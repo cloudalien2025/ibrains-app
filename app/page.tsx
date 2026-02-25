@@ -103,7 +103,7 @@ export default function Home() {
     }
     return (
       <span className="inline-flex items-center rounded-full bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-200 ring-1 ring-inset ring-rose-500/25">
-        ❌ Worker error · {state.ms}ms
+        ❌ Worker error
       </span>
     );
   })();
