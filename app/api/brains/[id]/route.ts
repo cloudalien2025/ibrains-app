@@ -1,18 +1,18 @@
-export const runtime = "nodejs";
-
 import { NextRequest } from "next/server";
-import { proxyToBrains, unexpectedErrorResponse } from "../../_utils/proxy";
+import { proxyToBrains } from "../../_utils/proxy";
 
-export async function GET(
-  req: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const { id } = params;
-    return proxyToBrains(req, `/v1/brains/${id}`, { requireAuth: false });
-  } catch {
-    return unexpectedErrorResponse();
-  }
+type Params = {
+  params: {
+    id: string;
+  };
+};
+
+export async function GET(req: NextRequest, { params }: Params) {
+  const { id } = params;
+
+  return proxyToBrains(req, `/v1/brains/${id}`, {
+    requireAuth: false,
+  });
 }
 
 export async function OPTIONS() {
