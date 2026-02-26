@@ -1,18 +1,12 @@
 import { NextRequest } from "next/server";
 import { proxyToBrains } from "../../_utils/proxy";
 
-type Params = {
-  params: {
-    id: string;
-  };
-};
-
-export async function GET(req: NextRequest, { params }: Params) {
-  const { id } = params;
-
-  return proxyToBrains(req, `/v1/brains/${id}`, {
-    requireAuth: false,
-  });
+export async function GET(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> }
+) {
+  const { id } = await context.params;
+  return proxyToBrains(req, `/v1/brains/${id}`, { requireAuth: false });
 }
 
 export async function OPTIONS() {
