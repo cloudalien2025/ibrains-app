@@ -2,12 +2,25 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type HealthPayload = Record<string, unknown>;
+type HealthPayload = {
+  ok: boolean;
+  timestamp: string;
+  worker_base_url_present: boolean;
+  upstream_ok: boolean;
+  upstream_error?: string;
+  request_id?: string;
+};
 
 type StatusState =
   | { phase: "idle" | "loading" }
   | { phase: "ok"; ms: number; data: HealthPayload }
-  | { phase: "error"; ms: number; message: string; raw?: string };
+  | {
+      phase: "error";
+      ms: number;
+      message: string;
+      raw?: string;
+      requestId?: string;
+    };
 
 const DEFAULT_WORKER_URL = "https://api.ibrains.ai";
 
@@ -23,10 +36,7 @@ export default function Home() {
   const workerUrl =
     (process.env.NEXT_PUBLIC_WORKER_URL || "").trim() || DEFAULT_WORKER_URL;
 
-  const healthUrl = useMemo(() => {
-    const base = workerUrl.replace(/\/+$/, "");
-    return `${base}/v1/health`;
-  }, [workerUrl]);
+  const healthUrl = useMemo(() => "/api/health", []);
 
   const [state, setState] = useState<StatusState>({ phase: "idle" });
 
@@ -46,7 +56,7 @@ export default function Home() {
       const text = await res.text();
       let json: HealthPayload | null = null;
       try {
-        json = text ? (JSON.parse(text) as HealthPayload) : {};
+        json = text ? (JSON.parse(text) as HealthPayload) : null;
       } catch {
         json = null;
       }
@@ -55,18 +65,29 @@ export default function Home() {
         setState({
           phase: "error",
           ms,
-          message: `HTTP ${res.status} from /v1/health`,
+          message: `HTTP ${res.status} from /api/health`,
           raw: text?.slice(0, 4000),
         });
         return;
       }
 
-      if (!json) {
+      if (!json || typeof json !== "object" || !("upstream_ok" in json)) {
         setState({
           phase: "error",
           ms,
           message: "Worker returned non-JSON response",
           raw: text?.slice(0, 4000),
+        });
+        return;
+      }
+
+      if (!json.upstream_ok) {
+        setState({
+          phase: "error",
+          ms,
+          message: json.upstream_error || "Upstream health check failed",
+          raw: text?.slice(0, 4000),
+          requestId: json.request_id,
         });
         return;
       }
@@ -116,6 +137,7 @@ export default function Home() {
           error: state.message,
           ...(state.raw ? { raw: state.raw } : {}),
           url: healthUrl,
+          ...(state.requestId ? { request_id: state.requestId } : {}),
         },
         2
       );
@@ -154,7 +176,8 @@ export default function Home() {
               <div className="mt-3 flex flex-wrap gap-3">
                 <button
                   onClick={() => void checkHealth()}
-                  className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 ring-1 ring-inset ring-white/10 hover:bg-white/15"
+                  disabled={state.phase === "loading"}
+                  className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 ring-1 ring-inset ring-white/10 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Refresh status
                 </button>
@@ -165,12 +188,25 @@ export default function Home() {
                   rel="noreferrer"
                   className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 ring-1 ring-inset ring-white/10 hover:bg-white/15"
                 >
-                  Open /v1/health
+                  Open /api/health
                 </a>
               </div>
               <p className="mt-3 text-xs text-zinc-400">
                 Tip: set <span className="font-mono">NEXT_PUBLIC_WORKER_URL</span> in Vercel env vars if you ever change the API host.
               </p>
+              {state.phase === "error" ? (
+                <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-100">
+                  <div className="text-[11px] uppercase tracking-wide text-rose-200/80">
+                    Health Error
+                  </div>
+                  <div className="mt-1 text-sm text-rose-50">{state.message}</div>
+                  {state.requestId ? (
+                    <div className="mt-1 text-[11px] text-rose-200/80">
+                      Request ID: <span className="font-mono">{state.requestId}</span>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           </div>
 
