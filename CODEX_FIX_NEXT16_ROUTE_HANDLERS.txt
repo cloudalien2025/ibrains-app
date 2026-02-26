@@ -1,0 +1,66 @@
+GOAL:
+Fix all Next.js 16 App Router dynamic route handlers so that:
+1) params are Promise-based (Next 16 requirement)
+2) All proxy imports point to correct relative path:
+   app/api/_utils/proxy.ts
+3) Remove any old `type Params` definitions
+4) Ensure handlers compile with:
+   context: { params: Promise<{ ... }> }
+5) Await params before usage
+6) Do not change runtime behavior
+7) After patching, commit and push changes
+
+INSTRUCTIONS:
+
+1) Find all dynamic route files under:
+   app/api/**/[...]/route.ts
+
+2) For each route file:
+   - Remove any custom `type Params` or `interface Params`
+   - Replace GET handler signature with:
+
+     export async function GET(
+       req: NextRequest,
+       { params }: { params: Promise<{ ... }> }
+     )
+
+   - Await params:
+       const { id } = await params;
+       OR
+       const { runId } = await params;
+
+   - Keep all proxyToBrains logic intact.
+
+3) Correct proxy import path based on file depth:
+
+   If file is:
+   - app/api/brains/[id]/route.ts
+     → "../../_utils/proxy"
+
+   - app/api/brains/[id]/runs/route.ts
+     → "../../../_utils/proxy"
+
+   - app/api/runs/[runId]/route.ts
+     → "../../_utils/proxy"
+
+   - app/api/runs/[runId]/diagnostics/route.ts
+     → "../../../_utils/proxy"
+
+4) Ensure imports use:
+     import { NextRequest } from "next/server";
+
+5) After edits:
+   - Remove .next
+   - Run npm run build
+   - If build succeeds:
+       git add .
+       git commit -m "fix: Next.js 16 dynamic route handlers (Promise params)"
+       git push
+
+6) Output:
+   - List modified files
+   - Build result
+   - Git commit hash
+
+Do NOT ask for confirmation.
+Apply minimal deterministic patch.
