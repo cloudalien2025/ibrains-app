@@ -1,12 +1,16 @@
 import { NextRequest } from "next/server";
-import { proxyToBrains } from "../../../_utils/proxy";
+import { proxyToBrains, unexpectedErrorResponse } from "../../../_utils/proxy";
 
 export async function GET(
   req: NextRequest,
   context: { params: Promise<{ runId: string }> }
 ) {
-  const { runId } = await context.params;
-  return proxyToBrains(req, `/v1/runs/${runId}/diagnostics`, { requireAuth: false });
+  try {
+    const { runId } = await context.params;
+    return proxyToBrains(req, `/v1/runs/${runId}/diagnostics`, { requireAuth: false });
+  } catch {
+    return unexpectedErrorResponse();
+  }
 }
 
 export async function OPTIONS() {
