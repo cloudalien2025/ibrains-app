@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CopyButton from "../../_components/CopyButton";
 import StartRunDialog from "../../_components/StartRunDialog";
 
 export type BrainView = {
@@ -45,7 +46,10 @@ export default function BrainsTable({ brains }: BrainsTableProps) {
                 className="border-t border-white/10 text-slate-200"
               >
                 <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                  {brain.id}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{brain.id}</span>
+                    <CopyButton value={brain.id} label="Copy ID" />
+                  </div>
                 </td>
                 <td className="px-4 py-3 font-medium text-white">{brain.name}</td>
                 <td className="px-4 py-3 text-slate-300">
@@ -58,6 +62,14 @@ export default function BrainsTable({ brains }: BrainsTableProps) {
                       className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
                     >
                       Open
+                    </Link>
+                    <Link
+                      href={`/brains/${brain.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
+                    >
+                      Open in new tab
                     </Link>
                     <StartRunDialog
                       brainId={brain.id}

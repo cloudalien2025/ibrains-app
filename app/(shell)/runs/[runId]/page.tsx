@@ -1,4 +1,5 @@
 import Link from "next/link";
+import CopyButton from "../../_components/CopyButton";
 import RunStatusBadge from "../_components/RunStatusBadge";
 import RunDetailClient from "./run-detail-client";
 
@@ -23,6 +24,10 @@ export default async function RunDetailPage({ params }: RunDetailProps) {
               Status cards, stage transitions, and live counters will appear
               here as the run progresses.
             </p>
+            <div className="mt-4 flex flex-wrap items-center gap-2 text-xs text-slate-300">
+              <span className="font-mono">{runId}</span>
+              <CopyButton value={runId} label="Copy run_id" />
+            </div>
           </div>
           <Link
             href="/runs"
@@ -45,9 +50,11 @@ export default async function RunDetailPage({ params }: RunDetailProps) {
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
                   {label}
                 </div>
-                <p className="mt-3 text-sm text-slate-300">
-                  Awaiting live data from the worker.
-                </p>
+                <div className="mt-4 space-y-3">
+                  <div className="h-2 w-24 rounded-full bg-white/10" />
+                  <div className="h-3 w-32 rounded-full bg-white/10" />
+                  <div className="h-3 w-20 rounded-full bg-white/10" />
+                </div>
               </div>
             ))}
           </div>
@@ -114,12 +121,22 @@ export default async function RunDetailPage({ params }: RunDetailProps) {
                   Dive into per-video telemetry and error streams.
                 </p>
               </div>
-              <Link
-                href={`/runs/${runId}/diagnostics`}
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
-              >
-                View diagnostics
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  href={`/runs/${runId}/diagnostics`}
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  View diagnostics
+                </Link>
+                <Link
+                  href={`/runs/${runId}/diagnostics`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                >
+                  Open in new tab
+                </Link>
+              </div>
             </div>
           </div>
         )}

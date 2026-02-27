@@ -172,8 +172,22 @@ export default function DiagnosticsClient({ runId }: DiagnosticsClientProps) {
 
   if (!payload) {
     return (
-      <div className="rounded-[24px] border border-white/10 bg-white/5 p-6 text-sm text-slate-300">
-        Loading diagnostics...
+      <div className="grid gap-4">
+        {["Summary", "Per-video", "Errors"].map((label) => (
+          <div
+            key={label}
+            className="rounded-[24px] border border-white/10 bg-white/5 p-6"
+          >
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
+              {label}
+            </div>
+            <div className="mt-4 space-y-3">
+              <div className="h-2 w-24 rounded-full bg-white/10" />
+              <div className="h-3 w-48 rounded-full bg-white/10" />
+              <div className="h-3 w-32 rounded-full bg-white/10" />
+            </div>
+          </div>
+        ))}
       </div>
     );
   }
