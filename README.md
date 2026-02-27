@@ -50,3 +50,16 @@ Set these environment variables for DirectoryIQ SERP outline processing:
 - `scripts/prod_smoke.sh`: quick production health checks.
 - `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/runs`.
 - `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.
+- `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
+
+## Droplet Rebuild + Restart
+
+```bash
+rm -rf .next && npm run build && sudo systemctl restart ibrains-next
+```
+
+Check env loaded:
+
+```bash
+sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
+```
