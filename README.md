@@ -70,3 +70,10 @@ Check env loaded:
 ```bash
 sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
 ```
+
+## SSC v1 (Ferrari)
+
+- Migrations: `psql $DATABASE_URL -f migrations/20260227_ssc_v1.sql`
+- Playwright (first-time): `npx playwright install --with-deps`
+- Artifact sync to worker: `scripts/sync_ssc_artifacts_to_worker.sh`
+- Operations + endpoint wiring: `docs/SSC_V1_FERRARI.md`
