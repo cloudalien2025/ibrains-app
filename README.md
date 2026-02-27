@@ -35,45 +35,8 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## DirectoryIQ configuration
-
-Set these environment variables for DirectoryIQ SERP outline processing:
-
-- `SERPAPI_API_KEY` - required API key for SERP fetch jobs.
-- `DIRECTORYIQ_SERP_CACHE_TTL_DAYS` - cache retention in days (default `14`).
-- `DIRECTORYIQ_SERP_MAX_CONCURRENCY` - max concurrent SERP jobs (default `3`).
-- `DIRECTORYIQ_SERP_FETCH_TIMEOUT_MS` - page-fetch timeout for outline extraction (default `12000`).
-- `DIRECTORYIQ_DATA_ROOT` - optional override for DirectoryIQ cache/draft storage root.
-
 ## Operational Scripts
 
 - `scripts/prod_smoke.sh`: quick production health checks.
 - `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/runs`.
 - `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.
-- `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
-- `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
-
-## Non-Negotiable Route Signatures
-
-- Next.js route handlers must use inline `{ params }: { params: { ... } }` for the second argument.
-- Do not use `RouteContext` or any custom `ctx` type aliases.
-- Run `scripts/check_route_signatures.sh` before building.
-
-## Droplet Rebuild + Restart
-
-```bash
-rm -rf .next && npm run build && sudo systemctl restart ibrains-next
-```
-
-Check env loaded:
-
-```bash
-sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
-```
-
-## SSC v1 (Ferrari)
-
-- Migrations: `psql $DATABASE_URL -f migrations/20260227_ssc_v1.sql`
-- Playwright (first-time): `npx playwright install --with-deps`
-- Artifact sync to worker: `scripts/sync_ssc_artifacts_to_worker.sh`
-- Operations + endpoint wiring: `docs/SSC_V1_FERRARI.md`
