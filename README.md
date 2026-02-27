@@ -44,3 +44,9 @@ Set these environment variables for DirectoryIQ SERP outline processing:
 - `DIRECTORYIQ_SERP_MAX_CONCURRENCY` - max concurrent SERP jobs (default `3`).
 - `DIRECTORYIQ_SERP_FETCH_TIMEOUT_MS` - page-fetch timeout for outline extraction (default `12000`).
 - `DIRECTORYIQ_DATA_ROOT` - optional override for DirectoryIQ cache/draft storage root.
+
+## Operational Scripts
+
+- `scripts/prod_smoke.sh`: quick production health checks.
+- `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/runs`.
+- `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.

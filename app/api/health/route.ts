@@ -4,6 +4,7 @@ import { probeBrains } from "../_utils/proxy";
 export async function GET(req: NextRequest) {
   const timestamp = new Date().toISOString();
   const workerBaseUrlPresent = Boolean(process.env.BRAINS_API_BASE);
+  const brainsApiKeyPresent = Boolean(process.env.BRAINS_X_API_KEY);
 
   try {
     const probe = await probeBrains(req, "/v1/health", { requireAuth: false });
@@ -11,6 +12,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       timestamp,
       worker_base_url_present: workerBaseUrlPresent,
+      brains_x_api_key_present: brainsApiKeyPresent,
       upstream_ok: probe.upstreamOk,
       upstream_error: probe.upstreamError,
       ...(probe.requestId ? { request_id: probe.requestId } : {}),
@@ -20,6 +22,7 @@ export async function GET(req: NextRequest) {
       ok: true,
       timestamp,
       worker_base_url_present: workerBaseUrlPresent,
+      brains_x_api_key_present: brainsApiKeyPresent,
       upstream_ok: false,
       upstream_error: "Health probe failed",
     });
