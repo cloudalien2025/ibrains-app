@@ -6,7 +6,8 @@
     "dev": "next dev --webpack",
     "build": "next build --webpack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "postinstall": "node scripts/patch_next_route_types.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
