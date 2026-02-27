@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const navItems = [
   { href: "/brains", label: "Brains" },
   { href: "/runs", label: "Runs" },
+  { href: "/mission-control", label: "Mission Control" },
 ];
 
 export default function SideNav() {
