@@ -15,12 +15,6 @@ type NormalizedError = {
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-function env(name: string, fallback?: string): string {
-  const v = process.env[name] ?? fallback;
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
-
 function buildTargetUrl(req: NextRequest, targetPath: string): string {
   const base = (process.env.BRAINS_API_BASE ?? "https://api.ibrains.ai").replace(/\/+$/, "");
   const path = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
@@ -44,7 +38,12 @@ function buildHeaders(req: NextRequest, requireAuth: boolean): Headers {
 
   // Auth headers (server-side only)
   if (requireAuth) {
-    const apiKey = process.env.BRAINS_MASTER_KEY || env("BRAINS_X_API_KEY");
+    const apiKey = process.env.BRAINS_MASTER_KEY || process.env.BRAINS_X_API_KEY;
+    if (!apiKey) {
+      throw new Error(
+        "Missing required env var: BRAINS_MASTER_KEY or BRAINS_X_API_KEY"
+      );
+    }
     const userId = process.env.BRAINS_USER_ID ?? "user_1";
     headers.set("X-Api-Key", apiKey);
     headers.set("X-User-Id", userId);
