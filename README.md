@@ -53,6 +53,12 @@ Set these environment variables for DirectoryIQ SERP outline processing:
 - `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
 - `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
 
+## Non-Negotiable Route Signatures
+
+- Next.js route handlers must use inline `{ params }: { params: { ... } }` for the second argument.
+- Do not use `RouteContext` or any custom `ctx` type aliases.
+- Run `scripts/check_route_signatures.sh` before building.
+
 ## Droplet Rebuild + Restart
 
 ```bash
