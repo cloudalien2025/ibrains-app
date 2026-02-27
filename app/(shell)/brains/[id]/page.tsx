@@ -1,5 +1,6 @@
 import Link from "next/link";
 import EmptyState from "../../_components/EmptyState";
+import StartRunDialog from "../../_components/StartRunDialog";
 
 type BrainDetailProps = {
   params: Promise<{ id: string }>;
@@ -31,6 +32,20 @@ export default async function BrainDetailPage({ params }: BrainDetailProps) {
           </Link>
         </div>
       </section>
+
+      <div className="rounded-[24px] border border-white/10 bg-white/5 p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
+              Run controls
+            </div>
+            <p className="mt-2 text-sm text-slate-300">
+              Launch a new run for this brain to collect fresh discovery data.
+            </p>
+          </div>
+          <StartRunDialog brainId={id} brainName={`Brain ${id}`} />
+        </div>
+      </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-[24px] border border-white/10 bg-white/4 p-6">
