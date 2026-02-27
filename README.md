@@ -51,6 +51,7 @@ Set these environment variables for DirectoryIQ SERP outline processing:
 - `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/runs`.
 - `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.
 - `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
+- `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
 
 ## Droplet Rebuild + Restart
 
