@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import CopyButton from "../../_components/CopyButton";
 import RunStatusBadge from "./RunStatusBadge";
 
 export type RunView = {
@@ -47,7 +48,10 @@ export default function RunList({ runs }: RunListProps) {
                 className="border-t border-white/10 text-slate-200"
               >
                 <td className="px-4 py-3 font-mono text-xs text-slate-300">
-                  {run.id}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span>{run.id}</span>
+                    <CopyButton value={run.id} label="Copy ID" />
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-slate-300">
                   {run.brainId || "Unknown"}
@@ -59,12 +63,20 @@ export default function RunList({ runs }: RunListProps) {
                   {run.startedAt || "Not reported"}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex justify-end">
+                  <div className="flex flex-wrap justify-end gap-2">
                     <Link
                       href={`/runs/${run.id}`}
                       className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
                     >
                       View
+                    </Link>
+                    <Link
+                      href={`/runs/${run.id}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
+                    >
+                      Open in new tab
                     </Link>
                   </div>
                 </td>
