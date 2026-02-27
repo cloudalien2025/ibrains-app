@@ -7,7 +7,7 @@ export async function GET(
 ) {
   try {
     const { runId } = await context.params;
-    return proxyToBrains(req, `/v1/runs/${runId}/diagnostics`, { requireAuth: false });
+    return proxyToBrains(req, `/v1/runs/${runId}/diagnostics`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }

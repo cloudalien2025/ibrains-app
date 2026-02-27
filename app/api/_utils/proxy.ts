@@ -44,7 +44,7 @@ function buildHeaders(req: NextRequest, requireAuth: boolean): Headers {
 
   // Auth headers (server-side only)
   if (requireAuth) {
-    const apiKey = env("BRAINS_X_API_KEY");
+    const apiKey = process.env.BRAINS_MASTER_KEY || env("BRAINS_X_API_KEY");
     const userId = process.env.BRAINS_USER_ID ?? "user_1";
     headers.set("X-Api-Key", apiKey);
     headers.set("X-User-Id", userId);
