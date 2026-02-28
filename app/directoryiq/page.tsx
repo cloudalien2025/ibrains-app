@@ -32,7 +32,7 @@ export default async function DirectoryIQPage() {
         { href: "/directoryiq", label: aiSelectionCopy.directoryiq.nav.dashboard },
         { href: "/directoryiq?panel=surfaces", label: aiSelectionCopy.directoryiq.nav.surfaces },
         { href: "/directoryiq?panel=coverage", label: aiSelectionCopy.directoryiq.nav.coverage },
-        { href: "/directoryiq?panel=signal-sources#signal-sources", label: aiSelectionCopy.directoryiq.nav.signalSources },
+        { href: "/directoryiq/signal-sources", label: aiSelectionCopy.directoryiq.nav.signalSources },
       ]}
     >
       <TopBar
