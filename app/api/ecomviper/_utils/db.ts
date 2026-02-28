@@ -182,6 +182,28 @@ async function ensureSchema(): Promise<void> {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           UNIQUE (user_id, source_type, source_id)
         );
+
+        CREATE TABLE IF NOT EXISTS brain_snapshots (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          brain_id TEXT NOT NULL,
+          snapshot_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          snapshot_status TEXT NOT NULL DEFAULT 'needs_connection',
+          snapshot_updated_at TIMESTAMPTZ,
+          hints_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+          last_error TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (user_id, brain_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS snapshot_refresh_locks (
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          brain_id TEXT NOT NULL,
+          locked_until TIMESTAMPTZ NOT NULL,
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          PRIMARY KEY (user_id, brain_id)
+        );
       `);
       schemaReady = true;
     })().catch((error) => {
