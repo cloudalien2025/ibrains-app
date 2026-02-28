@@ -10,12 +10,19 @@ import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 import { directoryIqSignalSources } from "@/lib/copy/signalSourcesCatalog";
 import DirectoryIqSignalSourcesClient from "./directoryiq-signal-sources-client";
+import { query } from "@/app/api/ecomviper/_utils/db";
+import { resolveUserIdFromHeaders } from "@/app/api/ecomviper/_utils/user";
+
+type ConnectorRow = {
+  connector_id: string;
+};
 
 export const dynamic = "force-dynamic";
 
 export default async function DirectoryIQSignalSourcesPage() {
   const headersList = await headers();
   const user = resolveUserFromHeaders(headersList);
+  const userId = resolveUserIdFromHeaders(headersList);
   const entitled = isEntitled(user, "directoryiq");
 
   if (!entitled) {
@@ -24,6 +31,27 @@ export default async function DirectoryIQSignalSourcesPage() {
   }
 
   const userLabel = typeof user.name === "string" && user.name.trim().length > 0 ? user.name : "Operator";
+  const connectedRows = await query<ConnectorRow>(
+    `SELECT connector_id FROM directoryiq_signal_source_credentials WHERE user_id = $1`,
+    [userId]
+  );
+  const connectedIds = new Set(connectedRows.map((row) => row.connector_id));
+  const panelConnectors = directoryIqSignalSources.map((connector) => {
+    const mapToConnectorId =
+      connector.id === "brilliant-directories"
+        ? "brilliant_directories_api"
+        : connector.id === "openai" || connector.id === "serpapi" || connector.id === "ga4"
+          ? connector.id
+          : null;
+
+    if (!mapToConnectorId || !connectedIds.has(mapToConnectorId)) return connector;
+
+    return {
+      ...connector,
+      status: "connected" as const,
+      actionLabel: "Configured",
+    };
+  });
 
   return (
     <BrainWorkspaceFrame
@@ -45,7 +73,7 @@ export default async function DirectoryIQSignalSourcesPage() {
       <SignalSourcesPanel
         title="DirectoryIQ Signal Sources"
         subtitle="DirectoryIQ connectors are configured within this brain only. No cross-brain routing."
-        connectors={directoryIqSignalSources}
+        connectors={panelConnectors}
       />
 
       <HudCard
