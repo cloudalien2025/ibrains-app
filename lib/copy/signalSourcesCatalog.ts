@@ -17,10 +17,10 @@ export const directoryIqSignalSources: SignalSource[] = [
     id: "brilliant-directories",
     name: "Brilliant Directories API",
     category: "Core",
-    status: "connected",
+    status: "disconnected",
     description: "Listings and blog signal ingest surface for travel entity readiness.",
-    actionLabel: "Configured",
-    actionHref: "/directoryiq#signal-sources",
+    actionLabel: "Configure",
+    actionHref: "/directoryiq/signal-sources?connector=brilliant-directories#credentials",
   },
   {
     id: "openai",

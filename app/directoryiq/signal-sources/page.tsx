@@ -9,6 +9,7 @@ import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 import { directoryIqSignalSources } from "@/lib/copy/signalSourcesCatalog";
+import DirectoryIqSignalSourcesClient from "./directoryiq-signal-sources-client";
 
 export const dynamic = "force-dynamic";
 
@@ -47,10 +48,11 @@ export default async function DirectoryIQSignalSourcesPage() {
         connectors={directoryIqSignalSources}
       />
 
-      <HudCard title="Connector Credentials" subtitle="DirectoryIQ credential registry (scaffold).">
-        <div id="credentials" className="rounded-xl border border-white/10 bg-white/[0.03] p-4 text-sm text-slate-300">
-          Configure actions remain inside DirectoryIQ. Credential storage wiring is intentionally isolated from EcomViper in this page.
-        </div>
+      <HudCard
+        title="Connector Credentials"
+        subtitle="DirectoryIQ credentials are stored server-side per user with masked reload status."
+      >
+        <DirectoryIqSignalSourcesClient />
         <div className="mt-4">
           <Link
             href="/directoryiq"

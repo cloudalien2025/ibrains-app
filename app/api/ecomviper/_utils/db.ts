@@ -129,6 +129,29 @@ async function ensureSchema(): Promise<void> {
 
         ALTER TABLE byo_api_keys
           ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ;
+
+        CREATE TABLE IF NOT EXISTS directoryiq_signal_source_credentials (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          connector_id TEXT NOT NULL,
+          secret_ciphertext TEXT NOT NULL,
+          secret_last4 TEXT,
+          secret_length INTEGER,
+          label TEXT,
+          last_verified_at TIMESTAMPTZ,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (user_id, connector_id)
+        );
+
+        ALTER TABLE directoryiq_signal_source_credentials
+          ADD COLUMN IF NOT EXISTS secret_last4 TEXT;
+
+        ALTER TABLE directoryiq_signal_source_credentials
+          ADD COLUMN IF NOT EXISTS secret_length INTEGER;
+
+        ALTER TABLE directoryiq_signal_source_credentials
+          ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ;
       `);
       schemaReady = true;
     })().catch((error) => {
