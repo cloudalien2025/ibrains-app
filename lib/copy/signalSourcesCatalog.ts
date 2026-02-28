@@ -29,7 +29,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Entity normalization, signal synthesis, and authority blueprint drafting.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/directoryiq/signal-sources?connector=openai#credentials",
   },
   {
     id: "serpapi",
@@ -38,7 +38,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Competitive set discovery and comparative clarity checks.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/directoryiq/signal-sources?connector=serpapi#credentials",
   },
   {
     id: "ga4",
@@ -47,7 +47,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Feedback loop for behavior signals and post-selection outcomes.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/directoryiq/signal-sources?connector=ga4#credentials",
   },
   {
     id: "google-places",
@@ -104,7 +104,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Channel and transcript ingest for narrative legibility.",
     actionLabel: "Configure",
-    actionHref: "/studio#signal-sources",
+    actionHref: "/studio/signal-sources?connector=youtube#credentials",
   },
   {
     id: "openai",
@@ -113,7 +113,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Narrative synthesis, evidence mapping, and mention scaffolding.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/studio/signal-sources?connector=openai#credentials",
   },
   {
     id: "podcast-rss",

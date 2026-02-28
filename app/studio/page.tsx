@@ -1,4 +1,5 @@
 import { headers } from "next/headers";
+import Link from "next/link";
 import { Clapperboard, FileText, MicVocal, Scissors, Send } from "lucide-react";
 import LockedBrainView from "@/components/brains/LockedBrainView";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
@@ -61,6 +62,14 @@ export default async function StudioPage() {
             subtitle="Connector scaffolding for AI Narrative Selection Index inputs. Actions are UI-only in this release."
             connectors={studioSignalSources}
           />
+          <div className="mt-4">
+            <Link
+              href="/studio/signal-sources"
+              className={`${brainTheme.secondaryButton} text-sm`}
+            >
+              Open Studio Signal Source Settings
+            </Link>
+          </div>
         </section>
       </main>
     </div>
