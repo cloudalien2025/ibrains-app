@@ -8,6 +8,7 @@ export type DirectoryIqCredentialStatus = {
   label: string | null;
   masked_secret: string;
   updated_at: string | null;
+  config: Record<string, string> | null;
 };
 
 export type DirectoryIqCredentialRow = {
@@ -16,6 +17,7 @@ export type DirectoryIqCredentialRow = {
   secret_last4: string | null;
   secret_length: number | null;
   updated_at: string;
+  config_json?: Record<string, unknown> | null;
 };
 
 export function isDirectoryIqConnector(value: string): value is DirectoryIqConnector {
@@ -26,6 +28,17 @@ export function maskFromMetadata(last4: string | null, length: number | null): s
   if (!length || length <= 0) return "Saved";
   const hidden = "*".repeat(Math.min(Math.max(length - 4, 0), 12));
   return `${hidden}${last4 ?? ""}` || "Saved";
+}
+
+function sanitizeConfig(config: Record<string, unknown> | null | undefined): Record<string, string> | null {
+  if (!config || typeof config !== "object") return null;
+
+  const entries = Object.entries(config).filter(
+    (entry) => typeof entry[1] === "string" && entry[1].trim().length > 0
+  ) as Array<[string, string]>;
+
+  if (entries.length === 0) return null;
+  return Object.fromEntries(entries) as Record<string, string>;
 }
 
 export function toDirectoryIqStatus(rows: DirectoryIqCredentialRow[]): DirectoryIqCredentialStatus[] {
@@ -39,6 +52,7 @@ export function toDirectoryIqStatus(rows: DirectoryIqCredentialRow[]): Directory
       label: row?.label ?? null,
       masked_secret: row ? maskFromMetadata(row.secret_last4 ?? null, row.secret_length ?? null) : "",
       updated_at: row?.updated_at ?? null,
+      config: sanitizeConfig(row?.config_json),
     };
   });
 }

@@ -32,6 +32,17 @@ const idAlias: Record<string, DirectoryIqConnector> = {
   ga4: "ga4",
 };
 
+type IngestRun = {
+  id: string;
+  status: string;
+  source_base_url: string | null;
+  started_at: string;
+  finished_at: string | null;
+  listings_count: number;
+  blog_posts_count: number;
+  error_message: string | null;
+};
+
 export default function DirectoryIqSignalSourcesClient() {
   const searchParams = useSearchParams();
   const selectedConnector = idAlias[(searchParams.get("connector") ?? "").toLowerCase()] ?? null;
@@ -43,10 +54,11 @@ export default function DirectoryIqSignalSourcesClient() {
       label: null,
       masked_secret: "",
       updated_at: null,
+      config: null,
     },
-    openai: { connector_id: "openai", connected: false, label: null, masked_secret: "", updated_at: null },
-    serpapi: { connector_id: "serpapi", connected: false, label: null, masked_secret: "", updated_at: null },
-    ga4: { connector_id: "ga4", connected: false, label: null, masked_secret: "", updated_at: null },
+    openai: { connector_id: "openai", connected: false, label: null, masked_secret: "", updated_at: null, config: null },
+    serpapi: { connector_id: "serpapi", connected: false, label: null, masked_secret: "", updated_at: null, config: null },
+    ga4: { connector_id: "ga4", connected: false, label: null, masked_secret: "", updated_at: null, config: null },
   });
 
   const [values, setValues] = useState<Record<DirectoryIqConnector, string>>({
@@ -64,8 +76,15 @@ export default function DirectoryIqSignalSourcesClient() {
   });
 
   const [saving, setSaving] = useState<DirectoryIqConnector | null>(null);
+  const [runningIngest, setRunningIngest] = useState(false);
+  const [runs, setRuns] = useState<IngestRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [bdConfig, setBdConfig] = useState<{ baseUrl: string; listingsPath: string; blogPostsPath: string }>({
+    baseUrl: "",
+    listingsPath: "/wp-json/brilliantdirectories/v1/listings",
+    blogPostsPath: "/wp-json/wp/v2/posts",
+  });
 
   const orderedConnectors = useMemo(
     () => ["brilliant_directories_api", "openai", "serpapi", "ga4"] as DirectoryIqConnector[],
@@ -88,6 +107,13 @@ export default function DirectoryIqSignalSourcesClient() {
         next[connector.connector_id] = connector;
       }
       setStates(next);
+      const bd = next.brilliant_directories_api;
+      const cfg = bd.config ?? {};
+      setBdConfig((prev) => ({
+        baseUrl: typeof cfg.base_url === "string" ? cfg.base_url : prev.baseUrl,
+        listingsPath: typeof cfg.listings_path === "string" ? cfg.listings_path : prev.listingsPath,
+        blogPostsPath: typeof cfg.blog_posts_path === "string" ? cfg.blog_posts_path : prev.blogPostsPath,
+      }));
 
       setLabels((prev) => {
         const updated = { ...prev };
@@ -101,8 +127,20 @@ export default function DirectoryIqSignalSourcesClient() {
     }
   }
 
+  async function loadRuns() {
+    try {
+      const response = await fetch("/api/directoryiq/ingest/runs", { cache: "no-store" });
+      const json = (await response.json()) as { runs?: IngestRun[]; error?: string };
+      if (!response.ok) throw new Error(json.error ?? "Failed to load ingest runs");
+      setRuns(json.runs ?? []);
+    } catch {
+      setRuns([]);
+    }
+  }
+
   useEffect(() => {
     void load();
+    void loadRuns();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -125,6 +163,14 @@ export default function DirectoryIqSignalSourcesClient() {
           connector_id: connectorId,
           secret,
           label: labels[connectorId] || null,
+          config:
+            connectorId === "brilliant_directories_api"
+              ? {
+                  base_url: bdConfig.baseUrl.trim(),
+                  listings_path: bdConfig.listingsPath.trim(),
+                  blog_posts_path: bdConfig.blogPostsPath.trim(),
+                }
+              : null,
         }),
       });
       const json = (await response.json()) as { error?: string };
@@ -137,6 +183,39 @@ export default function DirectoryIqSignalSourcesClient() {
       setError(e instanceof Error ? e.message : "Unknown save error");
     } finally {
       setSaving(null);
+    }
+  }
+
+  async function runIngest() {
+    setRunningIngest(true);
+    setError(null);
+    setNotice(null);
+
+    try {
+      const response = await fetch("/api/ingest/directoryiq/run", { method: "POST" });
+      const json = (await response.json()) as {
+        run_id?: string;
+        status?: string;
+        counts?: { listings: number; blogPosts: number };
+        error?: string;
+        error_message?: string | null;
+      };
+
+      if (!response.ok) throw new Error(json.error ?? json.error_message ?? "DirectoryIQ ingest failed");
+
+      if (json.status === "failed") {
+        throw new Error(json.error_message ?? "DirectoryIQ ingest failed");
+      }
+
+      setNotice(
+        `Ingest completed. Listings: ${json.counts?.listings ?? 0}, Blog posts: ${json.counts?.blogPosts ?? 0}.`
+      );
+      await loadRuns();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown ingest error");
+      await loadRuns();
+    } finally {
+      setRunningIngest(false);
     }
   }
 
@@ -227,9 +306,59 @@ export default function DirectoryIqSignalSourcesClient() {
                 Delete
               </NeonButton>
             </div>
+
+            {connectorId === "brilliant_directories_api" ? (
+              <div className="mt-3 grid gap-2 md:grid-cols-3">
+                <input
+                  value={bdConfig.baseUrl}
+                  onChange={(event) => setBdConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
+                  placeholder="Base URL (e.g. https://example.com)"
+                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                />
+                <input
+                  value={bdConfig.listingsPath}
+                  onChange={(event) => setBdConfig((prev) => ({ ...prev, listingsPath: event.target.value }))}
+                  placeholder="Listings path"
+                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                />
+                <input
+                  value={bdConfig.blogPostsPath}
+                  onChange={(event) => setBdConfig((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
+                  placeholder="Blog posts path"
+                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                />
+              </div>
+            ) : null}
           </article>
         );
       })}
+
+      <article className="rounded-xl border border-cyan-300/25 bg-cyan-400/8 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Ingest Listings + Blog Posts</h3>
+            <p className="text-xs text-slate-300">
+              Runs a full DirectoryIQ pull from Brilliant Directories API and blog source paths.
+            </p>
+          </div>
+          <NeonButton onClick={runIngest} disabled={runningIngest || !states.brilliant_directories_api.connected}>
+            {runningIngest ? "Ingesting..." : "Ingest All"}
+          </NeonButton>
+        </div>
+
+        <div className="mt-3 space-y-2">
+          {runs.length === 0 ? (
+            <div className="text-xs text-slate-400">No ingest runs recorded yet.</div>
+          ) : (
+            runs.slice(0, 5).map((run) => (
+              <div key={run.id} className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300">
+                {run.status.toUpperCase()} · Listings {run.listings_count} · Blog posts {run.blog_posts_count}
+                {run.error_message ? ` · Error: ${run.error_message}` : ""}
+              </div>
+            ))
+          )}
+        </div>
+      </article>
     </div>
   );
 }

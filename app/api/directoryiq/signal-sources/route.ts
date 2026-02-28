@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
     const rows = await query<DirectoryIqCredentialRow>(
       `
-      SELECT connector_id, label, secret_last4, secret_length, updated_at
+      SELECT connector_id, label, secret_last4, secret_length, updated_at, config_json
       FROM directoryiq_signal_source_credentials
       WHERE user_id = $1
       ORDER BY connector_id ASC
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       connector_id?: string;
       secret?: string;
       label?: string | null;
+      config?: Record<string, string> | null;
     };
 
     const connectorId = (body.connector_id ?? "").trim().toLowerCase() as DirectoryIqConnector;
@@ -59,21 +60,31 @@ export async function POST(req: NextRequest) {
     const secretLast4 = secret.slice(-4);
     const secretLength = secret.length;
 
+    const configJson =
+      body.config && typeof body.config === "object"
+        ? Object.fromEntries(
+            Object.entries(body.config).filter(
+              ([, value]) => typeof value === "string" && value.trim().length > 0
+            )
+          )
+        : {};
+
     await query(
       `
       INSERT INTO directoryiq_signal_source_credentials
-      (user_id, connector_id, secret_ciphertext, secret_last4, secret_length, label, last_verified_at)
-      VALUES ($1, $2, $3, $4, $5, $6, now())
+      (user_id, connector_id, secret_ciphertext, secret_last4, secret_length, label, config_json, last_verified_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, now())
       ON CONFLICT (user_id, connector_id)
       DO UPDATE SET
         secret_ciphertext = EXCLUDED.secret_ciphertext,
         secret_last4 = EXCLUDED.secret_last4,
         secret_length = EXCLUDED.secret_length,
         label = EXCLUDED.label,
+        config_json = EXCLUDED.config_json,
         last_verified_at = now(),
         updated_at = now()
       `,
-      [userId, connectorId, ciphertext, secretLast4, secretLength, body.label?.trim() || null]
+      [userId, connectorId, ciphertext, secretLast4, secretLength, body.label?.trim() || null, JSON.stringify(configJson)]
     );
 
     return NextResponse.json({ ok: true, connector_id: connectorId, connected: true });
