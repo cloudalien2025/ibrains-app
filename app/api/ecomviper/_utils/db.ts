@@ -138,6 +138,7 @@ async function ensureSchema(): Promise<void> {
           secret_last4 TEXT,
           secret_length INTEGER,
           label TEXT,
+          config_json JSONB NOT NULL DEFAULT '{}'::jsonb,
           last_verified_at TIMESTAMPTZ,
           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -152,6 +153,35 @@ async function ensureSchema(): Promise<void> {
 
         ALTER TABLE directoryiq_signal_source_credentials
           ADD COLUMN IF NOT EXISTS last_verified_at TIMESTAMPTZ;
+
+        ALTER TABLE directoryiq_signal_source_credentials
+          ADD COLUMN IF NOT EXISTS config_json JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+        CREATE TABLE IF NOT EXISTS directoryiq_ingest_runs (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          status TEXT NOT NULL,
+          source_base_url TEXT,
+          started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          finished_at TIMESTAMPTZ,
+          listings_count INTEGER NOT NULL DEFAULT 0,
+          blog_posts_count INTEGER NOT NULL DEFAULT 0,
+          error_message TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS directoryiq_nodes (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          source_type TEXT NOT NULL,
+          source_id TEXT NOT NULL,
+          title TEXT,
+          url TEXT,
+          updated_at_source TIMESTAMPTZ,
+          raw_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          UNIQUE (user_id, source_type, source_id)
+        );
       `);
       schemaReady = true;
     })().catch((error) => {
