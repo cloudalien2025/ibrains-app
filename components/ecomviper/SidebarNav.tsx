@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutGrid, Network, FlaskConical, Cable, KeyRound, CircleHelp } from "lucide-react";
+import { LayoutGrid, Network, FlaskConical, Cable, CircleHelp } from "lucide-react";
 
 const navItems = [
   { href: "/ecomviper", label: "Agent Readiness", icon: LayoutGrid },
@@ -13,7 +13,6 @@ const navItems = [
   },
   { href: "/ecomviper/lab", label: "Selection Lab", icon: FlaskConical },
   { href: "/ecomviper/settings/integrations", label: "Signal Sources", icon: Cable },
-  { href: "/ecomviper/settings/apis", label: "Signal Credentials", icon: KeyRound },
   { href: "/ecomviper/help/connect-shopify", label: "Connect Guide", icon: CircleHelp },
 ];
 
