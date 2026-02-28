@@ -22,6 +22,27 @@ function deriveDeterministicUuid(input: string): string {
   return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+type HeaderReader = {
+  get(name: string): string | null;
+};
+
+export function resolveUserIdFromHeaders(headers: HeaderReader): string {
+  const fromHeader = normalizeUuid(headers.get("x-user-id"));
+  if (fromHeader) return fromHeader;
+
+  const externalIdRaw =
+    headers.get("x-user-id") ??
+    headers.get("x-user-email") ??
+    headers.get("x-forwarded-email") ??
+    headers.get("cf-access-authenticated-user-email");
+
+  if (externalIdRaw && externalIdRaw.trim().length > 0) {
+    return deriveDeterministicUuid(externalIdRaw);
+  }
+
+  return DEFAULT_USER_ID;
+}
+
 export function resolveUserId(req?: NextRequest): string {
   if (!req) return DEFAULT_USER_ID;
   const fromHeader = normalizeUuid(req.headers.get("x-user-id"));
