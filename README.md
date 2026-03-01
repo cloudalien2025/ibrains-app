@@ -34,3 +34,13 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## DirectoryIQ configuration
+
+Set these environment variables for DirectoryIQ SERP outline processing:
+
+- `SERPAPI_API_KEY` - required API key for SERP fetch jobs.
+- `DIRECTORYIQ_SERP_CACHE_TTL_DAYS` - cache retention in days (default `14`).
+- `DIRECTORYIQ_SERP_MAX_CONCURRENCY` - max concurrent SERP jobs (default `3`).
+- `DIRECTORYIQ_SERP_FETCH_TIMEOUT_MS` - page-fetch timeout for outline extraction (default `12000`).
+- `DIRECTORYIQ_DATA_ROOT` - optional override for DirectoryIQ cache/draft storage root.
