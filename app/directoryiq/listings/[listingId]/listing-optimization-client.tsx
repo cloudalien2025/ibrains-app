@@ -243,6 +243,21 @@ export default function ListingOptimizationClient() {
     ] as const;
   }, [detail]);
 
+  const heroChips = useMemo(() => {
+    if (!detail) return [];
+    const structuralActive = detail.evaluation.flags.structuralGateActive || detail.evaluation.flags.structuralHardFailActive;
+    return [
+      {
+        label: `Structural gate: ${structuralActive ? "Yes" : "No"}`,
+        tone: structuralActive ? ("warn" as const) : ("good" as const),
+      },
+      {
+        label: `Authority ceiling: ${detail.evaluation.flags.authorityCeilingActive ? "Yes" : "No"}`,
+        tone: detail.evaluation.flags.authorityCeilingActive ? ("warn" as const) : ("good" as const),
+      },
+    ];
+  }, [detail]);
+
   async function load() {
     setError(null);
     if (!listingId) {
@@ -490,6 +505,8 @@ export default function ListingOptimizationClient() {
             title={detail.listing.listing_name}
             subtitle="Listing Optimization"
             imageUrl={detail.listing.mainImageUrl}
+            score={detail.evaluation.totalScore}
+            chips={heroChips}
           />
 
           <HudCard title="AI Agent Selection Score" subtitle="Selection confidence and pillar breakdown.">
