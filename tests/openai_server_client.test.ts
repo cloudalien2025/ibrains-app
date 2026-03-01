@@ -36,6 +36,6 @@ describe("openai server client", () => {
   });
 
   it("throws when openai key missing", () => {
-    expect(() => validateOpenAiKeyPresent(null)).toThrowError("OpenAI API key is not configured");
+    expect(() => validateOpenAiKeyPresent(null)).toThrowError("OpenAI API not configured");
   });
 });
