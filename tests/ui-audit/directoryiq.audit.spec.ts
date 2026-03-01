@@ -31,6 +31,7 @@ type AuditMetrics = {
   startedAt: string;
   endedAt: string;
   durationMs: number;
+  imageErrorCount: number;
   routes: RouteMetrics[];
 };
 
@@ -56,17 +57,28 @@ async function run(): Promise<void> {
 
   const consoleItems: ConsoleItem[] = [];
   const networkItems: NetworkItem[] = [];
+  let imageErrorCount = 0;
   const metrics: AuditMetrics = {
     baseUrl,
     startedAt: new Date().toISOString(),
     endedAt: "",
     durationMs: 0,
+    imageErrorCount: 0,
     routes: [],
   };
   const totalStarted = Date.now();
 
   const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({ recordHar: { path: harPath } });
+  const context = await browser.newContext({
+    recordHar: { path: harPath },
+    extraHTTPHeaders: {
+      "x-user-brains": "directoryiq,ecomviper,studio",
+      "x-user-entitlements": "directoryiq,ecomviper,studio",
+      "x-user-role": "admin",
+      "x-user-is-admin": "true",
+      "x-user-name": "UI Audit",
+    },
+  });
   const page = await context.newPage();
 
   page.on("console", (msg) => {
@@ -95,6 +107,9 @@ async function run(): Promise<void> {
   page.on("response", (res) => {
     if (res.status() >= 400) {
       const req = res.request();
+      if (req.resourceType() === "image") {
+        imageErrorCount += 1;
+      }
       networkItems.push({
         type: "http-error",
         method: req.method(),
@@ -131,6 +146,13 @@ async function run(): Promise<void> {
       screenshotFiles.push(fullShot);
 
       if (route.includes("/listings/")) {
+        const hero = page.locator('[data-testid="directoryiq-listing-hero"]').first();
+        if (await hero.isVisible().catch(() => false)) {
+          const heroShot = `${prefix}__hero-section.png`;
+          await hero.screenshot({ path: path.join(shotsDir, heroShot) });
+          screenshotFiles.push(heroShot);
+        }
+
         const authorityTitle = page.getByRole("heading", { name: "Authority Support" }).first();
         if (await authorityTitle.isVisible().catch(() => false)) {
           const authorityShot = `${prefix}__authority-section.png`;
@@ -186,6 +208,7 @@ async function run(): Promise<void> {
 
   metrics.endedAt = new Date().toISOString();
   metrics.durationMs = Date.now() - totalStarted;
+  metrics.imageErrorCount = imageErrorCount;
 
   await fs.writeFile(path.join(logsDir, "console.json"), `${JSON.stringify(consoleItems, null, 2)}\n`, "utf8");
   await fs.writeFile(path.join(logsDir, "network.json"), `${JSON.stringify(networkItems, null, 2)}\n`, "utf8");
