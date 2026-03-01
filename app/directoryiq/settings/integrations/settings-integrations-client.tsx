@@ -249,6 +249,13 @@ export default function DirectoryIqIntegrationsClient() {
 
   return (
     <>
+      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <h1 className="text-xl font-semibold text-slate-100">Signal Sources Integrations</h1>
+        <p className="mt-1 text-sm text-slate-300">
+          Connect providers once, then manage edits inline without leaving this page.
+        </p>
+      </section>
+
       <TopBar
         breadcrumbs={["Home", "DirectoryIQ", "Settings", "Integrations"]}
         searchPlaceholder="Search signal sources..."
@@ -338,18 +345,9 @@ export default function DirectoryIqIntegrationsClient() {
                                 Coming soon
                               </NeonButton>
                             ) : (
-                              <>
-                                <NeonButton variant="secondary" onClick={() => setExpandedProvider(expanded ? null : provider)}>
-                                  {expanded ? "Close" : connected ? "Edit" : "Configure"}
-                                </NeonButton>
-                                <NeonButton
-                                  variant="secondary"
-                                  disabled={!connected || saving === provider}
-                                  onClick={() => void disconnect(provider)}
-                                >
-                                  {saving === provider ? "Working..." : "Disconnect"}
-                                </NeonButton>
-                              </>
+                              <NeonButton variant="secondary" onClick={() => setExpandedProvider(expanded ? null : provider)}>
+                                {expanded ? "Close" : connected ? "Edit" : "Configure"}
+                              </NeonButton>
                             )}
                           </div>
                         </div>
@@ -358,6 +356,12 @@ export default function DirectoryIqIntegrationsClient() {
                           <div className="mt-3 border-t border-white/10 pt-3">
                             {provider === "brilliant_directories" ? (
                               <div className="grid gap-2 md:grid-cols-2">
+                                <label className="text-xs text-slate-300">
+                                  Base URL <span className="text-rose-200">*</span>
+                                </label>
+                                <label className="text-xs text-slate-300">
+                                  X-Api-Key <span className="text-rose-200">*</span>
+                                </label>
                                 <input
                                   value={bdBaseUrl}
                                   onChange={(event) => setBdBaseUrl(event.target.value)}
@@ -381,17 +385,28 @@ export default function DirectoryIqIntegrationsClient() {
                             ) : null}
 
                             {provider === "openai" ? (
-                              <input
-                                value={openAiApiKey}
-                                onChange={(event) => setOpenAiApiKey(event.target.value)}
-                                type="password"
-                                placeholder="OpenAI API key"
-                                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
-                              />
+                              <div className="space-y-2">
+                                <label className="text-xs text-slate-300">
+                                  API Key <span className="text-rose-200">*</span>
+                                </label>
+                                <input
+                                  value={openAiApiKey}
+                                  onChange={(event) => setOpenAiApiKey(event.target.value)}
+                                  type="password"
+                                  placeholder="OpenAI API key"
+                                  className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
+                                />
+                              </div>
                             ) : null}
 
                             {provider === "ga4" ? (
                               <div className="grid gap-2 md:grid-cols-2">
+                                <label className="text-xs text-slate-300">
+                                  Measurement ID <span className="text-rose-200">*</span>
+                                </label>
+                                <label className="text-xs text-slate-300">
+                                  API Secret <span className="text-rose-200">*</span>
+                                </label>
                                 <input
                                   value={ga4MeasurementId}
                                   onChange={(event) => setGa4MeasurementId(event.target.value)}
@@ -410,6 +425,10 @@ export default function DirectoryIqIntegrationsClient() {
 
                             {provider === "serpapi" ? (
                               <div className="grid gap-2 md:grid-cols-2">
+                                <label className="text-xs text-slate-300">
+                                  API Key <span className="text-rose-200">*</span>
+                                </label>
+                                <label className="text-xs text-slate-300">Engine preference</label>
                                 <input
                                   value={serpApiKey}
                                   onChange={(event) => setSerpApiKey(event.target.value)}
@@ -436,6 +455,16 @@ export default function DirectoryIqIntegrationsClient() {
                               <NeonButton variant="secondary" onClick={() => setExpandedProvider(null)}>
                                 Cancel
                               </NeonButton>
+                              {connected ? (
+                                <button
+                                  type="button"
+                                  className="rounded-xl border border-rose-300/30 px-3 py-2 text-sm text-rose-200 hover:bg-rose-400/10"
+                                  onClick={() => void disconnect(provider)}
+                                  disabled={saving === provider}
+                                >
+                                  {saving === provider ? "Working..." : "Disconnect"}
+                                </button>
+                              ) : null}
                             </div>
                           </div>
                         ) : null}
