@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import HudCard from "@/components/ecomviper/HudCard";
 import TopBar from "@/components/ecomviper/TopBar";
 import NeonButton from "@/components/ecomviper/NeonButton";
+import ListingHero from "@/components/directoryiq/ListingHero";
 
 type Cap = { kind: string; cap: number; reason: string };
 
@@ -13,6 +14,7 @@ type ListingDetail = {
     listing_id: string;
     listing_name: string;
     listing_url: string | null;
+    mainImageUrl: string | null;
   };
   evaluation: {
     totalScore: number;
@@ -450,11 +452,17 @@ export default function ListingOptimizationClient() {
 
       {detail ? (
         <>
-          <HudCard title={detail.listing.listing_name} subtitle="Listing Optimization Summary">
-            <div className="grid gap-4 lg:grid-cols-[240px_1fr]">
-              <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
-                <div className="text-xs uppercase tracking-[0.14em] text-slate-400">AI Agent Selection Score</div>
-                <div className="mt-3 text-5xl font-semibold text-cyan-100">{detail.evaluation.totalScore}</div>
+          <ListingHero
+            title={detail.listing.listing_name}
+            subtitle="Listing Optimization"
+            imageUrl={detail.listing.mainImageUrl}
+          />
+
+          <HudCard title="AI Agent Selection Score" subtitle="Selection confidence and pillar breakdown.">
+            <div className="grid gap-4 lg:grid-cols-[260px_1fr]">
+              <div className="rounded-xl border border-cyan-300/15 bg-slate-900/50 p-5 text-center">
+                <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Current Score</div>
+                <div className="mt-3 text-6xl font-semibold text-cyan-100">{detail.evaluation.totalScore}</div>
               </div>
 
               <div className="space-y-3">
