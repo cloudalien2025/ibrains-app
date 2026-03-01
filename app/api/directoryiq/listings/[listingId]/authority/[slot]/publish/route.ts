@@ -81,7 +81,11 @@ export async function POST(
 
     const bd = await getDirectoryIqBdConnection(userId);
     if (!bd) {
-      throw new AuthorityRouteError(400, "BD_NOT_CONFIGURED", "Brilliant Directories connection is not configured.");
+      throw new AuthorityRouteError(
+        400,
+        "BD_NOT_CONFIGURED",
+        "Brilliant Directories API not configured. Go to DirectoryIQ -> Settings -> Integrations."
+      );
     }
 
     const publishResult = await publishBlogPostToBd({
