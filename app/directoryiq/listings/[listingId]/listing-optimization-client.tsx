@@ -93,6 +93,10 @@ type UiError = {
   details?: string;
 };
 
+function clientReqId(action: string, slot?: number): string {
+  return `client-${action}-${slot ?? 0}-${Date.now()}`;
+}
+
 function parseApiError(json: ApiErrorPayload, fallback: string): UiError {
   if (Array.isArray(json.validation_errors) && json.validation_errors.length > 0) {
     return { message: json.validation_errors.join(" ") };
@@ -294,6 +298,16 @@ export default function ListingOptimizationClient() {
 
   async function generateDraft(slot: number) {
     setError(null);
+    const focusTopic = (focusTopicBySlot[slot] ?? "").trim();
+    if (!focusTopic) {
+      setError({
+        message: "Focus topic is required before generating a draft.",
+        code: "VALIDATION_ERROR",
+        reqId: clientReqId("draft", slot),
+      });
+      return;
+    }
+
     setBusyAction(`draft-${slot}`);
     const source = detail?.authority_posts.find((post) => post.slot === slot);
     const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/authority/${slot}/draft`, {
@@ -301,7 +315,7 @@ export default function ListingOptimizationClient() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         type: source?.type ?? "contextual_guide",
-        focus_topic: focusTopicBySlot[slot],
+        focus_topic: focusTopic,
         title: titleBySlot[slot],
       }),
     });
@@ -320,11 +334,21 @@ export default function ListingOptimizationClient() {
 
   async function generateImage(slot: number) {
     setError(null);
+    const focusTopic = (focusTopicBySlot[slot] ?? "").trim();
+    if (!focusTopic) {
+      setError({
+        message: "Focus topic is required before generating a featured image.",
+        code: "VALIDATION_ERROR",
+        reqId: clientReqId("image", slot),
+      });
+      return;
+    }
+
     setBusyAction(`image-${slot}`);
     const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/authority/${slot}/image`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ focus_topic: focusTopicBySlot[slot] }),
+      body: JSON.stringify({ focus_topic: focusTopic }),
     });
     const json = (await response.json()) as ApiErrorPayload;
     if (!response.ok) {
@@ -340,6 +364,16 @@ export default function ListingOptimizationClient() {
 
   async function previewBlogPublish(slot: number) {
     setError(null);
+    const source = detail?.authority_posts.find((post) => post.slot === slot);
+    if (!source || source.status === "not_created") {
+      setError({
+        message: "Generate a draft before opening preview.",
+        code: "VALIDATION_ERROR",
+        reqId: clientReqId("preview", slot),
+      });
+      return;
+    }
+
     setBusyAction(`preview-${slot}`);
     const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/authority/${slot}/preview`, { method: "POST" });
     const json = (await response.json()) as PreviewResponse & ApiErrorPayload;
@@ -584,7 +618,7 @@ export default function ListingOptimizationClient() {
                     <NeonButton
                       variant="secondary"
                       onClick={() => void previewBlogPublish(post.slot)}
-                      disabled={post.status === "not_created" || busyAction === `preview-${post.slot}`}
+                      disabled={busyAction === `preview-${post.slot}`}
                     >
                       {busyAction === `preview-${post.slot}` ? "Preparing..." : "Preview"}
                     </NeonButton>
