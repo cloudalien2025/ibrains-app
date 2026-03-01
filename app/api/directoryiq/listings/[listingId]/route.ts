@@ -102,6 +102,7 @@ export async function GET(
     const { listingId } = await Promise.resolve(context.params);
     const listingEval = await getListingEvaluation(userId, decodeURIComponent(listingId));
     const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
+    const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
     const bdBaseUrl = readBaseUrl(bdIntegration.meta);
 
     if (!listingEval.listing || !listingEval.evaluation) {
@@ -138,6 +139,10 @@ export async function GET(
         updated_at: post.updated_at,
       })),
       settings: listingEval.settings,
+      integrations: {
+        brilliant_directories: bdIntegration.status === "connected",
+        openai: openAiIntegration.status === "connected" || Boolean(process.env.OPENAI_API_KEY),
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown listing detail error";

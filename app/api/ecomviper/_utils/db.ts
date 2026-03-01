@@ -270,6 +270,24 @@ async function ensureSchema(): Promise<void> {
         CREATE INDEX IF NOT EXISTS idx_directoryiq_versions_user_created
           ON directoryiq_versions(user_id, created_at DESC);
 
+        CREATE TABLE IF NOT EXISTS directoryiq_listing_upgrades (
+          id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+          user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          listing_source_id TEXT NOT NULL,
+          created_by_user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+          original_description_hash TEXT NOT NULL,
+          original_description TEXT NOT NULL DEFAULT '',
+          proposed_description TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'draft',
+          bd_update_ref TEXT,
+          created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+          previewed_at TIMESTAMPTZ,
+          pushed_at TIMESTAMPTZ
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_directoryiq_listing_upgrades_listing
+          ON directoryiq_listing_upgrades(user_id, listing_source_id, created_at DESC);
+
         CREATE TABLE IF NOT EXISTS brain_snapshots (
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

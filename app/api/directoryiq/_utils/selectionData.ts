@@ -1,5 +1,6 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
+import crypto from "crypto";
 import {
   computeSiteReadiness,
   detectVerticalFromSignals,
@@ -47,6 +48,21 @@ type SettingsRow = {
   updated_at: string;
 };
 
+type ListingUpgradeRow = {
+  id: string;
+  user_id: string;
+  listing_source_id: string;
+  created_by_user_id: string;
+  original_description_hash: string;
+  original_description: string;
+  proposed_description: string;
+  status: "draft" | "previewed" | "pushed";
+  bd_update_ref: string | null;
+  created_at: string;
+  previewed_at: string | null;
+  pushed_at: string | null;
+};
+
 export type DirectoryIqSettings = {
   verticalOverride: DirectoryIqVerticalId | null;
   riskTierOverrides: Partial<Record<DirectoryIqVerticalId, RiskTier>>;
@@ -84,16 +100,25 @@ function asArray(value: unknown): string[] {
   return value.filter((item): item is string => typeof item === "string");
 }
 
-function parseListing(row: ListingRow, posts: AuthorityPostRow[], settings: DirectoryIqSettings): ListingSelectionInput {
-  const raw = (row.raw_json ?? {}) as Record<string, unknown>;
-  const title = row.title ?? asString(raw.title) ?? row.source_id;
-  const description =
+function hashText(value: string): string {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+export function extractListingDescription(raw: Record<string, unknown>): string {
+  return (
     asString(raw.group_desc) ||
     asString(raw.short_description) ||
     asString(raw.description) ||
     asString(raw.content) ||
     asString((raw.content as Record<string, unknown> | undefined)?.rendered) ||
-    asString(raw.excerpt);
+    asString(raw.excerpt)
+  );
+}
+
+function parseListing(row: ListingRow, posts: AuthorityPostRow[], settings: DirectoryIqSettings): ListingSelectionInput {
+  const raw = (row.raw_json ?? {}) as Record<string, unknown>;
+  const title = row.title ?? asString(raw.title) ?? row.source_id;
+  const description = extractListingDescription(raw);
   const category =
     asString(raw.group_category) ||
     asString(raw.category) ||
@@ -717,4 +742,86 @@ export async function getDirectoryIqVersionById(userId: string, versionId: strin
   );
 
   return rows[0] ?? null;
+}
+
+export async function createListingUpgradeDraft(params: {
+  userId: string;
+  listingId: string;
+  createdByUserId: string;
+  originalDescription: string;
+  proposedDescription: string;
+}): Promise<{ id: string }> {
+  const rows = await query<{ id: string }>(
+    `
+    INSERT INTO directoryiq_listing_upgrades
+    (user_id, listing_source_id, created_by_user_id, original_description_hash, original_description, proposed_description, status)
+    VALUES ($1, $2, $3, $4, $5, $6, 'draft')
+    RETURNING id
+    `,
+    [
+      params.userId,
+      params.listingId,
+      params.createdByUserId,
+      hashText(params.originalDescription),
+      params.originalDescription,
+      params.proposedDescription,
+    ]
+  );
+  return rows[0];
+}
+
+export async function getListingUpgradeDraft(
+  userId: string,
+  listingId: string,
+  draftId: string
+): Promise<ListingUpgradeRow | null> {
+  const rows = await query<ListingUpgradeRow>(
+    `
+    SELECT
+      id,
+      user_id,
+      listing_source_id,
+      created_by_user_id,
+      original_description_hash,
+      original_description,
+      proposed_description,
+      status,
+      bd_update_ref,
+      created_at,
+      previewed_at,
+      pushed_at
+    FROM directoryiq_listing_upgrades
+    WHERE user_id = $1 AND listing_source_id = $2 AND id = $3
+    LIMIT 1
+    `,
+    [userId, listingId, draftId]
+  );
+  return rows[0] ?? null;
+}
+
+export async function markListingUpgradePreviewed(userId: string, listingId: string, draftId: string): Promise<void> {
+  await query(
+    `
+    UPDATE directoryiq_listing_upgrades
+    SET status = 'previewed', previewed_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND id = $3
+    `,
+    [userId, listingId, draftId]
+  );
+}
+
+export async function markListingUpgradePushed(params: {
+  userId: string;
+  listingId: string;
+  draftId: string;
+  bdUpdateRef: string | null;
+}): Promise<void> {
+  await query(
+    `
+    UPDATE directoryiq_listing_upgrades
+    SET status = 'pushed', pushed_at = now(), bd_update_ref = $4
+    WHERE user_id = $1 AND listing_source_id = $2 AND id = $3
+    `,
+    [params.userId, params.listingId, params.draftId, params.bdUpdateRef]
+  );
 }

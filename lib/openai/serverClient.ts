@@ -113,6 +113,38 @@ export async function generateAuthorityDraft(params: {
   return content;
 }
 
+export async function generateListingUpgradeDraft(params: {
+  apiKey: string;
+  prompt: string;
+  model?: string;
+}): Promise<string> {
+  const json = await openAiJsonRequest({
+    apiKey: params.apiKey,
+    path: "/v1/chat/completions",
+    timeoutMs: 45_000,
+    retries: 2,
+    payload: {
+      model: params.model || process.env.DIRECTORYIQ_OPENAI_TEXT_MODEL || "gpt-4.1-mini",
+      temperature: 0.15,
+      messages: [
+        {
+          role: "system",
+          content: "You rewrite business listing descriptions. Never fabricate facts. Return only the upgraded description.",
+        },
+        { role: "user", content: params.prompt },
+      ],
+    },
+  });
+
+  const content =
+    (((json.choices as Array<{ message?: { content?: string } }> | undefined)?.[0]?.message?.content as string | undefined) || "").trim();
+
+  if (!content) {
+    throw new AuthorityRouteError(502, "OPENAI_EMPTY_RESPONSE", "OpenAI returned empty listing upgrade content.");
+  }
+  return content;
+}
+
 export async function generateAuthorityImage(params: {
   apiKey: string;
   prompt: string;
