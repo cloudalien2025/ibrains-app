@@ -48,6 +48,10 @@ type ListingDetail = {
     published_url: string | null;
     updated_at: string;
   }>;
+  integrations?: {
+    brilliant_directories?: boolean;
+    openai?: boolean;
+  };
 };
 
 type BlueprintResponse = {
@@ -72,6 +76,12 @@ type PreviewResponse = {
     score_delta?: { before: number; after: number; cap_changes?: Cap[] };
   };
   approval_token?: string;
+};
+
+type UpgradeDiffRow = {
+  left: string;
+  right: string;
+  type: "same" | "added" | "removed" | "changed";
 };
 
 type ApiErrorPayload = {
@@ -231,7 +241,14 @@ export default function ListingOptimizationClient() {
   const [titleBySlot, setTitleBySlot] = useState<Record<number, string>>({});
   const [preview, setPreview] = useState<PreviewResponse["preview"] | null>(null);
   const [previewAction, setPreviewAction] = useState<null | { type: "listing_push"; proposedDescription: string; token: string } | { type: "blog_publish"; slot: number; token: string }>(null);
-  const [proposedDescription, setProposedDescription] = useState("");
+  const [upgradeState, setUpgradeState] = useState<
+    "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done"
+  >("idle");
+  const [upgradeDraftId, setUpgradeDraftId] = useState<string | null>(null);
+  const [upgradeProposedDescription, setUpgradeProposedDescription] = useState<string>("");
+  const [upgradeDiff, setUpgradeDiff] = useState<UpgradeDiffRow[] | null>(null);
+  const [upgradeApprovalToken, setUpgradeApprovalToken] = useState<string>("");
+  const [upgradeApproved, setUpgradeApproved] = useState(false);
 
   const capIndicators = useMemo(() => {
     if (!detail) return [];
@@ -258,6 +275,10 @@ export default function ListingOptimizationClient() {
     ];
   }, [detail]);
 
+  const isGeneratingUpgrade = upgradeState === "generating";
+  const isPreviewingUpgrade = upgradeState === "previewing";
+  const isPushingUpgrade = upgradeState === "pushing";
+
   async function load() {
     setError(null);
     if (!listingId) {
@@ -283,6 +304,12 @@ export default function ListingOptimizationClient() {
         }
         return next;
       });
+      setUpgradeState("idle");
+      setUpgradeDraftId(null);
+      setUpgradeProposedDescription("");
+      setUpgradeDiff(null);
+      setUpgradeApprovalToken("");
+      setUpgradeApproved(false);
     } catch (e) {
       if (typeof e === "object" && e && "message" in e) {
         setError(e as UiError);
@@ -424,47 +451,92 @@ export default function ListingOptimizationClient() {
     await load();
   }
 
-  async function previewListingPush() {
+  async function generateUpgrade() {
     setError(null);
-    setBusyAction("listing-preview");
-    const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/listing-preview`, {
+    setNotice(null);
+    setUpgradeState("generating");
+    const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ proposed_description: proposedDescription }),
+      body: JSON.stringify({ mode: "standard" }),
     });
-    const json = (await response.json()) as PreviewResponse & ApiErrorPayload;
+    const json = (await response.json()) as {
+      draftId?: string;
+      proposedDescription?: string;
+    } & ApiErrorPayload;
     if (!response.ok) {
-      setError(parseApiError(json, "Listing preview failed"));
-      setBusyAction(null);
+      setError(parseApiError(json, "Upgrade generation failed"));
+      setUpgradeState("idle");
       return;
     }
 
-    setPreview(json.preview);
-    setPreviewAction({ type: "listing_push", proposedDescription, token: json.approval_token ?? "" });
-    setBusyAction(null);
+    setUpgradeDraftId(json.draftId ?? null);
+    setUpgradeProposedDescription(json.proposedDescription ?? "");
+    setUpgradeDiff(null);
+    setUpgradeApprovalToken("");
+    setUpgradeApproved(false);
+    setUpgradeState("generated");
+    setNotice("Upgrade draft generated.");
   }
 
-  async function pushListing(token: string) {
-    if (previewAction?.type !== "listing_push") return;
-    setError(null);
-    setBusyAction("listing-push");
-    const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/listing-push`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ approve_push: true, proposed_description: previewAction.proposedDescription, approval_token: token }),
-    });
-
-    const json = (await response.json()) as { version_id?: string } & ApiErrorPayload;
-    if (!response.ok) {
-      setError(parseApiError(json, "Listing push failed"));
-      setBusyAction(null);
+  async function previewUpgrade() {
+    if (!upgradeDraftId) {
+      setError({ message: "Generate an upgrade before previewing changes.", reqId: clientReqId("upgrade-preview") });
       return;
     }
 
-    setNotice(`Listing pushed. Version ${json.version_id ?? "created"}.`);
-    setPreview(null);
-    setPreviewAction(null);
-    setBusyAction(null);
+    setError(null);
+    setUpgradeState("previewing");
+    const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/preview`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId: upgradeDraftId }),
+    });
+    const json = (await response.json()) as {
+      draftId?: string;
+      original?: string;
+      proposed?: string;
+      diff?: UpgradeDiffRow[];
+      approvalToken?: string;
+    } & ApiErrorPayload;
+    if (!response.ok) {
+      setError(parseApiError(json, "Upgrade preview failed"));
+      setUpgradeState("generated");
+      return;
+    }
+
+    setUpgradeProposedDescription(json.proposed ?? "");
+    setUpgradeDiff(Array.isArray(json.diff) ? json.diff : []);
+    setUpgradeApprovalToken(json.approvalToken ?? "");
+    setUpgradeApproved(false);
+    setUpgradeState("ready_to_push");
+    setNotice("Preview ready. Confirm and push when ready.");
+  }
+
+  async function pushUpgrade() {
+    if (!upgradeDraftId) return;
+    if (!upgradeApproved) {
+      setError({ message: "Check approval confirmation before pushing.", reqId: clientReqId("upgrade-push") });
+      return;
+    }
+
+    setError(null);
+    setUpgradeState("pushing");
+    const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/push`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ draftId: upgradeDraftId, approved: true, approvalToken: upgradeApprovalToken }),
+    });
+    const json = (await response.json()) as { versionId?: string } & ApiErrorPayload;
+    if (!response.ok) {
+      setError(parseApiError(json, "Upgrade push failed"));
+      setUpgradeState("ready_to_push");
+      return;
+    }
+
+    setNotice(`Listing pushed. Version ${json.versionId ?? "created"}.`);
+    setUpgradeState("done");
+    await load();
   }
 
   return (
@@ -567,20 +639,129 @@ export default function ListingOptimizationClient() {
               <div className="text-sm text-slate-300">Run blueprint generation to view pillar-specific gaps.</div>
             )}
 
-            <div className="mt-6 rounded-xl border border-white/10 p-3">
-              <div className="mb-2 text-xs uppercase tracking-[0.08em] text-cyan-200">Listing Update Draft</div>
-              <textarea
-                value={proposedDescription}
-                onChange={(event) => setProposedDescription(event.target.value)}
-                placeholder="Paste proposed listing description update"
-                className="h-28 w-full rounded-xl border border-white/15 bg-white/[0.04] p-3 text-sm text-slate-100"
-              />
-              <div className="mt-2">
-                <NeonButton onClick={previewListingPush} disabled={busyAction === "listing-preview"}>
-                  {busyAction === "listing-preview" ? "Preparing..." : "Preview Listing Push"}
+            <section className="mt-6 rounded-xl border border-white/10 p-4">
+              <h3 className="text-base font-semibold text-slate-100">Auto-Generate Listing Upgrade</h3>
+              <p className="mt-1 text-sm text-slate-300">
+                We&apos;ll write an improved listing based on detected gaps. You can preview changes before any push.
+              </p>
+
+              {detail.integrations?.openai === false ? (
+                <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                  <div>OpenAI not configured.</div>
+                  <a
+                    href="/directoryiq/settings/integrations"
+                    className="mt-2 inline-block rounded-md border border-amber-200/40 px-2 py-1 text-xs text-amber-50 hover:bg-amber-300/15"
+                  >
+                    Configure OpenAI in Integrations
+                  </a>
+                </div>
+              ) : null}
+
+              {detail.integrations?.brilliant_directories === false ? (
+                <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 p-3 text-sm text-amber-100">
+                  <div>Brilliant Directories API not configured.</div>
+                  <a
+                    href="/directoryiq/settings/integrations"
+                    className="mt-2 inline-block rounded-md border border-amber-200/40 px-2 py-1 text-xs text-amber-50 hover:bg-amber-300/15"
+                  >
+                    Configure Brilliant Directories in Integrations
+                  </a>
+                </div>
+              ) : null}
+
+              <div className="mt-3 flex flex-wrap gap-2">
+                <NeonButton onClick={() => void generateUpgrade()} disabled={isGeneratingUpgrade}>
+                  {isGeneratingUpgrade ? "Generating..." : "Generate Upgrade"}
                 </NeonButton>
+
+                {(upgradeState === "generated" || upgradeState === "ready_to_push" || upgradeState === "done") && upgradeDraftId ? (
+                  <NeonButton variant="secondary" onClick={() => void previewUpgrade()} disabled={isPreviewingUpgrade}>
+                    {isPreviewingUpgrade ? "Preparing..." : "Preview Changes"}
+                  </NeonButton>
+                ) : null}
+
+                {(upgradeState === "generated" || upgradeState === "ready_to_push" || upgradeState === "done") ? (
+                  <NeonButton variant="secondary" onClick={() => void generateUpgrade()} disabled={isGeneratingUpgrade}>
+                    Regenerate
+                  </NeonButton>
+                ) : null}
               </div>
-            </div>
+
+              {(upgradeState === "generated" || upgradeState === "ready_to_push" || upgradeState === "done") && upgradeProposedDescription ? (
+                <details className="mt-4 rounded-lg border border-white/10 p-3 text-sm text-slate-200">
+                  <summary className="cursor-pointer text-cyan-200">Generated Upgrade</summary>
+                  <pre className="mt-3 whitespace-pre-wrap rounded-lg bg-slate-900/70 p-3 text-sm text-slate-100">
+                    {upgradeProposedDescription}
+                  </pre>
+                </details>
+              ) : null}
+
+              {upgradeState === "ready_to_push" && upgradeDiff ? (
+                <div className="mt-4 rounded-lg border border-white/10 p-3">
+                  <div className="mb-2 text-xs uppercase tracking-[0.08em] text-cyan-200">Diff Viewer</div>
+                  <div className="max-h-80 overflow-auto rounded-lg border border-white/10">
+                    <div className="grid grid-cols-2 border-b border-white/10 bg-slate-900/70 p-2 text-xs uppercase tracking-[0.08em] text-slate-300">
+                      <div>Original listing description</div>
+                      <div>Proposed listing description</div>
+                    </div>
+                    {upgradeDiff.map((row, index) => (
+                      <div
+                        key={`${index}-${row.type}`}
+                        className={`grid grid-cols-2 gap-0 border-b border-white/5 text-sm ${
+                          row.type === "changed"
+                            ? "bg-cyan-400/10"
+                            : row.type === "added"
+                              ? "bg-emerald-400/10"
+                              : row.type === "removed"
+                                ? "bg-rose-400/10"
+                                : "bg-transparent"
+                        }`}
+                      >
+                        <pre className="whitespace-pre-wrap border-r border-white/10 p-2 text-slate-200">{row.left || " "}</pre>
+                        <pre className="whitespace-pre-wrap p-2 text-slate-100">{row.right || " "}</pre>
+                      </div>
+                    ))}
+                  </div>
+
+                  <label className="mt-3 flex items-center gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={upgradeApproved}
+                      onChange={(event) => setUpgradeApproved(event.target.checked)}
+                      className="h-4 w-4 rounded border-white/30 bg-slate-900"
+                    />
+                    I reviewed the diff and approve this push.
+                  </label>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <NeonButton onClick={() => void pushUpgrade()} disabled={isPushingUpgrade || !upgradeApproved}>
+                      {isPushingUpgrade ? "Pushing..." : "Approve & Push to BD"}
+                    </NeonButton>
+                    <NeonButton
+                      variant="secondary"
+                      onClick={() => {
+                        setUpgradeState("generated");
+                        setUpgradeDiff(null);
+                        setUpgradeApprovalToken("");
+                        setUpgradeApproved(false);
+                      }}
+                    >
+                      Cancel
+                    </NeonButton>
+                    <NeonButton variant="secondary" onClick={() => void generateUpgrade()} disabled={isGeneratingUpgrade}>
+                      Regenerate
+                    </NeonButton>
+                  </div>
+                </div>
+              ) : null}
+
+              <details className="mt-4 rounded-lg border border-white/10 p-3 text-sm text-slate-300">
+                <summary className="cursor-pointer text-slate-200">Advanced: Manual Override</summary>
+                <div className="mt-2 text-xs text-slate-400">
+                  Manual listing text override is intentionally hidden in v1 to keep the upgrade flow simple and deterministic.
+                </div>
+              </details>
+            </section>
           </HudCard>
 
           <HudCard title="Authority Support" subtitle="Max 4 posts per listing.">
@@ -666,11 +847,8 @@ export default function ListingOptimizationClient() {
 
           <DiffPreview
             preview={preview}
-            approveLabel={previewAction?.type === "listing_push" ? "Approve & Push" : "Approve & Publish"}
+            approveLabel="Approve & Publish"
             onApprove={async () => {
-              if (previewAction?.type === "listing_push") {
-                await pushListing(previewAction.token);
-              }
               if (previewAction?.type === "blog_publish") {
                 await publishBlog(previewAction.slot, previewAction.token);
               }
