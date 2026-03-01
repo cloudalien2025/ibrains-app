@@ -1,0 +1,75 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { expect, test } from "@playwright/test";
+
+const runStamp = new Date().toISOString().replace(/[:.]/g, "-");
+const artifactRoot = path.join(process.cwd(), "artifacts", "ui-audit", runStamp);
+const screenshotsDir = path.join(artifactRoot, "screenshots");
+const logsDir = path.join(artifactRoot, "logs");
+
+test.describe("DirectoryIQ listing hero visuals", () => {
+  test("renders hero image or fallback with glass panel on listing pages", async ({ page, baseURL }) => {
+    await fs.mkdir(screenshotsDir, { recursive: true });
+    await fs.mkdir(logsDir, { recursive: true });
+
+    const consoleErrors: Array<{ type: string; text: string; url?: string }> = [];
+    const imageFailures: Array<{ url: string; status: number }> = [];
+
+    page.on("console", (msg) => {
+      if (msg.type() === "error") {
+        consoleErrors.push({
+          type: msg.type(),
+          text: msg.text(),
+          url: msg.location().url || undefined,
+        });
+      }
+    });
+
+    page.on("response", (response) => {
+      if (response.status() >= 400 && response.request().resourceType() === "image") {
+        imageFailures.push({ url: response.url(), status: response.status() });
+      }
+    });
+
+    for (const listingId of ["8", "651"]) {
+      await page.goto(`${baseURL}/directoryiq/listings/${listingId}`, { waitUntil: "networkidle" });
+      await page
+        .waitForResponse(
+          (response) =>
+            response.url().includes(`/api/directoryiq/listings/${listingId}`) &&
+            response.request().method() === "GET",
+          { timeout: 20_000 }
+        )
+        .catch(() => null);
+
+      const hero = page.getByTestId("directoryiq-listing-hero");
+      await expect(hero).toBeVisible({ timeout: 20_000 });
+      await expect(hero.locator("h1")).toBeVisible();
+      await expect(page.getByTestId("directoryiq-hero-glass-panel").first()).toBeVisible();
+
+      const heroImage = hero.getByTestId("directoryiq-hero-image");
+      const imageCount = await heroImage.count();
+      if (imageCount > 0) {
+        await expect(heroImage.first()).toBeVisible();
+        const src = await heroImage.first().getAttribute("src");
+        expect(src && src.length > 0).toBeTruthy();
+      } else {
+        await expect(hero.getByText("No main image available for this listing.")).toBeVisible();
+      }
+
+      await page.screenshot({
+        path: path.join(screenshotsDir, `directoryiq-listing-${listingId}__full-after.png`),
+        fullPage: true,
+      });
+      await hero.screenshot({
+        path: path.join(screenshotsDir, `directoryiq-listing-${listingId}__hero-after.png`),
+      });
+    }
+
+    await fs.writeFile(path.join(logsDir, "directoryiq-hero-console-errors.json"), JSON.stringify(consoleErrors, null, 2), "utf8");
+    await fs.writeFile(path.join(logsDir, "directoryiq-hero-image-failures.json"), JSON.stringify(imageFailures, null, 2), "utf8");
+
+    expect(consoleErrors).toEqual([]);
+    expect(imageFailures).toEqual([]);
+  });
+});
