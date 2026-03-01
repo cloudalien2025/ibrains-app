@@ -20,7 +20,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Listings and blog signal ingest surface for travel entity readiness.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/signal-sources?connector=brilliant-directories#credentials",
+    actionHref: "/directoryiq/settings/integrations?connector=brilliant-directories",
   },
   {
     id: "openai",
@@ -29,7 +29,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Entity normalization, signal synthesis, and authority blueprint drafting.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/signal-sources?connector=openai#credentials",
+    actionHref: "/directoryiq/settings/integrations?connector=openai",
   },
   {
     id: "serpapi",
@@ -38,7 +38,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Competitive set discovery and comparative clarity checks.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/signal-sources?connector=serpapi#credentials",
+    actionHref: "/directoryiq/settings/integrations?connector=serpapi",
   },
   {
     id: "ga4",
@@ -47,7 +47,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Feedback loop for behavior signals and post-selection outcomes.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/signal-sources?connector=ga4#credentials",
+    actionHref: "/directoryiq/settings/integrations?connector=ga4",
   },
   {
     id: "google-places",
@@ -104,7 +104,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Channel and transcript ingest for narrative legibility.",
     actionLabel: "Configure",
-    actionHref: "/studio/signal-sources?connector=youtube#credentials",
+    actionHref: "/studio/signal-sources?connector=youtube",
   },
   {
     id: "openai",
@@ -113,7 +113,7 @@ export const studioSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Narrative synthesis, evidence mapping, and mention scaffolding.",
     actionLabel: "Configure",
-    actionHref: "/studio/signal-sources?connector=openai#credentials",
+    actionHref: "/studio/signal-sources?connector=openai",
   },
   {
     id: "podcast-rss",
@@ -188,7 +188,7 @@ export const ecomviperSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Model credentials for selection reasoning and blueprint generation.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/ecomviper/settings/integrations?connector=openai",
   },
   {
     id: "ga4",
@@ -197,7 +197,7 @@ export const ecomviperSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Behavior analytics for feedback-driven product selection.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/ecomviper/settings/integrations?connector=ga4",
   },
   {
     id: "serpapi",
@@ -206,7 +206,7 @@ export const ecomviperSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Visibility and competitor context for selection confidence.",
     actionLabel: "Configure",
-    actionHref: "/ecomviper/settings/apis",
+    actionHref: "/ecomviper/settings/integrations?connector=serpapi",
   },
   {
     id: "reviews",
