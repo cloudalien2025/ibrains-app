@@ -1,32 +1,45 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { encryptSecret } from "@/app/api/ecomviper/_utils/crypto";
-import { query } from "@/app/api/ecomviper/_utils/db";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import {
   isDirectoryIqConnector,
-  toDirectoryIqStatus,
+  type DirectoryIqCredentialStatus,
   type DirectoryIqConnector,
-  type DirectoryIqCredentialRow,
 } from "@/lib/directoryiq/signalSourceCredentials";
+import {
+  deleteDirectoryIqIntegration,
+  getDirectoryIqIntegration,
+  listDirectoryIqIntegrations,
+  saveDirectoryIqIntegration,
+} from "@/app/api/directoryiq/_utils/credentials";
+
+function connectorToProvider(connector: DirectoryIqConnector): "brilliant_directories" | "openai" | "serpapi" | "ga4" {
+  if (connector === "brilliant_directories_api") return "brilliant_directories";
+  return connector;
+}
+
+function providerToConnector(provider: string): DirectoryIqConnector {
+  if (provider === "brilliant_directories") return "brilliant_directories_api";
+  if (provider === "openai" || provider === "serpapi" || provider === "ga4") return provider;
+  return "openai";
+}
 
 export async function GET(req: NextRequest) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const rows = await query<DirectoryIqCredentialRow>(
-      `
-      SELECT connector_id, label, secret_last4, secret_length, updated_at, config_json
-      FROM directoryiq_signal_source_credentials
-      WHERE user_id = $1
-      ORDER BY connector_id ASC
-      `,
-      [userId]
-    );
-
-    return NextResponse.json({ connectors: toDirectoryIqStatus(rows) });
+    const integrations = await listDirectoryIqIntegrations(userId);
+    const connectors: DirectoryIqCredentialStatus[] = integrations.map((row) => ({
+      connector_id: providerToConnector(row.provider),
+      connected: row.status === "connected",
+      label: (row.meta.label as string | null) ?? null,
+      masked_secret: row.masked,
+      updated_at: row.savedAt,
+      config: row.meta as Record<string, string>,
+    }));
+    return NextResponse.json({ connectors });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ signal-source error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -56,38 +69,37 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "secret is required" }, { status: 400 });
     }
 
-    const ciphertext = encryptSecret(secret, `${userId}:directoryiq:${connectorId}`);
-    const secretLast4 = secret.slice(-4);
-    const secretLength = secret.length;
-
     const configJson =
       body.config && typeof body.config === "object"
         ? Object.fromEntries(
-            Object.entries(body.config).filter(
-              ([, value]) => typeof value === "string" && value.trim().length > 0
-            )
+            Object.entries(body.config).filter((entry) => typeof entry[1] === "string" && String(entry[1]).trim().length > 0)
           )
         : {};
 
-    await query(
-      `
-      INSERT INTO directoryiq_signal_source_credentials
-      (user_id, connector_id, secret_ciphertext, secret_last4, secret_length, label, config_json, last_verified_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, now())
-      ON CONFLICT (user_id, connector_id)
-      DO UPDATE SET
-        secret_ciphertext = EXCLUDED.secret_ciphertext,
-        secret_last4 = EXCLUDED.secret_last4,
-        secret_length = EXCLUDED.secret_length,
-        label = EXCLUDED.label,
-        config_json = EXCLUDED.config_json,
-        last_verified_at = now(),
-        updated_at = now()
-      `,
-      [userId, connectorId, ciphertext, secretLast4, secretLength, body.label?.trim() || null, JSON.stringify(configJson)]
-    );
+    const provider = connectorToProvider(connectorId);
+    const meta =
+      provider === "brilliant_directories"
+        ? {
+            baseUrl: (configJson.base_url as string) ?? "",
+            listingsPath: (configJson.listings_path as string) ?? "/api/v2/users_portfolio_groups/search",
+            blogPostsPath: (configJson.blog_posts_path as string) ?? "/api/v2/data_posts/search",
+            listingsDataId: 75,
+            label: body.label?.trim() || null,
+          }
+        : {
+            ...configJson,
+            label: body.label?.trim() || null,
+          };
 
-    return NextResponse.json({ ok: true, connector_id: connectorId, connected: true });
+    await saveDirectoryIqIntegration({
+      userId,
+      provider,
+      secret,
+      meta,
+    });
+
+    const saved = await getDirectoryIqIntegration(userId, provider);
+    return NextResponse.json({ ok: true, connector_id: connectorId, connected: true, saved_at: saved.savedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ credential save error";
     return NextResponse.json({ error: message }, { status: 500 });
@@ -104,10 +116,7 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Unsupported connector_id" }, { status: 400 });
     }
 
-    await query(
-      `DELETE FROM directoryiq_signal_source_credentials WHERE user_id = $1 AND connector_id = $2`,
-      [userId, connectorId]
-    );
+    await deleteDirectoryIqIntegration(userId, connectorToProvider(connectorId));
 
     return NextResponse.json({ ok: true });
   } catch (error) {
