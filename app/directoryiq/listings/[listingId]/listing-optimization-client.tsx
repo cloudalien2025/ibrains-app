@@ -121,6 +121,16 @@ function PillarBar({ label, value }: { label: string; value: number }) {
   );
 }
 
+function humanPostStatus(status: "not_created" | "draft" | "published"): string {
+  if (status === "not_created") return "Not Created";
+  if (status === "draft") return "Draft Ready";
+  return "Published";
+}
+
+function humanLinkStatus(status: "linked" | "missing"): string {
+  return status === "linked" ? "Linked" : "Missing";
+}
+
 function DiffPreview({ preview, onApprove, approveLabel }: { preview: PreviewResponse["preview"] | null; onApprove: () => Promise<void>; approveLabel: string }) {
   const [busy, setBusy] = useState(false);
 
@@ -128,51 +138,57 @@ function DiffPreview({ preview, onApprove, approveLabel }: { preview: PreviewRes
 
   return (
     <HudCard title="Diff Preview" subtitle="Approval required before any write action.">
-      {preview.listing_changes?.length ? (
-        <div className="mb-4 space-y-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-cyan-200">Listing changes</div>
-          {preview.listing_changes.map((change, index) => (
-            <div key={`${change.section}-${index}`} className="rounded-lg border border-white/10 p-3">
-              <div className="mb-2 text-xs text-slate-400">{change.section}</div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-slate-300">{change.before}</pre>
-                <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-cyan-100">{change.after}</pre>
+      <div className="mb-4 rounded-lg border border-white/10 p-3 text-sm text-slate-200">
+        {preview.score_delta ? (
+          <div>Score Delta: {preview.score_delta.before} → {preview.score_delta.after}</div>
+        ) : (
+          <div>Review proposed content and link updates before approval.</div>
+        )}
+      </div>
+
+      <details className="mb-4 rounded-lg border border-white/10 p-3 text-xs text-slate-200">
+        <summary className="cursor-pointer text-cyan-200">Details</summary>
+
+        {preview.listing_changes?.length ? (
+          <div className="mt-3 space-y-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-cyan-200">Listing changes</div>
+            {preview.listing_changes.map((change, index) => (
+              <div key={`${change.section}-${index}`} className="rounded-lg border border-white/10 p-3">
+                <div className="mb-2 text-xs text-slate-400">{change.section}</div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-slate-300">{change.before}</pre>
+                  <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-cyan-100">{change.after}</pre>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
+            ))}
+          </div>
+        ) : null}
 
-      {preview.blog_changes?.length ? (
-        <div className="mb-4 space-y-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-cyan-200">Blog changes</div>
-          {preview.blog_changes.map((change, index) => (
-            <div key={`${change.section}-${index}`} className="rounded-lg border border-white/10 p-3">
-              <div className="mb-2 text-xs text-slate-400">{change.section}</div>
-              <div className="grid gap-2 md:grid-cols-2">
-                <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-slate-300">{change.before}</pre>
-                <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-cyan-100">{change.after}</pre>
+        {preview.blog_changes?.length ? (
+          <div className="mt-3 space-y-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-cyan-200">Blog changes</div>
+            {preview.blog_changes.map((change, index) => (
+              <div key={`${change.section}-${index}`} className="rounded-lg border border-white/10 p-3">
+                <div className="mb-2 text-xs text-slate-400">{change.section}</div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-slate-300">{change.before}</pre>
+                  <pre className="max-h-44 overflow-auto rounded bg-slate-900/80 p-2 text-xs text-cyan-100">{change.after}</pre>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
-      ) : null}
+            ))}
+          </div>
+        ) : null}
 
-      {preview.inserted_links ? (
-        <div className="mb-4 rounded-lg border border-white/10 p-3 text-xs text-slate-200">
-          <div className="mb-2 text-xs uppercase tracking-[0.08em] text-cyan-200">Inserted Links</div>
-          <div>Blog → Listing: {preview.inserted_links.blog_to_listing.status}</div>
-          <div>Anchor/Location: {preview.inserted_links.blog_to_listing.anchor_text} · {preview.inserted_links.blog_to_listing.location}</div>
-          <div className="mt-1">Listing → Blog: {preview.inserted_links.listing_to_blog.status}</div>
-          <div>Placement: {preview.inserted_links.listing_to_blog.placement}</div>
-        </div>
-      ) : null}
-
-      {preview.score_delta ? (
-        <div className="mb-4 rounded-lg border border-white/10 p-3 text-sm text-slate-200">
-          Score Delta: {preview.score_delta.before} → {preview.score_delta.after}
-        </div>
-      ) : null}
+        {preview.inserted_links ? (
+          <div className="mt-3 rounded-lg border border-white/10 p-3 text-xs text-slate-200">
+            <div className="mb-2 text-xs uppercase tracking-[0.08em] text-cyan-200">Inserted Links</div>
+            <div>Blog → Listing: {preview.inserted_links.blog_to_listing.status}</div>
+            <div>Anchor/Location: {preview.inserted_links.blog_to_listing.anchor_text} · {preview.inserted_links.blog_to_listing.location}</div>
+            <div className="mt-1">Listing → Blog: {preview.inserted_links.listing_to_blog.status}</div>
+            <div>Placement: {preview.inserted_links.listing_to_blog.placement}</div>
+          </div>
+        ) : null}
+      </details>
 
       <NeonButton
         onClick={async () => {
@@ -192,16 +208,21 @@ function DiffPreview({ preview, onApprove, approveLabel }: { preview: PreviewRes
 }
 
 export default function ListingOptimizationClient() {
-  const params = useParams<{ listingId: string }>();
-  const listingId = decodeURIComponent(params.listingId);
+  const params = useParams<{ listingId?: string | string[] }>();
+  const listingId = useMemo(() => {
+    const raw = params?.listingId;
+    if (typeof raw === "string" && raw.length > 0) return decodeURIComponent(raw);
+    if (Array.isArray(raw) && raw[0]) return decodeURIComponent(raw[0]);
+    return "";
+  }, [params]);
 
   const [detail, setDetail] = useState<ListingDetail | null>(null);
   const [blueprint, setBlueprint] = useState<BlueprintResponse["blueprint"] | null>(null);
   const [error, setError] = useState<UiError | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [busyAction, setBusyAction] = useState<string | null>(null);
-  const [focusTopicBySlot, setFocusTopicBySlot] = useState<Record<number, string>>({ 1: "", 2: "", 3: "", 4: "" });
-  const [titleBySlot, setTitleBySlot] = useState<Record<number, string>>({ 1: "", 2: "", 3: "", 4: "" });
+  const [focusTopicBySlot, setFocusTopicBySlot] = useState<Record<number, string>>({});
+  const [titleBySlot, setTitleBySlot] = useState<Record<number, string>>({});
   const [preview, setPreview] = useState<PreviewResponse["preview"] | null>(null);
   const [previewAction, setPreviewAction] = useState<null | { type: "listing_push"; proposedDescription: string; token: string } | { type: "blog_publish"; slot: number; token: string }>(null);
   const [proposedDescription, setProposedDescription] = useState("");
@@ -218,11 +239,29 @@ export default function ListingOptimizationClient() {
 
   async function load() {
     setError(null);
+    if (!listingId) {
+      setDetail(null);
+      return;
+    }
     try {
       const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}`, { cache: "no-store" });
       const json = (await response.json()) as ListingDetail & ApiErrorPayload;
       if (!response.ok) throw parseApiError(json, "Failed to load listing");
       setDetail(json);
+      setTitleBySlot((prev) => {
+        const next = { ...prev };
+        for (const post of json.authority_posts ?? []) {
+          if (next[post.slot] == null && post.title) next[post.slot] = post.title;
+        }
+        return next;
+      });
+      setFocusTopicBySlot((prev) => {
+        const next = { ...prev };
+        for (const post of json.authority_posts ?? []) {
+          if (next[post.slot] == null && post.focus_topic) next[post.slot] = post.focus_topic;
+        }
+        return next;
+      });
     } catch (e) {
       if (typeof e === "object" && e && "message" in e) {
         setError(e as UiError);
@@ -233,6 +272,7 @@ export default function ListingOptimizationClient() {
   }
 
   useEffect(() => {
+    if (!listingId) return;
     void load();
   }, [listingId]);
 
@@ -271,7 +311,7 @@ export default function ListingOptimizationClient() {
       return;
     }
 
-    setNotice(`Draft generated for slot ${slot}.`);
+    setNotice(`Draft ready for slot ${slot}.`);
     setBusyAction(null);
     await load();
   }
@@ -291,7 +331,7 @@ export default function ListingOptimizationClient() {
       return;
     }
 
-    setNotice(`Featured image generated for slot ${slot}.`);
+    setNotice(`Featured image ready for slot ${slot}.`);
     setBusyAction(null);
     await load();
   }
@@ -378,7 +418,20 @@ export default function ListingOptimizationClient() {
 
   return (
     <>
+      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <h1 className="text-xl font-semibold text-slate-100">Listing Optimization</h1>
+        <p className="mt-1 text-sm text-slate-300">
+          Review score gaps, improve authority support, then preview before any publish or push.
+        </p>
+      </section>
+
       <TopBar breadcrumbs={["Home", "DirectoryIQ", "Listing Optimization"]} searchPlaceholder="Search listing optimization..." />
+
+      {!listingId ? (
+        <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+          Listing id is missing from the route.
+        </div>
+      ) : null}
 
       {error ? (
         <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
@@ -482,6 +535,10 @@ export default function ListingOptimizationClient() {
                     <span className="text-xs text-slate-300">Slot {post.slot}</span>
                   </div>
 
+                  <div className="mb-2 text-[11px] text-slate-300">
+                    Step 1: Provide title and focus topic.
+                  </div>
+
                   <input
                     value={titleBySlot[post.slot] ?? post.title ?? ""}
                     onChange={(event) => setTitleBySlot((prev) => ({ ...prev, [post.slot]: event.target.value }))}
@@ -496,15 +553,18 @@ export default function ListingOptimizationClient() {
                   />
 
                   <div className="mb-3 flex flex-wrap gap-1 text-[11px]">
-                    <span className="rounded-full border border-white/15 px-2 py-0.5 text-slate-200">Status: {post.status}</span>
+                    <span className="rounded-full border border-white/15 px-2 py-0.5 text-slate-200">Status: {humanPostStatus(post.status)}</span>
                     <span className={`rounded-full border px-2 py-0.5 ${post.blog_to_listing_status === "linked" ? "border-emerald-300/40 text-emerald-100" : "border-amber-300/40 text-amber-100"}`}>
-                      Blog→Listing: {post.blog_to_listing_status}
+                      Blog→Listing: {humanLinkStatus(post.blog_to_listing_status)}
                     </span>
                     <span className={`rounded-full border px-2 py-0.5 ${post.listing_to_blog_status === "linked" ? "border-emerald-300/40 text-emerald-100" : "border-amber-300/40 text-amber-100"}`}>
-                      Listing→Blog: {post.listing_to_blog_status}
+                      Listing→Blog: {humanLinkStatus(post.listing_to_blog_status)}
                     </span>
                   </div>
 
+                  <div className="mb-2 text-[11px] text-slate-300">
+                    Step 2: Generate Draft.
+                  </div>
                   <div className="flex flex-wrap gap-2">
                     <NeonButton onClick={() => void generateDraft(post.slot)} disabled={busyAction === `draft-${post.slot}`}>
                       {busyAction === `draft-${post.slot}` ? "Generating..." : "Generate Draft"}
@@ -512,16 +572,34 @@ export default function ListingOptimizationClient() {
                     <NeonButton variant="secondary" onClick={() => void generateImage(post.slot)} disabled={busyAction === `image-${post.slot}`}>
                       {busyAction === `image-${post.slot}` ? "Generating..." : "Generate Featured Image"}
                     </NeonButton>
-                    <NeonButton variant="secondary" onClick={() => void previewBlogPublish(post.slot)} disabled={busyAction === `preview-${post.slot}`}>
+
+                    <NeonButton
+                      variant="secondary"
+                      onClick={() => void previewBlogPublish(post.slot)}
+                      disabled={post.status === "not_created" || busyAction === `preview-${post.slot}`}
+                    >
                       {busyAction === `preview-${post.slot}` ? "Preparing..." : "Preview"}
                     </NeonButton>
-                    <NeonButton
-                      onClick={() => void previewBlogPublish(post.slot)}
-                      disabled={busyAction === `preview-${post.slot}` || busyAction === `publish-${post.slot}`}
-                    >
-                      {busyAction === `publish-${post.slot}` ? "Publishing..." : "Publish"}
-                    </NeonButton>
+
+                    {previewAction?.type === "blog_publish" && previewAction.slot === post.slot ? (
+                      <NeonButton
+                        variant="secondary"
+                        onClick={() => void publishBlog(post.slot, previewAction.token)}
+                        disabled={busyAction === `publish-${post.slot}`}
+                      >
+                        {busyAction === `publish-${post.slot}` ? "Publishing..." : "Publish"}
+                      </NeonButton>
+                    ) : null}
                   </div>
+
+                  <details className="mt-3 rounded-lg border border-white/10 p-2 text-xs text-slate-300">
+                    <summary className="cursor-pointer text-cyan-200">Details</summary>
+                    <div className="mt-2 space-y-1">
+                      <div>Draft status: {humanPostStatus(post.status)}</div>
+                      <div>Blog link check: {humanLinkStatus(post.blog_to_listing_status)}</div>
+                      <div>Listing link check: {humanLinkStatus(post.listing_to_blog_status)}</div>
+                    </div>
+                  </details>
                 </article>
               ))}
             </div>
