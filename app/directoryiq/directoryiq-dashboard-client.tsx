@@ -1,189 +1,198 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import TopBar from "@/components/ecomviper/TopBar";
-import ConnectPanel from "@/components/connect/ConnectPanel";
-import SnapshotCard from "@/components/snapshots/SnapshotCard";
-import SnapshotStatusStrip from "@/components/snapshots/SnapshotStatusStrip";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
-import {
-  type SnapshotResponse,
-  isSnapshotStale,
-  metricTemplate,
-  type SnapshotStatus,
-} from "@/lib/snapshots/types";
+import DirectoryIqTopNav from "@/components/directoryiq/DirectoryIqTopNav";
 
-const EMPTY_SNAPSHOT: SnapshotResponse = {
-  brain_id: "directoryiq",
-  status: "needs_connection",
-  updated_at: null,
-  metrics: metricTemplate("directoryiq", "loading"),
-  hints: [],
-  last_error: null,
+type DashboardResponse = {
+  connected: boolean;
+  readiness: number;
+  pillars: {
+    structure: number;
+    clarity: number;
+    trust: number;
+    authority: number;
+    actionability: number;
+  };
+  listings: Array<{
+    listing_id: string;
+    listing_name: string;
+    score: number;
+    authority_status: string;
+    trust_status: string;
+    last_optimized: string | null;
+  }>;
+  vertical_detected: string;
+  vertical_override: string | null;
+  last_analyzed_at: string | null;
+  progress_messages: string[];
 };
 
-export default function DirectoryIqDashboardClient({ userLabel }: { userLabel: string }) {
-  const [websiteUrl, setWebsiteUrl] = useState("");
-  const [apiKey, setApiKey] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
+const EMPTY: DashboardResponse = {
+  connected: false,
+  readiness: 0,
+  pillars: { structure: 0, clarity: 0, trust: 0, authority: 0, actionability: 0 },
+  listings: [],
+  vertical_detected: "general",
+  vertical_override: null,
+  last_analyzed_at: null,
+  progress_messages: [],
+};
+
+function humanizeState(value: string): string {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function PillarBar({ label, value }: { label: string; value: number }) {
+  return (
+    <div>
+      <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+        <span>{label}</span>
+        <span>{value}</span>
+      </div>
+      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
+        <div className="h-full rounded-full bg-cyan-300/80" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      </div>
+    </div>
+  );
+}
+
+export default function DirectoryIqDashboardClient() {
+  const [data, setData] = useState<DashboardResponse>(EMPTY);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [snapshot, setSnapshot] = useState<SnapshotResponse>(EMPTY_SNAPSHOT);
-  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [progressIndex, setProgressIndex] = useState(0);
 
-  const connected = snapshot.status !== "needs_connection";
+  const progressLabel = useMemo(() => {
+    if (!loading) return null;
+    if (!data.progress_messages.length) return "Evaluating selection signals...";
+    return data.progress_messages[progressIndex % data.progress_messages.length];
+  }, [data.progress_messages, loading, progressIndex]);
 
-  function clearPolling() {
-    if (pollTimerRef.current) {
-      clearInterval(pollTimerRef.current);
-      pollTimerRef.current = null;
-    }
-  }
-
-  async function loadSnapshot(): Promise<SnapshotResponse | null> {
-    try {
-      const response = await fetch("/api/directoryiq/snapshot", { cache: "no-store" });
-      const json = (await response.json()) as SnapshotResponse & { error?: string };
-      if (!response.ok) throw new Error(json.error ?? "Failed to load snapshot");
-      setSnapshot(json);
-      return json;
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown snapshot error");
-      return null;
-    }
-  }
-
-  function startPolling() {
-    clearPolling();
-    const startedAt = Date.now();
-    pollTimerRef.current = setInterval(async () => {
-      const next = await loadSnapshot();
-      if (!next) return;
-
-      const done = next.status === "up_to_date" || next.status === "error";
-      const timedOut = Date.now() - startedAt > 20_000;
-      if (done || timedOut) {
-        clearPolling();
-        setAnalyzing(false);
-      }
-    }, 1500);
-  }
-
-  async function refreshSnapshot() {
-    await fetch("/api/directoryiq/snapshot/refresh", { method: "POST" });
-    setSnapshot((prev) => ({
-      ...prev,
-      status: "updating",
-      metrics: prev.metrics.map((metric) => ({
-        ...metric,
-        state: metric.value == null ? "loading" : "stale",
-      })),
-    }));
-  }
-
-  async function handleConnect() {
-    setSubmitting(true);
+  async function load() {
+    setLoading(true);
     setError(null);
-
     try {
-      const response = await fetch("/api/directoryiq/connect", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ base_url: websiteUrl, api_key: apiKey }),
-      });
-      const json = (await response.json()) as { error?: string };
-      if (!response.ok) throw new Error(json.error ?? "Failed to connect website");
-
-      setAnalyzing(true);
-      setSnapshot((prev) => ({
-        ...prev,
-        status: "updating",
-        metrics: metricTemplate("directoryiq", "loading"),
-      }));
-
-      setTimeout(() => {
-        void loadSnapshot();
-        startPolling();
-      }, 1200);
+      const response = await fetch("/api/directoryiq/dashboard", { cache: "no-store" });
+      const json = (await response.json()) as DashboardResponse & { error?: string };
+      if (!response.ok) throw new Error(json.error ?? "Failed to load DirectoryIQ dashboard");
+      setData(json);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown connection error");
+      setError(e instanceof Error ? e.message : "Unknown dashboard error");
     } finally {
-      setSubmitting(false);
+      setLoading(false);
     }
+  }
+
+  async function refreshAnalysis() {
+    await fetch("/api/directoryiq/dashboard", { method: "POST" });
+    await load();
+  }
+
+  async function saveVerticalOverride(next: string | null) {
+    await fetch("/api/directoryiq/settings", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        vertical_override: next,
+        risk_tier_overrides: {},
+        image_style_preference: "editorial clean",
+      }),
+    });
+    await load();
   }
 
   useEffect(() => {
-    void (async () => {
-      const first = await loadSnapshot();
-      if (!first) return;
-      if (first.status === "needs_connection") return;
-
-      if (first.status === "updating" || isSnapshotStale(first.updated_at)) {
-        await refreshSnapshot();
-        startPolling();
-      }
-    })();
-
-    return () => clearPolling();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    void load();
   }, []);
 
-  const statusForStrip = useMemo<SnapshotStatus>(() => {
-    if (analyzing && snapshot.status !== "needs_connection") return "updating";
-    return snapshot.status;
-  }, [analyzing, snapshot.status]);
+  useEffect(() => {
+    if (!loading) return;
+    const timer = setInterval(() => setProgressIndex((value) => value + 1), 1200);
+    return () => clearInterval(timer);
+  }, [loading]);
 
   return (
     <>
-      <TopBar
-        breadcrumbs={["Home", "DirectoryIQ", "AI Travel Selection Engine"]}
-        searchPlaceholder="Search travel entity, surface, or authority blueprint..."
-        userLabel={userLabel}
+      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+        <h1 className="text-xl font-semibold text-slate-100">DirectoryIQ Dashboard</h1>
+        <p className="mt-1 text-sm text-slate-300">
+          Monitor site readiness and move one listing at a time into optimization.
+        </p>
+      </section>
+
+      <DirectoryIqTopNav
+        connected={data.connected}
+        verticalDetected={data.vertical_detected}
+        verticalOverride={data.vertical_override}
+        lastAnalyzedAt={data.last_analyzed_at}
+        onRefresh={refreshAnalysis}
+        onVerticalOverride={saveVerticalOverride}
       />
 
-      <SnapshotStatusStrip connected={connected} status={statusForStrip} updatedAt={snapshot.updated_at} />
-
-      {!connected ? (
-        <ConnectPanel
-          title="Connect your Brilliant Directories Website"
-          subtitle="Add your website URL and key so we can start your snapshot automatically."
-          buttonLabel="Connect your Brilliant Directories Website"
-          onSubmit={handleConnect}
-          submitting={submitting}
-          error={error}
-        >
-          <div className="grid gap-3 sm:grid-cols-2">
-            <input
-              value={websiteUrl}
-              onChange={(event) => setWebsiteUrl(event.target.value)}
-              placeholder="yourdomain.com"
-              className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:border-cyan-300/40 focus:ring-2"
-            />
-            <input
-              value={apiKey}
-              onChange={(event) => setApiKey(event.target.value)}
-              placeholder="Paste your API key"
-              type="password"
-              className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:border-cyan-300/40 focus:ring-2"
-            />
+      <HudCard title="AI Agent Selection Readiness" subtitle="Site-level read-only snapshot">
+        <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+          <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
+            <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Readiness Score</div>
+            <div className="mt-3 text-5xl font-semibold text-cyan-100">{data.readiness}</div>
+            <div className="mt-1 text-xs text-slate-400">0-100</div>
           </div>
-        </ConnectPanel>
-      ) : null}
 
-      {analyzing ? (
-        <HudCard title="Analyzing..." subtitle="Your snapshot shell is ready. Metrics will fill in as results arrive.">
-          <div className="h-1" />
-        </HudCard>
-      ) : null}
+          <div className="space-y-3">
+            <PillarBar label="Structure" value={data.pillars.structure} />
+            <PillarBar label="Clarity" value={data.pillars.clarity} />
+            <PillarBar label="Trust" value={data.pillars.trust} />
+            <PillarBar label="Authority" value={data.pillars.authority} />
+            <PillarBar label="Actionability" value={data.pillars.actionability} />
+          </div>
+        </div>
 
-      {connected ? (
-        <SnapshotCard
-          title="AI Travel Agent Discovery Snapshot"
-          snapshot={snapshot}
-          ctaLabel="Select a Listing to Optimize"
-          ctaHref="/directoryiq/listings"
-        />
-      ) : null}
+        {loading ? <div className="mt-4 text-sm text-cyan-200">{progressLabel}</div> : null}
+        {error ? <div className="mt-4 text-sm text-rose-200">{error}</div> : null}
+      </HudCard>
+
+      <HudCard title="Listings" subtitle="Per-listing optimization only. No bulk updates.">
+        {data.listings.length === 0 ? (
+          <div className="text-sm text-slate-300">No listings found yet. Connect and refresh analysis.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-left text-sm">
+              <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
+                <tr>
+                  <th className="py-2 pr-3">Listing</th>
+                  <th className="py-2 pr-3">Score</th>
+                  <th className="py-2 pr-3">Authority</th>
+                  <th className="py-2 pr-3">Trust</th>
+                  <th className="py-2 pr-3">Last optimized</th>
+                  <th className="py-2 pr-3">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.listings.map((listing) => (
+                  <tr key={listing.listing_id} className="border-t border-white/10">
+                    <td className="py-2 pr-3 text-slate-100">{listing.listing_name}</td>
+                    <td className="py-2 pr-3">{listing.score}</td>
+                    <td className="py-2 pr-3">{humanizeState(listing.authority_status)}</td>
+                    <td className="py-2 pr-3">{humanizeState(listing.trust_status)}</td>
+                    <td className="py-2 pr-3">{listing.last_optimized ? new Date(listing.last_optimized).toLocaleString() : "-"}</td>
+                    <td className="py-2 pr-3">
+                      <Link
+                        href={`/directoryiq/listings/${encodeURIComponent(listing.listing_id)}`}
+                        className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100"
+                      >
+                        Optimize
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </HudCard>
     </>
   );
 }
