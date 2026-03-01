@@ -3,6 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
+import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
 
 function readFirstString(values: Array<unknown>): string | null {
   for (const value of values) {
@@ -13,28 +15,11 @@ function readFirstString(values: Array<unknown>): string | null {
   return null;
 }
 
-function resolveImageUrl(candidate: string | null, listingUrl: string | null): string | null {
-  if (!candidate) return null;
-  if (/^https?:\/\//i.test(candidate)) return candidate;
-  if (candidate.startsWith("//")) return `https:${candidate}`;
-
-  if (listingUrl) {
-    try {
-      const base = new URL(listingUrl);
-      if (candidate.startsWith("/")) return new URL(candidate, base.origin).toString();
-      return new URL(`/${candidate.replace(/^\/+/, "")}`, base.origin).toString();
-    } catch {
-      return null;
-    }
-  }
-
-  return null;
-}
-
 function extractMainImageUrl(
   raw: Record<string, unknown> | null | undefined,
-  listingUrl: string | null
-): string | null {
+  listingUrl: string | null,
+  bdBaseUrl: string | null
+): { mainImageUrl: string | null; sourceField: string | null; rawValue: string | null } {
   const row = raw ?? {};
   const gallery = Array.isArray(row.gallery) ? row.gallery : [];
   const firstGallery = gallery[0];
@@ -50,20 +35,60 @@ function extractMainImageUrl(
           ])
         : null;
 
-  const candidate = readFirstString([
-    row.primary_image,
-    row.featured_image,
-    row.image_url,
-    row.photo,
-    row.logo,
-    row.thumbnail,
-    row.image,
-    row.cover_image,
-    (row as { imageUrl?: unknown }).imageUrl,
-    firstGalleryUrl,
-  ]);
+  const candidates: Array<{ field: string; value: unknown }> = [
+    { field: "primary_image", value: row.primary_image },
+    { field: "featured_image", value: row.featured_image },
+    { field: "image_url", value: row.image_url },
+    { field: "photo", value: row.photo },
+    { field: "logo", value: row.logo },
+    { field: "thumbnail", value: row.thumbnail },
+    { field: "image", value: row.image },
+    { field: "cover_image", value: row.cover_image },
+    { field: "imageUrl", value: (row as { imageUrl?: unknown }).imageUrl },
+    { field: "gallery[0]", value: firstGalleryUrl },
+  ];
 
-  return resolveImageUrl(candidate, listingUrl);
+  for (const candidate of candidates) {
+    const rawValue = readFirstString([candidate.value]);
+    if (!rawValue) continue;
+    const mainImageUrl = normalizeListingImageUrl({
+      rawUrl: rawValue,
+      listingUrl,
+      bdBaseUrl,
+    });
+    if (mainImageUrl) {
+      return {
+        mainImageUrl,
+        sourceField: candidate.field,
+        rawValue,
+      };
+    }
+  }
+
+  return {
+    mainImageUrl: null,
+    sourceField: null,
+    rawValue: readFirstString([
+      row.primary_image,
+      row.featured_image,
+      row.image_url,
+      row.photo,
+      row.logo,
+      row.thumbnail,
+      row.image,
+      row.cover_image,
+      (row as { imageUrl?: unknown }).imageUrl,
+      firstGalleryUrl,
+    ]),
+  };
+}
+
+function readBaseUrl(meta: Record<string, unknown>): string | null {
+  return readFirstString([
+    meta.baseUrl,
+    meta.base_url,
+    process.env.DIRECTORYIQ_BD_BASE_URL,
+  ]);
 }
 
 export async function GET(
@@ -76,9 +101,19 @@ export async function GET(
 
     const { listingId } = await Promise.resolve(context.params);
     const listingEval = await getListingEvaluation(userId, decodeURIComponent(listingId));
+    const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
+    const bdBaseUrl = readBaseUrl(bdIntegration.meta);
 
     if (!listingEval.listing || !listingEval.evaluation) {
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+    }
+
+    const mainImage = extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url, bdBaseUrl);
+    if (process.env.NODE_ENV !== "production") {
+      // Dev-only trace for image resolution diagnostics.
+      console.info(
+        `[directoryiq-image] listing=${listingEval.listing.source_id} source=${mainImage.sourceField ?? "none"} raw=${mainImage.rawValue ?? "null"} normalized=${mainImage.mainImageUrl ?? "null"}`
+      );
     }
 
     return NextResponse.json({
@@ -86,7 +121,7 @@ export async function GET(
         listing_id: listingEval.listing.source_id,
         listing_name: listingEval.listing.title ?? listingEval.listing.source_id,
         listing_url: listingEval.listing.url,
-        mainImageUrl: extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url),
+        mainImageUrl: mainImage.mainImageUrl,
       },
       evaluation: listingEval.evaluation,
       authority_posts: listingEval.authorityPosts.map((post) => ({
