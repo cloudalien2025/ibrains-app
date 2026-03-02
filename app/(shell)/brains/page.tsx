@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import BrainsTable, { type BrainView } from "./_components/BrainsTable";
 import EmptyState from "../_components/EmptyState";
+import { brainCatalogById, isBrainId } from "@/lib/brains/brainCatalog";
 
 type BrainRecord = Record<string, unknown>;
 
@@ -20,7 +21,7 @@ function resolveBrains(payload: unknown): BrainRecord[] {
 }
 
 function normalizeBrain(brain: BrainRecord): BrainView {
-  const id =
+  const rawId =
     String(
       brain.brain_id ??
         brain.id ??
@@ -28,6 +29,7 @@ function normalizeBrain(brain: BrainRecord): BrainView {
         brain.key ??
         "unknown_brain"
     ) || "unknown_brain";
+  const id = isBrainId(rawId) ? rawId : "directoryiq";
   const name =
     String(
       brain.name ??
@@ -42,8 +44,14 @@ function normalizeBrain(brain: BrainRecord): BrainView {
     (brain.last_run_at as string | undefined) ??
     (brain.created_at as string | undefined) ??
     null;
+  const entitled = Boolean(brain.entitled ?? true);
 
-  return { id, name, lastUpdated };
+  return {
+    ...brainCatalogById[id],
+    name: name || brainCatalogById[id].name,
+    entitled,
+    lastUpdated,
+  };
 }
 
 async function loadBrains(): Promise<{
