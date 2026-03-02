@@ -1,8 +1,9 @@
-import { Pool, type PoolClient } from "pg";
+import { Pool } from "pg";
 
 let pool: Pool | null = null;
 let schemaReady = false;
 let schemaInitPromise: Promise<void> | null = null;
+type PoolClient = Awaited<ReturnType<Pool["connect"]>>;
 
 function getPool(): Pool {
   if (!pool) {
