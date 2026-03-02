@@ -1,45 +1,48 @@
-import type { ReactNode } from "react";
+import { ChevronRight, Search, User } from "lucide-react";
 
-type TopBarProps = {
-  title?: string;
-  subtitle?: string;
-  leftSlot?: ReactNode;
-  rightSlot?: ReactNode;
-  className?: string;
-  breadcrumbs?: string[];
+interface TopBarProps {
+  breadcrumbs: string[];
   searchPlaceholder?: string;
-};
+  userLabel?: string;
+}
 
 export default function TopBar({
-  title,
-  subtitle,
-  leftSlot,
-  rightSlot,
-  className,
   breadcrumbs,
-  searchPlaceholder,
+  searchPlaceholder = "Search product reasoning nodes...",
+  userLabel = "Ariel Viper",
 }: TopBarProps) {
-  const resolvedTitle = title ?? (breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs[breadcrumbs.length - 1] : undefined);
-  const resolvedSubtitle = subtitle ?? (breadcrumbs && breadcrumbs.length > 0 ? breadcrumbs.join(" / ") : undefined);
   return (
-    <header className={`rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 ${className ?? ""}`}>
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {leftSlot ? <div className="shrink-0">{leftSlot}</div> : null}
-          <div>
-            {resolvedTitle ? <div className="text-sm font-semibold text-white">{resolvedTitle}</div> : null}
-            {resolvedSubtitle ? <div className="text-xs text-slate-300">{resolvedSubtitle}</div> : null}
-          </div>
+    <header
+      data-testid="ecomviper-topbar"
+      className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-4 backdrop-blur-xl shadow-[0_20px_45px_rgba(2,6,23,0.75)]"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs uppercase tracking-[0.12em] text-slate-400">
+          {breadcrumbs.map((crumb, index) => (
+            <span key={`${crumb}-${index}`} className="flex items-center gap-1">
+              {index > 0 ? <ChevronRight className="h-3.5 w-3.5 text-cyan-300/80" /> : null}
+              <span
+                className={index === breadcrumbs.length - 1 ? "text-cyan-200" : "text-slate-400"}
+              >
+                {crumb}
+              </span>
+            </span>
+          ))}
         </div>
-        <div className="shrink-0 flex items-center gap-2">
-          {searchPlaceholder ? (
+
+        <div className="flex items-center gap-2">
+          <div className="relative w-64 max-w-[60vw]">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
-              aria-label={searchPlaceholder}
+              type="search"
               placeholder={searchPlaceholder}
-              className="w-56 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-xs text-slate-100 placeholder:text-slate-400"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-cyan-300/40 transition focus:border-cyan-300/40 focus:ring-2"
             />
-          ) : null}
-          {rightSlot ? <div>{rightSlot}</div> : null}
+          </div>
+          <div className="flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-medium tracking-[0.08em] text-cyan-100 uppercase">
+            <User className="h-4 w-4" />
+            {userLabel}
+          </div>
         </div>
       </div>
     </header>
