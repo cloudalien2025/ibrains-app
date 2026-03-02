@@ -7,6 +7,7 @@ type BrainDockState = {
 };
 
 export type BrainDockView = BrainCatalogEntry & BrainDockState;
+export type BrainView = BrainDockView;
 
 type BrainsTableProps = {
   brains: BrainDockView[];
