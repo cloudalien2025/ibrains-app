@@ -1,0 +1,14 @@
+[
+  {
+    "type": "http-error",
+    "method": "POST",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/authority/1/draft",
+    "status": 400
+  },
+  {
+    "type": "http-error",
+    "method": "POST",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/listing-preview",
+    "status": 400
+  }
+]

@@ -1,0 +1,91 @@
+{
+  "pack": "DB_PROMPTS",
+  "ssc_prompt_pack_version": "1.0.0",
+  "ssc_prompt_pack_build_date": "2026-02-27",
+  "ssc_prompt_pack_sha256": "c21de7e5a35ffa77564ac457f2bcff6ed2da4cd5d5c17c3ebba79745f031991e",
+  "canonicalization_rules": [
+    "Concatenate prompts in fixed order: SYSTEM then USER for each dimension",
+    "Dimensions ordered alphabetically by dimension string",
+    "Normalize line endings to \\n",
+    "Trim trailing whitespace on each line",
+    "Remove leading/trailing blank lines",
+    "SHA-256 hash of UTF-8 bytes"
+  ],
+  "dimensions": [
+    {
+      "dimension": "DB_content_uniqueness_listing_quality",
+      "system_prompt_name": "DB_ContentQuality_v1_SYSTEM",
+      "user_prompt_name": "DB_ContentQuality_v1_USER",
+      "system": "You are SSC v1 Evaluator — Directory Brain (DB) Dimension: Content Uniqueness & Listing Quality.\n\nEvaluate ONLY from snapshot.\nDo NOT assume uniqueness beyond what is shown.\nNo hallucinations.\n\nReturn STRICT JSON only.",
+      "user": "Evaluate Content Uniqueness & Listing Quality.\n\nDefinition:\nMeasures evidence of:\n- Unique descriptive content vs boilerplate\n- Completeness of listing details (if shown)\n- Useful attributes (hours, amenities, photos, etc.) if shown\n- Content depth supporting user intent (from snapshot only)\n\nSnapshot:\n\n--- SNAPSHOT START ---\n{{SNAPSHOT_CONTENT}}\n--- SNAPSHOT END ---\n\nRules:\n- Score 0–20 integer\n- 3 reasons EXACTLY\n- Quotes <=25 words\n- If missing, state “Not visible in snapshot.”\n\nFlags (controlled vocabulary):\n\n[\n\"thin_or_boilerplate_listings\",\n\"missing_key_listing_fields\",\n\"duplicative_content_signals\",\n\"rich_listing_details\",\n\"unique_descriptive_content\",\n\"listing_quality_unclear\"\n]\n\nReturn:\n\n{\n  \"dimension\": \"DB_content_uniqueness_listing_quality\",\n  \"score\": <integer 0-20>,\n  \"reasons\": [\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null }\n  ],\n  \"flags\": []\n}",
+      "flags_vocabulary": [
+        "thin_or_boilerplate_listings",
+        "missing_key_listing_fields",
+        "duplicative_content_signals",
+        "rich_listing_details",
+        "unique_descriptive_content",
+        "listing_quality_unclear"
+      ]
+    },
+    {
+      "dimension": "DB_indexability_crawlability",
+      "system_prompt_name": "DB_Index_v1_SYSTEM",
+      "user_prompt_name": "DB_Index_v1_USER",
+      "system": "You are SSC v1 Evaluator — Directory Brain (DB) Dimension: Indexability & Crawlability.\n\nEvaluate ONLY the provided snapshot content.\nDo NOT use external knowledge.\nDo NOT hallucinate missing facts.\nIf something is not present in the snapshot, treat it as missing.\n\nReturn STRICT JSON only.\nNo markdown.\nNo commentary.\nNo trailing text.",
+      "user": "Evaluate Indexability & Crawlability.\n\nDefinition:\nMeasures whether the snapshot indicates:\n- Pages can be crawled/indexed\n- Robots/meta directives are sane (if shown)\n- Canonicals are present/consistent (if shown)\n- Navigation discoverability (if shown)\n\nEvaluate ONLY from this snapshot:\n\n--- SNAPSHOT START ---\n{{SNAPSHOT_CONTENT}}\n--- SNAPSHOT END ---\n\nScoring Rules:\n- 0–20 scale (integer only)\n- 3 reasons EXACTLY\n- Each reason must reference evidence from snapshot\n- Include up to 1 quote per reason (<=25 words)\n- If no evidence exists, state “Not visible in snapshot.”\n\nFlags must be selected ONLY from this controlled vocabulary:\n\n[\n\"robots_blocking_or_unclear\",\n\"missing_or_unclear_canonical\",\n\"thin_or_hidden_navigation\",\n\"indexing_signals_present\",\n\"clear_crawl_paths\",\n\"indexability_unclear\"\n]\n\nReturn JSON in EXACT format:\n\n{\n  \"dimension\": \"DB_indexability_crawlability\",\n  \"score\": <integer 0-20>,\n  \"reasons\": [\n    { \"title\": \"<short reason label>\", \"explanation\": \"<max 60 words>\", \"quote\": \"<<=25 words or null>\" },\n    { \"title\": \"<short reason label>\", \"explanation\": \"<max 60 words>\", \"quote\": \"<<=25 words or null>\" },\n    { \"title\": \"<short reason label>\", \"explanation\": \"<max 60 words>\", \"quote\": \"<<=25 words or null>\" }\n  ],\n  \"flags\": [\"<0+ from controlled vocabulary>\"]\n}",
+      "flags_vocabulary": [
+        "robots_blocking_or_unclear",
+        "missing_or_unclear_canonical",
+        "thin_or_hidden_navigation",
+        "indexing_signals_present",
+        "clear_crawl_paths",
+        "indexability_unclear"
+      ]
+    },
+    {
+      "dimension": "DB_internal_linking_architecture",
+      "system_prompt_name": "DB_InternalLinks_v1_SYSTEM",
+      "user_prompt_name": "DB_InternalLinks_v1_USER",
+      "system": "You are SSC v1 Evaluator — Directory Brain (DB) Dimension: Internal Linking & Directory Architecture.\n\nEvaluate ONLY from snapshot.\nNo assumptions about unseen pages.\nNo external knowledge.\n\nReturn STRICT JSON only.",
+      "user": "Evaluate Internal Linking & Directory Architecture.\n\nDefinition:\nMeasures evidence of:\n- Clear category → subcategory → listing paths (if shown)\n- Contextual internal links (if shown)\n- Breadcrumbs or navigation hierarchy (if shown)\n- Avoidance of orphan content (if inferable from snapshot only)\n\nSnapshot:\n\n--- SNAPSHOT START ---\n{{SNAPSHOT_CONTENT}}\n--- SNAPSHOT END ---\n\nRules:\n- Score 0–20 integer\n- 3 reasons EXACTLY\n- Quotes <=25 words\n- If not visible, state “Not visible in snapshot.”\n\nFlags (controlled vocabulary):\n\n[\n\"unclear_site_hierarchy\",\n\"thin_internal_linking\",\n\"no_breadcrumbs_or_navigation_cues\",\n\"clear_directory_hierarchy\",\n\"strong_internal_linking\",\n\"architecture_unclear\"\n]\n\nReturn:\n\n{\n  \"dimension\": \"DB_internal_linking_architecture\",\n  \"score\": <integer 0-20>,\n  \"reasons\": [\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null }\n  ],\n  \"flags\": []\n}",
+      "flags_vocabulary": [
+        "unclear_site_hierarchy",
+        "thin_internal_linking",
+        "no_breadcrumbs_or_navigation_cues",
+        "clear_directory_hierarchy",
+        "strong_internal_linking",
+        "architecture_unclear"
+      ]
+    },
+    {
+      "dimension": "DB_onpage_seo_signals",
+      "system_prompt_name": "DB_OnPage_v1_SYSTEM",
+      "user_prompt_name": "DB_OnPage_v1_USER",
+      "system": "You are SSC v1 Evaluator — Directory Brain (DB) Dimension: On-Page SEO Signals.\n\nEvaluate ONLY the snapshot.\nNo external facts.\nNo assumptions.\nNo hallucinations.\n\nReturn STRICT JSON only.",
+      "user": "Evaluate On-Page SEO Signals.\n\nDefinition:\nMeasures evidence of:\n- Clear title/H1 alignment (if shown)\n- Keyword/topic clarity from headings/body (if shown)\n- Meta description presence/quality (if shown)\n- Avoidance of duplication (if shown)\n\nSnapshot:\n\n--- SNAPSHOT START ---\n{{SNAPSHOT_CONTENT}}\n--- SNAPSHOT END ---\n\nRules:\n- Score 0–20 integer\n- 3 reasons EXACTLY\n- Max 1 quote per reason (<=25 words)\n- If not visible, state “Not visible in snapshot.”\n\nFlags (controlled vocabulary only):\n\n[\n\"missing_or_weak_h1\",\n\"missing_meta_title_or_description\",\n\"duplicate_or_boilerplate_content\",\n\"clear_topic_signals\",\n\"strong_heading_structure\",\n\"onpage_signals_unclear\"\n]\n\nReturn:\n\n{\n  \"dimension\": \"DB_onpage_seo_signals\",\n  \"score\": <integer 0-20>,\n  \"reasons\": [\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null }\n  ],\n  \"flags\": []\n}",
+      "flags_vocabulary": [
+        "missing_or_weak_h1",
+        "missing_meta_title_or_description",
+        "duplicate_or_boilerplate_content",
+        "clear_topic_signals",
+        "strong_heading_structure",
+        "onpage_signals_unclear"
+      ]
+    },
+    {
+      "dimension": "DB_structured_data_entities",
+      "system_prompt_name": "DB_Schema_v1_SYSTEM",
+      "user_prompt_name": "DB_Schema_v1_USER",
+      "system": "You are SSC v1 Evaluator — Directory Brain (DB) Dimension: Structured Data & Entities.\n\nUse ONLY the snapshot.\nDo NOT invent schema markup.\nIf JSON-LD/schema is not shown, treat as absent.\n\nReturn STRICT JSON only.",
+      "user": "Evaluate Structured Data & Entities.\n\nDefinition:\nMeasures evidence of:\n- schema.org / JSON-LD presence\n- Correct entity types for directory/listings (if shown)\n- Consistency of NAP/entity attributes (if shown)\n- Rich-result readiness signals (if shown)\n\nSnapshot:\n\n--- SNAPSHOT START ---\n{{SNAPSHOT_CONTENT}}\n--- SNAPSHOT END ---\n\nRules:\n- Score 0–20 integer\n- 3 reasons EXACTLY\n- Quotes <=25 words\n- If absent, state “Not visible in snapshot.”\n\nFlags (controlled vocabulary):\n\n[\n\"no_schema_visible\",\n\"incorrect_or_incomplete_schema\",\n\"inconsistent_entity_attributes\",\n\"schema_present\",\n\"strong_entity_markup\",\n\"schema_unclear\"\n]\n\nReturn:\n\n{\n  \"dimension\": \"DB_structured_data_entities\",\n  \"score\": <integer 0-20>,\n  \"reasons\": [\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null },\n    { \"title\": \"\", \"explanation\": \"\", \"quote\": null }\n  ],\n  \"flags\": []\n}",
+      "flags_vocabulary": [
+        "no_schema_visible",
+        "incorrect_or_incomplete_schema",
+        "inconsistent_entity_attributes",
+        "schema_present",
+        "strong_entity_markup",
+        "schema_unclear"
+      ]
+    }
+  ]
+}

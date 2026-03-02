@@ -1,0 +1,42 @@
+{
+  "baseUrl": "http://127.0.0.1:3001",
+  "startedAt": "2026-03-01T06:32:05.577Z",
+  "endedAt": "2026-03-01T06:32:17.347Z",
+  "durationMs": 11770,
+  "routes": [
+    {
+      "route": "/directoryiq",
+      "startedAt": "2026-03-01T06:32:05.742Z",
+      "endedAt": "2026-03-01T06:32:11.116Z",
+      "durationMs": 5374,
+      "status": "ok",
+      "screenshotFiles": [
+        "directoryiq__full.png"
+      ]
+    },
+    {
+      "route": "/directoryiq/listings/321",
+      "startedAt": "2026-03-01T06:32:11.116Z",
+      "endedAt": "2026-03-01T06:32:15.115Z",
+      "durationMs": 3999,
+      "status": "ok",
+      "screenshotFiles": [
+        "directoryiq_listings_321__full.png",
+        "directoryiq_listings_321__authority-section.png",
+        "directoryiq_listings_321__generate-draft-validation.png",
+        "directoryiq_listings_321__preview-validation.png"
+      ]
+    },
+    {
+      "route": "/directoryiq/settings/integrations",
+      "startedAt": "2026-03-01T06:32:15.115Z",
+      "endedAt": "2026-03-01T06:32:17.181Z",
+      "durationMs": 2066,
+      "status": "ok",
+      "screenshotFiles": [
+        "directoryiq_settings_integrations__full.png",
+        "directoryiq_settings_integrations__drawer-open.png"
+      ]
+    }
+  ]
+}

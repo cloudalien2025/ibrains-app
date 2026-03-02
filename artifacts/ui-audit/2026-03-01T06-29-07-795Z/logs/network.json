@@ -1,0 +1,182 @@
+[
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/brains?_rsc=1mhyl",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/settings?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/versions?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/5?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/6?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/8?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/7?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/3?_rsc=jb2py",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/6?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/7?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/5?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/8?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings/3?_rsc=z53lm",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/settings?_rsc=q9sub",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/versions?_rsc=q9sub",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings?_rsc=q9sub",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq?_rsc=q9sub",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/brains?_rsc=q9sub",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/settings?_rsc=1dyjo",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/versions?_rsc=1dyjo",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings?_rsc=1dyjo",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "http-error",
+    "method": "POST",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/authority/1/draft",
+    "status": 400
+  },
+  {
+    "type": "http-error",
+    "method": "POST",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/listing-preview",
+    "status": 400
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/brains?_rsc=1lvk6",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/versions?_rsc=1xrp1",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/settings?_rsc=1xrp1",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq/listings?_rsc=1xrp1",
+    "failureText": "net::ERR_ABORTED"
+  },
+  {
+    "type": "requestfailed",
+    "method": "GET",
+    "url": "http://127.0.0.1:3001/directoryiq?_rsc=1xrp1",
+    "failureText": "net::ERR_ABORTED"
+  }
+]

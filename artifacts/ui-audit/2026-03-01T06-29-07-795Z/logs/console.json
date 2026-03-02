@@ -1,0 +1,12 @@
+[
+  {
+    "level": "error",
+    "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/authority/1/draft"
+  },
+  {
+    "level": "error",
+    "text": "Failed to load resource: the server responded with a status of 400 (Bad Request)",
+    "url": "http://127.0.0.1:3001/api/directoryiq/listings/321/listing-preview"
+  }
+]

@@ -1,0 +1,57 @@
+SSC v1 — Global Enforcement Wrapper (Anti-Drift Layer)
+==================================================
+
+PURPOSE
+- Enforce deterministic evaluation across SB / DB / EB prompt packs.
+- Prevent hallucination, contract drift, uncontrolled flags, and format violations.
+
+GLOBAL ENFORCEMENT (MUST APPLY TO EVERY DIMENSION)
+1) Evaluate ONLY the provided snapshot.
+2) Never use external knowledge.
+3) Never hallucinate missing facts.
+4) If evidence is missing, explicitly say it is not visible in the snapshot.
+5) Output MUST be STRICT JSON only.
+6) No markdown, no commentary, no trailing text.
+7) Do not add keys beyond the evaluator JSON contract.
+8) Score MUST be integer in range 0–20.
+9) Reasons array MUST have EXACTLY 3 items.
+10) Each reason must include: title, explanation (<=60 words), quote (<=25 words or null).
+11) Quotes must be exact copies from snapshot; never fabricate.
+12) Flags MUST be selected ONLY from the controlled vocabulary for that dimension.
+13) Dimension string MUST match the requested dimension exactly.
+
+FAILURE PROTOCOL (MISSING SNAPSHOT)
+If snapshot content is missing/empty, return:
+- score = 0
+- reasons: 3 items each stating “Snapshot not provided.”
+- flags: []
+
+UNIVERSAL JSON CONTRACT TEMPLATE
+{
+  "dimension": "<dimension_string>",
+  "score": <integer>,
+  "reasons": [
+    { "title": "", "explanation": "", "quote": null },
+    { "title": "", "explanation": "", "quote": null },
+    { "title": "", "explanation": "", "quote": null }
+  ],
+  "flags": []
+}
+
+DETERMINISTIC RELEASES: VERSIONING + HASH LOCK
+Every release MUST define:
+- SSC_PROMPT_PACK_VERSION (e.g., 1.0.0)
+- SSC_PROMPT_PACK_BUILD_DATE (ISO date)
+- SSC_PROMPT_PACK_SHA256 (hash of canonical prompt bundle)
+
+Canonicalization (for hashing):
+1) Concatenate prompts in fixed order: SYSTEM then USER for each dimension.
+2) Dimensions ordered alphabetically by dimension string.
+3) Normalize line endings to \n.
+4) Trim trailing whitespace per line.
+5) Remove leading/trailing blank lines.
+6) SHA-256 hash of UTF-8 bytes.
+
+Runtime enforcement:
+- Refuse to run if loaded prompt pack SHA256 != expected.
+- Expose version + hash read-only for auditing.

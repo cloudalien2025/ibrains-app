@@ -1,0 +1,159 @@
+TASK: Phase 3 — Production Hardening (Full Stack) for iBrains Mission Control
+Repo path: /root/ibrains-app
+Branch: feat/mission-control-phase3
+
+GOAL
+Make the Mission Control Next.js app real internet-ready on this droplet:
+A) Nginx reverse proxy + HTTPS (Let’s Encrypt)
+B) Lock down firewall (only 80/443 open externally, keep SSH)
+C) Production logging + log rotation
+D) Begin ingestion workflow testing (smoke tests)
+E) Use a real domain instead of raw IP
+F) Move to Phase 3 hardening checks + docs
+
+ASSUMPTIONS (verify and adapt if different)
+- Next.js app should run as a systemd service on localhost:3001
+- Public traffic should be served ONLY via Nginx on 80/443
+- Domain to use: <SET_DOMAIN> (example: app.ibrains.ai) — MUST be configured as an A record to this droplet’s public IP
+- We already have /api/health implemented and it should report:
+  ok=true
+  worker_base_url_present=true when configured
+  upstream_ok=true when the worker is reachable
+
+IMPORTANT CONSTRAINTS
+- No breaking changes to app routes or API behavior
+- Keep changes small, production-safe, and reversible
+- Add clear docs + commands for validate/rollback
+- Do NOT expose port 3001 publicly after Nginx is in place
+
+DELIVERABLES
+1) Nginx config for domain + reverse proxy to localhost:3001
+2) Let’s Encrypt cert via certbot + auto-renew
+3) UFW firewall rules: allow OpenSSH, allow 80/443, deny others
+4) systemd service for Next.js in production mode (build + start)
+5) Logging strategy:
+   - Nginx access/error logs
+   - App logs captured to /var/log/ibrains-app/app.log (plus rotate)
+6) Logrotate config for /var/log/ibrains-app/*.log + nginx logs verified
+7) Smoke test script that validates:
+   - https://<domain>/api/health returns 200 JSON with ok:true
+   - upstream_ok true when worker env set
+   - / and basic routes return 200
+8) Phase 3 hardening checklist doc + “How to deploy” doc
+
+STEP-BY-STEP PLAN
+
+STEP 0 — Collect environment facts (write results into docs/PROD_HARDENING_NOTES.md)
+- Confirm droplet OS, nginx installed or not, node version, repo status
+- Confirm app currently runs and which port it binds to
+- Confirm public IP
+- Confirm domain A record points to this droplet (dig/host)
+
+STEP 1 — Create a production systemd service for the Next.js app
+- Ensure `npm ci` is used (or `npm install` only if lockfile is missing)
+- Run `npm run build`
+- Create a systemd unit:
+  /etc/systemd/system/ibrains-app.service
+  Requirements:
+  - WorkingDirectory=/root/ibrains-app
+  - EnvironmentFile=/root/ibrains-app/.env.production.local (create if missing)
+  - ExecStart should run: `npm run start -- --port 3001`
+  - Restart=always
+  - User=root (acceptable for now) OR create a dedicated user `ibrains` if feasible without breaking permissions
+  - StandardOutput=append:/var/log/ibrains-app/app.log
+  - StandardError=append:/var/log/ibrains-app/app.log
+- Create log directory /var/log/ibrains-app with correct perms
+- Enable + start service
+- Verify: `curl -sS http://127.0.0.1:3001/api/health`
+
+STEP 2 — Nginx reverse proxy for the domain
+- Install nginx if missing
+- Create nginx site config:
+  /etc/nginx/sites-available/ibrains-app.conf
+  Must:
+  - server_name <SET_DOMAIN>;
+  - proxy_pass http://127.0.0.1:3001;
+  - proper proxy headers (Host, X-Forwarded-For, X-Forwarded-Proto)
+  - reasonable timeouts
+  - gzip optional
+  - deny access to hidden files
+- Enable site via symlink into sites-enabled
+- Disable default site if conflicting
+- `nginx -t` then reload
+- Validate on HTTP first:
+  `curl -I http://<SET_DOMAIN>/api/health`
+
+STEP 3 — HTTPS via Let’s Encrypt (certbot)
+- Install certbot + nginx plugin
+- Obtain certificate for <SET_DOMAIN> using certbot nginx method
+- Force redirect HTTP -> HTTPS
+- Verify:
+  `curl -I https://<SET_DOMAIN>/api/health`
+- Confirm auto-renew:
+  `systemctl status certbot.timer`
+  `certbot renew --dry-run`
+
+STEP 4 — Firewall lockdown (UFW)
+- Install ufw if missing
+- Allow OpenSSH
+- Allow Nginx Full (80/443)
+- Deny everything else incoming by default
+- Ensure port 3001 is NOT exposed publicly (only localhost)
+- Verify UFW status and rules
+
+STEP 5 — Logging + rotation
+- Ensure nginx logs in /var/log/nginx
+- Ensure app logs in /var/log/ibrains-app/app.log
+- Add logrotate config:
+  /etc/logrotate.d/ibrains-app
+  Rotate daily, keep 14, compress, delaycompress, copytruncate
+- Confirm logrotate runs without errors:
+  `logrotate -d /etc/logrotate.d/ibrains-app`
+- Confirm nginx logrotate already exists and is active (Ubuntu default)
+
+STEP 6 — Ingestion workflow smoke tests (minimum viable)
+Create scripts/prod_smoke.sh that:
+- Checks systemd service is active
+- Checks nginx is active
+- Calls:
+  - https://<SET_DOMAIN>/api/health
+  - https://<SET_DOMAIN>/api/brains (or other existing endpoints) expecting 200/expected JSON shape
+- If BRAINS worker base URL is required, ensure .env.production.local contains correct env vars:
+  - NEXT_PUBLIC_WORKER_URL (if used by UI)
+  - BRAINS_API_BASE (if used by server routes)
+  (Use existing env naming from the repo. Do NOT invent new env names unless necessary. If needed, document.)
+- Output a clear PASS/FAIL summary with exit codes
+
+STEP 7 — Phase 3 hardening checklist + docs
+Add docs:
+- docs/PRODUCTION_DEPLOYMENT.md
+  Includes exact commands to:
+  - build, start, restart, view logs
+  - test endpoints
+  - renew certs
+- docs/PHASE3_HARDENING_CHECKLIST.md
+  Include:
+  - Nginx + TLS done
+  - UFW done
+  - logrotate done
+  - smoke tests done
+  - environment vars documented
+  - rollback steps
+
+STEP 8 — Commit + push
+- Commit message:
+  Phase3(A-F): prod hardening (nginx+tls, ufw, logging, smoke tests, domain)
+- Push to origin feat/mission-control-phase3
+
+ACCEPTANCE TESTS (must pass)
+1) `systemctl is-active ibrains-app` => active
+2) `curl -sS http://127.0.0.1:3001/api/health` => 200 JSON ok:true
+3) `curl -sS https://<SET_DOMAIN>/api/health` => 200 JSON ok:true
+4) UFW status shows only OpenSSH + 80/443 allowed
+5) `ss -ltnp` shows port 3001 bound to 127.0.0.1 only (NOT 0.0.0.0)
+6) logrotate dry run succeeds for ibrains-app
+7) scripts/prod_smoke.sh exits 0 and prints PASS
+
+NOTES
+- If DNS isn’t pointing yet, stop before certbot and write exact DNS instructions into docs/PROD_HARDENING_NOTES.md.
+- Do not proceed with certbot until domain resolves to this droplet.
