@@ -1,3 +1,5 @@
+import { type PostType } from "@/lib/directoryiq/selectionEngine";
+
 const APPROVAL_TOKEN_SECRET = process.env.DIRECTORYIQ_APPROVAL_TOKEN_SECRET ?? "directoryiq-dev-secret";
 
 type ApprovalAction = "blog_publish" | "listing_push";
@@ -15,10 +17,12 @@ export function normalizeSlot(slot: string): number {
   return parsed;
 }
 
-export function normalizePostType(type: string): string {
+export function normalizePostType(type: string): PostType {
   const normalized = type.trim().toLowerCase();
-  if (!normalized) return "insight";
-  return normalized;
+  if (normalized === "comparison" || normalized === "best_of" || normalized === "contextual_guide" || normalized === "persona_intent") {
+    return normalized;
+  }
+  return "contextual_guide";
 }
 
 export function makeVersionLabel(prefix: string): string {
