@@ -49,7 +49,7 @@ check_noop_vs_main() {
     return
   fi
 
-  read -r ahead behind < <(git rev-list --left-right --count "${base}...HEAD")
+  read -r behind ahead < <(git rev-list --left-right --count "...HEAD")
 
   echo "Compare vs ${base}: ahead=${ahead} behind=${behind}"
 
