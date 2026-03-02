@@ -1,0 +1,23 @@
+name: Repo Health
+
+on:
+  pull_request:
+    branches: ["main"]
+  push:
+    branches: ["main"]
+
+jobs:
+  repo_health:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Repo health
+        shell: bash
+        run: |
+          chmod +x scripts/repo_health.sh
+          ./scripts/repo_health.sh
