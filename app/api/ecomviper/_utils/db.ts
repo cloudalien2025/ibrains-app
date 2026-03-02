@@ -3,7 +3,10 @@ import { Pool } from "pg";
 let pool: Pool | null = null;
 let schemaReady = false;
 let schemaInitPromise: Promise<void> | null = null;
-type PoolClient = Awaited<ReturnType<Pool["connect"]>>;
+type PoolClient = {
+  query: (text: string, params?: unknown[]) => Promise<unknown>;
+  release: () => void;
+};
 
 function getPool(): Pool {
   if (!pool) {
@@ -328,7 +331,7 @@ export async function query<T>(text: string, params: unknown[] = []): Promise<T[
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   await ensureSchema();
-  const client = await getPool().connect();
+  const client = await (getPool() as unknown as { connect: () => Promise<PoolClient> }).connect();
   try {
     await client.query("BEGIN");
     const result = await fn(client);
