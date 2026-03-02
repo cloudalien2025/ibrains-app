@@ -1,65 +1,93 @@
-import Link from "next/link";
-import type { ReactNode } from "react";
+"use client";
 
-type DirectoryIqTopNavProps = {
-  title?: string;
-  rightSlot?: ReactNode;
-  className?: string;
-  connected?: boolean;
-  verticalDetected?: string;
-  verticalOverride?: string | null;
-  lastAnalyzedAt?: string | null;
-  onRefresh?: () => Promise<void> | void;
-  onVerticalOverride?: (next: string | null) => Promise<void> | void;
+import { useState } from "react";
+import { Building2, RefreshCw } from "lucide-react";
+import NeonButton from "@/components/ecomviper/NeonButton";
+
+type Props = {
+  connected: boolean;
+  verticalDetected: string;
+  verticalOverride: string | null;
+  lastAnalyzedAt: string | null;
+  onRefresh?: () => Promise<void>;
+  onVerticalOverride?: (value: string | null) => Promise<void>;
 };
 
+const VERTICALS = [
+  { value: "", label: "Auto-detect" },
+  { value: "home-services", label: "Home Services" },
+  { value: "health-medical", label: "Health & Medical" },
+  { value: "legal-financial", label: "Legal & Financial" },
+  { value: "hospitality-travel", label: "Hospitality & Travel" },
+  { value: "education", label: "Education" },
+  { value: "general", label: "General" },
+];
+
 export default function DirectoryIqTopNav({
-  title = "DirectoryIQ",
-  rightSlot,
-  className,
   connected,
   verticalDetected,
   verticalOverride,
   lastAnalyzedAt,
   onRefresh,
   onVerticalOverride,
-}: DirectoryIqTopNavProps) {
+}: Props) {
+  const [busy, setBusy] = useState(false);
+
+  async function handleRefresh() {
+    if (!onRefresh) return;
+    setBusy(true);
+    try {
+      await onRefresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleOverride(next: string) {
+    if (!onVerticalOverride) return;
+    setBusy(true);
+    try {
+      await onVerticalOverride(next || null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
-    <div className={`mb-4 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 ${className ?? ""}`}>
-      <div className="flex items-center justify-between gap-3">
+    <section className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-4 backdrop-blur-xl shadow-[0_20px_45px_rgba(2,6,23,0.75)]">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="text-sm font-semibold text-white">{title}</div>
-          <nav className="hidden items-center gap-3 text-xs text-slate-300 sm:flex">
-            <Link className="hover:text-white" href="/directoryiq">Dashboard</Link>
-          </nav>
-          {connected !== undefined ? (
-            <span className="text-xs text-slate-300">{connected ? "Connected" : "Not connected"}</span>
-          ) : null}
-          {verticalDetected ? <span className="text-xs text-slate-300">Vertical: {verticalOverride ?? verticalDetected}</span> : null}
-          {lastAnalyzedAt ? <span className="text-xs text-slate-300">Updated: {new Date(lastAnalyzedAt).toLocaleString()}</span> : null}
+          <div className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">
+            <Building2 className="h-4 w-4" />
+            DirectoryIQ
+          </div>
+          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${connected ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-100" : "border-amber-300/40 bg-amber-400/10 text-amber-100"}`}>
+            {connected ? "Connected BD Site" : "BD Site Not Connected"}
+          </span>
         </div>
-        <div className="shrink-0 flex items-center gap-2">
-          {onVerticalOverride ? (
-            <button
-              type="button"
-              onClick={() => void onVerticalOverride(null)}
-              className="rounded-md border border-white/15 px-2 py-1 text-xs text-slate-200"
-            >
-              Auto Vertical
-            </button>
-          ) : null}
+
+        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
+          <span>Detected Vertical: <span className="text-slate-100">{verticalDetected}</span></span>
+          <select
+            value={verticalOverride ?? ""}
+            onChange={(event) => void handleOverride(event.target.value)}
+            className="rounded-lg border border-white/15 bg-white/[0.04] px-2 py-1 text-xs text-slate-100"
+          >
+            {VERTICALS.map((vertical) => (
+              <option key={vertical.label} value={vertical.value}>
+                {vertical.label}
+              </option>
+            ))}
+          </select>
+          <span>Last analyzed: {lastAnalyzedAt ? new Date(lastAnalyzedAt).toLocaleString() : "Never"}</span>
           {onRefresh ? (
-            <button
-              type="button"
-              onClick={() => void onRefresh()}
-              className="rounded-md border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-xs text-cyan-100"
-            >
-              Refresh
-            </button>
+            <NeonButton onClick={handleRefresh} disabled={busy}>
+              <RefreshCw className={`mr-1 h-4 w-4 ${busy ? "animate-spin" : ""}`} />
+              Refresh Analysis
+            </NeonButton>
           ) : null}
-          {rightSlot ? <div>{rightSlot}</div> : null}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
