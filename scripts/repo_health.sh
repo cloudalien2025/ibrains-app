@@ -42,14 +42,14 @@ check_worktree() {
 
 check_noop_vs_main() {
   main_branch="$(main_branch_name)"
-  base="origin/${main_branch}"
+  base="origin/main"
 
   if ! git rev-parse --verify "${base}" >/dev/null 2>&1; then
     echo "${WARN} Cannot find ${base}"
     return
   fi
 
-  read -r behind ahead < <(git rev-list --left-right --count "...HEAD")
+  read -r behind ahead < <(git rev-list --left-right --count "${base}...HEAD")
 
   echo "Compare vs ${base}: ahead=${ahead} behind=${behind}"
 
