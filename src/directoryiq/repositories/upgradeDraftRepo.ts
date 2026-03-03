@@ -46,6 +46,7 @@ function mapRow(row: UpgradeDraftRow): UpgradeDraftRecord {
 }
 
 const memory = new Map<string, UpgradeDraftRecord>();
+const UUID_V4ISH = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function canUseDb(): boolean {
   return Boolean(process.env.DATABASE_URL);
@@ -60,7 +61,7 @@ export async function createDraft(
 ): Promise<UpgradeDraftRecord> {
   const userId = createdBy ?? "00000000-0000-4000-8000-000000000001";
 
-  if (process.env.E2E_MOCK_OPENAI === "1" || !canUseDb()) {
+  if (!canUseDb()) {
     const id = `draft-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
     const row: UpgradeDraftRecord = {
       id,
@@ -98,6 +99,7 @@ export async function getDraft(draftId: string): Promise<UpgradeDraftRecord | nu
   if (mem) return mem;
 
   if (!canUseDb()) return null;
+  if (!UUID_V4ISH.test(draftId)) return null;
 
   const rows = await queryDb<UpgradeDraftRow>(
     `
@@ -123,6 +125,7 @@ export async function markPreviewed(draftId: string): Promise<void> {
   }
 
   if (!canUseDb()) return;
+  if (!UUID_V4ISH.test(draftId)) return;
 
   await queryDb(
     `
@@ -145,6 +148,7 @@ export async function markPushed(draftId: string, bdRef?: string): Promise<void>
   }
 
   if (!canUseDb()) return;
+  if (!UUID_V4ISH.test(draftId)) return;
 
   await queryDb(
     `
