@@ -11,7 +11,6 @@ const navItems = [
   { href: "/directoryiq/listings", label: "Listings" },
   { href: "/directoryiq/authority", label: "Authority" },
   { href: "/directoryiq/settings/integrations", label: "Integrations" },
-  { href: "/directoryiq/signal-sources", label: "Signal Sources" },
   { href: "/directoryiq/versions", label: "History" },
 ];
 
