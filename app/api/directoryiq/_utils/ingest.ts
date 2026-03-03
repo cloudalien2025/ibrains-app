@@ -26,6 +26,16 @@ export type DirectoryIqIngestResult = {
   errorMessage?: string;
 };
 
+export type DirectoryIqBlogIngestResult = {
+  runId: string;
+  status: "succeeded" | "failed";
+  counts: {
+    blogPosts: number;
+  };
+  blogPostsDataId: number;
+  errorMessage?: string;
+};
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -338,7 +348,7 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
     asNumber(config.blogPostsDataId) ??
     asNumber(config.blog_posts_data_id) ??
     asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ??
-    null;
+    14;
 
   const apiKey = row.secret;
 
@@ -375,17 +385,15 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
 
     const listingItemsMapped = resolveTruePostMapping(listingItems, listingDataPosts);
 
-    const blogItems = blogPostsDataId
-      ? await fetchBdPagedSearch({
-          baseUrl,
-          apiKey,
-          path: dataPostsSearchPath,
-          dataId: blogPostsDataId,
-          includeAction: false,
-          limit: 100,
-          maxPages: 20,
-        })
-      : [];
+    const blogItems = await fetchBdPagedSearch({
+      baseUrl,
+      apiKey,
+      path: dataPostsSearchPath,
+      dataId: blogPostsDataId,
+      includeAction: false,
+      limit: 100,
+      maxPages: 20,
+    });
 
     const listings = listingItemsMapped.map((item, index) => extractNode(item, "listing", index));
     const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
@@ -424,6 +432,97 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       runId,
       status: "failed",
       counts: { listings: 0, blogPosts: 0 },
+      errorMessage: message,
+    };
+  }
+}
+
+export async function runDirectoryIqBlogIngest(userId: string): Promise<DirectoryIqBlogIngestResult> {
+  const row = await getDirectoryIqIntegrationSecret(userId, "brilliant_directories");
+  if (!row) {
+    throw new Error("Brilliant Directories API credential is not configured.");
+  }
+
+  const config = row.meta ?? {};
+  const baseUrlRaw =
+    (typeof config.baseUrl === "string" && config.baseUrl.trim()) ||
+    (typeof config.base_url === "string" && config.base_url.trim()) ||
+    process.env.DIRECTORYIQ_BRILLIANT_DIRECTORIES_BASE_URL ||
+    "";
+
+  if (!baseUrlRaw) {
+    throw new Error("Brilliant Directories API not configured. Go to DirectoryIQ -> Settings -> Integrations.");
+  }
+
+  const baseUrl = normalizeBdBaseUrl(baseUrlRaw);
+  const blogPostsPath =
+    (typeof config.blogPostsPath === "string" && config.blogPostsPath.trim()) ||
+    (typeof config.blog_posts_path === "string" && config.blog_posts_path.trim()) ||
+    process.env.DIRECTORYIQ_BLOG_POSTS_PATH ||
+    "/api/v2/data_posts/search";
+
+  const blogPostsDataId =
+    asNumber(config.blogPostsDataId) ??
+    asNumber(config.blog_posts_data_id) ??
+    asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ??
+    14;
+
+  const apiKey = row.secret;
+
+  let runId = "";
+  try {
+    runId = await createRun(userId, baseUrl);
+
+    const dataPostsSearchPath = await discoverDataPostsSearchPath({
+      baseUrl,
+      apiKey,
+      preferredPath: blogPostsPath,
+      dataId: blogPostsDataId,
+    });
+
+    const blogItems = await fetchBdPagedSearch({
+      baseUrl,
+      apiKey,
+      path: dataPostsSearchPath,
+      dataId: blogPostsDataId,
+      includeAction: false,
+      limit: 100,
+      maxPages: 20,
+    });
+
+    const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
+    await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs });
+
+    await finishRun({
+      runId,
+      status: "succeeded",
+      listings: 0,
+      blogPosts: blogs.length,
+    });
+
+    return {
+      runId,
+      status: "succeeded",
+      counts: { blogPosts: blogs.length },
+      blogPostsDataId,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown DirectoryIQ blog ingest error";
+    if (runId) {
+      await finishRun({
+        runId,
+        status: "failed",
+        listings: 0,
+        blogPosts: 0,
+        errorMessage: message,
+      });
+    }
+
+    return {
+      runId,
+      status: "failed",
+      counts: { blogPosts: 0 },
+      blogPostsDataId,
       errorMessage: message,
     };
   }

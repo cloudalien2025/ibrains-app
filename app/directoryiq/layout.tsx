@@ -9,7 +9,7 @@ import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 const navItems = [
   { href: "/directoryiq", label: "Dashboard" },
   { href: "/directoryiq/listings", label: "Listings" },
-  { href: "/directoryiq/authority-support", label: "Authority" },
+  { href: "/directoryiq/authority", label: "Authority" },
   { href: "/directoryiq/settings/integrations", label: "Integrations" },
   { href: "/directoryiq/signal-sources", label: "Signal Sources" },
   { href: "/directoryiq/versions", label: "History" },

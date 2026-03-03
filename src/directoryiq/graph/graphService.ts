@@ -3,13 +3,18 @@ import {
   addEvidence,
   createRun,
   finishRun,
+  getGraphSummaryCounts,
   getLatestRun,
+  listBlogLayerRows,
+  listListingLayerRows,
   listMentionsWithoutLinks,
   listOrphanListings,
   listWeakAnchors,
   upsertEdge,
   upsertNode,
+  type AuthorityGraphBlogLayerRow,
   type AuthorityGraphIssueRow,
+  type AuthorityGraphListingLayerRow,
 } from "@/src/directoryiq/repositories/authorityGraphRepo";
 import {
   type GraphIssue,
@@ -63,6 +68,65 @@ type IssuesResult = {
     completedAt: string | null;
     stats: Record<string, unknown>;
   } | null;
+};
+
+type AuthorityOverviewResult = {
+  totalNodes: number;
+  totalEdges: number;
+  totalEvidence: number;
+  blogNodes: number;
+  listingNodes: number;
+  lastIngestionRunAt: string | null;
+  lastGraphRunAt: string | null;
+  lastGraphRunStatus: string | null;
+};
+
+type BlogEntity = {
+  entityText: string;
+  entityType: "listing";
+  evidenceSnippet: string | null;
+};
+
+type BlogSuggestion = {
+  listingExternalId: string;
+  listingTitle: string;
+  listingUrl: string | null;
+  recommendation: string;
+};
+
+type AuthorityBlogRow = {
+  blogNodeId: string;
+  blogExternalId: string;
+  blogTitle: string | null;
+  blogUrl: string | null;
+  extractedEntitiesCount: number;
+  linkedListingsCount: number;
+  unlinkedMentionsCount: number;
+  status: "green" | "yellow" | "red";
+  entities: BlogEntity[];
+  suggestedListingTargets: BlogSuggestion[];
+  missingInternalLinksRecommendations: string[];
+};
+
+type ListingEvidence = {
+  blogExternalId: string;
+  blogTitle: string | null;
+  blogUrl: string | null;
+  edgeType: "links_to" | "mentions";
+  evidenceSnippet: string | null;
+  anchorText: string | null;
+};
+
+type AuthorityListingRow = {
+  listingNodeId: string;
+  listingExternalId: string;
+  listingTitle: string | null;
+  listingUrl: string | null;
+  inboundBlogLinksCount: number;
+  mentionedInCount: number;
+  status: "green" | "yellow" | "red";
+  inboundBlogs: ListingEvidence[];
+  suggestedBlogsToLinkFrom: ListingEvidence[];
 };
 
 type Anchor = {
@@ -328,6 +392,18 @@ function mapOrphanIssue(row: AuthorityGraphIssueRow): GraphIssue {
       suggestedFix: "Add at least one relevant blog post link pointing to this listing page.",
     },
   };
+}
+
+function mapBlogStatus(linkedListingsCount: number, unlinkedMentionsCount: number): "green" | "yellow" | "red" {
+  if (linkedListingsCount > 0) return "green";
+  if (unlinkedMentionsCount > 0) return "yellow";
+  return "red";
+}
+
+function mapListingStatus(inboundBlogLinksCount: number, mentionedInCount: number): "green" | "yellow" | "red" {
+  if (inboundBlogLinksCount > 0) return "green";
+  if (mentionedInCount > 0) return "yellow";
+  return "red";
 }
 
 async function loadListings(): Promise<ListingNodeRow[]> {
@@ -710,4 +786,143 @@ export async function getIssues(input: { tenantId: string }): Promise<IssuesResu
         }
       : null,
   };
+}
+
+export async function getAuthorityOverview(input: { tenantId: string }): Promise<AuthorityOverviewResult> {
+  const [counts, latestGraphRun, latestIngestRun] = await Promise.all([
+    getGraphSummaryCounts(input.tenantId),
+    getLatestRun(input.tenantId),
+    queryDb<{ finished_at: string | null }>(
+      `
+      SELECT finished_at
+      FROM directoryiq_ingest_runs
+      WHERE user_id = $1
+        AND status = 'succeeded'
+      ORDER BY finished_at DESC NULLS LAST
+      LIMIT 1
+      `,
+      [input.tenantId]
+    ),
+  ]);
+
+  return {
+    totalNodes: counts.total_nodes,
+    totalEdges: counts.total_edges,
+    totalEvidence: counts.total_evidence,
+    blogNodes: counts.blog_nodes,
+    listingNodes: counts.listing_nodes,
+    lastIngestionRunAt: latestIngestRun[0]?.finished_at ?? null,
+    lastGraphRunAt: latestGraphRun?.completedAt ?? latestGraphRun?.startedAt ?? null,
+    lastGraphRunStatus: latestGraphRun?.status ?? null,
+  };
+}
+
+export async function getAuthorityBlogs(input: { tenantId: string }): Promise<AuthorityBlogRow[]> {
+  const rows = await listBlogLayerRows(input.tenantId);
+  const grouped = new Map<string, { head: AuthorityGraphBlogLayerRow; rows: AuthorityGraphBlogLayerRow[] }>();
+
+  for (const row of rows) {
+    const existing = grouped.get(row.blog_node_id);
+    if (!existing) {
+      grouped.set(row.blog_node_id, { head: row, rows: [row] });
+    } else {
+      existing.rows.push(row);
+    }
+  }
+
+  return Array.from(grouped.values()).map(({ head, rows }) => {
+    const linkedRows = rows.filter((row) => row.edge_type === "internal_link" && row.listing_node_id);
+    const mentionRows = rows.filter((row) => row.edge_type === "mention_without_link" && row.listing_node_id);
+    const entityRows = rows.filter((row) => row.listing_node_id && (row.edge_type === "internal_link" || row.edge_type === "mention_without_link"));
+
+    const linkedListingIds = new Set(linkedRows.map((row) => row.listing_node_id as string));
+    const mentionListingIds = new Set(mentionRows.map((row) => row.listing_node_id as string));
+
+    const entities: BlogEntity[] = entityRows.map((row) => ({
+      entityText: row.listing_title ?? row.listing_external_id ?? "Listing",
+      entityType: "listing",
+      evidenceSnippet: row.evidence_snippet ?? null,
+    }));
+
+    const suggestedTargets: BlogSuggestion[] = mentionRows.map((row) => ({
+      listingExternalId: row.listing_external_id ?? "",
+      listingTitle: row.listing_title ?? row.listing_external_id ?? "Listing",
+      listingUrl: row.listing_url ?? null,
+      recommendation: `Add link to ${row.listing_title ?? row.listing_external_id ?? "listing"} using anchor "${row.listing_title ?? "Listing details"}".`,
+    }));
+
+    const missingInternalLinksRecommendations = suggestedTargets.map((target) => target.recommendation);
+    const linkedCount = linkedListingIds.size;
+    const mentionsCount = mentionListingIds.size;
+
+    return {
+      blogNodeId: head.blog_node_id,
+      blogExternalId: head.blog_external_id,
+      blogTitle: head.blog_title,
+      blogUrl: head.blog_url,
+      extractedEntitiesCount: new Set(entities.map((entity) => entity.entityText)).size,
+      linkedListingsCount: linkedCount,
+      unlinkedMentionsCount: mentionsCount,
+      status: mapBlogStatus(linkedCount, mentionsCount),
+      entities,
+      suggestedListingTargets: suggestedTargets,
+      missingInternalLinksRecommendations,
+    };
+  });
+}
+
+export async function getAuthorityListings(input: { tenantId: string }): Promise<AuthorityListingRow[]> {
+  const rows = await listListingLayerRows(input.tenantId);
+  const grouped = new Map<string, { head: AuthorityGraphListingLayerRow; rows: AuthorityGraphListingLayerRow[] }>();
+
+  for (const row of rows) {
+    const existing = grouped.get(row.listing_node_id);
+    if (!existing) {
+      grouped.set(row.listing_node_id, { head: row, rows: [row] });
+    } else {
+      existing.rows.push(row);
+    }
+  }
+
+  return Array.from(grouped.values()).map(({ head, rows }) => {
+    const linkRows = rows.filter((row) => row.edge_type === "internal_link" && row.blog_node_id);
+    const mentionRows = rows.filter((row) => row.edge_type === "mention_without_link" && row.blog_node_id);
+    const linkBlogIds = new Set(linkRows.map((row) => row.blog_node_id as string));
+    const mentionBlogIds = new Set(mentionRows.map((row) => row.blog_node_id as string));
+
+    const inboundBlogs: ListingEvidence[] = rows
+      .filter((row) => row.blog_node_id && (row.edge_type === "internal_link" || row.edge_type === "mention_without_link"))
+      .map((row) => ({
+        blogExternalId: row.blog_external_id ?? "",
+        blogTitle: row.blog_title,
+        blogUrl: row.blog_url,
+        edgeType: row.edge_type === "internal_link" ? "links_to" : "mentions",
+        evidenceSnippet: row.evidence_snippet,
+        anchorText: row.evidence_anchor_text,
+      }));
+
+    const suggestedBlogsToLinkFrom = mentionRows.map((row) => ({
+      blogExternalId: row.blog_external_id ?? "",
+      blogTitle: row.blog_title,
+      blogUrl: row.blog_url,
+      edgeType: "mentions" as const,
+      evidenceSnippet: row.evidence_snippet,
+      anchorText: row.evidence_anchor_text,
+    }));
+
+    const linksCount = linkBlogIds.size;
+    const mentionsCount = mentionBlogIds.size;
+
+    return {
+      listingNodeId: head.listing_node_id,
+      listingExternalId: head.listing_external_id,
+      listingTitle: head.listing_title,
+      listingUrl: head.listing_url,
+      inboundBlogLinksCount: linksCount,
+      mentionedInCount: mentionsCount,
+      status: mapListingStatus(linksCount, mentionsCount),
+      inboundBlogs,
+      suggestedBlogsToLinkFrom,
+    };
+  });
 }

@@ -31,14 +31,33 @@ export async function GET(req: NextRequest) {
     await ensureUser(userId);
 
     const integrations = await listDirectoryIqIntegrations(userId);
-    const connectors: DirectoryIqCredentialStatus[] = integrations.map((row) => ({
-      connector_id: providerToConnector(row.provider),
-      connected: row.status === "connected",
-      label: (row.meta.label as string | null) ?? null,
-      masked_secret: row.masked,
-      updated_at: row.savedAt,
-      config: row.meta as Record<string, string>,
-    }));
+    const connectors: DirectoryIqCredentialStatus[] = integrations.map((row) => {
+      const connectorId = providerToConnector(row.provider);
+      const config =
+        connectorId === "brilliant_directories_api"
+          ? {
+              base_url: typeof row.meta.baseUrl === "string" ? row.meta.baseUrl : "",
+              listings_path: typeof row.meta.listingsPath === "string" ? row.meta.listingsPath : "/api/v2/users_portfolio_groups/search",
+              blog_posts_path: typeof row.meta.blogPostsPath === "string" ? row.meta.blogPostsPath : "/api/v2/data_posts/search",
+              blog_posts_data_id: String(
+                typeof row.meta.blogPostsDataId === "number"
+                  ? row.meta.blogPostsDataId
+                  : typeof row.meta.blog_posts_data_id === "number"
+                    ? row.meta.blog_posts_data_id
+                    : 14
+              ),
+            }
+          : (row.meta as Record<string, string>);
+
+      return {
+        connector_id: connectorId,
+        connected: row.status === "connected",
+        label: (row.meta.label as string | null) ?? null,
+        masked_secret: row.masked,
+        updated_at: row.savedAt,
+        config,
+      };
+    });
     return NextResponse.json({ connectors });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ signal-source error";
@@ -55,7 +74,7 @@ export async function POST(req: NextRequest) {
       connector_id?: string;
       secret?: string;
       label?: string | null;
-      config?: Record<string, string> | null;
+      config?: Record<string, string | number> | null;
     };
 
     const connectorId = (body.connector_id ?? "").trim().toLowerCase() as DirectoryIqConnector;
@@ -69,25 +88,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "secret is required" }, { status: 400 });
     }
 
-    const configJson =
-      body.config && typeof body.config === "object"
-        ? Object.fromEntries(
-            Object.entries(body.config).filter((entry) => typeof entry[1] === "string" && String(entry[1]).trim().length > 0)
-          )
-        : {};
+    const configInput = body.config && typeof body.config === "object" ? body.config : {};
+    const readConfigString = (key: string): string => {
+      const value = configInput[key];
+      if (typeof value === "string") return value.trim();
+      if (typeof value === "number" && Number.isFinite(value)) return String(value);
+      return "";
+    };
+    const readPositiveInteger = (value: string, fallback: number): number => {
+      const parsed = Number.parseInt(value, 10);
+      return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    };
 
     const provider = connectorToProvider(connectorId);
     const meta =
       provider === "brilliant_directories"
         ? {
-            baseUrl: (configJson.base_url as string) ?? "",
-            listingsPath: (configJson.listings_path as string) ?? "/api/v2/users_portfolio_groups/search",
-            blogPostsPath: (configJson.blog_posts_path as string) ?? "/api/v2/data_posts/search",
+            baseUrl: readConfigString("base_url"),
+            listingsPath: readConfigString("listings_path") || "/api/v2/users_portfolio_groups/search",
+            blogPostsPath: readConfigString("blog_posts_path") || "/api/v2/data_posts/search",
             listingsDataId: 75,
+            blogPostsDataId: readPositiveInteger(readConfigString("blog_posts_data_id"), 14),
             label: body.label?.trim() || null,
           }
         : {
-            ...configJson,
             label: body.label?.trim() || null,
           };
 
