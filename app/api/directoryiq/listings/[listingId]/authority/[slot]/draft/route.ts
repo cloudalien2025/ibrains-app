@@ -17,7 +17,7 @@ import { generateAuthorityDraft, validateOpenAiKeyPresent } from "@/lib/openai/s
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { listingId: string; slot: string } }
+  { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
 ) {
   let resolvedListingId = "unknown";
   let slotIndex = 0;
@@ -27,7 +27,7 @@ export async function POST(
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const { listingId, slot } = params;
+    const { listingId, slot } = await Promise.resolve(params);
     resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
 

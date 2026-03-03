@@ -58,13 +58,13 @@ async function testGa4(params: { measurementId: string; apiSecret: string }): Pr
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { provider: string } }
+  { params }: { params: Promise<{ provider: string }> | { provider: string } }
 ) {
   const reqId = crypto.randomUUID();
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
-    const { provider } = params;
+    const { provider } = await Promise.resolve(params);
     const resolvedProvider = provider.trim().toLowerCase();
     if (!isDirectoryIqProvider(resolvedProvider)) {
       return errorResponse(400, "Unsupported provider.", "BAD_PROVIDER", reqId);
