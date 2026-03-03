@@ -229,6 +229,33 @@ function stripHtml(value: string): string {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function normalizeForMatch(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/&[a-z0-9#]+;/gi, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildDeterministicAliases(name: string): string[] {
+  const base = normalizeForMatch(name);
+  if (!base) return [];
+  const out = new Set<string>([base]);
+
+  if (base.startsWith("the ")) {
+    out.add(base.slice(4).trim());
+  }
+
+  // deterministic stopword removal used by many title variants like "X at Vail" vs "X Vail"
+  out.add(base.replace(/\bat\b/g, " ").replace(/\s+/g, " ").trim());
+
+  // optional hospitality suffix stripping as secondary keys only
+  out.add(base.replace(/\b(hotel|inn|resort)\b/g, " ").replace(/\s+/g, " ").trim());
+
+  return Array.from(out).filter((item) => item.length >= 3);
+}
+
 function extractHtml(raw: Record<string, unknown>): string {
   const content = raw.content;
   if (typeof content === "string" && content.trim()) return content;
@@ -676,7 +703,8 @@ export async function rebuildGraph(input: {
         }
       }
 
-      const searchable = (text || stripHtml(html)).toLowerCase();
+      const searchable = normalizeForMatch(text || stripHtml(html));
+      const searchablePadded = ` ${searchable} `;
       for (const listing of listings) {
         const listingNode = listingNodeBySourceId.get(listing.source_id);
         if (!listingNode) continue;
@@ -684,7 +712,9 @@ export async function rebuildGraph(input: {
 
         const listingName = (listing.title ?? "").trim();
         if (listingName.length < 3) continue;
-        if (!searchable.includes(listingName.toLowerCase())) continue;
+        const aliases = buildDeterministicAliases(listingName);
+        const matchedAlias = aliases.find((alias) => searchablePadded.includes(` ${alias} `));
+        if (!matchedAlias) continue;
 
         const edge = await upsertEdge({
           tenantId: input.tenantId,
@@ -703,7 +733,7 @@ export async function rebuildGraph(input: {
           edgeId: edge.id,
           sourceUrl: blog.url ?? `blog:${blog.source_id}`,
           targetUrl: listing.url,
-          contextSnippet: makeSnippet(text || stripHtml(html), listingName),
+          contextSnippet: makeSnippet(text || stripHtml(html), matchedAlias),
           locationHint: "body",
         });
         evidenceCount += 1;
