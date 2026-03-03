@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { buildConsensusOutline } from "../../lib/directoryiq/serp/consensus.ts";
+import { buildConsensusOutline } from "../../lib/directoryiq/serp/consensus";
 
 test("consensus outline ordering and length band are deterministic", () => {
   const outlines = Array.from({ length: 10 }).map((_, idx) => ({

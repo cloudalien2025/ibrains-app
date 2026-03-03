@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { directoryIqConfig, serpCacheFile } from "../config.ts";
-import type { EnqueueInput, SerpCacheEntry, SerpStatus } from "../types.ts";
-import { readJsonFile, writeJsonFile } from "./fileStore.ts";
+import { directoryIqConfig, serpCacheFile } from "../config";
+import type { EnqueueInput, SerpCacheEntry, SerpStatus } from "../types";
+import { readJsonFile, writeJsonFile } from "./fileStore";
 
 type CacheState = { items: SerpCacheEntry[] };
 

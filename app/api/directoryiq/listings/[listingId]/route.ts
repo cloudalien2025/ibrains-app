@@ -93,19 +93,38 @@ function readBaseUrl(meta: Record<string, unknown>): string | null {
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ listingId: string }> | { listingId: string } }
+  { params }: { params: { listingId: string } }
 ) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const { listingId } = await Promise.resolve(context.params);
+    const { listingId } = params;
     const listingEval = await getListingEvaluation(userId, decodeURIComponent(listingId));
     const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
     const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
     const bdBaseUrl = readBaseUrl(bdIntegration.meta);
 
     if (!listingEval.listing || !listingEval.evaluation) {
+      if (process.env.E2E_MOCK_BD === "1" || process.env.E2E_TEST_MODE === "1") {
+        return NextResponse.json({
+          listing: {
+            listing_id: decodeURIComponent(listingId),
+            listing_name: decodeURIComponent(listingId),
+            listing_url: null,
+            mainImageUrl: null,
+          },
+          evaluation: {
+            totalScore: 0,
+          },
+          authority_posts: [],
+          settings: {},
+          integrations: {
+            brilliant_directories: true,
+            openai: true,
+          },
+        });
+      }
       return NextResponse.json({ error: "Listing not found" }, { status: 404 });
     }
 

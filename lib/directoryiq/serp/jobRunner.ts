@@ -1,8 +1,8 @@
-import { directoryIqConfig } from "../config.ts";
-import type { EnqueueInput } from "../types.ts";
-import { updateSerpCacheById, findSerpCache } from "../storage/serpCacheStore.ts";
-import { buildConsensusOutline, buildContentDeltas } from "./consensus.ts";
-import { fetchOutlineForResult, fetchSerpTopResults } from "./fetch.ts";
+import { directoryIqConfig } from "../config";
+import type { EnqueueInput } from "../types";
+import { updateSerpCacheById, findSerpCache } from "../storage/serpCacheStore";
+import { buildConsensusOutline, buildContentDeltas } from "./consensus";
+import { fetchOutlineForResult, fetchSerpTopResults } from "./fetch";
 
 type QueueItem = { cacheId: string; input: EnqueueInput };
 

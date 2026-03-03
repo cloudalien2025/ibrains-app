@@ -68,7 +68,7 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: Promise.resolve({ listingId: "321", slot: "1" }) });
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -88,7 +88,7 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: Promise.resolve({ listingId: "321", slot: "1" }) });
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
     const json = await res.json();
 
     expect(res.status).toBe(400);

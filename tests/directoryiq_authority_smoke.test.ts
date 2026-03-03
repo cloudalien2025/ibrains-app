@@ -70,8 +70,8 @@ describe("directoryiq authority smoke generation routes", () => {
       }),
     });
 
-    const draftRes = await draftRoute.POST(draftReq, { params: Promise.resolve({ listingId: "321", slot: "1" }) });
-    const imageRes = await imageRoute.POST(imageReq, { params: Promise.resolve({ listingId: "321", slot: "1" }) });
+    const draftRes = await draftRoute.POST(draftReq, { params: { listingId: "321", slot: "1" } });
+    const imageRes = await imageRoute.POST(imageReq, { params: { listingId: "321", slot: "1" } });
 
     expect(draftRes.status).toBe(200);
     expect(imageRes.status).toBe(200);

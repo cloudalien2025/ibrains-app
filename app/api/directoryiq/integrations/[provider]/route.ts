@@ -67,12 +67,12 @@ function validateBody(provider: DirectoryIqProvider, body: SaveBody): {
 
 export async function GET(
   req: NextRequest,
-  context: { params: Promise<{ provider: string }> | { provider: string } }
+  { params }: { params: { provider: string } }
 ) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
-    const { provider } = await Promise.resolve(context.params);
+    const { provider } = params;
     const resolvedProvider = provider.trim().toLowerCase();
     if (!isDirectoryIqProvider(resolvedProvider)) {
       return errorResponse(400, "Unsupported provider.", "BAD_PROVIDER");
@@ -87,12 +87,12 @@ export async function GET(
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ provider: string }> | { provider: string } }
+  { params }: { params: { provider: string } }
 ) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
-    const { provider } = await Promise.resolve(context.params);
+    const { provider } = params;
     const resolvedProvider = provider.trim().toLowerCase();
     if (!isDirectoryIqProvider(resolvedProvider)) {
       return errorResponse(400, "Unsupported provider.", "BAD_PROVIDER");
@@ -121,12 +121,12 @@ export async function POST(
 
 export async function DELETE(
   req: NextRequest,
-  context: { params: Promise<{ provider: string }> | { provider: string } }
+  { params }: { params: { provider: string } }
 ) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
-    const { provider } = await Promise.resolve(context.params);
+    const { provider } = params;
     const resolvedProvider = provider.trim().toLowerCase();
     if (!isDirectoryIqProvider(resolvedProvider)) {
       return errorResponse(400, "Unsupported provider.", "BAD_PROVIDER");
