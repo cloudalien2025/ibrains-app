@@ -145,13 +145,13 @@ export default function AuthorityBlogsClient() {
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/65">
-          <div className="h-full w-full max-w-[min(94vw,560px)] border-l border-white/10 bg-slate-950 p-5">
+          <div className="flex h-full w-full max-w-[min(94vw,560px)] flex-col border-l border-white/10 bg-slate-950 p-5">
             <div className="mb-4 flex items-center justify-between gap-2">
               <h3 className="text-base font-semibold text-slate-100">{selected.blogTitle ?? selected.blogExternalId}</h3>
               <NeonButton variant="ghost" onClick={() => setSelected(null)}>Close</NeonButton>
             </div>
 
-            <div className="space-y-4 text-sm text-slate-200">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-1 text-sm text-slate-200">
               <div>
                 <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Entities ({selected.entities.length})</div>
                 <div className="mt-2 space-y-2">
