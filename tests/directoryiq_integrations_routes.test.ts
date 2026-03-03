@@ -45,7 +45,7 @@ describe("directoryiq integrations routes", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ apiKey: "sk-test-key" }),
     });
-    const res = await POST(req, { params: Promise.resolve({ provider: "openai" }) });
+    const res = await POST(req, { params: { provider: "openai" } });
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -60,7 +60,7 @@ describe("directoryiq integrations routes", () => {
     );
     const { POST } = await import("@/app/api/directoryiq/integrations/[provider]/test/route");
     const req = new NextRequest("http://localhost/api/directoryiq/integrations/openai/test", { method: "POST" });
-    const res = await POST(req, { params: Promise.resolve({ provider: "openai" }) });
+    const res = await POST(req, { params: { provider: "openai" } });
     const json = await res.json();
 
     expect(res.status).toBe(400);

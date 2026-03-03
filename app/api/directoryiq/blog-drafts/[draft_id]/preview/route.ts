@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { getDraftById } from "@/lib/directoryiq/storage/draftStore";
 
-export async function GET(_: Request, context: { params: Promise<{ draft_id: string }> }) {
-  const { draft_id } = await context.params;
+export async function GET(_: Request, { params }: { params: { draft_id: string } }) {
+  const { draft_id } = params;
   const draft = await getDraftById(draft_id);
   if (!draft) return NextResponse.json({ error: "draft not found" }, { status: 404 });
 

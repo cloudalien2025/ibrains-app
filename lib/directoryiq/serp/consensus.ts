@@ -1,4 +1,4 @@
-import type { ConsensusOutline, ExtractedOutlineItem } from "../types.ts";
+import type { ConsensusOutline, ExtractedOutlineItem } from "../types";
 
 const STOPWORDS = new Set(["the", "a", "an", "and", "for", "to", "in", "of", "near"]);
 
@@ -25,7 +25,8 @@ export const buildConsensusOutline = (outlines: ExtractedOutlineItem[]): Consens
     outline.h2.forEach((heading, index) => {
       const key = normalizeHeading(heading);
       if (!key) return;
-      const current = h2Map.get(key) ?? { heading, count: 0, positions: [], h3: new Map() };
+      const current: { heading: string; count: number; positions: number[]; h3: Map<string, number> } =
+        h2Map.get(key) ?? { heading, count: 0, positions: [], h3: new Map<string, number>() };
       current.count += 1;
       current.positions.push(index + 1);
       h2Map.set(key, current);

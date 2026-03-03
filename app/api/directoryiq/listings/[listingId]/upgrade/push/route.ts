@@ -8,13 +8,13 @@ import { pushUpgrade } from "@/src/directoryiq/services/upgradeService";
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ listingId: string }> | { listingId: string } }
+  { params }: { params: { listingId: string } }
 ) {
   const userId = resolveUserId(req);
 
   try {
     await ensureUser(userId);
-    const { listingId } = await Promise.resolve(context.params);
+    const { listingId } = params;
     const resolvedListingId = decodeURIComponent(listingId);
 
     const body = (await req.json().catch(() => ({}))) as {

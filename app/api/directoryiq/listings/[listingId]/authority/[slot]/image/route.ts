@@ -17,7 +17,7 @@ import { generateAuthorityImage, validateOpenAiKeyPresent } from "@/lib/openai/s
 
 export async function POST(
   req: NextRequest,
-  context: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
+  { params }: { params: { listingId: string; slot: string } }
 ) {
   let resolvedListingId = "unknown";
   let slotIndex = 0;
@@ -26,7 +26,7 @@ export async function POST(
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const { listingId, slot } = await Promise.resolve(context.params);
+    const { listingId, slot } = params;
     resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
     logAuthorityInfo({
