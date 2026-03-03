@@ -381,15 +381,39 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
   try {
     runId = await createRun(userId, baseUrl);
 
-    const listingItems = await fetchBdPagedSearch({
-      baseUrl,
-      apiKey,
-      path: listingsPath,
-      dataId: listingsDataId,
-      includeAction: true,
-      limit: 100,
-      maxPages: 20,
-    });
+    let listingItems: Record<string, unknown>[] = [];
+    try {
+      listingItems = await fetchBdPagedSearch({
+        baseUrl,
+        apiKey,
+        path: listingsPath,
+        dataId: listingsDataId,
+        includeAction: true,
+        limit: 100,
+        maxPages: 20,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const isListingsAuthFailure = message.includes("HTTP 401") && message.includes(listingsPath);
+      if (!isListingsAuthFailure) throw error;
+
+      console.warn(
+        `[directoryiq-ingest] listings search auth failed on ${listingsPath}; retrying without action param and falling back to data_posts mapping if needed`
+      );
+      try {
+        listingItems = await fetchBdPagedSearch({
+          baseUrl,
+          apiKey,
+          path: listingsPath,
+          dataId: listingsDataId,
+          includeAction: false,
+          limit: 100,
+          maxPages: 20,
+        });
+      } catch {
+        listingItems = [];
+      }
+    }
 
     const dataPostsSearchPath = await discoverDataPostsSearchPath({
       baseUrl,
@@ -408,7 +432,8 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       maxPages: 20,
     });
 
-    const listingItemsMapped = resolveTruePostMapping(listingItems, listingDataPosts);
+    const listingItemsMapped =
+      listingItems.length > 0 ? resolveTruePostMapping(listingItems, listingDataPosts) : listingDataPosts;
 
     const blogItems = await fetchBdPagedSearch({
       baseUrl,

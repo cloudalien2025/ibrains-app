@@ -117,6 +117,10 @@ export default function DirectoryIqIntegrationsClient() {
   const [bdBaseUrl, setBdBaseUrl] = useState("");
   const [bdApiKey, setBdApiKey] = useState("");
   const [bdSiteLabel, setBdSiteLabel] = useState("");
+  const [bdListingsPath, setBdListingsPath] = useState("/api/v2/users_portfolio_groups/search");
+  const [bdBlogPostsPath, setBdBlogPostsPath] = useState("/api/v2/data_posts/search");
+  const [bdListingsDataId, setBdListingsDataId] = useState("75");
+  const [bdBlogPostsDataId, setBdBlogPostsDataId] = useState("14");
   const [openAiApiKey, setOpenAiApiKey] = useState("");
   const [ga4MeasurementId, setGa4MeasurementId] = useState("");
   const [ga4ApiSecret, setGa4ApiSecret] = useState("");
@@ -151,6 +155,42 @@ export default function DirectoryIqIntegrationsClient() {
     const serpMeta = next.serpapi.meta ?? {};
     setBdBaseUrl(typeof bdMeta.baseUrl === "string" ? bdMeta.baseUrl : "");
     setBdSiteLabel(typeof bdMeta.siteLabel === "string" ? bdMeta.siteLabel : "");
+    setBdListingsPath(
+      typeof bdMeta.listingsPath === "string"
+        ? bdMeta.listingsPath
+        : typeof bdMeta.listings_path === "string"
+          ? bdMeta.listings_path
+          : "/api/v2/users_portfolio_groups/search"
+    );
+    setBdBlogPostsPath(
+      typeof bdMeta.blogPostsPath === "string"
+        ? bdMeta.blogPostsPath
+        : typeof bdMeta.blog_posts_path === "string"
+          ? bdMeta.blog_posts_path
+          : "/api/v2/data_posts/search"
+    );
+    setBdListingsDataId(
+      typeof bdMeta.listingsDataId === "number"
+        ? String(bdMeta.listingsDataId)
+        : typeof bdMeta.listings_data_id === "number"
+          ? String(bdMeta.listings_data_id)
+          : typeof bdMeta.listingsDataId === "string"
+            ? bdMeta.listingsDataId
+            : typeof bdMeta.listings_data_id === "string"
+              ? bdMeta.listings_data_id
+              : "75"
+    );
+    setBdBlogPostsDataId(
+      typeof bdMeta.blogPostsDataId === "number"
+        ? String(bdMeta.blogPostsDataId)
+        : typeof bdMeta.blog_posts_data_id === "number"
+          ? String(bdMeta.blog_posts_data_id)
+          : typeof bdMeta.blogPostsDataId === "string"
+            ? bdMeta.blogPostsDataId
+            : typeof bdMeta.blog_posts_data_id === "string"
+              ? bdMeta.blog_posts_data_id
+              : "14"
+    );
     setGa4MeasurementId(typeof ga4Meta.measurementId === "string" ? ga4Meta.measurementId : "");
     setSerpEnginePreference(typeof serpMeta.enginePreference === "string" ? serpMeta.enginePreference : "");
   }
@@ -172,7 +212,13 @@ export default function DirectoryIqIntegrationsClient() {
       body = {
         baseUrl: bdBaseUrl.trim(),
         apiKey: bdApiKey.trim(),
-        meta: { siteLabel: bdSiteLabel.trim() || null },
+        meta: {
+          siteLabel: bdSiteLabel.trim() || null,
+          listingsPath: bdListingsPath.trim() || "/api/v2/users_portfolio_groups/search",
+          blogPostsPath: bdBlogPostsPath.trim() || "/api/v2/data_posts/search",
+          listingsDataId: Number.parseInt(bdListingsDataId, 10) || 75,
+          blogPostsDataId: Number.parseInt(bdBlogPostsDataId, 10) || 14,
+        },
       };
     } else if (provider === "openai") {
       body = { apiKey: openAiApiKey.trim() };
@@ -380,6 +426,30 @@ export default function DirectoryIqIntegrationsClient() {
                                   onChange={(event) => setBdSiteLabel(event.target.value)}
                                   placeholder="Default directory site label (optional)"
                                   className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 md:col-span-2"
+                                />
+                                <input
+                                  value={bdListingsPath}
+                                  onChange={(event) => setBdListingsPath(event.target.value)}
+                                  placeholder="Listings path (e.g. /api/v2/users_portfolio_groups/search)"
+                                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
+                                />
+                                <input
+                                  value={bdBlogPostsPath}
+                                  onChange={(event) => setBdBlogPostsPath(event.target.value)}
+                                  placeholder="Blog posts path (e.g. /api/v2/data_posts/search)"
+                                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
+                                />
+                                <input
+                                  value={bdListingsDataId}
+                                  onChange={(event) => setBdListingsDataId(event.target.value)}
+                                  placeholder="Listings data_id (default 75)"
+                                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
+                                />
+                                <input
+                                  value={bdBlogPostsDataId}
+                                  onChange={(event) => setBdBlogPostsDataId(event.target.value)}
+                                  placeholder="Blog posts data_id (default 14)"
+                                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
                                 />
                               </div>
                             ) : null}
