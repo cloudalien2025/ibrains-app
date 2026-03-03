@@ -255,13 +255,17 @@ function extractHtml(raw: Record<string, unknown>): string {
 
 function extractPlainText(raw: Record<string, unknown>): string {
   const candidates = [
-    raw.title,
-    raw.post_title,
+    raw.clean_text,
+    raw.body,
+    raw.post_content,
+    raw.raw_html,
+    raw.body_html,
+    raw.content_html,
     raw.excerpt,
     raw.description,
     raw.summary,
-    raw.body,
-    raw.post_content,
+    raw.title,
+    raw.post_title,
     raw.content,
   ];
 
