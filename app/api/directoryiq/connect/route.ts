@@ -50,6 +50,7 @@ export async function POST(req: NextRequest) {
         listingsPath,
         blogPostsPath,
         listingsDataId: 75,
+        blogPostsDataId: 14,
         siteLabel: "Brilliant Directories",
       },
     });

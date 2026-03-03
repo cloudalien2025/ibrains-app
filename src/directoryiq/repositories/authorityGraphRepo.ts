@@ -46,6 +46,42 @@ type RunRow = {
   started_at: string;
 };
 
+type SummaryCountsRow = {
+  total_nodes: number;
+  total_edges: number;
+  total_evidence: number;
+  blog_nodes: number;
+  listing_nodes: number;
+};
+
+type BlogLayerRow = {
+  blog_node_id: string;
+  blog_external_id: string;
+  blog_title: string | null;
+  blog_url: string | null;
+  edge_type: string | null;
+  listing_node_id: string | null;
+  listing_external_id: string | null;
+  listing_title: string | null;
+  listing_url: string | null;
+  evidence_snippet: string | null;
+  evidence_anchor_text: string | null;
+};
+
+type ListingLayerRow = {
+  listing_node_id: string;
+  listing_external_id: string;
+  listing_title: string | null;
+  listing_url: string | null;
+  edge_type: string | null;
+  blog_node_id: string | null;
+  blog_external_id: string | null;
+  blog_title: string | null;
+  blog_url: string | null;
+  evidence_snippet: string | null;
+  evidence_anchor_text: string | null;
+};
+
 export async function upsertNode(input: {
   tenantId: string;
   nodeType: NodeType;
@@ -335,5 +371,136 @@ export async function getLatestRun(tenantId: string): Promise<{
   };
 }
 
+export async function getGraphSummaryCounts(tenantId: string): Promise<SummaryCountsRow> {
+  const rows = await queryDb<SummaryCountsRow>(
+    `
+    SELECT
+      (
+        SELECT COUNT(*)::int
+        FROM authority_graph_nodes n
+        WHERE n.tenant_id = $1
+          AND n.status = 'active'
+      ) AS total_nodes,
+      (
+        SELECT COUNT(*)::int
+        FROM authority_graph_edges e
+        WHERE e.tenant_id = $1
+          AND e.status = 'active'
+      ) AS total_edges,
+      (
+        SELECT COUNT(*)::int
+        FROM authority_graph_evidence ev
+        WHERE ev.tenant_id = $1
+      ) AS total_evidence,
+      (
+        SELECT COUNT(*)::int
+        FROM authority_graph_nodes n
+        WHERE n.tenant_id = $1
+          AND n.status = 'active'
+          AND n.node_type = 'blog_post'
+      ) AS blog_nodes,
+      (
+        SELECT COUNT(*)::int
+        FROM authority_graph_nodes n
+        WHERE n.tenant_id = $1
+          AND n.status = 'active'
+          AND n.node_type = 'listing'
+      ) AS listing_nodes
+    `,
+    [tenantId]
+  );
+
+  return rows[0] ?? {
+    total_nodes: 0,
+    total_edges: 0,
+    total_evidence: 0,
+    blog_nodes: 0,
+    listing_nodes: 0,
+  };
+}
+
+export async function listBlogLayerRows(tenantId: string): Promise<BlogLayerRow[]> {
+  return queryDb<BlogLayerRow>(
+    `
+    SELECT
+      b.id AS blog_node_id,
+      b.external_id AS blog_external_id,
+      b.title AS blog_title,
+      b.canonical_url AS blog_url,
+      e.edge_type AS edge_type,
+      l.id AS listing_node_id,
+      l.external_id AS listing_external_id,
+      l.title AS listing_title,
+      l.canonical_url AS listing_url,
+      ev.context_snippet AS evidence_snippet,
+      ev.anchor_text AS evidence_anchor_text
+    FROM authority_graph_nodes b
+    LEFT JOIN authority_graph_edges e
+      ON e.tenant_id = b.tenant_id
+     AND e.from_node_id = b.id
+     AND e.status = 'active'
+     AND e.edge_type IN ('internal_link', 'mention_without_link')
+    LEFT JOIN authority_graph_nodes l
+      ON l.id = e.to_node_id
+     AND l.node_type = 'listing'
+    LEFT JOIN LATERAL (
+      SELECT context_snippet, anchor_text
+      FROM authority_graph_evidence ev
+      WHERE ev.edge_id = e.id
+      ORDER BY ev.detected_at DESC
+      LIMIT 1
+    ) ev ON true
+    WHERE b.tenant_id = $1
+      AND b.node_type = 'blog_post'
+      AND b.status = 'active'
+    ORDER BY b.updated_at DESC, b.title NULLS LAST
+    `,
+    [tenantId]
+  );
+}
+
+export async function listListingLayerRows(tenantId: string): Promise<ListingLayerRow[]> {
+  return queryDb<ListingLayerRow>(
+    `
+    SELECT
+      l.id AS listing_node_id,
+      l.external_id AS listing_external_id,
+      l.title AS listing_title,
+      l.canonical_url AS listing_url,
+      e.edge_type AS edge_type,
+      b.id AS blog_node_id,
+      b.external_id AS blog_external_id,
+      b.title AS blog_title,
+      b.canonical_url AS blog_url,
+      ev.context_snippet AS evidence_snippet,
+      ev.anchor_text AS evidence_anchor_text
+    FROM authority_graph_nodes l
+    LEFT JOIN authority_graph_edges e
+      ON e.tenant_id = l.tenant_id
+     AND e.to_node_id = l.id
+     AND e.status = 'active'
+     AND e.edge_type IN ('internal_link', 'mention_without_link')
+    LEFT JOIN authority_graph_nodes b
+      ON b.id = e.from_node_id
+     AND b.node_type = 'blog_post'
+    LEFT JOIN LATERAL (
+      SELECT context_snippet, anchor_text
+      FROM authority_graph_evidence ev
+      WHERE ev.edge_id = e.id
+      ORDER BY ev.detected_at DESC
+      LIMIT 1
+    ) ev ON true
+    WHERE l.tenant_id = $1
+      AND l.node_type = 'listing'
+      AND l.status = 'active'
+    ORDER BY l.updated_at DESC, l.title NULLS LAST
+    `,
+    [tenantId]
+  );
+}
+
 export type AuthorityGraphIssueRow = IssueRow;
 export type AuthorityGraphEvidenceRow = EvidenceRow;
+export type AuthorityGraphSummaryCountsRow = SummaryCountsRow;
+export type AuthorityGraphBlogLayerRow = BlogLayerRow;
+export type AuthorityGraphListingLayerRow = ListingLayerRow;

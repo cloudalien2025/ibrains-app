@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
 
@@ -211,6 +212,7 @@ export default function AuthoritySupportClient() {
                   <th className="py-2 pr-3">Target (listing)</th>
                   <th className="py-2 pr-3">Evidence snippet</th>
                   <th className="py-2 pr-3">Suggested fix</th>
+                  <th className="py-2 pr-3">Open</th>
                 </tr>
               </thead>
               <tbody>
@@ -228,6 +230,20 @@ export default function AuthoritySupportClient() {
                     <td className="py-2 pr-3">{safeLabel(issue.to?.title, issue.to?.externalId ?? "-")}</td>
                     <td className="py-2 pr-3">{issue.evidence?.contextSnippet ?? "-"}</td>
                     <td className="py-2 pr-3">{issue.details.suggestedFix}</td>
+                    <td className="py-2 pr-3">
+                      <div className="flex flex-wrap gap-2 text-xs">
+                        {issue.from?.externalId ? (
+                          <Link href={`/directoryiq/authority/blogs?blog=${encodeURIComponent(issue.from.externalId)}`} className="text-cyan-200 underline">
+                            Blog
+                          </Link>
+                        ) : null}
+                        {issue.to?.externalId ? (
+                          <Link href={`/directoryiq/authority/listings?listing=${encodeURIComponent(issue.to.externalId)}`} className="text-cyan-200 underline">
+                            Listing
+                          </Link>
+                        ) : null}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -260,6 +276,24 @@ export default function AuthoritySupportClient() {
               <div>
                 <div className="text-xs uppercase tracking-[0.08em] text-slate-400">context_snippet</div>
                 <div>{selectedIssue.evidence?.contextSnippet ?? "-"}</div>
+              </div>
+              <div className="flex flex-wrap gap-3 pt-1 text-xs">
+                {selectedIssue.from?.externalId ? (
+                  <Link
+                    href={`/directoryiq/authority/blogs?blog=${encodeURIComponent(selectedIssue.from.externalId)}`}
+                    className="text-cyan-200 underline"
+                  >
+                    Open Blog Drawer
+                  </Link>
+                ) : null}
+                {selectedIssue.to?.externalId ? (
+                  <Link
+                    href={`/directoryiq/authority/listings?listing=${encodeURIComponent(selectedIssue.to.externalId)}`}
+                    className="text-cyan-200 underline"
+                  >
+                    Open Listing Drawer
+                  </Link>
+                ) : null}
               </div>
             </div>
           </div>

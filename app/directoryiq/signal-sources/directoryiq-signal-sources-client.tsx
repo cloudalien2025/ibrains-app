@@ -80,10 +80,11 @@ export default function DirectoryIqSignalSourcesClient() {
   const [runs, setRuns] = useState<IngestRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [bdConfig, setBdConfig] = useState<{ baseUrl: string; listingsPath: string; blogPostsPath: string }>({
+  const [bdConfig, setBdConfig] = useState<{ baseUrl: string; listingsPath: string; blogPostsPath: string; blogPostsDataId: string }>({
     baseUrl: "",
     listingsPath: "/wp-json/brilliantdirectories/v1/listings",
     blogPostsPath: "/wp-json/wp/v2/posts",
+    blogPostsDataId: "14",
   });
 
   const orderedConnectors = useMemo(
@@ -113,6 +114,7 @@ export default function DirectoryIqSignalSourcesClient() {
         baseUrl: typeof cfg.base_url === "string" ? cfg.base_url : prev.baseUrl,
         listingsPath: typeof cfg.listings_path === "string" ? cfg.listings_path : prev.listingsPath,
         blogPostsPath: typeof cfg.blog_posts_path === "string" ? cfg.blog_posts_path : prev.blogPostsPath,
+        blogPostsDataId: typeof cfg.blog_posts_data_id === "string" ? cfg.blog_posts_data_id : prev.blogPostsDataId,
       }));
 
       setLabels((prev) => {
@@ -169,6 +171,7 @@ export default function DirectoryIqSignalSourcesClient() {
                   base_url: bdConfig.baseUrl.trim(),
                   listings_path: bdConfig.listingsPath.trim(),
                   blog_posts_path: bdConfig.blogPostsPath.trim(),
+                  blog_posts_data_id: bdConfig.blogPostsDataId.trim() || "14",
                 }
               : null,
         }),
@@ -308,7 +311,7 @@ export default function DirectoryIqSignalSourcesClient() {
             </div>
 
             {connectorId === "brilliant_directories_api" ? (
-              <div className="mt-3 grid gap-2 md:grid-cols-3">
+              <div className="mt-3 grid gap-2 md:grid-cols-4">
                 <input
                   value={bdConfig.baseUrl}
                   onChange={(event) => setBdConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
@@ -325,6 +328,12 @@ export default function DirectoryIqSignalSourcesClient() {
                   value={bdConfig.blogPostsPath}
                   onChange={(event) => setBdConfig((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
                   placeholder="Blog posts path"
+                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                />
+                <input
+                  value={bdConfig.blogPostsDataId}
+                  onChange={(event) => setBdConfig((prev) => ({ ...prev, blogPostsDataId: event.target.value }))}
+                  placeholder="Blog Posts data_id (default 14)"
                   className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
                 />
               </div>

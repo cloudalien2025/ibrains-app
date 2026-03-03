@@ -89,7 +89,7 @@ export async function getDirectoryIqBdConnection(userId: string): Promise<{
     dataPostsUpdatePath,
     dataPostsCreatePath,
     listingsDataId,
-    blogPostsDataId,
+    blogPostsDataId: blogPostsDataId ?? 14,
   };
 }
 
