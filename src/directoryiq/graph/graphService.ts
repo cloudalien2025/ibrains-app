@@ -788,7 +788,7 @@ export async function getIssues(input: { tenantId: string }): Promise<IssuesResu
   };
 }
 
-export async function getAuthorityOverview(input: { tenantId: string }): Promise<AuthorityOverviewResult> {
+export async function getAuthorityOverview(input: { tenantId: string; userId: string }): Promise<AuthorityOverviewResult> {
   const [counts, latestGraphRun, latestIngestRun] = await Promise.all([
     getGraphSummaryCounts(input.tenantId),
     getLatestRun(input.tenantId),
@@ -801,7 +801,7 @@ export async function getAuthorityOverview(input: { tenantId: string }): Promise
       ORDER BY finished_at DESC NULLS LAST
       LIMIT 1
       `,
-      [input.tenantId]
+      [input.userId]
     ),
   ]);
 

@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const overview = await getAuthorityOverview({ tenantId: "default" });
+    const overview = await getAuthorityOverview({ tenantId: "default", userId });
     return NextResponse.json({ ok: true, overview, reqId });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load authority overview";

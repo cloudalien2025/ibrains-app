@@ -453,6 +453,7 @@ export async function listBlogLayerRows(tenantId: string): Promise<BlogLayerRow[
     WHERE b.tenant_id = $1
       AND b.node_type = 'blog_post'
       AND b.status = 'active'
+      AND (b.meta->>'mock') IS DISTINCT FROM 'true'
     ORDER BY b.updated_at DESC, b.title NULLS LAST
     `,
     [tenantId]
@@ -493,6 +494,7 @@ export async function listListingLayerRows(tenantId: string): Promise<ListingLay
     WHERE l.tenant_id = $1
       AND l.node_type = 'listing'
       AND l.status = 'active'
+      AND (l.meta->>'mock') IS DISTINCT FROM 'true'
     ORDER BY l.updated_at DESC, l.title NULLS LAST
     `,
     [tenantId]
