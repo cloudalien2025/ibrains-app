@@ -4,9 +4,9 @@ import { rm } from "node:fs/promises";
 
 process.env.DIRECTORYIQ_DATA_ROOT = "/tmp/directoryiq-test-data";
 
-const cacheStore = await import("../../lib/directoryiq/storage/serpCacheStore.ts");
-const draftStore = await import("../../lib/directoryiq/storage/draftStore.ts");
-const writer = await import("../../lib/directoryiq/blog_writer/v2/writer.ts");
+const cacheStore = await import("../../lib/directoryiq/storage/serpCacheStore");
+const draftStore = await import("../../lib/directoryiq/storage/draftStore");
+const writer = await import("../../lib/directoryiq/blog_writer/v2/writer");
 
 const reset = async () => {
   await rm("/tmp/directoryiq-test-data", { recursive: true, force: true });
