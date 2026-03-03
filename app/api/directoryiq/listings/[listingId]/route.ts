@@ -93,13 +93,13 @@ function readBaseUrl(meta: Record<string, unknown>): string | null {
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: { listingId: string } }
+  { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
 ) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const { listingId } = params;
+    const { listingId } = await Promise.resolve(params);
     const listingEval = await getListingEvaluation(userId, decodeURIComponent(listingId));
     const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
     const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
