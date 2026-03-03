@@ -28,6 +28,9 @@ export async function POST(req: NextRequest) {
     }
 
     const graph = await rebuildGraph({ tenantId: "default", mode: "scan" });
+    console.info(
+      `[directoryiq-authority-ingest-route] req=${reqId} blogs_fetched=${ingest.counts.blogPosts} edges_upserted=${graph.stats.edgesUpserted} mentions_edges_upserted=${graph.stats.issuesCounts.mentions_without_links}`
+    );
 
     return NextResponse.json({
       ok: true,

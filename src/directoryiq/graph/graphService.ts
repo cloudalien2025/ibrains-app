@@ -545,7 +545,9 @@ export async function rebuildGraph(input: {
 
   try {
     const listings = await loadListings();
-    const blogs = await loadBlogPosts();
+    const blogsAll = await loadBlogPosts();
+    const maxBlogsPerRun = Number.parseInt(process.env.DIRECTORYIQ_AUTHORITY_MAX_BLOGS ?? "500", 10) || 500;
+    const blogs = blogsAll.slice(0, maxBlogsPerRun);
 
     const listingNodeBySourceId = new Map<string, { id: string; url: string; title: string }>();
     const listingUrls = new Map<string, { id: string; sourceId: string; title: string; url: string }>();
@@ -579,6 +581,12 @@ export async function rebuildGraph(input: {
     }
 
     let hasAnyBlogBody = false;
+    let blogsWithRawHtml = 0;
+    let totalCleanTextLength = 0;
+    let totalExtractedHrefs = 0;
+    let linksToEdgesUpserted = 0;
+    let mentionsEdgesUpserted = 0;
+    const goldenListing = listings.find((listing) => (listing.title ?? "").toLowerCase().includes("arrabelle"));
 
     for (const blog of blogs) {
       const blogRaw = (blog.raw_json ?? {}) as Record<string, unknown>;
@@ -597,9 +605,14 @@ export async function rebuildGraph(input: {
       if (html || text) {
         hasAnyBlogBody = true;
       }
+      if (html.trim()) blogsWithRawHtml += 1;
+      totalCleanTextLength += text.length;
 
       const anchors = extractAnchors(html);
+      totalExtractedHrefs += anchors.length;
       const linkedListingIds = new Set<string>();
+      let blogLinks = 0;
+      let blogMentions = 0;
 
       for (const anchor of anchors) {
         const href = normalizeUrl(anchor.href);
@@ -618,6 +631,8 @@ export async function rebuildGraph(input: {
             confidence: 95,
           });
           edgesUpserted += 1;
+          linksToEdgesUpserted += 1;
+          blogLinks += 1;
 
           await addEvidence({
             tenantId: input.tenantId,
@@ -676,6 +691,8 @@ export async function rebuildGraph(input: {
           confidence: 75,
         });
         edgesUpserted += 1;
+        mentionsEdgesUpserted += 1;
+        blogMentions += 1;
 
         await addEvidence({
           tenantId: input.tenantId,
@@ -687,6 +704,15 @@ export async function rebuildGraph(input: {
         });
         evidenceCount += 1;
       }
+
+      const goldenMatch =
+        blog.source_id === "51" && !!goldenListing && searchable.includes((goldenListing.title ?? "").trim().toLowerCase());
+      if (blog.source_id === "51") {
+        console.info(
+          `[directoryiq-authority-graph] EXPECT_MATCH listing="${goldenListing?.title ?? "none"}" blog="${blog.title ?? blog.source_id}" => ${goldenMatch}`
+        );
+      }
+      console.info(`[directoryiq-authority-graph] blog=${blog.source_id} links=${blogLinks} mentions=${blogMentions}`);
     }
 
     const orphanRows = await listOrphanListings(input.tenantId);
@@ -710,6 +736,10 @@ export async function rebuildGraph(input: {
         reason: "Blog body content is unavailable; scanner used title/excerpt-level signals only.",
       };
     }
+
+    console.info(
+      `[directoryiq-authority-graph] Ingestion Debug Summary blogs_fetched=${blogs.length} blogs_with_raw_html=${blogsWithRawHtml} avg_clean_text_length=${blogs.length ? Math.round(totalCleanTextLength / blogs.length) : 0} hrefs_extracted_total=${totalExtractedHrefs} links_to_edges_upserted=${linksToEdgesUpserted} mentions_edges_upserted=${mentionsEdgesUpserted}`
+    );
 
     await finishRun({
       runId: run.id,

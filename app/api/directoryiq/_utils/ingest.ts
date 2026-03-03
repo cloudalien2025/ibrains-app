@@ -45,6 +45,31 @@ function asNumber(value: unknown): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function extractBlogHtmlAndText(item: Record<string, unknown>): { rawHtml: string; cleanText: string } {
+  const rawHtml =
+    asString(item.raw_html) ||
+    asString(item.body_html) ||
+    asString(item.post_html) ||
+    asString(item.content_html) ||
+    asString(item.post_content) ||
+    asString(item.description) ||
+    asString(item.excerpt);
+
+  const cleanText = stripHtml(
+    asString(item.clean_text) ||
+      asString(item.summary) ||
+      asString(item.body) ||
+      asString(item.post_content) ||
+      rawHtml
+  );
+
+  return { rawHtml, cleanText };
+}
+
 function extractNode(item: Record<string, unknown>, fallbackPrefix: string, index: number): DirectoryIqNode {
   const sourceId =
     String(item.id ?? item.post_id ?? item.group_id ?? item.data_post_id ?? item.listing_id ?? item.slug ?? `${fallbackPrefix}-${index + 1}`);
@@ -394,6 +419,15 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       limit: 100,
       maxPages: 20,
     });
+    const blogSignals = blogItems.map(extractBlogHtmlAndText);
+    const blogsWithRawHtml = blogSignals.filter((signal) => signal.rawHtml.length > 0).length;
+    const avgCleanTextLength =
+      blogSignals.length > 0
+        ? Math.round(blogSignals.reduce((sum, signal) => sum + signal.cleanText.length, 0) / blogSignals.length)
+        : 0;
+    console.info(
+      `[directoryiq-authority-ingest] Ingestion Debug Summary blogs_fetched=${blogItems.length} blog_detail_fetched=0 public_fetch=0 serpapi_fetch=0 blogs_with_raw_html=${blogsWithRawHtml} avg_clean_text_length=${avgCleanTextLength}`
+    );
 
     const listings = listingItemsMapped.map((item, index) => extractNode(item, "listing", index));
     const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
@@ -489,6 +523,15 @@ export async function runDirectoryIqBlogIngest(userId: string): Promise<Director
       limit: 100,
       maxPages: 20,
     });
+    const blogSignals = blogItems.map(extractBlogHtmlAndText);
+    const blogsWithRawHtml = blogSignals.filter((signal) => signal.rawHtml.length > 0).length;
+    const avgCleanTextLength =
+      blogSignals.length > 0
+        ? Math.round(blogSignals.reduce((sum, signal) => sum + signal.cleanText.length, 0) / blogSignals.length)
+        : 0;
+    console.info(
+      `[directoryiq-authority-ingest] Ingestion Debug Summary blogs_fetched=${blogItems.length} blog_detail_fetched=0 public_fetch=0 serpapi_fetch=0 blogs_with_raw_html=${blogsWithRawHtml} avg_clean_text_length=${avgCleanTextLength}`
+    );
 
     const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
     await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs });
