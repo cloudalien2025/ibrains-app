@@ -19,6 +19,16 @@ type BlogSuggestion = {
   recommendation: string;
 };
 
+type MissingLinkRecommendation =
+  | string
+  | {
+      listingExternalId: string;
+      listingName: string;
+      listingUrl: string | null;
+      recommendedAnchorText: string;
+      evidenceSnippet: string | null;
+    };
+
 type AuthorityBlog = {
   blogNodeId: string;
   blogExternalId: string;
@@ -30,7 +40,7 @@ type AuthorityBlog = {
   status: "green" | "yellow" | "red";
   entities: BlogEntity[];
   suggestedListingTargets: BlogSuggestion[];
-  missingInternalLinksRecommendations: string[];
+  missingInternalLinksRecommendations: MissingLinkRecommendation[];
 };
 
 function statusClass(status: "green" | "yellow" | "red"): string {
@@ -49,23 +59,27 @@ export default function AuthorityBlogsClient() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    setError(null);
-    const response = await fetch("/api/directoryiq/authority/blogs", { cache: "no-store" });
-    const json = (await response.json().catch(() => ({}))) as { blogs?: AuthorityBlog[]; error?: { message?: string } };
-    if (!response.ok) {
-      setError(json.error?.message ?? "Failed to load authority blogs.");
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("/api/directoryiq/authority/blogs", { cache: "no-store" });
+      const json = (await response.json().catch(() => ({}))) as { blogs?: AuthorityBlog[]; error?: { message?: string } };
+      if (!response.ok) {
+        setError(json.error?.message ?? "Failed to load authority blogs.");
+        setLoading(false);
+        return;
+      }
+
+      const data = json.blogs ?? [];
+      setRows(data);
       setLoading(false);
-      return;
-    }
-
-    const data = json.blogs ?? [];
-    setRows(data);
-    setLoading(false);
-
-    if (selectedFromQuery) {
-      const match = data.find((row) => row.blogExternalId === selectedFromQuery);
-      if (match) setSelected(match);
+      if (selectedFromQuery) {
+        const match = data.find((row) => row.blogExternalId === selectedFromQuery);
+        if (match) setSelected(match);
+      }
+    } catch {
+      setError("Failed to load authority blogs.");
+      setLoading(false);
     }
   }
 
@@ -168,11 +182,26 @@ export default function AuthorityBlogsClient() {
                 <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing Internal Links Recommendations</div>
                 <div className="mt-2 space-y-2">
                   {selected.missingInternalLinksRecommendations.length === 0 ? <div className="text-slate-400">No missing link recommendations.</div> : null}
-                  {selected.missingInternalLinksRecommendations.map((recommendation) => (
-                    <div key={recommendation} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
-                      {recommendation}
-                    </div>
-                  ))}
+                  {selected.missingInternalLinksRecommendations.map((recommendation, index) => {
+                    if (typeof recommendation === "string") {
+                      return (
+                        <div key={`${recommendation}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                          {recommendation}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={`${recommendation.listingExternalId}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                        <div>{recommendation.listingName}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Link to {recommendation.listingUrl ?? "listing URL unavailable"} using anchor "{recommendation.recommendedAnchorText}".
+                        </div>
+                        {recommendation.evidenceSnippet ? (
+                          <div className="mt-1 text-xs text-slate-500">{recommendation.evidenceSnippet}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>
