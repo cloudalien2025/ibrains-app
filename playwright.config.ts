@@ -4,7 +4,7 @@ const baseURL = process.env.UI_AUDIT_BASE_URL || "http://127.0.0.1:3001";
 
 export default defineConfig({
   testDir: "./tests",
-  testMatch: ["**/e2e/**/*.spec.ts", "**/ui-audit/**/*.hero.spec.ts"],
+  testMatch: ["**/e2e/**/*.spec.ts", "**/ui-audit/**/*.hero.spec.ts", "**/ui-audit/**/*.shell.spec.ts"],
   retries: 1,
   timeout: 45_000,
   outputDir: "artifacts/playwright",
