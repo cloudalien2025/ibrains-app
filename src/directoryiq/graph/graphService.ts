@@ -229,6 +229,17 @@ function stripHtml(value: string): string {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function normalizePathForMatch(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  try {
+    const url = new URL(raw, "https://directoryiq.local");
+    return url.pathname.toLowerCase().replace(/\/+$/, "");
+  } catch {
+    return raw.split("?")[0].split("#")[0].toLowerCase().replace(/\/+$/, "");
+  }
+}
+
 function normalizeForMatch(value: string): string {
   return value
     .toLowerCase()
@@ -582,6 +593,7 @@ export async function rebuildGraph(input: {
 
     const listingNodeBySourceId = new Map<string, { id: string; url: string; title: string }>();
     const listingUrls = new Map<string, { id: string; sourceId: string; title: string; url: string }>();
+    const listingPaths = new Map<string, { id: string; sourceId: string; title: string; url: string }>();
 
     let nodesCreated = 0;
     let edgesUpserted = 0;
@@ -607,6 +619,19 @@ export async function rebuildGraph(input: {
           sourceId: listing.source_id,
           title: listingTitle,
           url: listing.url ?? "",
+        });
+      }
+
+      const listingRaw = (listing.raw_json ?? {}) as Record<string, unknown>;
+      const slugPath = normalizePathForMatch(
+        asString(listingRaw.listing_slug ?? listingRaw.group_filename ?? listingRaw.slug ?? listingRaw.path ?? "")
+      );
+      if (slugPath) {
+        listingPaths.set(slugPath, {
+          id: node.id,
+          sourceId: listing.source_id,
+          title: listingTitle,
+          url: listing.url ?? slugPath,
         });
       }
     }
@@ -647,6 +672,63 @@ export async function rebuildGraph(input: {
 
       for (const anchor of anchors) {
         const href = normalizeUrl(anchor.href);
+        const hrefPath = normalizePathForMatch(anchor.href);
+
+        if (hrefPath) {
+          const listing = listingPaths.get(hrefPath);
+          if (listing) {
+            linkedListingIds.add(listing.id);
+            const edge = await upsertEdge({
+              tenantId: input.tenantId,
+              fromNodeId: blogNode.id,
+              toNodeId: listing.id,
+              edgeType: "internal_link",
+              strength: 90,
+              confidence: 95,
+            });
+            edgesUpserted += 1;
+            linksToEdgesUpserted += 1;
+            blogLinks += 1;
+
+            await addEvidence({
+              tenantId: input.tenantId,
+              edgeId: edge.id,
+              sourceUrl: blog.url ?? `blog:${blog.source_id}`,
+              targetUrl: listing.url,
+              anchorText: anchor.text,
+              contextSnippet: makeSnippet(stripHtml(html || text), anchor.text || listing.title),
+              domPath: "a",
+              locationHint: "body",
+            });
+            evidenceCount += 1;
+
+            if (weakAnchorDetector(anchor.text)) {
+              const weakEdge = await upsertEdge({
+                tenantId: input.tenantId,
+                fromNodeId: blogNode.id,
+                toNodeId: listing.id,
+                edgeType: "weak_anchor",
+                strength: 40,
+                confidence: 85,
+              });
+              edgesUpserted += 1;
+
+              await addEvidence({
+                tenantId: input.tenantId,
+                edgeId: weakEdge.id,
+                sourceUrl: blog.url ?? `blog:${blog.source_id}`,
+                targetUrl: listing.url,
+                anchorText: anchor.text,
+                contextSnippet: makeSnippet(stripHtml(html || text), anchor.text || listing.title),
+                domPath: "a",
+                locationHint: "body",
+              });
+              evidenceCount += 1;
+            }
+            continue;
+          }
+        }
+
         if (!href) continue;
 
         for (const listing of listingUrls.values()) {
