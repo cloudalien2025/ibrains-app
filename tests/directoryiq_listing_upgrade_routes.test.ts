@@ -73,7 +73,7 @@ describe("directoryiq listing upgrade routes", () => {
       body: JSON.stringify({ mode: "standard" }),
       headers: { "content-type": "application/json" },
     });
-    const res = await POST(req, { params: Promise.resolve({ listingId: "321" }) });
+    const res = await POST(req, { params: { listingId: "321" } });
     const json = await res.json();
 
     expect(res.status).toBe(200);
@@ -89,7 +89,7 @@ describe("directoryiq listing upgrade routes", () => {
       body: JSON.stringify({ mode: "standard" }),
       headers: { "content-type": "application/json" },
     });
-    const res = await POST(req, { params: Promise.resolve({ listingId: "321" }) });
+    const res = await POST(req, { params: { listingId: "321" } });
     const json = await res.json();
 
     expect(res.status).toBe(400);
@@ -110,7 +110,7 @@ describe("directoryiq listing upgrade routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: Promise.resolve({ listingId: "321" }) });
+    const res = await POST(req, { params: { listingId: "321" } });
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
