@@ -67,12 +67,6 @@ export default function ListingHero({ title, subtitle = "Listing Optimization", 
         <div className="max-w-3xl">
           <h1 className="text-2xl font-semibold text-white sm:text-3xl">{title}</h1>
           <p className="mt-1 text-sm text-slate-200">{subtitle}</p>
-          {!hasImage ? (
-            <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-black/25 px-3 py-1.5 text-xs text-slate-100">
-              <span aria-hidden>[img]</span>
-              <span>No main image available for this listing.</span>
-            </div>
-          ) : null}
         </div>
 
         <div className="md:hidden">
