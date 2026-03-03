@@ -24,7 +24,7 @@ export default async function DirectoryIqListingsPage() {
       navItems={[
         { href: "/directoryiq", label: "Dashboard" },
         { href: "/directoryiq/listings", label: "Listings" },
-        { href: "/directoryiq/listings/321", label: "Authority" },
+        { href: "/directoryiq/authority-support", label: "Authority" },
         { href: "/directoryiq/settings/integrations", label: "Integrations" },
         { href: "/directoryiq/versions", label: "History" },
       ]}
