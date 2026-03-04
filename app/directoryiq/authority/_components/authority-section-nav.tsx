@@ -14,7 +14,7 @@ export default function AuthoritySectionNav() {
   const pathname = usePathname();
 
   return (
-    <section data-testid="authority-section-nav" className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+    <section data-testid="authority-section-nav" className="rounded-xl border border-white/10 bg-zinc-900 p-3">
       <div className="flex flex-wrap gap-2 text-sm">
         {LINKS.map((link) => {
           const active = pathname === link.href;
@@ -22,7 +22,7 @@ export default function AuthoritySectionNav() {
             <Link
               key={link.href}
               href={link.href}
-              className={`rounded-lg border px-3 py-1.5 ${active ? "border-cyan-300/45 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"}`}
+              className={`rounded-lg border px-3 py-1.5 ${active ? "border-cyan-300/45 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-zinc-900 text-slate-300 hover:bg-zinc-800"}`}
             >
               {link.label}
             </Link>

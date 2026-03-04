@@ -136,7 +136,7 @@ export default function AuthoritySupportClient() {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+      <section className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3">
         <h1 className="text-xl font-semibold text-slate-100">Authority Support</h1>
         <p className="mt-1 text-sm text-slate-300">
           Deterministic authority leak scan for listing link coverage and evidence-backed issues.
@@ -172,7 +172,7 @@ export default function AuthoritySupportClient() {
         <button
           type="button"
           onClick={() => setActiveCard("orphans")}
-          className={`rounded-xl border p-4 text-left ${activeCard === "orphans" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-white/[0.03]"}`}
+          className={`rounded-xl border p-4 text-left ${activeCard === "orphans" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-zinc-900"}`}
         >
           <div className="text-sm text-slate-300">Orphan Listings</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{issues.orphans.length}</div>
@@ -181,7 +181,7 @@ export default function AuthoritySupportClient() {
         <button
           type="button"
           onClick={() => setActiveCard("mentions_without_links")}
-          className={`rounded-xl border p-4 text-left ${activeCard === "mentions_without_links" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-white/[0.03]"}`}
+          className={`rounded-xl border p-4 text-left ${activeCard === "mentions_without_links" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-zinc-900"}`}
         >
           <div className="text-sm text-slate-300">Mentions Without Links</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{issues.mentions_without_links.length}</div>
@@ -190,7 +190,7 @@ export default function AuthoritySupportClient() {
         <button
           type="button"
           onClick={() => setActiveCard("weak_anchors")}
-          className={`rounded-xl border p-4 text-left ${activeCard === "weak_anchors" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-white/[0.03]"}`}
+          className={`rounded-xl border p-4 text-left ${activeCard === "weak_anchors" ? "border-cyan-300/40 bg-cyan-400/10" : "border-white/10 bg-zinc-900"}`}
         >
           <div className="text-sm text-slate-300">Weak Anchors</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{issues.weak_anchors.length}</div>

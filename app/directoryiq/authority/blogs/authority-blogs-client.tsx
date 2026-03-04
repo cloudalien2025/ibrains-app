@@ -78,7 +78,7 @@ export default function AuthorityBlogsClient() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+      <section className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3">
         <h1 className="text-xl font-semibold text-slate-100">Blog Content Layer</h1>
         <p className="mt-1 text-sm text-slate-300">Blog posts with extracted entities and listing link coverage.</p>
       </section>
@@ -143,7 +143,7 @@ export default function AuthorityBlogsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.entities.length === 0 ? <div className="text-slate-400">No entities detected.</div> : null}
                   {selected.entities.map((entity, index) => (
-                    <div key={`${entity.entityText}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div key={`${entity.entityText}-${index}`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
                       <div>{entity.entityText}</div>
                       <div className="mt-1 text-xs text-slate-400">{entity.evidenceSnippet ?? "No snippet"}</div>
                     </div>
@@ -156,7 +156,7 @@ export default function AuthorityBlogsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.suggestedListingTargets.length === 0 ? <div className="text-slate-400">No suggestions.</div> : null}
                   {selected.suggestedListingTargets.map((target) => (
-                    <div key={`${target.listingExternalId}-${target.recommendation}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div key={`${target.listingExternalId}-${target.recommendation}`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
                       <div>{target.listingTitle}</div>
                       <div className="mt-1 text-xs text-slate-400">{target.recommendation}</div>
                     </div>
@@ -169,7 +169,7 @@ export default function AuthorityBlogsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.missingInternalLinksRecommendations.length === 0 ? <div className="text-slate-400">No missing link recommendations.</div> : null}
                   {selected.missingInternalLinksRecommendations.map((recommendation) => (
-                    <div key={recommendation} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div key={recommendation} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
                       {recommendation}
                     </div>
                   ))}
