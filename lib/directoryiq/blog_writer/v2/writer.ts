@@ -1,6 +1,6 @@
-import type { ListingData } from "../../types.ts";
-import { getSerpCacheById } from "../../storage/serpCacheStore.ts";
-import { listDraftsByListing } from "../../storage/draftStore.ts";
+import type { ListingData } from "../../types";
+import { getSerpCacheById } from "../../storage/serpCacheStore";
+import { listDraftsByListing } from "../../storage/draftStore";
 
 const scoreTitle = (title: string, keyword: string, location?: string): number => {
   let score = 0;

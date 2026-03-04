@@ -1,5 +1,5 @@
-import { directoryIqConfig } from "../config.ts";
-import type { ExtractedOutlineItem, SerpTopResult } from "../types.ts";
+import { directoryIqConfig } from "../config";
+import type { ExtractedOutlineItem, SerpTopResult } from "../types";
 
 const withTimeout = async (url: string): Promise<string> => {
   const controller = new AbortController();

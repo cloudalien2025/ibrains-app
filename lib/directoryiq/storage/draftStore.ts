@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import type { BlogDraft } from "../types.ts";
-import { draftsFile } from "../config.ts";
-import { readJsonFile, writeJsonFile } from "./fileStore.ts";
+import type { BlogDraft } from "../types";
+import { draftsFile } from "../config";
+import { readJsonFile, writeJsonFile } from "./fileStore";
 
 type DraftState = { items: BlogDraft[] };
 const readState = () => readJsonFile<DraftState>(draftsFile, { items: [] });
