@@ -82,8 +82,7 @@ jobs:
             package-lock.json \
             .next \
             public \
-            next.config.ts \
-            node_modules
+            next.config.ts
           echo "TARBALL=dist/${SHA}.tgz" >> "$GITHUB_ENV"
           echo "RELEASE_SHA=${SHA}" >> "$GITHUB_ENV"
 
@@ -116,6 +115,7 @@ jobs:
           SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
           HEALTHCHECK_URL="${{ secrets.HEALTHCHECK_URL }}"
           RELEASE_SHA="${{ env.RELEASE_SHA }}"
+          BUILT_AT="${{ github.run_id }}"
           RELEASE_DIR="${DEPLOY_PATH}/.deploy/releases/${RELEASE_SHA}"
           TARBALL="${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
 
@@ -132,6 +132,31 @@ jobs:
             --exclude='.deploy' \
             --exclude='.git' \
             "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
+
+          ENV_FILE=""
+          if [ -L "${DEPLOY_PATH}/.env.production.local" ]; then
+            ENV_FILE="$(readlink -f "${DEPLOY_PATH}/.env.production.local")"
+          elif [ -f "${DEPLOY_PATH}/.env.production.local" ]; then
+            ENV_FILE="${DEPLOY_PATH}/.env.production.local"
+          elif [ -f /etc/ibrains/ibrains-app.env ]; then
+            ENV_FILE="/etc/ibrains/ibrains-app.env"
+          fi
+
+          if [ -z "${ENV_FILE}" ]; then
+            echo "ERROR: runtime env file not found."
+            exit 6
+          fi
+
+          echo "Runtime env file: ${ENV_FILE}"
+          TMP_ENV="$(mktemp)"
+          grep -v '^RELEASE_SHA=' "${ENV_FILE}" | grep -v '^BUILT_AT=' > "${TMP_ENV}" || true
+          printf 'RELEASE_SHA=%s\nBUILT_AT=%s\n' "${RELEASE_SHA}" "${BUILT_AT}" >> "${TMP_ENV}"
+          cat "${TMP_ENV}" > "${ENV_FILE}"
+          rm -f "${TMP_ENV}"
+
+          cd "${DEPLOY_PATH}"
+          export NODE_ENV=production
+          npm ci --omit=dev --no-audit --no-fund
 
           systemctl restart "${SERVICE_NAME}"
           systemctl is-active --quiet "${SERVICE_NAME}"
@@ -165,7 +190,7 @@ jobs:
           fi
 
           curl -sf http://127.0.0.1:3001/api/_meta/release | tee /tmp/release.json
-          if ! grep -q "${RELEASE_SHA}" /tmp/release.json; then
+          if ! grep -q "\"sha\":\"${RELEASE_SHA}\"" /tmp/release.json; then
             echo "ERROR: release endpoint does not contain expected SHA ${RELEASE_SHA}."
             echo "=== /tmp/release.json ==="
             cat /tmp/release.json || true
