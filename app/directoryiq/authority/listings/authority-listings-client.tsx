@@ -72,7 +72,7 @@ export default function AuthorityListingsClient() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
+      <section className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3">
         <h1 className="text-xl font-semibold text-slate-100">Listing Authority View</h1>
         <p className="mt-1 text-sm text-slate-300">Listing coverage from inbound blog links and mention evidence.</p>
       </section>
@@ -135,7 +135,7 @@ export default function AuthorityListingsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.inboundBlogs.length === 0 ? <div className="text-slate-400">No inbound blog references.</div> : null}
                   {selected.inboundBlogs.map((blog, index) => (
-                    <div key={`${blog.blogExternalId}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div key={`${blog.blogExternalId}-${index}`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
                       <div>{blog.blogTitle ?? blog.blogExternalId}</div>
                       <div className="mt-1 text-xs text-slate-400">{blog.blogUrl ?? "-"}</div>
                       <div className="mt-1 text-xs text-slate-400">{blog.edgeType === "links_to" ? "links_to" : "mentions"} · {blog.evidenceSnippet ?? "No snippet"}</div>
@@ -149,7 +149,7 @@ export default function AuthorityListingsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.suggestedBlogsToLinkFrom.length === 0 ? <div className="text-slate-400">No mention-only blog posts.</div> : null}
                   {selected.suggestedBlogsToLinkFrom.map((blog, index) => (
-                    <div key={`${blog.blogExternalId}-${index}-suggested`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                    <div key={`${blog.blogExternalId}-${index}-suggested`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
                       <div>{blog.blogTitle ?? blog.blogExternalId}</div>
                       <div className="mt-1 text-xs text-slate-400">{blog.evidenceSnippet ?? "No snippet"}</div>
                     </div>
