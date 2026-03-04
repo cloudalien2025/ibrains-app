@@ -7,18 +7,21 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
     steps:
       - name: Validate required secrets
         run: |
           set -euo pipefail
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH SERVICE_NAME; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_PATH SERVICE_NAME; do
             if [ -z "${!name:-}" ]; then
               echo "Missing required secret: $name" >&2
               exit 1
@@ -32,34 +35,33 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: "npm"
 
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
 
       - name: Prepare deploy tarball
         run: |
           set -euo pipefail
           SHA="${GITHUB_SHA}"
+
           mkdir -p dist
+
           tar \
             --exclude-vcs \
             --exclude='.env*' \
             --exclude='.deploy' \
             -czf "dist/${SHA}.tgz" \
             package.json \
-            pnpm-lock.yaml \
             package-lock.json \
             .next \
             public \
             next.config.ts \
             node_modules
+
           echo "TARBALL=dist/${SHA}.tgz" >> "$GITHUB_ENV"
           echo "RELEASE_SHA=${SHA}" >> "$GITHUB_ENV"
 
@@ -68,42 +70,54 @@ jobs:
           set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
-          printf '%s\n' "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+
+          printf '%s\n' "${DEPLOY_SSH_KEY}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
           if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
             printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
           else
             ssh-keyscan -p "${DEPLOY_PORT}" "${DEPLOY_HOST}" > ~/.ssh/known_hosts
           fi
+
           chmod 644 ~/.ssh/known_hosts
 
       - name: Upload tarball
         run: |
           set -euo pipefail
-          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "mkdir -p '${DEPLOY_PATH}/.deploy/incoming' '${DEPLOY_PATH}/.deploy/releases'"
-          scp -P "${DEPLOY_PORT}" "${TARBALL}" "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
+
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+            "mkdir -p '${DEPLOY_PATH}/.deploy/incoming' '${DEPLOY_PATH}/.deploy/releases'"
+
+          scp -P "${DEPLOY_PORT}" "${TARBALL}" \
+            "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
 
       - name: Remote release + restart
         run: |
           set -euo pipefail
-          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s" <<'EOF'
-          set -euo pipefail
-          DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-          SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
-          RELEASE_SHA="${{ github.sha }}"
-          RELEASE_DIR="${DEPLOY_PATH}/.deploy/releases/${RELEASE_SHA}"
-          TARBALL="${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
 
-          mkdir -p "${RELEASE_DIR}"
-          tar -xzf "${TARBALL}" -C "${RELEASE_DIR}"
+          ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s" <<EOF
+          set -euo pipefail
+
+          DEPLOY_PATH="${DEPLOY_PATH}"
+          SERVICE_NAME="${SERVICE_NAME}"
+          RELEASE_SHA="${RELEASE_SHA}"
+
+          RELEASE_DIR="\${DEPLOY_PATH}/.deploy/releases/\${RELEASE_SHA}"
+          TARBALL="\${DEPLOY_PATH}/.deploy/incoming/\${RELEASE_SHA}.tgz"
+
+          mkdir -p "\${RELEASE_DIR}"
+
+          tar -xzf "\${TARBALL}" -C "\${RELEASE_DIR}"
 
           rsync -a --delete \
             --exclude='.env*' \
             --exclude='.deploy' \
             --exclude='.git' \
-            "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
+            "\${RELEASE_DIR}/" "\${DEPLOY_PATH}/"
 
-          systemctl restart "${SERVICE_NAME}"
-          systemctl is-active --quiet "${SERVICE_NAME}"
+          systemctl restart "\${SERVICE_NAME}"
+          systemctl is-active --quiet "\${SERVICE_NAME}"
+
           curl -sf http://127.0.0.1:3001/brains >/dev/null
           EOF
