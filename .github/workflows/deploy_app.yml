@@ -10,6 +10,7 @@ jobs:
     env:
       DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
       DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
@@ -18,7 +19,7 @@ jobs:
       - name: Validate required secrets
         run: |
           set -euo pipefail
-          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_PATH SERVICE_NAME; do
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_PATH SERVICE_NAME; do
             if [ -z "${!name:-}" ]; then
               echo "Missing required secret: $name" >&2
               exit 1
@@ -32,16 +33,13 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
-
-      - name: Enable Corepack
-        run: corepack enable
+          cache: "npm"
 
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm ci
 
       - name: Build
-        run: pnpm build
+        run: npm run build
 
       - name: Prepare deploy tarball
         run: |
@@ -54,7 +52,6 @@ jobs:
             --exclude='.deploy' \
             -czf "dist/${SHA}.tgz" \
             package.json \
-            pnpm-lock.yaml \
             package-lock.json \
             .next \
             public \
