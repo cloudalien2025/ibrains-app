@@ -9,10 +9,16 @@ import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 
 export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
 
 export default async function EcomViperLayout({ children }: { children: ReactNode }) {
-  const headersList = await headers();
-  const user = resolveUserFromHeaders(headersList);
+  let user = null;
+  try {
+    const headersList = await headers();
+    user = resolveUserFromHeaders(headersList);
+  } catch {
+    user = null;
+  }
 
   if (!isEntitled(user, "ecomviper")) {
     const meta = brainCatalogById.ecomviper;
