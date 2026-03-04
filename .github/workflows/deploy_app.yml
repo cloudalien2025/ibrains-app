@@ -2,6 +2,8 @@ name: Deploy App
 
 on:
   workflow_dispatch:
+  push:
+    branches: ["main"]
 
 jobs:
   deploy:
@@ -16,6 +18,7 @@ jobs:
       SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
       HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      RELEASE_SHA: ${{ github.sha }}
     steps:
       - name: Validate required secrets
         run: |
@@ -29,6 +32,24 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+
+      - name: Validate branch and sha
+        run: |
+          set -euo pipefail
+          if [ "${GITHUB_REF_NAME}" != "main" ]; then
+            echo "This workflow must run from main. Current ref: ${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+          git fetch --depth=1 origin main
+          MAIN_SHA="$(git rev-parse origin/main)"
+          if [ "${MAIN_SHA}" != "${GITHUB_SHA}" ]; then
+            echo "Refuses to deploy non-main SHA." >&2
+            echo "origin/main: ${MAIN_SHA}" >&2
+            echo "github.sha: ${GITHUB_SHA}" >&2
+            exit 1
+          fi
 
       - name: Setup Node 20
         uses: actions/setup-node@v4
@@ -40,12 +61,17 @@ jobs:
         run: npm ci
 
       - name: Build
+        env:
+          NEXT_PUBLIC_RELEASE_SHA: ${{ env.RELEASE_SHA }}
+          RELEASE_SHA: ${{ env.RELEASE_SHA }}
+          NEXT_PUBLIC_BUILT_AT: ${{ github.run_id }}
+          BUILT_AT: ${{ github.run_id }}
         run: npm run build
 
       - name: Prepare deploy tarball
         run: |
           set -euo pipefail
-          SHA="${GITHUB_SHA}"
+          SHA="${RELEASE_SHA}"
           mkdir -p dist
           tar \
             --exclude-vcs \
@@ -89,9 +115,14 @@ jobs:
           DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
           SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
           HEALTHCHECK_URL="${{ secrets.HEALTHCHECK_URL }}"
-          RELEASE_SHA="${{ github.sha }}"
+          RELEASE_SHA="${{ env.RELEASE_SHA }}"
           RELEASE_DIR="${DEPLOY_PATH}/.deploy/releases/${RELEASE_SHA}"
           TARBALL="${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
+
+          echo "DEPLOY_PATH=${DEPLOY_PATH}"
+          test -d "${DEPLOY_PATH}" || (echo "DEPLOY_PATH missing" && exit 1)
+          ls -la "${DEPLOY_PATH}" || true
+          systemctl list-units --type=service | grep -F "${SERVICE_NAME}" >/dev/null || (echo "SERVICE_NAME not found: ${SERVICE_NAME}" && exit 1)
 
           mkdir -p "${RELEASE_DIR}"
           tar -xzf "${TARBALL}" -C "${RELEASE_DIR}"
@@ -131,5 +162,17 @@ jobs:
             echo "=== listening ports (ss -lntp) ==="
             ss -lntp || true
             exit 7
+          fi
+
+          curl -sf http://127.0.0.1:3001/api/_meta/release | tee /tmp/release.json
+          if ! grep -q "${RELEASE_SHA}" /tmp/release.json; then
+            echo "ERROR: release endpoint does not contain expected SHA ${RELEASE_SHA}."
+            echo "=== /tmp/release.json ==="
+            cat /tmp/release.json || true
+            echo "=== systemctl status ${SERVICE_NAME} ==="
+            systemctl status "${SERVICE_NAME}" --no-pager || true
+            echo "=== journalctl -u ${SERVICE_NAME} (last 100 lines) ==="
+            journalctl -u "${SERVICE_NAME}" -n 100 --no-pager || true
+            exit 8
           fi
           EOF
