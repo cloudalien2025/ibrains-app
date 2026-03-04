@@ -10,7 +10,8 @@ export async function GET(
   try {
     const { runId } = params;
 
-    return proxyToBrains(req, `/v1/runs/${runId}`, { requireAuth: true });
+    // public-safe per backend spec
+    return proxyToBrains(req, `/v1/runs/${runId}`, { requireAuth: false });
   } catch {
     return unexpectedErrorResponse();
   }

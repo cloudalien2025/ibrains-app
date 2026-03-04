@@ -35,16 +35,6 @@ The easiest way to deploy your Next.js app is to use the [Vercel Platform](https
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
 
-## DirectoryIQ configuration
-
-Set these environment variables for DirectoryIQ SERP outline processing:
-
-- `SERPAPI_API_KEY` - required API key for SERP fetch jobs.
-- `DIRECTORYIQ_SERP_CACHE_TTL_DAYS` - cache retention in days (default `14`).
-- `DIRECTORYIQ_SERP_MAX_CONCURRENCY` - max concurrent SERP jobs (default `3`).
-- `DIRECTORYIQ_SERP_FETCH_TIMEOUT_MS` - page-fetch timeout for outline extraction (default `12000`).
-- `DIRECTORYIQ_DATA_ROOT` - optional override for DirectoryIQ cache/draft storage root.
-
 ## Operational Scripts
 
 - `scripts/prod_smoke.sh`: quick production health checks.
@@ -70,10 +60,3 @@ Check env loaded:
 ```bash
 sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
 ```
-
-## SSC v1 (Ferrari)
-
-- Migrations: `psql $DATABASE_URL -f migrations/20260227_ssc_v1.sql`
-- Playwright (first-time): `npx playwright install --with-deps`
-- Artifact sync to worker: `scripts/sync_ssc_artifacts_to_worker.sh`
-- Operations + endpoint wiring: `docs/SSC_V1_FERRARI.md`
