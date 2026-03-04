@@ -14,6 +14,7 @@ jobs:
       DEPLOY_PORT: ${{ secrets.DEPLOY_PORT || '22' }}
       DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
       SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+      HEALTHCHECK_URL: ${{ secrets.HEALTHCHECK_URL }}
       DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
     steps:
       - name: Validate required secrets
@@ -87,6 +88,7 @@ jobs:
           set -euo pipefail
           DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
           SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
+          HEALTHCHECK_URL="${{ secrets.HEALTHCHECK_URL }}"
           RELEASE_SHA="${{ github.sha }}"
           RELEASE_DIR="${DEPLOY_PATH}/.deploy/releases/${RELEASE_SHA}"
           TARBALL="${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
@@ -102,5 +104,32 @@ jobs:
 
           systemctl restart "${SERVICE_NAME}"
           systemctl is-active --quiet "${SERVICE_NAME}"
-          curl -sf http://127.0.0.1:3001/brains >/dev/null
+
+          # Healthcheck (configurable; defaults to 127.0.0.1:3001/brains)
+          HC_URL="${HEALTHCHECK_URL:-http://127.0.0.1:3001/brains}"
+
+          echo "Healthcheck URL: ${HC_URL}"
+          echo "Waiting for service to become healthy..."
+
+          ok=0
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            if curl -sf "${HC_URL}" >/dev/null; then
+              ok=1
+              echo "Healthcheck OK on attempt ${i}"
+              break
+            fi
+            echo "Healthcheck not ready yet (attempt ${i}/10). Sleeping 3s..."
+            sleep 3
+          done
+
+          if [ "${ok}" -ne 1 ]; then
+            echo "ERROR: Healthcheck failed after retries."
+            echo "=== systemctl status ${SERVICE_NAME} ==="
+            systemctl status "${SERVICE_NAME}" --no-pager || true
+            echo "=== journalctl -u ${SERVICE_NAME} (last 200 lines) ==="
+            journalctl -u "${SERVICE_NAME}" -n 200 --no-pager || true
+            echo "=== listening ports (ss -lntp) ==="
+            ss -lntp || true
+            exit 7
+          fi
           EOF
