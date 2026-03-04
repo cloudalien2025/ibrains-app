@@ -17,31 +17,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Node 20
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-          run_install: false
+      - name: Install Dependencies (npm ci)
+        run: npm ci
 
-      - name: Enable Corepack
-        run: corepack enable
-
-      - name: Install Dependencies
-        run: pnpm install --no-frozen-lockfile
-
-      - name: Run Tests (if present)
-        run: |
-          set -e
-          if pnpm -s run | grep -qE '(^|\s)test($|\s)'; then
-            pnpm test
-          else
-            echo "No test script found; skipping tests."
-          fi
+      - name: Run Tests
+        run: npm test
 
       - name: Build
-        run: pnpm build
+        run: npm run build
