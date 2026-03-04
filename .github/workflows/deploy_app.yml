@@ -82,6 +82,7 @@ jobs:
             package-lock.json \
             .next \
             public \
+            scripts \
             next.config.ts
           echo "TARBALL=dist/${SHA}.tgz" >> "$GITHUB_ENV"
           echo "RELEASE_SHA=${SHA}" >> "$GITHUB_ENV"
@@ -156,7 +157,7 @@ jobs:
 
           cd "${DEPLOY_PATH}"
           export NODE_ENV=production
-          npm ci --omit=dev --no-audit --no-fund
+          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 
           systemctl restart "${SERVICE_NAME}"
           systemctl is-active --quiet "${SERVICE_NAME}"
