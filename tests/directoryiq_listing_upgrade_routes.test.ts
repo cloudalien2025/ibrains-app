@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { issueApprovalToken } from "@/app/api/directoryiq/_utils/authority";
+import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
@@ -33,6 +34,16 @@ const validateOpenAiKeyPresent = vi.fn((value: string | null) => {
   return value;
 });
 const generateListingUpgradeDraft = vi.fn(async () => "Improved description.");
+const generateUpgrade = vi.fn(async () => ({
+  reqId: "req-1",
+  draft: { id: "draft-1", proposedText: "Improved description." },
+}));
+const pushUpgrade = vi.fn(async () => ({
+  reqId: "req-2",
+  ok: true,
+  draftId: "draft-1",
+  bdRef: null,
+}));
 
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
@@ -61,9 +72,24 @@ vi.mock("@/lib/openai/serverClient", () => ({
   generateListingUpgradeDraft,
 }));
 
+vi.mock("@/src/directoryiq/services/upgradeService", () => ({
+  generateUpgrade,
+  pushUpgrade,
+}));
+
 describe("directoryiq listing upgrade routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    generateUpgrade.mockResolvedValue({
+      reqId: "req-1",
+      draft: { id: "draft-1", proposedText: "Improved description." },
+    });
+    pushUpgrade.mockResolvedValue({
+      reqId: "req-2",
+      ok: true,
+      draftId: "draft-1",
+      bdRef: null,
+    });
   });
 
   it("generate route returns draft payload", async () => {
@@ -78,11 +104,18 @@ describe("directoryiq listing upgrade routes", () => {
 
     expect(res.status).toBe(200);
     expect(json.draftId).toBe("draft-1");
-    expect(generateListingUpgradeDraft).toHaveBeenCalledTimes(1);
+    expect(generateUpgrade).toHaveBeenCalledTimes(1);
   });
 
   it("generate route returns OPENAI_KEY_MISSING when key absent", async () => {
-    getDirectoryIqOpenAiKey.mockResolvedValueOnce(null as unknown as string);
+    generateUpgrade.mockRejectedValueOnce(
+      new DirectoryIqServiceError({
+        status: 400,
+        code: "OPENAI_KEY_MISSING",
+        reqId: "req-3",
+        message: "OpenAI key missing.",
+      })
+    );
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/upgrade/generate/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/upgrade/generate", {
       method: "POST",
@@ -114,6 +147,6 @@ describe("directoryiq listing upgrade routes", () => {
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(markListingUpgradePushed).toHaveBeenCalledTimes(1);
+    expect(pushUpgrade).toHaveBeenCalledTimes(1);
   });
 });
