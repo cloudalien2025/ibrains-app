@@ -4,8 +4,7 @@ import SideNav from "./_components/SideNav";
 
 export default function ShellLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-[#05070f] text-slate-100">
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_55%),radial-gradient(circle_at_right,_rgba(16,185,129,0.12),_transparent_45%),linear-gradient(135deg,_rgba(15,23,42,0.9),_rgba(2,6,23,0.95))]" />
+    <div className="min-h-screen text-slate-100">
       <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-6 py-8">
         <aside className="hidden w-64 flex-col gap-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_40px_80px_rgba(2,6,23,0.6)] lg:flex">
           <div className="space-y-2">

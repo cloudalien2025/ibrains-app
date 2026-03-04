@@ -13,8 +13,11 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-zinc-950 text-zinc-100">
-        {children}
+      <body className="min-h-screen text-slate-100">
+        <div className="relative min-h-screen bg-[#05070f] text-slate-100">
+          <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top,_rgba(59,130,246,0.18),_transparent_55%),radial-gradient(circle_at_right,_rgba(16,185,129,0.12),_transparent_45%),linear-gradient(135deg,_rgba(15,23,42,0.9),_rgba(2,6,23,0.95))]" />
+          {children}
+        </div>
       </body>
     </html>
   );
