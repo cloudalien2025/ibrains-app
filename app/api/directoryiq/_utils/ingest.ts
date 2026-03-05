@@ -256,6 +256,7 @@ async function fetchBdUsersPaged(params: {
 
     for (let page = 1; page <= maxPages; page += 1) {
       const form = formBuilder(page);
+      form.output_type = "array";
       const response = await bdRequestWithRetryLocal(() =>
         bdRequestFormWithFallback({
           baseUrl: params.baseUrl,
