@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:list": "playwright test --list",
+    "test:e2e:droplet": "bash scripts/pw_droplet.sh",
     "test:e2e:docker": "PW_NO_SANDBOX=1 pnpm playwright test",
     "test:ui-audit": "playwright test tests/ui-audit",
     "verify:ecomviper:css": "bash scripts/verify_ecomviper_css.sh",
