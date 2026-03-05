@@ -21,6 +21,8 @@ type ListingDetailResponse = {
   };
 };
 
+type ListingDetailPayload = ListingDetailResponse | { data?: Partial<ListingDetailResponse> };
+
 type IntegrationStatusResponse = {
   openaiConfigured: boolean;
   bdConfigured: boolean;
@@ -95,14 +97,23 @@ export default function ListingOptimizationClient({
         fetch("/api/directoryiq/integrations", { cache: "no-store" }),
       ]);
 
-      const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailResponse & ApiErrorShape;
+      const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailPayload & ApiErrorShape;
       const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
+      const listingPayload =
+        (listingJson as ListingDetailResponse).listing ??
+        (listingJson as { data?: ListingDetailResponse }).data?.listing;
+      const evaluationPayload =
+        (listingJson as ListingDetailResponse).evaluation ??
+        (listingJson as { data?: ListingDetailResponse }).data?.evaluation;
 
-      if (!listingRes.ok) {
+      if (!listingRes.ok || !listingPayload) {
         setError(parseError(listingJson, "Failed to load listing details.", listingRes.status, effectiveListingId));
         setListing(null);
       } else {
-        setListing(listingJson);
+        setListing({
+          listing: listingPayload,
+          evaluation: evaluationPayload ?? { totalScore: 0 },
+        });
       }
 
       if (!integrationRes.ok) {
