@@ -10,6 +10,7 @@ const inDocker = fs.existsSync("/.dockerenv");
 const isRoot = typeof process.getuid === "function" ? process.getuid() === 0 : false;
 const forceNoSandbox = process.env.PW_NO_SANDBOX === "1";
 const executablePath = process.env.PW_EXECUTABLE_PATH || undefined;
+process.env.E2E_MOCK_GRAPH ??= "1";
 // Chromium sandbox can crash in root/docker environments; keep it on elsewhere.
 const needsNoSandbox = forceNoSandbox || inDocker || isRoot;
 const chromiumArgs = needsNoSandbox
@@ -54,6 +55,19 @@ export default defineConfig({
   retries: 1,
   timeout: 45_000,
   outputDir,
+  webServer: {
+    command: "pnpm exec next dev -p 3001 -H 127.0.0.1",
+    url: "http://127.0.0.1:3001",
+    reuseExistingServer: false,
+    timeout: 120_000,
+    env: {
+      ...process.env,
+      E2E_MOCK_GRAPH: "1",
+      TMPDIR: "/tmp",
+      TMP: "/tmp",
+      TEMP: "/tmp",
+    },
+  },
   use: {
     baseURL,
     trace: "retain-on-failure",
