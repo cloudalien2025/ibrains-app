@@ -63,6 +63,7 @@ export default defineConfig({
     env: {
       ...process.env,
       E2E_MOCK_GRAPH: "1",
+      NODE_ENV: "test",
       TMPDIR: "/tmp",
       TMP: "/tmp",
       TEMP: "/tmp",

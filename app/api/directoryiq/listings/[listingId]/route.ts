@@ -144,6 +144,26 @@ export async function GET(
     return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
   }
 
+  if (process.env.E2E_MOCK_GRAPH === "1") {
+    return NextResponse.json({
+      listing: {
+        listing_id: decodedListingId,
+        listing_name: `Mock Listing ${decodedListingId}`,
+        listing_url: null,
+        mainImageUrl: null,
+      },
+      evaluation: {
+        totalScore: 0,
+      },
+      authority_posts: [],
+      settings: {},
+      integrations: {
+        brilliant_directories: false,
+        openai: false,
+      },
+    });
+  }
+
   if (!hasAuthContext(req)) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
