@@ -72,7 +72,11 @@ async function loadBrains(): Promise<{
     }
     const payload = await res.json().catch(() => null);
     const list = resolveBrains(payload);
-    return { brains: list.map(normalizeBrain) };
+    const normalized = list.map(normalizeBrain);
+    const uniqueBrains = Array.from(
+      new Map(normalized.map((brain) => [brain.id, brain])).values()
+    );
+    return { brains: uniqueBrains };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown fetch error";
     return { brains: [], error: message };

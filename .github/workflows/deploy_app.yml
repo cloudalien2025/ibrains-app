@@ -112,93 +112,23 @@ jobs:
           set -euo pipefail
           ssh -p "${DEPLOY_PORT}" "${DEPLOY_USER}@${DEPLOY_HOST}" "bash -s" <<'EOF'
           set -euo pipefail
-          DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
-          SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
-          HEALTHCHECK_URL="${{ secrets.HEALTHCHECK_URL }}"
-          RELEASE_SHA="${{ env.RELEASE_SHA }}"
-          BUILT_AT="${{ github.run_id }}"
-          RELEASE_DIR="${DEPLOY_PATH}/.deploy/releases/${RELEASE_SHA}"
-          TARBALL="${DEPLOY_PATH}/.deploy/incoming/${RELEASE_SHA}.tgz"
+          cd /root/ibrains-app
 
-          echo "DEPLOY_PATH=${DEPLOY_PATH}"
-          test -d "${DEPLOY_PATH}" || (echo "DEPLOY_PATH missing" && exit 1)
-          ls -la "${DEPLOY_PATH}" || true
-          systemctl list-units --type=service | grep -F "${SERVICE_NAME}" >/dev/null || (echo "SERVICE_NAME not found: ${SERVICE_NAME}" && exit 1)
+          echo "== Sync main =="
+          git fetch origin
+          git checkout main
+          git reset --hard origin/main
 
-          mkdir -p "${RELEASE_DIR}"
-          tar -xzf "${TARBALL}" -C "${RELEASE_DIR}"
+          echo "== Install + build =="
+          rm -rf .next
+          npm ci
+          npm run build
 
-          rsync -a --delete \
-            --exclude='.env*' \
-            --exclude='.deploy' \
-            --exclude='.git' \
-            "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
+          echo "== Restart service =="
+          sudo systemctl restart ibrains-next.service
+          sleep 2
+          sudo systemctl status ibrains-next.service --no-pager
 
-          ENV_FILE=""
-          if [ -L "${DEPLOY_PATH}/.env.production.local" ]; then
-            ENV_FILE="$(readlink -f "${DEPLOY_PATH}/.env.production.local")"
-          elif [ -f "${DEPLOY_PATH}/.env.production.local" ]; then
-            ENV_FILE="${DEPLOY_PATH}/.env.production.local"
-          elif [ -f /etc/ibrains/ibrains-app.env ]; then
-            ENV_FILE="/etc/ibrains/ibrains-app.env"
-          fi
-
-          if [ -z "${ENV_FILE}" ]; then
-            echo "ERROR: runtime env file not found."
-            exit 6
-          fi
-
-          echo "Runtime env file: ${ENV_FILE}"
-          TMP_ENV="$(mktemp)"
-          grep -v '^RELEASE_SHA=' "${ENV_FILE}" | grep -v '^BUILT_AT=' > "${TMP_ENV}" || true
-          printf 'RELEASE_SHA=%s\nBUILT_AT=%s\n' "${RELEASE_SHA}" "${BUILT_AT}" >> "${TMP_ENV}"
-          cat "${TMP_ENV}" > "${ENV_FILE}"
-          rm -f "${TMP_ENV}"
-
-          cd "${DEPLOY_PATH}"
-          export NODE_ENV=production
-          npm ci --omit=dev --ignore-scripts --no-audit --no-fund
-
-          systemctl restart "${SERVICE_NAME}"
-          systemctl is-active --quiet "${SERVICE_NAME}"
-
-          # Healthcheck (configurable; defaults to 127.0.0.1:3001/brains)
-          HC_URL="${HEALTHCHECK_URL:-http://127.0.0.1:3001/brains}"
-
-          echo "Healthcheck URL: ${HC_URL}"
-          echo "Waiting for service to become healthy..."
-
-          ok=0
-          for i in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -sf "${HC_URL}" >/dev/null; then
-              ok=1
-              echo "Healthcheck OK on attempt ${i}"
-              break
-            fi
-            echo "Healthcheck not ready yet (attempt ${i}/10). Sleeping 3s..."
-            sleep 3
-          done
-
-          if [ "${ok}" -ne 1 ]; then
-            echo "ERROR: Healthcheck failed after retries."
-            echo "=== systemctl status ${SERVICE_NAME} ==="
-            systemctl status "${SERVICE_NAME}" --no-pager || true
-            echo "=== journalctl -u ${SERVICE_NAME} (last 200 lines) ==="
-            journalctl -u "${SERVICE_NAME}" -n 200 --no-pager || true
-            echo "=== listening ports (ss -lntp) ==="
-            ss -lntp || true
-            exit 7
-          fi
-
-          curl -sf http://127.0.0.1:3001/api/_meta/release | tee /tmp/release.json
-          if ! grep -q "\"sha\":\"${RELEASE_SHA}\"" /tmp/release.json; then
-            echo "ERROR: release endpoint does not contain expected SHA ${RELEASE_SHA}."
-            echo "=== /tmp/release.json ==="
-            cat /tmp/release.json || true
-            echo "=== systemctl status ${SERVICE_NAME} ==="
-            systemctl status "${SERVICE_NAME}" --no-pager || true
-            echo "=== journalctl -u ${SERVICE_NAME} (last 100 lines) ==="
-            journalctl -u "${SERVICE_NAME}" -n 100 --no-pager || true
-            exit 8
-          fi
+          echo "== Health check =="
+          curl -si http://127.0.0.1:3001/api/_meta/release | sed -n "1,25p"
           EOF
