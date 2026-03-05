@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
@@ -16,9 +16,17 @@ type VersionRow = {
   created_at: string;
 };
 
-export default function DirectoryIqVersionsClient() {
-  const [rows, setRows] = useState<VersionRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
+type DirectoryIqVersionsClientProps = {
+  initialRows?: VersionRow[];
+  initialError?: string | null;
+};
+
+export default function DirectoryIqVersionsClient({
+  initialRows = [],
+  initialError = null,
+}: DirectoryIqVersionsClientProps) {
+  const [rows, setRows] = useState<VersionRow[]>(initialRows);
+  const [error, setError] = useState<string | null>(initialError);
   const [preview, setPreview] = useState<Record<string, unknown> | null>(null);
   const [restoreToken, setRestoreToken] = useState<string>("");
 
@@ -32,10 +40,6 @@ export default function DirectoryIqVersionsClient() {
     }
     setRows(json.versions ?? []);
   }
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   async function previewRestore(versionId: string) {
     const response = await fetch(`/api/directoryiq/versions/${versionId}/restore-preview`, { method: "POST" });
