@@ -6,6 +6,28 @@ const baseURL = process.env.UI_AUDIT_BASE_URL || "http://127.0.0.1:3001";
 const outputDir = path.join(process.cwd(), "artifacts", "playwright");
 const tmpDir = path.join(outputDir, ".tmp");
 
+const inDocker = fs.existsSync("/.dockerenv");
+const isRoot = typeof process.getuid === "function" ? process.getuid() === 0 : false;
+const forceNoSandbox = process.env.PW_NO_SANDBOX === "1";
+const executablePath = process.env.PW_EXECUTABLE_PATH || undefined;
+// Chromium sandbox can crash in root/docker environments; keep it on elsewhere.
+const needsNoSandbox = forceNoSandbox || inDocker || isRoot;
+const chromiumArgs = needsNoSandbox
+  ? [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-crash-reporter",
+      "--disable-features=Crashpad,CrashpadHandler",
+      "--disable-breakpad",
+      "--no-zygote",
+      "--single-process",
+    ]
+  : [];
+const chromiumLaunchOptions = needsNoSandbox
+  ? { args: chromiumArgs, chromiumSandbox: false, ...(executablePath ? { executablePath } : {}) }
+  : { args: chromiumArgs, ...(executablePath ? { executablePath } : {}) };
+const chromiumChannel = needsNoSandbox ? "chromium" : undefined;
+
 fs.mkdirSync(tmpDir, { recursive: true });
 process.env.TMPDIR ??= tmpDir;
 process.env.TMP ??= tmpDir;
@@ -37,6 +59,8 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "off",
+    launchOptions: chromiumLaunchOptions,
+    channel: chromiumChannel,
     extraHTTPHeaders: {
       "x-user-brains": "directoryiq,ecomviper,studio",
       "x-user-entitlements": "directoryiq,ecomviper,studio",
@@ -48,7 +72,11 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
-      use: { browserName: "chromium" },
+      use: {
+        browserName: "chromium",
+        launchOptions: chromiumLaunchOptions,
+        channel: chromiumChannel,
+      },
     },
   ],
 });
