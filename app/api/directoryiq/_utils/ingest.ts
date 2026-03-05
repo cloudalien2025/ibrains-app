@@ -986,6 +986,20 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
 
   let runId = "";
   try {
+    const fixtureCleanup = await query<{ count: number }>(
+      `
+      DELETE FROM directoryiq_nodes
+      WHERE user_id = $1
+        AND source_type = 'listing'
+        AND (raw_json->>'source_url') = 'https://example.com/listings/summit-home-services'
+      RETURNING 1 as count
+      `,
+      [userId]
+    );
+    if (fixtureCleanup.length > 0) {
+      console.info(`[directoryiq-ingest] fixture_cleanup removed=${fixtureCleanup.length}`);
+    }
+
     const runBaseUrl = integrations[0]?.baseUrl ?? "multi://brilliant_directories";
     runId = await createRun(userId, runBaseUrl);
 
