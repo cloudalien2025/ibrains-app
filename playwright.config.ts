@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
-const baseURL = process.env.UI_AUDIT_BASE_URL || "http://127.0.0.1:3001";
+const baseURL = process.env.UI_AUDIT_BASE_URL || "http://127.0.0.1:3002";
 const outputDir = path.join(process.cwd(), "artifacts", "playwright");
 const tmpDir = path.join(outputDir, ".tmp");
 
@@ -56,8 +56,8 @@ export default defineConfig({
   timeout: 45_000,
   outputDir,
   webServer: {
-    command: "pnpm exec next dev -p 3001 -H 127.0.0.1",
-    url: "http://127.0.0.1:3001",
+    command: "pnpm exec next dev -p 3002 -H 127.0.0.1",
+    url: "http://127.0.0.1:3002",
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
