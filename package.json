@@ -11,6 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list",
     "test:ui-audit": "playwright test tests/ui-audit",
     "verify:ecomviper:css": "bash scripts/verify_ecomviper_css.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"
