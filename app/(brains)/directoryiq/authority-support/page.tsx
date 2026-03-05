@@ -1,18 +1,22 @@
 import { headers } from "next/headers";
 import AuthoritySupportClient from "./authority-support-client";
+import type { GraphIssue, GraphIssuesPayload } from "@/src/directoryiq/domain/authorityGraph";
 
-type GraphIssuesPayload = {
-  orphans: unknown[];
-  mentions_without_links: unknown[];
-  weak_anchors: unknown[];
-  lastRun: {
-    id: string;
-    status: string;
-    startedAt: string;
-    completedAt: string | null;
-    stats: Record<string, unknown>;
-  } | null;
-};
+function normalizeIssues(input: unknown): GraphIssuesPayload {
+  const raw = (input && typeof input === "object") ? (input as Partial<GraphIssuesPayload>) : {};
+  const orphans = Array.isArray(raw.orphans) ? (raw.orphans as GraphIssue[]) : [];
+  const mentions = Array.isArray(raw.mentions_without_links) ? (raw.mentions_without_links as GraphIssue[]) : [];
+  const weakAnchors = Array.isArray(raw.weak_anchors) ? (raw.weak_anchors as GraphIssue[]) : [];
+  const lastRun =
+    raw.lastRun && typeof raw.lastRun === "object" ? (raw.lastRun as GraphIssuesPayload["lastRun"]) : null;
+
+  return {
+    orphans,
+    mentions_without_links: mentions,
+    weak_anchors: weakAnchors,
+    lastRun,
+  };
+}
 
 async function loadIssues(): Promise<{ issues: GraphIssuesPayload; error: string | null }> {
   const headersList = await headers();
@@ -21,17 +25,17 @@ async function loadIssues(): Promise<{ issues: GraphIssuesPayload; error: string
 
   try {
     const res = await fetch(`${baseUrl}/api/directoryiq/graph/issues`, { cache: "no-store" });
-    const json = (await res.json().catch(() => ({}))) as { issues?: GraphIssuesPayload; error?: { message?: string } };
+    const json = (await res.json().catch(() => ({}))) as { issues?: unknown; error?: { message?: string } };
     if (!res.ok || !json.issues) {
       return {
-        issues: { orphans: [], mentions_without_links: [], weak_anchors: [], lastRun: null },
+        issues: normalizeIssues(null),
         error: json.error?.message ?? "Failed to load authority graph issues.",
       };
     }
-    return { issues: json.issues, error: null };
+    return { issues: normalizeIssues(json.issues), error: null };
   } catch (e) {
     return {
-      issues: { orphans: [], mentions_without_links: [], weak_anchors: [], lastRun: null },
+      issues: normalizeIssues(null),
       error: e instanceof Error ? e.message : "Failed to load authority graph issues.",
     };
   }

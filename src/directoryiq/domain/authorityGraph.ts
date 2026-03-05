@@ -38,6 +38,21 @@ export type GraphIssue = {
   };
 };
 
+export type GraphIssuesRun = {
+  id: string;
+  status: string;
+  startedAt: string;
+  completedAt: string | null;
+  stats: Record<string, unknown>;
+};
+
+export type GraphIssuesPayload = {
+  orphans: GraphIssue[];
+  mentions_without_links: GraphIssue[];
+  weak_anchors: GraphIssue[];
+  lastRun: GraphIssuesRun | null;
+};
+
 const WEAK_ANCHOR_TERMS = new Set([
   "click here",
   "here",
