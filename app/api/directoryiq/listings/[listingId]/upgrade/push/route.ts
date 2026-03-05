@@ -5,6 +5,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 import { pushUpgrade } from "@/src/directoryiq/services/upgradeService";
+import { resolveUserFromHeaders } from "@/lib/auth/entitlements";
+import { resolveGraphIntegrityGate } from "@/src/directoryiq/services/graphIntegrity/featureFlags";
+import { recomputeIntegrityDelta } from "@/src/directoryiq/services/graphIntegrity/integrityRunner";
 
 export async function POST(
   req: NextRequest,
@@ -44,6 +47,12 @@ export async function POST(
       body.approved === true,
       String(body.approvalToken ?? "")
     );
+
+    const user = resolveUserFromHeaders(req.headers);
+    const gate = resolveGraphIntegrityGate({ tenantId: "default", userFeatures: user.features as string[] | undefined });
+    if (gate.enabled) {
+      await recomputeIntegrityDelta({ tenantId: "default", userId });
+    }
 
     return NextResponse.json({
       ok: true,

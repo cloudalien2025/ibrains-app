@@ -7,6 +7,7 @@ const LINKS = [
   { href: "/directoryiq/authority", label: "Overview" },
   { href: "/directoryiq/authority/blogs", label: "Blog Posts" },
   { href: "/directoryiq/authority/listings", label: "Listings" },
+  { href: "/directoryiq/authority/integrity", label: "Integrity" },
   { href: "/directoryiq/authority/authority-support", label: "Leak Scanner" },
 ];
 
