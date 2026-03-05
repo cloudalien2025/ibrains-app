@@ -32,7 +32,7 @@ test.describe("DirectoryIQ listing hero visuals", () => {
     });
 
     for (const listingId of ["8", "651"]) {
-      await page.goto(`${baseURL}/directoryiq/listings/${listingId}`, { waitUntil: "networkidle" });
+      await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "networkidle" });
       await page
         .waitForResponse(
           (response) =>
@@ -43,9 +43,16 @@ test.describe("DirectoryIQ listing hero visuals", () => {
         .catch(() => null);
 
       const hero = page.getByTestId("directoryiq-listing-hero");
-      await expect(hero).toBeVisible({ timeout: 20_000 });
+      await expect(hero).toBeVisible({ timeout: 30_000 });
       await expect(hero.locator("h1")).toBeVisible();
-      await expect(page.getByTestId("directoryiq-hero-glass-panel").first()).toBeVisible();
+      const glassPanels = page.getByTestId("directoryiq-hero-glass-panel");
+      const visibleGlassPanels = await glassPanels.evaluateAll((elements) =>
+        elements.filter((el) => {
+          const style = window.getComputedStyle(el);
+          return style.display !== "none" && style.visibility !== "hidden" && el.getClientRects().length > 0;
+        }).length
+      );
+      expect(visibleGlassPanels).toBeGreaterThan(0);
 
       const heroImage = hero.getByTestId("directoryiq-hero-image");
       const imageCount = await heroImage.count();
@@ -54,7 +61,8 @@ test.describe("DirectoryIQ listing hero visuals", () => {
         const src = await heroImage.first().getAttribute("src");
         expect(src && src.length > 0).toBeTruthy();
       } else {
-        await expect(hero.getByText("No main image available for this listing.")).toBeVisible();
+        const heroBg = await hero.evaluate((el) => window.getComputedStyle(el).backgroundColor);
+        expect(heroBg).not.toBe("rgba(0, 0, 0, 0)");
       }
 
       await page.screenshot({

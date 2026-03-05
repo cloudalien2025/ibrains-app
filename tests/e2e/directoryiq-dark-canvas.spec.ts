@@ -17,12 +17,15 @@ test.describe("DirectoryIQ dark canvas", () => {
     });
 
     await page.goto("/directoryiq/authority/blogs", { waitUntil: "networkidle" });
-    await expect(page.getByRole("heading", { name: "Blog Content Layer" })).toBeVisible();
+    await expect(page.getByText("No blog nodes found yet. Run Blog Ingestion from Overview.")).toBeVisible();
 
-    const bodyBg = await page.evaluate(() => window.getComputedStyle(document.body).backgroundColor);
-    expect(bodyBg).not.toBe("rgb(255, 255, 255)");
+    const canvasBg = await page.evaluate(() => {
+      const root = document.querySelector(".ecomviper-hud") ?? document.body;
+      return window.getComputedStyle(root).backgroundColor;
+    });
+    expect(canvasBg).not.toBe("rgb(255, 255, 255)");
 
-    const rgb = parseRgb(bodyBg);
+    const rgb = parseRgb(canvasBg);
     expect(rgb).not.toBeNull();
     const [r, g, b] = rgb as [number, number, number];
     const nearWhiteThreshold = 240;

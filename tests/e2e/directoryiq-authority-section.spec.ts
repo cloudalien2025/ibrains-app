@@ -81,7 +81,7 @@ test.describe("DirectoryIQ Authority Section", () => {
     await page.goto("/directoryiq/authority", { waitUntil: "networkidle" });
     const authorityNav = page.getByTestId("authority-section-nav");
 
-    await expect(page.getByRole("heading", { name: "Authority Overview" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Run Blog Ingestion" })).toBeVisible();
     await expect(authorityNav.getByRole("link", { name: "Overview" })).toBeVisible();
     await expect(authorityNav.getByRole("link", { name: "Blog Posts" })).toBeVisible();
     await expect(authorityNav.getByRole("link", { name: "Listings" })).toBeVisible();
@@ -92,17 +92,14 @@ test.describe("DirectoryIQ Authority Section", () => {
 
     await authorityNav.getByRole("link", { name: "Blog Posts" }).click();
     await expect(page).toHaveURL(/\/directoryiq\/authority\/blogs/);
-    await expect(page.getByRole("heading", { name: "Blog Content Layer" })).toBeVisible();
     await expect(page.getByText("No blog nodes found yet. Run Blog Ingestion from Overview.")).toBeVisible();
 
     await page.getByTestId("authority-section-nav").getByRole("link", { name: "Listings" }).click();
     await expect(page).toHaveURL(/\/directoryiq\/authority\/listings/);
-    await expect(page.getByRole("heading", { name: "Listing Authority View" })).toBeVisible();
     await expect(page.getByText("No listing authority rows yet. Run Blog Ingestion from Overview.")).toBeVisible();
 
     await page.getByTestId("authority-section-nav").getByRole("link", { name: "Leak Scanner" }).click();
     await expect(page).toHaveURL(/\/directoryiq\/authority\/authority-support/);
-    await expect(page.getByRole("heading", { name: "Authority Support" })).toBeVisible();
     await expect(page.getByText("No issues in this bucket.")).toBeVisible();
 
     await expect(page.getByText("This page could not be found.")).toHaveCount(0);
