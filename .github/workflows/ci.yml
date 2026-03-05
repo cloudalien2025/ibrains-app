@@ -43,4 +43,15 @@ jobs:
         run: npx playwright install --with-deps
 
       - name: Test (Playwright)
-        run: pnpm run --if-present test:e2e
+        env:
+          TMPDIR: ${{ github.workspace }}/artifacts/playwright/.tmp
+        run: |
+          mkdir -p artifacts/playwright/.tmp
+          pnpm run --if-present test:e2e
+
+      - name: Upload Playwright Artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: artifacts/playwright
