@@ -1,5 +1,5 @@
-import AuthoritySectionNav from "@/app/(shell)/directoryiq/authority/_components/authority-section-nav";
-import AuthoritySupportClient from "@/app/(shell)/directoryiq/authority-support/authority-support-client";
+import AuthoritySectionNav from "@/app/(brains)/directoryiq/authority/_components/authority-section-nav";
+import AuthoritySupportClient from "@/app/(brains)/directoryiq/authority-support/authority-support-client";
 
 export const dynamic = "force-dynamic";
 

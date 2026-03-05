@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
-import AuthoritySectionNav from "@/app/(shell)/directoryiq/authority/_components/authority-section-nav";
+import AuthoritySectionNav from "@/app/(brains)/directoryiq/authority/_components/authority-section-nav";
 
 type BlogEntity = {
   entityText: string;

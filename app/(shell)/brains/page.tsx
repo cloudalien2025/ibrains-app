@@ -31,13 +31,13 @@ function normalizeBrain(brain: BrainRecord): BrainView {
     ) || "unknown_brain";
   const id = isBrainId(rawId) ? rawId : "directoryiq";
   const name =
-    String(
-      brain.name ??
-        brain.title ??
-        brain.brain_name ??
-        brain.display_name ??
-        "Unnamed brain"
-    ) || "Unnamed brain";
+    (brain.displayName as string | undefined) ??
+    (brain.display_name as string | undefined) ??
+    (brain.name as string | undefined) ??
+    (brain.title as string | undefined) ??
+    (brain.brain_name as string | undefined) ??
+    brainCatalogById[id].name ??
+    "Unnamed brain";
   const lastUpdated =
     (brain.last_updated as string | undefined) ??
     (brain.updated_at as string | undefined) ??
@@ -48,7 +48,7 @@ function normalizeBrain(brain: BrainRecord): BrainView {
 
   return {
     ...brainCatalogById[id],
-    name: name || brainCatalogById[id].name,
+    name,
     entitled,
     lastUpdated,
   };
