@@ -5,13 +5,14 @@ export const dynamic = "force-dynamic";
 export default async function DirectoryIqListingOptimizationPage({
   params,
 }: {
-  params: { listingId: string };
+  params: Promise<{ listingId: string }>;
 }) {
-  const listingId = decodeURIComponent(params.listingId);
+  const { listingId } = await params;
+  const decodedListingId = decodeURIComponent(listingId);
 
   return (
     <ListingOptimizationClient
-      listingId={listingId}
+      listingId={decodedListingId}
       initialListing={null}
       initialIntegrations={{ openaiConfigured: false, bdConfigured: false }}
       initialError={null}
