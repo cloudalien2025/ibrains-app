@@ -3,6 +3,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { runDirectoryIqBlogIngest } from "@/app/api/directoryiq/_utils/ingest";
 import { rebuildGraph } from "@/src/directoryiq/graph/graphService";
+import { resolveUserFromHeaders } from "@/lib/auth/entitlements";
+import { resolveGraphIntegrityGate } from "@/src/directoryiq/services/graphIntegrity/featureFlags";
+import { recomputeIntegrityDelta } from "@/src/directoryiq/services/graphIntegrity/integrityRunner";
 
 export async function POST(req: NextRequest) {
   const reqId = crypto.randomUUID();
@@ -31,6 +34,12 @@ export async function POST(req: NextRequest) {
     console.info(
       `[directoryiq-authority-ingest-route] req=${reqId} blogs_fetched=${ingest.counts.blogPosts} edges_upserted=${graph.stats.edgesUpserted} mentions_edges_upserted=${graph.stats.issuesCounts.mentions_without_links}`
     );
+
+    const user = resolveUserFromHeaders(req.headers);
+    const gate = resolveGraphIntegrityGate({ tenantId: "default", userFeatures: user.features as string[] | undefined });
+    if (gate.enabled) {
+      await recomputeIntegrityDelta({ tenantId: "default", userId });
+    }
 
     return NextResponse.json({
       ok: true,

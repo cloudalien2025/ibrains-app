@@ -9,6 +9,9 @@ import {
 } from "@/app/api/directoryiq/_utils/integrations";
 import { addDirectoryIqVersion, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
 import { makeVersionLabel, verifyApprovalToken } from "@/app/api/directoryiq/_utils/authority";
+import { resolveUserFromHeaders } from "@/lib/auth/entitlements";
+import { resolveGraphIntegrityGate } from "@/src/directoryiq/services/graphIntegrity/featureFlags";
+import { recomputeIntegrityDelta } from "@/src/directoryiq/services/graphIntegrity/integrityRunner";
 
 export async function POST(
   req: NextRequest,
@@ -124,6 +127,12 @@ export async function POST(
       },
       linkDelta: {},
     });
+
+    const user = resolveUserFromHeaders(req.headers);
+    const gate = resolveGraphIntegrityGate({ tenantId: "default", userFeatures: user.features as string[] | undefined });
+    if (gate.enabled) {
+      await recomputeIntegrityDelta({ tenantId: "default", userId });
+    }
 
     return NextResponse.json({ ok: true, version_id: versionId, auto_push: false, requires_manual_approval: true });
   } catch (error) {
