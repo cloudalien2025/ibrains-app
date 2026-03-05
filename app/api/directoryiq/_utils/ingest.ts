@@ -84,12 +84,9 @@ async function bdRequestFormXApiKey(input: {
     const headers: Record<string, string> = {
       "Content-Type": "application/x-www-form-urlencoded",
       "X-Api-Key": input.apiKey,
-      Authorization: `Bearer ${input.apiKey}`,
+      Accept: "application/json",
     };
     const formWithKey = input.form ? { ...input.form } : {};
-    if (!("api_key" in formWithKey)) {
-      formWithKey.api_key = input.apiKey;
-    }
 
     const body = new URLSearchParams();
     for (const [key, value] of Object.entries(formWithKey ?? {})) {
@@ -113,6 +110,35 @@ async function bdRequestFormXApiKey(input: {
       cache: "no-store",
     });
 
+    const text = await response.text();
+    let json: unknown = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      json = null;
+    }
+    return { ok: response.ok, status: response.status, json, text };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "bd request failed";
+    return { ok: false, status: 500, json: { error: message }, text: message };
+  }
+}
+
+async function bdRequestGet(input: {
+  baseUrl: string;
+  apiKey: string;
+  path: string;
+}): Promise<LocalBdResponse> {
+  try {
+    const headers: Record<string, string> = {
+      "X-Api-Key": input.apiKey,
+      Accept: "application/json",
+    };
+    const response = await fetch(`${normalizeBdBaseUrl(input.baseUrl)}${input.path}`, {
+      method: "GET",
+      headers,
+      cache: "no-store",
+    });
     const text = await response.text();
     let json: unknown = null;
     try {
@@ -205,116 +231,164 @@ function extractRecordsFromUnknownShape(payload: Record<string, unknown>): Recor
   return [];
 }
 
-function extractUsersFromResponse(payload: Record<string, unknown>): Record<string, unknown>[] {
-  const isRecordArray = (value: unknown): value is Record<string, unknown>[] =>
-    Array.isArray(value) && value.some((row) => row && typeof row === "object");
-
-  const directCandidates = [
-    payload.message,
-    payload.users,
-    payload.results,
-    payload.data,
-    payload.items,
-  ];
-  for (const candidate of directCandidates) {
-    if (isRecordArray(candidate)) return candidate;
-  }
-
+function extractDataType(payload: Record<string, unknown>): string | null {
+  const direct = asString(payload.data_type);
+  if (direct) return direct;
   const message = payload.message;
   if (message && typeof message === "object") {
     const nested = message as Record<string, unknown>;
+    const nestedType = asString(nested.data_type);
+    if (nestedType) return nestedType;
     for (const value of Object.values(nested)) {
-      if (isRecordArray(value)) return value;
+      if (value && typeof value === "object") {
+        const found = asString((value as Record<string, unknown>).data_type);
+        if (found) return found;
+      }
     }
   }
-
-  return [];
+  return null;
 }
 
-async function fetchBdUsersPaged(params: {
+async function fetchBdListingsPaged(params: {
   baseUrl: string;
   apiKey: string;
   path: string;
-  pageSize?: number;
+  dataId: number;
+  limit: number;
   maxPages?: number;
-  onPage?: (input: { page: number; received: number; total: number }) => void;
+  onPage?: (input: { page: number; limit: number; received: number; total: number }) => void;
 }): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
-  const pageSize = params.pageSize ?? 100;
   const maxPages = params.maxPages ?? 200;
 
-  const strategies: Array<(page: number) => Record<string, unknown>> = [
-    (page) => ({ page, per_page: pageSize }),
-    (page) => ({ page, limit: pageSize }),
-    (page) => ({ offset: (page - 1) * pageSize, limit: pageSize }),
-  ];
+  for (let page = 1; page <= maxPages; page += 1) {
+    const form: Record<string, unknown> = {
+      action: "search",
+      output_type: "array",
+      data_id: params.dataId,
+      limit: params.limit,
+      page,
+    };
 
-  for (const formBuilder of strategies) {
-    all.length = 0;
-    let lastFirstId = "";
-    let usedPages = 0;
+    const response = await bdRequestWithRetryLocal(() =>
+      bdRequestFormWithFallback({
+        baseUrl: params.baseUrl,
+        apiKey: params.apiKey,
+        method: "POST",
+        path: params.path,
+        form,
+      })
+    );
 
-    for (let page = 1; page <= maxPages; page += 1) {
-      const form = formBuilder(page);
-      form.output_type = "array";
-      const response = await bdRequestWithRetryLocal(() =>
-        bdRequestFormWithFallback({
-          baseUrl: params.baseUrl,
-          apiKey: params.apiKey,
-          method: "POST",
-          path: params.path,
-          form,
-        })
-      );
-
-      if (!response.ok) {
-        const detail = typeof response.text === "string" && response.text.trim().length > 0 ? response.text.trim() : "";
-        const snippet = detail.length > 200 ? `${detail.slice(0, 200)}...` : detail;
-        const suffix = snippet ? `: ${snippet}` : "";
-        throw new Error(`DirectoryIQ source returned HTTP ${response.status} for ${params.path}${suffix}`);
-      }
-
-      const payload = normalizeBdJson(response.json);
-      if (typeof payload.status === "string" && payload.status.toLowerCase() === "error") {
-        const msg = typeof payload.message === "string" ? payload.message : "Unknown BD error";
-        throw new Error(`DirectoryIQ source returned error for ${params.path}: ${msg}`);
-      }
-
-      const users = extractUsersFromResponse(payload);
-      const received = users.length;
-      params.onPage?.({ page, received, total: all.length + received });
-      usedPages += 1;
-
-      if (received === 0) break;
-
-      const firstId =
-        String(users[0]?.user_id ?? users[0]?.id ?? users[0]?.ID ?? users[0]?.userId ?? "");
-      if (firstId && firstId === lastFirstId) break;
-      lastFirstId = firstId;
-
-      all.push(...users);
-
-      if (received < pageSize) break;
+    if (!response.ok) {
+      const detail = typeof response.text === "string" && response.text.trim().length > 0 ? response.text.trim() : "";
+      const snippet = detail.length > 120 ? `${detail.slice(0, 120)}...` : detail;
+      throw new BdRequestFailure({
+        statusCode: response.status,
+        endpoint: params.path,
+        page,
+        snippet,
+      });
     }
 
-    if (all.length > 0) return all;
-    if (usedPages > 1) continue;
+    const payload = normalizeBdJson(response.json);
+    if (typeof payload.status === "string" && payload.status.toLowerCase() === "error") {
+      const msg = typeof payload.message === "string" ? payload.message : "Unknown BD error";
+      const snippet = msg.length > 120 ? `${msg.slice(0, 120)}...` : msg;
+      throw new BdRequestFailure({
+        statusCode: response.status,
+        endpoint: params.path,
+        page,
+        snippet,
+      });
+    }
+
+    const message = payload.message;
+    if (!Array.isArray(message)) {
+      const raw =
+        typeof message === "string"
+          ? message
+          : JSON.stringify(message ?? payload).slice(0, 120);
+      const snippet = raw.length > 120 ? `${raw.slice(0, 120)}...` : raw;
+      throw new BdRequestFailure({
+        statusCode: response.status,
+        endpoint: params.path,
+        page,
+        snippet,
+      });
+    }
+
+    const records = message.filter((row) => row && typeof row === "object") as Record<string, unknown>[];
+    params.onPage?.({ page, limit: params.limit, received: records.length, total: all.length + records.length });
+
+    if (records.length === 0) break;
+    all.push(...records);
   }
 
   return all;
 }
 
-export class BdIntegrationMissingError extends Error {
+type BdIngestErrorCode =
+  | "bd_integration_missing"
+  | "bd_integration_invalid"
+  | "bd_post_type_invalid"
+  | "bd_request_failed";
+
+export class BdIngestError extends Error {
+  code: BdIngestErrorCode;
   baseUrlPresent: boolean;
   apiKeyPresent: boolean;
-  tenantUserIdPresent: boolean;
+  listingsPathPresent: boolean;
+  listingsDataIdPresent: boolean;
+  listingsDataIdValue: number | null;
+  dataTypeObserved: string | null;
+  statusCode: number | null;
+  endpoint: string | null;
+  page: number | null;
+  messageSnippet: string | null;
 
-  constructor(params: { baseUrlPresent: boolean; apiKeyPresent: boolean; tenantUserIdPresent: boolean }) {
-    super("bd_integration_missing");
-    this.name = "BdIntegrationMissingError";
+  constructor(params: {
+    code: BdIngestErrorCode;
+    baseUrlPresent: boolean;
+    apiKeyPresent: boolean;
+    listingsPathPresent: boolean;
+    listingsDataIdPresent: boolean;
+    listingsDataIdValue: number | null;
+    dataTypeObserved?: string | null;
+    statusCode?: number | null;
+    endpoint?: string | null;
+    page?: number | null;
+    messageSnippet?: string | null;
+  }) {
+    super(params.code);
+    this.name = "BdIngestError";
+    this.code = params.code;
     this.baseUrlPresent = params.baseUrlPresent;
     this.apiKeyPresent = params.apiKeyPresent;
-    this.tenantUserIdPresent = params.tenantUserIdPresent;
+    this.listingsPathPresent = params.listingsPathPresent;
+    this.listingsDataIdPresent = params.listingsDataIdPresent;
+    this.listingsDataIdValue = params.listingsDataIdValue;
+    this.dataTypeObserved = params.dataTypeObserved ?? null;
+    this.statusCode = params.statusCode ?? null;
+    this.endpoint = params.endpoint ?? null;
+    this.page = params.page ?? null;
+    this.messageSnippet = params.messageSnippet ?? null;
+  }
+}
+
+class BdRequestFailure extends Error {
+  statusCode: number;
+  endpoint: string;
+  page: number;
+  snippet: string | null;
+
+  constructor(params: { statusCode: number; endpoint: string; page: number; snippet?: string | null }) {
+    super("bd_request_failed");
+    this.name = "BdRequestFailure";
+    this.statusCode = params.statusCode;
+    this.endpoint = params.endpoint;
+    this.page = params.page;
+    this.snippet = params.snippet ?? null;
   }
 }
 
@@ -333,7 +407,6 @@ async function loadBdIntegrations(userId: string): Promise<{
   integrations: BdIntegration[];
   baseUrlPresent: boolean;
   apiKeyPresent: boolean;
-  tenantUserIdPresent: boolean;
 }> {
   const rows = await query<IntegrationRow>(
     `
@@ -350,7 +423,6 @@ async function loadBdIntegrations(userId: string): Promise<{
   const fallback = rows.filter((row) => row.user_id === DEFAULT_DIRECTORYIQ_USER_ID || row.user_id === null);
   const selected = exact.length > 0 ? exact : fallback;
 
-  const tenantUserIdPresent = exact.length > 0;
   const baseUrlPresent = selected.some((row) => {
     const meta = (row.meta_json ?? {}) as Record<string, unknown>;
     const baseUrlRaw =
@@ -409,7 +481,6 @@ async function loadBdIntegrations(userId: string): Promise<{
     integrations: Array.from(uniqueByBaseUrl.values()),
     baseUrlPresent,
     apiKeyPresent,
-    tenantUserIdPresent,
   };
 }
 
@@ -507,86 +578,6 @@ function normalizeListingRecord(item: Record<string, unknown>, fallbackId: strin
     post_location: item.post_location ?? (city && state ? `${city}, ${state}` : location),
     url: item.url ?? sourceUrl,
     image_url: item.image_url ?? heroImage,
-  };
-}
-
-function normalizeUserListing(item: Record<string, unknown>, baseUrl: string, fallbackId: string): Record<string, unknown> {
-  const listingId = readFirstString([
-    item.user_id,
-    item.id,
-    item.ID,
-    item.userId,
-    item.member_id,
-    item.profile_id,
-    fallbackId,
-  ]);
-
-  const firstName = readFirstString([item.first_name, item.firstname, item.firstName]);
-  const lastName = readFirstString([item.last_name, item.lastname, item.lastName]);
-  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
-
-  const name = readFirstString([
-    item.company,
-    item.company_name,
-    item.business_name,
-    item.name,
-    fullName,
-    item.email,
-    listingId,
-  ]);
-
-  const category = readFirstString([
-    item.profession,
-    item.category,
-    item.group_category,
-    item.industry,
-    item.post_tags,
-  ]);
-
-  const city = readFirstString([item.city, item.location_city, item.post_city, item.address_city]);
-  const state = readFirstString([item.state, item.state_sn, item.state_code, item.region]);
-
-  const heroImage = readFirstString([
-    item.avatar,
-    item.profile_photo,
-    item.photo,
-    item.image_url,
-    item.image,
-    item.logo,
-  ]);
-
-  const description = readFirstString([
-    item.about,
-    item.about_me,
-    item.bio,
-    item.description,
-    item.search_description,
-    item.summary,
-  ]);
-
-  const profilePath = readFirstString([item.profile_url, item.user_url, item.url, item.permalink, item.link]);
-  let sourceUrl = baseUrl;
-  if (profilePath) {
-    if (profilePath.startsWith("http://") || profilePath.startsWith("https://")) {
-      sourceUrl = profilePath;
-    } else {
-      const trimmedBase = baseUrl.replace(/\/+$/, "");
-      const trimmedPath = profilePath.startsWith("/") ? profilePath : `/${profilePath}`;
-      sourceUrl = `${trimmedBase}${trimmedPath}`;
-    }
-  }
-
-  return {
-    ...item,
-    listing_id: listingId || fallbackId,
-    name: name || listingId || fallbackId,
-    category: category || "Unknown",
-    city: city || "",
-    state: state || "",
-    hero_image: heroImage || "",
-    description: description || "",
-    source_url: sourceUrl,
-    source_base_url: baseUrl,
   };
 }
 
@@ -947,19 +938,17 @@ async function finishRun(params: {
 export async function runDirectoryIqFullIngest(userId: string): Promise<DirectoryIqIngestResult> {
   const startedAt = Date.now();
   const deterministicEnabled = isDeterministicEnabled();
-  const {
-    integrations,
-    baseUrlPresent,
-    apiKeyPresent,
-    tenantUserIdPresent,
-  } = await loadBdIntegrations(userId);
+  const { integrations, baseUrlPresent, apiKeyPresent } = await loadBdIntegrations(userId);
 
   if (integrations.length === 0) {
     if (process.env.NODE_ENV === "production" && !deterministicEnabled) {
-      throw new BdIntegrationMissingError({
+      throw new BdIngestError({
+        code: "bd_integration_missing",
         baseUrlPresent,
         apiKeyPresent,
-        tenantUserIdPresent,
+        listingsPathPresent: false,
+        listingsDataIdPresent: false,
+        listingsDataIdValue: null,
       });
     }
     if (!deterministicEnabled) {
@@ -1023,50 +1012,154 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
         }
       })();
 
-      const configuredListingsPath =
+      const listingsPathRaw =
         asString((meta as Record<string, unknown>).listingsPath) ||
         asString((meta as Record<string, unknown>).listings_path) ||
-        asString(process.env.DIRECTORYIQ_LISTINGS_PATH) ||
-        "/api/v2/user/search";
-      let listingsPath = normalizeBdPath(configuredListingsPath);
-      if (!listingsPath.includes("/api/v2/user/search")) {
-        console.info(
-          `[directoryiq-ingest] listings_path_override base=${baseHost} configured=${listingsPath} fallback=/api/v2/user/search`
-        );
-        listingsPath = "/api/v2/user/search";
-      }
+        asString(process.env.DIRECTORYIQ_LISTINGS_PATH);
+      const listingsPathPresent = Boolean(listingsPathRaw);
+      const listingsPath = normalizeBdPath(listingsPathRaw || "/api/v2/users_portfolio_groups/search");
+
+      const listingsDataId =
+        asNumber((meta as Record<string, unknown>).listingsDataId) ??
+        asNumber((meta as Record<string, unknown>).listings_data_id) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID);
+
+      const listingsDataIdPresent = typeof listingsDataId === "number";
+      const listingsLimit =
+        asNumber((meta as Record<string, unknown>).listingsLimit) ??
+        asNumber((meta as Record<string, unknown>).listings_limit) ??
+        100;
 
       console.info(
         `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${integration.label ?? ""} integration_id=${integration.id}`
       );
 
-      let pagesFetched = 0;
-      let lastPage = 0;
-      const users = await fetchBdUsersPaged({
-        baseUrl,
-        apiKey,
-        path: listingsPath,
-        pageSize: 100,
-        maxPages: 200,
-        onPage: ({ page, received, total }) => {
-          pagesFetched += 1;
-          lastPage = page;
-          console.info(
-            `[directoryiq-ingest] listings_page base=${baseHost} path=${listingsPath} page=${page} per_page=100 received=${received} total=${total}`
-          );
-        },
-      });
+      if (!listingsDataIdPresent) {
+        throw new BdIngestError({
+          code: "bd_integration_missing",
+          baseUrlPresent,
+          apiKeyPresent,
+          listingsPathPresent,
+          listingsDataIdPresent,
+          listingsDataIdValue: null,
+          endpoint: listingsPath,
+        });
+      }
 
-      const normalizedListings = users.map((item, index) =>
-        normalizeUserListing(item, baseUrl, `user-${index + 1}`)
+      const preflightPath = `/api/v2/data_categories/get/${listingsDataId}`;
+      const preflightResponse = await bdRequestGet({ baseUrl, apiKey, path: preflightPath });
+      const preflightPayload = normalizeBdJson(preflightResponse.json);
+      const dataTypeObserved = extractDataType(preflightPayload);
+      const preflightOk =
+        preflightResponse.ok &&
+        !(typeof preflightPayload.status === "string" && preflightPayload.status.toLowerCase() === "error");
+      console.info(
+        JSON.stringify({
+          phase: "bd_preflight",
+          ok: preflightOk,
+          data_id: listingsDataId,
+          data_type_observed: dataTypeObserved,
+        })
       );
-      const listings = normalizedListings.map((item, index) => extractNode(item, "listing", index));
-      await upsertNodes({ userId, sourceType: "listing", nodes: listings });
-      listingsTotal += listings.length;
+
+      if (!preflightOk) {
+        throw new BdIngestError({
+          code: "bd_integration_invalid",
+          baseUrlPresent,
+          apiKeyPresent,
+          listingsPathPresent,
+          listingsDataIdPresent,
+          listingsDataIdValue: listingsDataId,
+          dataTypeObserved,
+          statusCode: preflightResponse.status,
+          endpoint: preflightPath,
+        });
+      }
+
+      if (dataTypeObserved !== "4") {
+        throw new BdIngestError({
+          code: "bd_post_type_invalid",
+          baseUrlPresent,
+          apiKeyPresent,
+          listingsPathPresent,
+          listingsDataIdPresent,
+          listingsDataIdValue: listingsDataId,
+          dataTypeObserved,
+          statusCode: preflightResponse.status,
+          endpoint: preflightPath,
+        });
+      }
+
+      let pagesFetched = 0;
+      let itemsTotal = 0;
+      let listingsItems: Record<string, unknown>[] = [];
+      try {
+        listingsItems = await fetchBdListingsPaged({
+          baseUrl,
+          apiKey,
+          path: listingsPath,
+          dataId: listingsDataId,
+          limit: listingsLimit,
+          maxPages: 200,
+          onPage: ({ page, limit, received, total }) => {
+            pagesFetched += 1;
+            itemsTotal = total;
+            console.info(
+              JSON.stringify({
+                phase: "bd_page",
+                page,
+                limit,
+                returned: received,
+                total,
+              })
+            );
+          },
+        });
+      } catch (error) {
+        if (error instanceof BdRequestFailure) {
+          throw new BdIngestError({
+            code: "bd_request_failed",
+            baseUrlPresent,
+            apiKeyPresent,
+            listingsPathPresent,
+            listingsDataIdPresent,
+            listingsDataIdValue: listingsDataId,
+            statusCode: error.statusCode,
+            endpoint: error.endpoint,
+            page: error.page,
+            messageSnippet: error.snippet,
+          });
+        }
+        throw error;
+      }
 
       console.info(
-        `[directoryiq-ingest] site_complete base=${baseHost} count_ingested=${listings.length} pages_fetched=${pagesFetched} last_page=${lastPage}`
+        JSON.stringify({
+          phase: "bd_done",
+          pages_fetched: pagesFetched,
+          items_total: itemsTotal,
+        })
       );
+
+      const normalizedListings = listingsItems.map((item, index) =>
+        normalizeListingRecord(item, `listing-${index + 1}`)
+      );
+      const filteredListings: Record<string, unknown>[] = [];
+      for (const listing of normalizedListings) {
+        const listingId = asString(listing.listing_id);
+        if (!listingId) {
+          console.warn("[directoryiq-ingest] listing_missing_id skipped=true");
+          continue;
+        }
+        listing.listing_id = listingId;
+        filteredListings.push(listing);
+      }
+
+      const listings = filteredListings.map((item, index) => extractNode(item, "listing", index));
+      if (listings.length > 0) {
+        await upsertNodes({ userId, sourceType: "listing", nodes: listings });
+      }
+      listingsTotal += listings.length;
 
       const blogPostsPath =
         asString((meta as Record<string, unknown>).blogPostsPath) ||
@@ -1130,6 +1223,20 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       },
     };
   } catch (error) {
+    if (error instanceof BdIngestError) {
+      if (runId) {
+        await finishRun({
+          runId,
+          status: "failed",
+          listings: 0,
+          blogPosts: 0,
+          errorMessage: error.code,
+        });
+      }
+      const durationMs = Date.now() - startedAt;
+      console.info(`[directoryiq-ingest] completed status=failed duration_ms=${durationMs}`);
+      throw error;
+    }
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ ingest error";
     if (runId) {
       await finishRun({
