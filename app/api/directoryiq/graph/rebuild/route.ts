@@ -7,6 +7,16 @@ export async function POST(req: NextRequest) {
   const reqId = crypto.randomUUID();
 
   try {
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      const result = await rebuildGraph({ tenantId: "default", mode: "scan" });
+      return NextResponse.json({
+        ok: true,
+        runId: result.runId,
+        stats: result.stats,
+        reqId,
+      });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 

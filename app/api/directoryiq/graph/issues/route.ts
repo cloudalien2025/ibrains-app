@@ -7,6 +7,11 @@ export async function GET(req: NextRequest) {
   const reqId = crypto.randomUUID();
 
   try {
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      const issues = await getIssues({ tenantId: "default" });
+      return NextResponse.json({ ok: true, issues, reqId });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import AuthoritySectionNav from "@/app/(brains)/directoryiq/authority/_components/authority-section-nav";
@@ -55,6 +55,11 @@ export default function AuthorityOverviewClient({
     setOverview(json.overview ?? EMPTY);
     setLoading(false);
   }
+
+  useEffect(() => {
+    void load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function runIngestion() {
     setRunning(true);

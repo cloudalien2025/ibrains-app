@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { issueApprovalToken } from "@/app/api/directoryiq/_utils/authority";
+import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
@@ -33,6 +34,32 @@ const validateOpenAiKeyPresent = vi.fn((value: string | null) => {
   return value;
 });
 const generateListingUpgradeDraft = vi.fn(async () => "Improved description.");
+const generateUpgrade = vi.fn(async () => {
+  const key = await getDirectoryIqOpenAiKey();
+  if (!key) {
+    throw new DirectoryIqServiceError({
+      message: "OpenAI key missing",
+      status: 400,
+      code: "OPENAI_KEY_MISSING",
+      reqId: "req-missing-key",
+    });
+  }
+
+  const proposedText = await generateListingUpgradeDraft();
+  const draft = await createListingUpgradeDraft();
+
+  return {
+    draft: {
+      id: draft.id,
+      proposedText,
+    },
+    reqId: "req-generate-upgrade",
+  };
+});
+const pushUpgrade = vi.fn(async () => {
+  await markListingUpgradePushed();
+  return { reqId: "req-push-upgrade", draftId: "draft-1", bdRef: "bd-ref-1" };
+});
 
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
@@ -59,6 +86,11 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
 vi.mock("@/lib/openai/serverClient", () => ({
   validateOpenAiKeyPresent,
   generateListingUpgradeDraft,
+}));
+
+vi.mock("@/src/directoryiq/services/upgradeService", () => ({
+  generateUpgrade,
+  pushUpgrade,
 }));
 
 describe("directoryiq listing upgrade routes", () => {

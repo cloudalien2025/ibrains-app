@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
@@ -68,7 +68,8 @@ export default function ListingOptimizationClient({
   initialIntegrations,
   initialError = null,
 }: ListingOptimizationClientProps) {
-
+  const hasValidListingId = Boolean(listingId) && listingId !== "undefined" && listingId !== "null";
+  const effectiveListingId = hasValidListingId ? listingId : "";
   const [state, setState] = useState<UiState>("idle");
   const [listing, setListing] = useState<ListingDetailResponse | null>(initialListing);
   const [integrations, setIntegrations] = useState<IntegrationStatusResponse>(initialIntegrations);
@@ -81,11 +82,11 @@ export default function ListingOptimizationClient({
   const [error, setError] = useState<UiError | null>(initialError);
 
   async function loadListingAndIntegrations() {
-    if (!listingId) return;
+    if (!effectiveListingId) return;
     setError(null);
 
     const [listingRes, integrationRes] = await Promise.all([
-      fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}`, { cache: "no-store" }),
+      fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}`, { cache: "no-store" }),
       fetch("/api/directoryiq/integrations", { cache: "no-store" }),
     ]);
 
@@ -109,14 +110,19 @@ export default function ListingOptimizationClient({
     }
   }
 
+  useEffect(() => {
+    void loadListingAndIntegrations();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [effectiveListingId]);
+
   async function generateUpgrade() {
-    if (!listingId) return;
+    if (!effectiveListingId) return;
 
     setState("generating");
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/generate`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "default" }),
@@ -143,13 +149,13 @@ export default function ListingOptimizationClient({
   }
 
   async function previewChanges() {
-    if (!listingId || !draftId) return;
+    if (!effectiveListingId || !draftId) return;
 
     setState("previewing");
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/preview`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/preview`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ draftId }),
@@ -173,13 +179,13 @@ export default function ListingOptimizationClient({
   }
 
   async function approveAndPush() {
-    if (!listingId || !draftId) return;
+    if (!effectiveListingId || !draftId) return;
 
     setState("pushing");
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(listingId)}/upgrade/push`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/push`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -202,7 +208,7 @@ export default function ListingOptimizationClient({
     await loadListingAndIntegrations();
   }
 
-  const displayName = listing?.listing.listing_name || listingId || "Listing";
+  const displayName = listing?.listing.listing_name || effectiveListingId || "Listing";
   const displayUrl = listing?.listing.listing_url ?? null;
   const displayScore = listing?.evaluation.totalScore ?? 0;
 

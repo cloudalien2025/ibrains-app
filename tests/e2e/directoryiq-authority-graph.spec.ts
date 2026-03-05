@@ -14,9 +14,9 @@ test.describe("DirectoryIQ Authority Graph v1", () => {
     const mentionCard = page.getByRole("button", { name: /Mentions Without Links/i });
     const weakCard = page.getByRole("button", { name: /Weak Anchors/i });
 
-    await expect(orphanCard).toContainText("1");
-    await expect(mentionCard).toContainText("1");
-    await expect(weakCard).toContainText("1");
+    await expect(orphanCard.locator(".text-2xl")).toHaveText("1");
+    await expect(mentionCard.locator(".text-2xl")).toHaveText("1");
+    await expect(weakCard.locator(".text-2xl")).toHaveText("1");
 
     await mentionCard.click();
 

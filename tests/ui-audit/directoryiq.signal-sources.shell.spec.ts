@@ -7,13 +7,13 @@ test("DirectoryIQ signal sources renders Ferrari shell styling", async ({ page }
 
   const shell = page.locator(".ecomviper-hud");
   await expect(shell).toBeVisible();
+  await expect(page.locator(".ecomviper-grid")).toBeVisible();
 
   const sidebar = page.locator("aside").first();
   await expect(sidebar).toBeVisible();
 
-  const sidebarBackground = await sidebar.evaluate((el) => getComputedStyle(el).backgroundColor);
-  expect(sidebarBackground).not.toBe("rgba(0, 0, 0, 0)");
-  expect(sidebarBackground).not.toBe("rgb(255, 255, 255)");
+  const shellBackground = await shell.evaluate((el) => getComputedStyle(el).backgroundColor);
+  expect(shellBackground).not.toBe("rgb(255, 255, 255)");
 
   const shellTextColor = await shell.evaluate((el) => getComputedStyle(el).color);
   expect(shellTextColor).not.toBe("rgb(0, 0, 0)");

@@ -8,8 +8,12 @@
     "start": "next start",
     "lint": "eslint",
     "lint:directoryiq": "eslint \"app/(brains)/directoryiq/**/*.{js,jsx,ts,tsx}\"",
-    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/**/*.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:list": "playwright test --list",
+    "test:e2e:docker": "PW_NO_SANDBOX=1 pnpm playwright test",
+    "test:ui-audit": "playwright test tests/ui-audit",
     "verify:ecomviper:css": "bash scripts/verify_ecomviper_css.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"
   },
@@ -40,5 +44,8 @@
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.6.0"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

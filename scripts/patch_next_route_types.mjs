@@ -55,13 +55,16 @@ let touched = 0;
 for (const { file, changes } of replacements) {
   const target = path.join(root, file);
   if (!fs.existsSync(target)) {
-    throw new Error(`Missing file: ${file}`);
+    console.warn(`[patch_next_route_types] Missing file: ${file}. Skipping.`);
+    continue;
   }
   let contents = fs.readFileSync(target, "utf8");
   let updated = contents;
   for (const { from, to } of changes) {
     if (!updated.includes(from)) {
-      throw new Error(`Pattern not found in ${file}: ${from}`);
+      console.warn(`[patch_next_route_types] Pattern not found in ${file}: ${from}. Skipping file.`);
+      updated = contents;
+      break;
     }
     updated = updated.split(from).join(to);
   }

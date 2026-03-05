@@ -216,6 +216,17 @@ const mockIssues: IssuesResult = {
   lastRun: null,
 };
 
+const E2E_MOCK_STATS: RebuildStats = {
+  nodesCreated: 2,
+  edgesUpserted: 2,
+  evidenceCount: 2,
+  issuesCounts: {
+    orphans: 1,
+    mentions_without_links: 1,
+    weak_anchors: 1,
+  },
+};
+
 function normalizeUrl(value: string | null | undefined): string {
   if (!value) return "";
   return value.trim().toLowerCase().replace(/\/$/, "");
@@ -470,116 +481,14 @@ async function loadBlogPosts(): Promise<BlogNodeRow[]> {
   );
 }
 
-async function persistMockGraph(tenantId: string): Promise<{ runId: string }> {
-  const run = await createRun({ tenantId, runType: "scan" });
-
-  const listingNode = await upsertNode({
-    tenantId,
-    nodeType: "listing",
-    externalId: "listing-001",
-    canonicalUrl: MOCK_TARGET_URL,
-    title: "Acme Plumbing",
-    meta: { mock: true },
-  });
-
-  const blogNode = await upsertNode({
-    tenantId,
-    nodeType: "blog_post",
-    externalId: "blog-001",
-    canonicalUrl: MOCK_SOURCE_URL,
-    title: "How to Pick a Reliable Plumber",
-    meta: { mock: true },
-  });
-
-  const mentionEdge = await upsertEdge({
-    tenantId,
-    fromNodeId: blogNode.id,
-    toNodeId: listingNode.id,
-    edgeType: "mention_without_link",
-    strength: 45,
-    confidence: 90,
-  });
-
-  await addEvidence({
-    tenantId,
-    edgeId: mentionEdge.id,
-    sourceUrl: MOCK_SOURCE_URL,
-    targetUrl: MOCK_TARGET_URL,
-    contextSnippet: "Acme Plumbing serves the local area with emergency response.",
-    locationHint: "body",
-  });
-
-  const weakEdge = await upsertEdge({
-    tenantId,
-    fromNodeId: blogNode.id,
-    toNodeId: listingNode.id,
-    edgeType: "weak_anchor",
-    strength: 40,
-    confidence: 88,
-  });
-
-  await addEvidence({
-    tenantId,
-    edgeId: weakEdge.id,
-    sourceUrl: MOCK_SOURCE_URL,
-    targetUrl: MOCK_TARGET_URL,
-    anchorText: "click here",
-    contextSnippet: "For details, click here.",
-    locationHint: "body",
-  });
-
-  await finishRun({
-    runId: run.id,
-    status: "completed",
-    stats: {
-      nodesCreated: 2,
-      edgesUpserted: 2,
-      evidenceCount: 2,
-      issuesCounts: {
-        orphans: 1,
-        mentions_without_links: 1,
-        weak_anchors: 1,
-      },
-    },
-  });
-
-  return { runId: run.id };
-}
-
 export async function rebuildGraph(input: {
   tenantId: string;
   mode: "scan";
 }): Promise<RebuildResult> {
   if (process.env.E2E_MOCK_GRAPH === "1") {
-    if (process.env.DATABASE_URL) {
-      const run = await persistMockGraph(input.tenantId);
-      return {
-        runId: run.runId,
-        stats: {
-          nodesCreated: 2,
-          edgesUpserted: 2,
-          evidenceCount: 2,
-          issuesCounts: {
-            orphans: 1,
-            mentions_without_links: 1,
-            weak_anchors: 1,
-          },
-        },
-      };
-    }
-
     return {
       runId: "mock-run-001",
-      stats: {
-        nodesCreated: 2,
-        edgesUpserted: 2,
-        evidenceCount: 2,
-        issuesCounts: {
-          orphans: 1,
-          mentions_without_links: 1,
-          weak_anchors: 1,
-        },
-      },
+      stats: E2E_MOCK_STATS,
     };
   }
 
@@ -897,16 +806,7 @@ export async function getIssues(input: { tenantId: string }): Promise<IssuesResu
         status: "completed",
         startedAt: "2026-03-03T00:00:00.000Z",
         completedAt: "2026-03-03T00:00:01.000Z",
-        stats: {
-          nodesCreated: 2,
-          edgesUpserted: 2,
-          evidenceCount: 2,
-          issuesCounts: {
-            orphans: 1,
-            mentions_without_links: 1,
-            weak_anchors: 1,
-          },
-        },
+        stats: E2E_MOCK_STATS,
       },
     };
   }
