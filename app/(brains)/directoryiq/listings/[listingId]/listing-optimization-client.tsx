@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
@@ -56,28 +55,30 @@ function parseError(json: ApiErrorShape, fallback: string): UiError {
   };
 }
 
-export default function ListingOptimizationClient() {
-  const params = useParams<{ listingId?: string | string[] }>();
-  const listingId = useMemo(() => {
-    const raw = params?.listingId;
-    if (typeof raw === "string") return decodeURIComponent(raw);
-    if (Array.isArray(raw) && raw[0]) return decodeURIComponent(raw[0]);
-    return "";
-  }, [params]);
+type ListingOptimizationClientProps = {
+  listingId: string;
+  initialListing: ListingDetailResponse | null;
+  initialIntegrations: IntegrationStatusResponse;
+  initialError?: UiError | null;
+};
+
+export default function ListingOptimizationClient({
+  listingId,
+  initialListing,
+  initialIntegrations,
+  initialError = null,
+}: ListingOptimizationClientProps) {
 
   const [state, setState] = useState<UiState>("idle");
-  const [listing, setListing] = useState<ListingDetailResponse | null>(null);
-  const [integrations, setIntegrations] = useState<IntegrationStatusResponse>({
-    openaiConfigured: false,
-    bdConfigured: false,
-  });
+  const [listing, setListing] = useState<ListingDetailResponse | null>(initialListing);
+  const [integrations, setIntegrations] = useState<IntegrationStatusResponse>(initialIntegrations);
   const [proposedDescription, setProposedDescription] = useState("");
   const [draftId, setDraftId] = useState("");
   const [diffRows, setDiffRows] = useState<DiffRow[]>([]);
   const [approvalToken, setApprovalToken] = useState("");
   const [approved, setApproved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<UiError | null>(null);
+  const [error, setError] = useState<UiError | null>(initialError);
 
   async function loadListingAndIntegrations() {
     if (!listingId) return;
@@ -107,10 +108,6 @@ export default function ListingOptimizationClient() {
       });
     }
   }
-
-  useEffect(() => {
-    void loadListingAndIntegrations();
-  }, [listingId]);
 
   async function generateUpgrade() {
     if (!listingId) return;
