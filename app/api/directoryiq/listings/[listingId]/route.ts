@@ -115,6 +115,28 @@ export async function GET(
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
 ) {
   try {
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      const { listingId } = await Promise.resolve(params);
+      const decodedId = decodeURIComponent(listingId ?? "0");
+      return NextResponse.json({
+        listing: {
+          listing_id: decodedId,
+          listing_name: `Mock Listing ${decodedId}`,
+          listing_url: null,
+          mainImageUrl: null,
+        },
+        evaluation: {
+          totalScore: 0,
+        },
+        authority_posts: [],
+        settings: {},
+        integrations: {
+          brilliant_directories: false,
+          openai: false,
+        },
+      });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
