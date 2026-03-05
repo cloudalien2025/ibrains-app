@@ -17,7 +17,7 @@ vi.mock("@/app/api/directoryiq/_utils/ingest", async () => {
     ...actual,
     runDirectoryIqFullIngest: vi.fn(async () => {
       throw new actual.BdIngestError({
-        code: "bd_request_failed",
+        code: "bd_rate_limited",
         baseUrlPresent: true,
         apiKeyPresent: true,
         listingsPathPresent: true,
@@ -26,6 +26,8 @@ vi.mock("@/app/api/directoryiq/_utils/ingest", async () => {
         statusCode: 400,
         endpoint: "/api/v2/users_portfolio_groups/search",
         page: 1,
+        retryAttempts: 6,
+        nextRetryDelayMs: 8000,
       });
     }),
   };
@@ -41,8 +43,9 @@ describe("directoryiq ingest route", () => {
     const json = await res.json();
 
     expect(res.status).toBe(400);
-    expect(json.error).toBe("bd_request_failed");
+    expect(json.error).toBe("bd_rate_limited");
     expect(json.status_code).toBe(400);
     expect(json.endpoint).toBe("/api/v2/users_portfolio_groups/search");
+    expect(json.retry_attempts).toBe(6);
   });
 });

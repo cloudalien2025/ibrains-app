@@ -32,6 +32,12 @@ export async function POST(req: NextRequest) {
           endpoint: error.endpoint,
           page: error.page,
           message_snippet: error.messageSnippet,
+          pages_succeeded: error.pagesSucceeded,
+          page_failed: error.pageFailed,
+          total_listings_ingested_so_far: error.listingsIngested,
+          will_resume_from_page: error.willResumeFromPage,
+          retry_attempts: error.retryAttempts,
+          next_retry_delay_ms: error.nextRetryDelayMs,
         },
         { status: 400 }
       );

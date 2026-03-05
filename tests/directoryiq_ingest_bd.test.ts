@@ -38,6 +38,10 @@ describe("directoryiq BD ingest", () => {
     global.fetch = fetchMock;
     process.env.NODE_ENV = "production";
     process.env.DIRECTORYIQ_MODE = "";
+    process.env.DIRECTORYIQ_LISTINGS_PAGE_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_BASE_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_MAX_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_MAX_RETRIES = "1";
   });
 
   it("fails preflight when data category is invalid", async () => {
@@ -45,6 +49,7 @@ describe("directoryiq BD ingest", () => {
       ok: false,
       status: 400,
       text: async () => "bad",
+      headers: new Headers(),
     });
 
     const { runDirectoryIqFullIngest } = await import(
@@ -63,6 +68,7 @@ describe("directoryiq BD ingest", () => {
       ok: true,
       status: 200,
       text: async () => JSON.stringify({ status: "success", message: { data_type: "2" } }),
+      headers: new Headers(),
     });
 
     const { runDirectoryIqFullIngest } = await import(
@@ -76,13 +82,15 @@ describe("directoryiq BD ingest", () => {
   });
 
   it("uses vacayrank request shape and paginates", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-    });
-
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/data_categories/get/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+          headers: new Headers(),
+        });
+      }
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
         const body =
           init?.body instanceof URLSearchParams
@@ -104,15 +112,17 @@ describe("directoryiq BD ingest", () => {
             status: 200,
             text: async () =>
               JSON.stringify({ status: "success", message: [{ group_id: "1", group_name: "Alpha" }] }),
+            headers: new Headers(),
           });
         }
         return Promise.resolve({
           ok: true,
           status: 200,
           text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
         });
       }
-      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
     });
 
     const { runDirectoryIqFullIngest } = await import(
@@ -125,16 +135,24 @@ describe("directoryiq BD ingest", () => {
   });
 
   it("does not fall back to fixture when search fails", async () => {
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-    });
-
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      text: async () => JSON.stringify({ status: "error", message: "boom" }),
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_categories/get/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+          headers: new Headers(),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "error", message: "boom" }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
     });
 
     const { runDirectoryIqFullIngest } = await import(
@@ -143,6 +161,76 @@ describe("directoryiq BD ingest", () => {
 
     await expect(runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001")).rejects.toMatchObject({
       code: "bd_request_failed",
+    });
+  });
+
+  it("retries on 429 and succeeds", async () => {
+    let callCount = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_categories/get/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+          headers: new Headers(),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        callCount += 1;
+        if (callCount === 1) {
+          return Promise.resolve({
+            ok: false,
+            status: 429,
+            text: async () => JSON.stringify({ status: "error", message: "Too many API requests per minute" }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+  });
+
+  it("fails with bd_rate_limited after retries", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_categories/get/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+          headers: new Headers(),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        return Promise.resolve({
+          ok: false,
+          status: 429,
+          text: async () => JSON.stringify({ status: "error", message: "Too many API requests per minute" }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    await expect(runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001")).rejects.toMatchObject({
+      code: "bd_rate_limited",
+      statusCode: 429,
     });
   });
 });

@@ -37,6 +37,7 @@ type LocalBdResponse = {
   status: number;
   json: unknown;
   text?: string;
+  headers?: Record<string, string>;
 };
 
 export type DirectoryIqIngestResult = {
@@ -117,7 +118,11 @@ async function bdRequestFormXApiKey(input: {
     } catch {
       json = null;
     }
-    return { ok: response.ok, status: response.status, json, text };
+    const headersMap: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headersMap[key.toLowerCase()] = value;
+    });
+    return { ok: response.ok, status: response.status, json, text, headers: headersMap };
   } catch (error) {
     const message = error instanceof Error ? error.message : "bd request failed";
     return { ok: false, status: 500, json: { error: message }, text: message };
@@ -146,7 +151,11 @@ async function bdRequestGet(input: {
     } catch {
       json = null;
     }
-    return { ok: response.ok, status: response.status, json, text };
+    const headersMap: Record<string, string> = {};
+    response.headers.forEach((value, key) => {
+      headersMap[key.toLowerCase()] = value;
+    });
+    return { ok: response.ok, status: response.status, json, text, headers: headersMap };
   } catch (error) {
     const message = error instanceof Error ? error.message : "bd request failed";
     return { ok: false, status: 500, json: { error: message }, text: message };
@@ -255,13 +264,24 @@ async function fetchBdListingsPaged(params: {
   path: string;
   dataId: number;
   limit: number;
+  startPage?: number;
   maxPages?: number;
+  pageDelayMs?: number;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
+  retryMaxDelayMs?: number;
+  sleepFn?: (ms: number) => Promise<void>;
   onPage?: (input: { page: number; limit: number; received: number; total: number }) => void;
 }): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
   const maxPages = params.maxPages ?? 200;
+  const pageDelayMs = params.pageDelayMs ?? 300;
+  const maxRetries = params.maxRetries ?? 6;
+  const retryBaseDelayMs = params.retryBaseDelayMs ?? 500;
+  const retryMaxDelayMs = params.retryMaxDelayMs ?? 8000;
+  const sleepFn = params.sleepFn ?? sleep;
 
-  for (let page = 1; page <= maxPages; page += 1) {
+  for (let page = params.startPage ?? 1; page <= maxPages; page += 1) {
     const form: Record<string, unknown> = {
       action: "search",
       output_type: "array",
@@ -270,25 +290,48 @@ async function fetchBdListingsPaged(params: {
       page,
     };
 
-    const response = await bdRequestWithRetryLocal(() =>
-      bdRequestFormWithFallback({
-        baseUrl: params.baseUrl,
-        apiKey: params.apiKey,
-        method: "POST",
-        path: params.path,
-        form,
-      })
-    );
+    let response: LocalBdResponse | null = null;
+    let attempt = 0;
+    let lastDelayMs: number | null = null;
+    for (; attempt <= maxRetries; attempt += 1) {
+      response = await bdRequestWithRetryLocal(() =>
+        bdRequestFormWithFallback({
+          baseUrl: params.baseUrl,
+          apiKey: params.apiKey,
+          method: "POST",
+          path: params.path,
+          form,
+        })
+      );
+      if (response.status !== 429) break;
+      const retryAfterMs = parseRetryAfterMs(response.headers);
+      const jitter = Math.floor(Math.random() * 250);
+      const backoff = Math.min(retryMaxDelayMs, retryBaseDelayMs * 2 ** attempt) + jitter;
+      const delay = Math.min(retryMaxDelayMs, retryAfterMs ?? backoff);
+      lastDelayMs = delay;
+      await sleepFn(delay);
+    }
+    if (!response) {
+      throw new BdRequestFailure({
+        statusCode: 500,
+        endpoint: params.path,
+        page,
+        snippet: "empty_response",
+      });
+    }
 
     if (!response.ok) {
       const detail = typeof response.text === "string" && response.text.trim().length > 0 ? response.text.trim() : "";
       const snippet = detail.length > 120 ? `${detail.slice(0, 120)}...` : detail;
-      throw new BdRequestFailure({
+      const failure = new BdRequestFailure({
         statusCode: response.status,
         endpoint: params.path,
         page,
         snippet,
       });
+      failure.retryAttempts = attempt;
+      failure.nextRetryDelayMs = lastDelayMs;
+      throw failure;
     }
 
     const payload = normalizeBdJson(response.json);
@@ -323,6 +366,10 @@ async function fetchBdListingsPaged(params: {
 
     if (records.length === 0) break;
     all.push(...records);
+
+    if (pageDelayMs > 0) {
+      await sleepFn(pageDelayMs);
+    }
   }
 
   return all;
@@ -332,7 +379,8 @@ type BdIngestErrorCode =
   | "bd_integration_missing"
   | "bd_integration_invalid"
   | "bd_post_type_invalid"
-  | "bd_request_failed";
+  | "bd_request_failed"
+  | "bd_rate_limited";
 
 export class BdIngestError extends Error {
   code: BdIngestErrorCode;
@@ -346,6 +394,12 @@ export class BdIngestError extends Error {
   endpoint: string | null;
   page: number | null;
   messageSnippet: string | null;
+  pagesSucceeded: number | null;
+  pageFailed: number | null;
+  listingsIngested: number | null;
+  willResumeFromPage: number | null;
+  retryAttempts: number | null;
+  nextRetryDelayMs: number | null;
 
   constructor(params: {
     code: BdIngestErrorCode;
@@ -359,6 +413,12 @@ export class BdIngestError extends Error {
     endpoint?: string | null;
     page?: number | null;
     messageSnippet?: string | null;
+    pagesSucceeded?: number | null;
+    pageFailed?: number | null;
+    listingsIngested?: number | null;
+    willResumeFromPage?: number | null;
+    retryAttempts?: number | null;
+    nextRetryDelayMs?: number | null;
   }) {
     super(params.code);
     this.name = "BdIngestError";
@@ -373,6 +433,12 @@ export class BdIngestError extends Error {
     this.endpoint = params.endpoint ?? null;
     this.page = params.page ?? null;
     this.messageSnippet = params.messageSnippet ?? null;
+    this.pagesSucceeded = params.pagesSucceeded ?? null;
+    this.pageFailed = params.pageFailed ?? null;
+    this.listingsIngested = params.listingsIngested ?? null;
+    this.willResumeFromPage = params.willResumeFromPage ?? null;
+    this.retryAttempts = params.retryAttempts ?? null;
+    this.nextRetryDelayMs = params.nextRetryDelayMs ?? null;
   }
 }
 
@@ -381,6 +447,8 @@ class BdRequestFailure extends Error {
   endpoint: string;
   page: number;
   snippet: string | null;
+  retryAttempts: number;
+  nextRetryDelayMs: number | null;
 
   constructor(params: { statusCode: number; endpoint: string; page: number; snippet?: string | null }) {
     super("bd_request_failed");
@@ -389,7 +457,27 @@ class BdRequestFailure extends Error {
     this.endpoint = params.endpoint;
     this.page = params.page;
     this.snippet = params.snippet ?? null;
+    this.retryAttempts = 0;
+    this.nextRetryDelayMs = null;
   }
+}
+
+function parseRetryAfterMs(headers?: Record<string, string>): number | null {
+  if (!headers) return null;
+  const raw = headers["retry-after"];
+  if (!raw) return null;
+  const seconds = Number(raw);
+  if (Number.isFinite(seconds)) return Math.max(0, seconds * 1000);
+  const dateMs = Date.parse(raw);
+  if (Number.isFinite(dateMs)) {
+    const delta = dateMs - Date.now();
+    return delta > 0 ? delta : 0;
+  }
+  return null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function isDeterministicEnabled(): boolean {
@@ -492,6 +580,34 @@ function parseCityState(location: string): { city: string; state: string } {
     return { city: match[1].trim(), state: match[2].trim().toUpperCase() };
   }
   return { city: trimmed, state: "" };
+}
+
+async function updateListingsCheckpoint(params: {
+  integrationId: string;
+  lastPage: number;
+}): Promise<void> {
+  await query(
+    `
+    UPDATE integrations_credentials
+    SET meta_json = jsonb_set(
+      COALESCE(meta_json, '{}'::jsonb),
+      '{directoryiq_ingest_checkpoint}',
+      jsonb_build_object('listings_last_page', $2, 'updated_at', now()::text),
+      true
+    )
+    WHERE id = $1
+    `,
+    [params.integrationId, params.lastPage]
+  );
+}
+
+function readListingsCheckpoint(meta: Record<string, unknown>): number | null {
+  const checkpoint = meta.directoryiq_ingest_checkpoint;
+  if (checkpoint && typeof checkpoint === "object") {
+    const value = asNumber((checkpoint as Record<string, unknown>).listings_last_page);
+    return value ?? null;
+  }
+  return null;
 }
 
 function readPrimaryCategory(item: Record<string, unknown>): string {
@@ -1028,7 +1144,33 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       const listingsLimit =
         asNumber((meta as Record<string, unknown>).listingsLimit) ??
         asNumber((meta as Record<string, unknown>).listings_limit) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_LIMIT) ??
         100;
+      const pageDelayMs =
+        asNumber((meta as Record<string, unknown>).listingsPageDelayMs) ??
+        asNumber((meta as Record<string, unknown>).listings_page_delay_ms) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_PAGE_DELAY_MS) ??
+        300;
+      const maxRetries =
+        asNumber((meta as Record<string, unknown>).listings429MaxRetries) ??
+        asNumber((meta as Record<string, unknown>).listings_429_max_retries) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_429_MAX_RETRIES) ??
+        6;
+      const retryBaseDelayMs =
+        asNumber((meta as Record<string, unknown>).listings429BaseDelayMs) ??
+        asNumber((meta as Record<string, unknown>).listings_429_base_delay_ms) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_429_BASE_DELAY_MS) ??
+        500;
+      const retryMaxDelayMs =
+        asNumber((meta as Record<string, unknown>).listings429MaxDelayMs) ??
+        asNumber((meta as Record<string, unknown>).listings_429_max_delay_ms) ??
+        asNumber(process.env.DIRECTORYIQ_LISTINGS_429_MAX_DELAY_MS) ??
+        8000;
+      const resetRequested =
+        process.env.DIRECTORYIQ_INGEST_RESET === "1" ||
+        process.env.DIRECTORYIQ_LISTINGS_RESET === "1";
+      const checkpointPage = resetRequested ? null : readListingsCheckpoint(meta as Record<string, unknown>);
+      const startPage = checkpointPage ? checkpointPage + 1 : 1;
 
       console.info(
         `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${integration.label ?? ""} integration_id=${integration.id}`
@@ -1101,6 +1243,11 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
           dataId: listingsDataId,
           limit: listingsLimit,
           maxPages: 200,
+          startPage,
+          pageDelayMs,
+          maxRetries,
+          retryBaseDelayMs,
+          retryMaxDelayMs,
           onPage: ({ page, limit, received, total }) => {
             pagesFetched += 1;
             itemsTotal = total;
@@ -1113,12 +1260,14 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
                 total,
               })
             );
+            updateListingsCheckpoint({ integrationId: integration.id, lastPage: page }).catch(() => {});
           },
         });
       } catch (error) {
         if (error instanceof BdRequestFailure) {
+          const code = error.statusCode === 429 ? "bd_rate_limited" : "bd_request_failed";
           throw new BdIngestError({
-            code: "bd_request_failed",
+            code,
             baseUrlPresent,
             apiKeyPresent,
             listingsPathPresent,
@@ -1128,6 +1277,12 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
             endpoint: error.endpoint,
             page: error.page,
             messageSnippet: error.snippet,
+            pagesSucceeded: pagesFetched,
+            pageFailed: error.page,
+            listingsIngested: listingsTotal,
+            willResumeFromPage: error.page,
+            retryAttempts: error.retryAttempts,
+            nextRetryDelayMs: error.nextRetryDelayMs,
           });
         }
         throw error;
