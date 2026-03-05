@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
-import AuthoritySectionNav from "@/app/directoryiq/authority/_components/authority-section-nav";
+import AuthoritySectionNav from "@/app/(shell)/directoryiq/authority/_components/authority-section-nav";
 
 type Overview = {
   totalNodes: number;
