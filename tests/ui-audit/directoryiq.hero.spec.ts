@@ -51,6 +51,10 @@ test.describe("DirectoryIQ listing hero visuals", () => {
 
     const hero = page.getByTestId("directoryiq-listing-hero");
     await expect(hero.locator("h1")).toBeVisible({ timeout: 15_000 });
+    const heroTitle = hero.locator("h1");
+    const titleText = (await heroTitle.textContent())?.trim() ?? "";
+    expect(titleText).not.toMatch(/undefined/i);
+    expect(titleText.length).toBeGreaterThan(0);
     const glassPanels = page.getByTestId("directoryiq-hero-glass-panel");
     const visibleGlassPanels = await glassPanels.evaluateAll((elements) =>
       elements.filter((el) => {
