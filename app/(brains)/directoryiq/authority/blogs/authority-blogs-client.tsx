@@ -194,7 +194,7 @@ export default function AuthorityBlogsClient() {
                       <div key={`${recommendation.listingExternalId}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
                         <div>{recommendation.listingName}</div>
                         <div className="mt-1 text-xs text-slate-400">
-                          Link to {recommendation.listingUrl ?? "listing URL unavailable"} using anchor "{recommendation.recommendedAnchorText}".
+                          Link to {recommendation.listingUrl ?? "listing URL unavailable"} using anchor &quot;{recommendation.recommendedAnchorText}&quot;.
                         </div>
                         {recommendation.evidenceSnippet ? (
                           <div className="mt-1 text-xs text-slate-500">{recommendation.evidenceSnippet}</div>

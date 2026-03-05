@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
@@ -76,14 +76,22 @@ function formatStats(stats: Record<string, unknown> | null): string {
   return `Nodes ${nodes} · Edges ${edges} · Evidence ${evidence}`;
 }
 
-export default function AuthoritySupportClient() {
-  const [issues, setIssues] = useState<GraphIssuesPayload>(EMPTY);
+type AuthoritySupportClientProps = {
+  initialIssues?: GraphIssuesPayload;
+  initialError?: string | null;
+};
+
+export default function AuthoritySupportClient({
+  initialIssues = EMPTY,
+  initialError = null,
+}: AuthoritySupportClientProps) {
+  const [issues, setIssues] = useState<GraphIssuesPayload>(initialIssues);
   const [activeCard, setActiveCard] = useState<ActiveCard>("orphans");
   const [selectedIssue, setSelectedIssue] = useState<GraphIssue | null>(null);
   const [scanBusy, setScanBusy] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
 
   const activeRows = useMemo(() => issues[activeCard], [activeCard, issues]);
 
@@ -130,10 +138,6 @@ export default function AuthoritySupportClient() {
     await loadIssues();
     setScanBusy(false);
   }
-
-  useEffect(() => {
-    void loadIssues();
-  }, []);
 
   return (
     <div className="space-y-5">

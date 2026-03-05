@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import AuthoritySectionNav from "@/app/(brains)/directoryiq/authority/_components/authority-section-nav";
@@ -27,11 +27,19 @@ const EMPTY: Overview = {
   lastGraphRunStatus: null,
 };
 
-export default function AuthorityOverviewClient() {
-  const [overview, setOverview] = useState<Overview>(EMPTY);
-  const [loading, setLoading] = useState(true);
+type AuthorityOverviewClientProps = {
+  initialOverview?: Overview;
+  initialError?: string | null;
+};
+
+export default function AuthorityOverviewClient({
+  initialOverview = EMPTY,
+  initialError = null,
+}: AuthorityOverviewClientProps) {
+  const [overview, setOverview] = useState<Overview>(initialOverview);
+  const [loading, setLoading] = useState(false);
   const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(initialError);
   const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
@@ -69,10 +77,6 @@ export default function AuthorityOverviewClient() {
     await load();
     setRunning(false);
   }
-
-  useEffect(() => {
-    void load();
-  }, []);
 
   return (
     <div className="space-y-4">
