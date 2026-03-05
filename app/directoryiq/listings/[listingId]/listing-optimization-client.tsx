@@ -215,7 +215,7 @@ export default function ListingOptimizationClient() {
 
       <ListingHero
         title={displayName}
-        subtitle={displayUrl ?? "No public URL available"}
+        subtitle={displayUrl ?? undefined}
         imageUrl={listing?.listing.mainImageUrl ?? null}
         score={displayScore}
         chips={[

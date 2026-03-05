@@ -15,12 +15,6 @@ type NormalizedError = {
 
 const DEFAULT_TIMEOUT_MS = 8000;
 
-function env(name: string, fallback?: string): string {
-  const v = process.env[name] ?? fallback;
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
-}
-
 function buildTargetUrl(req: NextRequest, targetPath: string): string {
   const base = (process.env.BRAINS_API_BASE ?? "https://api.ibrains.ai").replace(/\/+$/, "");
   const path = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
@@ -31,7 +25,11 @@ function buildTargetUrl(req: NextRequest, targetPath: string): string {
   return url.toString();
 }
 
-function buildHeaders(req: NextRequest, requireAuth: boolean): Headers {
+function buildHeaders(
+  req: NextRequest,
+  requireAuth: boolean,
+  targetPath: string
+): Headers {
   const headers = new Headers();
 
   // Forward content type if present
@@ -44,7 +42,23 @@ function buildHeaders(req: NextRequest, requireAuth: boolean): Headers {
 
   // Auth headers (server-side only)
   if (requireAuth) {
-    const apiKey = env("BRAINS_X_API_KEY");
+    let apiKey: string | undefined;
+    const isWorkerPath =
+      targetPath.startsWith("/v1/brains/") || targetPath.startsWith("/v1/runs/");
+
+    if (isWorkerPath) {
+      apiKey = process.env.BRAINS_WORKER_API_KEY;
+      if (!apiKey) {
+        throw new Error("Missing required env var: BRAINS_WORKER_API_KEY");
+      }
+    } else {
+      apiKey = process.env.BRAINS_MASTER_KEY || process.env.BRAINS_X_API_KEY;
+      if (!apiKey) {
+        throw new Error(
+          "Missing required env var: BRAINS_MASTER_KEY or BRAINS_X_API_KEY"
+        );
+      }
+    }
     const userId = process.env.BRAINS_USER_ID ?? "user_1";
     headers.set("X-Api-Key", apiKey);
     headers.set("X-User-Id", userId);
@@ -117,7 +131,7 @@ export async function proxyToBrains(
     );
   }
 
-  const headers = buildHeaders(req, requireAuth);
+  const headers = buildHeaders(req, requireAuth, targetPath);
 
   let body: BodyInit | undefined;
   try {
@@ -212,7 +226,7 @@ export async function probeBrains(
     return { upstreamOk: false, upstreamError: e?.message ?? "Bad proxy config" };
   }
 
-  const headers = buildHeaders(req, requireAuth);
+  const headers = buildHeaders(req, requireAuth, targetPath);
 
   try {
     const { signal, cancel } = withTimeout(DEFAULT_TIMEOUT_MS);

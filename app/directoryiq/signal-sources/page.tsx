@@ -1,7 +1,7 @@
-import DirectoryIqSignalSourcesClient from "./directoryiq-signal-sources-client";
+import { redirect } from "next/navigation";
 
 export const dynamic = "force-dynamic";
 
 export default function DirectoryIQSignalSourcesPage() {
-  return <DirectoryIqSignalSourcesClient />;
+  redirect("/directoryiq/settings/integrations");
 }

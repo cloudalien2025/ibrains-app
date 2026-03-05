@@ -19,6 +19,16 @@ type BlogSuggestion = {
   recommendation: string;
 };
 
+type MissingLinkRecommendation =
+  | string
+  | {
+      listingExternalId: string;
+      listingName: string;
+      listingUrl: string | null;
+      recommendedAnchorText: string;
+      evidenceSnippet: string | null;
+    };
+
 type AuthorityBlog = {
   blogNodeId: string;
   blogExternalId: string;
@@ -30,7 +40,7 @@ type AuthorityBlog = {
   status: "green" | "yellow" | "red";
   entities: BlogEntity[];
   suggestedListingTargets: BlogSuggestion[];
-  missingInternalLinksRecommendations: string[];
+  missingInternalLinksRecommendations: MissingLinkRecommendation[];
 };
 
 function statusClass(status: "green" | "yellow" | "red"): string {
@@ -49,23 +59,27 @@ export default function AuthorityBlogsClient() {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    setLoading(true);
-    setError(null);
-    const response = await fetch("/api/directoryiq/authority/blogs", { cache: "no-store" });
-    const json = (await response.json().catch(() => ({}))) as { blogs?: AuthorityBlog[]; error?: { message?: string } };
-    if (!response.ok) {
-      setError(json.error?.message ?? "Failed to load authority blogs.");
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch("/api/directoryiq/authority/blogs", { cache: "no-store" });
+      const json = (await response.json().catch(() => ({}))) as { blogs?: AuthorityBlog[]; error?: { message?: string } };
+      if (!response.ok) {
+        setError(json.error?.message ?? "Failed to load authority blogs.");
+        setLoading(false);
+        return;
+      }
+
+      const data = json.blogs ?? [];
+      setRows(data);
       setLoading(false);
-      return;
-    }
-
-    const data = json.blogs ?? [];
-    setRows(data);
-    setLoading(false);
-
-    if (selectedFromQuery) {
-      const match = data.find((row) => row.blogExternalId === selectedFromQuery);
-      if (match) setSelected(match);
+      if (selectedFromQuery) {
+        const match = data.find((row) => row.blogExternalId === selectedFromQuery);
+        if (match) setSelected(match);
+      }
+    } catch {
+      setError("Failed to load authority blogs.");
+      setLoading(false);
     }
   }
 
@@ -78,7 +92,7 @@ export default function AuthorityBlogsClient() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3">
+      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
         <h1 className="text-xl font-semibold text-slate-100">Blog Content Layer</h1>
         <p className="mt-1 text-sm text-slate-300">Blog posts with extracted entities and listing link coverage.</p>
       </section>
@@ -131,19 +145,19 @@ export default function AuthorityBlogsClient() {
 
       {selected ? (
         <div className="fixed inset-0 z-50 flex justify-end bg-slate-950/65">
-          <div className="h-full w-full max-w-[min(94vw,560px)] border-l border-white/10 bg-slate-950 p-5">
+          <div className="flex h-full w-full max-w-[min(94vw,560px)] flex-col border-l border-white/10 bg-slate-950 p-5">
             <div className="mb-4 flex items-center justify-between gap-2">
               <h3 className="text-base font-semibold text-slate-100">{selected.blogTitle ?? selected.blogExternalId}</h3>
               <NeonButton variant="ghost" onClick={() => setSelected(null)}>Close</NeonButton>
             </div>
 
-            <div className="space-y-4 text-sm text-slate-200">
+            <div className="flex-1 space-y-4 overflow-y-auto pr-1 text-sm text-slate-200">
               <div>
                 <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Entities ({selected.entities.length})</div>
                 <div className="mt-2 space-y-2">
                   {selected.entities.length === 0 ? <div className="text-slate-400">No entities detected.</div> : null}
                   {selected.entities.map((entity, index) => (
-                    <div key={`${entity.entityText}-${index}`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
+                    <div key={`${entity.entityText}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
                       <div>{entity.entityText}</div>
                       <div className="mt-1 text-xs text-slate-400">{entity.evidenceSnippet ?? "No snippet"}</div>
                     </div>
@@ -156,7 +170,7 @@ export default function AuthorityBlogsClient() {
                 <div className="mt-2 space-y-2">
                   {selected.suggestedListingTargets.length === 0 ? <div className="text-slate-400">No suggestions.</div> : null}
                   {selected.suggestedListingTargets.map((target) => (
-                    <div key={`${target.listingExternalId}-${target.recommendation}`} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
+                    <div key={`${target.listingExternalId}-${target.recommendation}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
                       <div>{target.listingTitle}</div>
                       <div className="mt-1 text-xs text-slate-400">{target.recommendation}</div>
                     </div>
@@ -168,11 +182,26 @@ export default function AuthorityBlogsClient() {
                 <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing Internal Links Recommendations</div>
                 <div className="mt-2 space-y-2">
                   {selected.missingInternalLinksRecommendations.length === 0 ? <div className="text-slate-400">No missing link recommendations.</div> : null}
-                  {selected.missingInternalLinksRecommendations.map((recommendation) => (
-                    <div key={recommendation} className="rounded-lg border border-white/10 bg-zinc-900 p-2">
-                      {recommendation}
-                    </div>
-                  ))}
+                  {selected.missingInternalLinksRecommendations.map((recommendation, index) => {
+                    if (typeof recommendation === "string") {
+                      return (
+                        <div key={`${recommendation}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                          {recommendation}
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={`${recommendation.listingExternalId}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-2">
+                        <div>{recommendation.listingName}</div>
+                        <div className="mt-1 text-xs text-slate-400">
+                          Link to {recommendation.listingUrl ?? "listing URL unavailable"} using anchor "{recommendation.recommendedAnchorText}".
+                        </div>
+                        {recommendation.evidenceSnippet ? (
+                          <div className="mt-1 text-xs text-slate-500">{recommendation.evidenceSnippet}</div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </div>

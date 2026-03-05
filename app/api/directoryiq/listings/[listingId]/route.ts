@@ -23,6 +23,8 @@ function extractMainImageUrl(
   const row = raw ?? {};
   const gallery = Array.isArray(row.gallery) ? row.gallery : [];
   const firstGallery = gallery[0];
+  const portfolio = Array.isArray(row.users_portfolio) ? row.users_portfolio : [];
+  const firstPortfolio = portfolio[0];
   const firstGalleryUrl =
     typeof firstGallery === "string"
       ? firstGallery
@@ -34,8 +36,24 @@ function extractMainImageUrl(
             (firstGallery as Record<string, unknown>).image_url,
           ])
         : null;
+  const firstPortfolioUrl =
+    typeof firstPortfolio === "string"
+      ? firstPortfolio
+      : firstPortfolio && typeof firstPortfolio === "object"
+        ? readFirstString([
+            (firstPortfolio as Record<string, unknown>).file_main_full_url,
+            (firstPortfolio as Record<string, unknown>).file_thumbnail_full_url,
+            (firstPortfolio as Record<string, unknown>).original_image_url,
+            (firstPortfolio as Record<string, unknown>).url,
+            (firstPortfolio as Record<string, unknown>).src,
+            (firstPortfolio as Record<string, unknown>).image,
+            (firstPortfolio as Record<string, unknown>).image_url,
+            (firstPortfolio as Record<string, unknown>).file,
+          ])
+        : null;
 
   const candidates: Array<{ field: string; value: unknown }> = [
+    { field: "users_portfolio[0]", value: firstPortfolioUrl },
     { field: "primary_image", value: row.primary_image },
     { field: "featured_image", value: row.featured_image },
     { field: "image_url", value: row.image_url },
@@ -78,6 +96,7 @@ function extractMainImageUrl(
       row.image,
       row.cover_image,
       (row as { imageUrl?: unknown }).imageUrl,
+      firstPortfolioUrl,
       firstGalleryUrl,
     ]),
   };

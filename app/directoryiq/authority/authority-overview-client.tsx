@@ -76,7 +76,7 @@ export default function AuthorityOverviewClient() {
 
   return (
     <div className="space-y-4">
-      <section className="rounded-xl border border-white/10 bg-zinc-900 px-4 py-3">
+      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
         <h1 className="text-xl font-semibold text-slate-100">Authority Overview</h1>
         <p className="mt-1 text-sm text-slate-300">Graph summary for blog to listing authority coverage.</p>
       </section>
@@ -98,27 +98,27 @@ export default function AuthorityOverviewClient() {
         {loading ? <div className="text-sm text-slate-300">Loading overview...</div> : null}
         {!loading ? (
           <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="text-xs text-slate-400">Total Nodes</div>
               <div className="mt-1 text-2xl font-semibold text-slate-100">{overview.totalNodes}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="text-xs text-slate-400">Total Edges</div>
               <div className="mt-1 text-2xl font-semibold text-slate-100">{overview.totalEdges}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="text-xs text-slate-400">Evidence Count</div>
               <div className="mt-1 text-2xl font-semibold text-slate-100">{overview.totalEvidence}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="text-xs text-slate-400">Blog Nodes</div>
               <div className="mt-1 text-2xl font-semibold text-slate-100">{overview.blogNodes}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
               <div className="text-xs text-slate-400">Listing Nodes</div>
               <div className="mt-1 text-2xl font-semibold text-slate-100">{overview.listingNodes}</div>
             </div>
-            <div className="rounded-xl border border-white/10 bg-zinc-900 p-3 text-sm text-slate-300">
+            <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-sm text-slate-300">
               <div>Last ingestion run: {overview.lastIngestionRunAt ? new Date(overview.lastIngestionRunAt).toLocaleString() : "Never"}</div>
               <div className="mt-1">Last graph run: {overview.lastGraphRunAt ? new Date(overview.lastGraphRunAt).toLocaleString() : "Never"}</div>
               <div className="mt-1">Graph status: {overview.lastGraphRunStatus ?? "n/a"}</div>

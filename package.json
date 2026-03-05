@@ -3,15 +3,14 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --webpack",
-    "build": "next build --webpack",
+    "dev": "next dev",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run",
+    "test": "node --experimental-strip-types --experimental-specifier-resolution=node --test tests/**/*.test.ts",
     "test:e2e": "playwright test",
     "verify:ecomviper:css": "bash scripts/verify_ecomviper_css.sh",
-    "postinstall": "node scripts/patch_next_route_types.mjs",
-    "test:unit": "vitest run --config vitest.config.ts"
+    "postinstall": "node scripts/patch_next_route_types.mjs"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
@@ -36,7 +35,6 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
-    "jsdom": "^28.1.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "^1.6.0"
