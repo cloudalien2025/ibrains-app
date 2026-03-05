@@ -74,3 +74,11 @@ git rev-list --left-right --count origin/main...HEAD
 
 git checkout main
 git pull --ff-only
+
+---
+
+## 7) Auto-Merge Green PRs
+
+Use the auto-merge helper to squash-merge and delete the branch:
+
+pnpm -s pr:automerge <PR_NUMBER>

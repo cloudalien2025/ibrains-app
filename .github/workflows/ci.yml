@@ -45,6 +45,7 @@ jobs:
       - name: Test (Playwright)
         env:
           TMPDIR: ${{ github.workspace }}/artifacts/playwright/.tmp
+          E2E_MOCK_GRAPH: "1"
         run: |
           mkdir -p artifacts/playwright/.tmp
           pnpm run --if-present test:e2e

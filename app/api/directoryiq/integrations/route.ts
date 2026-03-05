@@ -8,6 +8,14 @@ import { listDirectoryIqIntegrations } from "@/app/api/directoryiq/_utils/creden
 
 export async function GET(req: NextRequest) {
   try {
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      return NextResponse.json({
+        openaiConfigured: false,
+        bdConfigured: false,
+        integrations: [],
+      });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 

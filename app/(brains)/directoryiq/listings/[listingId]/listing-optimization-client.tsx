@@ -45,13 +45,17 @@ type UiError = {
   message: string;
   reqId?: string;
   code?: string;
+  status?: number;
+  listingId?: string;
 };
 
-function parseError(json: ApiErrorShape, fallback: string): UiError {
+function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
   return {
     message: json.error?.message ?? fallback,
     reqId: json.error?.reqId,
     code: json.error?.code,
+    status,
+    listingId,
   };
 }
 
@@ -85,28 +89,34 @@ export default function ListingOptimizationClient({
     if (!effectiveListingId) return;
     setError(null);
 
-    const [listingRes, integrationRes] = await Promise.all([
-      fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}`, { cache: "no-store" }),
-      fetch("/api/directoryiq/integrations", { cache: "no-store" }),
-    ]);
+    try {
+      const [listingRes, integrationRes] = await Promise.all([
+        fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}`, { cache: "no-store" }),
+        fetch("/api/directoryiq/integrations", { cache: "no-store" }),
+      ]);
 
-    const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailResponse & ApiErrorShape;
-    const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
+      const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailResponse & ApiErrorShape;
+      const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
 
-    if (!listingRes.ok) {
-      setError(parseError(listingJson, "Failed to load listing details."));
+      if (!listingRes.ok) {
+        setError(parseError(listingJson, "Failed to load listing details.", listingRes.status, effectiveListingId));
+        setListing(null);
+      } else {
+        setListing(listingJson);
+      }
+
+      if (!integrationRes.ok) {
+        setIntegrations({ openaiConfigured: false, bdConfigured: false });
+      } else {
+        setIntegrations({
+          openaiConfigured: integrationJson.openaiConfigured,
+          bdConfigured: integrationJson.bdConfigured,
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to load listing details.";
+      setError({ message, status: 0, listingId: effectiveListingId });
       setListing(null);
-    } else {
-      setListing(listingJson);
-    }
-
-    if (!integrationRes.ok) {
-      setIntegrations({ openaiConfigured: false, bdConfigured: false });
-    } else {
-      setIntegrations({
-        openaiConfigured: integrationJson.openaiConfigured,
-        bdConfigured: integrationJson.bdConfigured,
-      });
     }
   }
 
@@ -208,7 +218,11 @@ export default function ListingOptimizationClient({
     await loadListingAndIntegrations();
   }
 
-  const displayName = listing?.listing.listing_name || effectiveListingId || "Listing";
+  const fallbackId = effectiveListingId || (listingId && listingId !== "undefined" && listingId !== "null" ? listingId : "");
+  const displayName =
+    listing?.listing.listing_name?.trim() ||
+    listing?.listing.listing_name ||
+    (fallbackId ? `Listing #${fallbackId}` : "Listing");
   const displayUrl = listing?.listing.listing_url ?? null;
   const displayScore = listing?.evaluation.totalScore ?? 0;
 
@@ -244,6 +258,8 @@ export default function ListingOptimizationClient({
       {error ? (
         <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
           {error.message}
+          {error.status !== undefined ? ` (status: ${error.status})` : ""}
+          {error.listingId ? ` (listing: ${error.listingId})` : ""}
           {error.reqId ? ` (reqId: ${error.reqId})` : ""}
         </div>
       ) : null}

@@ -110,16 +110,69 @@ function readBaseUrl(meta: Record<string, unknown>): string | null {
   ]);
 }
 
+function normalizeListingId(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.toLowerCase() === "undefined" || trimmed.toLowerCase() === "null") return null;
+  return trimmed;
+}
+
+function hasAuthContext(req: NextRequest): boolean {
+  return Boolean(
+    req.headers.get("x-user-id") ||
+      req.headers.get("x-user-email") ||
+      req.headers.get("x-forwarded-email") ||
+      req.headers.get("cf-access-authenticated-user-email") ||
+      req.nextUrl.searchParams.get("user_id")
+  );
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
 ) {
+  const { listingId: listingIdParam } = await Promise.resolve(params);
+  const listingIdRaw = normalizeListingId(listingIdParam);
+  if (!listingIdRaw) {
+    return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
+  }
+
+  let decodedListingId: string;
+  try {
+    decodedListingId = decodeURIComponent(listingIdRaw);
+  } catch {
+    return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
+  }
+
+  if (process.env.E2E_MOCK_GRAPH === "1") {
+    return NextResponse.json({
+      listing: {
+        listing_id: decodedListingId,
+        listing_name: `Mock Listing ${decodedListingId}`,
+        listing_url: null,
+        mainImageUrl: null,
+      },
+      evaluation: {
+        totalScore: 0,
+      },
+      authority_posts: [],
+      settings: {},
+      integrations: {
+        brilliant_directories: false,
+        openai: false,
+      },
+    });
+  }
+
+  if (!hasAuthContext(req)) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const { listingId } = await Promise.resolve(params);
-    const listingEval = await getListingEvaluation(userId, decodeURIComponent(listingId));
+    const listingEval = await getListingEvaluation(userId, decodedListingId);
     const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
     const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
     const bdBaseUrl = readBaseUrl(bdIntegration.meta);
@@ -128,8 +181,8 @@ export async function GET(
       if (process.env.E2E_MOCK_BD === "1" || process.env.E2E_TEST_MODE === "1") {
         return NextResponse.json({
           listing: {
-            listing_id: decodeURIComponent(listingId),
-            listing_name: decodeURIComponent(listingId),
+            listing_id: decodedListingId,
+            listing_name: decodedListingId,
             listing_url: null,
             mainImageUrl: null,
           },
@@ -144,7 +197,7 @@ export async function GET(
           },
         });
       }
-      return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+      return NextResponse.json({ error: "listing_not_found", listingId: decodedListingId }, { status: 404 });
     }
 
     const mainImage = extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url, bdBaseUrl);
@@ -158,7 +211,7 @@ export async function GET(
     return NextResponse.json({
       listing: {
         listing_id: listingEval.listing.source_id,
-        listing_name: listingEval.listing.title ?? listingEval.listing.source_id,
+        listing_name: listingEval.listing.title ?? listingEval.listing.source_id ?? decodedListingId,
         listing_url: listingEval.listing.url,
         mainImageUrl: mainImage.mainImageUrl,
       },
@@ -184,6 +237,7 @@ export async function GET(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown listing detail error";
-    return NextResponse.json({ error: message }, { status: 500 });
+    console.error(`[directoryiq-listing] listingId=${decodedListingId} error=${message}`);
+    return NextResponse.json({ error: "listing_load_failed", message }, { status: 500 });
   }
 }
