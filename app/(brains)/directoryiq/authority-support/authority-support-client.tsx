@@ -4,46 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
-
-type GraphIssue = {
-  type: "orphan_listing" | "mention_without_link" | "weak_anchor";
-  severity: "low" | "medium" | "high";
-  from?: {
-    title?: string | null;
-    canonicalUrl?: string | null;
-    externalId?: string;
-  };
-  to?: {
-    title?: string | null;
-    canonicalUrl?: string | null;
-    externalId?: string;
-  };
-  evidence?: {
-    sourceUrl: string;
-    targetUrl?: string | null;
-    anchorText?: string | null;
-    contextSnippet?: string | null;
-    domPath?: string | null;
-    locationHint?: "body" | "sidebar" | "footer" | "unknown" | null;
-  } | null;
-  details: {
-    summary: string;
-    suggestedFix: string;
-  };
-};
-
-type GraphIssuesPayload = {
-  orphans: GraphIssue[];
-  mentions_without_links: GraphIssue[];
-  weak_anchors: GraphIssue[];
-  lastRun: {
-    id: string;
-    status: string;
-    startedAt: string;
-    completedAt: string | null;
-    stats: Record<string, unknown>;
-  } | null;
-};
+import type { GraphIssue, GraphIssuesPayload } from "@/src/directoryiq/domain/authorityGraph";
 
 type ApiError = {
   error?: {
