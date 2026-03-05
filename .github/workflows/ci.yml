@@ -38,3 +38,9 @@ jobs:
 
       - name: Test
         run: pnpm run --if-present test
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps
+
+      - name: Test (Playwright)
+        run: pnpm run --if-present test:e2e

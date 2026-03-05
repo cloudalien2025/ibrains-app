@@ -9,7 +9,9 @@
     "lint": "eslint",
     "lint:directoryiq": "eslint \"app/(brains)/directoryiq/**/*.{js,jsx,ts,tsx}\"",
     "test": "vitest run",
+    "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:ui-audit": "playwright test tests/ui-audit",
     "verify:ecomviper:css": "bash scripts/verify_ecomviper_css.sh",
     "postinstall": "node scripts/patch_next_route_types.mjs"
   },
