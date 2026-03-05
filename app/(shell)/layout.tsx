@@ -4,8 +4,11 @@ import SideNav from "./_components/SideNav";
 
 export default function ShellLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen text-slate-100">
-      <div className="mx-auto flex min-h-screen max-w-7xl gap-6 px-6 py-8">
+    <div className="ecomviper-hud min-h-screen text-slate-100">
+      <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
+      <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-40" />
+
+      <div className="relative mx-auto flex min-h-screen max-w-7xl gap-6 px-6 py-8">
         <aside className="hidden w-64 flex-col gap-8 rounded-[28px] border border-white/10 bg-white/5 p-6 shadow-[0_40px_80px_rgba(2,6,23,0.6)] lg:flex">
           <div className="space-y-2">
             <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
