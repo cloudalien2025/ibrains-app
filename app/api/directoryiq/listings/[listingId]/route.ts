@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
 import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
 import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
@@ -117,14 +118,17 @@ function normalizeListingId(value: string | null | undefined): string | null {
   return trimmed;
 }
 
-function hasAuthContext(req: NextRequest): boolean {
+function hasHeaderIdentity(req: NextRequest): boolean {
   return Boolean(
     req.headers.get("x-user-id") ||
       req.headers.get("x-user-email") ||
       req.headers.get("x-forwarded-email") ||
-      req.headers.get("cf-access-authenticated-user-email") ||
-      req.nextUrl.searchParams.get("user_id")
+      req.headers.get("cf-access-authenticated-user-email")
   );
+}
+
+function hasQueryIdentity(req: NextRequest): boolean {
+  return Boolean(req.nextUrl.searchParams.get("user_id"));
 }
 
 export async function GET(
@@ -133,7 +137,7 @@ export async function GET(
 ) {
   const { listingId: listingIdParam } = await Promise.resolve(params);
   const listingIdRaw = normalizeListingId(listingIdParam);
-  if (!listingIdRaw) {
+  if (!listingIdRaw || Number.isNaN(Number(listingIdRaw))) {
     return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
   }
 
@@ -144,60 +148,44 @@ export async function GET(
     return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
   }
 
-  if (process.env.E2E_MOCK_GRAPH === "1") {
-    return NextResponse.json({
-      listing: {
-        listing_id: decodedListingId,
-        listing_name: `Mock Listing ${decodedListingId}`,
-        listing_url: null,
-        mainImageUrl: null,
-      },
-      evaluation: {
-        totalScore: 0,
-      },
-      authority_posts: [],
-      settings: {},
-      integrations: {
-        brilliant_directories: false,
-        openai: false,
-      },
-    });
-  }
-
-  if (!hasAuthContext(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
   try {
+    const user = resolveUserFromHeaders(req.headers);
+    const entitled = isEntitled(user, "directoryiq");
+    const headerIdentity = hasHeaderIdentity(req);
+    const allowQueryIdentity = process.env.NODE_ENV !== "production" && hasQueryIdentity(req);
+
+    if (!entitled && !headerIdentity && !allowQueryIdentity) {
+      console.warn("Listing auth denied", {
+        route: "/api/directoryiq/listings/[listingId]",
+        listingId: decodedListingId,
+        has_session_cookie: Boolean(req.headers.get("cookie")),
+        has_x_user_id: Boolean(req.headers.get("x-user-id")),
+        has_cf_access_email: Boolean(req.headers.get("cf-access-authenticated-user-email")),
+        has_x_forwarded_email: Boolean(req.headers.get("x-forwarded-email")),
+      });
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      return NextResponse.json({
+        listing: {
+          listing_id: decodedListingId,
+          listing_name: `Mock Listing ${decodedListingId}`,
+          listing_url: null,
+          mainImageUrl: null,
+        },
+      });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
     const listingEval = await getListingEvaluation(userId, decodedListingId);
     const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
-    const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
     const bdBaseUrl = readBaseUrl(bdIntegration.meta);
 
     if (!listingEval.listing || !listingEval.evaluation) {
-      if (process.env.E2E_MOCK_BD === "1" || process.env.E2E_TEST_MODE === "1") {
-        return NextResponse.json({
-          listing: {
-            listing_id: decodedListingId,
-            listing_name: decodedListingId,
-            listing_url: null,
-            mainImageUrl: null,
-          },
-          evaluation: {
-            totalScore: 0,
-          },
-          authority_posts: [],
-          settings: {},
-          integrations: {
-            brilliant_directories: true,
-            openai: true,
-          },
-        });
-      }
-      return NextResponse.json({ error: "listing_not_found", listingId: decodedListingId }, { status: 404 });
+      return NextResponse.json({ error: "Listing not found", listingId: decodedListingId }, { status: 404 });
     }
 
     const mainImage = extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url, bdBaseUrl);
@@ -215,29 +203,9 @@ export async function GET(
         listing_url: listingEval.listing.url,
         mainImageUrl: mainImage.mainImageUrl,
       },
-      evaluation: listingEval.evaluation,
-      authority_posts: listingEval.authorityPosts.map((post) => ({
-        id: post.id,
-        slot: post.slot_index,
-        type: post.post_type,
-        title: post.title,
-        focus_topic: post.focus_topic,
-        status: post.status,
-        blog_to_listing_status: post.blog_to_listing_link_status,
-        listing_to_blog_status: post.listing_to_blog_link_status,
-        featured_image_url: post.featured_image_url,
-        published_url: post.published_url,
-        updated_at: post.updated_at,
-      })),
-      settings: listingEval.settings,
-      integrations: {
-        brilliant_directories: bdIntegration.status === "connected",
-        openai: openAiIntegration.status === "connected" || Boolean(process.env.OPENAI_API_KEY),
-      },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown listing detail error";
-    console.error(`[directoryiq-listing] listingId=${decodedListingId} error=${message}`);
-    return NextResponse.json({ error: "listing_load_failed", message }, { status: 500 });
+    console.error("Listing route failure", error);
+    return NextResponse.json({ error: "Internal error loading listing" }, { status: 500 });
   }
 }
