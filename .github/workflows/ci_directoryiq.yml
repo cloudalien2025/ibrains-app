@@ -10,18 +10,45 @@ jobs:
   test-and-build:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      HOME: /home/runner
+      XDG_CONFIG_HOME: /home/runner/.config
+      NPM_CONFIG_USERCONFIG: /home/runner/.npmrc
+      NPM_CONFIG_CACHE: /home/runner/.npm
+      PNPM_HOME: /home/runner/.local/share/pnpm
+      PNPM_STORE_PATH: /home/runner/.pnpm-store
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Prepare user dirs for pnpm/npm
+        run: |
+          mkdir -p "$HOME" "$XDG_CONFIG_HOME" "$NPM_CONFIG_CACHE" "$PNPM_HOME" "$PNPM_STORE_PATH"
+          touch "$NPM_CONFIG_USERCONFIG"
+          echo "HOME=$HOME"
+          echo "XDG_CONFIG_HOME=$XDG_CONFIG_HOME"
+          echo "NPM_CONFIG_USERCONFIG=$NPM_CONFIG_USERCONFIG"
+          echo "NPM_CONFIG_CACHE=$NPM_CONFIG_CACHE"
+          echo "PNPM_HOME=$PNPM_HOME"
+          echo "PNPM_STORE_PATH=$PNPM_STORE_PATH"
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Prepare pnpm
+        run: corepack prepare pnpm@10.30.3 --activate
+
+      - name: Verify pnpm
+        run: pnpm --version
+
       - name: Install dependencies
-        run: corepack enable && pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Skip unit tests (temporary)
         run: echo "Skipping tests in CI"
