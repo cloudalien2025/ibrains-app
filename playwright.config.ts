@@ -11,6 +11,7 @@ const isRoot = typeof process.getuid === "function" ? process.getuid() === 0 : f
 const forceNoSandbox = process.env.PW_NO_SANDBOX === "1";
 const executablePath = process.env.PW_EXECUTABLE_PATH || undefined;
 process.env.E2E_MOCK_GRAPH ??= "1";
+process.env.NEXT_TELEMETRY_DISABLED ??= "1";
 // Chromium sandbox can crash in root/docker environments; keep it on elsewhere.
 const needsNoSandbox = forceNoSandbox || inDocker || isRoot;
 const chromiumArgs = needsNoSandbox
@@ -64,6 +65,7 @@ export default defineConfig({
       ...process.env,
       E2E_MOCK_GRAPH: "1",
       NODE_ENV: "test",
+      NEXT_TELEMETRY_DISABLED: "1",
       TMPDIR: "/tmp",
       TMP: "/tmp",
       TEMP: "/tmp",

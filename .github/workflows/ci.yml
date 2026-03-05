@@ -44,11 +44,12 @@ jobs:
 
       - name: Test (Playwright)
         env:
+          CI: "1"
           TMPDIR: ${{ github.workspace }}/artifacts/playwright/.tmp
           E2E_MOCK_GRAPH: "1"
         run: |
           mkdir -p artifacts/playwright/.tmp
-          pnpm run --if-present test:e2e
+          pnpm run --if-present test:e2e:ci
 
       - name: Upload Playwright Artifacts
         if: always()

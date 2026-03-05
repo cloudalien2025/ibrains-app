@@ -1,0 +1,56 @@
+name: Auto-merge
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  enable:
+    if: ${{ github.event.pull_request.head.repo.fork == false }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Enable auto-merge
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REPO_OWNER: ${{ github.repository_owner }}
+          ALLOWED_BOTS: ${{ vars.AUTO_MERGE_BOTS }}
+        run: |
+          set -euo pipefail
+
+          author=$(gh pr view "$PR_NUMBER" --json author -q .author.login)
+          is_draft=$(gh pr view "$PR_NUMBER" --json isDraft -q .isDraft)
+          labels=$(gh pr view "$PR_NUMBER" --json labels -q '.labels[].name' || true)
+
+          if [[ "$is_draft" == "true" ]]; then
+            echo "PR is draft; skipping auto-merge"
+            exit 0
+          fi
+
+          if echo "$labels" | rg -q '^no-automerge$'; then
+            echo "Label no-automerge present; skipping"
+            exit 0
+          fi
+
+          allowlist="${REPO_OWNER},${ALLOWED_BOTS:-}"
+          allowed=false
+          IFS=',' read -ra entries <<< "$allowlist"
+          for entry in "${entries[@]}"; do
+            if [[ -n "$entry" && "$author" == "$entry" ]]; then
+              allowed=true
+            fi
+          done
+
+          if [[ "$allowed" != "true" ]]; then
+            echo "Author $author not in allowlist; skipping"
+            exit 0
+          fi
+
+          gh pr merge "$PR_NUMBER" --auto --squash --delete-branch
