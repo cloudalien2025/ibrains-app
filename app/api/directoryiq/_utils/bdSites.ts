@@ -61,18 +61,19 @@ export async function ensureLegacyBdSite(userId: string): Promise<void> {
 
   const rows = await query<{
     id: string;
-    user_id: string;
+    user_id: string | null;
     secret_ciphertext: string | null;
     meta_json: Record<string, unknown> | null;
   }>(
     `
     SELECT id, user_id, secret_ciphertext, meta_json
     FROM integrations_credentials
-    WHERE product = 'directoryiq' AND provider = 'brilliant_directories' AND user_id = $1
+    WHERE product = 'directoryiq' AND provider = 'brilliant_directories'
+      AND (user_id = $1 OR user_id = $2 OR user_id IS NULL)
     ORDER BY saved_at DESC
     LIMIT 1
     `,
-    [userId]
+    [userId, DEFAULT_DIRECTORYIQ_USER_ID]
   );
   const legacy = rows[0];
   if (!legacy || !legacy.secret_ciphertext) return;
@@ -105,7 +106,26 @@ export async function ensureLegacyBdSite(userId: string): Promise<void> {
         : null;
   const label = typeof meta.siteLabel === "string" ? meta.siteLabel : null;
 
-  const decrypted = decryptSecret(legacy.secret_ciphertext, `${userId}:directoryiq:brilliant_directories`);
+  const contexts = Array.from(
+    new Set(
+      [
+        legacy.user_id ? `${legacy.user_id}:directoryiq:brilliant_directories` : null,
+        `${userId}:directoryiq:brilliant_directories`,
+        `${DEFAULT_DIRECTORYIQ_USER_ID}:directoryiq:brilliant_directories`,
+      ].filter(Boolean) as string[]
+    )
+  );
+
+  let decrypted: string | null = null;
+  for (const context of contexts) {
+    try {
+      decrypted = decryptSecret(legacy.secret_ciphertext, context);
+      break;
+    } catch {
+      decrypted = null;
+    }
+  }
+  if (!decrypted) return;
   const ciphertext = encryptSecret(decrypted, secretContext(userId, legacy.id));
   const secretLast4 = decrypted.slice(-4);
 
