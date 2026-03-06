@@ -375,7 +375,11 @@ export default function DirectoryIqSignalSourcesClient() {
     setBdSiteNotice(null);
     try {
       const response = await fetch(`/api/directoryiq/sites/${siteId}/test`, { method: "POST" });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        error?: string;
+        preflight?: { ok?: boolean };
+        search?: { ok?: boolean };
+      };
       if (!response.ok) throw new Error(json.error ?? "Test failed");
       setBdSiteNotice(
         `Test: preflight=${json.preflight?.ok ? "ok" : "failed"} search=${json.search?.ok ? "ok" : "failed"}`
