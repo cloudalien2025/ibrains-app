@@ -6,7 +6,6 @@ import { makeVersionLabel, normalizeSlot, verifyApprovalToken } from "@/app/api/
 import {
   addDirectoryIqVersion,
   getAuthorityPostBySlot,
-  getListingEvaluation,
   markPostPublished,
 } from "@/app/api/directoryiq/_utils/selectionData";
 import {
@@ -22,6 +21,7 @@ import {
   logAuthorityError,
   logAuthorityInfo,
 } from "@/app/api/directoryiq/_utils/authorityErrors";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -37,6 +37,7 @@ export async function POST(
     const { listingId, slot } = await Promise.resolve(params);
     resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
+    const siteId = req.nextUrl.searchParams.get("site_id");
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
@@ -50,9 +51,29 @@ export async function POST(
       throw new AuthorityRouteError(400, "APPROVAL_REQUIRED", "Publish requires explicit approval.");
     }
     const approvalToken = String(body.approval_token ?? "");
-    const tokenResult = verifyApprovalToken(approvalToken, {
+    const resolved = await resolveListingEvaluation({
       userId,
       listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved || !resolved.listingEval.listing || !resolved.listingEval.evaluation) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+
+    const listing = resolved.listingEval;
+    const listingRow = listing.listing;
+    const listingEval = listing.evaluation;
+    if (!listingRow) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    if (!listingEval) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const listingSourceId = listingRow.source_id;
+
+    const tokenResult = verifyApprovalToken(approvalToken, {
+      userId,
+      listingId: listingSourceId,
       slot: slotIndex,
       action: "blog_publish",
     });
@@ -60,12 +81,7 @@ export async function POST(
       throw new AuthorityRouteError(400, "TOKEN_INVALID", tokenResult.reason);
     }
 
-    const listing = await getListingEvaluation(userId, resolvedListingId);
-    if (!listing.listing || !listing.evaluation) {
-      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
-    }
-
-    const post = await getAuthorityPostBySlot(userId, resolvedListingId, slotIndex);
+    const post = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
     if (!post || !post.draft_html || !post.title) {
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft content is required before publish.");
     }
@@ -79,7 +95,7 @@ export async function POST(
       );
     }
 
-    const bd = await getDirectoryIqBdConnection(userId);
+    const bd = await getDirectoryIqBdConnection(userId, resolved.siteId);
     if (!bd) {
       throw new AuthorityRouteError(
         400,
@@ -123,7 +139,7 @@ export async function POST(
         ""
     );
 
-    const listingRaw = listing.listing.raw_json ?? {};
+    const listingRaw = listingRow.raw_json ?? {};
     const resolvedTruePostId =
       typeof listingRaw.true_post_id === "string" && listingRaw.true_post_id.trim()
         ? listingRaw.true_post_id.trim()
@@ -134,7 +150,7 @@ export async function POST(
       "";
     const listingTitle =
       (typeof listingRaw.group_name === "string" && listingRaw.group_name) ||
-      (typeof listing.listing.title === "string" && listing.listing.title) ||
+      (typeof listingRow.title === "string" && listingRow.title) ||
       "";
 
     const mapping = resolvedTruePostId
@@ -173,7 +189,7 @@ export async function POST(
       );
     }
 
-    await markPostPublished(userId, resolvedListingId, slotIndex, {
+    await markPostPublished(userId, listingSourceId, slotIndex, {
       publishedPostId,
       publishedUrl,
       blogToListingStatus: "linked",
@@ -185,18 +201,22 @@ export async function POST(
       },
     });
 
-    const updated = await getListingEvaluation(userId, resolvedListingId);
+    const updated = await resolveListingEvaluation({
+      userId,
+      listingId: resolvedListingId,
+      siteId: resolved.siteId,
+    });
 
     const versionId = await addDirectoryIqVersion(userId, {
-      listingId: resolvedListingId,
+      listingId: listingSourceId,
       authorityPostId: post.id,
       actionType: "blog_publish",
       versionLabel: makeVersionLabel("BLOG"),
       scoreSnapshot: {
-        before: listing.evaluation.totalScore,
-        after: updated.evaluation?.totalScore ?? listing.evaluation.totalScore,
-        pillars_before: listing.evaluation.scores,
-        pillars_after: updated.evaluation?.scores ?? listing.evaluation.scores,
+        before: listingEval.totalScore,
+        after: updated?.listingEval.evaluation?.totalScore ?? listingEval.totalScore,
+        pillars_before: listingEval.scores,
+        pillars_after: updated?.listingEval.evaluation?.scores ?? listingEval.scores,
       },
       contentDelta: {
         blog_title: post.title,
@@ -233,6 +253,20 @@ export async function POST(
       action: "publish",
       error,
     });
+    if (error instanceof ListingSiteRequiredError) {
+      return authorityErrorResponse({
+        reqId,
+        status: 409,
+        message: "Multiple sites contain this listing. Provide site_id.",
+        code: "BAD_REQUEST",
+        details: JSON.stringify(
+          error.candidates.map((candidate) => ({
+            site_id: candidate.siteId,
+            site_label: candidate.siteLabel,
+          }))
+        ),
+      });
+    }
     if (error instanceof AuthorityRouteError) {
       return authorityErrorResponse({
         reqId,

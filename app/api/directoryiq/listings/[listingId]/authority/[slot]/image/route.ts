@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getDirectoryIqOpenAiKey } from "@/app/api/directoryiq/_utils/integrations";
-import { getListingEvaluation, saveAuthorityImage } from "@/app/api/directoryiq/_utils/selectionData";
+import { saveAuthorityImage } from "@/app/api/directoryiq/_utils/selectionData";
 import { normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
 import {
   AuthorityRouteError,
@@ -14,6 +14,7 @@ import {
 } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { buildImagePrompt } from "@/lib/directoryiq/contentGovernance";
 import { generateAuthorityImage, validateOpenAiKeyPresent } from "@/lib/openai/serverClient";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -29,6 +30,7 @@ export async function POST(
     const { listingId, slot } = await Promise.resolve(params);
     resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
+    const siteId = req.nextUrl.searchParams.get("site_id");
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
@@ -45,10 +47,21 @@ export async function POST(
 
     const apiKey = validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId));
 
-    const detail = await getListingEvaluation(userId, resolvedListingId);
-    if (!detail.listing) {
+    const resolved = await resolveListingEvaluation({
+      userId,
+      listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved || !resolved.listingEval.listing) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
+
+    const detail = resolved.listingEval;
+    const listing = detail.listing;
+    if (!listing) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const listingSourceId = listing.source_id;
 
     const prompt = buildImagePrompt({
       focusTopic,
@@ -57,7 +70,7 @@ export async function POST(
 
     const imageUrl = await generateAuthorityImage({ apiKey, prompt });
 
-    await saveAuthorityImage(userId, resolvedListingId, slotIndex, {
+    await saveAuthorityImage(userId, listingSourceId, slotIndex, {
       imagePrompt: prompt,
       imageUrl,
     });
@@ -78,6 +91,20 @@ export async function POST(
       action: "image",
       error,
     });
+    if (error instanceof ListingSiteRequiredError) {
+      return authorityErrorResponse({
+        reqId,
+        status: 409,
+        message: "Multiple sites contain this listing. Provide site_id.",
+        code: "BAD_REQUEST",
+        details: JSON.stringify(
+          error.candidates.map((candidate) => ({
+            site_id: candidate.siteId,
+            site_label: candidate.siteLabel,
+          }))
+        ),
+      });
+    }
     if (error instanceof AuthorityRouteError) {
       return authorityErrorResponse({
         reqId,

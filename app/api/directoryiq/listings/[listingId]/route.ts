@@ -2,8 +2,9 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
-import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
+import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
+import { findListingCandidates, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
 
 function readFirstString(values: Array<unknown>): string | null {
@@ -102,14 +103,6 @@ function extractMainImageUrl(
   };
 }
 
-function readBaseUrl(meta: Record<string, unknown>): string | null {
-  return readFirstString([
-    meta.baseUrl,
-    meta.base_url,
-    process.env.DIRECTORYIQ_BD_BASE_URL,
-  ]);
-}
-
 function normalizeListingId(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
@@ -117,14 +110,21 @@ function normalizeListingId(value: string | null | undefined): string | null {
   return trimmed;
 }
 
-function hasAuthContext(req: NextRequest): boolean {
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function hasHeaderIdentity(req: NextRequest): boolean {
   return Boolean(
     req.headers.get("x-user-id") ||
       req.headers.get("x-user-email") ||
       req.headers.get("x-forwarded-email") ||
-      req.headers.get("cf-access-authenticated-user-email") ||
-      req.nextUrl.searchParams.get("user_id")
+      req.headers.get("cf-access-authenticated-user-email")
   );
+}
+
+function hasQueryIdentity(req: NextRequest): boolean {
+  return Boolean(req.nextUrl.searchParams.get("user_id"));
 }
 
 export async function GET(
@@ -144,63 +144,79 @@ export async function GET(
     return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
   }
 
-  if (process.env.E2E_MOCK_GRAPH === "1") {
-    return NextResponse.json({
-      listing: {
-        listing_id: decodedListingId,
-        listing_name: `Mock Listing ${decodedListingId}`,
-        listing_url: null,
-        mainImageUrl: null,
-      },
-      evaluation: {
-        totalScore: 0,
-      },
-      authority_posts: [],
-      settings: {},
-      integrations: {
-        brilliant_directories: false,
-        openai: false,
-      },
-    });
-  }
-
-  if (!hasAuthContext(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
   try {
+    const user = resolveUserFromHeaders(req.headers);
+    const entitled = isEntitled(user, "directoryiq");
+    const headerIdentity = hasHeaderIdentity(req);
+    const allowQueryIdentity = process.env.NODE_ENV !== "production" && hasQueryIdentity(req);
+
+    if (!entitled && !headerIdentity && !allowQueryIdentity) {
+      console.warn("Listing auth denied", {
+        route: "/api/directoryiq/listings/[listingId]",
+        listingId: decodedListingId,
+        has_session_cookie: Boolean(req.headers.get("cookie")),
+        has_x_user_id: Boolean(req.headers.get("x-user-id")),
+        has_cf_access_email: Boolean(req.headers.get("cf-access-authenticated-user-email")),
+        has_x_forwarded_email: Boolean(req.headers.get("x-forwarded-email")),
+      });
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    if (process.env.E2E_MOCK_GRAPH === "1") {
+      return NextResponse.json({
+        listing: {
+          listing_id: decodedListingId,
+          listing_name: `Mock Listing ${decodedListingId}`,
+          listing_url: null,
+          mainImageUrl: null,
+        },
+      });
+    }
+
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const listingEval = await getListingEvaluation(userId, decodedListingId);
-    const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
-    const openAiIntegration = await getDirectoryIqIntegration(userId, "openai");
-    const bdBaseUrl = readBaseUrl(bdIntegration.meta);
-
-    if (!listingEval.listing || !listingEval.evaluation) {
-      if (process.env.E2E_MOCK_BD === "1" || process.env.E2E_TEST_MODE === "1") {
-        return NextResponse.json({
-          listing: {
-            listing_id: decodedListingId,
-            listing_name: decodedListingId,
-            listing_url: null,
-            mainImageUrl: null,
-          },
-          evaluation: {
-            totalScore: 0,
-          },
-          authority_posts: [],
-          settings: {},
-          integrations: {
-            brilliant_directories: true,
-            openai: true,
-          },
-        });
+    const siteIdParam = req.nextUrl.searchParams.get("site_id");
+    let siteId = siteIdParam?.trim() || null;
+    if (!siteId) {
+      const rows = await findListingCandidates(userId, decodedListingId);
+      const uniqueSites = new Map<string, string | null>();
+      for (const row of rows) {
+        if (row.siteId) uniqueSites.set(row.siteId, row.siteLabel ?? null);
       }
-      return NextResponse.json({ error: "listing_not_found", listingId: decodedListingId }, { status: 404 });
+      if (uniqueSites.size > 1) {
+        return NextResponse.json(
+          {
+            error: "site_required",
+            candidates: Array.from(uniqueSites.entries()).map(([site_id, site_label]) => ({
+              site_id,
+              site_label,
+            })),
+          },
+          { status: 409 }
+        );
+      }
+      siteId = rows[0]?.siteId ?? null;
     }
 
-    const mainImage = extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url, bdBaseUrl);
+    const listingEval = await getListingEvaluation(userId, decodedListingId, siteId ?? undefined);
+    const bdSite = siteId ? await getBdSite(userId, siteId) : null;
+    const bdBaseUrl = bdSite ? bdSite.base_url : null;
+
+    if (!listingEval.listing || !listingEval.evaluation) {
+      return NextResponse.json({ error: "Listing not found", listingId: decodedListingId }, { status: 404 });
+    }
+
+    const raw = (listingEval.listing.raw_json ?? {}) as Record<string, unknown>;
+    const listingIdValue = asString(raw.listing_id) || decodedListingId;
+    const listingName =
+      asString(raw.name) ||
+      asString(raw.group_name) ||
+      asString(listingEval.listing.title) ||
+      listingIdValue;
+    const siteLabel = asString(raw.site_label) || bdSite?.label || null;
+
+    const mainImage = extractMainImageUrl(raw, listingEval.listing.url, bdBaseUrl);
     if (process.env.NODE_ENV !== "production") {
       // Dev-only trace for image resolution diagnostics.
       console.info(
@@ -210,34 +226,17 @@ export async function GET(
 
     return NextResponse.json({
       listing: {
-        listing_id: listingEval.listing.source_id,
-        listing_name: listingEval.listing.title ?? listingEval.listing.source_id ?? decodedListingId,
+        listing_id: listingIdValue,
+        listing_name: listingName,
         listing_url: listingEval.listing.url,
         mainImageUrl: mainImage.mainImageUrl,
+        site_id: siteId,
+        site_label: siteLabel,
       },
       evaluation: listingEval.evaluation,
-      authority_posts: listingEval.authorityPosts.map((post) => ({
-        id: post.id,
-        slot: post.slot_index,
-        type: post.post_type,
-        title: post.title,
-        focus_topic: post.focus_topic,
-        status: post.status,
-        blog_to_listing_status: post.blog_to_listing_link_status,
-        listing_to_blog_status: post.listing_to_blog_link_status,
-        featured_image_url: post.featured_image_url,
-        published_url: post.published_url,
-        updated_at: post.updated_at,
-      })),
-      settings: listingEval.settings,
-      integrations: {
-        brilliant_directories: bdIntegration.status === "connected",
-        openai: openAiIntegration.status === "connected" || Boolean(process.env.OPENAI_API_KEY),
-      },
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown listing detail error";
-    console.error(`[directoryiq-listing] listingId=${decodedListingId} error=${message}`);
-    return NextResponse.json({ error: "listing_load_failed", message }, { status: 500 });
+    console.error("Listing route failure", error);
+    return NextResponse.json({ error: "Internal error loading listing" }, { status: 500 });
   }
 }

@@ -43,6 +43,19 @@ type IngestRun = {
   error_message: string | null;
 };
 
+type BdSite = {
+  id: string;
+  label: string | null;
+  baseUrl: string;
+  enabled: boolean;
+  listingsDataId: number | null;
+  blogPostsDataId: number | null;
+  listingsPath: string;
+  blogPostsPath: string | null;
+  maskedSecret: string;
+  secretPresent: boolean;
+};
+
 export default function DirectoryIqSignalSourcesClient() {
   const searchParams = useSearchParams();
   const selectedConnector = idAlias[(searchParams.get("connector") ?? "").toLowerCase()] ?? null;
@@ -80,15 +93,28 @@ export default function DirectoryIqSignalSourcesClient() {
   const [runs, setRuns] = useState<IngestRun[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [bdConfig, setBdConfig] = useState<{ baseUrl: string; listingsPath: string; blogPostsPath: string; blogPostsDataId: string }>({
+
+  const [bdSites, setBdSites] = useState<BdSite[]>([]);
+  const [bdIsAdmin, setBdIsAdmin] = useState(false);
+  const [bdSiteLimit, setBdSiteLimit] = useState(1);
+  const [bdSiteError, setBdSiteError] = useState<string | null>(null);
+  const [bdSiteNotice, setBdSiteNotice] = useState<string | null>(null);
+  const [bdEditingId, setBdEditingId] = useState<string | null>(null);
+  const [bdSaving, setBdSaving] = useState(false);
+  const [bdTesting, setBdTesting] = useState<string | null>(null);
+  const [bdForm, setBdForm] = useState({
+    label: "",
     baseUrl: "",
-    listingsPath: "/wp-json/brilliantdirectories/v1/listings",
-    blogPostsPath: "/wp-json/wp/v2/posts",
-    blogPostsDataId: "14",
+    apiKey: "",
+    listingsDataId: "",
+    blogPostsDataId: "",
+    listingsPath: "/api/v2/users_portfolio_groups/search",
+    blogPostsPath: "",
+    enabled: true,
   });
 
   const orderedConnectors = useMemo(
-    () => ["brilliant_directories_api", "openai", "serpapi", "ga4"] as DirectoryIqConnector[],
+    () => ["openai", "serpapi", "ga4"] as DirectoryIqConnector[],
     []
   );
 
@@ -108,14 +134,6 @@ export default function DirectoryIqSignalSourcesClient() {
         next[connector.connector_id] = connector;
       }
       setStates(next);
-      const bd = next.brilliant_directories_api;
-      const cfg = bd.config ?? {};
-      setBdConfig((prev) => ({
-        baseUrl: typeof cfg.base_url === "string" ? cfg.base_url : prev.baseUrl,
-        listingsPath: typeof cfg.listings_path === "string" ? cfg.listings_path : prev.listingsPath,
-        blogPostsPath: typeof cfg.blog_posts_path === "string" ? cfg.blog_posts_path : prev.blogPostsPath,
-        blogPostsDataId: typeof cfg.blog_posts_data_id === "string" ? cfg.blog_posts_data_id : prev.blogPostsDataId,
-      }));
 
       setLabels((prev) => {
         const updated = { ...prev };
@@ -126,6 +144,25 @@ export default function DirectoryIqSignalSourcesClient() {
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : "Unknown load error");
+    }
+  }
+
+  async function loadSites() {
+    setBdSiteError(null);
+    try {
+      const response = await fetch("/api/directoryiq/sites", { cache: "no-store" });
+      const json = (await response.json()) as {
+        sites?: BdSite[];
+        is_admin?: boolean;
+        limit?: number;
+        error?: string;
+      };
+      if (!response.ok) throw new Error(json.error ?? "Failed to load BD sites");
+      setBdSites(json.sites ?? []);
+      setBdIsAdmin(Boolean(json.is_admin));
+      setBdSiteLimit(Number(json.limit ?? 1));
+    } catch (e) {
+      setBdSiteError(e instanceof Error ? e.message : "Unknown BD sites error");
     }
   }
 
@@ -143,6 +180,7 @@ export default function DirectoryIqSignalSourcesClient() {
   useEffect(() => {
     void load();
     void loadRuns();
+    void loadSites();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -165,18 +203,14 @@ export default function DirectoryIqSignalSourcesClient() {
           connector_id: connectorId,
           secret,
           label: labels[connectorId] || null,
-          config:
-            connectorId === "brilliant_directories_api"
-              ? {
-                  base_url: bdConfig.baseUrl.trim(),
-                  listings_path: bdConfig.listingsPath.trim(),
-                  blog_posts_path: bdConfig.blogPostsPath.trim(),
-                  blog_posts_data_id: bdConfig.blogPostsDataId.trim() || "14",
-                }
-              : null,
+          config: null,
         }),
       });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        error?: string;
+        preflight?: { ok?: boolean };
+        search?: { ok?: boolean };
+      };
       if (!response.ok) throw new Error(json.error ?? "Failed to save credential");
 
       setValues((prev) => ({ ...prev, [connectorId]: "" }));
@@ -222,6 +256,141 @@ export default function DirectoryIqSignalSourcesClient() {
     }
   }
 
+  async function runBdIngest(input?: { siteId?: string | null; allSites?: boolean }) {
+    setRunningIngest(true);
+    setBdSiteNotice(null);
+    setBdSiteError(null);
+    try {
+      const search = new URLSearchParams();
+      if (input?.allSites) search.set("site", "all");
+      if (input?.siteId) search.set("site_id", input.siteId);
+      const url = `/api/ingest/directoryiq/run${search.toString() ? `?${search.toString()}` : ""}`;
+      const response = await fetch(url, { method: "POST" });
+      const json = (await response.json()) as {
+        status?: string;
+        counts?: { listings: number; blogPosts: number };
+        error?: string;
+        error_message?: string | null;
+      };
+      if (!response.ok) throw new Error(json.error ?? json.error_message ?? "DirectoryIQ ingest failed");
+      if (json.status === "failed") {
+        throw new Error(json.error_message ?? "DirectoryIQ ingest failed");
+      }
+      setBdSiteNotice(
+        `Ingest completed. Listings: ${json.counts?.listings ?? 0}, Blog posts: ${json.counts?.blogPosts ?? 0}.`
+      );
+      await loadRuns();
+    } catch (e) {
+      setBdSiteError(e instanceof Error ? e.message : "Unknown ingest error");
+    } finally {
+      setRunningIngest(false);
+    }
+  }
+
+  function resetBdForm() {
+    setBdForm({
+      label: "",
+      baseUrl: "",
+      apiKey: "",
+      listingsDataId: "",
+      blogPostsDataId: "",
+      listingsPath: "/api/v2/users_portfolio_groups/search",
+      blogPostsPath: "",
+      enabled: true,
+    });
+    setBdEditingId(null);
+  }
+
+  function startEditSite(site: BdSite) {
+    setBdForm({
+      label: site.label ?? "",
+      baseUrl: site.baseUrl ?? "",
+      apiKey: "",
+      listingsDataId: site.listingsDataId ? String(site.listingsDataId) : "",
+      blogPostsDataId: site.blogPostsDataId ? String(site.blogPostsDataId) : "",
+      listingsPath: site.listingsPath ?? "/api/v2/users_portfolio_groups/search",
+      blogPostsPath: site.blogPostsPath ?? "",
+      enabled: site.enabled,
+    });
+    setBdEditingId(site.id);
+    setBdSiteNotice(null);
+    setBdSiteError(null);
+  }
+
+  async function saveSite() {
+    setBdSaving(true);
+    setBdSiteError(null);
+    setBdSiteNotice(null);
+    try {
+      const payload = {
+        label: bdForm.label.trim() || null,
+        base_url: bdForm.baseUrl.trim(),
+        api_key: bdForm.apiKey.trim() || undefined,
+        listings_data_id: bdForm.listingsDataId.trim(),
+        blog_posts_data_id: bdForm.blogPostsDataId.trim() || null,
+        listings_path: bdForm.listingsPath.trim() || "/api/v2/users_portfolio_groups/search",
+        blog_posts_path: bdForm.blogPostsPath.trim() || null,
+        enabled: bdForm.enabled,
+      };
+      const url = bdEditingId ? `/api/directoryiq/sites/${bdEditingId}` : "/api/directoryiq/sites";
+      const method = bdEditingId ? "PUT" : "POST";
+      const response = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(json.error ?? "Failed to save BD site");
+      await loadSites();
+      resetBdForm();
+      setBdSiteNotice("BD site saved.");
+    } catch (e) {
+      setBdSiteError(e instanceof Error ? e.message : "Unknown BD site save error");
+    } finally {
+      setBdSaving(false);
+    }
+  }
+
+  async function deleteSite(siteId: string) {
+    setBdSaving(true);
+    setBdSiteError(null);
+    setBdSiteNotice(null);
+    try {
+      const response = await fetch(`/api/directoryiq/sites/${siteId}`, { method: "DELETE" });
+      const json = (await response.json()) as { error?: string };
+      if (!response.ok) throw new Error(json.error ?? "Failed to delete BD site");
+      await loadSites();
+      if (bdEditingId === siteId) resetBdForm();
+      setBdSiteNotice("BD site deleted.");
+    } catch (e) {
+      setBdSiteError(e instanceof Error ? e.message : "Unknown BD site delete error");
+    } finally {
+      setBdSaving(false);
+    }
+  }
+
+  async function testSite(siteId: string) {
+    setBdTesting(siteId);
+    setBdSiteError(null);
+    setBdSiteNotice(null);
+    try {
+      const response = await fetch(`/api/directoryiq/sites/${siteId}/test`, { method: "POST" });
+      const json = (await response.json()) as {
+        error?: string;
+        preflight?: { ok?: boolean };
+        search?: { ok?: boolean };
+      };
+      if (!response.ok) throw new Error(json.error ?? "Test failed");
+      setBdSiteNotice(
+        `Test: preflight=${json.preflight?.ok ? "ok" : "failed"} search=${json.search?.ok ? "ok" : "failed"}`
+      );
+    } catch (e) {
+      setBdSiteError(e instanceof Error ? e.message : "Unknown test error");
+    } finally {
+      setBdTesting(null);
+    }
+  }
+
   async function remove(connectorId: DirectoryIqConnector) {
     setSaving(connectorId);
     setError(null);
@@ -250,11 +419,146 @@ export default function DirectoryIqSignalSourcesClient() {
           {notice}
         </div>
       ) : null}
+      {bdSiteNotice ? (
+        <div className="rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          {bdSiteNotice}
+        </div>
+      ) : null}
       {error ? (
         <div className="rounded-xl border border-rose-300/35 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
           {error}
         </div>
       ) : null}
+      {bdSiteError ? (
+        <div className="rounded-xl border border-rose-300/35 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+          {bdSiteError}
+        </div>
+      ) : null}
+
+      <article className="rounded-xl border border-cyan-300/25 bg-cyan-400/8 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-white">Brilliant Directories Sites</h3>
+            <p className="text-xs text-slate-300">
+              Add each BD site with its own Post Type IDs. Multi-site listings can be ingested per site or across all sites.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <NeonButton onClick={() => void runBdIngest({ siteId: bdEditingId ?? bdSites[0]?.id ?? null })} disabled={runningIngest || bdSites.length === 0}>
+              {runningIngest ? "Ingesting..." : "Ingest Site"}
+            </NeonButton>
+            {bdIsAdmin ? (
+              <NeonButton variant="secondary" onClick={() => void runBdIngest({ allSites: true })} disabled={runningIngest || bdSites.length === 0}>
+                Ingest All Sites
+              </NeonButton>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-3 md:grid-cols-[1.2fr_1fr_1fr]">
+          <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">
+              {bdEditingId ? "Edit Site" : "Add Site"} {bdIsAdmin ? "" : `(Limit ${bdSiteLimit})`}
+            </div>
+            <input
+              value={bdForm.label}
+              onChange={(event) => setBdForm((prev) => ({ ...prev, label: event.target.value }))}
+              placeholder="Label (e.g. VailVacay)"
+              className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+            />
+            <input
+              value={bdForm.baseUrl}
+              onChange={(event) => setBdForm((prev) => ({ ...prev, baseUrl: event.target.value }))}
+              placeholder="Base URL (https://vailvacay.com)"
+              className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+            />
+            <input
+              value={bdForm.apiKey}
+              onChange={(event) => setBdForm((prev) => ({ ...prev, apiKey: event.target.value }))}
+              placeholder={bdEditingId ? "API key (leave blank to keep)" : "API key"}
+              className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+            />
+            <div className="grid gap-2 md:grid-cols-2">
+              <input
+                value={bdForm.listingsDataId}
+                onChange={(event) => setBdForm((prev) => ({ ...prev, listingsDataId: event.target.value }))}
+                placeholder="Listings Post Type ID"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+              />
+              <input
+                value={bdForm.blogPostsDataId}
+                onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsDataId: event.target.value }))}
+                placeholder="Blog Posts Post Type ID"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+              />
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              <input
+                value={bdForm.listingsPath}
+                onChange={(event) => setBdForm((prev) => ({ ...prev, listingsPath: event.target.value }))}
+                placeholder="Listings path"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+              />
+              <input
+                value={bdForm.blogPostsPath}
+                onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
+                placeholder="Blog posts path (optional)"
+                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+              />
+            </div>
+            <label className="flex items-center gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={bdForm.enabled}
+                onChange={(event) => setBdForm((prev) => ({ ...prev, enabled: event.target.checked }))}
+              />
+              Enabled
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <NeonButton onClick={() => void saveSite()} disabled={bdSaving}>
+                {bdSaving ? "Saving..." : bdEditingId ? "Update Site" : "Add Site"}
+              </NeonButton>
+              {bdEditingId ? (
+                <NeonButton variant="secondary" onClick={() => resetBdForm()} disabled={bdSaving}>
+                  Cancel
+                </NeonButton>
+              ) : null}
+            </div>
+          </div>
+
+          <div className="space-y-2 rounded-xl border border-white/10 bg-white/[0.03] p-3 md:col-span-2">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Configured Sites</div>
+            {bdSites.length === 0 ? (
+              <div className="text-xs text-slate-400">No BD sites connected yet.</div>
+            ) : (
+              bdSites.map((site) => (
+                <div key={site.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <div className="text-sm text-slate-100">{site.label || site.baseUrl}</div>
+                      <div className="text-xs text-slate-400">{site.baseUrl}</div>
+                      <div className="text-xs text-slate-500">
+                        Listings ID: {site.listingsDataId ?? "-"} · Blog ID: {site.blogPostsDataId ?? "-"} · {site.enabled ? "Enabled" : "Disabled"}
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <NeonButton variant="secondary" onClick={() => startEditSite(site)}>
+                        Edit
+                      </NeonButton>
+                      <NeonButton variant="secondary" onClick={() => void testSite(site.id)} disabled={bdTesting === site.id}>
+                        {bdTesting === site.id ? "Testing..." : "Test"}
+                      </NeonButton>
+                      <NeonButton variant="secondary" onClick={() => void deleteSite(site.id)} disabled={bdSaving}>
+                        Delete
+                      </NeonButton>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </article>
 
       {orderedConnectors.map((connectorId) => {
         const state = states[connectorId];
@@ -309,35 +613,6 @@ export default function DirectoryIqSignalSourcesClient() {
                 Delete
               </NeonButton>
             </div>
-
-            {connectorId === "brilliant_directories_api" ? (
-              <div className="mt-3 grid gap-2 md:grid-cols-4">
-                <input
-                  value={bdConfig.baseUrl}
-                  onChange={(event) => setBdConfig((prev) => ({ ...prev, baseUrl: event.target.value }))}
-                  placeholder="Base URL (e.g. https://example.com)"
-                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-                />
-                <input
-                  value={bdConfig.listingsPath}
-                  onChange={(event) => setBdConfig((prev) => ({ ...prev, listingsPath: event.target.value }))}
-                  placeholder="Listings path"
-                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-                />
-                <input
-                  value={bdConfig.blogPostsPath}
-                  onChange={(event) => setBdConfig((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
-                  placeholder="Blog posts path"
-                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-                />
-                <input
-                  value={bdConfig.blogPostsDataId}
-                  onChange={(event) => setBdConfig((prev) => ({ ...prev, blogPostsDataId: event.target.value }))}
-                  placeholder="Blog Posts data_id (default 14)"
-                  className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-                />
-              </div>
-            ) : null}
           </article>
         );
       })}
@@ -345,13 +620,13 @@ export default function DirectoryIqSignalSourcesClient() {
       <article className="rounded-xl border border-cyan-300/25 bg-cyan-400/8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Ingest Listings + Blog Posts</h3>
+            <h3 className="text-sm font-semibold text-white">Ingest History</h3>
             <p className="text-xs text-slate-300">
-              Runs a full DirectoryIQ pull from Brilliant Directories API and blog source paths.
+              Recent ingest runs across DirectoryIQ sites.
             </p>
           </div>
-          <NeonButton onClick={runIngest} disabled={runningIngest || !states.brilliant_directories_api.connected}>
-            {runningIngest ? "Ingesting..." : "Ingest All"}
+          <NeonButton onClick={runIngest} disabled={runningIngest}>
+            {runningIngest ? "Ingesting..." : "Run Ingest"}
           </NeonButton>
         </div>
 

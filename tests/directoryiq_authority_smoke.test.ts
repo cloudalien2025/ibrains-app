@@ -6,7 +6,7 @@ const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const getDirectoryIqOpenAiKey = vi.fn(async () => "smoke-key");
 const getListingEvaluation = vi.fn(async () => ({
   listing: {
-    source_id: "321",
+    source_id: "site-1:321",
     title: "Fixture Listing",
     url: "https://example.com/listings/fixture-listing",
     raw_json: { description: "Sample listing description" },
@@ -14,6 +14,9 @@ const getListingEvaluation = vi.fn(async () => ({
   evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
   settings: { imageStylePreference: "editorial clean" },
 }));
+const findListingCandidates = vi.fn(async () => [
+  { sourceId: "site-1:321", siteId: "site-1", siteLabel: "Site One" },
+]);
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
 const generateAuthorityDraft = vi.fn(async () => "<p>Draft html</p>");
@@ -29,6 +32,7 @@ vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
 }));
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getListingEvaluation,
+  findListingCandidates,
   upsertAuthorityPostDraft,
   saveAuthorityImage,
 }));

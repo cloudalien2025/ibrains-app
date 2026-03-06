@@ -1,5 +1,5 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
-import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
+import { listBdSiteRows } from "@/app/api/directoryiq/_utils/bdSites";
 import crypto from "crypto";
 import {
   computeSiteReadiness,
@@ -15,6 +15,7 @@ import {
 
 type ListingRow = {
   source_id: string;
+  bd_site_id: string | null;
   title: string | null;
   url: string | null;
   updated_at: string;
@@ -78,6 +79,14 @@ export type ListingCard = {
   trustStatus: "Strong" | "Needs Trust";
   lastOptimized: string | null;
   evaluation: ListingSelectionEvaluation;
+  siteId?: string | null;
+  siteLabel?: string | null;
+};
+
+export type ListingCandidate = {
+  sourceId: string;
+  siteId: string | null;
+  siteLabel: string | null;
 };
 
 function toPostType(value: string): PostType {
@@ -93,6 +102,11 @@ function clamp(n: number, min: number, max: number): number {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function readListingId(raw: Record<string, unknown>, fallback: string): string {
+  const fromRaw = asString(raw.listing_id);
+  return fromRaw || fallback;
 }
 
 function asArray(value: unknown): string[] {
@@ -303,10 +317,8 @@ export async function upsertDirectoryIqSettings(
 }
 
 export async function hasDirectoryIqSiteConnected(userId: string): Promise<boolean> {
-  const row = await getDirectoryIqIntegrationSecret(userId, "brilliant_directories");
-  if (!row) return false;
-  const base = row.meta.baseUrl ?? row.meta.base_url;
-  return typeof base === "string" && base.trim().length > 0;
+  const rows = await listBdSiteRows(userId);
+  return rows.some((row) => row.enabled && Boolean(row.secret_ciphertext) && Boolean(row.base_url));
 }
 
 export async function getLastAnalyzedAt(userId: string): Promise<string | null> {
@@ -410,7 +422,10 @@ export async function getAuthorityPostBySlot(
   return rows[0] ?? null;
 }
 
-export async function getAllListingsWithEvaluations(userId: string): Promise<{
+export async function getAllListingsWithEvaluations(
+  userId: string,
+  siteIds?: string[] | null
+): Promise<{
   cards: ListingCard[];
   readiness: number;
   pillarAverages: { structure: number; clarity: number; trust: number; authority: number; actionability: number };
@@ -420,12 +435,13 @@ export async function getAllListingsWithEvaluations(userId: string): Promise<{
 
   const listings = await query<ListingRow>(
     `
-    SELECT source_id, title, url, updated_at, raw_json
+    SELECT source_id, bd_site_id, title, url, updated_at, raw_json
     FROM directoryiq_nodes
     WHERE user_id = $1 AND source_type = 'listing'
+      AND ($2::uuid[] IS NULL OR bd_site_id = ANY($2::uuid[]))
     ORDER BY updated_at DESC
     `,
-    [userId]
+    [userId, siteIds ?? null]
   );
 
   const listingIds = listings.map((row) => row.source_id);
@@ -476,14 +492,17 @@ export async function getAllListingsWithEvaluations(userId: string): Promise<{
 
     evaluations.push(evaluation);
 
+    const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     cards.push({
-      listingId: listing.source_id,
-      name: listing.title ?? listing.source_id,
+      listingId: readListingId(raw, listing.source_id),
+      name: listing.title ?? readListingId(raw, listing.source_id),
       url: listing.url,
       authorityStatus: evaluation.scores.authority >= 70 ? "Strong" : "Needs Support",
       trustStatus: evaluation.scores.trust >= 70 ? "Strong" : "Needs Trust",
       lastOptimized: posts.some((post) => post.status === "published") ? listing.updated_at : null,
       evaluation,
+      siteId: listing.bd_site_id,
+      siteLabel: asString(raw.site_label) || null,
     });
   }
 
@@ -499,7 +518,35 @@ export async function getAllListingsWithEvaluations(userId: string): Promise<{
   };
 }
 
-export async function getListingEvaluation(userId: string, listingId: string): Promise<{
+export async function findListingCandidates(userId: string, listingId: string): Promise<ListingCandidate[]> {
+  const rows = await query<{
+    source_id: string;
+    bd_site_id: string | null;
+    site_label: string | null;
+  }>(
+    `
+    SELECT source_id, bd_site_id, raw_json->>'site_label' as site_label
+    FROM directoryiq_nodes
+    WHERE user_id = $1
+      AND source_type = 'listing'
+      AND (raw_json->>'listing_id' = $2 OR source_id = $2)
+    ORDER BY updated_at DESC
+    `,
+    [userId, listingId]
+  );
+
+  return rows.map((row) => ({
+    sourceId: row.source_id,
+    siteId: row.bd_site_id,
+    siteLabel: row.site_label,
+  }));
+}
+
+export async function getListingEvaluation(
+  userId: string,
+  listingId: string,
+  siteId?: string | null
+): Promise<{
   listing: ListingRow | null;
   authorityPosts: AuthorityPostRow[];
   evaluation: ListingSelectionEvaluation | null;
@@ -507,15 +554,28 @@ export async function getListingEvaluation(userId: string, listingId: string): P
 }> {
   const settings = await getDirectoryIqSettings(userId);
 
-  const listingRows = await query<ListingRow>(
-    `
-    SELECT source_id, title, url, updated_at, raw_json
-    FROM directoryiq_nodes
-    WHERE user_id = $1 AND source_type = 'listing' AND source_id = $2
-    LIMIT 1
-    `,
-    [userId, listingId]
-  );
+  let listingRows: ListingRow[] = [];
+  if (siteId) {
+    const sourceId = `${siteId}:${listingId}`;
+    listingRows = await query<ListingRow>(
+      `
+      SELECT source_id, bd_site_id, title, url, updated_at, raw_json
+      FROM directoryiq_nodes
+      WHERE user_id = $1 AND source_type = 'listing' AND source_id = $2
+      LIMIT 1
+      `,
+      [userId, sourceId]
+    );
+  } else {
+    listingRows = await query<ListingRow>(
+      `
+      SELECT source_id, bd_site_id, title, url, updated_at, raw_json
+      FROM directoryiq_nodes
+      WHERE user_id = $1 AND source_type = 'listing' AND raw_json->>'listing_id' = $2
+      `,
+      [userId, listingId]
+    );
+  }
 
   const listing = listingRows[0] ?? null;
   if (!listing) {

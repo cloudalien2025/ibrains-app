@@ -8,7 +8,7 @@ const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const getDirectoryIqOpenAiKey = vi.fn(async () => "test-key");
 const getListingEvaluation = vi.fn(async () => ({
   listing: {
-    source_id: "321",
+    source_id: "site-1:321",
     title: "Fixture Listing",
     url: "https://example.com/listings/fixture-listing",
     raw_json: { description: "Current description." },
@@ -18,6 +18,9 @@ const getListingEvaluation = vi.fn(async () => ({
     gapsByPillar: { structure: ["Add specific services"], clarity: ["Remove vague claims"] },
   },
 }));
+const findListingCandidates = vi.fn(async () => [
+  { sourceId: "site-1:321", siteId: "site-1", siteLabel: "Site One" },
+]);
 const createListingUpgradeDraft = vi.fn(async () => ({ id: "draft-1" }));
 const getListingUpgradeDraft = vi.fn(async () => ({
   id: "draft-1",
@@ -75,6 +78,7 @@ vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getListingEvaluation,
+  findListingCandidates,
   extractListingDescription: vi.fn(() => "Current description."),
   createListingUpgradeDraft,
   getListingUpgradeDraft,

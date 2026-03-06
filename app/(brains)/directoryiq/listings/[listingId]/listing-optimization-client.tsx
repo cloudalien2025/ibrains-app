@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
@@ -74,6 +75,9 @@ export default function ListingOptimizationClient({
   initialIntegrations,
   initialError = null,
 }: ListingOptimizationClientProps) {
+  const searchParams = useSearchParams();
+  const siteIdParam = searchParams.get("site_id");
+  const siteQuery = siteIdParam ? `?site_id=${encodeURIComponent(siteIdParam)}` : "";
   const hasValidListingId = Boolean(listingId) && listingId !== "undefined" && listingId !== "null";
   const effectiveListingId = hasValidListingId ? listingId : "";
   const [state, setState] = useState<UiState>("idle");
@@ -93,7 +97,7 @@ export default function ListingOptimizationClient({
 
     try {
       const [listingRes, integrationRes] = await Promise.all([
-        fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}`, { cache: "no-store" }),
+        fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}${siteQuery}`, { cache: "no-store" }),
         fetch("/api/directoryiq/integrations", { cache: "no-store" }),
       ]);
 
@@ -134,7 +138,7 @@ export default function ListingOptimizationClient({
   useEffect(() => {
     void loadListingAndIntegrations();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [effectiveListingId]);
+  }, [effectiveListingId, siteQuery]);
 
   async function generateUpgrade() {
     if (!effectiveListingId) return;
@@ -143,7 +147,7 @@ export default function ListingOptimizationClient({
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/generate`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/generate${siteQuery}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "default" }),
@@ -176,7 +180,7 @@ export default function ListingOptimizationClient({
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/preview`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/preview${siteQuery}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ draftId }),
@@ -206,7 +210,7 @@ export default function ListingOptimizationClient({
     setError(null);
     setNotice(null);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/push`, {
+    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/push${siteQuery}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
