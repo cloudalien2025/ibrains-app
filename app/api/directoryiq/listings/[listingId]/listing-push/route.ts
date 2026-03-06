@@ -58,7 +58,11 @@ export async function POST(
     }
 
     const detail = resolved.listingEval;
-    const listingSourceId = detail.listing.source_id;
+    const listing = detail.listing;
+    if (!listing) {
+      return NextResponse.json({ error: "Listing not found." }, { status: 404 });
+    }
+    const listingSourceId = listing.source_id;
 
     const bd = await getDirectoryIqBdConnection(userId, resolved.siteId);
     if (!bd) {
@@ -68,7 +72,7 @@ export async function POST(
       );
     }
 
-    const listingRaw = detail.listing.raw_json ?? {};
+    const listingRaw = listing.raw_json ?? {};
     const resolvedTruePostId =
       typeof listingRaw.true_post_id === "string" && listingRaw.true_post_id.trim()
         ? listingRaw.true_post_id.trim()
@@ -80,7 +84,7 @@ export async function POST(
       "";
     const listingTitle =
       (typeof listingRaw.group_name === "string" && listingRaw.group_name) ||
-      (typeof detail.listing.title === "string" && detail.listing.title) ||
+      (typeof listing.title === "string" && listing.title) ||
       "";
 
     const mapping = resolvedTruePostId

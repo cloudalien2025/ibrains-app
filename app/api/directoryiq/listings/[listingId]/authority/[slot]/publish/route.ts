@@ -61,7 +61,11 @@ export async function POST(
     }
 
     const listing = resolved.listingEval;
-    const listingSourceId = listing.listing.source_id;
+    const listingRow = listing.listing;
+    if (!listingRow) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const listingSourceId = listingRow.source_id;
 
     const tokenResult = verifyApprovalToken(approvalToken, {
       userId,
@@ -131,7 +135,7 @@ export async function POST(
         ""
     );
 
-    const listingRaw = listing.listing.raw_json ?? {};
+    const listingRaw = listingRow.raw_json ?? {};
     const resolvedTruePostId =
       typeof listingRaw.true_post_id === "string" && listingRaw.true_post_id.trim()
         ? listingRaw.true_post_id.trim()
@@ -142,7 +146,7 @@ export async function POST(
       "";
     const listingTitle =
       (typeof listingRaw.group_name === "string" && listingRaw.group_name) ||
-      (typeof listing.listing.title === "string" && listing.listing.title) ||
+      (typeof listingRow.title === "string" && listingRow.title) ||
       "";
 
     const mapping = resolvedTruePostId

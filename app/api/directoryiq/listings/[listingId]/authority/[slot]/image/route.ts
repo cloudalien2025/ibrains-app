@@ -57,7 +57,11 @@ export async function POST(
     }
 
     const detail = resolved.listingEval;
-    const listingSourceId = detail.listing.source_id;
+    const listing = detail.listing;
+    if (!listing) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const listingSourceId = listing.source_id;
 
     const prompt = buildImagePrompt({
       focusTopic,

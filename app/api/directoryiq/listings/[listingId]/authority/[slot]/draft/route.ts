@@ -65,9 +65,13 @@ export async function POST(
     }
 
     const detail = resolved.listingEval;
-    const listingSourceId = detail.listing.source_id;
-    const listingName = detail.listing.title ?? listingSourceId;
-    const listingUrl = detail.listing.url ?? "";
+    const listing = detail.listing;
+    if (!listing) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const listingSourceId = listing.source_id;
+    const listingName = listing.title ?? listingSourceId;
+    const listingUrl = listing.url ?? "";
 
     if (!listingUrl) {
       throw new AuthorityRouteError(
@@ -77,7 +81,7 @@ export async function POST(
       );
     }
 
-    const raw = (detail.listing.raw_json ?? {}) as Record<string, unknown>;
+    const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     const listingDescription =
       (typeof raw.description === "string" && raw.description) ||
       (typeof raw.content === "string" && raw.content) ||
