@@ -6,6 +6,7 @@ import {
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
 import { decryptBdSiteKey, getBdSite, listBdSiteRows } from "@/app/api/directoryiq/_utils/bdSites";
+import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
