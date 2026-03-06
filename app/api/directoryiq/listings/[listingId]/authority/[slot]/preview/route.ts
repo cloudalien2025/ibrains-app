@@ -57,7 +57,11 @@ export async function POST(
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft not found for this slot.");
     }
 
-    const beforeScore = detail.evaluation.totalScore;
+    const evaluation = detail.evaluation;
+    if (!evaluation) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    const beforeScore = evaluation.totalScore;
     const optimisticAfter = Math.min(
       100,
       beforeScore +
@@ -105,7 +109,7 @@ export async function POST(
         score_delta: {
           before: beforeScore,
           after: optimisticAfter,
-          cap_changes: detail.evaluation.caps,
+          cap_changes: evaluation.caps,
         },
       },
       approval_token: issueApprovalToken({
