@@ -96,7 +96,7 @@ export async function POST(
         reqId,
         status: 409,
         message: "Multiple sites contain this listing. Provide site_id.",
-        code: "SITE_REQUIRED",
+        code: "BAD_REQUEST",
         details: JSON.stringify(
           error.candidates.map((candidate) => ({
             site_id: candidate.siteId,
