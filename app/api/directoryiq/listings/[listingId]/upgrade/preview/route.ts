@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 import { previewUpgrade } from "@/src/directoryiq/services/upgradeService";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -16,6 +17,25 @@ export async function POST(
     await ensureUser(userId);
     const { listingId } = await Promise.resolve(params);
     const resolvedListingId = decodeURIComponent(listingId);
+    const siteId = req.nextUrl.searchParams.get("site_id");
+
+    const resolved = await resolveListingEvaluation({
+      userId,
+      listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved) {
+      return NextResponse.json(
+        {
+          error: {
+            message: "Listing not found.",
+            code: "NOT_FOUND",
+            reqId: crypto.randomUUID(),
+          },
+        },
+        { status: 404 }
+      );
+    }
 
     const body = (await req.json().catch(() => ({}))) as { draftId?: string };
     const draftId = (body.draftId ?? "").trim();
@@ -32,7 +52,8 @@ export async function POST(
       );
     }
 
-    const result = await previewUpgrade(userId, resolvedListingId, draftId);
+    const sourceId = resolved.listingEval.listing?.source_id ?? resolvedListingId;
+    const result = await previewUpgrade(userId, sourceId, draftId);
 
     return NextResponse.json({
       draftId: result.draftId,
@@ -43,6 +64,22 @@ export async function POST(
       reqId: result.reqId,
     });
   } catch (error) {
+    if (error instanceof ListingSiteRequiredError) {
+      return NextResponse.json(
+        {
+          error: {
+            message: "Multiple sites contain this listing. Provide site_id.",
+            code: "SITE_REQUIRED",
+            reqId: crypto.randomUUID(),
+            candidates: error.candidates.map((candidate) => ({
+              site_id: candidate.siteId,
+              site_label: candidate.siteLabel,
+            })),
+          },
+        },
+        { status: 409 }
+      );
+    }
     if (error instanceof DirectoryIqServiceError) {
       return NextResponse.json(
         {

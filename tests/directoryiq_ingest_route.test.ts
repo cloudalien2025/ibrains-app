@@ -9,13 +9,26 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   resolveUserId,
 }));
 
+const runDirectoryIqFullIngest = vi.fn();
+
 vi.mock("@/app/api/directoryiq/_utils/ingest", async () => {
   const actual = await vi.importActual<typeof import("@/app/api/directoryiq/_utils/ingest")>(
     "@/app/api/directoryiq/_utils/ingest"
   );
   return {
     ...actual,
-    runDirectoryIqFullIngest: vi.fn(async () => {
+    runDirectoryIqFullIngest,
+  };
+});
+
+describe("directoryiq ingest route", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("returns structured BD errors", async () => {
+    const actual = await import("@/app/api/directoryiq/_utils/ingest");
+    runDirectoryIqFullIngest.mockImplementationOnce(async () => {
       throw new actual.BdIngestError({
         code: "bd_rate_limited",
         baseUrlPresent: true,
@@ -29,12 +42,7 @@ vi.mock("@/app/api/directoryiq/_utils/ingest", async () => {
         retryAttempts: 6,
         nextRetryDelayMs: 8000,
       });
-    }),
-  };
-});
-
-describe("directoryiq ingest route", () => {
-  it("returns structured BD errors", async () => {
+    });
     const { POST } = await import("@/app/api/ingest/directoryiq/run/route");
     const req = new NextRequest("http://localhost/api/ingest/directoryiq/run", {
       headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
@@ -47,5 +55,22 @@ describe("directoryiq ingest route", () => {
     expect(json.status_code).toBe(400);
     expect(json.endpoint).toBe("/api/v2/users_portfolio_groups/search");
     expect(json.retry_attempts).toBe(6);
+  });
+
+  it("passes site selection params through", async () => {
+    runDirectoryIqFullIngest.mockResolvedValueOnce({
+      runId: "run-1",
+      status: "succeeded",
+      counts: { listings: 1, blogPosts: 0 },
+    });
+    const { POST } = await import("@/app/api/ingest/directoryiq/run/route");
+    const req = new NextRequest("http://localhost/api/ingest/directoryiq/run?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    await POST(req);
+    expect(runDirectoryIqFullIngest).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001", {
+      siteId: "site-1",
+      allSites: false,
+    });
   });
 });

@@ -255,7 +255,8 @@ export async function pushUpgrade(
       });
     }
 
-    const bd = await getBdConnection(userId);
+    const siteId = listingId.includes(":") ? listingId.split(":")[0] : null;
+    const bd = await getBdConnection(userId, siteId);
     if (!bd) {
       throw new DirectoryIqServiceError({
         status: 400,

@@ -3,8 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { query } from "@/app/api/ecomviper/_utils/db";
-import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
-import { getAllListingsWithEvaluations, getDirectoryIqSettings } from "@/app/api/directoryiq/_utils/selectionData";
+import { getAllListingsWithEvaluations, getDirectoryIqSettings, hasDirectoryIqSiteConnected } from "@/app/api/directoryiq/_utils/selectionData";
 import { scheduleSnapshotRefresh } from "@/app/api/_utils/snapshots";
 
 type DashboardListing = {
@@ -21,8 +20,8 @@ type LastRunRow = {
 };
 
 async function loadDashboard(userId: string) {
-  const [integration, listingEval, settings, latestRunRows] = await Promise.all([
-    getDirectoryIqIntegration(userId, "brilliant_directories"),
+  const [bdConnected, listingEval, settings, latestRunRows] = await Promise.all([
+    hasDirectoryIqSiteConnected(userId),
     getAllListingsWithEvaluations(userId),
     getDirectoryIqSettings(userId),
     query<LastRunRow>(
@@ -47,7 +46,7 @@ async function loadDashboard(userId: string) {
   }));
 
   return {
-    connected: integration.status === "connected",
+    connected: bdConnected,
     readiness: listingEval.readiness,
     pillars: listingEval.pillarAverages,
     listings,
@@ -86,4 +85,3 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-

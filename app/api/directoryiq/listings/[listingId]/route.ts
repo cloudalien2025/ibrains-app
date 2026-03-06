@@ -3,8 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
-import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
-import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
+import { findListingCandidates, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
 
 function readFirstString(values: Array<unknown>): string | null {
@@ -103,19 +103,15 @@ function extractMainImageUrl(
   };
 }
 
-function readBaseUrl(meta: Record<string, unknown>): string | null {
-  return readFirstString([
-    meta.baseUrl,
-    meta.base_url,
-    process.env.DIRECTORYIQ_BD_BASE_URL,
-  ]);
-}
-
 function normalizeListingId(value: string | null | undefined): string | null {
   if (!value) return null;
   const trimmed = value.trim();
   if (!trimmed || trimmed.toLowerCase() === "undefined" || trimmed.toLowerCase() === "null") return null;
   return trimmed;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function hasHeaderIdentity(req: NextRequest): boolean {
@@ -137,7 +133,7 @@ export async function GET(
 ) {
   const { listingId: listingIdParam } = await Promise.resolve(params);
   const listingIdRaw = normalizeListingId(listingIdParam);
-  if (!listingIdRaw || Number.isNaN(Number(listingIdRaw))) {
+  if (!listingIdRaw) {
     return NextResponse.json({ error: "invalid_listing_id" }, { status: 400 });
   }
 
@@ -180,15 +176,47 @@ export async function GET(
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const listingEval = await getListingEvaluation(userId, decodedListingId);
-    const bdIntegration = await getDirectoryIqIntegration(userId, "brilliant_directories");
-    const bdBaseUrl = readBaseUrl(bdIntegration.meta);
+    const siteIdParam = req.nextUrl.searchParams.get("site_id");
+    let siteId = siteIdParam?.trim() || null;
+    if (!siteId) {
+      const rows = await findListingCandidates(userId, decodedListingId);
+      const uniqueSites = new Map<string, string | null>();
+      for (const row of rows) {
+        if (row.siteId) uniqueSites.set(row.siteId, row.siteLabel ?? null);
+      }
+      if (uniqueSites.size > 1) {
+        return NextResponse.json(
+          {
+            error: "site_required",
+            candidates: Array.from(uniqueSites.entries()).map(([site_id, site_label]) => ({
+              site_id,
+              site_label,
+            })),
+          },
+          { status: 409 }
+        );
+      }
+      siteId = rows[0]?.siteId ?? null;
+    }
+
+    const listingEval = await getListingEvaluation(userId, decodedListingId, siteId ?? undefined);
+    const bdSite = siteId ? await getBdSite(userId, siteId) : null;
+    const bdBaseUrl = bdSite ? bdSite.base_url : null;
 
     if (!listingEval.listing || !listingEval.evaluation) {
       return NextResponse.json({ error: "Listing not found", listingId: decodedListingId }, { status: 404 });
     }
 
-    const mainImage = extractMainImageUrl(listingEval.listing.raw_json, listingEval.listing.url, bdBaseUrl);
+    const raw = (listingEval.listing.raw_json ?? {}) as Record<string, unknown>;
+    const listingIdValue = asString(raw.listing_id) || decodedListingId;
+    const listingName =
+      asString(raw.name) ||
+      asString(raw.group_name) ||
+      asString(listingEval.listing.title) ||
+      listingIdValue;
+    const siteLabel = asString(raw.site_label) || bdSite?.label || null;
+
+    const mainImage = extractMainImageUrl(raw, listingEval.listing.url, bdBaseUrl);
     if (process.env.NODE_ENV !== "production") {
       // Dev-only trace for image resolution diagnostics.
       console.info(
@@ -198,11 +226,14 @@ export async function GET(
 
     return NextResponse.json({
       listing: {
-        listing_id: listingEval.listing.source_id,
-        listing_name: listingEval.listing.title ?? listingEval.listing.source_id ?? decodedListingId,
+        listing_id: listingIdValue,
+        listing_name: listingName,
         listing_url: listingEval.listing.url,
         mainImageUrl: mainImage.mainImageUrl,
+        site_id: siteId,
+        site_label: siteLabel,
       },
+      evaluation: listingEval.evaluation,
     });
   } catch (error) {
     console.error("Listing route failure", error);

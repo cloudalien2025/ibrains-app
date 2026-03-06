@@ -5,7 +5,7 @@ import {
   parseBdRecords,
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
-import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
+import { decryptBdSiteKey, getBdSite, listBdSiteRows } from "@/app/api/directoryiq/_utils/bdSites";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -54,7 +54,10 @@ export async function getGa4ConfigForUser(userId: string): Promise<{ measurement
   };
 }
 
-export async function getDirectoryIqBdConnection(userId: string): Promise<{
+export async function getDirectoryIqBdConnection(
+  userId: string,
+  siteId?: string | null
+): Promise<{
   baseUrl: string;
   apiKey: string;
   listingsSearchPath: string;
@@ -64,32 +67,32 @@ export async function getDirectoryIqBdConnection(userId: string): Promise<{
   listingsDataId: number;
   blogPostsDataId: number | null;
 } | null> {
-  const row = await getDirectoryIqIntegrationSecret(userId, "brilliant_directories");
-  if (!row) return null;
+  const site = siteId ? await getBdSite(userId, siteId) : (await listBdSiteRows(userId)).find((row) => row.enabled);
+  if (!site || !site.secret_ciphertext) return null;
 
-  const baseUrlRaw = asString(row.meta.baseUrl ?? row.meta.base_url);
-  if (!baseUrlRaw) return null;
+  const baseUrl = normalizeBdBaseUrl(site.base_url);
+  if (!baseUrl) return null;
 
-  const baseUrl = normalizeBdBaseUrl(baseUrlRaw);
-  const listingsSearchPath = asString(row.meta.listingsPath ?? row.meta.listings_path) || "/api/v2/users_portfolio_groups/search";
-  const dataPostsSearchPath = asString(row.meta.blogPostsPath ?? row.meta.blog_posts_path) || "/api/v2/data_posts/search";
-  const dataPostsUpdatePath = asString(row.meta.dataPostsUpdatePath ?? row.meta.data_posts_update_path) || "/api/v2/data_posts/update";
-  const dataPostsCreatePath = asString(row.meta.dataPostsCreatePath ?? row.meta.data_posts_create_path) || "/api/v2/data_posts/create";
-  const listingsDataId =
-    asNumber(row.meta.listingsDataId ?? row.meta.listings_data_id) ??
-    asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID) ??
-    75;
-  const blogPostsDataId = asNumber(row.meta.blogPostsDataId ?? row.meta.blog_posts_data_id) ?? asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID);
+  const listingsSearchPath = asString(site.listings_path) || "/api/v2/users_portfolio_groups/search";
+  const dataPostsSearchPath = asString(site.blog_posts_path) || "/api/v2/data_posts/search";
+  const dataPostsUpdatePath = "/api/v2/data_posts/update";
+  const dataPostsCreatePath = "/api/v2/data_posts/create";
+  const listingsDataId = site.listings_data_id ?? asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID) ?? 75;
+  const blogPostsDataId =
+    site.blog_posts_data_id ?? asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ?? 14;
+
+  const apiKey = (await decryptBdSiteKey(site)).trim();
+  if (!apiKey) return null;
 
   return {
     baseUrl,
-    apiKey: row.secret,
+    apiKey,
     listingsSearchPath,
     dataPostsSearchPath,
     dataPostsUpdatePath,
     dataPostsCreatePath,
     listingsDataId,
-    blogPostsDataId: blogPostsDataId ?? 14,
+    blogPostsDataId,
   };
 }
 

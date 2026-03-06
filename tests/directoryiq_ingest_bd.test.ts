@@ -1,23 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
 
 const query = vi.fn(async (sql: string) => {
-  if (sql.includes("FROM integrations_credentials")) {
-    return [
-      {
-        id: "integration-1",
-        user_id: "00000000-0000-4000-8000-000000000001",
-        secret_ciphertext: "cipher",
-        meta_json: {
-          baseUrl: "https://example.com",
-          listingsPath: "/api/v2/users_portfolio_groups/search",
-          listingsDataId: 75,
-          listingsLimit: 2,
-        },
-        saved_at: "2026-01-01",
-      },
-    ];
-  }
   if (sql.includes("INSERT INTO directoryiq_ingest_runs")) {
     return [{ id: "run-1" }];
   }
@@ -25,8 +8,34 @@ const query = vi.fn(async (sql: string) => {
 });
 
 vi.mock("@/app/api/ecomviper/_utils/db", () => ({ query }));
-vi.mock("@/app/api/ecomviper/_utils/crypto", () => ({
-  decryptSecret: vi.fn(() => "test-key"),
+const ensureLegacyBdSite = vi.fn(async () => {});
+const listBdSiteRows = vi.fn(async () => [
+  {
+    id: "site-1",
+    user_id: "00000000-0000-4000-8000-000000000001",
+    label: "Site One",
+    base_url: "https://example.com",
+    enabled: true,
+    listings_data_id: 75,
+    blog_posts_data_id: 14,
+    listings_path: "/api/v2/users_portfolio_groups/search",
+    blog_posts_path: null,
+    ingest_checkpoint_json: {},
+    secret_ciphertext: "cipher",
+    secret_last4: "1234",
+    secret_length: 12,
+    created_at: "2026-01-01",
+    updated_at: "2026-01-01",
+  },
+]);
+const decryptBdSiteKey = vi.fn(async () => "test-key");
+const getBdSite = vi.fn(async () => null);
+
+vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
+  ensureLegacyBdSite,
+  listBdSiteRows,
+  decryptBdSiteKey,
+  getBdSite,
 }));
 
 const fetchMock = vi.fn();
@@ -105,7 +114,7 @@ describe("directoryiq BD ingest", () => {
         expect(body.get("action")).toBe("search");
         expect(body.get("output_type")).toBe("array");
         expect(body.get("data_id")).toBe("75");
-        expect(limit).toBe("2");
+        expect(limit).toBe("100");
         if (page === "1") {
           return Promise.resolve({
             ok: true,
@@ -232,5 +241,83 @@ describe("directoryiq BD ingest", () => {
       code: "bd_rate_limited",
       statusCode: 429,
     });
+  });
+
+  it("ingests all sites when requested", async () => {
+    listBdSiteRows.mockResolvedValueOnce([
+      {
+        id: "site-1",
+        user_id: "00000000-0000-4000-8000-000000000001",
+        label: "Site One",
+        base_url: "https://example.com",
+        enabled: true,
+        listings_data_id: 75,
+        blog_posts_data_id: 14,
+        listings_path: "/api/v2/users_portfolio_groups/search",
+        blog_posts_path: null,
+        ingest_checkpoint_json: {},
+        secret_ciphertext: "cipher",
+        secret_last4: "1234",
+        secret_length: 12,
+        created_at: "2026-01-01",
+        updated_at: "2026-01-01",
+      },
+      {
+        id: "site-2",
+        user_id: "00000000-0000-4000-8000-000000000001",
+        label: "Site Two",
+        base_url: "https://example.org",
+        enabled: true,
+        listings_data_id: 75,
+        blog_posts_data_id: 14,
+        listings_path: "/api/v2/users_portfolio_groups/search",
+        blog_posts_path: null,
+        ingest_checkpoint_json: {},
+        secret_ciphertext: "cipher",
+        secret_last4: "5678",
+        secret_length: 12,
+        created_at: "2026-01-01",
+        updated_at: "2026-01-01",
+      },
+    ]);
+
+    let searchCalls = 0;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_categories/get/")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+          headers: new Headers(),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        searchCalls += 1;
+        if (searchCalls % 2 === 1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({ status: "success", message: [{ group_id: `site-${searchCalls}`, group_name: "Alpha" }] }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001", { allSites: true });
+    expect(result.status).toBe("succeeded");
+    expect(result.counts.listings).toBe(2);
   });
 });

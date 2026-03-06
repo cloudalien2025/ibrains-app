@@ -3,18 +3,32 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { BdIngestError, runDirectoryIqFullIngest } from "@/app/api/directoryiq/_utils/ingest";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { isAdminRequest } from "@/app/api/directoryiq/_utils/bdSites";
 
 export async function POST(req: NextRequest) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const result = await runDirectoryIqFullIngest(userId);
+    const searchParams = req.nextUrl.searchParams;
+    const body = (await req.json().catch(() => ({}))) as {
+      site_id?: string;
+      site?: string;
+    };
+    const siteId = (searchParams.get("site_id") ?? body.site_id ?? "").trim() || null;
+    const siteMode = (searchParams.get("site") ?? body.site ?? "").trim().toLowerCase();
+    const allSites = siteMode === "all";
+    if (allSites && !isAdminRequest(req)) {
+      return NextResponse.json({ error: "admin_only" }, { status: 403 });
+    }
+
+    const result = await runDirectoryIqFullIngest(userId, { siteId, allSites });
 
     return NextResponse.json({
       run_id: result.runId,
       status: result.status,
       counts: result.counts,
+      site_results: result.siteResults ?? null,
       error_message: result.errorMessage ?? null,
     });
   } catch (error) {

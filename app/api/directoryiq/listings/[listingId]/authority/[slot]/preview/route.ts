@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { issueApprovalToken, normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
-import { getAuthorityPostBySlot, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { getAuthorityPostBySlot } from "@/app/api/directoryiq/_utils/selectionData";
 import {
   AuthorityRouteError,
   authorityErrorResponse,
@@ -11,6 +11,7 @@ import {
   logAuthorityError,
   logAuthorityInfo,
 } from "@/app/api/directoryiq/_utils/authorityErrors";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -26,6 +27,7 @@ export async function POST(
     const { listingId, slot } = await Promise.resolve(params);
     resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
+    const siteId = req.nextUrl.searchParams.get("site_id");
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
@@ -34,12 +36,19 @@ export async function POST(
       message: "request received",
     });
 
-    const detail = await getListingEvaluation(userId, resolvedListingId);
-    if (!detail.listing || !detail.evaluation) {
+    const resolved = await resolveListingEvaluation({
+      userId,
+      listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved || !resolved.listingEval.listing || !resolved.listingEval.evaluation) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
 
-    const post = await getAuthorityPostBySlot(userId, resolvedListingId, slotIndex);
+    const detail = resolved.listingEval;
+    const listingSourceId = detail.listing.source_id;
+
+    const post = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
     if (!post || !post.draft_html) {
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft not found for this slot.");
     }
@@ -97,7 +106,7 @@ export async function POST(
       },
       approval_token: issueApprovalToken({
         userId,
-        listingId: resolvedListingId,
+        listingId: listingSourceId,
         slot: slotIndex,
         action: "blog_publish",
       }),
@@ -115,6 +124,20 @@ export async function POST(
       action: "preview",
       error,
     });
+    if (error instanceof ListingSiteRequiredError) {
+      return authorityErrorResponse({
+        reqId,
+        status: 409,
+        message: "Multiple sites contain this listing. Provide site_id.",
+        code: "SITE_REQUIRED",
+        details: JSON.stringify(
+          error.candidates.map((candidate) => ({
+            site_id: candidate.siteId,
+            site_label: candidate.siteLabel,
+          }))
+        ),
+      });
+    }
     if (error instanceof AuthorityRouteError) {
       return authorityErrorResponse({
         reqId,

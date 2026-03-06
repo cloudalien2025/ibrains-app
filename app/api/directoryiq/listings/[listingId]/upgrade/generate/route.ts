@@ -5,6 +5,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 import { generateUpgrade } from "@/src/directoryiq/services/upgradeService";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -17,9 +18,19 @@ export async function POST(
     const { listingId } = await Promise.resolve(params);
     const resolvedListingId = decodeURIComponent(listingId);
 
-    const result = await generateUpgrade({
+    const siteId = req.nextUrl.searchParams.get("site_id");
+    const resolved = await resolveListingEvaluation({
       userId,
       listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved) {
+      return NextResponse.json({ error: { message: "Listing not found.", code: "NOT_FOUND", reqId: crypto.randomUUID() } }, { status: 404 });
+    }
+
+    const result = await generateUpgrade({
+      userId,
+      listingId: resolved.listingEval.listing?.source_id ?? resolvedListingId,
       mode: "default",
     });
 
@@ -29,6 +40,22 @@ export async function POST(
       reqId: result.reqId,
     });
   } catch (error) {
+    if (error instanceof ListingSiteRequiredError) {
+      return NextResponse.json(
+        {
+          error: {
+            message: "Multiple sites contain this listing. Provide site_id.",
+            code: "SITE_REQUIRED",
+            reqId: crypto.randomUUID(),
+            candidates: error.candidates.map((candidate) => ({
+              site_id: candidate.siteId,
+              site_label: candidate.siteLabel,
+            })),
+          },
+        },
+        { status: 409 }
+      );
+    }
     if (error instanceof DirectoryIqServiceError) {
       return NextResponse.json(
         {

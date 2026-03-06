@@ -1,11 +1,16 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
-import { decryptSecret } from "@/app/api/ecomviper/_utils/crypto";
 import {
   normalizeBdBaseUrl,
   parseBdRecords,
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
-import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
+import {
+  BdSiteRow,
+  decryptBdSiteKey,
+  ensureLegacyBdSite,
+  getBdSite,
+  listBdSiteRows,
+} from "@/app/api/directoryiq/_utils/bdSites";
 
 type DirectoryIqNode = {
   sourceId: string;
@@ -15,21 +20,18 @@ type DirectoryIqNode = {
   raw: Record<string, unknown>;
 };
 
-type IntegrationRow = {
-  id: string;
-  user_id: string | null;
-  secret_ciphertext: string | null;
-  meta_json: Record<string, unknown> | null;
-  saved_at: string;
-};
-
-type BdIntegration = {
+type BdSiteConfig = {
   id: string;
   userId: string;
+  label: string | null;
   baseUrl: string;
   apiKey: string;
-  meta: Record<string, unknown>;
-  label: string | null;
+  enabled: boolean;
+  listingsDataId: number | null;
+  blogPostsDataId: number | null;
+  listingsPath: string;
+  blogPostsPath: string | null;
+  ingestCheckpoint: Record<string, unknown>;
 };
 
 type LocalBdResponse = {
@@ -48,6 +50,14 @@ export type DirectoryIqIngestResult = {
     blogPosts: number;
   };
   errorMessage?: string;
+  siteResults?: Array<{
+    siteId: string;
+    siteLabel: string | null;
+    status: "succeeded" | "failed";
+    listings: number;
+    blogPosts: number;
+    errorCode?: string | null;
+  }>;
 };
 
 export type DirectoryIqBlogIngestResult = {
@@ -489,86 +499,62 @@ function isDeterministicEnabled(): boolean {
   return false;
 }
 
-const DEFAULT_DIRECTORYIQ_USER_ID = "00000000-0000-4000-8000-000000000001";
-
-async function loadBdIntegrations(userId: string): Promise<{
-  integrations: BdIntegration[];
+async function loadBdSitesForIngest(params: {
+  userId: string;
+  siteId?: string | null;
+  allSites?: boolean;
+}): Promise<{
+  sites: BdSiteConfig[];
   baseUrlPresent: boolean;
   apiKeyPresent: boolean;
+  listingsPathPresent: boolean;
+  listingsDataIdPresent: boolean;
 }> {
-  const rows = await query<IntegrationRow>(
-    `
-    SELECT id, user_id, secret_ciphertext, meta_json, saved_at
-    FROM integrations_credentials
-    WHERE product = 'directoryiq' AND provider = 'brilliant_directories'
-      AND (user_id = $1 OR user_id = $2 OR user_id IS NULL)
-    ORDER BY saved_at DESC
-    `,
-    [userId, DEFAULT_DIRECTORYIQ_USER_ID]
-  );
-
-  const exact = rows.filter((row) => row.user_id === userId);
-  const fallback = rows.filter((row) => row.user_id === DEFAULT_DIRECTORYIQ_USER_ID || row.user_id === null);
-  const selected = exact.length > 0 ? exact : fallback;
-
-  const baseUrlPresent = selected.some((row) => {
-    const meta = (row.meta_json ?? {}) as Record<string, unknown>;
-    const baseUrlRaw =
-      (typeof meta.baseUrl === "string" && meta.baseUrl.trim()) ||
-      (typeof meta.base_url === "string" && meta.base_url.trim()) ||
-      "";
-    return Boolean(baseUrlRaw);
-  });
-  const apiKeyPresent = selected.some((row) => Boolean(row.secret_ciphertext));
-
-  const integrations: BdIntegration[] = [];
-  for (const row of selected) {
-    if (!row.secret_ciphertext) continue;
-    const meta = (row.meta_json ?? {}) as Record<string, unknown>;
-    const baseUrlRaw =
-      (typeof meta.baseUrl === "string" && meta.baseUrl.trim()) ||
-      (typeof meta.base_url === "string" && meta.base_url.trim()) ||
-      "";
-    if (!baseUrlRaw) continue;
-
-    const contextUserId = row.user_id ?? DEFAULT_DIRECTORYIQ_USER_ID;
-    let apiKey = "";
-    try {
-      apiKey = decryptSecret(row.secret_ciphertext, `${contextUserId}:directoryiq:brilliant_directories`).trim();
-    } catch {
-      continue;
+  await ensureLegacyBdSite(params.userId);
+  let rows: BdSiteRow[] = [];
+  if (params.siteId) {
+    const row = await getBdSite(params.userId, params.siteId);
+    if (row) rows = [row];
+  } else {
+    rows = await listBdSiteRows(params.userId);
+    if (!params.allSites) {
+      rows = rows.filter((row) => row.enabled);
+      if (rows.length > 1) rows = [rows[0]];
     }
+  }
+
+  const baseUrlPresent = rows.some((row) => Boolean(row.base_url));
+  const apiKeyPresent = rows.some((row) => Boolean(row.secret_ciphertext));
+  const listingsPathPresent = rows.some((row) => Boolean(row.listings_path));
+  const listingsDataIdPresent = rows.some((row) => row.listings_data_id != null);
+
+  const sites: BdSiteConfig[] = [];
+  for (const row of rows) {
+    if (!row.secret_ciphertext) continue;
+    const apiKey = (await decryptBdSiteKey(row)).trim();
     if (!apiKey) continue;
-
-    const disabled =
-      meta.disabled === true ||
-      meta.disabled === "true" ||
-      meta.enabled === false ||
-      meta.enabled === "false";
-    if (disabled) continue;
-
-    const label = typeof meta.label === "string" ? meta.label : null;
-    integrations.push({
+    if (!row.enabled && !params.allSites) continue;
+    sites.push({
       id: row.id,
-      userId: contextUserId,
-      baseUrl: normalizeBdBaseUrl(baseUrlRaw),
+      userId: row.user_id,
+      label: row.label,
+      baseUrl: normalizeBdBaseUrl(row.base_url),
       apiKey,
-      meta,
-      label,
+      enabled: row.enabled,
+      listingsDataId: row.listings_data_id,
+      blogPostsDataId: row.blog_posts_data_id,
+      listingsPath: row.listings_path,
+      blogPostsPath: row.blog_posts_path,
+      ingestCheckpoint: row.ingest_checkpoint_json ?? {},
     });
   }
 
-  const uniqueByBaseUrl = new Map<string, BdIntegration>();
-  for (const integration of integrations) {
-    if (!uniqueByBaseUrl.has(integration.baseUrl)) {
-      uniqueByBaseUrl.set(integration.baseUrl, integration);
-    }
-  }
-
   return {
-    integrations: Array.from(uniqueByBaseUrl.values()),
+    sites,
     baseUrlPresent,
     apiKeyPresent,
+    listingsPathPresent,
+    listingsDataIdPresent,
   };
 }
 
@@ -583,26 +569,27 @@ function parseCityState(location: string): { city: string; state: string } {
 }
 
 async function updateListingsCheckpoint(params: {
-  integrationId: string;
+  siteId: string;
   lastPage: number;
 }): Promise<void> {
   await query(
     `
-    UPDATE integrations_credentials
-    SET meta_json = jsonb_set(
-      COALESCE(meta_json, '{}'::jsonb),
-      '{directoryiq_ingest_checkpoint}',
-      jsonb_build_object('listings_last_page', $2, 'updated_at', now()::text),
+    UPDATE directoryiq_bd_sites
+    SET ingest_checkpoint_json = jsonb_set(
+      COALESCE(ingest_checkpoint_json, '{}'::jsonb),
+      '{listings_last_page}',
+      to_jsonb($2::int),
       true
-    )
+    ),
+    updated_at = now()
     WHERE id = $1
     `,
-    [params.integrationId, params.lastPage]
+    [params.siteId, params.lastPage]
   );
 }
 
 function readListingsCheckpoint(meta: Record<string, unknown>): number | null {
-  const checkpoint = meta.directoryiq_ingest_checkpoint;
+  const checkpoint = meta;
   if (checkpoint && typeof checkpoint === "object") {
     const value = asNumber((checkpoint as Record<string, unknown>).listings_last_page);
     return value ?? null;
@@ -740,9 +727,16 @@ function extractBlogHtmlAndText(item: Record<string, unknown>): { rawHtml: strin
   return { rawHtml, cleanText };
 }
 
-function extractNode(item: Record<string, unknown>, fallbackPrefix: string, index: number): DirectoryIqNode {
-  const sourceId =
-    String(item.id ?? item.post_id ?? item.group_id ?? item.data_post_id ?? item.listing_id ?? item.slug ?? `${fallbackPrefix}-${index + 1}`);
+function extractNode(
+  item: Record<string, unknown>,
+  fallbackPrefix: string,
+  index: number,
+  siteId?: string | null
+): DirectoryIqNode {
+  const rawId = String(
+    item.id ?? item.post_id ?? item.group_id ?? item.data_post_id ?? item.listing_id ?? item.slug ?? `${fallbackPrefix}-${index + 1}`
+  );
+  const sourceId = siteId ? `${siteId}:${rawId}` : rawId;
 
   const title =
     String(item.title ?? item.post_title ?? item.group_name ?? item.name ?? item.listing_title ?? item.headline ?? sourceId);
@@ -999,21 +993,32 @@ async function upsertNodes(params: {
   userId: string;
   sourceType: "listing" | "blog_post";
   nodes: DirectoryIqNode[];
+  siteId?: string | null;
 }): Promise<void> {
   for (const node of params.nodes) {
     await query(
       `
-      INSERT INTO directoryiq_nodes (user_id, source_type, source_id, title, url, updated_at_source, raw_json)
-      VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb)
+      INSERT INTO directoryiq_nodes (user_id, source_type, source_id, bd_site_id, title, url, updated_at_source, raw_json)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb)
       ON CONFLICT (user_id, source_type, source_id)
       DO UPDATE SET
+        bd_site_id = EXCLUDED.bd_site_id,
         title = EXCLUDED.title,
         url = EXCLUDED.url,
         updated_at_source = EXCLUDED.updated_at_source,
         raw_json = EXCLUDED.raw_json,
         updated_at = now()
       `,
-      [params.userId, params.sourceType, node.sourceId, node.title, node.url, node.updatedAt, JSON.stringify(node.raw)]
+      [
+        params.userId,
+        params.sourceType,
+        node.sourceId,
+        params.siteId ?? null,
+        node.title,
+        node.url,
+        node.updatedAt,
+        JSON.stringify(node.raw),
+      ]
     );
   }
 }
@@ -1051,19 +1056,27 @@ async function finishRun(params: {
   );
 }
 
-export async function runDirectoryIqFullIngest(userId: string): Promise<DirectoryIqIngestResult> {
+export async function runDirectoryIqFullIngest(
+  userId: string,
+  options?: { siteId?: string | null; allSites?: boolean }
+): Promise<DirectoryIqIngestResult> {
   const startedAt = Date.now();
   const deterministicEnabled = isDeterministicEnabled();
-  const { integrations, baseUrlPresent, apiKeyPresent } = await loadBdIntegrations(userId);
+  const { sites, baseUrlPresent, apiKeyPresent, listingsPathPresent, listingsDataIdPresent } =
+    await loadBdSitesForIngest({
+      userId,
+      siteId: options?.siteId ?? null,
+      allSites: options?.allSites ?? false,
+    });
 
-  if (integrations.length === 0) {
+  if (sites.length === 0) {
     if (process.env.NODE_ENV === "production" && !deterministicEnabled) {
       throw new BdIngestError({
         code: "bd_integration_missing",
         baseUrlPresent,
         apiKeyPresent,
-        listingsPathPresent: false,
-        listingsDataIdPresent: false,
+        listingsPathPresent,
+        listingsDataIdPresent,
         listingsDataIdValue: null,
       });
     }
@@ -1105,20 +1118,27 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
       console.info(`[directoryiq-ingest] fixture_cleanup removed=${fixtureCleanup.length}`);
     }
 
-    const runBaseUrl = integrations[0]?.baseUrl ?? "multi://brilliant_directories";
+    const runBaseUrl = sites[0]?.baseUrl ?? "multi://brilliant_directories";
     runId = await createRun(userId, runBaseUrl);
 
     let listingsTotal = 0;
     let blogPostsTotal = 0;
-    const usingFallback = integrations.some((integration) => integration.userId !== userId);
+    const siteResults: Array<{
+      siteId: string;
+      siteLabel: string | null;
+      status: "succeeded" | "failed";
+      listings: number;
+      blogPosts: number;
+      errorCode?: string | null;
+    }> = [];
+    let hasFailures = false;
     console.info(
-      `[directoryiq-ingest] integrations_selected count=${integrations.length} fallback=${usingFallback}`
+      `[directoryiq-ingest] integrations_selected count=${sites.length} fallback=false`
     );
 
-    for (const integration of integrations) {
-      const baseUrl = integration.baseUrl;
-      const apiKey = integration.apiKey;
-      const meta = integration.meta ?? {};
+    for (const site of sites) {
+      const baseUrl = site.baseUrl;
+      const apiKey = site.apiKey;
 
       const baseHost = (() => {
         try {
@@ -1128,52 +1148,36 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
         }
       })();
 
-      const listingsPathRaw =
-        asString((meta as Record<string, unknown>).listingsPath) ||
-        asString((meta as Record<string, unknown>).listings_path) ||
-        asString(process.env.DIRECTORYIQ_LISTINGS_PATH);
-      const listingsPathPresent = Boolean(listingsPathRaw);
+      const listingsPathRaw = asString(site.listingsPath) || asString(process.env.DIRECTORYIQ_LISTINGS_PATH);
       const listingsPath = normalizeBdPath(listingsPathRaw || "/api/v2/users_portfolio_groups/search");
+      const listingsPathPresentLocal = Boolean(listingsPathRaw);
 
-      const listingsDataId =
-        asNumber((meta as Record<string, unknown>).listingsDataId) ??
-        asNumber((meta as Record<string, unknown>).listings_data_id) ??
-        asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID);
+      const listingsDataId = site.listingsDataId ?? asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID);
 
       const listingsDataIdPresent = typeof listingsDataId === "number";
       const listingsLimit =
-        asNumber((meta as Record<string, unknown>).listingsLimit) ??
-        asNumber((meta as Record<string, unknown>).listings_limit) ??
         asNumber(process.env.DIRECTORYIQ_LISTINGS_LIMIT) ??
         100;
       const pageDelayMs =
-        asNumber((meta as Record<string, unknown>).listingsPageDelayMs) ??
-        asNumber((meta as Record<string, unknown>).listings_page_delay_ms) ??
         asNumber(process.env.DIRECTORYIQ_LISTINGS_PAGE_DELAY_MS) ??
         300;
       const maxRetries =
-        asNumber((meta as Record<string, unknown>).listings429MaxRetries) ??
-        asNumber((meta as Record<string, unknown>).listings_429_max_retries) ??
         asNumber(process.env.DIRECTORYIQ_LISTINGS_429_MAX_RETRIES) ??
         6;
       const retryBaseDelayMs =
-        asNumber((meta as Record<string, unknown>).listings429BaseDelayMs) ??
-        asNumber((meta as Record<string, unknown>).listings_429_base_delay_ms) ??
         asNumber(process.env.DIRECTORYIQ_LISTINGS_429_BASE_DELAY_MS) ??
         500;
       const retryMaxDelayMs =
-        asNumber((meta as Record<string, unknown>).listings429MaxDelayMs) ??
-        asNumber((meta as Record<string, unknown>).listings_429_max_delay_ms) ??
         asNumber(process.env.DIRECTORYIQ_LISTINGS_429_MAX_DELAY_MS) ??
         8000;
       const resetRequested =
         process.env.DIRECTORYIQ_INGEST_RESET === "1" ||
         process.env.DIRECTORYIQ_LISTINGS_RESET === "1";
-      const checkpointPage = resetRequested ? null : readListingsCheckpoint(meta as Record<string, unknown>);
+      const checkpointPage = resetRequested ? null : readListingsCheckpoint(site.ingestCheckpoint ?? {});
       const startPage = checkpointPage ? checkpointPage + 1 : 1;
 
       console.info(
-        `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${integration.label ?? ""} integration_id=${integration.id}`
+        `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${site.label ?? ""} site_id=${site.id}`
       );
 
       if (!listingsDataIdPresent) {
@@ -1181,7 +1185,7 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
           code: "bd_integration_missing",
           baseUrlPresent,
           apiKeyPresent,
-          listingsPathPresent,
+          listingsPathPresent: listingsPathPresentLocal,
           listingsDataIdPresent,
           listingsDataIdValue: null,
           endpoint: listingsPath,
@@ -1209,7 +1213,7 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
           code: "bd_integration_invalid",
           baseUrlPresent,
           apiKeyPresent,
-          listingsPathPresent,
+          listingsPathPresent: listingsPathPresentLocal,
           listingsDataIdPresent,
           listingsDataIdValue: listingsDataId,
           dataTypeObserved,
@@ -1223,7 +1227,7 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
           code: "bd_post_type_invalid",
           baseUrlPresent,
           apiKeyPresent,
-          listingsPathPresent,
+          listingsPathPresent: listingsPathPresentLocal,
           listingsDataIdPresent,
           listingsDataIdValue: listingsDataId,
           dataTypeObserved,
@@ -1260,17 +1264,17 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
                 total,
               })
             );
-            updateListingsCheckpoint({ integrationId: integration.id, lastPage: page }).catch(() => {});
+            updateListingsCheckpoint({ siteId: site.id, lastPage: page }).catch(() => {});
           },
         });
       } catch (error) {
         if (error instanceof BdRequestFailure) {
           const code = error.statusCode === 429 ? "bd_rate_limited" : "bd_request_failed";
-          throw new BdIngestError({
+          const ingestError = new BdIngestError({
             code,
             baseUrlPresent,
             apiKeyPresent,
-            listingsPathPresent,
+            listingsPathPresent: listingsPathPresentLocal,
             listingsDataIdPresent,
             listingsDataIdValue: listingsDataId,
             statusCode: error.statusCode,
@@ -1284,6 +1288,19 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
             retryAttempts: error.retryAttempts,
             nextRetryDelayMs: error.nextRetryDelayMs,
           });
+          if (options?.allSites) {
+            hasFailures = true;
+            siteResults.push({
+              siteId: site.id,
+              siteLabel: site.label,
+              status: "failed",
+              listings: 0,
+              blogPosts: 0,
+              errorCode: ingestError.code,
+            });
+            continue;
+          }
+          throw ingestError;
         }
         throw error;
       }
@@ -1296,9 +1313,12 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
         })
       );
 
-      const normalizedListings = listingsItems.map((item, index) =>
-        normalizeListingRecord(item, `listing-${index + 1}`)
-      );
+      const normalizedListings = listingsItems.map((item, index) => {
+        const normalized = normalizeListingRecord(item, `listing-${index + 1}`);
+        normalized.site_id = site.id;
+        normalized.site_label = site.label ?? "";
+        return normalized;
+      });
       const filteredListings: Record<string, unknown>[] = [];
       for (const listing of normalizedListings) {
         const listingId = asString(listing.listing_id);
@@ -1310,21 +1330,22 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
         filteredListings.push(listing);
       }
 
-      const listings = filteredListings.map((item, index) => extractNode(item, "listing", index));
+      const listings = filteredListings.map((item, index) =>
+        extractNode(item, `listing:${site.id}`, index, site.id)
+      );
       if (listings.length > 0) {
-        await upsertNodes({ userId, sourceType: "listing", nodes: listings });
+        await upsertNodes({ userId, sourceType: "listing", nodes: listings, siteId: site.id });
       }
       listingsTotal += listings.length;
 
+      let siteBlogPosts = 0;
       const blogPostsPath =
-        asString((meta as Record<string, unknown>).blogPostsPath) ||
-        asString((meta as Record<string, unknown>).blog_posts_path) ||
+        asString(site.blogPostsPath) ||
         asString(process.env.DIRECTORYIQ_BLOG_POSTS_PATH) ||
         "/api/v2/data_posts/search";
 
       const blogPostsDataId =
-        asNumber((meta as Record<string, unknown>).blogPostsDataId) ??
-        asNumber((meta as Record<string, unknown>).blog_posts_data_id) ??
+        site.blogPostsDataId ??
         asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ??
         14;
 
@@ -1346,21 +1367,30 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
           maxPages: 20,
         });
 
-        const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
+        const blogs = blogItems.map((item, index) => extractNode(item, `blog:${site.id}`, index, site.id));
         if (blogs.length > 0) {
-          await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs });
+          await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
         }
+        siteBlogPosts = blogs.length;
         blogPostsTotal += blogs.length;
         console.info(`[directoryiq-ingest] blog_site_complete base=${baseHost} count=${blogs.length}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[directoryiq-ingest] blog_ingest_failed base=${baseHost} error=${message}`);
       }
+
+      siteResults.push({
+        siteId: site.id,
+        siteLabel: site.label,
+        status: "succeeded",
+        listings: listings.length,
+        blogPosts: siteBlogPosts,
+      });
     }
 
     await finishRun({
       runId,
-      status: "succeeded",
+      status: hasFailures ? "failed" : "succeeded",
       listings: listingsTotal,
       blogPosts: blogPostsTotal,
     });
@@ -1371,11 +1401,12 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
 
     return {
       runId,
-      status: "succeeded",
+      status: hasFailures ? "failed" : "succeeded",
       counts: {
         listings: listingsTotal,
         blogPosts: blogPostsTotal,
       },
+      siteResults,
     };
   } catch (error) {
     if (error instanceof BdIngestError) {
@@ -1415,36 +1446,24 @@ export async function runDirectoryIqFullIngest(userId: string): Promise<Director
 }
 
 export async function runDirectoryIqBlogIngest(userId: string): Promise<DirectoryIqBlogIngestResult> {
-  const row = await getDirectoryIqIntegrationSecret(userId, "brilliant_directories");
-  if (!row) {
+  const { sites } = await loadBdSitesForIngest({ userId });
+  const site = sites[0];
+  if (!site) {
     throw new Error("Brilliant Directories API credential is not configured.");
   }
 
-  const config = row.meta ?? {};
-  const baseUrlRaw =
-    (typeof config.baseUrl === "string" && config.baseUrl.trim()) ||
-    (typeof config.base_url === "string" && config.base_url.trim()) ||
-    process.env.DIRECTORYIQ_BRILLIANT_DIRECTORIES_BASE_URL ||
-    "";
-
-  if (!baseUrlRaw) {
-    throw new Error("Brilliant Directories API not configured. Go to DirectoryIQ -> Settings -> Integrations.");
-  }
-
-  const baseUrl = normalizeBdBaseUrl(baseUrlRaw);
+  const baseUrl = normalizeBdBaseUrl(site.baseUrl);
   const blogPostsPath =
-    (typeof config.blogPostsPath === "string" && config.blogPostsPath.trim()) ||
-    (typeof config.blog_posts_path === "string" && config.blog_posts_path.trim()) ||
-    process.env.DIRECTORYIQ_BLOG_POSTS_PATH ||
+    asString(site.blogPostsPath) ||
+    asString(process.env.DIRECTORYIQ_BLOG_POSTS_PATH) ||
     "/api/v2/data_posts/search";
 
   const blogPostsDataId =
-    asNumber(config.blogPostsDataId) ??
-    asNumber(config.blog_posts_data_id) ??
+    site.blogPostsDataId ??
     asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ??
     14;
 
-  const apiKey = row.secret;
+  const apiKey = site.apiKey;
 
   let runId = "";
   try {
@@ -1476,8 +1495,8 @@ export async function runDirectoryIqBlogIngest(userId: string): Promise<Director
       `[directoryiq-authority-ingest] Ingestion Debug Summary blogs_fetched=${blogItems.length} blog_detail_fetched=0 public_fetch=0 serpapi_fetch=0 blogs_with_raw_html=${blogsWithRawHtml} avg_clean_text_length=${avgCleanTextLength}`
     );
 
-    const blogs = blogItems.map((item, index) => extractNode(item, "blog", index));
-    await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs });
+    const blogs = blogItems.map((item, index) => extractNode(item, `blog:${site.id}`, index, site.id));
+    await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
 
     await finishRun({
       runId,

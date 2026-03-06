@@ -8,6 +8,7 @@ import { pushUpgrade } from "@/src/directoryiq/services/upgradeService";
 import { resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { resolveGraphIntegrityGate } from "@/src/directoryiq/services/graphIntegrity/featureFlags";
 import { recomputeIntegrityDelta } from "@/src/directoryiq/services/graphIntegrity/integrityRunner";
+import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
   req: NextRequest,
@@ -19,6 +20,25 @@ export async function POST(
     await ensureUser(userId);
     const { listingId } = await Promise.resolve(params);
     const resolvedListingId = decodeURIComponent(listingId);
+    const siteId = req.nextUrl.searchParams.get("site_id");
+
+    const resolved = await resolveListingEvaluation({
+      userId,
+      listingId: resolvedListingId,
+      siteId: siteId?.trim() || null,
+    });
+    if (!resolved) {
+      return NextResponse.json(
+        {
+          error: {
+            message: "Listing not found.",
+            code: "NOT_FOUND",
+            reqId: crypto.randomUUID(),
+          },
+        },
+        { status: 404 }
+      );
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       draftId?: string;
@@ -42,7 +62,7 @@ export async function POST(
 
     const result = await pushUpgrade(
       userId,
-      resolvedListingId,
+      resolved.listingEval.listing?.source_id ?? resolvedListingId,
       draftId,
       body.approved === true,
       String(body.approvalToken ?? "")
@@ -63,6 +83,22 @@ export async function POST(
       },
     });
   } catch (error) {
+    if (error instanceof ListingSiteRequiredError) {
+      return NextResponse.json(
+        {
+          error: {
+            message: "Multiple sites contain this listing. Provide site_id.",
+            code: "SITE_REQUIRED",
+            reqId: crypto.randomUUID(),
+            candidates: error.candidates.map((candidate) => ({
+              site_id: candidate.siteId,
+              site_label: candidate.siteLabel,
+            })),
+          },
+        },
+        { status: 409 }
+      );
+    }
     if (error instanceof DirectoryIqServiceError) {
       return NextResponse.json(
         {
