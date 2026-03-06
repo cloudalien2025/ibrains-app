@@ -68,7 +68,7 @@ describe("directoryiq BD ingest", () => {
     await expect(runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001")).rejects.toMatchObject({
       code: "bd_integration_invalid",
       statusCode: 400,
-      endpoint: "/api/v2/data_categories/get/75",
+      endpoint: "/api/v2/users_portfolio_groups/search",
     });
   });
 
@@ -92,14 +92,6 @@ describe("directoryiq BD ingest", () => {
 
   it("uses vacayrank request shape and paginates", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
-      if (url.includes("/api/v2/data_categories/get/")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-          headers: new Headers(),
-        });
-      }
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
         const body =
           init?.body instanceof URLSearchParams
@@ -108,13 +100,26 @@ describe("directoryiq BD ingest", () => {
         const headers = init?.headers as Record<string, string>;
         const page = body.get("page");
         const limit = body.get("limit");
+        const action = body.get("action");
+        const dataId = body.get("data_id");
         expect(init?.method).toBe("POST");
         expect(headers["X-Api-Key"]).toBe("test-key");
         expect(headers.Authorization).toBeUndefined();
-        expect(body.get("action")).toBe("search");
         expect(body.get("output_type")).toBe("array");
-        expect(body.get("data_id")).toBe("75");
         expect(limit).toBe("100");
+
+        if (!action && !dataId) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
+
+        expect(action).toBe("search");
+        expect(dataId).toBe("75");
+
         if (page === "1") {
           return Promise.resolve({
             ok: true,
@@ -144,20 +149,36 @@ describe("directoryiq BD ingest", () => {
   });
 
   it("does not fall back to fixture when search fails", async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes("/api/v2/data_categories/get/")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-          headers: new Headers(),
-        });
-      }
+    let searchCalls = 0;
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const action = body.get("action");
+        const dataId = body.get("data_id");
+        if (!action && !dataId) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
+        searchCalls += 1;
+        if (searchCalls === 1) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "error", message: "boom" }),
+            headers: new Headers(),
+          });
+        }
         return Promise.resolve({
           ok: true,
           status: 200,
-          text: async () => JSON.stringify({ status: "error", message: "boom" }),
+          text: async () => JSON.stringify({ status: "success", message: [] }),
           headers: new Headers(),
         });
       }
@@ -175,16 +196,22 @@ describe("directoryiq BD ingest", () => {
 
   it("retries on 429 and succeeds", async () => {
     let callCount = 0;
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes("/api/v2/data_categories/get/")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-          headers: new Headers(),
-        });
-      }
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const action = body.get("action");
+        const dataId = body.get("data_id");
+        if (!action && !dataId) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
         callCount += 1;
         if (callCount === 1) {
           return Promise.resolve({
@@ -213,16 +240,22 @@ describe("directoryiq BD ingest", () => {
   });
 
   it("fails with bd_rate_limited after retries", async () => {
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes("/api/v2/data_categories/get/")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-          headers: new Headers(),
-        });
-      }
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const action = body.get("action");
+        const dataId = body.get("data_id");
+        if (!action && !dataId) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
         return Promise.resolve({
           ok: false,
           status: 429,
@@ -282,16 +315,22 @@ describe("directoryiq BD ingest", () => {
     ]);
 
     let searchCalls = 0;
-    fetchMock.mockImplementation((url: string) => {
-      if (url.includes("/api/v2/data_categories/get/")) {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
-          headers: new Headers(),
-        });
-      }
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const action = body.get("action");
+        const dataId = body.get("data_id");
+        if (!action && !dataId) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
         searchCalls += 1;
         if (searchCalls % 2 === 1) {
           return Promise.resolve({

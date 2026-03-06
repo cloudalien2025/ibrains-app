@@ -1192,8 +1192,17 @@ export async function runDirectoryIqFullIngest(
         });
       }
 
-      const preflightPath = `/api/v2/data_categories/get/${listingsDataId}`;
-      const preflightResponse = await bdRequestGet({ baseUrl, apiKey, path: preflightPath });
+      const preflightPath = listingsPath;
+      const preflightResponse = await bdRequestFormXApiKey({
+        baseUrl,
+        apiKey,
+        path: preflightPath,
+        form: {
+          page: 1,
+          limit: 100,
+          output_type: "array",
+        },
+      });
       const preflightPayload = normalizeBdJson(preflightResponse.json);
       const dataTypeObserved = extractDataType(preflightPayload);
       const preflightOk =
@@ -1222,7 +1231,7 @@ export async function runDirectoryIqFullIngest(
         });
       }
 
-      if (dataTypeObserved !== "4") {
+      if (dataTypeObserved && dataTypeObserved !== "4") {
         throw new BdIngestError({
           code: "bd_post_type_invalid",
           baseUrlPresent,
