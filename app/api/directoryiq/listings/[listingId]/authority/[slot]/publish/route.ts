@@ -62,7 +62,11 @@ export async function POST(
 
     const listing = resolved.listingEval;
     const listingRow = listing.listing;
+    const listingEval = listing.evaluation;
     if (!listingRow) {
+      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+    }
+    if (!listingEval) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
     const listingSourceId = listingRow.source_id;
@@ -209,10 +213,10 @@ export async function POST(
       actionType: "blog_publish",
       versionLabel: makeVersionLabel("BLOG"),
       scoreSnapshot: {
-        before: listing.evaluation.totalScore,
-        after: updated?.listingEval.evaluation?.totalScore ?? listing.evaluation.totalScore,
-        pillars_before: listing.evaluation.scores,
-        pillars_after: updated?.listingEval.evaluation?.scores ?? listing.evaluation.scores,
+        before: listingEval.totalScore,
+        after: updated?.listingEval.evaluation?.totalScore ?? listingEval.totalScore,
+        pillars_before: listingEval.scores,
+        pillars_after: updated?.listingEval.evaluation?.scores ?? listingEval.scores,
       },
       contentDelta: {
         blog_title: post.title,
