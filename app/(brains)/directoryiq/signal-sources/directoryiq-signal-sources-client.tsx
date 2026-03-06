@@ -206,7 +206,11 @@ export default function DirectoryIqSignalSourcesClient() {
           config: null,
         }),
       });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        error?: string;
+        preflight?: { ok?: boolean };
+        search?: { ok?: boolean };
+      };
       if (!response.ok) throw new Error(json.error ?? "Failed to save credential");
 
       setValues((prev) => ({ ...prev, [connectorId]: "" }));
