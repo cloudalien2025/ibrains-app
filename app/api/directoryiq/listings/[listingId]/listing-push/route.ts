@@ -59,7 +59,11 @@ export async function POST(
 
     const detail = resolved.listingEval;
     const listing = detail.listing;
+    const evaluation = detail.evaluation;
     if (!listing) {
+      return NextResponse.json({ error: "Listing not found." }, { status: 404 });
+    }
+    if (!evaluation) {
       return NextResponse.json({ error: "Listing not found." }, { status: 404 });
     }
     const listingSourceId = listing.source_id;
@@ -129,9 +133,9 @@ export async function POST(
       actionType: "listing_push",
       versionLabel: makeVersionLabel("LISTING"),
       scoreSnapshot: {
-        before: detail.evaluation.totalScore,
-        after: Math.min(100, detail.evaluation.totalScore + 6),
-        pillars_before: detail.evaluation.scores,
+        before: evaluation.totalScore,
+        after: Math.min(100, evaluation.totalScore + 6),
+        pillars_before: evaluation.scores,
       },
       contentDelta: {
         description_after: proposedDescription,
