@@ -54,7 +54,7 @@ jobs:
           package.json \
           package-lock.json \
           public \
-          next.config.js \
+          next.config.ts \
           app
 
       - name: Upload artifact
