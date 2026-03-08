@@ -26,4 +26,13 @@ describe("entitlements header resolution", () => {
     const user = resolveUserFromHeaders(headers);
     expect(isEntitled(user, "directoryiq")).toBe(true);
   });
+
+  it("treats cf-access authenticated email as admin for entitlements", () => {
+    const headers = makeHeaders({
+      "cf-access-authenticated-user-email": "owner@example.com",
+    });
+    const user = resolveUserFromHeaders(headers);
+    expect(isAdminUser(user)).toBe(true);
+    expect(isEntitled(user, "directoryiq")).toBe(true);
+  });
 });

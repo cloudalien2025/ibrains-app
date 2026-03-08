@@ -94,9 +94,15 @@ function hasAdminFlag(user: EntitlementUser): boolean {
   return fields.some((field) => user[field] === true);
 }
 
+function hasTrustedAccessEmail(user: EntitlementUser): boolean {
+  if (!user || typeof user !== "object") return false;
+  return user["cf_access_authenticated"] === true;
+}
+
 export function isAdminUser(user?: EntitlementUser): boolean {
   if (!user) return false;
   if (hasAdminFlag(user)) return true;
+  if (hasTrustedAccessEmail(user)) return true;
 
   const roles = readRoles(user).map((role) => role.toLowerCase());
   return roles.some((role) => ADMIN_ROLES.has(role));
@@ -144,11 +150,12 @@ export function resolveUserFromHeaders(headers: HeaderReader): Record<string, un
   const headerRole = headers.get("x-user-role");
   const resolvedRoles = headerRole ? [...headerRoles, headerRole] : headerRoles;
   const isAdminHeader = headers.get("x-user-is-admin");
-  const headerEmail =
-    headers.get("x-user-email") ?? headers.get("x-forwarded-email") ?? headers.get("cf-access-authenticated-user-email");
+  const cfAccessEmail = headers.get("cf-access-authenticated-user-email");
+  const headerEmail = headers.get("x-user-email") ?? headers.get("x-forwarded-email") ?? cfAccessEmail;
 
   return {
     ...(parsedUser ?? {}),
+    ...(cfAccessEmail ? { cf_access_authenticated: true } : {}),
     ...(headerEntitlements.length ? { entitlements: headerEntitlements } : {}),
     ...(headerFeatures.length ? { features: headerFeatures } : {}),
     ...(headerBrains.length ? { brains: headerBrains } : {}),
