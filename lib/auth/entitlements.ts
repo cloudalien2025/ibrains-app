@@ -142,16 +142,17 @@ export function resolveUserFromHeaders(headers: HeaderReader): Record<string, un
   const headerBrains = extractStringArray(headers.get("x-user-brains"));
   const headerRoles = extractStringArray(headers.get("x-user-roles"));
   const headerRole = headers.get("x-user-role");
+  const resolvedRoles = headerRole ? [...headerRoles, headerRole] : headerRoles;
   const isAdminHeader = headers.get("x-user-is-admin");
   const headerEmail =
     headers.get("x-user-email") ?? headers.get("x-forwarded-email") ?? headers.get("cf-access-authenticated-user-email");
 
   return {
     ...(parsedUser ?? {}),
-    entitlements: headerEntitlements,
-    features: headerFeatures,
-    brains: headerBrains,
-    roles: headerRole ? [...headerRoles, headerRole] : headerRoles,
+    ...(headerEntitlements.length ? { entitlements: headerEntitlements } : {}),
+    ...(headerFeatures.length ? { features: headerFeatures } : {}),
+    ...(headerBrains.length ? { brains: headerBrains } : {}),
+    ...(resolvedRoles.length ? { roles: resolvedRoles } : {}),
     is_admin:
       isAdminHeader === "1" ||
       isAdminHeader?.toLowerCase() === "true" ||
