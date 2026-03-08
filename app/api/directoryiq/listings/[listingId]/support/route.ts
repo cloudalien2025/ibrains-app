@@ -48,7 +48,7 @@ export async function GET(
         {
           ok: true,
           support: {
-            listing: { id: decodedListingId, title: decodedListingId, canonicalUrl: null, siteId: resolved.siteId ?? null },
+            listing: { id: decodedListingId, title: decodedListingId, canonicalUrl: null, siteId: resolved?.siteId ?? null },
             summary: {
               inboundLinkedSupportCount: 0,
               mentionWithoutLinkCount: 0,
