@@ -22,6 +22,8 @@ describe("GET /api/meta/release", () => {
     process.env.RELEASE_GIT_SHA = "abc1234567890defabc1234567890defabc12345";
     process.env.RELEASE_BUILD_TIMESTAMP = "2026-03-08T00:00:00Z";
     process.env.RELEASE_BUILD_ID = "run-777";
+    process.env.BUILD_ID = "build-ci";
+    process.env.GITHUB_RUN_ID = "run-ci";
 
     const response = await GET();
     const payload = await response.json();
@@ -43,10 +45,17 @@ describe("GET /api/meta/release", () => {
   });
 
   it("falls back to release file when env is missing", async () => {
+    delete process.env.APP_NAME;
+    delete process.env.SERVICE_NAME;
     delete process.env.APP_ENV;
+    delete process.env.VERCEL_ENV;
     delete process.env.RELEASE_GIT_SHA;
+    delete process.env.GIT_SHA;
+    delete process.env.VERCEL_GIT_COMMIT_SHA;
     delete process.env.RELEASE_BUILD_TIMESTAMP;
+    delete process.env.BUILD_TIMESTAMP;
     delete process.env.RELEASE_BUILD_ID;
+    delete process.env.BUILD_ID;
     process.env.GITHUB_RUN_ID = "run-999";
 
     await mkdir(path.dirname(releaseFilePath), { recursive: true });
