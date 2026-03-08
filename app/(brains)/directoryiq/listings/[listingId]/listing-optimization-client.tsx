@@ -29,6 +29,61 @@ type IntegrationStatusResponse = {
   bdConfigured: boolean;
 };
 
+type ListingSupportSummary = {
+  inboundLinkedSupportCount: number;
+  mentionWithoutLinkCount: number;
+  outboundSupportLinkCount: number;
+  connectedSupportPageCount: number;
+  lastGraphRunAt: string | null;
+};
+
+type ListingSupportInbound = {
+  sourceId: string;
+  sourceType: "blog_post" | "page" | "support";
+  title: string | null;
+  url?: string | null;
+  anchors: string[];
+  relationshipType: "links_to_listing";
+};
+
+type ListingSupportMention = {
+  sourceId: string;
+  sourceType: "blog_post" | "page" | "support";
+  title: string | null;
+  url?: string | null;
+  mentionSnippet?: string | null;
+  relationshipType: "mentions_without_link";
+};
+
+type ListingSupportOutbound = {
+  targetId?: string | null;
+  targetType?: "blog_post" | "page" | "support" | null;
+  title?: string | null;
+  url?: string | null;
+  relationshipType: "listing_links_out";
+};
+
+type ListingSupportConnectedPage = {
+  id?: string | null;
+  type: "hub" | "category" | "location" | "support" | "page";
+  title: string | null;
+  url?: string | null;
+};
+
+type ListingSupportModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: ListingSupportSummary;
+  inboundLinkedSupport: ListingSupportInbound[];
+  mentionsWithoutLinks: ListingSupportMention[];
+  outboundSupportLinks: ListingSupportOutbound[];
+  connectedSupportPages: ListingSupportConnectedPage[];
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -90,6 +145,8 @@ export default function ListingOptimizationClient({
   const [approved, setApproved] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<UiError | null>(initialError);
+  const [support, setSupport] = useState<ListingSupportModel | null>(null);
+  const [supportError, setSupportError] = useState<string | null>(null);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -127,6 +184,29 @@ export default function ListingOptimizationClient({
           openaiConfigured: integrationJson.openaiConfigured,
           bdConfigured: integrationJson.bdConfigured,
         });
+      }
+
+      try {
+        const supportRes = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/support${siteQuery}`, {
+          cache: "no-store",
+        });
+        const supportJson = (await supportRes.json().catch(() => ({}))) as {
+          support?: ListingSupportModel;
+          error?: { message?: string } | string;
+        };
+        if (!supportRes.ok) {
+          const supportMessage =
+            typeof supportJson.error === "string" ? supportJson.error : supportJson.error?.message ?? "Failed to load support model.";
+          setSupportError(supportMessage);
+          setSupport(null);
+        } else {
+          setSupport(supportJson.support ?? null);
+          setSupportError(null);
+        }
+      } catch (supportErr) {
+        const message = supportErr instanceof Error ? supportErr.message : "Failed to load support model.";
+        setSupportError(message);
+        setSupport(null);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load listing details.";
@@ -240,6 +320,13 @@ export default function ListingOptimizationClient({
     (fallbackId ? `Listing #${fallbackId}` : "Listing");
   const displayUrl = listing?.listing.listing_url ?? null;
   const displayScore = listing?.evaluation.totalScore ?? 0;
+  const supportSummary = support?.summary ?? {
+    inboundLinkedSupportCount: 0,
+    mentionWithoutLinkCount: 0,
+    outboundSupportLinkCount: 0,
+    connectedSupportPageCount: 0,
+    lastGraphRunAt: null,
+  };
 
   return (
     <>
@@ -284,6 +371,113 @@ export default function ListingOptimizationClient({
           {notice}
         </div>
       ) : null}
+
+      <HudCard title="Current Support" subtitle="Current authority relationships reinforcing this listing.">
+        {supportError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {supportError}
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting Links In</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.inboundLinkedSupportCount}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions Without Links</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.mentionWithoutLinkCount}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Outbound Support Links</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.outboundSupportLinkCount}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected Support Pages</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.connectedSupportPageCount}</div>
+          </div>
+        </div>
+
+        <div className="mt-3 text-xs text-slate-400">
+          {supportSummary.lastGraphRunAt
+            ? `Last graph refresh: ${new Date(supportSummary.lastGraphRunAt).toLocaleString()}`
+            : "Last graph refresh: Not available yet."}
+        </div>
+
+        <div className="mt-5 space-y-5">
+          <section>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Inbound Linked Support</div>
+            <div className="mt-2 space-y-2">
+              {support?.inboundLinkedSupport?.length ? (
+                support.inboundLinkedSupport.map((item) => (
+                  <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-sm text-slate-100">{item.title ?? item.sourceId}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {item.sourceType} · Anchors: {item.anchors.length ? item.anchors.join(", ") : "None captured"}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400">No inbound linked support detected yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions Without Links</div>
+            <div className="mt-2 space-y-2">
+              {support?.mentionsWithoutLinks?.length ? (
+                support.mentionsWithoutLinks.map((item) => (
+                  <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-sm text-slate-100">{item.title ?? item.sourceId}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      {item.sourceType} · {item.mentionSnippet ?? "No snippet captured"}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400">No unlinked mentions detected yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Listing Outbound Support Links</div>
+            <div className="mt-2 space-y-2">
+              {support?.outboundSupportLinks?.length ? (
+                support.outboundSupportLinks.map((item, index) => (
+                  <div key={`${item.targetId ?? "target"}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-sm text-slate-100">{item.title ?? item.url ?? "Support link"}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.targetType ?? "support"} · Listing links out</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400">No outbound support links detected yet.</div>
+              )}
+            </div>
+          </section>
+
+          <section>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected Support Pages</div>
+            <div className="mt-2 space-y-2">
+              {support?.connectedSupportPages?.length ? (
+                support.connectedSupportPages.map((item, index) => (
+                  <div key={`${item.id ?? "support"}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-sm text-slate-100">{item.title ?? item.id ?? "Support page"}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.type}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-sm text-slate-400">No connected support pages detected yet.</div>
+              )}
+            </div>
+          </section>
+        </div>
+      </HudCard>
 
       <HudCard
         title="Auto-Generate Listing Upgrade"
