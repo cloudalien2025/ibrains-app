@@ -11,6 +11,15 @@ function makeHeaders(entries: Record<string, string | undefined>) {
 }
 
 describe("entitlements header resolution", () => {
+  it("bypasses entitlements when disabled", () => {
+    const prior = process.env.ENTITLEMENTS_ENABLED;
+    process.env.ENTITLEMENTS_ENABLED = "false";
+    const user = resolveUserFromHeaders(makeHeaders({}));
+    expect(isEntitled(user, "directoryiq")).toBe(true);
+    expect(isEntitled(user, "studio")).toBe(true);
+    process.env.ENTITLEMENTS_ENABLED = prior;
+  });
+
   it("preserves roles from x-user when role headers are missing", () => {
     const headers = makeHeaders({
       "x-user": JSON.stringify({ roles: ["owner"], email: "owner@example.com" }),

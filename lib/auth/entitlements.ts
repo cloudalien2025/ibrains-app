@@ -14,6 +14,13 @@ const ADMIN_ROLES = new Set([
   "platform-owner",
 ]);
 
+function entitlementsEnabled(): boolean {
+  const raw = process.env.ENTITLEMENTS_ENABLED;
+  if (raw === undefined || raw === "") return true;
+  const normalized = raw.trim().toLowerCase();
+  return !["0", "false", "no", "off"].includes(normalized);
+}
+
 function splitCsv(value: string): string[] {
   return value
     .split(",")
@@ -114,6 +121,10 @@ export function resolveDefaultEntitledBrains(): Set<BrainId> {
 }
 
 export function resolveEntitledBrains(user?: EntitlementUser): Set<BrainId> {
+  if (!entitlementsEnabled()) {
+    return new Set(brainIds);
+  }
+
   if (isAdminUser(user)) {
     return new Set(brainIds);
   }
