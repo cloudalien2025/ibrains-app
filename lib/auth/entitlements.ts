@@ -3,7 +3,16 @@ import { type BrainId, brainIds, isBrainId } from "@/lib/brains/brainCatalog";
 export type EntitlementUser = Record<string, unknown> | null | undefined;
 
 const DEFAULT_ENTITLED_BRAINS = "ecomviper";
-const ADMIN_ROLES = new Set(["admin", "owner", "superadmin", "super_admin", "workspace_admin"]);
+const ADMIN_ROLES = new Set([
+  "admin",
+  "owner",
+  "superadmin",
+  "super_admin",
+  "super-admin",
+  "workspace_admin",
+  "platform_owner",
+  "platform-owner",
+]);
 
 function splitCsv(value: string): string[] {
   return value
