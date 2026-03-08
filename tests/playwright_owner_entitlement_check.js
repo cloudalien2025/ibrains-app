@@ -23,7 +23,7 @@ async function run() {
   });
   const context = await browser.newContext({
     extraHTTPHeaders: {
-      "x-user": JSON.stringify({ roles: ["owner"], email: "owner@example.com" }),
+      "cf-access-authenticated-user-email": "owner@example.com",
       "x-user-name": "Owner",
     },
   });
