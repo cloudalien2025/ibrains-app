@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
 
@@ -23,6 +24,26 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Write release metadata
+        run: |
+          set -e
+          mkdir -p app/_meta
+          BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+          GIT_SHA="${GITHUB_SHA}"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          APP_ENV="production"
+          cat > app/_meta/release.json <<EOF
+          {
+            "service": "ibrains",
+            "environment": "${APP_ENV}",
+            "git_sha": "${GIT_SHA}",
+            "git_sha_short": "${SHORT_SHA}",
+            "build_timestamp": "${BUILD_TIMESTAMP}",
+            "build_id": "${GITHUB_RUN_ID}",
+            "source": "github_actions"
+          }
+          EOF
+
       - name: Build Next.js app
         run: npm run build
 
@@ -33,7 +54,7 @@ jobs:
           package.json \
           package-lock.json \
           public \
-          next.config.js \
+          next.config.ts \
           app
 
       - name: Upload artifact
@@ -54,30 +75,77 @@ jobs:
         with:
           name: ibrains-build
 
+      - name: Preflight deploy secrets
+        shell: bash
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+          DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          SERVICE_NAME: ${{ secrets.SERVICE_NAME }}
+        run: |
+          set -euo pipefail
+
+          require_present() {
+            local name="$1"
+            local value="$2"
+            if [ -z "$value" ]; then
+              echo "Missing required deploy secret: $name"
+              exit 1
+            fi
+            echo "$name present"
+          }
+
+          require_present "DEPLOY_HOST" "$DEPLOY_HOST"
+          require_present "DEPLOY_USER" "$DEPLOY_USER"
+          require_present "DEPLOY_PORT" "$DEPLOY_PORT"
+          require_present "DEPLOY_PATH" "$DEPLOY_PATH"
+          require_present "DEPLOY_SSH_KEY" "$DEPLOY_SSH_KEY"
+          require_present "SERVICE_NAME" "$SERVICE_NAME"
+
+          if ! printf '%s' "$DEPLOY_SSH_KEY" | head -n 1 | grep -q '^-----BEGIN OPENSSH PRIVATE KEY-----$'; then
+            echo "DEPLOY_SSH_KEY does not appear to be an OpenSSH private key"
+            exit 1
+          fi
+
+          key_file="$(mktemp)"
+          printf '%s' "$DEPLOY_SSH_KEY" > "$key_file"
+          chmod 600 "$key_file"
+          if ! ssh-keygen -lf "$key_file" >/dev/null 2>&1; then
+            echo "DEPLOY_SSH_KEY does not parse as a valid private key"
+            rm -f "$key_file"
+            exit 1
+          fi
+          rm -f "$key_file"
+          echo "DEPLOY_SSH_KEY parses as valid key"
+
       - name: Copy artifact to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           source: build.tar.gz
-          target: /root/
+          target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy on droplet
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          port: ${{ secrets.DEPLOY_PORT }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
           script: |
             set -e
-            cd /root/ibrains-app
+            cd ${{ secrets.DEPLOY_PATH }}
 
-            tar -xzf /root/build.tar.gz
+            tar -xzf ${{ secrets.DEPLOY_PATH }}/build.tar.gz
 
             npm ci --omit=dev
 
-            systemctl restart ibrains-next.service
+            systemctl restart ${{ secrets.SERVICE_NAME }}
 
             sleep 2
 
