@@ -49,6 +49,28 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - Do not use `RouteContext` or any custom `ctx` type aliases.
 - Run `scripts/check_route_signatures.sh` before building.
 
+## Release Metadata
+
+Use `GET /api/meta/release` (or legacy alias `GET /api/_meta/release`) to see the exact build running in an environment.
+
+Fields:
+- `service`: app/service name (`ibrains`).
+- `environment`: `production`, `staging`, `development`, or `local`.
+- `git_sha`: full commit SHA (if available).
+- `git_sha_short`: short SHA (first 7 chars).
+- `build_timestamp`: UTC build time (`YYYY-MM-DDTHH:mm:ssZ`) or `null` if unknown.
+- `build_id`: CI/build identifier (if available).
+- `local`: boolean indicating local/dev fallback.
+- `sources`: where each value came from (`env`, `file`, `default`, or `missing`).
+
+Compare deployments:
+- Fetch `/api/meta/release` locally and in production, then compare `git_sha` and `build_timestamp`.
+- A stale deployment is obvious if production `git_sha` does not match the expected commit or the `build_timestamp` is older than the intended release.
+
+Local/dev fallback:
+- If CI metadata is absent, the endpoint returns `environment: "local"` and `git_sha`/`build_timestamp` may be `null`.
+- For deterministic local testing, set `RELEASE_GIT_SHA`, `RELEASE_BUILD_TIMESTAMP`, and `APP_ENV` or provide `app/_meta/release.json`.
+
 ## Droplet Rebuild + Restart
 
 ```bash
