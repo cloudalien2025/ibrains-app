@@ -113,17 +113,32 @@ export function resolveDefaultEntitledBrains(): Set<BrainId> {
   return toEntitlementSet(splitCsv(csv));
 }
 
-export function resolveEntitledBrains(user?: EntitlementUser): Set<BrainId> {
+export type EntitlementResolveOptions = {
+  allowDefault?: boolean;
+};
+
+export function resolveEntitledBrains(user?: EntitlementUser, options: EntitlementResolveOptions = {}): Set<BrainId> {
   if (isAdminUser(user)) {
     return new Set(brainIds);
   }
 
   const fromClaims = toEntitlementSet(readClaims(user));
-  return fromClaims.size > 0 ? fromClaims : resolveDefaultEntitledBrains();
+  if (fromClaims.size > 0) return fromClaims;
+
+  const allowDefault = options.allowDefault ?? true;
+  return allowDefault ? resolveDefaultEntitledBrains() : new Set<BrainId>();
 }
 
 export function isEntitled(user: EntitlementUser, brainId: BrainId): boolean {
   return resolveEntitledBrains(user).has(brainId);
+}
+
+export function isEntitledWithFallback(
+  user: EntitlementUser,
+  brainId: BrainId,
+  options: EntitlementResolveOptions
+): boolean {
+  return resolveEntitledBrains(user, options).has(brainId);
 }
 
 function tryParseJsonObject(input: string | null): Record<string, unknown> | null {
