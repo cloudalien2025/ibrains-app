@@ -42,6 +42,15 @@ type LocalBdResponse = {
   headers?: Record<string, string>;
 };
 
+const bdDebugKeysLogged = new Set<string>();
+
+function shouldLogBdDebug(key: string): boolean {
+  if (process.env.DIRECTORYIQ_BD_DEBUG !== "1") return false;
+  if (bdDebugKeysLogged.has(key)) return false;
+  bdDebugKeysLogged.add(key);
+  return true;
+}
+
 export type DirectoryIqIngestResult = {
   runId: string;
   status: "succeeded" | "failed";
@@ -98,6 +107,23 @@ async function bdRequestFormXApiKey(input: {
       Accept: "application/json",
     };
     const formWithKey = input.form ? { ...input.form } : {};
+
+    if (shouldLogBdDebug(`request:${method}:${input.path}`)) {
+      const safeForm: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(formWithKey)) {
+        if (value == null) continue;
+        safeForm[key] = value;
+      }
+      console.info(
+        JSON.stringify({
+          phase: "bd_request",
+          method,
+          path: input.path,
+          content_type: headers["Content-Type"],
+          form: safeForm,
+        })
+      );
+    }
 
     const body = new URLSearchParams();
     for (const [key, value] of Object.entries(formWithKey ?? {})) {
@@ -345,6 +371,25 @@ async function fetchBdListingsPaged(params: {
     }
 
     const payload = normalizeBdJson(response.json);
+    if (page === 1 && shouldLogBdDebug(`response:listings:${params.path}`)) {
+      const totals = parseBdTotals(payload);
+      const records = extractRecordsFromUnknownShape(payload);
+      console.info(
+        JSON.stringify({
+          phase: "bd_response",
+          target: "listings",
+          path: params.path,
+          http_status: response.status,
+          wrapper_status: typeof payload.status === "string" ? payload.status : null,
+          total: totals.total,
+          total_pages: totals.totalPages,
+          page: totals.page,
+          limit: totals.limit,
+          message_is_array: Array.isArray(payload.message),
+          records_count: records.length,
+        })
+      );
+    }
     if (typeof payload.status === "string" && payload.status.toLowerCase() === "error") {
       const msg = typeof payload.message === "string" ? payload.message : "Unknown BD error";
       const snippet = msg.length > 120 ? `${msg.slice(0, 120)}...` : msg;
@@ -768,6 +813,11 @@ async function fetchBdPagedSearch(params: {
   method?: "GET" | "POST";
   includeOutputType?: boolean;
   extraForm?: Record<string, unknown>;
+  pageDelayMs?: number;
+  maxRetries?: number;
+  retryBaseDelayMs?: number;
+  retryMaxDelayMs?: number;
+  sleepFn?: (ms: number) => Promise<void>;
   onPage?: (input: { page: number; perPage: number; received: number; total: number }) => void;
 }): Promise<Record<string, unknown>[]> {
   const all: Record<string, unknown>[] = [];
@@ -775,18 +825,22 @@ async function fetchBdPagedSearch(params: {
   const perPage = params.limit ?? 100;
   const method = params.method ?? "POST";
   const includeOutputType = params.includeOutputType ?? true;
+  const pageDelayMs = params.pageDelayMs ?? 300;
+  const maxRetries = params.maxRetries ?? 6;
+  const retryBaseDelayMs = params.retryBaseDelayMs ?? 500;
+  const retryMaxDelayMs = params.retryMaxDelayMs ?? 8000;
+  const sleepFn = params.sleepFn ?? sleep;
 
   let discoveredTotalPages: number | null = null;
 
   for (let page = 1; page <= maxPages; page += 1) {
     const form: Record<string, unknown> = {
-      per_page: perPage,
+      limit: perPage,
       page,
     };
     if (method !== "GET") {
       if (includeOutputType) {
         form.output_type = "array";
-        form.limit = perPage;
       }
     }
     if (typeof params.dataId === "number") {
@@ -806,22 +860,38 @@ async function fetchBdPagedSearch(params: {
       }
     }
 
-    const response = await bdRequestWithRetryLocal(() =>
-      bdRequestFormWithFallback({
-        baseUrl: params.baseUrl,
-        apiKey: params.apiKey,
-        method,
-        path: params.path,
-        form,
-      })
-    );
+    let response: LocalBdResponse | null = null;
+    let attempt = 0;
+    let lastDelayMs: number | null = null;
+    for (; attempt <= maxRetries; attempt += 1) {
+      response = await bdRequestWithRetryLocal(() =>
+        bdRequestFormWithFallback({
+          baseUrl: params.baseUrl,
+          apiKey: params.apiKey,
+          method,
+          path: params.path,
+          form,
+        })
+      );
+      if (response.status !== 429) break;
+      const retryAfterMs = parseRetryAfterMs(response.headers);
+      const jitter = Math.floor(Math.random() * 250);
+      const backoff = Math.min(retryMaxDelayMs, retryBaseDelayMs * 2 ** attempt) + jitter;
+      const delay = Math.min(retryMaxDelayMs, retryAfterMs ?? backoff);
+      lastDelayMs = delay;
+      await sleepFn(delay);
+    }
+    if (!response) {
+      throw new Error(`DirectoryIQ source returned empty response for ${params.path}`);
+    }
 
     if (response.status === 404 && page === 1) return [];
     if (!response.ok) {
       const detail = typeof response.text === "string" && response.text.trim().length > 0 ? response.text.trim() : "";
       const snippet = detail.length > 200 ? `${detail.slice(0, 200)}...` : detail;
       const suffix = snippet ? `: ${snippet}` : "";
-      throw new Error(`DirectoryIQ source returned HTTP ${response.status} for ${params.path}${suffix}`);
+      const retrySuffix = lastDelayMs ? ` retry_delay_ms=${lastDelayMs}` : "";
+      throw new Error(`DirectoryIQ source returned HTTP ${response.status} for ${params.path}${suffix}${retrySuffix}`);
     }
 
     const json = normalizeBdJson(response.json);
@@ -832,6 +902,23 @@ async function fetchBdPagedSearch(params: {
       if (fallbackRecords.length > 0) {
         records = fallbackRecords;
       }
+    }
+    if (page === 1 && shouldLogBdDebug(`response:paged:${params.path}`)) {
+      console.info(
+        JSON.stringify({
+          phase: "bd_response",
+          target: "paged_search",
+          path: params.path,
+          http_status: response.status,
+          wrapper_status: typeof json.status === "string" ? json.status : null,
+          total: totals.total,
+          total_pages: totals.totalPages,
+          page: totals.page,
+          limit: totals.limit,
+          message_is_array: Array.isArray(json.message),
+          records_count: records.length,
+        })
+      );
     }
 
     if (totals.status && totals.status !== "success" && page === 1) {
@@ -852,6 +939,9 @@ async function fetchBdPagedSearch(params: {
 
     if (discoveredTotalPages && page >= discoveredTotalPages) break;
     if (records.length < perPage && !discoveredTotalPages) break;
+    if (pageDelayMs > 0) {
+      await sleepFn(pageDelayMs);
+    }
   }
 
   return all;
@@ -957,6 +1047,7 @@ async function discoverDataPostsSearchPath(params: {
           method: "POST",
           path,
           form: {
+            action: "search",
             data_id: params.dataId,
             page: 1,
             limit: 1,
@@ -1158,6 +1249,10 @@ export async function runDirectoryIqFullIngest(
       const listingsLimit =
         asNumber(process.env.DIRECTORYIQ_LISTINGS_LIMIT) ??
         100;
+      const dataPostsPath =
+        asString(site.blogPostsPath) ||
+        asString(process.env.DIRECTORYIQ_BLOG_POSTS_PATH) ||
+        "/api/v2/data_posts/search";
       const pageDelayMs =
         asNumber(process.env.DIRECTORYIQ_LISTINGS_PAGE_DELAY_MS) ??
         300;
@@ -1316,6 +1411,35 @@ export async function runDirectoryIqFullIngest(
         throw error;
       }
 
+      if (listingsItems.length === 0) {
+        try {
+          const dataPostsSearchPath = await discoverDataPostsSearchPath({
+            baseUrl,
+            apiKey,
+            preferredPath: dataPostsPath,
+            dataId: listingsDataId,
+          });
+          const fallbackItems = await fetchBdPagedSearch({
+            baseUrl,
+            apiKey,
+            path: dataPostsSearchPath,
+            dataId: listingsDataId,
+            includeAction: true,
+            limit: listingsLimit,
+            maxPages: 200,
+          });
+          if (fallbackItems.length > 0) {
+            listingsItems = fallbackItems;
+            console.info(
+              `[directoryiq-ingest] listings_fallback_used path=${dataPostsSearchPath} count=${fallbackItems.length}`
+            );
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error);
+          console.warn(`[directoryiq-ingest] listings_fallback_failed base=${baseHost} error=${message}`);
+        }
+      }
+
       console.info(
         JSON.stringify({
           phase: "bd_done",
@@ -1350,10 +1474,7 @@ export async function runDirectoryIqFullIngest(
       listingsTotal += listings.length;
 
       let siteBlogPosts = 0;
-      const blogPostsPath =
-        asString(site.blogPostsPath) ||
-        asString(process.env.DIRECTORYIQ_BLOG_POSTS_PATH) ||
-        "/api/v2/data_posts/search";
+      const blogPostsPath = dataPostsPath;
 
       const blogPostsDataId =
         site.blogPostsDataId ??
@@ -1373,7 +1494,7 @@ export async function runDirectoryIqFullIngest(
           apiKey,
           path: dataPostsSearchPath,
           dataId: blogPostsDataId,
-          includeAction: false,
+          includeAction: true,
           limit: 100,
           maxPages: 20,
         });
@@ -1492,7 +1613,7 @@ export async function runDirectoryIqBlogIngest(userId: string): Promise<Director
       apiKey,
       path: dataPostsSearchPath,
       dataId: blogPostsDataId,
-      includeAction: false,
+      includeAction: true,
       limit: 100,
       maxPages: 20,
     });
