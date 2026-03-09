@@ -6,7 +6,7 @@ import NeonButton from "@/components/ecomviper/NeonButton";
 import type { DirectoryIqConnector, DirectoryIqCredentialStatus } from "@/lib/directoryiq/signalSourceCredentials";
 
 const API_BASE = (process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ?? "").trim().replace(/\/+$/, "");
-const apiUrl = (path: string) => `${API_BASE}${path}`;
+const API_BASE_READY = /^https?:\/\//i.test(API_BASE);
 
 const connectorMeta: Record<DirectoryIqConnector, { name: string; placeholder: string }> = {
   brilliant_directories_api: {
@@ -62,6 +62,33 @@ type BdSite = {
 export default function DirectoryIqSignalSourcesClient() {
   const searchParams = useSearchParams();
   const selectedConnector = idAlias[(searchParams.get("connector") ?? "").toLowerCase()] ?? null;
+  const [configError, setConfigError] = useState<string | null>(null);
+
+  const apiBaseOrigin = useMemo(() => {
+    if (!API_BASE_READY) return null;
+    try {
+      return new URL(API_BASE).origin;
+    } catch {
+      return null;
+    }
+  }, []);
+
+  const apiConfigError = useMemo(() => {
+    if (!apiBaseOrigin) {
+      return "Signal Sources requires a valid external DirectoryIQ API origin. Configure NEXT_PUBLIC_DIRECTORYIQ_API_BASE to a non-Vercel origin.";
+    }
+    if (typeof window !== "undefined" && apiBaseOrigin === window.location.origin) {
+      return "Signal Sources requires a valid external DirectoryIQ API origin. Configure NEXT_PUBLIC_DIRECTORYIQ_API_BASE to a non-Vercel origin.";
+    }
+    return null;
+  }, [apiBaseOrigin]);
+
+  const apiUrl = (path: string) => {
+    if (apiConfigError) {
+      throw new Error(apiConfigError);
+    }
+    return new URL(path, API_BASE).toString();
+  };
 
   const [states, setStates] = useState<Record<DirectoryIqConnector, DirectoryIqCredentialStatus>>({
     brilliant_directories_api: {
@@ -146,7 +173,8 @@ export default function DirectoryIqSignalSourcesClient() {
         return updated;
       });
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Unknown load error");
+      const message = e instanceof Error ? e.message : "Unknown load error";
+      setError(message);
     }
   }
 
@@ -165,7 +193,8 @@ export default function DirectoryIqSignalSourcesClient() {
       setBdIsAdmin(Boolean(json.is_admin));
       setBdSiteLimit(Number(json.limit ?? 1));
     } catch (e) {
-      setBdSiteError(e instanceof Error ? e.message : "Unknown BD sites error");
+      const message = e instanceof Error ? e.message : "Unknown BD sites error";
+      setBdSiteError(message);
     }
   }
 
@@ -181,11 +210,16 @@ export default function DirectoryIqSignalSourcesClient() {
   }
 
   useEffect(() => {
+    if (apiConfigError) {
+      setConfigError(apiConfigError);
+      return;
+    }
+    setConfigError(null);
     void load();
     void loadRuns();
     void loadSites();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apiConfigError]);
 
   async function save(connectorId: DirectoryIqConnector) {
     const secret = values[connectorId].trim();
@@ -420,6 +454,11 @@ export default function DirectoryIqSignalSourcesClient() {
       {notice ? (
         <div className="rounded-xl border border-emerald-300/35 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
           {notice}
+        </div>
+      ) : null}
+      {configError ? (
+        <div className="rounded-xl border border-amber-300/40 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          {configError}
         </div>
       ) : null}
       {bdSiteNotice ? (
