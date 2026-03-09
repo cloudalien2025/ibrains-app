@@ -23,7 +23,7 @@ async function run() {
   });
   const context = await browser.newContext({
     extraHTTPHeaders: {
-      "cf-access-authenticated-user-email": "owner@example.com",
+      "x-forwarded-email": "owner@example.com",
       "x-user-name": "Owner",
     },
   });

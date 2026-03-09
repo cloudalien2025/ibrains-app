@@ -35,4 +35,13 @@ describe("entitlements header resolution", () => {
     expect(isAdminUser(user)).toBe(true);
     expect(isEntitled(user, "directoryiq")).toBe(true);
   });
+
+  it("treats forwarded email as admin for entitlements", () => {
+    const headers = makeHeaders({
+      "x-forwarded-email": "owner@example.com",
+    });
+    const user = resolveUserFromHeaders(headers);
+    expect(isAdminUser(user)).toBe(true);
+    expect(isEntitled(user, "directoryiq")).toBe(true);
+  });
 });

@@ -152,10 +152,11 @@ export function resolveUserFromHeaders(headers: HeaderReader): Record<string, un
   const isAdminHeader = headers.get("x-user-is-admin");
   const cfAccessEmail = headers.get("cf-access-authenticated-user-email");
   const headerEmail = headers.get("x-user-email") ?? headers.get("x-forwarded-email") ?? cfAccessEmail;
+  const trustedAccessEmail = cfAccessEmail ?? headers.get("x-user-email") ?? headers.get("x-forwarded-email");
 
   return {
     ...(parsedUser ?? {}),
-    ...(cfAccessEmail ? { cf_access_authenticated: true } : {}),
+    ...(trustedAccessEmail ? { cf_access_authenticated: true } : {}),
     ...(headerEntitlements.length ? { entitlements: headerEntitlements } : {}),
     ...(headerFeatures.length ? { features: headerFeatures } : {}),
     ...(headerBrains.length ? { brains: headerBrains } : {}),
