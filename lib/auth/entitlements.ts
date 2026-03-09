@@ -2,7 +2,7 @@ import { type BrainId, brainIds, isBrainId } from "@/lib/brains/brainCatalog";
 
 export type EntitlementUser = Record<string, unknown> | null | undefined;
 
-const DEFAULT_ENTITLED_BRAINS = "ecomviper";
+const DEFAULT_ENTITLED_BRAINS = "ecomviper,directoryiq";
 const ADMIN_ROLES = new Set([
   "admin",
   "owner",
