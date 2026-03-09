@@ -2,7 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
+import { isEntitledWithFallback, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { findListingCandidates, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
@@ -146,7 +146,7 @@ export async function GET(
 
   try {
     const user = resolveUserFromHeaders(req.headers);
-    const entitled = isEntitled(user, "directoryiq");
+    const entitled = isEntitledWithFallback(user, "directoryiq", { allowDefault: false });
     const headerIdentity = hasHeaderIdentity(req);
     const allowQueryIdentity = process.env.NODE_ENV !== "production" && hasQueryIdentity(req);
 

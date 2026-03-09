@@ -44,4 +44,10 @@ describe("entitlements header resolution", () => {
     expect(isAdminUser(user)).toBe(true);
     expect(isEntitled(user, "directoryiq")).toBe(true);
   });
+
+  it("defaults DirectoryIQ as entitled when no header claims are present", () => {
+    const headers = makeHeaders({});
+    const user = resolveUserFromHeaders(headers);
+    expect(isEntitled(user, "directoryiq")).toBe(true);
+  });
 });
