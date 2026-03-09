@@ -1198,8 +1198,10 @@ export async function runDirectoryIqFullIngest(
         apiKey,
         path: preflightPath,
         form: {
+          action: "search",
+          data_id: listingsDataId,
           page: 1,
-          limit: 100,
+          limit: 1,
           output_type: "array",
         },
       });
