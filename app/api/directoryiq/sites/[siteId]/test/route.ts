@@ -216,7 +216,7 @@ export async function POST(
     let blog = {
       configured_data_id: site.blog_posts_data_id ?? null,
       status: "unresolved",
-      reason: site.blog_posts_data_id ? "blog_posts_data_id_unverified" : "blog_posts_data_id_missing",
+      reason: (site.blog_posts_data_id ? "blog_posts_data_id_unverified" : "blog_posts_data_id_missing") as string | null,
       search: { ok: false, status: null as number | null, count: 0, path: blogSearchPaths[0] ?? null, tried_paths: blogSearchPaths },
     };
 
