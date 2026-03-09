@@ -33,9 +33,12 @@ export async function bdRequestForm(input: {
   try {
     const method = (input.method ?? "POST").toUpperCase();
     const headers: Record<string, string> = {
-      "Content-Type": "application/x-www-form-urlencoded",
-      Authorization: `Bearer ${input.apiKey}`,
+      "X-Api-Key": input.apiKey,
+      Accept: "application/json",
     };
+    if (method !== "GET") {
+      headers["Content-Type"] = "application/x-www-form-urlencoded";
+    }
     const body = new URLSearchParams();
     for (const [key, value] of Object.entries(input.form ?? {})) {
       if (value == null) continue;

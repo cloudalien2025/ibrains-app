@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const query = vi.fn(async (sql: string) => {
+const query = vi.fn(async (sql: string, _params?: unknown[]) => {
   if (sql.includes("INSERT INTO directoryiq_ingest_runs")) {
     return [{ id: "run-1" }];
   }
@@ -103,13 +103,9 @@ describe("directoryiq BD ingest", () => {
         const action = body.get("action");
         const dataId = body.get("data_id");
         expect(init?.method).toBe("POST");
-        const normalizedHeaders = new Headers(headers as HeadersInit);
-        expect(normalizedHeaders.get("X-Api-Key")).toBe("test-key");
-        expect(normalizedHeaders.get("Authorization")).toBeNull();
+        expect(headers["X-Api-Key"]).toBe("test-key");
+        expect(headers.Authorization).toBeUndefined();
         expect(body.get("output_type")).toBe("array");
-        expect(action).toBe("search");
-        expect(dataId).toBe("75");
-
         if (limit === "1") {
           return Promise.resolve({
             ok: true,
@@ -118,6 +114,9 @@ describe("directoryiq BD ingest", () => {
             headers: new Headers(),
           });
         }
+
+        expect(action).toBe("search");
+        expect(dataId).toBe("75");
         expect(limit).toBe("100");
 
         if (page === "1") {
@@ -427,7 +426,7 @@ describe("directoryiq BD ingest", () => {
     expect(searchBodies[0].get("data_id")).toBe("14");
   });
 
-  it("refuses group_id and generic id as true_post_id substitutes", async () => {
+  it("refuses generic id as a true_post_id substitute", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/data_posts/search")) {
         const body =
@@ -441,10 +440,7 @@ describe("directoryiq BD ingest", () => {
             text: async () =>
               JSON.stringify({
                 status: "success",
-                message: [
-                  { group_id: "777", post_filename: "villa" },
-                  { id: "888", post_filename: "villa" },
-                ],
+                message: [{ id: "888", post_filename: "villa" }],
               }),
             headers: new Headers(),
           });
@@ -471,25 +467,78 @@ describe("directoryiq BD ingest", () => {
     });
 
     expect(resolved).toEqual({ truePostId: null, mappingKey: "unresolved" });
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v2/data_posts/get/777"), expect.anything());
     expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/api/v2/data_posts/get/888"), expect.anything());
   });
+});
 
-  it("returns unresolved when get confirmation is missing or ambiguous", async () => {
+describe("directoryiq BD helper auth", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // @ts-expect-error - test override
+    global.fetch = fetchMock;
+  });
+
+  it("uses X-Api-Key and does not send bearer authorization", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: "success", message: [] }),
+    });
+
+    const { bdRequestForm } = await import("@/app/api/directoryiq/_utils/bdApi");
+    await bdRequestForm({
+      baseUrl: "https://example.com",
+      apiKey: "api-key-1",
+      method: "POST",
+      path: "/api/v2/data_posts/search",
+      form: { action: "search", output_type: "array" },
+    });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = (init?.headers ?? {}) as Record<string, string>;
+    expect(headers["X-Api-Key"]).toBe("api-key-1");
+    expect(headers.Authorization).toBeUndefined();
+    expect(headers.Accept).toBe("application/json");
+    expect(headers["Content-Type"]).toBe("application/x-www-form-urlencoded");
+  });
+});
+
+describe("directoryiq identity + true post resolution hardening", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    // @ts-expect-error - test override
+    global.fetch = fetchMock;
+    process.env.NODE_ENV = "production";
+    process.env.DIRECTORYIQ_MODE = "";
+    process.env.DIRECTORYIQ_LISTINGS_PAGE_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_BASE_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_MAX_DELAY_MS = "0";
+    process.env.DIRECTORYIQ_LISTINGS_429_MAX_RETRIES = "1";
+  });
+
+  it("uses group_id for listing source identity and post_id for blog source identity", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
-      if (url.includes("/api/v2/data_posts/search")) {
-        const body =
-          init?.body instanceof URLSearchParams
-            ? init.body
-            : new URLSearchParams((init?.body as string) ?? "");
-        if (body.get("page") === "1") {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const page = body.get("page");
+        const limit = body.get("limit");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+        if (dataId === "75" && page === "1") {
           return Promise.resolve({
             ok: true,
             status: 200,
             text: async () =>
               JSON.stringify({
                 status: "success",
-                message: [{ post_id: "555", post_filename: "villa", post_title: "Villa" }],
+                message: [{ group_id: "listing-group-1", post_id: "wrong-post", id: "wrong-id", group_name: "Alpha" }],
               }),
             headers: new Headers(),
           });
@@ -501,19 +550,52 @@ describe("directoryiq BD ingest", () => {
           headers: new Headers(),
         });
       }
-      if (url.includes("/api/v2/data_posts/get/555")) {
+      if (url.includes("/api/v2/data_posts/search")) {
+        const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        if (dataId === "14") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({
+                status: "success",
+                data: [{ post_id: "blog-post-9", group_id: "wrong-group", id: "wrong-id", post_title: "Guide 1" }],
+              }),
+            headers: new Headers(),
+          });
+        }
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import("@/app/api/directoryiq/_utils/ingest");
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+
+    const nodeInserts = query.mock.calls.filter(
+      ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO directoryiq_nodes")
+    ) as Array<[string, unknown[]]>;
+    const listingInsert = nodeInserts.find(([, params]) => params?.[1] === "listing");
+    const blogInsert = nodeInserts.find(([, params]) => params?.[1] === "blog_post");
+    expect(listingInsert?.[1]?.[2]).toBe("site-1:listing-group-1");
+    expect(blogInsert?.[1]?.[2]).toBe("site-1:blog-post-9");
+  });
+
+  it("refuses group_id as a true_post_id substitute", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_posts/search")) {
         return Promise.resolve({
           ok: true,
           status: 200,
           text: async () =>
             JSON.stringify({
               status: "success",
-              message: { post_id: "555", post_filename: "different-slug", post_title: "Different title" },
+              data: [{ group_id: "g-1", post_title: "Fixture Listing", post_filename: "fixture-listing" }],
             }),
-          headers: new Headers(),
         });
       }
-      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
     });
 
     const { resolveTruePostIdForListing } = await import("@/app/api/directoryiq/_utils/integrations");
@@ -521,10 +603,82 @@ describe("directoryiq BD ingest", () => {
       baseUrl: "https://example.com",
       apiKey: "test-key",
       dataPostsSearchPath: "/api/v2/data_posts/search",
-      listingsDataId: 14,
-      listingId: "list-1",
-      listingSlug: "villa",
-      listingTitle: "Villa",
+      listingsDataId: 75,
+      listingId: "321",
+      listingSlug: "fixture-listing",
+      listingTitle: "Fixture Listing",
+    });
+
+    expect(resolved).toEqual({ truePostId: null, mappingKey: "unresolved" });
+  });
+
+  it("returns unresolved on ambiguous mapping", async () => {
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v2/data_posts/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              status: "success",
+              data: [
+                { post_id: "11", post_filename: "same-slug", post_title: "Fixture Listing" },
+                { post_id: "12", post_filename: "same-slug", post_title: "Fixture Listing" },
+              ],
+            }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
+    });
+
+    const { resolveTruePostIdForListing } = await import("@/app/api/directoryiq/_utils/integrations");
+    const resolved = await resolveTruePostIdForListing({
+      baseUrl: "https://example.com",
+      apiKey: "test-key",
+      dataPostsSearchPath: "/api/v2/data_posts/search",
+      listingsDataId: 75,
+      listingId: "321",
+      listingSlug: "same-slug",
+      listingTitle: "Fixture Listing",
+    });
+
+    expect(resolved).toEqual({ truePostId: null, mappingKey: "unresolved" });
+  });
+
+  it("returns unresolved when data_posts/get confirmation is missing", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/data_posts/search")) {
+        const body = init?.body instanceof URLSearchParams ? init.body : new URLSearchParams((init?.body as string) ?? "");
+        expect(body.get("action")).toBe("search");
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              status: "success",
+              data: [{ post_id: "99", post_filename: "fixture-listing", post_title: "Fixture Listing" }],
+            }),
+        });
+      }
+      if (url.includes("/api/v2/data_posts/get/99")) {
+        return Promise.resolve({
+          ok: false,
+          status: 404,
+          text: async () => JSON.stringify({ status: "error", message: "not found" }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
+    });
+
+    const { resolveTruePostIdForListing } = await import("@/app/api/directoryiq/_utils/integrations");
+    const resolved = await resolveTruePostIdForListing({
+      baseUrl: "https://example.com",
+      apiKey: "test-key",
+      dataPostsSearchPath: "/api/v2/data_posts/search",
+      listingsDataId: 75,
+      listingId: "321",
+      listingSlug: "fixture-listing",
+      listingTitle: "Fixture Listing",
     });
 
     expect(resolved).toEqual({ truePostId: null, mappingKey: "unresolved" });
