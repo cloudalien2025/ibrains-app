@@ -843,8 +843,9 @@ async function fetchBdPagedSearch(params: {
         form.output_type = "array";
       }
     }
-    if (typeof params.dataId === "number") {
-      form.data_id = params.dataId;
+    const dataId = typeof params.dataId === "number" ? params.dataId : asNumber(params.dataId);
+    if (typeof dataId === "number") {
+      form.data_id = dataId;
     }
     if (params.userId) {
       form.user_id = params.userId;
