@@ -4,7 +4,10 @@ import type { NextRequest } from "next/server";
 const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
 
 export function middleware(req: NextRequest) {
-  if (req.nextUrl.pathname.startsWith("/api/directoryiq")) {
+  if (
+    req.nextUrl.pathname.startsWith("/api/directoryiq") ||
+    req.nextUrl.pathname.startsWith("/api/ingest/directoryiq")
+  ) {
     const origin = req.headers.get("origin");
     const isAllowedOrigin = origin === DIRECTORYIQ_CORS_ORIGIN;
 
@@ -37,5 +40,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/api/_meta/release", "/api/directoryiq/:path*"],
+  matcher: ["/api/_meta/release", "/api/directoryiq/:path*", "/api/ingest/directoryiq/:path*"],
 };
