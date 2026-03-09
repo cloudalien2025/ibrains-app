@@ -1,9 +1,5 @@
 import {
-  bdRequestForm,
-  bdRequestWithRetry,
   normalizeBdBaseUrl,
-  parseBdRecords,
-  parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
 import { decryptBdSiteKey, getBdSite, listBdSiteRows } from "@/app/api/directoryiq/_utils/bdSites";
 import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
@@ -29,8 +25,157 @@ function extractTitle(item: Record<string, unknown>): string {
   return asString(item.group_name ?? item.post_title ?? item.title ?? item.name).toLowerCase();
 }
 
-function extractPostId(item: Record<string, unknown>): string {
-  return String(item.post_id ?? item.id ?? item.data_post_id ?? item.group_id ?? "").trim();
+function extractCanonicalPostId(item: Record<string, unknown>): string {
+  const postId = item.post_id;
+  if (typeof postId === "string" && postId.trim().length > 0) return postId.trim();
+  if (typeof postId === "number" && Number.isFinite(postId)) return String(postId);
+  return "";
+}
+
+type BdResponse = {
+  ok: boolean;
+  status: number;
+  json: Record<string, unknown> | null;
+  text?: string;
+};
+
+async function requestBd(params: {
+  baseUrl: string;
+  apiKey: string;
+  method: "GET" | "POST" | "PUT";
+  path: string;
+  form?: Record<string, unknown>;
+}): Promise<BdResponse> {
+  try {
+    const headers: Record<string, string> = {
+      "X-Api-Key": params.apiKey,
+      Accept: "application/json",
+    };
+
+    let body: URLSearchParams | undefined;
+    if (params.method !== "GET") {
+      headers["Content-Type"] = "application/x-www-form-urlencoded";
+      body = new URLSearchParams();
+      for (const [key, value] of Object.entries(params.form ?? {})) {
+        if (value == null) continue;
+        body.set(key, String(value));
+      }
+    }
+
+    const query =
+      params.method === "GET" && params.form
+        ? `?${new URLSearchParams(
+            Object.entries(params.form)
+              .filter(([, value]) => value != null)
+              .map(([key, value]) => [key, String(value)])
+          ).toString()}`
+        : "";
+
+    const response = await fetch(`${normalizeBdBaseUrl(params.baseUrl)}${params.path}${query}`, {
+      method: params.method,
+      headers,
+      body,
+      cache: "no-store",
+    });
+
+    const text = await response.text();
+    let json: Record<string, unknown> | null = null;
+    try {
+      json = text ? (JSON.parse(text) as Record<string, unknown>) : null;
+    } catch {
+      json = null;
+    }
+    return { ok: response.ok, status: response.status, json, text };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "bd request failed";
+    return { ok: false, status: 500, json: { error: message }, text: message };
+  }
+}
+
+async function requestBdWithRetry(
+  request: () => Promise<BdResponse>,
+  maxAttempts = 2
+): Promise<BdResponse> {
+  let last: BdResponse | null = null;
+  for (let attempt = 1; attempt <= Math.max(1, maxAttempts); attempt += 1) {
+    const result = await request();
+    if (result.ok || result.status < 500) return result;
+    last = result;
+  }
+  return last ?? { ok: false, status: 500, json: { error: "request failed" } };
+}
+
+function parseBdTotals(json: Record<string, unknown>): { status: string | null; totalPages: number | null } {
+  const asNum = (value: unknown): number | null => {
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  };
+  return {
+    status: typeof json.status === "string" ? json.status : null,
+    totalPages: asNum(json.total_pages ?? json.pages ?? json.last_page),
+  };
+}
+
+function extractDataPostRecords(json: Record<string, unknown>): Record<string, unknown>[] {
+  const isRows = (value: unknown): value is Record<string, unknown>[] =>
+    Array.isArray(value) && value.some((row) => row && typeof row === "object");
+
+  const candidates: unknown[] = [json.data, json.records, json.items, json.rows, json.message, json.data_posts, json.posts];
+  for (const candidate of candidates) {
+    if (isRows(candidate)) return candidate;
+    if (candidate && typeof candidate === "object" && !Array.isArray(candidate)) {
+      const nested = candidate as Record<string, unknown>;
+      const nestedCandidates = [nested.records, nested.items, nested.rows, nested.data_posts, nested.posts];
+      for (const nestedCandidate of nestedCandidates) {
+        if (isRows(nestedCandidate)) return nestedCandidate;
+      }
+    }
+  }
+  return [];
+}
+
+function normalizePath(path: string): string {
+  const trimmed = path.trim();
+  if (!trimmed) return "/";
+  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+}
+
+function dataPostsGetPath(postId: string): string {
+  return `/api/v2/data_posts/get/${encodeURIComponent(postId)}`;
+}
+
+function extractSlugFromPost(item: Record<string, unknown>): string {
+  return extractSlug(item.post_filename ?? item.slug ?? item.group_filename ?? item.post_slug ?? item.url ?? item.link ?? item.permalink);
+}
+
+function extractUrl(item: Record<string, unknown>): string {
+  return asString(item.url ?? item.link ?? item.permalink);
+}
+
+function isSuccessfulWrapper(payload: Record<string, unknown>): boolean {
+  const status = typeof payload.status === "string" ? payload.status.toLowerCase() : null;
+  return !status || status === "success";
+}
+
+function normalizeForCompare(value: string): string {
+  return value.trim().toLowerCase();
+}
+
+function collectDataPostsSearchPaths(preferredPath: string): string[] {
+  const candidates = [
+    preferredPath,
+    "/api/v2/data_posts/search",
+    "/api/v2/data_post/search",
+    "/api/v2/posts/search",
+    "/api/v2/data_posts/list",
+  ];
+  const normalized: string[] = [];
+  for (const candidate of candidates) {
+    const path = normalizePath(candidate);
+    if (!path || normalized.includes(path)) continue;
+    normalized.push(path);
+  }
+  return normalized;
 }
 
 export async function getDirectoryIqOpenAiKey(userId: string): Promise<string | null> {
@@ -106,45 +251,150 @@ export async function resolveTruePostIdForListing(params: {
   listingSlug?: string;
   listingTitle?: string;
 }): Promise<{ truePostId: string | null; mappingKey: "slug" | "title" | "unresolved" }> {
-  const response = await bdRequestWithRetry(() =>
-    bdRequestForm({
-      baseUrl: params.baseUrl,
-      apiKey: params.apiKey,
-      method: "POST",
-      path: params.dataPostsSearchPath,
-      form: {
-        data_id: params.listingsDataId,
-        page: 1,
-        limit: 200,
-        output_type: "array",
-      },
-    })
-  );
-
-  if (!response.ok) return { truePostId: null, mappingKey: "unresolved" };
-
-  const totals = parseBdTotals(response.json ?? {});
-  if (totals.status && totals.status !== "success") {
+  const slugTarget = extractSlug(params.listingSlug ?? "");
+  const titleTarget = asString(params.listingTitle).toLowerCase();
+  const urlTarget = extractUrl({
+    url: params.listingSlug && /^https?:\/\//i.test(params.listingSlug) ? params.listingSlug : "",
+  });
+  if (!slugTarget && !titleTarget && !urlTarget) {
     return { truePostId: null, mappingKey: "unresolved" };
   }
 
-  const records = parseBdRecords(response.json ?? {});
+  const perPage = 100;
+  const maxPages = 5;
+  const recordsByPath = new Map<string, Record<string, unknown>[]>();
+  for (const path of collectDataPostsSearchPaths(params.dataPostsSearchPath)) {
+    const collected: Record<string, unknown>[] = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await requestBdWithRetry(() =>
+        requestBd({
+          baseUrl: params.baseUrl,
+          apiKey: params.apiKey,
+          method: "POST",
+          path,
+          form: {
+            action: "search",
+            output_type: "array",
+            data_id: params.listingsDataId,
+            page,
+            limit: perPage,
+          },
+        })
+      );
+      if (!response.ok) break;
+      const payload = response.json ?? {};
+      if (!isSuccessfulWrapper(payload)) break;
 
-  const slugTarget = extractSlug(params.listingSlug ?? "");
-  const titleTarget = asString(params.listingTitle).toLowerCase();
+      const pageRecords = extractDataPostRecords(payload);
+      if (pageRecords.length === 0) break;
+      collected.push(...pageRecords);
 
-  if (slugTarget) {
-    const bySlug = records.find((row) => extractSlug(row.post_filename ?? row.slug ?? row.group_filename ?? row.url ?? row.link) === slugTarget);
-    if (bySlug) return { truePostId: extractPostId(bySlug) || null, mappingKey: "slug" };
+      const totals = parseBdTotals(payload);
+      if (totals.totalPages && page >= totals.totalPages) break;
+      if (pageRecords.length < perPage) break;
+    }
+    if (collected.length > 0) {
+      recordsByPath.set(path, collected);
+    }
   }
 
-  if (titleTarget) {
-    const byTitle = records.find((row) => extractTitle(row) === titleTarget);
-    if (byTitle) return { truePostId: extractPostId(byTitle) || null, mappingKey: "title" };
-  }
+  const confirmCandidate = async (candidate: {
+    postId: string;
+    expectSlug?: string;
+    expectTitle?: string;
+    expectUrl?: string;
+  }): Promise<Record<string, unknown> | null> => {
+    const response = await requestBdWithRetry(() =>
+      requestBd({
+        baseUrl: params.baseUrl,
+        apiKey: params.apiKey,
+        method: "GET",
+        path: dataPostsGetPath(candidate.postId),
+      })
+    );
+    if (!response.ok) return null;
+    const payload = response.json ?? {};
+    if (!isSuccessfulWrapper(payload)) return null;
+    const single = [payload.data, payload.message, payload.post, payload.data_post, payload]
+      .find((candidate) => candidate && typeof candidate === "object" && !Array.isArray(candidate)) as
+      | Record<string, unknown>
+      | undefined;
+    if (!single) return null;
+    const confirmedPostId = extractCanonicalPostId(single);
+    if (!confirmedPostId || confirmedPostId !== candidate.postId) return null;
 
-  const exactId = records.find((row) => extractPostId(row) === params.listingId);
-  if (exactId) return { truePostId: extractPostId(exactId) || null, mappingKey: "title" };
+    const confirmedSlug = extractSlugFromPost(single);
+    const confirmedTitle = extractTitle(single);
+    const confirmedUrl = normalizeForCompare(extractUrl(single));
+    const expectUrl = normalizeForCompare(candidate.expectUrl ?? "");
+
+    if (candidate.expectSlug && confirmedSlug !== candidate.expectSlug) return null;
+    if (candidate.expectTitle && confirmedTitle !== candidate.expectTitle) return null;
+    if (expectUrl && confirmedUrl !== expectUrl) return null;
+
+    return single;
+  };
+
+  const resolveFromRecords = async (
+    records: Record<string, unknown>[]
+  ): Promise<{ truePostId: string | null; mappingKey: "slug" | "title" | "unresolved" }> => {
+    const canonical = records.filter((row) => extractCanonicalPostId(row).length > 0);
+
+    if (slugTarget) {
+      const bySlug = canonical.filter((row) => extractSlugFromPost(row) === slugTarget);
+      if (bySlug.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (bySlug.length === 1) {
+        const postId = extractCanonicalPostId(bySlug[0]);
+        const confirmed = await confirmCandidate({
+          postId,
+          expectSlug: slugTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "slug" };
+      }
+    }
+
+    if (titleTarget) {
+      const byTitle = canonical.filter((row) => extractTitle(row) === titleTarget);
+      if (byTitle.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (byTitle.length === 1) {
+        const postId = extractCanonicalPostId(byTitle[0]);
+        const confirmed = await confirmCandidate({
+          postId,
+          expectTitle: titleTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "title" };
+      }
+    }
+
+    if (urlTarget) {
+      const byUrl = canonical.filter((row) => normalizeForCompare(extractUrl(row)) === normalizeForCompare(urlTarget));
+      if (byUrl.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (byUrl.length === 1) {
+        const postId = extractCanonicalPostId(byUrl[0]);
+        const confirmed = await confirmCandidate({
+          postId,
+          expectUrl: urlTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "title" };
+      }
+    }
+
+    return { truePostId: null, mappingKey: "unresolved" };
+  };
+
+  for (const path of collectDataPostsSearchPaths(params.dataPostsSearchPath)) {
+    const records = recordsByPath.get(path);
+    if (!records || records.length === 0) continue;
+    const resolved = await resolveFromRecords(records);
+    if (resolved.truePostId) return resolved;
+    if (resolved.mappingKey === "unresolved") {
+      // continue trying next candidate path only when no clear conflicting evidence
+      continue;
+    }
+  }
 
   return { truePostId: null, mappingKey: "unresolved" };
 }
@@ -162,8 +412,8 @@ export async function pushListingUpdateToBd(params: {
     form[key] = String(value);
   }
 
-  const response = await bdRequestWithRetry(() =>
-    bdRequestForm({
+  const response = await requestBdWithRetry(() =>
+    requestBd({
       baseUrl: params.baseUrl,
       apiKey: params.apiKey,
       method: "PUT",
@@ -204,8 +454,8 @@ export async function publishBlogPostToBd(params: {
     form.featured_image_url = params.featuredImageUrl;
   }
 
-  const response = await bdRequestWithRetry(() =>
-    bdRequestForm({
+  const response = await requestBdWithRetry(() =>
+    requestBd({
       baseUrl: params.baseUrl,
       apiKey: params.apiKey,
       method: "POST",
