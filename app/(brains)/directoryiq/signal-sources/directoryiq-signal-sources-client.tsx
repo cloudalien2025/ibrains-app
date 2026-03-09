@@ -5,6 +5,9 @@ import { useSearchParams } from "next/navigation";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import type { DirectoryIqConnector, DirectoryIqCredentialStatus } from "@/lib/directoryiq/signalSourceCredentials";
 
+const API_BASE = (process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ?? "").trim().replace(/\/+$/, "");
+const apiUrl = (path: string) => `${API_BASE}${path}`;
+
 const connectorMeta: Record<DirectoryIqConnector, { name: string; placeholder: string }> = {
   brilliant_directories_api: {
     name: "Brilliant Directories API",
@@ -121,7 +124,7 @@ export default function DirectoryIqSignalSourcesClient() {
   async function load() {
     setError(null);
     try {
-      const response = await fetch("/api/directoryiq/signal-sources", { cache: "no-store" });
+      const response = await fetch(apiUrl("/api/directoryiq/signal-sources"), { cache: "no-store" });
       const json = (await response.json()) as {
         connectors?: DirectoryIqCredentialStatus[];
         error?: string;
@@ -150,7 +153,7 @@ export default function DirectoryIqSignalSourcesClient() {
   async function loadSites() {
     setBdSiteError(null);
     try {
-      const response = await fetch("/api/directoryiq/sites", { cache: "no-store" });
+      const response = await fetch(apiUrl("/api/directoryiq/sites"), { cache: "no-store" });
       const json = (await response.json()) as {
         sites?: BdSite[];
         is_admin?: boolean;
@@ -168,7 +171,7 @@ export default function DirectoryIqSignalSourcesClient() {
 
   async function loadRuns() {
     try {
-      const response = await fetch("/api/directoryiq/ingest/runs", { cache: "no-store" });
+      const response = await fetch(apiUrl("/api/directoryiq/ingest/runs"), { cache: "no-store" });
       const json = (await response.json()) as { runs?: IngestRun[]; error?: string };
       if (!response.ok) throw new Error(json.error ?? "Failed to load ingest runs");
       setRuns(json.runs ?? []);
@@ -196,7 +199,7 @@ export default function DirectoryIqSignalSourcesClient() {
     setNotice(null);
 
     try {
-      const response = await fetch("/api/directoryiq/signal-sources", {
+      const response = await fetch(apiUrl("/api/directoryiq/signal-sources"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -229,7 +232,7 @@ export default function DirectoryIqSignalSourcesClient() {
     setNotice(null);
 
     try {
-      const response = await fetch("/api/ingest/directoryiq/run", { method: "POST" });
+      const response = await fetch(apiUrl("/api/ingest/directoryiq/run"), { method: "POST" });
       const json = (await response.json()) as {
         run_id?: string;
         status?: string;
@@ -264,7 +267,7 @@ export default function DirectoryIqSignalSourcesClient() {
       const search = new URLSearchParams();
       if (input?.allSites) search.set("site", "all");
       if (input?.siteId) search.set("site_id", input.siteId);
-      const url = `/api/ingest/directoryiq/run${search.toString() ? `?${search.toString()}` : ""}`;
+      const url = apiUrl(`/api/ingest/directoryiq/run${search.toString() ? `?${search.toString()}` : ""}`);
       const response = await fetch(url, { method: "POST" });
       const json = (await response.json()) as {
         status?: string;
@@ -332,7 +335,7 @@ export default function DirectoryIqSignalSourcesClient() {
         blog_posts_path: bdForm.blogPostsPath.trim() || null,
         enabled: bdForm.enabled,
       };
-      const url = bdEditingId ? `/api/directoryiq/sites/${bdEditingId}` : "/api/directoryiq/sites";
+      const url = apiUrl(bdEditingId ? `/api/directoryiq/sites/${bdEditingId}` : "/api/directoryiq/sites");
       const method = bdEditingId ? "PUT" : "POST";
       const response = await fetch(url, {
         method,
@@ -356,7 +359,7 @@ export default function DirectoryIqSignalSourcesClient() {
     setBdSiteError(null);
     setBdSiteNotice(null);
     try {
-      const response = await fetch(`/api/directoryiq/sites/${siteId}`, { method: "DELETE" });
+      const response = await fetch(apiUrl(`/api/directoryiq/sites/${siteId}`), { method: "DELETE" });
       const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error ?? "Failed to delete BD site");
       await loadSites();
@@ -374,7 +377,7 @@ export default function DirectoryIqSignalSourcesClient() {
     setBdSiteError(null);
     setBdSiteNotice(null);
     try {
-      const response = await fetch(`/api/directoryiq/sites/${siteId}/test`, { method: "POST" });
+      const response = await fetch(apiUrl(`/api/directoryiq/sites/${siteId}/test`), { method: "POST" });
       const json = (await response.json()) as {
         error?: string;
         preflight?: { ok?: boolean };
@@ -397,7 +400,7 @@ export default function DirectoryIqSignalSourcesClient() {
     setNotice(null);
 
     try {
-      const response = await fetch(`/api/directoryiq/signal-sources?connector_id=${connectorId}`, {
+      const response = await fetch(apiUrl(`/api/directoryiq/signal-sources?connector_id=${connectorId}`), {
         method: "DELETE",
       });
       const json = (await response.json()) as { error?: string };
