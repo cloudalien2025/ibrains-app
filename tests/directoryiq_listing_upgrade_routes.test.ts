@@ -31,6 +31,32 @@ const getListingUpgradeDraft = vi.fn(async () => ({
 const markListingUpgradePreviewed = vi.fn(async () => {});
 const markListingUpgradePushed = vi.fn(async () => {});
 const addDirectoryIqVersion = vi.fn(async () => "version-1");
+const resolveTruePostIdForListing = vi.fn(async () => ({ truePostId: "123", mappingKey: "slug" as const }));
+const getDirectoryIqBdConnection = vi.fn(async () => ({
+  baseUrl: "https://example.com",
+  apiKey: "k",
+  listingsSearchPath: "/api/v2/users_portfolio_groups/search",
+  dataPostsSearchPath: "/api/v2/data_posts/search",
+  dataPostsUpdatePath: "/api/v2/data_posts/update",
+  dataPostsCreatePath: "/api/v2/data_posts/create",
+  listingsDataId: 75,
+  blogPostsDataId: 14,
+}));
+const pushListingUpdateToBd = vi.fn(async () => ({ ok: true, status: 200, body: {} }));
+const resolveListingEvaluation = vi.fn(async () => ({
+  siteId: "site-1",
+  listingEval: {
+    listing: {
+      source_id: "site-1:321",
+      title: "Fixture Listing",
+      raw_json: { group_name: "Fixture Listing", group_filename: "fixture-listing" },
+    },
+    evaluation: {
+      totalScore: 44,
+      scores: { structure: 40, clarity: 40, trust: 40, authority: 40, actionability: 40 },
+    },
+  },
+}));
 
 const validateOpenAiKeyPresent = vi.fn((value: string | null) => {
   if (!value) throw new Error("OpenAI API not configured. Go to DirectoryIQ -> Settings -> Integrations.");
@@ -71,9 +97,21 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
-  getDirectoryIqBdConnection: vi.fn(async () => ({ baseUrl: "https://example.com", apiKey: "k" })),
-  pushListingUpdateToBd: vi.fn(async () => ({ ok: true, status: 200, body: {} })),
-  resolveTruePostIdForListing: vi.fn(async () => ({ truePostId: "123", mappingKey: "slug" })),
+  getDirectoryIqBdConnection,
+  pushListingUpdateToBd,
+  resolveTruePostIdForListing,
+}));
+
+vi.mock("@/app/api/directoryiq/_utils/listingResolve", () => ({
+  ListingSiteRequiredError: class ListingSiteRequiredError extends Error {
+    candidates: Array<{ siteId: string; siteLabel: string | null }>;
+    constructor(candidates: Array<{ siteId: string; siteLabel: string | null }>) {
+      super("site_required");
+      this.name = "ListingSiteRequiredError";
+      this.candidates = candidates;
+    }
+  },
+  resolveListingEvaluation,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
@@ -151,5 +189,30 @@ describe("directoryiq listing upgrade routes", () => {
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(markListingUpgradePushed).toHaveBeenCalledTimes(1);
+  });
+
+  it("listing push route refuses when true post id is unresolved", async () => {
+    resolveTruePostIdForListing.mockResolvedValueOnce({ truePostId: null, mappingKey: "unresolved" });
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/listing-push/route");
+    const token = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "321",
+      action: "listing_push",
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/listing-push", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_push: true,
+        proposed_description: "Improved description.",
+        approval_token: token,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321" } });
+    const json = await res.json();
+    expect(res.status).toBe(422);
+    expect(json.error).toContain("Unable to resolve true BD post_id");
+    expect(pushListingUpdateToBd).not.toHaveBeenCalled();
   });
 });
