@@ -147,6 +147,10 @@ export default function DirectoryIqSignalSourcesClient() {
     () => ["openai", "serpapi", "ga4"] as DirectoryIqConnector[],
     []
   );
+  const selectedSiteId = bdEditingId ?? bdSites[0]?.id ?? null;
+  const selectedSite = selectedSiteId ? bdSites.find((site) => site.id === selectedSiteId) ?? null : null;
+  const editingSite = bdEditingId ? bdSites.find((site) => site.id === bdEditingId) ?? null : null;
+  const selectedSiteMissingSecret = Boolean(selectedSite && !selectedSite.secretPresent);
 
   async function load() {
     setError(null);
@@ -484,14 +488,28 @@ export default function DirectoryIqSignalSourcesClient() {
             <p className="text-xs text-slate-300">
               Add each BD site with its own Post Type IDs. Multi-site listings can be ingested per site or across all sites.
             </p>
+            {selectedSite ? (
+              <div className="mt-2 text-xs text-slate-400">
+                Selected: {selectedSite.label || selectedSite.baseUrl} ·{" "}
+                {selectedSite.secretPresent ? `API key ${selectedSite.maskedSecret}` : "API key missing"}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <NeonButton onClick={() => void runBdIngest({ siteId: bdEditingId ?? bdSites[0]?.id ?? null })} disabled={runningIngest || bdSites.length === 0}>
-              {runningIngest ? "Ingesting..." : "Ingest Site"}
+            <NeonButton
+              onClick={() => void runBdIngest({ siteId: selectedSiteId })}
+              disabled={runningIngest || bdSites.length === 0 || selectedSiteMissingSecret}
+            >
+              {runningIngest ? "Ingesting..." : selectedSiteMissingSecret ? "Add API key to ingest" : "Ingest Site"}
             </NeonButton>
             {bdIsAdmin ? (
               <NeonButton variant="secondary" onClick={() => void runBdIngest({ allSites: true })} disabled={runningIngest || bdSites.length === 0}>
                 Ingest All Sites
+              </NeonButton>
+            ) : null}
+            {selectedSite && selectedSiteMissingSecret ? (
+              <NeonButton variant="secondary" onClick={() => startEditSite(selectedSite)} disabled={bdSaving}>
+                Add API key
               </NeonButton>
             ) : null}
           </div>
@@ -502,6 +520,11 @@ export default function DirectoryIqSignalSourcesClient() {
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">
               {bdEditingId ? "Edit Site" : "Add Site"} {bdIsAdmin ? "" : `(Limit ${bdSiteLimit})`}
             </div>
+            {editingSite && !editingSite.secretPresent ? (
+              <div className="rounded-lg border border-rose-300/35 bg-rose-400/10 px-3 py-2 text-xs text-rose-100">
+                API key missing for this site. Add the key below to enable ingest.
+              </div>
+            ) : null}
             <input
               value={bdForm.label}
               onChange={(event) => setBdForm((prev) => ({ ...prev, label: event.target.value }))}
@@ -579,6 +602,9 @@ export default function DirectoryIqSignalSourcesClient() {
                     <div>
                       <div className="text-sm text-slate-100">{site.label || site.baseUrl}</div>
                       <div className="text-xs text-slate-400">{site.baseUrl}</div>
+                      <div className={`text-xs ${site.secretPresent ? "text-slate-500" : "text-rose-200"}`}>
+                        API key: {site.secretPresent ? site.maskedSecret : "missing"}
+                      </div>
                       <div className="text-xs text-slate-500">
                         Listings ID: {site.listingsDataId ?? "-"} · Blog ID: {site.blogPostsDataId ?? "-"} · {site.enabled ? "Enabled" : "Disabled"}
                       </div>
