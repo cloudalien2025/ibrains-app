@@ -6,6 +6,9 @@ import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
 
+export const dynamic = "force-dynamic";
+export const runtime = "nodejs";
+
 const navItems = [
   { href: "/directoryiq", label: "Dashboard" },
   { href: "/directoryiq/listings", label: "Listings" },
