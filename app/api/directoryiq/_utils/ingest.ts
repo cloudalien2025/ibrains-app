@@ -661,11 +661,8 @@ function readFirstString(values: Array<unknown>): string {
 
 function normalizeListingRecord(item: Record<string, unknown>, fallbackId: string): Record<string, unknown> {
   const listingId = readFirstString([
-    item.listing_id,
-    item.id,
-    item.post_id,
     item.group_id,
-    item.data_post_id,
+    item.listing_id,
     item.listingId,
     fallbackId,
   ]);
@@ -774,13 +771,16 @@ function extractBlogHtmlAndText(item: Record<string, unknown>): { rawHtml: strin
 
 function extractNode(
   item: Record<string, unknown>,
+  sourceType: "listing" | "blog_post",
   fallbackPrefix: string,
   index: number,
   siteId?: string | null
 ): DirectoryIqNode {
-  const rawId = String(
-    item.id ?? item.post_id ?? item.group_id ?? item.data_post_id ?? item.listing_id ?? item.slug ?? `${fallbackPrefix}-${index + 1}`
-  );
+  const canonicalRawId =
+    sourceType === "listing"
+      ? readFirstString([item.group_id])
+      : readFirstString([item.post_id]);
+  const rawId = canonicalRawId || `${fallbackPrefix}-${index + 1}`;
   const sourceId = siteId ? `${siteId}:${rawId}` : rawId;
 
   const title =
@@ -975,7 +975,7 @@ function extractTitle(item: Record<string, unknown>): string {
 }
 
 function extractPostId(item: Record<string, unknown>): string {
-  return String(item.post_id ?? item.id ?? item.data_post_id ?? item.group_id ?? "").trim();
+  return readFirstString([item.post_id]);
 }
 
 function resolveTruePostMapping(
@@ -1177,7 +1177,7 @@ export async function runDirectoryIqFullIngest(
     }
 
     const runId = await createRun(userId, "deterministic://fixtures");
-    const listings = buildDeterministicListings().map((item, index) => extractNode(item, "listing", index));
+    const listings = buildDeterministicListings().map((item, index) => extractNode(item, "listing", "listing", index));
     await upsertNodes({ userId, sourceType: "listing", nodes: listings });
     await finishRun({
       runId,
@@ -1467,7 +1467,7 @@ export async function runDirectoryIqFullIngest(
       }
 
       const listings = filteredListings.map((item, index) =>
-        extractNode(item, `listing:${site.id}`, index, site.id)
+        extractNode(item, "listing", `listing:${site.id}`, index, site.id)
       );
       if (listings.length > 0) {
         await upsertNodes({ userId, sourceType: "listing", nodes: listings, siteId: site.id });
@@ -1500,7 +1500,7 @@ export async function runDirectoryIqFullIngest(
           maxPages: 20,
         });
 
-        const blogs = blogItems.map((item, index) => extractNode(item, `blog:${site.id}`, index, site.id));
+        const blogs = blogItems.map((item, index) => extractNode(item, "blog_post", `blog:${site.id}`, index, site.id));
         if (blogs.length > 0) {
           await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
         }
@@ -1628,7 +1628,7 @@ export async function runDirectoryIqBlogIngest(userId: string): Promise<Director
       `[directoryiq-authority-ingest] Ingestion Debug Summary blogs_fetched=${blogItems.length} blog_detail_fetched=0 public_fetch=0 serpapi_fetch=0 blogs_with_raw_html=${blogsWithRawHtml} avg_clean_text_length=${avgCleanTextLength}`
     );
 
-    const blogs = blogItems.map((item, index) => extractNode(item, `blog:${site.id}`, index, site.id));
+    const blogs = blogItems.map((item, index) => extractNode(item, "blog_post", `blog:${site.id}`, index, site.id));
     await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
 
     await finishRun({
