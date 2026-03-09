@@ -50,6 +50,18 @@ function extractDataPostRecords(json: Record<string, unknown>): Record<string, u
   return [];
 }
 
+function extractSlugFromPost(item: Record<string, unknown>): string {
+  return extractSlug(item.post_filename ?? item.slug ?? item.group_filename ?? item.post_slug ?? item.url ?? item.link ?? item.permalink);
+}
+
+function extractUrl(item: Record<string, unknown>): string {
+  return asString(item.url ?? item.link ?? item.permalink);
+}
+
+function normalizeForCompare(value: string): string {
+  return value.trim().toLowerCase();
+}
+
 function normalizePath(path: string): string {
   if (!path.trim()) return "/";
   return path.startsWith("/") ? path : `/${path}`;
@@ -77,6 +89,23 @@ function pickDataPostFromGetResponse(json: Record<string, unknown>): Record<stri
     }
   }
   return null;
+}
+
+function collectDataPostsSearchPaths(preferredPath: string): string[] {
+  const candidates = [
+    preferredPath,
+    "/api/v2/data_posts/search",
+    "/api/v2/data_post/search",
+    "/api/v2/posts/search",
+    "/api/v2/data_posts/list",
+  ];
+  const normalized: string[] = [];
+  for (const candidate of candidates) {
+    const path = normalizePath(candidate);
+    if (!path || normalized.includes(path)) continue;
+    normalized.push(path);
+  }
+  return normalized;
 }
 
 export async function getDirectoryIqOpenAiKey(userId: string): Promise<string | null> {
@@ -154,50 +183,59 @@ export async function resolveTruePostIdForListing(params: {
 }): Promise<{ truePostId: string | null; mappingKey: "slug" | "title" | "unresolved" }> {
   const slugTarget = extractSlug(params.listingSlug ?? "");
   const titleTarget = asString(params.listingTitle).toLowerCase();
-  if (!slugTarget && !titleTarget) {
+  const urlTarget = extractUrl({
+    url: params.listingSlug && /^https?:\/\//i.test(params.listingSlug) ? params.listingSlug : "",
+  });
+  if (!slugTarget && !titleTarget && !urlTarget) {
     return { truePostId: null, mappingKey: "unresolved" };
   }
 
-  const perPage = 200;
-  const maxPages = 10;
-  const records: Record<string, unknown>[] = [];
-  for (let page = 1; page <= maxPages; page += 1) {
-    const response = await bdRequestWithRetry(() =>
-      bdRequestForm({
-        baseUrl: params.baseUrl,
-        apiKey: params.apiKey,
-        method: "POST",
-        path: params.dataPostsSearchPath,
-        form: {
-          action: "search",
-          output_type: "array",
-          data_id: params.listingsDataId,
-          page,
-          limit: perPage,
-        },
-      })
-    );
-    if (!response.ok) return { truePostId: null, mappingKey: "unresolved" };
-    const payload = response.json ?? {};
-    const totals = parseBdTotals(payload);
-    if (totals.status && totals.status !== "success") {
-      return { truePostId: null, mappingKey: "unresolved" };
+  const perPage = 100;
+  const maxPages = 5;
+  const recordsByPath = new Map<string, Record<string, unknown>[]>();
+  for (const path of collectDataPostsSearchPaths(params.dataPostsSearchPath)) {
+    const records: Record<string, unknown>[] = [];
+    for (let page = 1; page <= maxPages; page += 1) {
+      const response = await bdRequestWithRetry(() =>
+        bdRequestForm({
+          baseUrl: params.baseUrl,
+          apiKey: params.apiKey,
+          method: "POST",
+          path,
+          form: {
+            action: "search",
+            output_type: "array",
+            data_id: params.listingsDataId,
+            page,
+            limit: perPage,
+          },
+        })
+      );
+      if (!response.ok) break;
+      const payload = response.json ?? {};
+      const totals = parseBdTotals(payload);
+      if (totals.status && totals.status !== "success") break;
+      const pageRecords = extractDataPostRecords(payload);
+      if (pageRecords.length === 0) break;
+      records.push(...pageRecords);
+      if (pageRecords.length < perPage) break;
+      if (totals.totalPages && page >= totals.totalPages) break;
     }
-    const pageRecords = extractDataPostRecords(payload);
-    records.push(...pageRecords);
-    if (pageRecords.length < perPage) break;
-    if (totals.totalPages && page >= totals.totalPages) break;
+    if (records.length > 0) recordsByPath.set(path, records);
   }
 
-  const canonicalRecords = records.filter((row) => extractCanonicalPostId(row).length > 0);
-
-  const confirmCandidate = async (postId: string): Promise<boolean> => {
+  const confirmCandidate = async (candidate: {
+    postId: string;
+    expectSlug?: string;
+    expectTitle?: string;
+    expectUrl?: string;
+  }): Promise<boolean> => {
     const getResponse = await bdRequestWithRetry(() =>
       bdRequestForm({
         baseUrl: params.baseUrl,
         apiKey: params.apiKey,
         method: "GET",
-        path: dataPostsGetPath(params.dataPostsSearchPath, postId),
+        path: dataPostsGetPath(params.dataPostsSearchPath, candidate.postId),
       })
     );
     if (!getResponse.ok) return false;
@@ -207,41 +245,70 @@ export async function resolveTruePostIdForListing(params: {
     const record = pickDataPostFromGetResponse(payload);
     if (!record) return false;
     const confirmedPostId = extractCanonicalPostId(record);
-    if (confirmedPostId !== postId) return false;
-    if (slugTarget) {
-      const slug = extractSlug(record.post_filename ?? record.slug ?? record.group_filename ?? record.url ?? record.link);
-      if (slug !== slugTarget) return false;
+    if (confirmedPostId !== candidate.postId) return false;
+    if (candidate.expectSlug) {
+      const slug = extractSlugFromPost(record);
+      if (slug !== candidate.expectSlug) return false;
     }
-    if (titleTarget) {
+    if (candidate.expectTitle) {
       const title = extractTitle(record);
-      if (title !== titleTarget) return false;
+      if (title !== candidate.expectTitle) return false;
+    }
+    if (candidate.expectUrl) {
+      const url = normalizeForCompare(extractUrl(record));
+      if (url !== normalizeForCompare(candidate.expectUrl)) return false;
     }
     return true;
   };
 
-  if (slugTarget) {
-    const bySlug = canonicalRecords.filter(
-      (row) => extractSlug(row.post_filename ?? row.slug ?? row.group_filename ?? row.url ?? row.link) === slugTarget
-    );
-    if (bySlug.length > 1) return { truePostId: null, mappingKey: "unresolved" };
-    if (bySlug.length === 1) {
-      const postId = extractCanonicalPostId(bySlug[0]);
-      if (!postId) return { truePostId: null, mappingKey: "unresolved" };
-      const confirmed = await confirmCandidate(postId);
-      if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
-      return { truePostId: postId, mappingKey: "slug" };
-    }
-  }
+  for (const path of collectDataPostsSearchPaths(params.dataPostsSearchPath)) {
+    const records = recordsByPath.get(path);
+    if (!records || records.length === 0) continue;
+    const canonicalRecords = records.filter((row) => extractCanonicalPostId(row).length > 0);
 
-  if (titleTarget) {
-    const byTitle = canonicalRecords.filter((row) => extractTitle(row) === titleTarget);
-    if (byTitle.length > 1) return { truePostId: null, mappingKey: "unresolved" };
-    if (byTitle.length === 1) {
-      const postId = extractCanonicalPostId(byTitle[0]);
-      if (!postId) return { truePostId: null, mappingKey: "unresolved" };
-      const confirmed = await confirmCandidate(postId);
-      if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
-      return { truePostId: postId, mappingKey: "title" };
+    if (slugTarget) {
+      const bySlug = canonicalRecords.filter((row) => extractSlugFromPost(row) === slugTarget);
+      if (bySlug.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (bySlug.length === 1) {
+        const postId = extractCanonicalPostId(bySlug[0]);
+        if (!postId) return { truePostId: null, mappingKey: "unresolved" };
+        const confirmed = await confirmCandidate({
+          postId,
+          expectSlug: slugTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "slug" };
+      }
+    }
+
+    if (titleTarget) {
+      const byTitle = canonicalRecords.filter((row) => extractTitle(row) === titleTarget);
+      if (byTitle.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (byTitle.length === 1) {
+        const postId = extractCanonicalPostId(byTitle[0]);
+        if (!postId) return { truePostId: null, mappingKey: "unresolved" };
+        const confirmed = await confirmCandidate({
+          postId,
+          expectTitle: titleTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "title" };
+      }
+    }
+
+    if (urlTarget) {
+      const byUrl = canonicalRecords.filter((row) => normalizeForCompare(extractUrl(row)) === normalizeForCompare(urlTarget));
+      if (byUrl.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (byUrl.length === 1) {
+        const postId = extractCanonicalPostId(byUrl[0]);
+        if (!postId) return { truePostId: null, mappingKey: "unresolved" };
+        const confirmed = await confirmCandidate({
+          postId,
+          expectUrl: urlTarget,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: postId, mappingKey: "title" };
+      }
     }
   }
 

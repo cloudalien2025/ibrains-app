@@ -16,6 +16,11 @@ function normalizeBaseUrl(value: string): string {
   return `${parsed.protocol}//${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
 }
 
+function asNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 export async function POST(req: NextRequest) {
   try {
     const userId = resolveUserId(req);
@@ -26,12 +31,18 @@ export async function POST(req: NextRequest) {
       api_key?: string;
       listings_path?: string;
       blog_posts_path?: string;
+      listings_data_id?: number | string;
+      listingsDataId?: number | string;
+      blog_posts_data_id?: number | string;
+      blogPostsDataId?: number | string;
     };
 
     const baseUrl = normalizeBaseUrl(body.base_url ?? "");
     const apiKey = (body.api_key ?? "").trim();
     const listingsPath = (body.listings_path ?? "/api/v2/users_portfolio_groups/search").trim();
     const blogPostsPath = (body.blog_posts_path ?? "/api/v2/data_posts/search").trim();
+    const listingsDataId = asNumber(body.listings_data_id ?? body.listingsDataId);
+    const blogPostsDataId = asNumber(body.blog_posts_data_id ?? body.blogPostsDataId);
 
     if (!baseUrl) {
       return NextResponse.json({ error: "Website URL is required." }, { status: 400 });
@@ -49,15 +60,24 @@ export async function POST(req: NextRequest) {
         baseUrl,
         listingsPath,
         blogPostsPath,
-        listingsDataId: 75,
-        blogPostsDataId: 14,
+        listingsDataId,
+        blogPostsDataId,
+        listingsDataIdVerified: false,
+        blogPostsDataIdVerified: false,
         siteLabel: "Brilliant Directories",
       },
     });
 
     await scheduleSnapshotRefresh({ userId, brainId: "directoryiq", runIngest: true });
 
-    return NextResponse.json({ ok: true, status: "updating" });
+    return NextResponse.json({
+      ok: true,
+      status: "updating",
+      data_ids: {
+        listings: { configured: listingsDataId, verified: false },
+        blog_posts: { configured: blogPostsDataId, verified: false },
+      },
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown connect error";
     return NextResponse.json({ error: message }, { status: 500 });
