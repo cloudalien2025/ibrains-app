@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
 describe("directoryiq listing detail route proxy", () => {
   beforeEach(() => {
@@ -65,6 +66,33 @@ describe("directoryiq listing detail route proxy", () => {
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     const headers = new Headers(init.headers);
     expect(headers.get("cf-access-jwt-assertion")).toBe("test-cf-access-jwt");
+  });
+
+  it("resolves and forwards x-user-id when request omits it", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/3", {
+      headers: {
+        "x-user-email": "owner@app.ibrains.ai",
+      },
+    });
+    const expectedUserId = resolveUserId(req);
+
+    const res = await GET(req, { params: { listingId: "3" } });
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get("x-user-id")).toBe(expectedUserId);
   });
 
   it("returns 502 when external listing detail proxy is unreachable", async () => {
