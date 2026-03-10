@@ -100,7 +100,7 @@ export async function POST(
       throw new AuthorityRouteError(
         400,
         "BD_NOT_CONFIGURED",
-        "Brilliant Directories API not configured. Go to DirectoryIQ -> Settings -> Integrations."
+        "Brilliant Directories API not configured. Go to DirectoryIQ -> Signal Sources."
       );
     }
 

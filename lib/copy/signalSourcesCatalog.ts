@@ -20,7 +20,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Listings and blog signal ingest surface for travel entity readiness.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/settings/integrations?connector=brilliant-directories",
+    actionHref: "/directoryiq/signal-sources?connector=brilliant-directories",
   },
   {
     id: "openai",
@@ -29,7 +29,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Entity normalization, signal synthesis, and authority blueprint drafting.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/settings/integrations?connector=openai",
+    actionHref: "/directoryiq/signal-sources?connector=openai",
   },
   {
     id: "serpapi",
@@ -38,7 +38,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Competitive set discovery and comparative clarity checks.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/settings/integrations?connector=serpapi",
+    actionHref: "/directoryiq/signal-sources?connector=serpapi",
   },
   {
     id: "ga4",
@@ -47,7 +47,7 @@ export const directoryIqSignalSources: SignalSource[] = [
     status: "disconnected",
     description: "Feedback loop for behavior signals and post-selection outcomes.",
     actionLabel: "Configure",
-    actionHref: "/directoryiq/settings/integrations?connector=ga4",
+    actionHref: "/directoryiq/signal-sources?connector=ga4",
   },
   {
     id: "google-places",

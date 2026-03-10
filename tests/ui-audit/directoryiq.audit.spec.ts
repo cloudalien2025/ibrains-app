@@ -122,7 +122,7 @@ async function run(): Promise<void> {
   const routes = [
     "/directoryiq",
     `/directoryiq/listings/${encodeURIComponent(listingId)}`,
-    "/directoryiq/settings/integrations",
+    "/directoryiq/signal-sources",
   ];
 
   for (const route of routes) {
@@ -180,7 +180,7 @@ async function run(): Promise<void> {
         }
       }
 
-      if (route.includes("/integrations")) {
+      if (route.includes("/signal-sources")) {
         const configureOrEdit = page
           .getByRole("button")
           .filter({ hasText: /Configure|Edit/i })

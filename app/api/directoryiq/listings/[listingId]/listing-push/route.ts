@@ -71,7 +71,7 @@ export async function POST(
     const bd = await getDirectoryIqBdConnection(userId, resolved.siteId);
     if (!bd) {
       return NextResponse.json(
-        { error: "Brilliant Directories API not configured. Go to DirectoryIQ -> Settings -> Integrations." },
+        { error: "Brilliant Directories API not configured. Go to DirectoryIQ -> Signal Sources." },
         { status: 400 }
       );
     }

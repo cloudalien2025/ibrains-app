@@ -181,6 +181,6 @@ export function validateOpenAiKeyPresent(apiKey: string | null): string {
   throw new AuthorityRouteError(
     400,
     "OPENAI_KEY_MISSING",
-    "OpenAI API not configured. Go to DirectoryIQ -> Settings -> Integrations."
+    "OpenAI API not configured. Go to DirectoryIQ -> Signal Sources."
   );
 }
