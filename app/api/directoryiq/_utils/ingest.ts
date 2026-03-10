@@ -52,6 +52,10 @@ function shouldLogBdDebug(key: string): boolean {
   return true;
 }
 
+function shouldLogListingsParityTrace(): boolean {
+  return process.env.DIRECTORYIQ_LISTINGS_PARITY_TRACE === "1";
+}
+
 export type DirectoryIqIngestResult = {
   runId: string;
   status: "succeeded" | "failed";
@@ -334,6 +338,22 @@ async function fetchBdListingsPaged(params: {
       page,
     };
 
+    if (shouldLogListingsParityTrace()) {
+      console.info(
+        JSON.stringify({
+          phase: "bd_listings_request_contract",
+          method: "POST",
+          path: params.path,
+          page,
+          limit: params.limit,
+          data_id: params.dataId,
+          body_keys: Object.keys(form).sort(),
+          body_has_action_search: form.action === "search",
+          body_has_output_type_array: form.output_type === "array",
+        })
+      );
+    }
+
     let response: LocalBdResponse | null = null;
     let attempt = 0;
     let lastDelayMs: number | null = null;
@@ -409,7 +429,34 @@ async function fetchBdListingsPaged(params: {
       });
     }
 
-    const records = extractBdListingRows(payload).filter((row) => isBdListingLikeRow(row));
+    const extractedRows = extractBdListingRows(payload);
+    const listingLikeRows = extractedRows.filter((row) => isBdListingLikeRow(row));
+    const records = listingLikeRows;
+    if (shouldLogListingsParityTrace()) {
+      const topLevelKeys = Object.keys(payload);
+      const messageValue = payload.message;
+      const dataValue = payload.data;
+      console.info(
+        JSON.stringify({
+          phase: "bd_listings_response_shape",
+          path: params.path,
+          page,
+          top_level_keys: topLevelKeys,
+          message_is_array: Array.isArray(messageValue),
+          data_is_array: Array.isArray(dataValue),
+          message_nested_keys:
+            messageValue && typeof messageValue === "object" && !Array.isArray(messageValue)
+              ? Object.keys(messageValue as Record<string, unknown>)
+              : [],
+          data_nested_keys:
+            dataValue && typeof dataValue === "object" && !Array.isArray(dataValue)
+              ? Object.keys(dataValue as Record<string, unknown>)
+              : [],
+          extracted_row_count: extractedRows.length,
+          listing_like_row_count: listingLikeRows.length,
+        })
+      );
+    }
     params.onPage?.({ page, limit: params.limit, received: records.length, total: all.length + records.length });
 
     if (records.length === 0) break;
@@ -1268,6 +1315,35 @@ export async function runDirectoryIqFullIngest(
       console.info(
         `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${site.label ?? ""} site_id=${site.id}`
       );
+      if (shouldLogListingsParityTrace()) {
+        console.info(
+          JSON.stringify({
+            phase: "bd_listings_ingest_site_contract",
+            site_id: site.id,
+            site_label: site.label ?? "",
+            base_host: baseHost,
+            path: listingsPath,
+            data_id: listingsDataId,
+            requested_site_id: options?.siteId ?? null,
+            all_sites: Boolean(options?.allSites),
+            checkpoint_page: checkpointPage,
+            reset_requested: resetRequested,
+            preflight_request: {
+              method: "POST",
+              page: 1,
+              limit: 1,
+              fields: ["action", "output_type", "data_id", "limit", "page"],
+            },
+            fetch_request: {
+              method: "POST",
+              start_page: startPage,
+              limit: listingsLimit,
+              max_pages: 200,
+              fields: ["action", "output_type", "data_id", "limit", "page"],
+            },
+          })
+        );
+      }
 
       if (!listingsDataIdPresent) {
         throw new BdIngestError({
@@ -1496,10 +1572,33 @@ export async function runDirectoryIqFullIngest(
       const listings = filteredListings.map((item, index) =>
         extractNode(item, "listing", `listing:${site.id}`, index, site.id)
       );
+      if (shouldLogListingsParityTrace()) {
+        console.info(
+          JSON.stringify({
+            phase: "bd_listings_count_pipeline",
+            site_id: site.id,
+            extracted_listing_rows: listingsItems.length,
+            normalized_listing_rows: normalizedListings.length,
+            accepted_listing_rows: filteredListings.length,
+            nodes_before_upsert: listings.length,
+            listings_total_before_increment: listingsTotal,
+          })
+        );
+      }
       if (listings.length > 0) {
         await upsertNodes({ userId, sourceType: "listing", nodes: listings, siteId: site.id });
       }
       listingsTotal += listings.length;
+      if (shouldLogListingsParityTrace()) {
+        console.info(
+          JSON.stringify({
+            phase: "bd_listings_count_result",
+            site_id: site.id,
+            nodes_upserted: listings.length,
+            listings_total_after_increment: listingsTotal,
+          })
+        );
+      }
 
       let siteBlogPosts = 0;
       const blogPostsPath = dataPostsPath;
