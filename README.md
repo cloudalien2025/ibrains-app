@@ -43,6 +43,11 @@ Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/bui
 - `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
 - `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
 
+## DirectoryIQ Bootstrap Read Path
+
+- `DIRECTORYIQ_API_BASE`: optional server-side base URL for DirectoryIQ read-route proxying.
+- For bootstrap mode, set this to the droplet API origin (example: `https://directoryiq-api.ibrains.ai`) so Vercel-hosted DirectoryIQ read routes do not require direct Postgres access.
+
 ## Non-Negotiable Route Signatures
 
 - Next.js route handlers must use inline `{ params }: { params: { ... } }` for the second argument.
