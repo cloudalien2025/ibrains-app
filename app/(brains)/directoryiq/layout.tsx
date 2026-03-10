@@ -5,6 +5,7 @@ import LockedBrainView from "@/components/brains/LockedBrainView";
 import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
+import DirectoryIqMobileNav from "@/components/directoryiq/DirectoryIqMobileNav";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export default async function DirectoryIqLayout({ children }: { children: ReactN
       subtitle={aiSelectionCopy.directoryiq.shellSubtitle}
       navItems={navItems}
     >
+      <DirectoryIqMobileNav items={navItems} />
       {children}
     </BrainWorkspaceFrame>
   );

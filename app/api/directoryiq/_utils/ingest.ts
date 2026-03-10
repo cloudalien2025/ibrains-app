@@ -324,6 +324,8 @@ async function fetchBdListingsPaged(params: {
   const retryBaseDelayMs = params.retryBaseDelayMs ?? 500;
   const retryMaxDelayMs = params.retryMaxDelayMs ?? 8000;
   const sleepFn = params.sleepFn ?? sleep;
+  let discoveredTotalPages: number | null = null;
+  const seenListingIds = new Set<string>();
 
   for (let page = params.startPage ?? 1; page <= maxPages; page += 1) {
     const form: Record<string, unknown> = {
@@ -379,8 +381,11 @@ async function fetchBdListingsPaged(params: {
     }
 
     const payload = normalizeBdJson(response.json);
+    const totals = parseBdTotals(payload);
+    if (totals.totalPages && !discoveredTotalPages) {
+      discoveredTotalPages = totals.totalPages;
+    }
     if (page === 1 && shouldLogBdDebug(`response:listings:${params.path}`)) {
-      const totals = parseBdTotals(payload);
       const records = extractBdListingRows(payload);
       console.info(
         JSON.stringify({
@@ -410,10 +415,18 @@ async function fetchBdListingsPaged(params: {
     }
 
     const records = extractBdListingRows(payload).filter((row) => isBdListingLikeRow(row));
-    params.onPage?.({ page, limit: params.limit, received: records.length, total: all.length + records.length });
+    const dedupedRecords: Record<string, unknown>[] = [];
+    for (const record of records) {
+      const key = readFirstString([record.group_id, record.listing_id, record.listingId, record.url, record.permalink]);
+      if (key && seenListingIds.has(key)) continue;
+      if (key) seenListingIds.add(key);
+      dedupedRecords.push(record);
+    }
+    params.onPage?.({ page, limit: params.limit, received: dedupedRecords.length, total: all.length + dedupedRecords.length });
 
-    if (records.length === 0) break;
-    all.push(...records);
+    if (dedupedRecords.length === 0) break;
+    all.push(...dedupedRecords);
+    if (discoveredTotalPages && page >= discoveredTotalPages) break;
 
     if (pageDelayMs > 0) {
       await sleepFn(pageDelayMs);
@@ -794,6 +807,14 @@ function extractNode(
   };
 }
 
+function dedupeNodesBySourceId(nodes: DirectoryIqNode[]): DirectoryIqNode[] {
+  const bySourceId = new Map<string, DirectoryIqNode>();
+  for (const node of nodes) {
+    bySourceId.set(node.sourceId, node);
+  }
+  return Array.from(bySourceId.values());
+}
+
 async function fetchBdPagedSearch(params: {
   baseUrl: string;
   apiKey: string;
@@ -825,6 +846,7 @@ async function fetchBdPagedSearch(params: {
   const sleepFn = params.sleepFn ?? sleep;
 
   let discoveredTotalPages: number | null = null;
+  const seenRecordKeys = new Set<string>();
 
   for (let page = 1; page <= maxPages; page += 1) {
     const form: Record<string, unknown> = {
@@ -919,20 +941,38 @@ async function fetchBdPagedSearch(params: {
       throw new Error(`DirectoryIQ source returned non-success wrapper status for ${params.path}`);
     }
 
-    if (records.length === 0) {
+    const dedupedRecords: Record<string, unknown>[] = [];
+    for (const record of records) {
+      const key =
+        readFirstString([
+          record.post_id,
+          record.group_id,
+          record.id,
+          record.url,
+          record.link,
+          record.permalink,
+          record.post_filename,
+          record.slug,
+        ]) || JSON.stringify(record);
+      if (seenRecordKeys.has(key)) continue;
+      seenRecordKeys.add(key);
+      dedupedRecords.push(record);
+    }
+
+    if (dedupedRecords.length === 0) {
       params.onPage?.({ page, perPage, received: 0, total: all.length });
       break;
     }
 
-    all.push(...records);
-    params.onPage?.({ page, perPage, received: records.length, total: all.length });
+    all.push(...dedupedRecords);
+    params.onPage?.({ page, perPage, received: dedupedRecords.length, total: all.length });
 
     if (totals.totalPages && !discoveredTotalPages) {
       discoveredTotalPages = totals.totalPages;
     }
 
     if (discoveredTotalPages && page >= discoveredTotalPages) break;
-    if (records.length < perPage && !discoveredTotalPages) break;
+    if (dedupedRecords.length < perPage && !discoveredTotalPages) break;
     if (pageDelayMs > 0) {
       await sleepFn(pageDelayMs);
     }
@@ -1501,10 +1541,11 @@ export async function runDirectoryIqFullIngest(
       const listings = filteredListings.map((item, index) =>
         extractNode(item, "listing", `listing:${site.id}`, index, site.id)
       );
-      if (listings.length > 0) {
-        await upsertNodes({ userId, sourceType: "listing", nodes: listings, siteId: site.id });
+      const uniqueListings = dedupeNodesBySourceId(listings);
+      if (uniqueListings.length > 0) {
+        await upsertNodes({ userId, sourceType: "listing", nodes: uniqueListings, siteId: site.id });
       }
-      listingsTotal += listings.length;
+      listingsTotal += uniqueListings.length;
 
       let siteBlogPosts = 0;
       const blogPostsPath = dataPostsPath;
@@ -1533,12 +1574,13 @@ export async function runDirectoryIqFullIngest(
         });
 
         const blogs = blogItems.map((item, index) => extractNode(item, "blog_post", `blog:${site.id}`, index, site.id));
-        if (blogs.length > 0) {
-          await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
+        const uniqueBlogs = dedupeNodesBySourceId(blogs);
+        if (uniqueBlogs.length > 0) {
+          await upsertNodes({ userId, sourceType: "blog_post", nodes: uniqueBlogs, siteId: site.id });
         }
-        siteBlogPosts = blogs.length;
-        blogPostsTotal += blogs.length;
-        console.info(`[directoryiq-ingest] blog_site_complete base=${baseHost} count=${blogs.length}`);
+        siteBlogPosts = uniqueBlogs.length;
+        blogPostsTotal += uniqueBlogs.length;
+        console.info(`[directoryiq-ingest] blog_site_complete base=${baseHost} count=${uniqueBlogs.length}`);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         console.warn(`[directoryiq-ingest] blog_ingest_failed base=${baseHost} error=${message}`);
@@ -1548,7 +1590,7 @@ export async function runDirectoryIqFullIngest(
         siteId: site.id,
         siteLabel: site.label,
         status: "succeeded",
-        listings: listings.length,
+        listings: uniqueListings.length,
         blogPosts: siteBlogPosts,
       });
     }
@@ -1663,19 +1705,20 @@ export async function runDirectoryIqBlogIngest(userId: string): Promise<Director
     );
 
     const blogs = blogItems.map((item, index) => extractNode(item, "blog_post", `blog:${site.id}`, index, site.id));
-    await upsertNodes({ userId, sourceType: "blog_post", nodes: blogs, siteId: site.id });
+    const uniqueBlogs = dedupeNodesBySourceId(blogs);
+    await upsertNodes({ userId, sourceType: "blog_post", nodes: uniqueBlogs, siteId: site.id });
 
     await finishRun({
       runId,
       status: "succeeded",
       listings: 0,
-      blogPosts: blogs.length,
+      blogPosts: uniqueBlogs.length,
     });
 
     return {
       runId,
       status: "succeeded",
-      counts: { blogPosts: blogs.length },
+      counts: { blogPosts: uniqueBlogs.length },
       blogPostsDataId,
     };
   } catch (error) {

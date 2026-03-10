@@ -48,6 +48,14 @@ function buildForwardHeaders(req: NextRequest): Headers {
 }
 
 export async function proxyDirectoryIqRead(req: NextRequest, upstreamPathname: string): Promise<NextResponse> {
+  return proxyDirectoryIqRequest(req, upstreamPathname, "GET");
+}
+
+export async function proxyDirectoryIqRequest(
+  req: NextRequest,
+  upstreamPathname: string,
+  method: "GET" | "POST"
+): Promise<NextResponse> {
   try {
     const base = resolveDirectoryIqApiBase();
     const target = new URL(upstreamPathname, `${base}/`);
@@ -55,7 +63,7 @@ export async function proxyDirectoryIqRead(req: NextRequest, upstreamPathname: s
     if (search) target.search = search;
 
     const upstream = await fetch(target.toString(), {
-      method: "GET",
+      method,
       headers: buildForwardHeaders(req),
       cache: "no-store",
     });
