@@ -2,7 +2,6 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { isEntitledWithFallback, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { findListingCandidates, getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeListingImageUrl } from "@/src/lib/images/normalizeListingImageUrl";
@@ -114,19 +113,6 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function hasHeaderIdentity(req: NextRequest): boolean {
-  return Boolean(
-    req.headers.get("x-user-id") ||
-      req.headers.get("x-user-email") ||
-      req.headers.get("x-forwarded-email") ||
-      req.headers.get("cf-access-authenticated-user-email")
-  );
-}
-
-function hasQueryIdentity(req: NextRequest): boolean {
-  return Boolean(req.nextUrl.searchParams.get("user_id"));
-}
-
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
@@ -145,23 +131,6 @@ export async function GET(
   }
 
   try {
-    const user = resolveUserFromHeaders(req.headers);
-    const entitled = isEntitledWithFallback(user, "directoryiq", { allowDefault: false });
-    const headerIdentity = hasHeaderIdentity(req);
-    const allowQueryIdentity = process.env.NODE_ENV !== "production" && hasQueryIdentity(req);
-
-    if (!entitled && !headerIdentity && !allowQueryIdentity) {
-      console.warn("Listing auth denied", {
-        route: "/api/directoryiq/listings/[listingId]",
-        listingId: decodedListingId,
-        has_session_cookie: Boolean(req.headers.get("cookie")),
-        has_x_user_id: Boolean(req.headers.get("x-user-id")),
-        has_cf_access_email: Boolean(req.headers.get("cf-access-authenticated-user-email")),
-        has_x_forwarded_email: Boolean(req.headers.get("x-forwarded-email")),
-      });
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
-
     if (process.env.E2E_MOCK_GRAPH === "1") {
       return NextResponse.json({
         listing: {

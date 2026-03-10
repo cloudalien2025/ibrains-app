@@ -61,14 +61,14 @@ describe("directoryiq listing route", () => {
     process.env.E2E_MOCK_GRAPH = "0";
   });
 
-  it("returns 401 when no identity headers present", async () => {
+  it("returns listing data without requiring identity headers", async () => {
     const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/98");
     const res = await GET(req, { params: { listingId: "98" } });
     const json = await res.json();
 
-    expect(res.status).toBe(401);
-    expect(json.error).toBe("unauthorized");
+    expect(res.status).toBe(200);
+    expect(json.listing.listing_name).toBe("Fixture Listing");
   });
 
   it("returns listing data with x-user-id header", async () => {

@@ -25,8 +25,8 @@ type ListingDetailResponse = {
 type ListingDetailPayload = ListingDetailResponse | { data?: Partial<ListingDetailResponse> };
 
 type IntegrationStatusResponse = {
-  openaiConfigured: boolean;
-  bdConfigured: boolean;
+  openaiConfigured: boolean | null;
+  bdConfigured: boolean | null;
 };
 
 type ListingSupportSummary = {
@@ -178,11 +178,14 @@ export default function ListingOptimizationClient({
       }
 
       if (!integrationRes.ok) {
-        setIntegrations({ openaiConfigured: false, bdConfigured: false });
+        setIntegrations((prev) => ({
+          openaiConfigured: prev.openaiConfigured,
+          bdConfigured: prev.bdConfigured,
+        }));
       } else {
         setIntegrations({
-          openaiConfigured: integrationJson.openaiConfigured,
-          bdConfigured: integrationJson.bdConfigured,
+          openaiConfigured: Boolean(integrationJson.openaiConfigured),
+          bdConfigured: Boolean(integrationJson.bdConfigured),
         });
       }
 
@@ -338,19 +341,35 @@ export default function ListingOptimizationClient({
         imageUrl={listing?.listing.mainImageUrl ?? null}
         score={displayScore}
         chips={[
-          { label: integrations.openaiConfigured ? "OpenAI Connected" : "OpenAI Missing", tone: integrations.openaiConfigured ? "good" : "warn" },
-          { label: integrations.bdConfigured ? "BD Connected" : "BD Missing", tone: integrations.bdConfigured ? "good" : "warn" },
+          {
+            label:
+              integrations.openaiConfigured === null
+                ? "OpenAI Status Pending"
+                : integrations.openaiConfigured
+                  ? "OpenAI Connected"
+                  : "OpenAI Missing",
+            tone: integrations.openaiConfigured === null ? "neutral" : integrations.openaiConfigured ? "good" : "warn",
+          },
+          {
+            label:
+              integrations.bdConfigured === null
+                ? "BD Status Pending"
+                : integrations.bdConfigured
+                  ? "BD Connected"
+                  : "BD Missing",
+            tone: integrations.bdConfigured === null ? "neutral" : integrations.bdConfigured ? "good" : "warn",
+          },
         ]}
       />
 
-      {!integrations.openaiConfigured ? (
+      {integrations.openaiConfigured === false ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           OpenAI not configured. Configure it in{" "}
           <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Signal Sources</Link>.
         </div>
       ) : null}
 
-      {!integrations.bdConfigured ? (
+      {integrations.bdConfigured === false ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           Brilliant Directories not configured. Configure it in{" "}
           <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Signal Sources</Link>.
