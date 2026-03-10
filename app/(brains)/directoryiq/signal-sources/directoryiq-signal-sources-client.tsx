@@ -4,6 +4,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import type { DirectoryIqConnector, DirectoryIqCredentialStatus } from "@/lib/directoryiq/signalSourceCredentials";
+import {
+  normalizeBdSiteTestVerification,
+  type BdSiteVerificationSnapshot,
+} from "@/src/lib/directoryiq/siteTestVerification";
 
 const API_BASE = (process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ?? "").trim().replace(/\/+$/, "");
 const API_BASE_READY = /^https?:\/\//i.test(API_BASE);
@@ -57,6 +61,11 @@ type BdSite = {
   blogPostsPath: string | null;
   maskedSecret: string;
   secretPresent: boolean;
+};
+
+type BdSiteVerificationState = {
+  testedAt: string;
+  verification: BdSiteVerificationSnapshot;
 };
 
 export default function DirectoryIqSignalSourcesClient() {
@@ -132,6 +141,7 @@ export default function DirectoryIqSignalSourcesClient() {
   const [bdEditingId, setBdEditingId] = useState<string | null>(null);
   const [bdSaving, setBdSaving] = useState(false);
   const [bdTesting, setBdTesting] = useState<string | null>(null);
+  const [bdSiteVerificationById, setBdSiteVerificationById] = useState<Record<string, BdSiteVerificationState>>({});
   const [bdForm, setBdForm] = useState({
     label: "",
     baseUrl: "",
@@ -416,14 +426,13 @@ export default function DirectoryIqSignalSourcesClient() {
     setBdSiteNotice(null);
     try {
       const response = await fetch(apiUrl(`/api/directoryiq/sites/${siteId}/test`), { method: "POST" });
-      const json = (await response.json()) as {
-        error?: string;
-        preflight?: { ok?: boolean };
-        search?: { ok?: boolean };
-      };
+      const json = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(json.error ?? "Test failed");
+      const verification = normalizeBdSiteTestVerification(json);
+      const testedAt = new Date().toISOString();
+      setBdSiteVerificationById((prev) => ({ ...prev, [siteId]: { testedAt, verification } }));
       setBdSiteNotice(
-        `Test: preflight=${json.preflight?.ok ? "ok" : "failed"} search=${json.search?.ok ? "ok" : "failed"}`
+        `Tested ${siteId}: ${verification.overall === "verified" ? "verified" : "unresolved"}`
       );
     } catch (e) {
       setBdSiteError(e instanceof Error ? e.message : "Unknown test error");
@@ -596,33 +605,53 @@ export default function DirectoryIqSignalSourcesClient() {
             {bdSites.length === 0 ? (
               <div className="text-xs text-slate-400">No BD sites connected yet.</div>
             ) : (
-              bdSites.map((site) => (
-                <div key={site.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <div className="text-sm text-slate-100">{site.label || site.baseUrl}</div>
-                      <div className="text-xs text-slate-400">{site.baseUrl}</div>
-                      <div className={`text-xs ${site.secretPresent ? "text-slate-500" : "text-rose-200"}`}>
-                        API key: {site.secretPresent ? site.maskedSecret : "missing"}
+              bdSites.map((site) => {
+                const testState = bdSiteVerificationById[site.id];
+                const verification = testState?.verification ?? null;
+                const testedAtText = testState ? new Date(testState.testedAt).toLocaleTimeString() : null;
+                const statusClass = verification?.overall === "verified" ? "text-emerald-200" : "text-amber-200";
+                const listingsCountText =
+                  verification?.listingsCount != null ? ` (${verification.listingsCount})` : "";
+                const blogCountText =
+                  verification?.blogPostsCount != null ? ` (${verification.blogPostsCount})` : "";
+
+                return (
+                  <div key={site.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <div className="text-sm text-slate-100">{site.label || site.baseUrl}</div>
+                        <div className="text-xs text-slate-400">{site.baseUrl}</div>
+                        <div className={`text-xs ${site.secretPresent ? "text-slate-500" : "text-rose-200"}`}>
+                          API key: {site.secretPresent ? site.maskedSecret : "missing"}
+                        </div>
+                        <div className="text-xs text-slate-500">
+                          Listings ID: {site.listingsDataId ?? "-"} · Blog ID: {site.blogPostsDataId ?? "-"} · {site.enabled ? "Enabled" : "Disabled"}
+                        </div>
+                        {verification ? (
+                          <div className={`mt-1 text-xs ${statusClass}`}>
+                            Verification: {verification.overall === "verified" ? "Verified" : "Unresolved"} · Listings{" "}
+                            {verification.listings}
+                            {listingsCountText} · Blog {verification.blogPosts}
+                            {blogCountText}
+                            {testedAtText ? ` · Tested ${testedAtText}` : ""}
+                          </div>
+                        ) : null}
                       </div>
-                      <div className="text-xs text-slate-500">
-                        Listings ID: {site.listingsDataId ?? "-"} · Blog ID: {site.blogPostsDataId ?? "-"} · {site.enabled ? "Enabled" : "Disabled"}
+                      <div className="flex flex-wrap gap-2">
+                        <NeonButton variant="secondary" onClick={() => startEditSite(site)}>
+                          Edit
+                        </NeonButton>
+                        <NeonButton variant="secondary" onClick={() => void testSite(site.id)} disabled={bdTesting === site.id}>
+                          {bdTesting === site.id ? "Testing..." : "Test"}
+                        </NeonButton>
+                        <NeonButton variant="secondary" onClick={() => void deleteSite(site.id)} disabled={bdSaving}>
+                          Delete
+                        </NeonButton>
                       </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <NeonButton variant="secondary" onClick={() => startEditSite(site)}>
-                        Edit
-                      </NeonButton>
-                      <NeonButton variant="secondary" onClick={() => void testSite(site.id)} disabled={bdTesting === site.id}>
-                        {bdTesting === site.id ? "Testing..." : "Test"}
-                      </NeonButton>
-                      <NeonButton variant="secondary" onClick={() => void deleteSite(site.id)} disabled={bdSaving}>
-                        Delete
-                      </NeonButton>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
