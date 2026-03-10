@@ -1374,6 +1374,40 @@ export async function runDirectoryIqFullIngest(
             updateListingsCheckpoint({ siteId: site.id, lastPage: page }).catch(() => {});
           },
         });
+
+        // If checkpoint resume lands past available pages, retry from page 1 once.
+        if (listingsItems.length === 0 && startPage > 1) {
+          console.info(
+            `[directoryiq-ingest] checkpoint_empty_retry site_id=${site.id} start_page=${startPage} retry_start_page=1`
+          );
+          listingsItems = await fetchBdListingsPaged({
+            baseUrl,
+            apiKey,
+            path: listingsPath,
+            dataId: listingsDataId,
+            limit: listingsLimit,
+            maxPages: 200,
+            startPage: 1,
+            pageDelayMs,
+            maxRetries,
+            retryBaseDelayMs,
+            retryMaxDelayMs,
+            onPage: ({ page, limit, received, total }) => {
+              pagesFetched += 1;
+              itemsTotal = total;
+              console.info(
+                JSON.stringify({
+                  phase: "bd_page",
+                  page,
+                  limit,
+                  returned: received,
+                  total,
+                })
+              );
+              updateListingsCheckpoint({ siteId: site.id, lastPage: page }).catch(() => {});
+            },
+          });
+        }
       } catch (error) {
         if (error instanceof BdRequestFailure) {
           const code = error.statusCode === 429 ? "bd_rate_limited" : "bd_request_failed";
