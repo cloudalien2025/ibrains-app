@@ -1308,8 +1308,14 @@ export async function runDirectoryIqFullIngest(
       );
 
       if (!preflightOk) {
+        const preflightCode: BdIngestErrorCode =
+          preflightResponse.status === 429
+            ? "bd_rate_limited"
+            : preflightResponse.status >= 500
+              ? "bd_request_failed"
+              : "bd_integration_invalid";
         throw new BdIngestError({
-          code: "bd_integration_invalid",
+          code: preflightCode,
           baseUrlPresent,
           apiKeyPresent,
           listingsPathPresent: listingsPathPresentLocal,
