@@ -159,4 +159,81 @@ describe("listing support service", () => {
     expect(support.summary.outboundSupportLinkCount).toBe(2);
     expect(support.summary.connectedSupportPageCount).toBe(1);
   });
+
+  it("returns deterministic sorted support arrays", async () => {
+    getLatestRun.mockResolvedValue({
+      id: "run-3",
+      status: "completed",
+      stats: {},
+      startedAt: "2026-03-08T01:00:00Z",
+      completedAt: "2026-03-08T02:00:00Z",
+    });
+
+    queryDb.mockImplementation(async (sql: string) => {
+      if (sql.includes("FROM authority_graph_nodes") && sql.includes("node_type = 'listing'")) {
+        return [{ id: "listing-node", external_id: "listing-9", canonical_url: "https://example.com/listing-9", title: "Listing Nine" }];
+      }
+      if (sql.includes("FROM authority_graph_edges")) {
+        return [
+          {
+            edge_id: "edge-2",
+            edge_type: "mention_without_link",
+            blog_node_id: "blog-z",
+            blog_external_id: "blog-z",
+            blog_title: "Blog Z",
+            blog_url: "https://example.com/blog-z",
+            anchor_text: null,
+            context_snippet: "Mention z.",
+            detected_at: "2026-03-07T11:00:00Z",
+          },
+          {
+            edge_id: "edge-3",
+            edge_type: "mention_without_link",
+            blog_node_id: "blog-a",
+            blog_external_id: "blog-a",
+            blog_title: "Blog A",
+            blog_url: "https://example.com/blog-a",
+            anchor_text: null,
+            context_snippet: "Mention a.",
+            detected_at: "2026-03-07T11:30:00Z",
+          },
+          {
+            edge_id: "edge-1",
+            edge_type: "internal_link",
+            blog_node_id: "blog-m",
+            blog_external_id: "blog-m",
+            blog_title: "Blog M",
+            blog_url: "https://example.com/blog-m",
+            anchor_text: "Listing Nine",
+            context_snippet: "Linked.",
+            detected_at: "2026-03-07T10:00:00Z",
+          },
+        ];
+      }
+      if (sql.includes("FROM directoryiq_listing_backlinks")) {
+        return [
+          { blog_node_id: null, blog_url: "https://example.com/zzz", blog_title: null, blog_canonical_url: null },
+          { blog_node_id: "blog-a-node", blog_url: "https://example.com/aaa", blog_title: "A", blog_canonical_url: "https://example.com/aaa" },
+        ];
+      }
+      if (sql.includes("FROM directoryiq_hub_members")) {
+        return [
+          { hub_id: "hub-z", hub_title: "Z Hub", category_slug: "z", geo_slug: "z", topic_slug: "z" },
+          { hub_id: "hub-a", hub_title: "A Hub", category_slug: "a", geo_slug: "a", topic_slug: "a" },
+        ];
+      }
+      return [];
+    });
+
+    const support = await getListingCurrentSupport({
+      tenantId: "default",
+      listingId: "listing-9",
+      listingTitle: "Listing Nine",
+      listingUrl: "https://example.com/listing-9",
+    });
+
+    expect(support.mentionsWithoutLinks.map((row) => row.sourceId)).toEqual(["blog-a", "blog-z"]);
+    expect(support.outboundSupportLinks.map((row) => row.url)).toEqual(["https://example.com/aaa", "https://example.com/zzz"]);
+    expect(support.connectedSupportPages.map((row) => row.id)).toEqual(["hub-a", "hub-z"]);
+  });
 });
