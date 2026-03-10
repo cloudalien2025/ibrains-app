@@ -166,6 +166,79 @@ describe("directoryiq BD ingest", () => {
     expect(result.counts.listings).toBe(1);
   });
 
+  it("records unique listing/blog counts when paged responses repeat the same entities", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const page = body.get("page");
+        const limit = body.get("limit");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+        if (dataId === "75" && (page === "1" || page === "2")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ group_id: "listing-1", group_name: "Alpha" }] }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+
+      if (url.includes("/api/v2/data_posts/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const page = body.get("page");
+        if (dataId === "14" && (page === "1" || page === "2")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", data: [{ post_id: "blog-1", post_title: "Guide" }] }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", data: [] }),
+          headers: new Headers(),
+        });
+      }
+
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import("@/app/api/directoryiq/_utils/ingest");
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+
+    expect(result.status).toBe("succeeded");
+    expect(result.counts).toEqual({ listings: 1, blogPosts: 1 });
+
+    const finishRunCall = query.mock.calls.find(
+      ([sql]) => typeof sql === "string" && sql.includes("UPDATE directoryiq_ingest_runs")
+    );
+    expect(finishRunCall?.[1]?.[2]).toBe(1);
+    expect(finishRunCall?.[1]?.[3]).toBe(1);
+  });
+
   it("ingests listings when rows are returned in data while message is empty", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/users_portfolio_groups/search")) {
