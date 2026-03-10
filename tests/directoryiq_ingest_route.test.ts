@@ -179,6 +179,86 @@ describe("directoryiq ingest route", () => {
     expect(json.verification.blog_posts.status).toBe("verified");
   });
 
+  it("site test route verifies listings when rows are nested under message.posts", async () => {
+    const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/data_categories/get/75")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        expect(body.get("action")).toBe("search");
+        expect(body.get("output_type")).toBe("array");
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ status: "success", message: { posts: [{ group_id: "12", group_name: "Nested Listing" }] } }),
+        });
+      }
+      if (url.includes("/api/v2/data_posts/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [{ post_id: "900", post_title: "Guide" }] }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
+    });
+    // @ts-expect-error test override
+    global.fetch = fetchMock;
+
+    const { POST } = await import("@/app/api/directoryiq/sites/[siteId]/test/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/sites/site-1/test", {
+      method: "POST",
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await POST(req, { params: { siteId: "site-1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.verification.listings.status).toBe("verified");
+  });
+
+  it("site test route does not treat wrapper success without listing-like rows as verified", async () => {
+    const fetchMock = vi.fn((url: string) => {
+      if (url.includes("/api/v2/data_categories/get/75")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { data_type: "4" } }),
+        });
+      }
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [{ post_id: "900", post_title: "Blog Row" }] }),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected" });
+    });
+    // @ts-expect-error test override
+    global.fetch = fetchMock;
+
+    const { POST } = await import("@/app/api/directoryiq/sites/[siteId]/test/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/sites/site-1/test", {
+      method: "POST",
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await POST(req, { params: { siteId: "site-1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.verification.listings.status).toBe("unresolved");
+  });
+
   it("site test route returns unresolved status when verification fails", async () => {
     getBdSite.mockResolvedValueOnce({
       id: "site-1",

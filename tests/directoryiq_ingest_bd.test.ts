@@ -203,6 +203,107 @@ describe("directoryiq BD ingest", () => {
     expect(listingInsert?.[1]?.[2]).toBe("site-1:listing-group-2");
   });
 
+  it("ingests listings when rows are nested under message.posts", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const limit = body.get("limit");
+        const page = body.get("page");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+        if (dataId === "75" && page === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({
+                status: "success",
+                message: {
+                  posts: [{ group_id: "listing-group-3", group_name: "Gamma Listing" }],
+                },
+              }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: { posts: [] } }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+    expect(result.counts.listings).toBe(1);
+
+    const nodeInserts = query.mock.calls.filter(
+      ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO directoryiq_nodes")
+    ) as Array<[string, unknown[]]>;
+    const listingInsert = nodeInserts.find(([, params]) => params?.[1] === "listing");
+    expect(listingInsert?.[1]?.[2]).toBe("site-1:listing-group-3");
+  });
+
+  it("does not ingest wrapper-success rows that are not listing-like", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const limit = body.get("limit");
+        const page = body.get("page");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+        if (dataId === "75" && page === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ post_id: "900", post_title: "Blog Row" }] }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+    expect(result.counts.listings).toBe(0);
+  });
   it("does not fall back to fixture when search fails", async () => {
     let searchCalls = 0;
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {

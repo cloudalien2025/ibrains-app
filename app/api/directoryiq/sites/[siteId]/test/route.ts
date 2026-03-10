@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { decryptBdSiteKey, getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeBdBaseUrl } from "@/app/api/directoryiq/_utils/bdApi";
+import { extractBdListingRows, hasBdListingLikeRows } from "@/app/api/directoryiq/_utils/listingResponse";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -18,44 +19,6 @@ function normalizePath(path: string): string {
 function isSuccessWrapper(payload: Record<string, unknown> | null): boolean {
   const status = typeof payload?.status === "string" ? payload.status.toLowerCase() : null;
   return !status || status === "success";
-}
-
-function asRows(value: unknown): Record<string, unknown>[] {
-  return Array.isArray(value) ? value.filter((row): row is Record<string, unknown> => !!row && typeof row === "object") : [];
-}
-
-function extractRows(payload: Record<string, unknown> | null): Record<string, unknown>[] {
-  if (!payload) return [];
-  const direct = [payload.message, payload.data, payload.items, payload.rows, payload.records];
-  for (const candidate of direct) {
-    const rows = asRows(candidate);
-    if (rows.length > 0) return rows;
-  }
-  const nested = [payload.message, payload.data].filter(
-    (candidate): candidate is Record<string, unknown> => !!candidate && typeof candidate === "object" && !Array.isArray(candidate)
-  );
-  for (const candidate of nested) {
-    const rows = [candidate.items, candidate.rows, candidate.records, candidate.posts, candidate.data_posts];
-    for (const rowCandidate of rows) {
-      const parsed = asRows(rowCandidate);
-      if (parsed.length > 0) return parsed;
-    }
-  }
-  return [];
-}
-
-function hasListingLikeRow(rows: Record<string, unknown>[]): boolean {
-  return rows.some((row) => {
-    const hasGroupId = row.group_id != null;
-    const hasListingField = Boolean(
-      asString(row.group_name) ||
-        asString(row.group_filename) ||
-        asString(row.url) ||
-        asString(row.title) ||
-        asString(row.name)
-    );
-    return hasGroupId && hasListingField;
-  });
 }
 
 function canonicalPostId(row: Record<string, unknown>): string {
@@ -188,8 +151,8 @@ export async function POST(
         page: 1,
       });
       const searchJson = search.json as Record<string, unknown> | null;
-      const searchRows = extractRows(searchJson);
-      const listingLike = hasListingLikeRow(searchRows);
+      const searchRows = extractBdListingRows(searchJson);
+      const listingLike = hasBdListingLikeRows(searchRows);
 
       const verified = preflight.ok && isSuccessWrapper(preflightJson) && search.ok && isSuccessWrapper(searchJson) && listingLike;
 
@@ -230,7 +193,7 @@ export async function POST(
           page: 1,
         });
         const searchJson = search.json as Record<string, unknown> | null;
-        const rows = extractRows(searchJson);
+        const rows = extractBdListingRows(searchJson);
         const verified = search.ok && isSuccessWrapper(searchJson) && hasBlogLikeRow(rows);
         if (verified) {
           blog = {
