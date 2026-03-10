@@ -110,6 +110,10 @@ function normalizeTitle(value: string | null | undefined, fallback: string): str
   return trimmed || fallback;
 }
 
+function sortText(value: string | null | undefined): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
 export async function getListingCurrentSupport(params: {
   tenantId: string;
   listingId: string;
@@ -232,25 +236,28 @@ export async function getListingCurrentSupport(params: {
 
   const linkedSourceIds = new Set(inboundLinkedMap.keys());
 
-  const inboundLinkedSupport: ListingSupportInbound[] = Array.from(inboundLinkedMap.values()).map((row) => ({
-    sourceId: row.sourceId,
-    sourceType: "blog_post",
-    title: row.title,
-    url: row.url,
-    anchors: Array.from(row.anchors).sort((a, b) => a.localeCompare(b)),
-    relationshipType: "links_to_listing",
-  }));
+  const inboundLinkedSupport: ListingSupportInbound[] = Array.from(inboundLinkedMap.values())
+    .map((row) => ({
+      sourceId: row.sourceId,
+      sourceType: "blog_post" as const,
+      title: row.title,
+      url: row.url,
+      anchors: Array.from(row.anchors).sort((a, b) => a.localeCompare(b)),
+      relationshipType: "links_to_listing" as const,
+    }))
+    .sort((left, right) => sortText(left.sourceId).localeCompare(sortText(right.sourceId)));
 
   const mentionsWithoutLinks: ListingSupportMention[] = Array.from(mentionMap.entries())
     .filter(([blogNodeId]) => !linkedSourceIds.has(blogNodeId))
     .map(([, row]) => ({
       sourceId: row.sourceId,
-      sourceType: "blog_post",
+      sourceType: "blog_post" as const,
       title: row.title,
       url: row.url,
       mentionSnippet: row.mentionSnippet,
-      relationshipType: "mentions_without_link",
-    }));
+      relationshipType: "mentions_without_link" as const,
+    }))
+    .sort((left, right) => sortText(left.sourceId).localeCompare(sortText(right.sourceId)));
 
   const outboundRows = await queryDb<OutboundRow>(
     `
@@ -270,13 +277,18 @@ export async function getListingCurrentSupport(params: {
     [params.tenantId, params.listingId]
   );
 
-  const outboundSupportLinks: ListingSupportOutbound[] = outboundRows.map((row) => ({
-    targetId: row.blog_node_id,
-    targetType: row.blog_node_id ? "blog_post" : "page",
-    title: row.blog_title,
-    url: row.blog_canonical_url ?? row.blog_url,
-    relationshipType: "listing_links_out",
-  }));
+  const outboundSupportLinks: ListingSupportOutbound[] = outboundRows
+    .map((row) => {
+      const targetType: ListingSupportOutbound["targetType"] = row.blog_node_id ? "blog_post" : "page";
+      return {
+        targetId: row.blog_node_id,
+        targetType,
+        title: row.blog_title,
+        url: row.blog_canonical_url ?? row.blog_url,
+        relationshipType: "listing_links_out" as const,
+      };
+    })
+    .sort((left, right) => sortText(left.url).localeCompare(sortText(right.url)));
 
   const hubRows = await queryDb<HubRow>(
     `
@@ -296,15 +308,17 @@ export async function getListingCurrentSupport(params: {
     [params.tenantId, params.listingId]
   );
 
-  const connectedSupportPages: ListingSupportConnectedPage[] = hubRows.map((row) => {
-    const fallbackTitle = [row.category_slug, row.geo_slug, row.topic_slug].filter(Boolean).join(" · ");
-    return {
-      id: row.hub_id,
-      type: "hub",
-      title: row.hub_title ?? (fallbackTitle || null),
-      url: null,
-    };
-  });
+  const connectedSupportPages: ListingSupportConnectedPage[] = hubRows
+    .map((row) => {
+      const fallbackTitle = [row.category_slug, row.geo_slug, row.topic_slug].filter(Boolean).join(" · ");
+      return {
+        id: row.hub_id,
+        type: "hub" as const,
+        title: row.hub_title ?? (fallbackTitle || null),
+        url: null,
+      };
+    })
+    .sort((left, right) => sortText(left.id ?? left.title).localeCompare(sortText(right.id ?? right.title)));
 
   const summary: ListingSupportSummary = {
     inboundLinkedSupportCount: inboundLinkedSupport.length,

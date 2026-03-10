@@ -84,6 +84,21 @@ type ListingSupportModel = {
   connectedSupportPages: ListingSupportConnectedPage[];
 };
 
+type ListingSupportResponse = {
+  ok: boolean;
+  support?: ListingSupportModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "supported" | "no_support_data";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -193,13 +208,12 @@ export default function ListingOptimizationClient({
         const supportRes = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/support${siteQuery}`, {
           cache: "no-store",
         });
-        const supportJson = (await supportRes.json().catch(() => ({}))) as {
-          support?: ListingSupportModel;
-          error?: { message?: string } | string;
-        };
-        if (!supportRes.ok) {
+        const supportJson = (await supportRes.json().catch(() => ({}))) as ListingSupportResponse;
+        if (!supportRes.ok || !supportJson.ok) {
           const supportMessage =
-            typeof supportJson.error === "string" ? supportJson.error : supportJson.error?.message ?? "Failed to load support model.";
+            typeof supportJson.error === "string"
+              ? supportJson.error
+              : supportJson.error?.message ?? "Failed to load support model.";
           setSupportError(supportMessage);
           setSupport(null);
         } else {
