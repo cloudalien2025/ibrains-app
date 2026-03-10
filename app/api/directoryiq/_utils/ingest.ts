@@ -1242,7 +1242,7 @@ export async function runDirectoryIqFullIngest(
       const listingsDataIdPresent = typeof listingsDataId === "number";
       const listingsLimit =
         asNumber(process.env.DIRECTORYIQ_LISTINGS_LIMIT) ??
-        100;
+        5;
       const dataPostsPath =
         asString(site.blogPostsPath) ||
         asString(process.env.DIRECTORYIQ_BLOG_POSTS_PATH) ||
