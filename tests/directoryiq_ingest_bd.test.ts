@@ -72,6 +72,25 @@ describe("directoryiq BD ingest", () => {
     });
   });
 
+  it("classifies preflight 429 as bd_rate_limited instead of bd_integration_invalid", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: false,
+      status: 429,
+      text: async () => "rate limited",
+      headers: new Headers(),
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    await expect(runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001")).rejects.toMatchObject({
+      code: "bd_rate_limited",
+      statusCode: 429,
+      endpoint: "/api/v2/users_portfolio_groups/search",
+    });
+  });
+
   it("fails preflight when data_type is not multi-image", async () => {
     fetchMock.mockResolvedValueOnce({
       ok: true,
