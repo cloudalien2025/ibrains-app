@@ -1188,6 +1188,17 @@ export async function runDirectoryIqFullIngest(
   }
 
   let runId = "";
+  let listingsTotal = 0;
+  let blogPostsTotal = 0;
+  const siteResults: Array<{
+    siteId: string;
+    siteLabel: string | null;
+    status: "succeeded" | "failed";
+    listings: number;
+    blogPosts: number;
+    errorCode?: string | null;
+  }> = [];
+  let hasFailures = false;
   try {
     const fixtureCleanup = await query<{ count: number }>(
       `
@@ -1205,18 +1216,6 @@ export async function runDirectoryIqFullIngest(
 
     const runBaseUrl = sites[0]?.baseUrl ?? "multi://brilliant_directories";
     runId = await createRun(userId, runBaseUrl);
-
-    let listingsTotal = 0;
-    let blogPostsTotal = 0;
-    const siteResults: Array<{
-      siteId: string;
-      siteLabel: string | null;
-      status: "succeeded" | "failed";
-      listings: number;
-      blogPosts: number;
-      errorCode?: string | null;
-    }> = [];
-    let hasFailures = false;
     console.info(
       `[directoryiq-ingest] integrations_selected count=${sites.length} fallback=false`
     );
@@ -1571,11 +1570,12 @@ export async function runDirectoryIqFullIngest(
   } catch (error) {
     if (error instanceof BdIngestError) {
       if (runId) {
+        const observedListings = error.listingsIngested ?? listingsTotal;
         await finishRun({
           runId,
           status: "failed",
-          listings: 0,
-          blogPosts: 0,
+          listings: observedListings,
+          blogPosts: blogPostsTotal,
           errorMessage: error.code,
         });
       }
@@ -1588,8 +1588,8 @@ export async function runDirectoryIqFullIngest(
       await finishRun({
         runId,
         status: "failed",
-        listings: 0,
-        blogPosts: 0,
+        listings: listingsTotal,
+        blogPosts: blogPostsTotal,
         errorMessage: message,
       });
     }
@@ -1599,7 +1599,8 @@ export async function runDirectoryIqFullIngest(
     return {
       runId,
       status: "failed",
-      counts: { listings: 0, blogPosts: 0 },
+      counts: { listings: listingsTotal, blogPosts: blogPostsTotal },
+      siteResults,
       errorMessage: message,
     };
   }
