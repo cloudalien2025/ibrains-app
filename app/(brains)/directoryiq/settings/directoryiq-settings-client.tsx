@@ -60,13 +60,13 @@ export default function DirectoryIqSettingsClient() {
       {error ? <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
       {notice ? <div className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{notice}</div> : null}
 
-      <HudCard title="Signal Sources Integrations" subtitle="Manage all provider credentials in one place.">
+      <HudCard title="Signal Sources" subtitle="Manage all provider credentials in one canonical place.">
         <div className="text-sm text-slate-300">
-          Configure Brilliant Directories API, OpenAI API (BYO), GA4, and SerpAPI in the integrations workspace.
+          Configure Brilliant Directories API, OpenAI API (BYO), GA4, and SerpAPI in Signal Sources.
         </div>
         <div className="mt-3">
-          <Link href="/directoryiq/settings/integrations">
-            <NeonButton>Open Integrations</NeonButton>
+          <Link href="/directoryiq/signal-sources">
+            <NeonButton>Open Signal Sources</NeonButton>
           </Link>
         </div>
       </HudCard>

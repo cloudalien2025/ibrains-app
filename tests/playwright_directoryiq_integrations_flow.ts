@@ -5,7 +5,7 @@ async function run() {
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage();
 
-  await page.goto(`${baseUrl}/directoryiq/settings/integrations`, { waitUntil: "networkidle" });
+  await page.goto(`${baseUrl}/directoryiq/signal-sources`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Configure" }).first().click();
   await page.getByPlaceholder("Base URL (e.g. https://your-bd-site.com)").fill("https://example.com");
   await page.getByPlaceholder("X-Api-Key").fill("bd_test_key");

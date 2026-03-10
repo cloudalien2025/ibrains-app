@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { permanentRedirect } from "next/navigation";
 
 export default function DirectoryIqIntegrationsRedirect() {
-  redirect("/directoryiq/signal-sources");
+  permanentRedirect("/directoryiq/signal-sources");
 }

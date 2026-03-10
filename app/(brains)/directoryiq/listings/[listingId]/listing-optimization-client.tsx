@@ -346,14 +346,14 @@ export default function ListingOptimizationClient({
       {!integrations.openaiConfigured ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           OpenAI not configured. Configure it in{" "}
-          <Link href="/directoryiq/settings/integrations" className="underline">DirectoryIQ Integrations</Link>.
+          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Signal Sources</Link>.
         </div>
       ) : null}
 
       {!integrations.bdConfigured ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
           Brilliant Directories not configured. Configure it in{" "}
-          <Link href="/directoryiq/settings/integrations" className="underline">DirectoryIQ Integrations</Link>.
+          <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Signal Sources</Link>.
         </div>
       ) : null}
 

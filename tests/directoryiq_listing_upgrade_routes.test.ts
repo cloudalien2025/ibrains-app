@@ -59,7 +59,7 @@ const resolveListingEvaluation = vi.fn(async () => ({
 }));
 
 const validateOpenAiKeyPresent = vi.fn((value: string | null) => {
-  if (!value) throw new Error("OpenAI API not configured. Go to DirectoryIQ -> Settings -> Integrations.");
+  if (!value) throw new Error("OpenAI API not configured. Go to DirectoryIQ -> Signal Sources.");
   return value;
 });
 const generateListingUpgradeDraft = vi.fn(async () => "Improved description.");
