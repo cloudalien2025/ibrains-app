@@ -4,6 +4,7 @@ import {
   parseBdRecords,
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
+import { extractBdListingRows, isBdListingLikeRow } from "@/app/api/directoryiq/_utils/listingResponse";
 import {
   BdSiteRow,
   decryptBdSiteKey,
@@ -266,10 +267,17 @@ function extractRecordsFromUnknownShape(payload: Record<string, unknown>): Recor
     if (isRecordArray(candidate)) return candidate;
   }
 
-  const nested = payload.data;
-  if (nested && typeof nested === "object") {
-    for (const value of Object.values(nested as Record<string, unknown>)) {
-      if (isRecordArray(value)) return value;
+  const nestedCandidates = [payload.message, payload.data];
+  for (const nested of nestedCandidates) {
+    if (nested && typeof nested === "object" && !Array.isArray(nested)) {
+      const typed = nested as Record<string, unknown>;
+      const preferredNested = [typed.items, typed.rows, typed.records, typed.posts, typed.data_posts, typed.listings];
+      for (const candidate of preferredNested) {
+        if (isRecordArray(candidate)) return candidate;
+      }
+      for (const value of Object.values(typed)) {
+        if (isRecordArray(value)) return value;
+      }
     }
   }
 
@@ -373,7 +381,7 @@ async function fetchBdListingsPaged(params: {
     const payload = normalizeBdJson(response.json);
     if (page === 1 && shouldLogBdDebug(`response:listings:${params.path}`)) {
       const totals = parseBdTotals(payload);
-      const records = extractRecordsFromUnknownShape(payload);
+      const records = extractBdListingRows(payload);
       console.info(
         JSON.stringify({
           phase: "bd_response",
@@ -401,17 +409,7 @@ async function fetchBdListingsPaged(params: {
       });
     }
 
-    const messageRecords = Array.isArray(payload.message)
-      ? payload.message.filter((row) => row && typeof row === "object") as Record<string, unknown>[]
-      : [];
-    const parsedRecords = parseBdRecords(payload);
-    const shapeFallbackRecords = extractRecordsFromUnknownShape(payload);
-    const records =
-      messageRecords.length > 0
-        ? messageRecords
-        : parsedRecords.length > 0
-          ? parsedRecords
-          : shapeFallbackRecords;
+    const records = extractBdListingRows(payload).filter((row) => isBdListingLikeRow(row));
     params.onPage?.({ page, limit: params.limit, received: records.length, total: all.length + records.length });
 
     if (records.length === 0) break;
