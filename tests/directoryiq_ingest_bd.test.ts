@@ -355,6 +355,97 @@ describe("directoryiq BD ingest", () => {
     expect(result.counts.listings).toBe(2);
   });
 
+  it("retries listings from page 1 when checkpoint resume returns zero rows", async () => {
+    listBdSiteRows.mockResolvedValueOnce([
+      {
+        id: "site-1",
+        user_id: "00000000-0000-4000-8000-000000000001",
+        label: "Site One",
+        base_url: "https://example.com",
+        enabled: true,
+        listings_data_id: 75,
+        blog_posts_data_id: 14,
+        listings_path: "/api/v2/users_portfolio_groups/search",
+        blog_posts_path: null,
+        ingest_checkpoint_json: { listings_last_page: 1 },
+        secret_ciphertext: "cipher",
+        secret_last4: "1234",
+        secret_length: 12,
+        created_at: "2026-01-01",
+        updated_at: "2026-01-01",
+      },
+    ]);
+
+    const listingPages: string[] = [];
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const limit = body.get("limit");
+        const page = body.get("page");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+
+        if (dataId === "75") {
+          listingPages.push(page ?? "");
+          if (page === "2") {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              text: async () => JSON.stringify({ status: "success", message: [] }),
+              headers: new Headers(),
+            });
+          }
+          if (page === "1") {
+            return Promise.resolve({
+              ok: true,
+              status: 200,
+              text: async () =>
+                JSON.stringify({ status: "success", message: [{ group_id: "1", group_name: "Alpha" }] }),
+              headers: new Headers(),
+            });
+          }
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [] }),
+            headers: new Headers(),
+          });
+        }
+      }
+
+      if (url.includes("/api/v2/data_posts/search")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+    expect(result.counts.listings).toBe(1);
+    expect(listingPages[0]).toBe("2");
+    expect(listingPages).toContain("1");
+  });
+
   it("resolves true_post_id with form search contract and bounded pagination", async () => {
     const searchBodies: URLSearchParams[] = [];
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
