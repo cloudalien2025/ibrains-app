@@ -41,6 +41,32 @@ describe("directoryiq listing detail route proxy", () => {
     expect(headers.get("x-user-id")).toBe("00000000-0000-4000-8000-000000000001");
   });
 
+  it("forwards Cloudflare Access JWT assertion header for external auth", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/3", {
+      headers: {
+        "cf-access-jwt-assertion": "test-cf-access-jwt",
+      },
+    });
+
+    const res = await GET(req, { params: { listingId: "3" } });
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const headers = new Headers(init.headers);
+    expect(headers.get("cf-access-jwt-assertion")).toBe("test-cf-access-jwt");
+  });
+
   it("returns 502 when external listing detail proxy is unreachable", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT"));
     vi.stubGlobal("fetch", fetchMock);

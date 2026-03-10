@@ -6,6 +6,7 @@ const FORWARDED_REQUEST_HEADERS = [
   "accept",
   "accept-language",
   "authorization",
+  "cf-access-jwt-assertion",
   "cf-access-authenticated-user-email",
   "cookie",
   "x-forwarded-email",
