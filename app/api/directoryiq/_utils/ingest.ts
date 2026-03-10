@@ -401,22 +401,17 @@ async function fetchBdListingsPaged(params: {
       });
     }
 
-    const message = payload.message;
-    if (!Array.isArray(message)) {
-      const raw =
-        typeof message === "string"
-          ? message
-          : JSON.stringify(message ?? payload).slice(0, 120);
-      const snippet = raw.length > 120 ? `${raw.slice(0, 120)}...` : raw;
-      throw new BdRequestFailure({
-        statusCode: response.status,
-        endpoint: params.path,
-        page,
-        snippet,
-      });
-    }
-
-    const records = message.filter((row) => row && typeof row === "object") as Record<string, unknown>[];
+    const messageRecords = Array.isArray(payload.message)
+      ? payload.message.filter((row) => row && typeof row === "object") as Record<string, unknown>[]
+      : [];
+    const parsedRecords = parseBdRecords(payload);
+    const shapeFallbackRecords = extractRecordsFromUnknownShape(payload);
+    const records =
+      messageRecords.length > 0
+        ? messageRecords
+        : parsedRecords.length > 0
+          ? parsedRecords
+          : shapeFallbackRecords;
     params.onPage?.({ page, limit: params.limit, received: records.length, total: all.length + records.length });
 
     if (records.length === 0) break;

@@ -147,6 +147,62 @@ describe("directoryiq BD ingest", () => {
     expect(result.counts.listings).toBe(1);
   });
 
+  it("ingests listings when rows are returned in data while message is empty", async () => {
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        const dataId = body.get("data_id");
+        const limit = body.get("limit");
+        const page = body.get("page");
+        if (dataId === "75" && limit === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () => JSON.stringify({ status: "success", message: [{ data_type: "4" }] }),
+            headers: new Headers(),
+          });
+        }
+        if (dataId === "75" && page === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({
+                status: "success",
+                message: [],
+                data: [{ group_id: "listing-group-2", group_name: "Beta Listing" }],
+              }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [], data: [] }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { runDirectoryIqFullIngest } = await import(
+      "@/app/api/directoryiq/_utils/ingest"
+    );
+
+    const result = await runDirectoryIqFullIngest("00000000-0000-4000-8000-000000000001");
+    expect(result.status).toBe("succeeded");
+    expect(result.counts.listings).toBe(1);
+
+    const nodeInserts = query.mock.calls.filter(
+      ([sql]) => typeof sql === "string" && sql.includes("INSERT INTO directoryiq_nodes")
+    ) as Array<[string, unknown[]]>;
+    const listingInsert = nodeInserts.find(([, params]) => params?.[1] === "listing");
+    expect(listingInsert?.[1]?.[2]).toBe("site-1:listing-group-2");
+  });
+
   it("does not fall back to fixture when search fails", async () => {
     let searchCalls = 0;
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
