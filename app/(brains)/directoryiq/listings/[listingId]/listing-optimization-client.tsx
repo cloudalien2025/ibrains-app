@@ -229,45 +229,64 @@ export default function ListingOptimizationClient({
     if (!effectiveListingId) return;
     setError(null);
 
-    try {
-      const [listingRes, integrationRes] = await Promise.all([
-        fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}${siteQuery}`, { cache: "no-store" }),
-        fetch("/api/directoryiq/integrations", { cache: "no-store" }),
-      ]);
+    const listingPath = `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}${siteQuery}`;
+    const supportPath = `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/support${siteQuery}`;
+    const gapsPath = `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/gaps${siteQuery}`;
 
-      const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailPayload & ApiErrorShape;
-      const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
-      const listingPayload =
-        (listingJson as ListingDetailResponse).listing ??
-        (listingJson as { data?: ListingDetailResponse }).data?.listing;
-      const evaluationPayload =
-        (listingJson as ListingDetailResponse).evaluation ??
-        (listingJson as { data?: ListingDetailResponse }).data?.evaluation;
+    void (async () => {
+      try {
+        const listingRes = await fetch(listingPath, { cache: "no-store" });
+        const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailPayload & ApiErrorShape;
+        const listingPayload =
+          (listingJson as ListingDetailResponse).listing ??
+          (listingJson as { data?: ListingDetailResponse }).data?.listing;
+        const evaluationPayload =
+          (listingJson as ListingDetailResponse).evaluation ??
+          (listingJson as { data?: ListingDetailResponse }).data?.evaluation;
 
-      if (!listingRes.ok || !listingPayload) {
-        setError(parseError(listingJson, "Failed to load listing details.", listingRes.status, effectiveListingId));
-        setListing(null);
-      } else {
+        if (!listingRes.ok || !listingPayload) {
+          setError(parseError(listingJson, "Failed to load listing details.", listingRes.status, effectiveListingId));
+          setListing(null);
+          return;
+        }
+
         setListing({
           listing: listingPayload,
           evaluation: evaluationPayload ?? { totalScore: 0 },
         });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Failed to load listing details.";
+        setError({ message, status: 0, listingId: effectiveListingId });
+        setListing(null);
       }
+    })();
 
-      if (!integrationRes.ok) {
-        setIntegrations((prev) => ({
-          openaiConfigured: prev.openaiConfigured,
-          bdConfigured: prev.bdConfigured,
-        }));
-      } else {
+    void (async () => {
+      try {
+        const integrationRes = await fetch("/api/directoryiq/integrations", { cache: "no-store" });
+        const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
+        if (!integrationRes.ok) {
+          setIntegrations({
+            openaiConfigured: false,
+            bdConfigured: false,
+          });
+          return;
+        }
         setIntegrations({
           openaiConfigured: Boolean(integrationJson.openaiConfigured),
           bdConfigured: Boolean(integrationJson.bdConfigured),
         });
+      } catch {
+        setIntegrations({
+          openaiConfigured: false,
+          bdConfigured: false,
+        });
       }
+    })();
 
+    void (async () => {
       try {
-        const supportRes = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/support${siteQuery}`, {
+        const supportRes = await fetch(supportPath, {
           cache: "no-store",
         });
         const supportJson = (await supportRes.json().catch(() => ({}))) as ListingSupportResponse;
@@ -278,18 +297,21 @@ export default function ListingOptimizationClient({
               : supportJson.error?.message ?? "Failed to load support model.";
           setSupportError(supportMessage);
           setSupport(null);
-        } else {
-          setSupport(supportJson.support ?? null);
-          setSupportError(null);
+          return;
         }
+
+        setSupport(supportJson.support ?? null);
+        setSupportError(null);
       } catch (supportErr) {
         const message = supportErr instanceof Error ? supportErr.message : "Failed to load support model.";
         setSupportError(message);
         setSupport(null);
       }
+    })();
 
+    void (async () => {
       try {
-        const gapsRes = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/gaps${siteQuery}`, {
+        const gapsRes = await fetch(gapsPath, {
           cache: "no-store",
         });
         const gapsJson = (await gapsRes.json().catch(() => ({}))) as ListingAuthorityGapsResponse;
@@ -300,20 +322,17 @@ export default function ListingOptimizationClient({
               : gapsJson.error?.message ?? "Failed to evaluate authority gaps.";
           setGapsError(gapsMessage);
           setGaps(null);
-        } else {
-          setGaps(gapsJson.gaps ?? null);
-          setGapsError(null);
+          return;
         }
+
+        setGaps(gapsJson.gaps ?? null);
+        setGapsError(null);
       } catch (gapsErr) {
         const message = gapsErr instanceof Error ? gapsErr.message : "Failed to evaluate authority gaps.";
         setGapsError(message);
         setGaps(null);
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load listing details.";
-      setError({ message, status: 0, listingId: effectiveListingId });
-      setListing(null);
-    }
+    })();
   }
 
   useEffect(() => {
