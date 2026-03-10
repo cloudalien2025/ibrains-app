@@ -14,7 +14,7 @@ export default async function DirectoryIqListingOptimizationPage({
     <ListingOptimizationClient
       listingId={decodedListingId}
       initialListing={null}
-      initialIntegrations={{ openaiConfigured: false, bdConfigured: false }}
+      initialIntegrations={{ openaiConfigured: null, bdConfigured: null }}
       initialError={null}
     />
   );
