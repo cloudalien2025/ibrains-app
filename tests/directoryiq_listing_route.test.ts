@@ -1,107 +1,58 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
-const ensureUser = vi.fn(async () => {});
-const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
-const getListingEvaluation = vi.fn(async () => ({
-  listing: {
-    source_id: "98",
-    title: "Fixture Listing",
-    url: "https://example.com/listings/fixture",
-    raw_json: { listing_id: "98", site_label: "Site One" },
-  },
-  evaluation: {
-    totalScore: 42,
-  },
-}));
-const findListingCandidates = vi.fn(async () => [
-  { sourceId: "site-1:98", siteId: "site-1", siteLabel: "Site One" },
-]);
-const getBdSite = vi.fn(async () => ({
-  id: "site-1",
-  user_id: "00000000-0000-4000-8000-000000000001",
-  label: "Site One",
-  base_url: "https://example.com",
-  enabled: true,
-  listings_data_id: 75,
-  blog_posts_data_id: 14,
-  listings_path: "/api/v2/users_portfolio_groups/search",
-  blog_posts_path: null,
-  ingest_checkpoint_json: {},
-  secret_ciphertext: "cipher",
-  secret_last4: "1234",
-  secret_length: 12,
-  created_at: "2026-01-01",
-  updated_at: "2026-01-01",
-}));
-
-vi.mock("@/app/api/ecomviper/_utils/user", () => ({
-  ensureUser,
-  resolveUserId,
-}));
-
-vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
-  getListingEvaluation,
-  findListingCandidates,
-}));
-
-vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
-  getBdSite,
-}));
-
-vi.mock("@/src/lib/images/normalizeListingImageUrl", () => ({
-  normalizeListingImageUrl: vi.fn(() => null),
-}));
-
-describe("directoryiq listing route", () => {
-  const originalMock = process.env.E2E_MOCK_GRAPH;
-
+describe("directoryiq listing detail route proxy", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
-    process.env.E2E_MOCK_GRAPH = "0";
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    delete process.env.DIRECTORYIQ_API_BASE;
+    delete process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE;
   });
 
-  it("returns listing data without requiring identity headers", async () => {
+  it("forwards listing detail reads to the external DirectoryIQ API", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
     const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
-    const req = new NextRequest("http://localhost/api/directoryiq/listings/98");
-    const res = await GET(req, { params: { listingId: "98" } });
+    const req = new NextRequest(
+      "http://localhost/api/directoryiq/listings/3?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      {
+        headers: {
+          "x-user-id": "00000000-0000-4000-8000-000000000001",
+        },
+      }
+    );
+
+    const res = await GET(req, { params: { listingId: "3" } });
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.listing.listing_name).toBe("Fixture Listing");
+    expect(json.listing.listing_id).toBe("3");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/listings/3?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415");
+    const headers = new Headers(init.headers);
+    expect(headers.get("x-user-id")).toBe("00000000-0000-4000-8000-000000000001");
   });
 
-  it("returns listing data with x-user-id header", async () => {
+  it("returns 502 when external listing detail proxy is unreachable", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT"));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
     const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
-    const req = new NextRequest("http://localhost/api/directoryiq/listings/98", {
-      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
-    });
-    const res = await GET(req, { params: { listingId: "98" } });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/3");
+    const res = await GET(req, { params: { listingId: "3" } });
     const json = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(json.listing.listing_name).toBe("Fixture Listing");
-    expect(getListingEvaluation).toHaveBeenCalledTimes(1);
-  });
-
-  it("returns site_required when multiple sites share listing", async () => {
-    findListingCandidates.mockResolvedValueOnce([
-      { sourceId: "site-1:98", siteId: "site-1", siteLabel: "Site One" },
-      { sourceId: "site-2:98", siteId: "site-2", siteLabel: "Site Two" },
-    ]);
-    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
-    const req = new NextRequest("http://localhost/api/directoryiq/listings/98", {
-      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
-    });
-    const res = await GET(req, { params: { listingId: "98" } });
-    const json = await res.json();
-
-    expect(res.status).toBe(409);
-    expect(json.error).toBe("site_required");
-    expect(Array.isArray(json.candidates)).toBe(true);
-  });
-
-  afterAll(() => {
-    process.env.E2E_MOCK_GRAPH = originalMock;
+    expect(res.status).toBe(502);
+    expect(json.ok).toBe(false);
+    expect(String(json.error)).toContain("connect ETIMEDOUT");
   });
 });
