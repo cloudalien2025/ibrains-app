@@ -304,7 +304,6 @@ describe("directoryiq BD ingest", () => {
     expect(result.status).toBe("succeeded");
     expect(result.counts.listings).toBe(0);
   });
-
   it("does not fall back to fixture when search fails", async () => {
     let searchCalls = 0;
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
