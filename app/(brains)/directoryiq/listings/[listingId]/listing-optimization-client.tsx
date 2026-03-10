@@ -99,6 +99,66 @@ type ListingSupportResponse = {
   } | string;
 };
 
+type AuthorityGapSeverity = "high" | "medium" | "low";
+
+type AuthorityGapType =
+  | "no_linked_support_posts"
+  | "weak_anchor_text"
+  | "mentions_without_links"
+  | "no_listing_to_support_links"
+  | "weak_category_support"
+  | "weak_local_context_support"
+  | "missing_comparison_content"
+  | "missing_faq_support_coverage";
+
+type AuthorityGapItem = {
+  type: AuthorityGapType;
+  severity: AuthorityGapSeverity;
+  title: string;
+  explanation: string;
+  evidenceSummary: string;
+  evidence?: {
+    counts?: Record<string, number>;
+    urls?: string[];
+    anchors?: string[];
+    entities?: string[];
+  };
+};
+
+type ListingAuthorityGapsModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalGaps: number;
+    highCount: number;
+    mediumCount: number;
+    lowCount: number;
+    evaluatedAt: string;
+    lastGraphRunAt: string | null;
+    dataStatus: "gaps_found" | "no_meaningful_gaps";
+  };
+  items: AuthorityGapItem[];
+};
+
+type ListingAuthorityGapsResponse = {
+  ok: boolean;
+  gaps?: ListingAuthorityGapsModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "gaps_found" | "no_meaningful_gaps";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -162,6 +222,8 @@ export default function ListingOptimizationClient({
   const [error, setError] = useState<UiError | null>(initialError);
   const [support, setSupport] = useState<ListingSupportModel | null>(null);
   const [supportError, setSupportError] = useState<string | null>(null);
+  const [gaps, setGaps] = useState<ListingAuthorityGapsModel | null>(null);
+  const [gapsError, setGapsError] = useState<string | null>(null);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -224,6 +286,28 @@ export default function ListingOptimizationClient({
         const message = supportErr instanceof Error ? supportErr.message : "Failed to load support model.";
         setSupportError(message);
         setSupport(null);
+      }
+
+      try {
+        const gapsRes = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/gaps${siteQuery}`, {
+          cache: "no-store",
+        });
+        const gapsJson = (await gapsRes.json().catch(() => ({}))) as ListingAuthorityGapsResponse;
+        if (!gapsRes.ok || !gapsJson.ok) {
+          const gapsMessage =
+            typeof gapsJson.error === "string"
+              ? gapsJson.error
+              : gapsJson.error?.message ?? "Failed to evaluate authority gaps.";
+          setGapsError(gapsMessage);
+          setGaps(null);
+        } else {
+          setGaps(gapsJson.gaps ?? null);
+          setGapsError(null);
+        }
+      } catch (gapsErr) {
+        const message = gapsErr instanceof Error ? gapsErr.message : "Failed to evaluate authority gaps.";
+        setGapsError(message);
+        setGaps(null);
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to load listing details.";
@@ -343,6 +427,15 @@ export default function ListingOptimizationClient({
     outboundSupportLinkCount: 0,
     connectedSupportPageCount: 0,
     lastGraphRunAt: null,
+  };
+  const gapsSummary = gaps?.summary ?? {
+    totalGaps: 0,
+    highCount: 0,
+    mediumCount: 0,
+    lowCount: 0,
+    evaluatedAt: "",
+    lastGraphRunAt: null,
+    dataStatus: "no_meaningful_gaps" as const,
   };
 
   return (
@@ -510,6 +603,65 @@ export default function ListingOptimizationClient({
             </div>
           </section>
         </div>
+      </HudCard>
+
+      <HudCard title="Authority Gaps" subtitle="Deterministic diagnostics showing where support authority is missing.">
+        {gapsError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {gapsError}
+          </div>
+        ) : null}
+
+        <div className="mt-3 grid gap-3 md:grid-cols-4">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Gaps</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{gapsSummary.totalGaps}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Severity</div>
+            <div className="mt-1 text-2xl font-semibold text-rose-200">{gapsSummary.highCount}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Severity</div>
+            <div className="mt-1 text-2xl font-semibold text-amber-100">{gapsSummary.mediumCount}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Severity</div>
+            <div className="mt-1 text-2xl font-semibold text-cyan-100">{gapsSummary.lowCount}</div>
+          </div>
+        </div>
+
+        <div className="mt-3 text-xs text-slate-400">
+          {gapsSummary.lastGraphRunAt
+            ? `Last graph refresh: ${new Date(gapsSummary.lastGraphRunAt).toLocaleString()}`
+            : "Last graph refresh: Not available yet."}
+        </div>
+
+        {gapsSummary.dataStatus === "no_meaningful_gaps" && !gapsError ? (
+          <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+            No major authority gaps found for this listing.
+          </div>
+        ) : null}
+
+        {gapsSummary.dataStatus === "gaps_found" ? (
+          <div className="mt-4 space-y-2">
+            {gaps?.items.map((item) => (
+              <div key={item.type} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                  <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                    {item.severity}
+                  </span>
+                  <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                    {item.type}
+                  </span>
+                </div>
+                <div className="mt-1 text-sm text-slate-300">{item.explanation}</div>
+                <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </HudCard>
 
       <HudCard
