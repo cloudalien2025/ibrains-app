@@ -7,7 +7,7 @@ test.describe("DirectoryIQ listing upgrade flow", () => {
     await page.goto("/directoryiq/listings/378", { waitUntil: "networkidle" });
 
     const section = page
-      .getByRole("heading", { name: "Auto-Generate Listing Upgrade" })
+      .getByRole("heading", { name: "Generate Upgrade Multi-Action System" })
       .first()
       .locator("xpath=ancestor::section[1]");
 
