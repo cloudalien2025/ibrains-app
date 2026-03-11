@@ -337,6 +337,64 @@ type ListingSelectionIntentClustersResponse = {
   } | string;
 };
 
+type BlogReinforcementPlanPriority = "high" | "medium" | "low";
+
+type BlogReinforcementPlanItemId =
+  | "publish_comparison_decision_post"
+  | "publish_faq_support_post"
+  | "publish_local_context_guide"
+  | "publish_reciprocal_support_post"
+  | "publish_cluster_hub_support_page"
+  | "refresh_anchor_intent_post";
+
+type BlogReinforcementPlanItem = {
+  id: BlogReinforcementPlanItemId;
+  title: string;
+  priority: BlogReinforcementPlanPriority;
+  rationale: string;
+  evidenceSummary: string;
+  suggestedContentPurpose: string;
+  suggestedTargetSurface: "blog" | "support_page" | "comparison" | "faq" | "local_guide" | "cluster_hub";
+  suggestedAngle?: string;
+  linkedGapTypes?: AuthorityGapType[];
+  linkedIntentClusterIds?: SelectionIntentClusterId[];
+  linkedActionKeys?: RecommendedActionType[];
+  linkedFlywheelTypes?: FlywheelRecommendationType[];
+};
+
+type ListingBlogReinforcementPlanModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalPlanItems: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "plan_items_identified" | "no_major_reinforcement_plan_items_identified";
+  };
+  items: BlogReinforcementPlanItem[];
+};
+
+type ListingBlogReinforcementPlanResponse = {
+  ok: boolean;
+  reinforcementPlan?: ListingBlogReinforcementPlanModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "plan_items_identified" | "no_major_reinforcement_plan_items_identified";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -411,6 +469,9 @@ export default function ListingOptimizationClient({
   const [intentClusters, setIntentClusters] = useState<ListingSelectionIntentClustersModel | null>(null);
   const [intentClustersError, setIntentClustersError] = useState<string | null>(null);
   const [intentClustersLoading, setIntentClustersLoading] = useState(true);
+  const [reinforcementPlan, setReinforcementPlan] = useState<ListingBlogReinforcementPlanModel | null>(null);
+  const [reinforcementPlanError, setReinforcementPlanError] = useState<string | null>(null);
+  const [reinforcementPlanLoading, setReinforcementPlanLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -643,6 +704,78 @@ export default function ListingOptimizationClient({
       active = false;
     };
   }, [effectiveListingId, siteQuery, support, gaps, actions, flywheel, supportError, gapsError, actionsError, flywheelError]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
+    if (supportError || gapsError || actionsError || flywheelError || intentClustersError) {
+      setReinforcementPlan(null);
+      setReinforcementPlanLoading(false);
+      setReinforcementPlanError("Reinforcement planning failed because prerequisite diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps || !actions || !flywheel || !intentClusters) {
+      setReinforcementPlanLoading(true);
+      setReinforcementPlanError(null);
+      return;
+    }
+
+    let active = true;
+    setReinforcementPlanLoading(true);
+    setReinforcementPlanError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/reinforcement-plan${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingBlogReinforcementPlanResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.reinforcementPlan) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate blog reinforcement plan.";
+          setReinforcementPlan(null);
+          setReinforcementPlanError(message);
+          setReinforcementPlanLoading(false);
+          return;
+        }
+
+        setReinforcementPlan(json.reinforcementPlan);
+        setReinforcementPlanError(null);
+        setReinforcementPlanLoading(false);
+      } catch (reinforcementPlanErr) {
+        if (!active) return;
+        const message =
+          reinforcementPlanErr instanceof Error ? reinforcementPlanErr.message : "Failed to evaluate blog reinforcement plan.";
+        setReinforcementPlan(null);
+        setReinforcementPlanError(message);
+        setReinforcementPlanLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    effectiveListingId,
+    siteQuery,
+    support,
+    gaps,
+    actions,
+    flywheel,
+    intentClusters,
+    supportError,
+    gapsError,
+    actionsError,
+    flywheelError,
+    intentClustersError,
+  ]);
 
   useEffect(() => {
     if (!effectiveListingId) return;
@@ -1268,6 +1401,90 @@ export default function ListingOptimizationClient({
                     ) : null}
                     {item.linkedFlywheelTypes?.length ? (
                       <div className="mt-1 text-xs text-slate-400">Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </HudCard>
+
+      <HudCard title="Blog Reinforcement Plan" subtitle="Deterministic reinforcement planning derived from support, gaps, actions, flywheel links, and intent clusters.">
+        {reinforcementPlanError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {reinforcementPlanError}
+          </div>
+        ) : null}
+
+        {reinforcementPlanLoading && !reinforcementPlanError ? (
+          <div className="text-sm text-slate-300">Building reinforcement plan...</div>
+        ) : null}
+
+        {reinforcementPlan && !reinforcementPlanError ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Plan Items</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{reinforcementPlan.summary.totalPlanItems}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-rose-200">{reinforcementPlan.summary.highPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{reinforcementPlan.summary.mediumPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{reinforcementPlan.summary.lowPriorityCount}</div>
+              </div>
+            </div>
+
+            {reinforcementPlan.summary.dataStatus === "no_major_reinforcement_plan_items_identified" ? (
+              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major reinforcement plan items identified.
+              </div>
+            ) : null}
+
+            {reinforcementPlan.summary.dataStatus === "plan_items_identified" ? (
+              <div className="mt-4 space-y-2">
+                {reinforcementPlan.items.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.id}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.suggestedTargetSurface}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    <div className="mt-1 text-xs text-slate-400">Purpose: {item.suggestedContentPurpose}</div>
+                    {item.suggestedAngle ? (
+                      <div className="mt-1 text-xs text-slate-400">Suggested angle: {item.suggestedAngle}</div>
+                    ) : null}
+                    {item.linkedGapTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                    ) : null}
+                    {item.linkedIntentClusterIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}
+                      </div>
+                    ) : null}
+                    {item.linkedActionKeys?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked actions: {item.linkedActionKeys.join(", ")}</div>
+                    ) : null}
+                    {item.linkedFlywheelTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}
+                      </div>
                     ) : null}
                   </div>
                 ))}
