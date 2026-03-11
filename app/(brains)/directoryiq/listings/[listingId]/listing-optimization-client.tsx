@@ -395,6 +395,91 @@ type ListingBlogReinforcementPlanResponse = {
   } | string;
 };
 
+type ContentStructurePriority = "high" | "medium" | "low";
+
+type ContentStructureItemId =
+  | "structure_decision_comparison"
+  | "structure_faq_framework"
+  | "structure_local_context"
+  | "structure_reciprocal_links"
+  | "structure_cluster_hub"
+  | "structure_anchor_intent";
+
+type ContentStructureType =
+  | "comparison_matrix"
+  | "faq_cluster"
+  | "local_context_block"
+  | "reciprocal_authority_block"
+  | "cluster_hub_layout"
+  | "anchor_intent_module";
+
+type ListingSerpContentStructureItem = {
+  id: ContentStructureItemId;
+  key: ContentStructureItemId;
+  title: string;
+  priority: ContentStructurePriority;
+  rationale: string;
+  evidenceSummary: string;
+  suggestedStructureType: ContentStructureType;
+  suggestedSections: string[];
+  suggestedComponents: string[];
+  linkedReinforcementItemIds?: BlogReinforcementPlanItemId[];
+  linkedIntentClusterIds?: SelectionIntentClusterId[];
+  linkedActionKeys?: RecommendedActionType[];
+  linkedGapTypes?: AuthorityGapType[];
+  linkedFlywheelTypes?: FlywheelRecommendationType[];
+  serpPatternSummary?: {
+    commonHeadings: string[];
+    commonQuestions: string[];
+  };
+};
+
+type ListingSerpContentStructureModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalRecommendations: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "structure_recommendations_identified" | "no_major_structure_recommendations_identified";
+    serpPatternStatus: "patterns_available" | "patterns_unavailable";
+  };
+  serpPatternSummary?: {
+    readySlotCount: number;
+    totalSlotCount: number;
+    commonHeadings: string[];
+    commonQuestions: string[];
+    targetLengthBand?: {
+      min: number;
+      median: number;
+      max: number;
+    };
+  };
+  items: ListingSerpContentStructureItem[];
+};
+
+type ListingSerpContentStructureResponse = {
+  ok: boolean;
+  contentStructure?: ListingSerpContentStructureModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "structure_recommendations_identified" | "no_major_structure_recommendations_identified";
+    serpPatternStatus: "patterns_available" | "patterns_unavailable";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -472,6 +557,9 @@ export default function ListingOptimizationClient({
   const [reinforcementPlan, setReinforcementPlan] = useState<ListingBlogReinforcementPlanModel | null>(null);
   const [reinforcementPlanError, setReinforcementPlanError] = useState<string | null>(null);
   const [reinforcementPlanLoading, setReinforcementPlanLoading] = useState(true);
+  const [contentStructure, setContentStructure] = useState<ListingSerpContentStructureModel | null>(null);
+  const [contentStructureError, setContentStructureError] = useState<string | null>(null);
+  const [contentStructureLoading, setContentStructureLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -775,6 +863,89 @@ export default function ListingOptimizationClient({
     actionsError,
     flywheelError,
     intentClustersError,
+  ]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
+    if (
+      supportError ||
+      gapsError ||
+      actionsError ||
+      flywheelError ||
+      intentClustersError ||
+      reinforcementPlanError
+    ) {
+      setContentStructure(null);
+      setContentStructureLoading(false);
+      setContentStructureError("Content structure evaluation failed because prerequisite diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps || !actions || !flywheel || !intentClusters || !reinforcementPlan) {
+      setContentStructureLoading(true);
+      setContentStructureError(null);
+      return;
+    }
+
+    let active = true;
+    setContentStructureLoading(true);
+    setContentStructureError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/content-structure${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters, reinforcementPlan }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingSerpContentStructureResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.contentStructure) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate SERP-informed content structure.";
+          setContentStructure(null);
+          setContentStructureError(message);
+          setContentStructureLoading(false);
+          return;
+        }
+
+        setContentStructure(json.contentStructure);
+        setContentStructureError(null);
+        setContentStructureLoading(false);
+      } catch (contentStructureErr) {
+        if (!active) return;
+        const message =
+          contentStructureErr instanceof Error
+            ? contentStructureErr.message
+            : "Failed to evaluate SERP-informed content structure.";
+        setContentStructure(null);
+        setContentStructureError(message);
+        setContentStructureLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    effectiveListingId,
+    siteQuery,
+    support,
+    gaps,
+    actions,
+    flywheel,
+    intentClusters,
+    reinforcementPlan,
+    supportError,
+    gapsError,
+    actionsError,
+    flywheelError,
+    intentClustersError,
+    reinforcementPlanError,
   ]);
 
   useEffect(() => {
@@ -1485,6 +1656,100 @@ export default function ListingOptimizationClient({
                       <div className="mt-1 text-xs text-slate-400">
                         Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}
                       </div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </HudCard>
+
+      <HudCard title="SERP-Informed Content Structure" subtitle="Canonical structure guidance derived from SERP patterns, intent clusters, and reinforcement planning.">
+        {contentStructureError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {contentStructureError}
+          </div>
+        ) : null}
+
+        {contentStructureLoading && !contentStructureError ? (
+          <div className="text-sm text-slate-300">Evaluating SERP-informed content structure...</div>
+        ) : null}
+
+        {contentStructure && !contentStructureError ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Recommendations</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{contentStructure.summary.totalRecommendations}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-rose-200">{contentStructure.summary.highPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{contentStructure.summary.mediumPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{contentStructure.summary.lowPriorityCount}</div>
+              </div>
+            </div>
+
+            {contentStructure.serpPatternSummary ? (
+              <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+                SERP pattern coverage: {contentStructure.serpPatternSummary.readySlotCount}/{contentStructure.serpPatternSummary.totalSlotCount} ready slot
+                {contentStructure.serpPatternSummary.readySlotCount === 1 ? "" : "s"}
+                {contentStructure.serpPatternSummary.targetLengthBand
+                  ? ` · target length ${contentStructure.serpPatternSummary.targetLengthBand.min}-${contentStructure.serpPatternSummary.targetLengthBand.max} words (median ${contentStructure.serpPatternSummary.targetLengthBand.median})`
+                  : ""}
+              </div>
+            ) : (
+              <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
+                SERP pattern coverage is not available yet; structure recommendations are based on current listing diagnostics.
+              </div>
+            )}
+
+            {contentStructure.summary.dataStatus === "no_major_structure_recommendations_identified" ? (
+              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major structure recommendations identified.
+              </div>
+            ) : null}
+
+            {contentStructure.summary.dataStatus === "structure_recommendations_identified" ? (
+              <div className="mt-4 space-y-2">
+                {contentStructure.items.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.id}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.suggestedStructureType}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested sections: {item.suggestedSections.join(" • ")}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested components: {item.suggestedComponents.join(" • ")}</div>
+                    {item.linkedReinforcementItemIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
+                      </div>
+                    ) : null}
+                    {item.linkedIntentClusterIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
+                    ) : null}
+                    {item.serpPatternSummary?.commonHeadings?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">SERP headings: {item.serpPatternSummary.commonHeadings.join(", ")}</div>
+                    ) : null}
+                    {item.serpPatternSummary?.commonQuestions?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">SERP questions: {item.serpPatternSummary.commonQuestions.join(", ")}</div>
                     ) : null}
                   </div>
                 ))}
