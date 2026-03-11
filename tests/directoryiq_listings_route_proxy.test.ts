@@ -53,4 +53,70 @@ describe("directoryiq listings read route proxy", () => {
     expect(json.ok).toBe(false);
     expect(String(json.error)).toContain("connect ETIMEDOUT");
   });
+
+  it("maps category from group_category in upstream listings payload", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          listings: [
+            {
+              listing_id: "1",
+              listing_name: "Sunrise Diner",
+              group_category: "Restaurants",
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings");
+    const res = await GET(req);
+    const json = (await res.json()) as { listings: Array<{ category: string | null }> };
+
+    expect(res.status).toBe(200);
+    expect(json.listings[0]?.category).toBe("Restaurants");
+  });
+
+  it("returns null category when upstream category fields are missing or blank", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          listings: [
+            {
+              listing_id: "1",
+              listing_name: "Unknown Listing",
+              group_category: "   ",
+              category: "",
+              raw_json: {
+                group_category: "  ",
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings");
+    const res = await GET(req);
+    const json = (await res.json()) as { listings: Array<{ category: string | null }> };
+
+    expect(res.status).toBe(200);
+    expect(json.listings[0]?.category).toBeNull();
+  });
 });
