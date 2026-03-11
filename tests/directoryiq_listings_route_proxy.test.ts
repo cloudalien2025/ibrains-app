@@ -119,4 +119,140 @@ describe("directoryiq listings read route proxy", () => {
     expect(res.status).toBe(200);
     expect(json.listings[0]?.category).toBeNull();
   });
+
+  it("serves local external-owner payload and maps category from BD group_category", async () => {
+    const getAllListingsWithEvaluations = vi.fn().mockResolvedValue({
+      cards: [
+        {
+          listingId: "3",
+          name: "Sample Listing",
+          url: "",
+          authorityStatus: "Needs Support",
+          trustStatus: "Needs Trust",
+          lastOptimized: null,
+          evaluation: {
+            score: 55,
+            scores: {
+              structure: 61,
+              clarity: 60,
+              trust: 50,
+              authority: 50,
+              actionability: 55,
+            },
+          },
+          siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+          siteLabel: "VailVacay",
+        },
+      ],
+    });
+    const query = vi.fn().mockResolvedValue([
+      {
+        source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:3",
+        bd_site_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        listing_id: "3",
+        group_category: "Shops",
+        category: null,
+      },
+    ]);
+    const resolveUserId = vi.fn().mockReturnValue("00000000-0000-4000-8000-000000000001");
+
+    vi.doMock("@/app/api/directoryiq/_utils/selectionData", () => ({ getAllListingsWithEvaluations }));
+    vi.doMock("@/app/api/ecomviper/_utils/db", () => ({ query }));
+    vi.doMock("@/app/api/ecomviper/_utils/user", () => ({ resolveUserId }));
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    delete process.env.DIRECTORYIQ_API_BASE;
+
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest(
+      "https://directoryiq-api.ibrains.ai/api/directoryiq/listings?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      {
+        headers: {
+          host: "directoryiq-api.ibrains.ai",
+        },
+      }
+    );
+    const res = await GET(req);
+    const json = (await res.json()) as {
+      ok: boolean;
+      listings: Array<{ category: string | null; group_category: string | null }>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(getAllListingsWithEvaluations).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      ["5c82f5c1-a45f-4b25-a0d4-1b749d962415"]
+    );
+    expect(json.listings[0]?.category).toBe("Shops");
+    expect(json.listings[0]?.group_category).toBe("Shops");
+  });
+
+  it("serves local external-owner payload with null category when group_category is blank", async () => {
+    const getAllListingsWithEvaluations = vi.fn().mockResolvedValue({
+      cards: [
+        {
+          listingId: "8",
+          name: "Blank Category Listing",
+          url: "",
+          authorityStatus: "Needs Support",
+          trustStatus: "Needs Trust",
+          lastOptimized: null,
+          evaluation: {
+            score: 55,
+            scores: {
+              structure: 61,
+              clarity: 60,
+              trust: 50,
+              authority: 50,
+              actionability: 55,
+            },
+          },
+          siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+          siteLabel: "VailVacay",
+        },
+      ],
+    });
+    const query = vi.fn().mockResolvedValue([
+      {
+        source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:8",
+        bd_site_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        listing_id: "8",
+        group_category: "  ",
+        category: null,
+      },
+    ]);
+    const resolveUserId = vi.fn().mockReturnValue("00000000-0000-4000-8000-000000000001");
+
+    vi.doMock("@/app/api/directoryiq/_utils/selectionData", () => ({ getAllListingsWithEvaluations }));
+    vi.doMock("@/app/api/ecomviper/_utils/db", () => ({ query }));
+    vi.doMock("@/app/api/ecomviper/_utils/user", () => ({ resolveUserId }));
+
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    delete process.env.DIRECTORYIQ_API_BASE;
+
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest(
+      "https://directoryiq-api.ibrains.ai/api/directoryiq/listings?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      {
+        headers: {
+          host: "directoryiq-api.ibrains.ai",
+        },
+      }
+    );
+    const res = await GET(req);
+    const json = (await res.json()) as {
+      ok: boolean;
+      listings: Array<{ category: string | null; group_category: string | null }>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(json.listings[0]?.category).toBeNull();
+    expect(json.listings[0]?.group_category).toBeNull();
+  });
 });
