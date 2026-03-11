@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { resolveDirectoryIqUserId } from "@/app/api/directoryiq/_utils/userContext";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
@@ -47,7 +47,7 @@ function buildForwardHeaders(req: NextRequest): Headers {
   }
   if (!headers.has("accept")) headers.set("accept", "application/json");
   if (!headers.has("x-user-id")) {
-    headers.set("x-user-id", resolveUserId(req));
+    headers.set("x-user-id", resolveDirectoryIqUserId(req));
   }
   return headers;
 }

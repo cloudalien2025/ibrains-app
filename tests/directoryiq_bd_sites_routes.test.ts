@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
+const resolveDirectoryIqUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 
 const siteStub = {
   id: "site-1",
@@ -27,6 +28,9 @@ const isAdminRequest = vi.fn(() => false);
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
   resolveUserId,
+}));
+vi.mock("@/app/api/directoryiq/_utils/userContext", () => ({
+  resolveDirectoryIqUserId,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
