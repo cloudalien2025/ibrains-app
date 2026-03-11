@@ -1,28 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
-
-type Listing = {
-  listing_id: string;
-  listing_name: string;
-  url: string | null;
-  score: number;
-  pillars: {
-    structure: number;
-    clarity: number;
-    trust: number;
-    authority: number;
-    actionability: number;
-  };
-  authority_status: string;
-  trust_status: string;
-  last_optimized: string | null;
-  site_id?: string | null;
-  site_label?: string | null;
-};
+import {
+  applyListingsTableModel,
+  formatCategoryLabel,
+  resolveListingCategory,
+  type ListingRow,
+  type ListingsSort,
+  type ListingsSortKey,
+} from "./listings-table-model";
 
 type BdSite = {
   id: string;
@@ -38,12 +27,14 @@ function humanizeState(value: string): string {
 }
 
 export default function DirectoryIqListingsClient() {
-  const [rows, setRows] = useState<Listing[]>([]);
+  const [rows, setRows] = useState<ListingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<BdSite[]>([]);
   const [selectedSite, setSelectedSite] = useState<string>("auto");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [sort, setSort] = useState<ListingsSort>({ key: "listing", direction: "asc" });
 
   async function loadSites() {
     try {
@@ -73,7 +64,7 @@ export default function DirectoryIqListingsClient() {
       }
       const url = `/api/directoryiq/listings${search.toString() ? `?${search.toString()}` : ""}`;
       const response = await fetch(url, { cache: "no-store" });
-      const json = (await response.json()) as { listings?: Listing[]; error?: string };
+      const json = (await response.json()) as { listings?: ListingRow[]; error?: string };
       if (!response.ok) throw new Error(json.error ?? "Failed to load listings");
       setRows(json.listings ?? []);
     } catch (e) {
@@ -91,9 +82,30 @@ export default function DirectoryIqListingsClient() {
     void loadListings(selectedSite);
   }, [selectedSite]);
 
+  const visibleRows = useMemo(() => applyListingsTableModel(rows, searchTerm, sort), [rows, searchTerm, sort]);
+
+  function handleSort(key: ListingsSortKey) {
+    setSort((current) => {
+      if (current.key === key) {
+        return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: "asc" };
+    });
+  }
+
+  function renderSortIndicator(key: ListingsSortKey): string {
+    if (sort.key !== key) return "↕";
+    return sort.direction === "asc" ? "↑" : "↓";
+  }
+
   return (
     <>
-      <TopBar breadcrumbs={["Home", "DirectoryIQ", "Listings"]} searchPlaceholder="Search listings..." />
+      <TopBar
+        breadcrumbs={["Home", "DirectoryIQ", "Listings"]}
+        searchPlaceholder="Search listings..."
+        searchValue={searchTerm}
+        onSearchChange={setSearchTerm}
+      />
 
       <HudCard title="Listings" subtitle="AI Agent Selection scoring for each listing.">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
@@ -119,29 +131,53 @@ export default function DirectoryIqListingsClient() {
         {error ? <div className="text-sm text-rose-200">{error}</div> : null}
 
         {!loading && !error ? (
-          rows.length === 0 ? (
-            <div className="text-sm text-slate-300">No listings available yet.</div>
+          visibleRows.length === 0 ? (
+            <div className="text-sm text-slate-300">
+              {rows.length > 0 ? "No listings match your search." : "No listings available yet."}
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
                   <tr>
-                    <th className="py-2 pr-3">Listing</th>
-                    <th className="py-2 pr-3">Site</th>
-                    <th className="py-2 pr-3">Score</th>
+                    <th className="py-2 pr-3">
+                      <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("listing")}>
+                        Listing <span aria-hidden="true">{renderSortIndicator("listing")}</span>
+                      </button>
+                    </th>
+                    <th className="py-2 pr-3">
+                      <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("category")}>
+                        Category <span aria-hidden="true">{renderSortIndicator("category")}</span>
+                      </button>
+                    </th>
+                    <th className="py-2 pr-3">
+                      <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("site")}>
+                        Site <span aria-hidden="true">{renderSortIndicator("site")}</span>
+                      </button>
+                    </th>
+                    <th className="py-2 pr-3">
+                      <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("score")}>
+                        Score <span aria-hidden="true">{renderSortIndicator("score")}</span>
+                      </button>
+                    </th>
                     <th className="py-2 pr-3">Authority</th>
                     <th className="py-2 pr-3">Trust</th>
-                    <th className="py-2 pr-3">Last optimized</th>
+                    <th className="py-2 pr-3">
+                      <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("last_optimized")}>
+                        Last optimized <span aria-hidden="true">{renderSortIndicator("last_optimized")}</span>
+                      </button>
+                    </th>
                     <th className="py-2 pr-3">Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
+                  {visibleRows.map((row) => (
                     <tr key={row.listing_id} className="border-t border-white/10">
                       <td className="py-2 pr-3">
                         <div className="text-slate-100">{row.listing_name}</div>
                         {row.url ? <div className="text-xs text-slate-400">{row.url}</div> : null}
                       </td>
+                      <td className="py-2 pr-3 text-xs text-slate-300">{formatCategoryLabel(resolveListingCategory(row))}</td>
                       <td className="py-2 pr-3 text-xs text-slate-300">{row.site_label ?? "-"}</td>
                       <td className="py-2 pr-3 text-slate-100">{row.score}</td>
                       <td className="py-2 pr-3">{humanizeState(row.authority_status)}</td>
