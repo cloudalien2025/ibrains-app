@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { resolveDirectoryIqUserId } from "@/app/api/directoryiq/_utils/userContext";
 
 describe("directoryiq listing detail route proxy", () => {
   beforeEach(() => {
@@ -68,7 +68,7 @@ describe("directoryiq listing detail route proxy", () => {
     expect(headers.get("cf-access-jwt-assertion")).toBe("test-cf-access-jwt");
   });
 
-  it("resolves and forwards x-user-id when request omits it", async () => {
+  it("uses canonical DirectoryIQ user id when request omits x-user-id", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
         status: 200,
@@ -84,7 +84,7 @@ describe("directoryiq listing detail route proxy", () => {
         "x-user-email": "owner@app.ibrains.ai",
       },
     });
-    const expectedUserId = resolveUserId(req);
+    const expectedUserId = resolveDirectoryIqUserId(req);
 
     const res = await GET(req, { params: { listingId: "3" } });
 
