@@ -50,7 +50,7 @@ describe("directoryiq listing gaps route", () => {
     );
   });
 
-  it("returns explicit failure payload when support proxy fails", async () => {
+  it("derives deterministic gaps payload from local fallback when support proxy fails", async () => {
     proxyDirectoryIqRead.mockResolvedValueOnce(
       NextResponse.json(
         {
@@ -68,9 +68,15 @@ describe("directoryiq listing gaps route", () => {
     const res = await GET(req, { params: { listingId: "321" } });
     const json = await res.json();
 
-    expect(res.status).toBe(502);
-    expect(json.ok).toBe(false);
-    expect(json.error.code).toBe("GAPS_EVALUATION_FAILED");
-    expect(String(json.error.message)).toContain("connect ETIMEDOUT");
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.gaps.listing.id).toBe("321");
+    expect(json.gaps.summary.totalGaps).toBe(3);
+    expect(json.gaps.summary.highCount).toBe(1);
+    expect(json.gaps.summary.mediumCount).toBe(1);
+    expect(json.gaps.summary.lowCount).toBe(1);
+    expect(json.meta.source).toBe("directoryiq_support_derived_gaps_v1");
+    expect(json.meta.supportSource).toBe("local_support_service_v1");
+    expect(json.meta.supportFallbackApplied).toBe(true);
   });
 });

@@ -43,7 +43,7 @@ describe("directoryiq listing support route proxy", () => {
     expect(headers.get("x-user-id")).toBe("00000000-0000-4000-8000-000000000001");
   });
 
-  it("returns 502 when external support proxy is unreachable", async () => {
+  it("falls back to local support model when external support proxy is unreachable", async () => {
     const fetchMock = vi.fn().mockRejectedValue(new Error("connect ETIMEDOUT"));
     vi.stubGlobal("fetch", fetchMock);
     process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
@@ -53,12 +53,19 @@ describe("directoryiq listing support route proxy", () => {
     const res = await GET(req, { params: { listingId: "3" } });
     const json = await res.json();
 
-    expect(res.status).toBe(502);
-    expect(json.ok).toBe(false);
-    expect(String(json.error)).toContain("connect ETIMEDOUT");
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.meta.source).toBe("local_support_service_v1");
+    expect(json.meta.fallbackApplied).toBe(true);
+    expect(json.meta.upstreamStatus).toBe(502);
+    expect(json.support.listing.id).toBe("3");
+    expect(json.support.summary.inboundLinkedSupportCount).toBe(0);
+    expect(json.support.summary.mentionWithoutLinkCount).toBe(0);
+    expect(json.support.summary.outboundSupportLinkCount).toBe(0);
+    expect(json.support.summary.connectedSupportPageCount).toBe(0);
   });
 
-  it("backfills inbound support from authority listings when support summary is stale zero-state", async () => {
+  it("returns upstream support payload for stale zero-state without authority listing fallback", async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
@@ -90,44 +97,6 @@ describe("directoryiq listing support route proxy", () => {
             headers: { "content-type": "application/json" },
           }
         )
-      )
-      .mockResolvedValueOnce(
-        new Response(
-          JSON.stringify({
-            ok: true,
-            listings: [
-              {
-                listingExternalId: "45",
-                listingTitle: "Austria Haus",
-                listingUrl: "https://www.vailvacay.com/listings/austria-haus",
-                inboundBlogLinksCount: 1,
-                mentionedInCount: 1,
-                inboundBlogs: [
-                  {
-                    blogExternalId: "135",
-                    blogTitle: "What Hotels Are In Vail Village? 9 Amazing Stays You'll Love",
-                    blogUrl: "https://www.vailvacay.com/blog/what-hotels-are-in-vail-village-9-amazing-stays-youll-love",
-                    edgeType: "links_to",
-                    evidenceSnippet: "The Austria Haus is linked.",
-                    anchorText: "The Austria Haus",
-                  },
-                  {
-                    blogExternalId: "64",
-                    blogTitle: "The 30 Best Hotels in Vail, Colorado",
-                    blogUrl: "https://www.vailvacay.com/blog/best-hotels-in-vail-colorado",
-                    edgeType: "mentions",
-                    evidenceSnippet: "Austria Haus Vail mentioned.",
-                    anchorText: null,
-                  },
-                ],
-              },
-            ],
-          }),
-          {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }
-        )
       );
     vi.stubGlobal("fetch", fetchMock);
     process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
@@ -147,14 +116,13 @@ describe("directoryiq listing support route proxy", () => {
 
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
-    expect(json.meta.source).toBe("directoryiq_support_authority_listing_fallback_v1");
-    expect(json.support.summary.inboundLinkedSupportCount).toBe(1);
-    expect(json.support.summary.mentionWithoutLinkCount).toBe(1);
-    expect(json.support.listing.canonicalUrl).toBe("https://www.vailvacay.com/listings/austria-haus");
-    expect(json.support.inboundLinkedSupport[0].sourceId).toBe("135");
-    expect(json.support.inboundLinkedSupport[0].anchors).toEqual(["The Austria Haus"]);
-    expect(json.support.mentionsWithoutLinks[0].sourceId).toBe("64");
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/authority/listings?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415");
+    expect(json.meta.source).toBe("external_proxy_support_v1");
+    expect(json.meta.fallbackApplied).toBe(false);
+    expect(json.meta.upstreamStatus).toBeNull();
+    expect(json.support.summary.inboundLinkedSupportCount).toBe(0);
+    expect(json.support.summary.mentionWithoutLinkCount).toBe(0);
+    expect(json.support.summary.outboundSupportLinkCount).toBe(0);
+    expect(json.support.summary.connectedSupportPageCount).toBe(0);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
