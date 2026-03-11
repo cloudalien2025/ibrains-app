@@ -4,12 +4,16 @@ interface TopBarProps {
   breadcrumbs: string[];
   searchPlaceholder?: string;
   userLabel?: string;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 export default function TopBar({
   breadcrumbs,
   searchPlaceholder = "Search product reasoning nodes...",
   userLabel = "Ariel Viper",
+  searchValue,
+  onSearchChange,
 }: TopBarProps) {
   return (
     <header
@@ -36,6 +40,8 @@ export default function TopBar({
             <input
               type="search"
               placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={onSearchChange ? (event) => onSearchChange(event.target.value) : undefined}
               className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-cyan-300/40 transition focus:border-cyan-300/40 focus:ring-2"
             />
           </div>
