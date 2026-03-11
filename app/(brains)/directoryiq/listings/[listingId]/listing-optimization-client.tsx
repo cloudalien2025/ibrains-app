@@ -280,6 +280,63 @@ type ListingFlywheelLinksResponse = {
   } | string;
 };
 
+type SelectionIntentClusterPriority = "high" | "medium" | "low";
+
+type SelectionIntentClusterId =
+  | "close_unlinked_support_mentions"
+  | "repair_bidirectional_flywheel_links"
+  | "reinforce_decision_stage_content"
+  | "strengthen_local_selection_confidence"
+  | "improve_anchor_intent_specificity";
+
+type SelectionIntentClusterItem = {
+  id: SelectionIntentClusterId;
+  title: string;
+  priority: SelectionIntentClusterPriority;
+  rationale: string;
+  evidenceSummary: string;
+  linkedGapTypes?: AuthorityGapType[];
+  linkedActionKeys?: RecommendedActionType[];
+  linkedFlywheelTypes?: FlywheelRecommendationType[];
+  suggestedReinforcementDirection?: {
+    surface: "listing" | "blog" | "support_page" | "cluster";
+    direction: string;
+  };
+};
+
+type ListingSelectionIntentClustersModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalClusters: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "clusters_identified" | "no_major_reinforcement_intent_clusters_identified";
+  };
+  items: SelectionIntentClusterItem[];
+};
+
+type ListingSelectionIntentClustersResponse = {
+  ok: boolean;
+  intentClusters?: ListingSelectionIntentClustersModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "clusters_identified" | "no_major_reinforcement_intent_clusters_identified";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -351,6 +408,9 @@ export default function ListingOptimizationClient({
   const [flywheel, setFlywheel] = useState<ListingFlywheelLinksModel | null>(null);
   const [flywheelError, setFlywheelError] = useState<string | null>(null);
   const [flywheelLoading, setFlywheelLoading] = useState(true);
+  const [intentClusters, setIntentClusters] = useState<ListingSelectionIntentClustersModel | null>(null);
+  const [intentClustersError, setIntentClustersError] = useState<string | null>(null);
+  const [intentClustersLoading, setIntentClustersLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -524,6 +584,65 @@ export default function ListingOptimizationClient({
       active = false;
     };
   }, [effectiveListingId, siteQuery, support, gaps, supportError, gapsError]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
+    if (supportError || gapsError || actionsError || flywheelError) {
+      setIntentClusters(null);
+      setIntentClustersLoading(false);
+      setIntentClustersError("Intent cluster evaluation failed because prerequisite diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps || !actions || !flywheel) {
+      setIntentClustersLoading(true);
+      setIntentClustersError(null);
+      return;
+    }
+
+    let active = true;
+    setIntentClustersLoading(true);
+    setIntentClustersError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/intent-clusters${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ support, gaps, actions, flywheel }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingSelectionIntentClustersResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.intentClusters) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate selection intent clusters.";
+          setIntentClusters(null);
+          setIntentClustersError(message);
+          setIntentClustersLoading(false);
+          return;
+        }
+
+        setIntentClusters(json.intentClusters);
+        setIntentClustersError(null);
+        setIntentClustersLoading(false);
+      } catch (intentClustersErr) {
+        if (!active) return;
+        const message =
+          intentClustersErr instanceof Error ? intentClustersErr.message : "Failed to evaluate selection intent clusters.";
+        setIntentClusters(null);
+        setIntentClustersError(message);
+        setIntentClustersLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveListingId, siteQuery, support, gaps, actions, flywheel, supportError, gapsError, actionsError, flywheelError]);
 
   useEffect(() => {
     if (!effectiveListingId) return;
@@ -1069,6 +1188,86 @@ export default function ListingOptimizationClient({
                     ) : null}
                     {item.dependsOn?.length ? (
                       <div className="mt-1 text-xs text-slate-400">Depends on: {item.dependsOn.join(", ")}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
+      </HudCard>
+
+      <HudCard title="Selection Intent Clusters" subtitle="Deterministic reinforcement clusters prioritized from support, gaps, actions, and flywheel evidence.">
+        {intentClustersError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {intentClustersError}
+          </div>
+        ) : null}
+
+        {intentClustersLoading && !intentClustersError ? (
+          <div className="text-sm text-slate-300">Resolving selection intent clusters...</div>
+        ) : null}
+
+        {intentClusters && !intentClustersError ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Clusters</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{intentClusters.summary.totalClusters}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-rose-200">{intentClusters.summary.highPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{intentClusters.summary.mediumPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{intentClusters.summary.lowPriorityCount}</div>
+              </div>
+            </div>
+
+            {intentClusters.summary.dataStatus === "no_major_reinforcement_intent_clusters_identified" ? (
+              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major reinforcement intent clusters identified.
+              </div>
+            ) : null}
+
+            {intentClusters.summary.dataStatus === "clusters_identified" ? (
+              <div className="mt-4 space-y-2">
+                {intentClusters.items.map((item) => (
+                  <div key={item.id} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.id}
+                      </span>
+                      {item.suggestedReinforcementDirection ? (
+                        <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                          {item.suggestedReinforcementDirection.surface}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    {item.suggestedReinforcementDirection ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Direction: {item.suggestedReinforcementDirection.direction}
+                      </div>
+                    ) : null}
+                    {item.linkedGapTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                    ) : null}
+                    {item.linkedActionKeys?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked actions: {item.linkedActionKeys.join(", ")}</div>
+                    ) : null}
+                    {item.linkedFlywheelTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}</div>
                     ) : null}
                   </div>
                 ))}
