@@ -2,33 +2,7 @@ export const runtime = "nodejs";
 
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
-
-type ListingSupportSummary = {
-  inboundLinkedSupportCount: number;
-  mentionWithoutLinkCount: number;
-  outboundSupportLinkCount: number;
-  connectedSupportPageCount: number;
-  lastGraphRunAt: string | null;
-};
-
-type ListingSupportModel = {
-  listing: {
-    id: string;
-    title: string;
-    canonicalUrl?: string | null;
-    siteId?: string | null;
-  };
-  summary: ListingSupportSummary;
-};
-
-type ListingSupportResponse = {
-  ok: boolean;
-  support?: ListingSupportModel;
-  error?: {
-    message?: string;
-  } | string;
-};
+import { resolveListingSupportModel } from "@/app/api/directoryiq/_utils/listingSupportRuntime";
 
 type AuthorityGapSeverity = "high" | "medium" | "low";
 type AuthorityGapType =
@@ -45,7 +19,10 @@ type AuthorityGapItem = {
   evidenceSummary: string;
 };
 
-function buildAuthorityGaps(support: ListingSupportModel, evaluatedAt: string) {
+function buildAuthorityGaps(
+  support: Awaited<ReturnType<typeof resolveListingSupportModel>>["support"],
+  evaluatedAt: string
+) {
   const summary = support.summary;
   const items: AuthorityGapItem[] = [];
 
@@ -121,37 +98,17 @@ export async function GET(
 
   try {
     const { listingId } = await Promise.resolve(params);
-    const resolvedListingId = decodeURIComponent(listingId);
-    const upstreamListingId = encodeURIComponent(resolvedListingId);
-    const supportRes = await proxyDirectoryIqRead(req, `/api/directoryiq/listings/${upstreamListingId}/support`);
-    const supportJson = (await supportRes.json().catch(() => ({}))) as ListingSupportResponse;
-
-    if (!supportRes.ok || !supportJson.ok || !supportJson.support) {
-      const message =
-        typeof supportJson.error === "string"
-          ? supportJson.error
-          : supportJson.error?.message ?? "Failed to evaluate authority gaps.";
-      return NextResponse.json(
-        {
-          ok: false,
-          error: {
-            message,
-            code: "GAPS_EVALUATION_FAILED",
-            reqId,
-          },
-        },
-        { status: supportRes.status >= 400 ? supportRes.status : 502 }
-      );
-    }
-
+    const supportResolution = await resolveListingSupportModel(req, listingId);
     const evaluatedAt = new Date().toISOString();
-    const gaps = buildAuthorityGaps(supportJson.support, evaluatedAt);
+    const gaps = buildAuthorityGaps(supportResolution.support, evaluatedAt);
 
     return NextResponse.json({
       ok: true,
       gaps,
       meta: {
         source: "directoryiq_support_derived_gaps_v1",
+        supportSource: supportResolution.source,
+        supportFallbackApplied: supportResolution.fallbackApplied,
         evaluatedAt,
         dataStatus: gaps.summary.dataStatus,
       },
