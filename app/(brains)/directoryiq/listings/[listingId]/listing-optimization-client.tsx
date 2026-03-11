@@ -159,6 +159,61 @@ type ListingAuthorityGapsResponse = {
   } | string;
 };
 
+type RecommendedActionType =
+  | "optimize_listing"
+  | "add_flywheel_links"
+  | "generate_reinforcement_post"
+  | "generate_reinforcement_cluster"
+  | "strengthen_anchor_text"
+  | "add_local_context_support"
+  | "create_comparison_support_content";
+
+type RecommendedActionPriority = "high" | "medium" | "low";
+
+type RecommendedActionItem = {
+  key: RecommendedActionType;
+  priority: RecommendedActionPriority;
+  title: string;
+  rationale: string;
+  evidenceSummary: string;
+  linkedGapTypes?: AuthorityGapType[];
+  dependsOn?: RecommendedActionType[];
+  targetSurface?: "listing" | "blog" | "support_page" | "cluster";
+};
+
+type ListingRecommendedActionsModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalActions: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "actions_recommended" | "no_major_actions_recommended";
+  };
+  items: RecommendedActionItem[];
+};
+
+type ListingRecommendedActionsResponse = {
+  ok: boolean;
+  actions?: ListingRecommendedActionsModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "actions_recommended" | "no_major_actions_recommended";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -224,6 +279,9 @@ export default function ListingOptimizationClient({
   const [supportError, setSupportError] = useState<string | null>(null);
   const [gaps, setGaps] = useState<ListingAuthorityGapsModel | null>(null);
   const [gapsError, setGapsError] = useState<string | null>(null);
+  const [actions, setActions] = useState<ListingRecommendedActionsModel | null>(null);
+  const [actionsError, setActionsError] = useState<string | null>(null);
+  const [actionsLoading, setActionsLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -339,6 +397,64 @@ export default function ListingOptimizationClient({
     void loadListingAndIntegrations();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveListingId, siteQuery]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
+    if (supportError || gapsError) {
+      setActions(null);
+      setActionsLoading(false);
+      setActionsError("Actions evaluation failed because support and gaps diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps) {
+      setActionsLoading(true);
+      setActionsError(null);
+      return;
+    }
+
+    let active = true;
+    setActionsLoading(true);
+    setActionsError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/actions${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ support, gaps }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingRecommendedActionsResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.actions) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate recommended actions.";
+          setActions(null);
+          setActionsError(message);
+          setActionsLoading(false);
+          return;
+        }
+
+        setActions(json.actions);
+        setActionsError(null);
+        setActionsLoading(false);
+      } catch (actionsErr) {
+        if (!active) return;
+        const message = actionsErr instanceof Error ? actionsErr.message : "Failed to evaluate recommended actions.";
+        setActions(null);
+        setActionsError(message);
+        setActionsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveListingId, siteQuery, support, gaps, supportError, gapsError]);
 
   async function generateUpgrade() {
     if (!effectiveListingId) return;
@@ -680,6 +796,78 @@ export default function ListingOptimizationClient({
               </div>
             ))}
           </div>
+        ) : null}
+      </HudCard>
+
+      <HudCard title="Recommended Actions" subtitle="Prioritized actions derived from Current Support + Authority Gaps.">
+        {actionsError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {actionsError}
+          </div>
+        ) : null}
+
+        {actionsLoading && !actionsError ? (
+          <div className="text-sm text-slate-300">Evaluating recommended actions...</div>
+        ) : null}
+
+        {actions && !actionsError ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Actions</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{actions.summary.totalActions}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-rose-200">{actions.summary.highPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{actions.summary.mediumPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{actions.summary.lowPriorityCount}</div>
+              </div>
+            </div>
+
+            {actions.summary.dataStatus === "no_major_actions_recommended" ? (
+              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major actions recommended at this time.
+              </div>
+            ) : null}
+
+            {actions.summary.dataStatus === "actions_recommended" ? (
+              <div className="mt-4 space-y-2">
+                {actions.items.map((item) => (
+                  <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.key}
+                      </span>
+                      {item.targetSurface ? (
+                        <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                          {item.targetSurface}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    {item.linkedGapTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                    ) : null}
+                    {item.dependsOn?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Depends on: {item.dependsOn.join(", ")}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
         ) : null}
       </HudCard>
 
