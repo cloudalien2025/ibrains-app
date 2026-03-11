@@ -48,4 +48,24 @@ describe("directoryiq authority read routes proxy", () => {
     const [url] = fetchMock.mock.calls[0] as [string];
     expect(url).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/authority/blogs");
   });
+
+  it("proxies authority overview reads to external DirectoryIQ API", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true, overview: {} }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/authority/overview/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/authority/overview");
+    const res = await GET(req);
+
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [url] = fetchMock.mock.calls[0] as [string];
+    expect(url).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/authority/overview");
+  });
 });
