@@ -14,6 +14,7 @@ type BrainSidebarNavProps = {
 
 export default function BrainSidebarNav({ items }: BrainSidebarNavProps) {
   const pathname = usePathname();
+  const disablePrefetch = pathname.startsWith("/directoryiq/authority");
 
   return (
     <nav className="flex flex-col gap-2">
@@ -23,6 +24,7 @@ export default function BrainSidebarNav({ items }: BrainSidebarNavProps) {
           <Link
             key={`${item.href}:${item.label}`}
             href={item.href}
+            prefetch={disablePrefetch ? false : undefined}
             className={`group flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition ${
               isActive
                 ? "border-cyan-300/45 bg-cyan-400/18 text-cyan-100 shadow-[0_0_22px_rgba(34,211,238,0.22)]"

@@ -23,6 +23,7 @@ export default function AuthoritySectionNav() {
             <Link
               key={link.href}
               href={link.href}
+              prefetch={false}
               className={`rounded-lg border px-3 py-1.5 ${active ? "border-cyan-300/45 bg-cyan-400/15 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"}`}
             >
               {link.label}
