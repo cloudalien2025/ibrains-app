@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
 import DirectoryIqTopNav from "@/components/directoryiq/DirectoryIqTopNav";
+import { deriveDashboardUiState } from "./dashboard-client-state";
 
 type DashboardResponse = {
   connected: boolean;
@@ -61,16 +62,24 @@ function PillarBar({ label, value }: { label: string; value: number }) {
 }
 
 export default function DirectoryIqDashboardClient() {
-  const [data, setData] = useState<DashboardResponse>(EMPTY);
+  const [data, setData] = useState<DashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progressIndex, setProgressIndex] = useState(0);
 
   const progressLabel = useMemo(() => {
+    const progressMessages = data?.progress_messages ?? EMPTY.progress_messages;
     if (!loading) return null;
-    if (!data.progress_messages.length) return "Evaluating selection signals...";
-    return data.progress_messages[progressIndex % data.progress_messages.length];
-  }, [data.progress_messages, loading, progressIndex]);
+    if (!progressMessages.length) return "Evaluating selection signals...";
+    return progressMessages[progressIndex % progressMessages.length];
+  }, [data, loading, progressIndex]);
+
+  const uiState = deriveDashboardUiState({
+    hasData: data !== null,
+    loading,
+    error,
+    listingsCount: data?.listings.length ?? 0,
+  });
 
   async function load() {
     setLoading(true);
@@ -124,40 +133,45 @@ export default function DirectoryIqDashboardClient() {
         </p>
       </section>
 
-      <DirectoryIqTopNav
-        connected={data.connected}
-        verticalDetected={data.vertical_detected}
-        verticalOverride={data.vertical_override}
-        lastAnalyzedAt={data.last_analyzed_at}
-        onRefresh={refreshAnalysis}
-        onVerticalOverride={saveVerticalOverride}
-      />
+      {data ? (
+        <DirectoryIqTopNav
+          connected={data.connected}
+          verticalDetected={data.vertical_detected}
+          verticalOverride={data.vertical_override}
+          lastAnalyzedAt={data.last_analyzed_at}
+          onRefresh={refreshAnalysis}
+          onVerticalOverride={saveVerticalOverride}
+        />
+      ) : null}
 
       <HudCard title="AI Agent Selection Readiness" subtitle="Site-level read-only snapshot">
-        <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
-          <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
-            <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Readiness Score</div>
-            <div className="mt-3 text-5xl font-semibold text-cyan-100">{data.readiness}</div>
-            <div className="mt-1 text-xs text-slate-400">0-100</div>
-          </div>
+        {uiState.showReadinessMetrics && data ? (
+          <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
+            <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
+              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Readiness Score</div>
+              <div className="mt-3 text-5xl font-semibold text-cyan-100">{data.readiness}</div>
+              <div className="mt-1 text-xs text-slate-400">0-100</div>
+            </div>
 
-          <div className="space-y-3">
-            <PillarBar label="Structure" value={data.pillars.structure} />
-            <PillarBar label="Clarity" value={data.pillars.clarity} />
-            <PillarBar label="Trust" value={data.pillars.trust} />
-            <PillarBar label="Authority" value={data.pillars.authority} />
-            <PillarBar label="Actionability" value={data.pillars.actionability} />
+            <div className="space-y-3">
+              <PillarBar label="Structure" value={data.pillars.structure} />
+              <PillarBar label="Clarity" value={data.pillars.clarity} />
+              <PillarBar label="Trust" value={data.pillars.trust} />
+              <PillarBar label="Authority" value={data.pillars.authority} />
+              <PillarBar label="Actionability" value={data.pillars.actionability} />
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        {loading ? <div className="mt-4 text-sm text-cyan-200">{progressLabel}</div> : null}
-        {error ? <div className="mt-4 text-sm text-rose-200">{error}</div> : null}
+        {uiState.showLoading ? <div className="mt-4 text-sm text-cyan-200">{progressLabel}</div> : null}
+        {uiState.showError ? <div className="mt-4 text-sm text-rose-200">{error}</div> : null}
       </HudCard>
 
       <HudCard title="Listings" subtitle="Per-listing optimization only. No bulk updates.">
-        {data.listings.length === 0 ? (
+        {uiState.showListingsZeroState ? (
           <div className="text-sm text-slate-300">No listings found yet. Connect and refresh analysis.</div>
-        ) : (
+        ) : null}
+        {uiState.showListingsTable && data ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
@@ -191,7 +205,8 @@ export default function DirectoryIqDashboardClient() {
               </tbody>
             </table>
           </div>
-        )}
+        ) : null}
+        {uiState.showError && !data ? <div className="text-sm text-rose-200">{error}</div> : null}
       </HudCard>
     </>
   );
