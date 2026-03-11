@@ -214,6 +214,72 @@ type ListingRecommendedActionsResponse = {
   } | string;
 };
 
+type FlywheelRecommendationType =
+  | "blog_posts_should_link_to_listing"
+  | "strengthen_anchor_text"
+  | "listing_should_link_back_to_support_post"
+  | "category_or_guide_page_should_join_cluster"
+  | "missing_reciprocal_link";
+
+type FlywheelRecommendationPriority = "high" | "medium" | "low";
+
+type FlywheelEntity = {
+  id: string;
+  type: "listing" | "blog_post" | "guide_page" | "category_page" | "support_page";
+  title: string;
+  url?: string | null;
+};
+
+type FlywheelRecommendationItem = {
+  key: string;
+  type: FlywheelRecommendationType;
+  priority: FlywheelRecommendationPriority;
+  title: string;
+  rationale: string;
+  evidenceSummary: string;
+  sourceEntity: FlywheelEntity;
+  targetEntity: FlywheelEntity;
+  linkedGapTypes?: AuthorityGapType[];
+  suggestedSurface?: "listing" | "blog" | "guide_page" | "category_page";
+  anchorGuidance?: {
+    suggestedAnchorText?: string;
+    guidance?: string;
+  };
+};
+
+type ListingFlywheelLinksModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalRecommendations: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "flywheel_opportunities_found" | "no_major_flywheel_opportunities";
+  };
+  items: FlywheelRecommendationItem[];
+};
+
+type ListingFlywheelLinksResponse = {
+  ok: boolean;
+  flywheel?: ListingFlywheelLinksModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "flywheel_opportunities_found" | "no_major_flywheel_opportunities";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -282,6 +348,9 @@ export default function ListingOptimizationClient({
   const [actions, setActions] = useState<ListingRecommendedActionsModel | null>(null);
   const [actionsError, setActionsError] = useState<string | null>(null);
   const [actionsLoading, setActionsLoading] = useState(true);
+  const [flywheel, setFlywheel] = useState<ListingFlywheelLinksModel | null>(null);
+  const [flywheelError, setFlywheelError] = useState<string | null>(null);
+  const [flywheelLoading, setFlywheelLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -448,6 +517,64 @@ export default function ListingOptimizationClient({
         setActions(null);
         setActionsError(message);
         setActionsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveListingId, siteQuery, support, gaps, supportError, gapsError]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
+    if (supportError || gapsError) {
+      setFlywheel(null);
+      setFlywheelLoading(false);
+      setFlywheelError("Flywheel evaluation failed because support and gaps diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps) {
+      setFlywheelLoading(true);
+      setFlywheelError(null);
+      return;
+    }
+
+    let active = true;
+    setFlywheelLoading(true);
+    setFlywheelError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/flywheel-links${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ support, gaps }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingFlywheelLinksResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.flywheel) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate flywheel links.";
+          setFlywheel(null);
+          setFlywheelError(message);
+          setFlywheelLoading(false);
+          return;
+        }
+
+        setFlywheel(json.flywheel);
+        setFlywheelError(null);
+        setFlywheelLoading(false);
+      } catch (flywheelErr) {
+        if (!active) return;
+        const message = flywheelErr instanceof Error ? flywheelErr.message : "Failed to evaluate flywheel links.";
+        setFlywheel(null);
+        setFlywheelError(message);
+        setFlywheelLoading(false);
       }
     })();
 
@@ -738,6 +865,86 @@ export default function ListingOptimizationClient({
             </div>
           </section>
         </div>
+      </HudCard>
+
+      <HudCard title="Flywheel Links" subtitle="Bidirectional link opportunities to reinforce listing authority clusters.">
+        {flywheelError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {flywheelError}
+          </div>
+        ) : null}
+
+        {flywheelLoading && !flywheelError ? (
+          <div className="text-sm text-slate-300">Evaluating flywheel links...</div>
+        ) : null}
+
+        {flywheel && !flywheelError ? (
+          <>
+            <div className="mt-3 grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Recommendations</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{flywheel.summary.totalRecommendations}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-rose-200">{flywheel.summary.highPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{flywheel.summary.mediumPriorityCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{flywheel.summary.lowPriorityCount}</div>
+              </div>
+            </div>
+
+            {flywheel.summary.dataStatus === "no_major_flywheel_opportunities" ? (
+              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major flywheel opportunities found.
+              </div>
+            ) : null}
+
+            {flywheel.summary.dataStatus === "flywheel_opportunities_found" ? (
+              <div className="mt-4 space-y-2">
+                {flywheel.items.map((item) => (
+                  <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.type}
+                      </span>
+                      {item.suggestedSurface ? (
+                        <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                          {item.suggestedSurface}
+                        </span>
+                      ) : null}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    <div className="mt-1 text-xs text-slate-400">
+                      Source: {item.sourceEntity.title} → Target: {item.targetEntity.title}
+                    </div>
+                    {item.anchorGuidance?.suggestedAnchorText ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Suggested anchor: {item.anchorGuidance.suggestedAnchorText}
+                      </div>
+                    ) : null}
+                    {item.anchorGuidance?.guidance ? (
+                      <div className="mt-1 text-xs text-slate-400">Anchor guidance: {item.anchorGuidance.guidance}</div>
+                    ) : null}
+                    {item.linkedGapTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </>
+        ) : null}
       </HudCard>
 
       <HudCard title="Authority Gaps" subtitle="Deterministic diagnostics showing where support authority is missing.">
