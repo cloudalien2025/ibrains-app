@@ -12,7 +12,7 @@ test.describe("DirectoryIQ listing support proxy path", () => {
       { timeout: 15_000 }
     );
 
-    await expect(page.getByText("Current Support")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Current Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText(/connect ETIMEDOUT/i)).toHaveCount(0);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
 

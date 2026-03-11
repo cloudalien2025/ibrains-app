@@ -99,7 +99,7 @@ test.describe("DirectoryIQ listing support contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Current Support")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Current Support" })).toBeVisible();
     await expect(page.getByText("How to choose a plumber")).toBeVisible();
     await expect(page.getByText("Emergency plumbing checklist")).toBeVisible();
     await expect(page.getByText("Water heater tips")).toBeVisible();
@@ -142,7 +142,7 @@ test.describe("DirectoryIQ listing support contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByText("Current Support")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Current Support" })).toBeVisible();
     await expect(page.getByText("No inbound linked support detected yet.")).toBeVisible();
     await expect(page.getByText("No unlinked mentions detected yet.")).toBeVisible();
     await expect(page.getByText("No outbound support links detected yet.")).toBeVisible();
