@@ -11,6 +11,11 @@ type RecommendedActionsRequest = {
   gaps?: ListingAuthorityGapsModel;
 };
 
+function listingIdMatchesPath(payloadId: string, pathListingId: string): boolean {
+  if (payloadId === pathListingId) return true;
+  return payloadId.endsWith(`:${pathListingId}`);
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
@@ -38,7 +43,10 @@ export async function POST(
       );
     }
 
-    if (support.listing.id !== resolvedListingId || gaps.listing.id !== resolvedListingId) {
+    if (
+      !listingIdMatchesPath(support.listing.id, resolvedListingId) ||
+      !listingIdMatchesPath(gaps.listing.id, resolvedListingId)
+    ) {
       return NextResponse.json(
         {
           ok: false,
