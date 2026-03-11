@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 function upgradeCard(page: Page) {
   return page
-    .getByRole("heading", { name: "Auto-Generate Listing Upgrade" })
+    .getByRole("heading", { name: "Generate Upgrade Multi-Action System" })
     .first()
     .locator("xpath=ancestor::section[1]");
 }

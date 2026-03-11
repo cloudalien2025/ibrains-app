@@ -480,6 +480,79 @@ type ListingSerpContentStructureResponse = {
   } | string;
 };
 
+type MultiActionPriority = "high" | "medium" | "low";
+type MultiActionStatus = "available" | "blocked" | "not_recommended";
+type MultiActionKey =
+  | "optimize_listing_description"
+  | "repair_flywheel_links"
+  | "publish_reinforcement_post"
+  | "build_reinforcement_cluster"
+  | "publish_local_context_support"
+  | "strengthen_anchor_intent"
+  | "implement_serp_structure_recommendations";
+
+type ListingMultiActionUpgradeItem = {
+  key: MultiActionKey;
+  title: string;
+  priority: MultiActionPriority;
+  status: MultiActionStatus;
+  rationale: string;
+  evidenceSummary: string;
+  targetSurface: "listing" | "blog" | "support_page" | "cluster";
+  linkedGapTypes?: AuthorityGapType[];
+  linkedRecommendedActionKeys?: RecommendedActionType[];
+  linkedIntentClusterIds?: SelectionIntentClusterId[];
+  linkedReinforcementItemIds?: BlogReinforcementPlanItemId[];
+  linkedStructureItemIds?: ContentStructureItemId[];
+  linkedFlywheelTypes?: FlywheelRecommendationType[];
+  blockingReasons?: string[];
+  previewCapability?: {
+    supported: boolean;
+    generateEndpoint?: string;
+    previewEndpoint?: string;
+    pushEndpoint?: string;
+    requiresApprovalToken?: boolean;
+    requiresBdForPush?: boolean;
+    note?: string;
+  };
+};
+
+type ListingMultiActionUpgradeModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalActions: number;
+    availableCount: number;
+    blockedCount: number;
+    notRecommendedCount: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "upgrade_actions_available" | "no_major_upgrade_actions_available";
+  };
+  items: ListingMultiActionUpgradeItem[];
+};
+
+type ListingMultiActionUpgradeResponse = {
+  ok: boolean;
+  multiAction?: ListingMultiActionUpgradeModel;
+  meta?: {
+    source: string;
+    evaluatedAt: string;
+    dataStatus: "upgrade_actions_available" | "no_major_upgrade_actions_available";
+  };
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -560,6 +633,9 @@ export default function ListingOptimizationClient({
   const [contentStructure, setContentStructure] = useState<ListingSerpContentStructureModel | null>(null);
   const [contentStructureError, setContentStructureError] = useState<string | null>(null);
   const [contentStructureLoading, setContentStructureLoading] = useState(true);
+  const [multiAction, setMultiAction] = useState<ListingMultiActionUpgradeModel | null>(null);
+  const [multiActionError, setMultiActionError] = useState<string | null>(null);
+  const [multiActionLoading, setMultiActionLoading] = useState(true);
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -951,6 +1027,104 @@ export default function ListingOptimizationClient({
   useEffect(() => {
     if (!effectiveListingId) return;
 
+    if (
+      supportError ||
+      gapsError ||
+      actionsError ||
+      flywheelError ||
+      intentClustersError ||
+      reinforcementPlanError ||
+      contentStructureError
+    ) {
+      setMultiAction(null);
+      setMultiActionLoading(false);
+      setMultiActionError("Multi-action upgrade evaluation failed because prerequisite diagnostics are unavailable.");
+      return;
+    }
+
+    if (!support || !gaps || !actions || !flywheel || !intentClusters || !reinforcementPlan || !contentStructure) {
+      setMultiActionLoading(true);
+      setMultiActionError(null);
+      return;
+    }
+
+    let active = true;
+    setMultiActionLoading(true);
+    setMultiActionError(null);
+
+    void (async () => {
+      try {
+        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/multi-action${siteQuery}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            support,
+            gaps,
+            actions,
+            flywheel,
+            intentClusters,
+            reinforcementPlan,
+            contentStructure,
+            integrations: {
+              openaiConfigured: Boolean(integrations.openaiConfigured),
+              bdConfigured: Boolean(integrations.bdConfigured),
+            },
+          }),
+        });
+        const json = (await response.json().catch(() => ({}))) as ListingMultiActionUpgradeResponse;
+        if (!active) return;
+
+        if (!response.ok || !json.ok || !json.multiAction) {
+          const message =
+            typeof json.error === "string"
+              ? json.error
+              : json.error?.message ?? "Failed to evaluate multi-action upgrade system.";
+          setMultiAction(null);
+          setMultiActionError(message);
+          setMultiActionLoading(false);
+          return;
+        }
+
+        setMultiAction(json.multiAction);
+        setMultiActionError(null);
+        setMultiActionLoading(false);
+      } catch (multiActionErr) {
+        if (!active) return;
+        const message =
+          multiActionErr instanceof Error ? multiActionErr.message : "Failed to evaluate multi-action upgrade system.";
+        setMultiAction(null);
+        setMultiActionError(message);
+        setMultiActionLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    effectiveListingId,
+    siteQuery,
+    support,
+    gaps,
+    actions,
+    flywheel,
+    intentClusters,
+    reinforcementPlan,
+    contentStructure,
+    integrations.openaiConfigured,
+    integrations.bdConfigured,
+    supportError,
+    gapsError,
+    actionsError,
+    flywheelError,
+    intentClustersError,
+    reinforcementPlanError,
+    contentStructureError,
+  ]);
+
+  useEffect(() => {
+    if (!effectiveListingId) return;
+
     if (supportError || gapsError) {
       setFlywheel(null);
       setFlywheelLoading(false);
@@ -1122,6 +1296,10 @@ export default function ListingOptimizationClient({
     lastGraphRunAt: null,
     dataStatus: "no_meaningful_gaps" as const,
   };
+  const optimizeListingAction = multiAction?.items.find((item) => item.key === "optimize_listing_description");
+  const optimizeActionExecutable =
+    optimizeListingAction?.status === "available" && optimizeListingAction.previewCapability?.supported === true;
+  const optimizeActionBlocked = optimizeListingAction?.status === "blocked";
 
   return (
     <>
@@ -1760,63 +1938,157 @@ export default function ListingOptimizationClient({
       </HudCard>
 
       <HudCard
-        title="Auto-Generate Listing Upgrade"
-        subtitle="Simple 3-step flow: Generate, Preview, Approve & Push."
+        title="Generate Upgrade Multi-Action System"
+        subtitle="Deterministic action control plane informed by support, gaps, flywheel, intent, reinforcement, and SERP structure signals."
       >
-        <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-          <div className="flex flex-wrap gap-2">
-            <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating"}>
-              {state === "generating" ? "Generating..." : "Generate Upgrade"}
-            </NeonButton>
-
-            {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
-              <NeonButton variant="secondary" onClick={() => void previewChanges()} disabled={state === "previewing"}>
-                {state === "previewing" ? "Preparing..." : "Preview Changes"}
-              </NeonButton>
-            ) : null}
-
-            {(state === "generated" || state === "ready_to_push" || state === "done") ? (
-              <NeonButton variant="secondary" onClick={() => void generateUpgrade()}>
-                Regenerate
-              </NeonButton>
-            ) : null}
+        {multiActionError ? (
+          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+            {multiActionError}
           </div>
+        ) : null}
 
-          {(state === "generated" || state === "ready_to_push" || state === "done") && proposedDescription ? (
-            <details open className="rounded-lg border border-white/10 p-3">
-              <summary className="cursor-pointer text-sm font-medium text-slate-100">Generated Upgrade</summary>
-              <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-900/80 p-3 text-sm text-slate-200">{proposedDescription}</pre>
-            </details>
-          ) : null}
+        {multiActionLoading && !multiActionError ? (
+          <div className="text-sm text-slate-300">Evaluating multi-action upgrade options...</div>
+        ) : null}
 
-          {state === "ready_to_push" ? (
-            <div className="space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-              <h4 className="text-sm font-semibold text-cyan-100">Diff Viewer</h4>
-              <div className="max-h-96 overflow-auto rounded border border-white/10">
-                {diffRows.map((row, index) => (
-                  <div key={`${row.type}-${index}`} className="grid grid-cols-2 gap-2 border-b border-white/10 p-2 text-xs">
-                    <div className="rounded bg-slate-900/80 p-2 text-slate-300">{row.left || " "}</div>
-                    <div className="rounded bg-slate-900/80 p-2 text-cyan-100">{row.right || " "}</div>
+        {multiAction && !multiActionError ? (
+          <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
+            <div className="grid gap-3 md:grid-cols-4">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Actions</div>
+                <div className="mt-1 text-2xl font-semibold text-slate-100">{multiAction.summary.totalActions}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Available</div>
+                <div className="mt-1 text-2xl font-semibold text-emerald-100">{multiAction.summary.availableCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked</div>
+                <div className="mt-1 text-2xl font-semibold text-amber-100">{multiAction.summary.blockedCount}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Not Recommended</div>
+                <div className="mt-1 text-2xl font-semibold text-cyan-100">{multiAction.summary.notRecommendedCount}</div>
+              </div>
+            </div>
+
+            {multiAction.summary.dataStatus === "no_major_upgrade_actions_available" ? (
+              <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
+                No major upgrade actions available.
+              </div>
+            ) : null}
+
+            {multiAction.summary.dataStatus === "upgrade_actions_available" ? (
+              <div className="space-y-2">
+                {multiAction.items.map((item) => (
+                  <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.status}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.targetSurface}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {item.key}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                    {item.linkedGapTypes?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                    ) : null}
+                    {item.linkedIntentClusterIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
+                    ) : null}
+                    {item.linkedReinforcementItemIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
+                      </div>
+                    ) : null}
+                    {item.linkedStructureItemIds?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Linked structure items: {item.linkedStructureItemIds.join(", ")}
+                      </div>
+                    ) : null}
+                    {item.blockingReasons?.length ? (
+                      <div className="mt-1 text-xs text-amber-100">Blocked: {item.blockingReasons.join(" ")}</div>
+                    ) : null}
+                    {item.previewCapability?.note ? (
+                      <div className="mt-1 text-xs text-slate-400">Preview metadata: {item.previewCapability.note}</div>
+                    ) : null}
                   </div>
                 ))}
               </div>
+            ) : null}
 
-              <label className="flex items-start gap-2 text-sm text-slate-200">
-                <input
-                  type="checkbox"
-                  checked={approved}
-                  onChange={(event) => setApproved(event.target.checked)}
-                  className="mt-0.5"
-                />
-                <span>I reviewed the diff and approve this push.</span>
-              </label>
+            <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
+              <h4 className="text-sm font-semibold text-cyan-100">Execution Surface: optimize_listing_description</h4>
+              {optimizeActionBlocked ? (
+                <div className="mt-2 text-sm text-amber-100">
+                  {optimizeListingAction?.blockingReasons?.join(" ") ?? "This action is currently blocked."}
+                </div>
+              ) : null}
 
-              <NeonButton onClick={() => void approveAndPush()} disabled={!approved || !integrations.bdConfigured}>
-                Approve & Push to BD
-              </NeonButton>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating" || !optimizeActionExecutable}>
+                  {state === "generating" ? "Generating..." : "Generate Upgrade"}
+                </NeonButton>
+
+                {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
+                  <NeonButton variant="secondary" onClick={() => void previewChanges()} disabled={state === "previewing" || !optimizeActionExecutable}>
+                    {state === "previewing" ? "Preparing..." : "Preview Changes"}
+                  </NeonButton>
+                ) : null}
+
+                {(state === "generated" || state === "ready_to_push" || state === "done") ? (
+                  <NeonButton variant="secondary" onClick={() => void generateUpgrade()} disabled={!optimizeActionExecutable}>
+                    Regenerate
+                  </NeonButton>
+                ) : null}
+              </div>
+
+              {(state === "generated" || state === "ready_to_push" || state === "done") && proposedDescription ? (
+                <details open className="mt-3 rounded-lg border border-white/10 p-3">
+                  <summary className="cursor-pointer text-sm font-medium text-slate-100">Generated Upgrade</summary>
+                  <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-900/80 p-3 text-sm text-slate-200">{proposedDescription}</pre>
+                </details>
+              ) : null}
+
+              {state === "ready_to_push" ? (
+                <div className="mt-3 space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
+                  <h4 className="text-sm font-semibold text-cyan-100">Diff Viewer</h4>
+                  <div className="max-h-96 overflow-auto rounded border border-white/10">
+                    {diffRows.map((row, index) => (
+                      <div key={`${row.type}-${index}`} className="grid grid-cols-2 gap-2 border-b border-white/10 p-2 text-xs">
+                        <div className="rounded bg-slate-900/80 p-2 text-slate-300">{row.left || " "}</div>
+                        <div className="rounded bg-slate-900/80 p-2 text-cyan-100">{row.right || " "}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <label className="flex items-start gap-2 text-sm text-slate-200">
+                    <input
+                      type="checkbox"
+                      checked={approved}
+                      onChange={(event) => setApproved(event.target.checked)}
+                      className="mt-0.5"
+                    />
+                    <span>I reviewed the diff and approve this push.</span>
+                  </label>
+
+                  <NeonButton onClick={() => void approveAndPush()} disabled={!approved || !integrations.bdConfigured}>
+                    Approve & Push to BD
+                  </NeonButton>
+                </div>
+              ) : null}
             </div>
-          ) : null}
-        </div>
+          </div>
+        ) : null}
       </HudCard>
     </>
   );
