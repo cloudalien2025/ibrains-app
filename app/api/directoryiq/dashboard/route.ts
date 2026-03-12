@@ -4,8 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { query } from "@/app/api/ecomviper/_utils/db";
-import { getDirectoryIqIntegration } from "@/app/api/directoryiq/_utils/credentials";
 import { getAllListingsWithEvaluations, getDirectoryIqSettings } from "@/app/api/directoryiq/_utils/selectionData";
+import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { scheduleSnapshotRefresh } from "@/app/api/_utils/snapshots";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
@@ -65,8 +65,8 @@ function targetHost(): string {
 }
 
 async function loadDashboard(userId: string) {
-  const [integration, listingEval, settings, latestRunRows] = await Promise.all([
-    getDirectoryIqIntegration(userId, "brilliant_directories"),
+  const [sites, listingEval, settings, latestRunRows] = await Promise.all([
+    listBdSites(userId),
     getAllListingsWithEvaluations(userId),
     getDirectoryIqSettings(userId),
     query<LastRunRow>(
@@ -90,8 +90,12 @@ async function loadDashboard(userId: string) {
     last_optimized: card.lastOptimized,
   }));
 
+  const connected = sites.some(
+    (site) => site.enabled && site.secretPresent && site.baseUrl.trim().length > 0 && site.listingsDataId != null
+  );
+
   return {
-    connected: integration.status === "connected",
+    connected,
     readiness: listingEval.readiness,
     pillars: listingEval.pillarAverages,
     listings,
