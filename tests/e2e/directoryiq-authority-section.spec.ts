@@ -100,7 +100,8 @@ test.describe("DirectoryIQ Authority Section", () => {
 
     await page.getByTestId("authority-section-nav").getByRole("link", { name: "Leak Scanner" }).click();
     await expect(page).toHaveURL(/\/directoryiq\/authority\/authority-support/);
-    await expect(page.getByText("No issues in this bucket.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Scan for Authority Leaks" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Orphan Listings/i }).locator(".text-2xl")).toHaveText("1");
 
     await expect(page.getByText("This page could not be found.")).toHaveCount(0);
   });
