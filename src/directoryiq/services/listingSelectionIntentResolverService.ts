@@ -221,7 +221,7 @@ function buildRanking(input: {
     100
   );
 
-  return [
+  const ranking: SelectionIntentPriorityRank[] = [
     {
       clusterId: "intent_match",
       title: "Intent Match Clarity",
@@ -256,7 +256,9 @@ function buildRanking(input: {
         ? "Comparison-intent coverage gaps are currently present."
         : "Comparison coverage signals are present or not flagged as missing.",
     },
-  ].sort((left, right) => left.score - right.score);
+  ];
+
+  return ranking.sort((left, right) => left.score - right.score);
 }
 
 export function resolveListingSelectionIntent(input: IntentResolverInput): ListingSelectionIntentProfile {
