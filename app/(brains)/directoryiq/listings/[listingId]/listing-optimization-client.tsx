@@ -29,6 +29,13 @@ type IntegrationStatusResponse = {
   bdConfigured: boolean | null;
 };
 
+type SignalSourcesResponse = {
+  connectors?: Array<{
+    connector_id?: string;
+    connected?: boolean;
+  }>;
+};
+
 type ListingSupportSummary = {
   inboundLinkedSupportCount: number;
   mentionWithoutLinkCount: number;
@@ -675,23 +682,29 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const integrationRes = await fetch("/api/directoryiq/integrations", { cache: "no-store" });
-        const integrationJson = (await integrationRes.json().catch(() => ({}))) as IntegrationStatusResponse & ApiErrorShape;
-        if (!integrationRes.ok) {
+        const response = await fetch("/api/directoryiq/signal-sources", { cache: "no-store" });
+        const json = (await response.json().catch(() => ({}))) as SignalSourcesResponse & ApiErrorShape;
+        if (!response.ok) {
           setIntegrations({
-            openaiConfigured: false,
-            bdConfigured: false,
+            openaiConfigured: null,
+            bdConfigured: null,
           });
           return;
         }
+
+        const connectors = Array.isArray(json.connectors) ? json.connectors : [];
+        const openAiConnector = connectors.find((connector) => connector.connector_id === "openai");
+        const bdConnector = connectors.find(
+          (connector) => connector.connector_id === "brilliant_directories_api"
+        );
         setIntegrations({
-          openaiConfigured: Boolean(integrationJson.openaiConfigured),
-          bdConfigured: Boolean(integrationJson.bdConfigured),
+          openaiConfigured: typeof openAiConnector?.connected === "boolean" ? openAiConnector.connected : null,
+          bdConfigured: typeof bdConnector?.connected === "boolean" ? bdConnector.connected : null,
         });
       } catch {
         setIntegrations({
-          openaiConfigured: false,
-          bdConfigured: false,
+          openaiConfigured: null,
+          bdConfigured: null,
         });
       }
     })();
