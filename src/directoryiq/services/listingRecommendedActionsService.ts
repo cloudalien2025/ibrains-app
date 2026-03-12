@@ -1,5 +1,6 @@
 import type { AuthorityGapItem, AuthorityGapType, ListingAuthorityGapsModel } from "@/src/directoryiq/services/listingGapsService";
 import type { ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
+import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
 
 export type RecommendedActionType =
   | "optimize_listing"
@@ -95,6 +96,25 @@ export function buildListingRecommendedActions(input: {
 }): ListingRecommendedActionsModel {
   const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
   const { support, gaps } = input;
+  if (!hasMaterialSupportSignals(support)) {
+    return {
+      listing: {
+        id: support.listing.id,
+        title: support.listing.title,
+        canonicalUrl: support.listing.canonicalUrl ?? null,
+        siteId: support.listing.siteId ?? null,
+      },
+      summary: {
+        totalActions: 0,
+        highPriorityCount: 0,
+        mediumPriorityCount: 0,
+        lowPriorityCount: 0,
+        evaluatedAt,
+        dataStatus: "no_major_actions_recommended",
+      },
+      items: [],
+    };
+  }
   const actions = new Map<RecommendedActionType, RecommendedActionItem>();
   const supportSummary = support.summary;
   const gapSummary = gaps.summary;

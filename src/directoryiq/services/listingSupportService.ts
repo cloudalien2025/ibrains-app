@@ -117,6 +117,7 @@ function sortText(value: string | null | undefined): string {
 export async function getListingCurrentSupport(params: {
   tenantId: string;
   listingId: string;
+  listingLookupIds?: string[];
   listingTitle?: string | null;
   listingUrl?: string | null;
   siteId?: string | null;
@@ -124,14 +125,22 @@ export async function getListingCurrentSupport(params: {
   const latestRun = await getLatestRun(params.tenantId);
   const lastGraphRunAt = latestRun?.completedAt ?? latestRun?.startedAt ?? null;
 
+  const lookupIds = Array.from(
+    new Set(
+      [params.listingId, ...(params.listingLookupIds ?? [])]
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
+
   const listingNodeRows = await queryDb<ListingNodeRow>(
     `
     SELECT id, external_id, canonical_url, title
     FROM authority_graph_nodes
-    WHERE tenant_id = $1 AND node_type = 'listing' AND external_id = $2
+    WHERE tenant_id = $1 AND node_type = 'listing' AND external_id = ANY($2::text[])
     LIMIT 1
     `,
-    [params.tenantId, params.listingId]
+    [params.tenantId, lookupIds]
   );
 
   const listingNode = listingNodeRows[0] ?? null;
@@ -179,12 +188,12 @@ export async function getListingCurrentSupport(params: {
       ON ev.edge_id = e.id
      AND ev.tenant_id = e.tenant_id
     WHERE e.tenant_id = $1
-      AND l.external_id = $2
+      AND l.external_id = ANY($2::text[])
       AND e.status = 'active'
       AND e.edge_type = ANY($3)
     ORDER BY e.last_seen_at DESC, ev.detected_at DESC NULLS LAST
     `,
-    [params.tenantId, params.listingId, [...LINK_EDGE_TYPES, MENTION_EDGE_TYPE]]
+    [params.tenantId, lookupIds, [...LINK_EDGE_TYPES, MENTION_EDGE_TYPE]]
   );
 
   const inboundLinkedMap = new Map<

@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
+import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { getListingCurrentSupport, type ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
+import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
@@ -9,6 +11,7 @@ export type SupportResolution = {
   support: ListingSupportModel;
   source: "local_support_service_v1" | "external_proxy_support_v1";
   fallbackApplied: boolean;
+  dataStatus: "supported" | "no_support_data";
   upstreamStatus?: number;
 };
 
@@ -79,19 +82,81 @@ function fallbackSupport(listingId: string, siteId: string | null): ListingSuppo
   };
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function stripSitePrefix(input: string): string {
+  const value = input.trim();
+  if (!value.includes(":")) return value;
+  const [, tail] = value.split(":", 2);
+  return tail?.trim() || value;
+}
+
+async function resolveListingContext(
+  req: NextRequest,
+  listingId: string
+): Promise<{
+  listingId: string;
+  sourceId: string | null;
+  title: string;
+  canonicalUrl: string | null;
+  siteId: string | null;
+}> {
+  const siteId = resolveSiteId(req);
+  const tenantId = resolveUserId(req);
+
+  try {
+    const resolved = await resolveListingEvaluation({
+      userId: tenantId,
+      listingId,
+      siteId,
+    });
+    const listing = resolved?.listingEval.listing;
+    const raw = (listing?.raw_json ?? {}) as Record<string, unknown>;
+    const listingIdFromRaw = asString(raw.listing_id) || stripSitePrefix(listing?.source_id ?? listingId);
+    const title = asString(raw.group_name) || asString(listing?.title) || listingIdFromRaw;
+    const canonicalUrl = asString(raw.url) || asString(listing?.url) || null;
+    return {
+      listingId: listingIdFromRaw,
+      sourceId: listing?.source_id ?? null,
+      title,
+      canonicalUrl,
+      siteId: resolved?.siteId ?? siteId,
+    };
+  } catch {
+    return {
+      listingId: stripSitePrefix(listingId),
+      sourceId: null,
+      title: stripSitePrefix(listingId),
+      canonicalUrl: null,
+      siteId,
+    };
+  }
+}
+
 async function resolveLocalSupport(req: NextRequest, listingId: string): Promise<ListingSupportModel> {
   const tenantId = resolveUserId(req);
-  const siteId = resolveSiteId(req);
+  const context = await resolveListingContext(req, listingId);
+  const lookupIds = Array.from(
+    new Set(
+      [listingId, context.listingId, context.sourceId, context.siteId ? `${context.siteId}:${context.listingId}` : null]
+        .map((value) => (value ?? "").trim())
+        .filter(Boolean)
+    )
+  );
+
   try {
     return await getListingCurrentSupport({
       tenantId,
-      listingId,
-      siteId,
-      listingTitle: listingId,
-      listingUrl: null,
+      listingId: context.listingId,
+      listingLookupIds: lookupIds,
+      siteId: context.siteId,
+      listingTitle: context.title,
+      listingUrl: context.canonicalUrl,
     });
   } catch {
-    return fallbackSupport(listingId, siteId);
+    return fallbackSupport(context.listingId, context.siteId);
   }
 }
 
@@ -105,12 +170,14 @@ export async function resolveListingSupportModel(
   listingId: string
 ): Promise<SupportResolution> {
   const resolvedListingId = decodeURIComponent(listingId);
-  if (requestHost(req) === targetHost()) {
-    const support = await resolveLocalSupport(req, resolvedListingId);
+  const localSupport = await resolveLocalSupport(req, resolvedListingId);
+  const localHasSignals = hasMaterialSupportSignals(localSupport);
+  if (requestHost(req) === targetHost() || localHasSignals) {
     return {
-      support,
+      support: localSupport,
       source: "local_support_service_v1",
       fallbackApplied: false,
+      dataStatus: localHasSignals ? "supported" : "no_support_data",
     };
   }
 
@@ -118,18 +185,29 @@ export async function resolveListingSupportModel(
   const supportRes = await proxyDirectoryIqRead(req, `/api/directoryiq/listings/${upstreamListingId}/support`);
   const supportJson = (await supportRes.clone().json().catch(() => null)) as UpstreamSupportResponse | null;
   if (supportRes.ok && supportJson?.ok && supportJson.support) {
+    const upstreamHasSignals = hasMaterialSupportSignals(supportJson.support);
+    if (!upstreamHasSignals) {
+      return {
+        support: localSupport,
+        source: "local_support_service_v1",
+        fallbackApplied: true,
+        dataStatus: localHasSignals ? "supported" : "no_support_data",
+        upstreamStatus: supportRes.status,
+      };
+    }
     return {
       support: supportJson.support,
       source: "external_proxy_support_v1",
       fallbackApplied: false,
+      dataStatus: "supported",
     };
   }
 
-  const support = await resolveLocalSupport(req, resolvedListingId);
   return {
-    support,
+    support: localSupport,
     source: "local_support_service_v1",
     fallbackApplied: true,
+    dataStatus: localHasSignals ? "supported" : "no_support_data",
     upstreamStatus: supportRes.status,
   };
 }
