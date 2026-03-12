@@ -138,6 +138,8 @@ describe("directoryiq listing blog reinforcement planner route", () => {
     expect(json.reinforcementPlan.listing.id).toBe("321");
     expect(json.reinforcementPlan.summary.dataStatus).toBe("plan_items_identified");
     expect(json.reinforcementPlan.items[0].id).toBeDefined();
+    expect(json.reinforcementPlan.items[0].targetIntent).toBeDefined();
+    expect(json.reinforcementPlan.items[0].suggestedInternalLinkPattern).toContain("->");
     expect(json.meta.source).toBe("first_party_blog_reinforcement_planner_v1");
   });
 

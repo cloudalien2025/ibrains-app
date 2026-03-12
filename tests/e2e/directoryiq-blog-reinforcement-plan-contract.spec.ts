@@ -196,6 +196,14 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
                 id: "publish_comparison_decision_post",
                 title: "Publish a comparison decision-stage post",
                 priority: "high",
+                recommendationType: "comparison_page",
+                targetIntent: "compare_alternatives",
+                whyItMatters: "Comparison-stage users need alternatives context before selecting.",
+                reinforcesListingId: listingId,
+                expectedSelectionImpact: "High expected impact on listing selection confidence and conversion intent.",
+                suggestedInternalLinkPattern:
+                  "comparison-asset -> https://example.com/listings/acme-plumbing; listing -> comparison block -> comparison-asset",
+                rankingContext: "Comparison Clarity (32/100, high urgency)",
                 rationale: "Selection-stage users need comparison context.",
                 evidenceSummary: "Comparison gap: yes.",
                 suggestedContentPurpose: "Help users evaluate alternatives.",
@@ -205,6 +213,14 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
                 id: "publish_reciprocal_support_post",
                 title: "Publish a reciprocal support post for inbound authority flow",
                 priority: "medium",
+                recommendationType: "blog_idea",
+                targetIntent: "validate_trust_signals",
+                whyItMatters: "Reciprocal links increase proof depth around the listing.",
+                reinforcesListingId: listingId,
+                expectedSelectionImpact: "Medium expected impact on listing selection confidence with stronger support coverage.",
+                suggestedInternalLinkPattern:
+                  "blog -> https://example.com/listings/acme-plumbing; listing -> related resources -> blog",
+                rankingContext: "Proof Depth (40/100, high urgency)",
                 rationale: "Unlinked mentions reduce authority transfer.",
                 evidenceSummary: "Mentions without links: 2.",
                 suggestedContentPurpose: "Create support post linking to listing and receiving reciprocal link.",
@@ -221,6 +237,13 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible();
     await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible();
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
+    await expect(page.getByText("Target intent: compare_alternatives")).toBeVisible();
+    await expect(page.getByText("Expected impact: High expected impact on listing selection confidence and conversion intent.")).toBeVisible();
+    await expect(
+      page.getByText(
+        "Internal links: comparison-asset -> https://example.com/listings/acme-plumbing; listing -> comparison block -> comparison-asset"
+      )
+    ).toBeVisible();
     await expect(page.getByText("No major reinforcement plan items identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
 
