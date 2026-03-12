@@ -88,8 +88,12 @@ function imageFromRaw(raw: Record<string, unknown>): string | null {
   const value =
     asString(raw.mainImageUrl) ||
     asString(raw.main_image_url) ||
+    asString(raw.main_image) ||
     asString(raw.image_url) ||
     asString(raw.featured_image_url) ||
+    asString(raw.featured_image) ||
+    asString(raw.hero_image) ||
+    asString(raw.primary_image) ||
     asString(raw.photo_url) ||
     asString(raw.group_photo) ||
     readNestedImage(raw.main_image) ||

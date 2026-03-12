@@ -4,7 +4,9 @@ const listingId = "321";
 const imagePath = "/mock/listing-hero.svg";
 
 test.describe("DirectoryIQ listing-detail contract drift", () => {
-  test("renders canonical hero image and avoids false config warnings when integration contract is healthy", async ({ page }) => {
+  test("renders canonical hero image and avoids false config warnings from Signal Sources canonical state", async ({ page }) => {
+    let integrationsCalls = 0;
+
     await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {
       await route.fulfill({
         status: 200,
@@ -42,13 +44,37 @@ test.describe("DirectoryIQ listing-detail contract drift", () => {
     });
 
     await page.route("**/api/directoryiq/integrations", async (route) => {
+      integrationsCalls += 1;
+      await route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ ok: false, error: "should not be called by listing-detail" }),
+      });
+    });
+
+    await page.route("**/api/directoryiq/signal-sources", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          openaiConfigured: true,
-          bdConfigured: true,
-          integrations: [],
+          connectors: [
+            {
+              connector_id: "brilliant_directories_api",
+              connected: true,
+              label: null,
+              masked_secret: "****bd",
+              updated_at: "2026-03-12T00:00:00.000Z",
+              config: null,
+            },
+            {
+              connector_id: "openai",
+              connected: true,
+              label: null,
+              masked_secret: "****open",
+              updated_at: "2026-03-12T00:00:00.000Z",
+              config: null,
+            },
+          ],
         }),
       });
     });
@@ -78,5 +104,6 @@ test.describe("DirectoryIQ listing-detail contract drift", () => {
     await expect(page.getByText("Brilliant Directories not configured.")).toHaveCount(0);
     await expect(page.getByText("OpenAI Connected")).toHaveCount(2);
     await expect(page.getByText("BD Connected")).toHaveCount(2);
+    expect(integrationsCalls).toBe(0);
   });
 });

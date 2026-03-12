@@ -1,10 +1,23 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { getDirectoryIqIntegrationSecret } from "@/app/api/directoryiq/_utils/credentials";
-import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
-import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
+import { GET as getSignalSources } from "@/app/api/directoryiq/signal-sources/route";
+
+type SignalSourcesResponse = {
+  connectors?: Array<{
+    connector_id?: string;
+    connected?: boolean;
+  }>;
+  error?: string;
+};
+
+function connectorState(connectors: SignalSourcesResponse["connectors"], connectorId: string): boolean | null {
+  const connector = Array.isArray(connectors)
+    ? connectors.find((entry) => entry?.connector_id === connectorId)
+    : null;
+  if (!connector || typeof connector.connected !== "boolean") return null;
+  return connector.connected;
+}
 
 export async function GET(req: NextRequest) {
   if (process.env.E2E_MOCK_GRAPH === "1") {
@@ -16,16 +29,14 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const signalSourcesRes = await getSignalSources(req);
+    const signalSourcesJson = (await signalSourcesRes.json().catch(() => ({}))) as SignalSourcesResponse;
+    if (!signalSourcesRes.ok) {
+      return NextResponse.json(signalSourcesJson, { status: signalSourcesRes.status });
+    }
 
-    const [openai, sites] = await Promise.all([
-      getDirectoryIqIntegrationSecret(userId, "openai"),
-      listBdSites(userId),
-    ]);
-
-    const openaiConfigured = Boolean(openai?.secret?.trim());
-    const bdConfigured = hasCanonicalDirectoryIqConnection(sites);
+    const openaiConfigured = connectorState(signalSourcesJson.connectors, "openai");
+    const bdConfigured = connectorState(signalSourcesJson.connectors, "brilliant_directories_api");
 
     return NextResponse.json({
       openaiConfigured,
