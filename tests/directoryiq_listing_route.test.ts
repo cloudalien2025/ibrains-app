@@ -42,6 +42,38 @@ describe("directoryiq listing detail route proxy", () => {
     expect(headers.get("x-user-id")).toBe("00000000-0000-4000-8000-000000000001");
   });
 
+  it("normalizes upstream listing image fields to canonical mainImageUrl", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          listing: {
+            listing_id: "3",
+            listing_name: "Listing 3",
+            listing_url: "https://example.com/listings/3",
+            main_image_url: "https://cdn.example.com/main.jpg",
+            images: [{ url: "https://cdn.example.com/secondary.jpg" }],
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/3");
+
+    const res = await GET(req, { params: { listingId: "3" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.listing.listing_id).toBe("3");
+    expect(json.listing.mainImageUrl).toBe("https://cdn.example.com/main.jpg");
+  });
+
   it("forwards Cloudflare Access JWT assertion header for external auth", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
