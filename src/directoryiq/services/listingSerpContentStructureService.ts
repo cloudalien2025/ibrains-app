@@ -1,5 +1,9 @@
 import type { SerpCacheEntry } from "@/lib/directoryiq/types";
 import type { BlogReinforcementPlanItemId, ListingBlogReinforcementPlanModel } from "@/src/directoryiq/services/listingBlogReinforcementPlannerService";
+import {
+  resolveSerpBlueprintPatternSet,
+  type SerpPatternSummary,
+} from "@/src/directoryiq/services/contentStructureSerpPatternProvider";
 import type { FlywheelRecommendationType, ListingFlywheelLinksModel } from "@/src/directoryiq/services/listingFlywheelLinksService";
 import type { AuthorityGapType, ListingAuthorityGapsModel } from "@/src/directoryiq/services/listingGapsService";
 import type { RecommendedActionType, ListingRecommendedActionsModel } from "@/src/directoryiq/services/listingRecommendedActionsService";
@@ -31,23 +35,21 @@ export type ContentStructureItemId =
   | "structure_cluster_hub"
   | "structure_anchor_intent";
 
-export type SerpPatternSummary = {
-  readySlotCount: number;
-  totalSlotCount: number;
-  commonHeadings: string[];
-  commonQuestions: string[];
-  targetLengthBand?: {
-    min: number;
-    median: number;
-    max: number;
-  };
-};
-
 export type ContentStructureItem = {
   id: ContentStructureItemId;
   key: ContentStructureItemId;
   title: string;
   priority: ContentStructurePriority;
+  recommendedContentType: "comparison_page" | "faq_support_page" | "local_guide" | "support_post" | "cluster_hub";
+  recommendedTitlePattern: string;
+  suggestedH1: string;
+  suggestedH2Structure: string[];
+  comparisonCriteria: string[];
+  faqThemes: string[];
+  localModifiers: string[];
+  entityCoverageTargets: string[];
+  internalLinkOpportunities: string[];
+  whyThisStructureMatters: string;
   rationale: string;
   evidenceSummary: string;
   suggestedStructureType: ContentStructureType;
@@ -79,6 +81,7 @@ export type ListingSerpContentStructureModel = {
     evaluatedAt: string;
     dataStatus: ContentStructureStatus;
     serpPatternStatus: "patterns_available" | "patterns_unavailable";
+    serpPatternSource: "serp_cache" | "intent_fixture" | "none";
   };
   serpPatternSummary?: SerpPatternSummary;
   items: ContentStructureItem[];
@@ -137,62 +140,64 @@ function hasAction(model: ListingRecommendedActionsModel, key: RecommendedAction
   return model.items.some((item) => item.key === key);
 }
 
-function aggregateSerpPatternSummary(entries: SerpCacheEntry[]): SerpPatternSummary | undefined {
-  const totalSlotCount = entries.length;
-  const readyEntries = entries
-    .filter((entry) => entry.status === "READY" && entry.consensus_outline)
-    .sort((left, right) => left.slot_id.localeCompare(right.slot_id));
+function toTitleCase(value: string): string {
+  return value
+    .split("_")
+    .map((part) => (part.length ? part.charAt(0).toUpperCase() + part.slice(1) : ""))
+    .join(" ");
+}
 
-  if (!readyEntries.length) return undefined;
+function normalizePhrase(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
 
-  const headingCounts = new Map<string, number>();
-  const questionCounts = new Map<string, number>();
-  const mins: number[] = [];
-  const medians: number[] = [];
-  const maxes: number[] = [];
-
-  for (const entry of readyEntries) {
-    const outline = entry.consensus_outline;
-    if (!outline) continue;
-
-    for (const section of outline.h2Sections) {
-      headingCounts.set(section.heading, (headingCounts.get(section.heading) ?? 0) + section.score);
-    }
-
-    for (const question of outline.mustCoverQuestions) {
-      questionCounts.set(question, (questionCounts.get(question) ?? 0) + 1);
-    }
-
-    mins.push(outline.targetLengthBand.min);
-    medians.push(outline.targetLengthBand.median);
-    maxes.push(outline.targetLengthBand.max);
-  }
-
-  const sortCounts = (map: Map<string, number>): string[] =>
-    Array.from(map.entries())
-      .sort((left, right) => {
-        if (right[1] !== left[1]) return right[1] - left[1];
-        return left[0].localeCompare(right[0]);
-      })
-      .slice(0, 6)
-      .map(([key]) => key);
-
-  const average = (values: number[]): number =>
-    values.length ? Math.round(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+function buildBlueprintCommon(input: {
+  support: ListingSupportModel;
+  intentClusters: ListingSelectionIntentClustersModel;
+  fallbackTitlePattern: string;
+  fallbackH2: string[];
+  fallbackCriteria: string[];
+  fallbackFaqThemes: string[];
+  why: string;
+  internalLinkPattern: string[];
+  contentType: ContentStructureItem["recommendedContentType"];
+}): Pick<
+  ContentStructureItem,
+  | "recommendedContentType"
+  | "recommendedTitlePattern"
+  | "suggestedH1"
+  | "suggestedH2Structure"
+  | "comparisonCriteria"
+  | "faqThemes"
+  | "localModifiers"
+  | "entityCoverageTargets"
+  | "internalLinkOpportunities"
+  | "whyThisStructureMatters"
+> {
+  const intentProfile = input.intentClusters.intentProfile;
+  const listingTitle = input.support.listing.title;
+  const localModifiers = normalizePhrase(intentProfile?.localModifiers ?? []);
+  const entityCoverageTargets = normalizePhrase([
+    ...(intentProfile?.targetEntities ?? []),
+    ...(intentProfile?.missingEntities ?? []).slice(0, 4),
+  ]);
+  const recommendedTitlePattern = input.fallbackTitlePattern
+    .replace("[Listing]", listingTitle)
+    .replace("[Listing Category]", listingTitle)
+    .replace("[Local Modifier]", localModifiers[0] ?? "this area");
+  const suggestedH1 = `${listingTitle}: ${toTitleCase(intentProfile?.primaryIntent ?? "selection guide")}`;
 
   return {
-    readySlotCount: readyEntries.length,
-    totalSlotCount,
-    commonHeadings: sortCounts(headingCounts),
-    commonQuestions: sortCounts(questionCounts),
-    targetLengthBand:
-      mins.length && medians.length && maxes.length
-        ? {
-            min: average(mins),
-            median: average(medians),
-            max: average(maxes),
-          }
-        : undefined,
+    recommendedContentType: input.contentType,
+    recommendedTitlePattern,
+    suggestedH1,
+    suggestedH2Structure: normalizePhrase(input.fallbackH2),
+    comparisonCriteria: normalizePhrase(input.fallbackCriteria),
+    faqThemes: normalizePhrase(input.fallbackFaqThemes),
+    localModifiers,
+    entityCoverageTargets,
+    internalLinkOpportunities: normalizePhrase(input.internalLinkPattern),
+    whyThisStructureMatters: input.why,
   };
 }
 
@@ -210,7 +215,11 @@ function trimOptionalArrays(item: ContentStructureItem): ContentStructureItem {
 export function buildListingSerpContentStructure(input: BuildInput): ListingSerpContentStructureModel {
   const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
   const { support, gaps, actions, intentClusters, reinforcementPlan, flywheel, serpCacheEntries } = input;
-  const serpPatternSummary = aggregateSerpPatternSummary(serpCacheEntries);
+  const patternSet = resolveSerpBlueprintPatternSet({
+    intentProfile: intentClusters.intentProfile,
+    serpCacheEntries,
+  });
+  const serpPatternSummary = patternSet.summary;
 
   const drafts: RecommendationDraft[] = [];
 
@@ -235,6 +244,27 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
         "When to choose alternatives",
       ],
       suggestedComponents: ["comparison-table", "decision-checklist", "cta-strip"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "Best [Listing] in [Local Modifier]: Comparison and Selection Guide",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Who this listing is best for", "Comparison criteria matrix", "When to choose alternatives"],
+        fallbackCriteria: patternSet.comparisonCriteria.length
+          ? patternSet.comparisonCriteria
+          : ["fit", "proof depth", "local relevance", "overall value"],
+        fallbackFaqThemes: patternSet.faqThemes.length
+          ? patternSet.faqThemes
+          : ["best fit scenarios", "pricing expectations", "booking and policy details"],
+        internalLinkPattern: [
+          `comparison-page -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> decision support module -> comparison-page`,
+        ],
+        contentType: "comparison_page",
+        why: "This blueprint aligns comparison-intent searchers with a clear structure that improves decision confidence.",
+      }),
       linkedReinforcementItemIds: ["publish_comparison_decision_post"],
       linkedIntentClusterIds: ["reinforce_decision_stage_content"],
       linkedActionKeys: ["create_comparison_support_content"],
@@ -263,6 +293,25 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       suggestedStructureType: "faq_cluster",
       suggestedSections: ["Top selection questions", "Eligibility and fit", "Booking expectations"],
       suggestedComponents: ["accordion-faq", "quick-answer-cards"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "[Listing] FAQ Guide for [Local Modifier]: Selection Questions Answered",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Top selection questions", "Eligibility and fit", "Booking expectations"],
+        fallbackCriteria: patternSet.comparisonCriteria,
+        fallbackFaqThemes: patternSet.faqThemes.length
+          ? patternSet.faqThemes
+          : ["pricing and eligibility", "timing and availability", "next steps before selection"],
+        internalLinkPattern: [
+          `faq-support-page -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> support answers module -> faq-support-page`,
+        ],
+        contentType: "faq_support_page",
+        why: "FAQ-first structure reduces uncertainty and captures practical questions that block selection.",
+      }),
       linkedReinforcementItemIds: ["publish_faq_support_post"],
       linkedIntentClusterIds: ["reinforce_decision_stage_content"],
       linkedActionKeys: ["generate_reinforcement_post"],
@@ -291,6 +340,23 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       suggestedStructureType: "local_context_block",
       suggestedSections: ["Local area fit guidance", "Timing and logistics", "Context-specific recommendations"],
       suggestedComponents: ["local-context-highlights", "map-context-panel"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "[Listing] in [Local Modifier]: Local Fit, Logistics, and Planning",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Local area fit guidance", "Timing and logistics", "Context-specific recommendations"],
+        fallbackCriteria: patternSet.comparisonCriteria,
+        fallbackFaqThemes: patternSet.faqThemes,
+        internalLinkPattern: [
+          `local-guide -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> local context module -> local-guide`,
+        ],
+        contentType: "local_guide",
+        why: "Local modifiers and context blocks make the listing's location fit explicit for intent-matching users.",
+      }),
       linkedReinforcementItemIds: ["publish_local_context_guide"],
       linkedIntentClusterIds: ["strengthen_local_selection_confidence"],
       linkedActionKeys: ["add_local_context_support"],
@@ -317,6 +383,23 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       suggestedStructureType: "reciprocal_authority_block",
       suggestedSections: ["Related support resources", "Proof and references", "Next-step links"],
       suggestedComponents: ["support-links-rail", "evidence-reference-list"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "[Listing] Proof and Support Resources: What to Review Before Choosing",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Related support resources", "Proof and references", "Next-step links"],
+        fallbackCriteria: patternSet.comparisonCriteria,
+        fallbackFaqThemes: patternSet.faqThemes,
+        internalLinkPattern: [
+          `support-post -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> proof resources module -> support-post`,
+        ],
+        contentType: "support_post",
+        why: "Internal link pathways between support content and listing improve trust signal depth and selection evidence.",
+      }),
       linkedReinforcementItemIds: ["publish_reciprocal_support_post"],
       linkedIntentClusterIds: ["repair_bidirectional_flywheel_links", "close_unlinked_support_mentions"],
       linkedActionKeys: ["add_flywheel_links"],
@@ -341,6 +424,23 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       suggestedStructureType: "cluster_hub_layout",
       suggestedSections: ["Cluster overview", "Decision assets", "Support path map"],
       suggestedComponents: ["cluster-hub-nav", "resource-grid"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "[Listing] Decision Hub: Comparison, FAQ, and Local Guidance",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Cluster overview", "Decision assets", "Support path map"],
+        fallbackCriteria: patternSet.comparisonCriteria,
+        fallbackFaqThemes: patternSet.faqThemes,
+        internalLinkPattern: [
+          `cluster-hub -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> decision resources module -> cluster-hub`,
+        ],
+        contentType: "cluster_hub",
+        why: "A cluster hub blueprint consolidates reinforcement assets into a coherent selection pathway.",
+      }),
       linkedReinforcementItemIds: ["publish_cluster_hub_support_page"],
       linkedIntentClusterIds: ["reinforce_decision_stage_content"],
       linkedActionKeys: ["generate_reinforcement_cluster"],
@@ -365,6 +465,23 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       suggestedStructureType: "anchor_intent_module",
       suggestedSections: ["Intent-driven headings", "Service-specific scenarios", "Anchor-linked quick jumps"],
       suggestedComponents: ["toc-anchor-jumps", "intent-scenario-cards"],
+      ...buildBlueprintCommon({
+        support,
+        intentClusters,
+        fallbackTitlePattern:
+          patternSet.suggestedTitlePattern ?? "[Listing] Intent Guide: Scenarios, Proof, and Next Steps",
+        fallbackH2: patternSet.suggestedH2Sections.length
+          ? patternSet.suggestedH2Sections
+          : ["Intent-driven headings", "Service-specific scenarios", "Anchor-linked quick jumps"],
+        fallbackCriteria: patternSet.comparisonCriteria,
+        fallbackFaqThemes: patternSet.faqThemes,
+        internalLinkPattern: [
+          `support-post -> ${support.listing.canonicalUrl ?? `listing:${support.listing.id}`}`,
+          `listing -> anchor-intent module -> support-post`,
+        ],
+        contentType: "support_post",
+        why: "Intent-specific heading and anchor structure improves match clarity for selection-oriented searches.",
+      }),
       linkedReinforcementItemIds: ["refresh_anchor_intent_post"],
       linkedIntentClusterIds: ["improve_anchor_intent_specificity"],
       linkedActionKeys: ["strengthen_anchor_text"],
@@ -406,7 +523,8 @@ export function buildListingSerpContentStructure(input: BuildInput): ListingSerp
       lowPriorityCount,
       evaluatedAt,
       dataStatus: items.length ? "structure_recommendations_identified" : "no_major_structure_recommendations_identified",
-      serpPatternStatus: serpPatternSummary ? "patterns_available" : "patterns_unavailable",
+      serpPatternStatus: patternSet.source === "none" ? "patterns_unavailable" : "patterns_available",
+      serpPatternSource: patternSet.source,
     },
     serpPatternSummary,
     items,

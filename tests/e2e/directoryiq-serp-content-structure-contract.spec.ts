@@ -214,6 +214,7 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
               evaluatedAt: "2026-03-10T00:00:06.000Z",
               dataStatus: "structure_recommendations_identified",
               serpPatternStatus: "patterns_available",
+              serpPatternSource: "serp_cache",
             },
             serpPatternSummary: {
               readySlotCount: 1,
@@ -228,6 +229,19 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
                 key: "structure_decision_comparison",
                 title: "Decision comparison structure",
                 priority: "high",
+                recommendedContentType: "comparison_page",
+                recommendedTitlePattern: "Acme Plumbing: comparison and fit guide",
+                suggestedH1: "Acme Plumbing: Compare Options and Select with Confidence",
+                suggestedH2Structure: ["Who this listing is best for", "Comparison criteria matrix"],
+                comparisonCriteria: ["price", "service scope"],
+                faqThemes: ["what is included"],
+                localModifiers: ["Denver"],
+                entityCoverageTargets: ["Acme Plumbing", "service scope"],
+                internalLinkOpportunities: [
+                  "comparison-page -> https://example.com/listings/acme-plumbing",
+                  "listing -> decision support module -> comparison-page",
+                ],
+                whyThisStructureMatters: "This structure aligns with decision-stage intent and improves selection confidence.",
                 rationale: "SERP and reinforcement signals indicate users need explicit side-by-side decision framing.",
                 evidenceSummary: "Comparison gap: yes; decision cluster: yes; reinforcement item: present.",
                 suggestedStructureType: "comparison_matrix",
@@ -243,10 +257,11 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
             ],
           },
           meta: {
-            source: "first_party_serp_content_structure_v1",
+            source: "first_party_serp_content_structure_v2",
             evaluatedAt: "2026-03-10T00:00:06.000Z",
             dataStatus: "structure_recommendations_identified",
             serpPatternStatus: "patterns_available",
+            serpPatternSource: "serp_cache",
           },
         }),
       });
@@ -256,6 +271,10 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
     await expect(page.getByRole("heading", { name: "Search Visibility Structure" })).toBeVisible();
     await expect(page.getByText("Decision comparison structure")).toBeVisible();
+    await expect(page.getByText("Recommended asset type: comparison_page")).toBeVisible();
+    await expect(
+      page.getByText("Why this structure matters: This structure aligns with decision-stage intent and improves selection confidence.")
+    ).toBeVisible();
     await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
 
@@ -276,14 +295,16 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
               evaluatedAt: "2026-03-10T00:00:06.000Z",
               dataStatus: "no_major_structure_recommendations_identified",
               serpPatternStatus: "patterns_unavailable",
+              serpPatternSource: "none",
             },
             items: [],
           },
           meta: {
-            source: "first_party_serp_content_structure_v1",
+            source: "first_party_serp_content_structure_v2",
             evaluatedAt: "2026-03-10T00:00:06.000Z",
             dataStatus: "no_major_structure_recommendations_identified",
             serpPatternStatus: "patterns_unavailable",
+            serpPatternSource: "none",
           },
         }),
       });

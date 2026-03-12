@@ -88,10 +88,11 @@ export async function POST(
       ok: true,
       contentStructure,
       meta: {
-        source: "first_party_serp_content_structure_v1",
+        source: "first_party_serp_content_structure_v2",
         evaluatedAt: contentStructure.summary.evaluatedAt,
         dataStatus: contentStructure.summary.dataStatus,
         serpPatternStatus: contentStructure.summary.serpPatternStatus,
+        serpPatternSource: contentStructure.summary.serpPatternSource,
       },
     });
   } catch (error) {
