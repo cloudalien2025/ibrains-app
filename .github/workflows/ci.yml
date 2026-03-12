@@ -40,7 +40,7 @@ jobs:
         run: pnpm run --if-present test
 
       - name: Install Playwright Browsers
-        run: npx playwright install --with-deps
+        run: npx playwright install chromium
 
       - name: Test (Playwright)
         env:

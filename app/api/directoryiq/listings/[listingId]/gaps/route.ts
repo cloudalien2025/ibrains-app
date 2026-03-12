@@ -90,6 +90,30 @@ function buildAuthorityGaps(
   };
 }
 
+function emptyAuthorityGaps(
+  support: Awaited<ReturnType<typeof resolveListingSupportModel>>["support"],
+  evaluatedAt: string
+) {
+  return {
+    listing: {
+      id: support.listing.id,
+      title: support.listing.title,
+      canonicalUrl: support.listing.canonicalUrl ?? null,
+      siteId: support.listing.siteId ?? null,
+    },
+    summary: {
+      totalGaps: 0,
+      highCount: 0,
+      mediumCount: 0,
+      lowCount: 0,
+      evaluatedAt,
+      lastGraphRunAt: support.summary.lastGraphRunAt ?? null,
+      dataStatus: "no_meaningful_gaps" as const,
+    },
+    items: [] as AuthorityGapItem[],
+  };
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
@@ -100,7 +124,10 @@ export async function GET(
     const { listingId } = await Promise.resolve(params);
     const supportResolution = await resolveListingSupportModel(req, listingId);
     const evaluatedAt = new Date().toISOString();
-    const gaps = buildAuthorityGaps(supportResolution.support, evaluatedAt);
+    const gaps =
+      supportResolution.dataStatus === "supported"
+        ? buildAuthorityGaps(supportResolution.support, evaluatedAt)
+        : emptyAuthorityGaps(supportResolution.support, evaluatedAt);
 
     return NextResponse.json({
       ok: true,
@@ -108,6 +135,7 @@ export async function GET(
       meta: {
         source: "directoryiq_support_derived_gaps_v1",
         supportSource: supportResolution.source,
+        supportDataStatus: supportResolution.dataStatus,
         supportFallbackApplied: supportResolution.fallbackApplied,
         evaluatedAt,
         dataStatus: gaps.summary.dataStatus,

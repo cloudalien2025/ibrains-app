@@ -4,6 +4,7 @@ import type {
   ListingSupportMention,
   ListingSupportModel,
 } from "@/src/directoryiq/services/listingSupportService";
+import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
 
 export type FlywheelRecommendationType =
   | "blog_posts_should_link_to_listing"
@@ -165,6 +166,20 @@ export function buildListingFlywheelLinks(input: {
   evaluatedAt?: string;
 }): ListingFlywheelLinksModel {
   const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
+  if (!hasMaterialSupportSignals(input.support)) {
+    return {
+      listing: input.support.listing,
+      summary: {
+        totalRecommendations: 0,
+        highPriorityCount: 0,
+        mediumPriorityCount: 0,
+        lowPriorityCount: 0,
+        evaluatedAt,
+        dataStatus: "no_major_flywheel_opportunities",
+      },
+      items: [],
+    };
+  }
   const listing: FlywheelEntity = {
     id: input.support.listing.id,
     type: "listing",
