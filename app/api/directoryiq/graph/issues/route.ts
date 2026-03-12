@@ -6,16 +6,16 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getIssues } from "@/src/directoryiq/graph/graphService";
 
 export async function GET(req: NextRequest) {
-  if (!shouldServeDirectoryIqLocally(req)) {
-    return proxyDirectoryIqRead(req, "/api/directoryiq/graph/issues");
-  }
-
   const reqId = crypto.randomUUID();
 
   try {
     if (process.env.E2E_MOCK_GRAPH === "1") {
       const issues = await getIssues({ tenantId: "default" });
       return NextResponse.json({ ok: true, issues, reqId });
+    }
+
+    if (!shouldServeDirectoryIqLocally(req)) {
+      return proxyDirectoryIqRead(req, "/api/directoryiq/graph/issues");
     }
 
     const userId = resolveUserId(req);
