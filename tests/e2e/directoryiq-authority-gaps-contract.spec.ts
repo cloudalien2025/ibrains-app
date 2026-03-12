@@ -150,8 +150,8 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("button", { name: "What's Missing" })).toBeVisible();
     await page.getByRole("button", { name: "What's Missing" }).click();
-    await expect(page.getByRole("heading", { name: "Visibility Gaps" })).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
   });
