@@ -11,10 +11,34 @@ describe("directoryiq listing support route proxy", () => {
 
   it("forwards support reads to the external DirectoryIQ API", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: true, support: { summary: { inboundLinkedSupportCount: 0 } } }), {
-        status: 200,
-        headers: { "content-type": "application/json" },
-      })
+      new Response(
+        JSON.stringify({
+          ok: true,
+          support: {
+            listing: {
+              id: "3",
+              title: "Listing 3",
+              canonicalUrl: null,
+              siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+            },
+            summary: {
+              inboundLinkedSupportCount: 0,
+              mentionWithoutLinkCount: 0,
+              outboundSupportLinkCount: 0,
+              connectedSupportPageCount: 0,
+              lastGraphRunAt: "2026-03-10T00:00:00.000Z",
+            },
+            inboundLinkedSupport: [],
+            mentionsWithoutLinks: [],
+            outboundSupportLinks: [],
+            connectedSupportPages: [],
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      )
     );
     vi.stubGlobal("fetch", fetchMock);
     process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";

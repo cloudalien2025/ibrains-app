@@ -7,9 +7,9 @@ export function hasMaterialSupportSignals(support: ListingSupportModel): boolean
   if (summary.mentionWithoutLinkCount > 0) return true;
   if (summary.outboundSupportLinkCount > 0) return true;
   if (summary.connectedSupportPageCount > 0) return true;
-  if (support.inboundLinkedSupport.length > 0) return true;
-  if (support.mentionsWithoutLinks.length > 0) return true;
-  if (support.outboundSupportLinks.length > 0) return true;
-  if (support.connectedSupportPages.length > 0) return true;
+  if ((support.inboundLinkedSupport ?? []).length > 0) return true;
+  if ((support.mentionsWithoutLinks ?? []).length > 0) return true;
+  if ((support.outboundSupportLinks ?? []).length > 0) return true;
+  if ((support.connectedSupportPages ?? []).length > 0) return true;
   return false;
 }
