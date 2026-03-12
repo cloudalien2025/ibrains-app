@@ -211,6 +211,8 @@ describe("listing selection intent clusters service", () => {
 
     expect(result.summary.dataStatus).toBe("clusters_identified");
     expect(result.summary.totalClusters).toBe(5);
+    expect(result.intentProfile.primaryIntent).toBeDefined();
+    expect(result.intentProfile.clusterPriorityRanking.length).toBe(4);
     expect(result.items.map((item) => item.id)).toEqual([
       "close_unlinked_support_mentions",
       "repair_bidirectional_flywheel_links",
@@ -300,5 +302,6 @@ describe("listing selection intent clusters service", () => {
     expect(result.items).toHaveLength(0);
     expect(result.summary.totalClusters).toBe(0);
     expect(result.summary.dataStatus).toBe("no_major_reinforcement_intent_clusters_identified");
+    expect(result.intentProfile.primaryIntent).toBeDefined();
   });
 });
