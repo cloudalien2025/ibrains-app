@@ -4,6 +4,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
+import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
+import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
 import {
   isDirectoryIqConnector,
   type DirectoryIqCredentialStatus,
@@ -36,7 +38,12 @@ export async function GET(req: NextRequest) {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
-    const integrations = await listDirectoryIqIntegrations(userId);
+    const [integrations, sites] = await Promise.all([
+      listDirectoryIqIntegrations(userId),
+      listBdSites(userId),
+    ]);
+    const canonicalBdConnected = hasCanonicalDirectoryIqConnection(sites);
+
     const connectors: DirectoryIqCredentialStatus[] = integrations.map((row) => {
       const connectorId = providerToConnector(row.provider);
       const config =
@@ -57,7 +64,7 @@ export async function GET(req: NextRequest) {
 
       return {
         connector_id: connectorId,
-        connected: row.status === "connected",
+        connected: connectorId === "brilliant_directories_api" ? canonicalBdConnected : row.status === "connected",
         label: (row.meta.label as string | null) ?? null,
         masked_secret: row.masked,
         updated_at: row.savedAt,

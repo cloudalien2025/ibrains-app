@@ -1,4 +1,6 @@
 import { runDirectoryIqFullIngest } from "@/app/api/directoryiq/_utils/ingest";
+import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
+import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
 import { runFullShopifyIngest } from "@/app/api/ecomviper/_utils/ingest";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import {
@@ -18,11 +20,6 @@ type SnapshotRow = {
   snapshot_updated_at: string | null;
   hints_json: string[] | null;
   last_error: string | null;
-};
-
-type DirectoryCredentialRow = {
-  connector_id: string;
-  config_json: { base_url?: string } | null;
 };
 
 type IntegrationRow = {
@@ -48,20 +45,8 @@ function cleanError(message: unknown): string | null {
 }
 
 export async function hasDirectoryIqConnection(userId: string): Promise<boolean> {
-  const rows = await query<DirectoryCredentialRow>(
-    `
-    SELECT connector_id, config_json
-    FROM directoryiq_signal_source_credentials
-    WHERE user_id = $1 AND connector_id = 'brilliant_directories_api'
-    LIMIT 1
-    `,
-    [userId]
-  );
-
-  const row = rows[0];
-  if (!row) return false;
-  const baseUrl = row.config_json?.base_url;
-  return typeof baseUrl === "string" && baseUrl.trim().length > 0;
+  const sites = await listBdSites(userId);
+  return hasCanonicalDirectoryIqConnection(sites);
 }
 
 export async function getLatestShopifyIntegration(userId: string): Promise<IntegrationRow | null> {

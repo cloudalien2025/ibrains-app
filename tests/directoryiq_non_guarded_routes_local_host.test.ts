@@ -89,7 +89,7 @@ describe("directoryiq non-guarded routes local host parity", () => {
     ).toBe(200);
 
     expect(fetchMock).not.toHaveBeenCalled();
-    expect(listBdSitesMock).toHaveBeenCalledTimes(1);
+    expect(listBdSitesMock).toHaveBeenCalledTimes(2);
     expect(listDirectoryIqIntegrationsMock).toHaveBeenCalledTimes(1);
     expect(queryMock).toHaveBeenCalledTimes(1);
     expect(getIssuesMock).toHaveBeenCalledTimes(1);
