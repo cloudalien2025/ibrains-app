@@ -241,7 +241,8 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Selection Intent Clusters" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "AI Selection Opportunities" })).toBeVisible();
     await expect(page.getByText("Close unlinked support mentions")).toBeVisible();
     await expect(page.getByText("Repair bidirectional flywheel links")).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
@@ -276,7 +277,8 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Selection Intent Clusters" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "AI Selection Opportunities" })).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });

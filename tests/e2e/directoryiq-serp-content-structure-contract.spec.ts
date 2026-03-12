@@ -253,7 +253,8 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "SERP-Informed Content Structure" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Search Visibility Structure" })).toBeVisible();
     await expect(page.getByText("Decision comparison structure")).toBeVisible();
     await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
@@ -289,7 +290,8 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "SERP-Informed Content Structure" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Search Visibility Structure" })).toBeVisible();
     await expect(page.getByText("No major structure recommendations identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
   });

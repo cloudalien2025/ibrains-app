@@ -158,7 +158,8 @@ test.describe("DirectoryIQ recommended actions contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Recommended Actions" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Recommended Improvements" })).toBeVisible();
     await expect(page.getByText("Optimize listing authority structure")).toBeVisible();
     await expect(page.getByText("Add flywheel links between listing and support assets")).toBeVisible();
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
@@ -198,7 +199,8 @@ test.describe("DirectoryIQ recommended actions contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Recommended Actions" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Recommended Improvements" })).toBeVisible();
     await expect(page.getByText("No major actions recommended at this time.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
   });

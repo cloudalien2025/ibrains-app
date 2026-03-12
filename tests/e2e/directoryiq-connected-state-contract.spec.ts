@@ -83,7 +83,7 @@ test.describe("DirectoryIQ Connected-State Contract", () => {
     });
 
     await page.goto("/directoryiq", { waitUntil: "networkidle" });
-    await expect(page.getByText("BD Site Not Connected")).toBeVisible();
+    await expect(page.getByText("Website Not Connected")).toBeVisible();
 
     await page.goto("/directoryiq/signal-sources", { waitUntil: "networkidle" });
     const configError = page.getByText(
