@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
 describe("directoryiq dashboard route user context", () => {
   beforeEach(() => {
@@ -32,6 +33,7 @@ describe("directoryiq dashboard route user context", () => {
         "x-user-email": "owner@app.ibrains.ai",
       },
     });
+    const expectedUserId = resolveUserId(req);
 
     const res = await GET(req);
     const json = await res.json();
@@ -44,6 +46,6 @@ describe("directoryiq dashboard route user context", () => {
     expect(url).toBe("http://127.0.0.1:3001/api/directoryiq/dashboard");
     const headers = new Headers(init.headers);
     expect(headers.get("x-user-email")).toBe("owner@app.ibrains.ai");
-    expect(headers.get("x-user-id")).toBe("00000000-0000-4000-8000-000000000001");
+    expect(headers.get("x-user-id")).toBe(expectedUserId);
   });
 });

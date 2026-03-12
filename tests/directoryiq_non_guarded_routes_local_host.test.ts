@@ -3,7 +3,6 @@ import { NextRequest } from "next/server";
 
 const ensureUserMock = vi.fn(async () => {});
 const resolveUserIdMock = vi.fn(() => "00000000-0000-4000-8000-000000000001");
-const resolveDirectoryIqUserIdMock = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const listBdSitesMock = vi.fn(async () => []);
 const isAdminRequestMock = vi.fn(() => false);
 const listDirectoryIqIntegrationsMock = vi.fn(async () => []);
@@ -20,10 +19,6 @@ const runDirectoryIqFullIngestMock = vi.fn(async () => ({
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser: ensureUserMock,
   resolveUserId: resolveUserIdMock,
-}));
-
-vi.mock("@/app/api/directoryiq/_utils/userContext", () => ({
-  resolveDirectoryIqUserId: resolveDirectoryIqUserIdMock,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
