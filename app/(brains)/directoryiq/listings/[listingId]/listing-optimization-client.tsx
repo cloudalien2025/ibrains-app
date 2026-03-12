@@ -463,6 +463,16 @@ type ListingSerpContentStructureItem = {
   key: ContentStructureItemId;
   title: string;
   priority: ContentStructurePriority;
+  recommendedContentType: "comparison_page" | "faq_support_page" | "local_guide" | "support_post" | "cluster_hub";
+  recommendedTitlePattern: string;
+  suggestedH1: string;
+  suggestedH2Structure: string[];
+  comparisonCriteria: string[];
+  faqThemes: string[];
+  localModifiers: string[];
+  entityCoverageTargets: string[];
+  internalLinkOpportunities: string[];
+  whyThisStructureMatters: string;
   rationale: string;
   evidenceSummary: string;
   suggestedStructureType: ContentStructureType;
@@ -494,6 +504,7 @@ type ListingSerpContentStructureModel = {
     evaluatedAt: string;
     dataStatus: "structure_recommendations_identified" | "no_major_structure_recommendations_identified";
     serpPatternStatus: "patterns_available" | "patterns_unavailable";
+    serpPatternSource: "serp_cache" | "intent_fixture" | "none";
   };
   serpPatternSummary?: {
     readySlotCount: number;
@@ -517,6 +528,7 @@ type ListingSerpContentStructureResponse = {
     evaluatedAt: string;
     dataStatus: "structure_recommendations_identified" | "no_major_structure_recommendations_identified";
     serpPatternStatus: "patterns_available" | "patterns_unavailable";
+    serpPatternSource: "serp_cache" | "intent_fixture" | "none";
   };
   error?: {
     message?: string;
@@ -2153,10 +2165,11 @@ export default function ListingOptimizationClient({
                 {contentStructure.serpPatternSummary.targetLengthBand
                   ? ` · target length ${contentStructure.serpPatternSummary.targetLengthBand.min}-${contentStructure.serpPatternSummary.targetLengthBand.max} words (median ${contentStructure.serpPatternSummary.targetLengthBand.median})`
                   : ""}
+                {` · source ${contentStructure.summary.serpPatternSource}`}
               </div>
             ) : (
               <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                SERP pattern coverage is not available yet; structure recommendations are based on current listing diagnostics.
+                SERP pattern coverage is not available yet; structure recommendations are based on {contentStructure.summary.serpPatternSource}.
               </div>
             )}
 
@@ -2183,9 +2196,33 @@ export default function ListingOptimizationClient({
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    <div className="mt-1 text-xs text-slate-400">Recommended asset type: {item.recommendedContentType}</div>
+                    <div className="mt-1 text-xs text-slate-400">Title pattern: {item.recommendedTitlePattern}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested H1: {item.suggestedH1}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested H2 structure: {item.suggestedH2Structure.join(" • ")}</div>
+                    <div className="mt-1 text-xs text-slate-400">Why this structure matters: {item.whyThisStructureMatters}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                     <div className="mt-1 text-xs text-slate-400">Suggested sections: {item.suggestedSections.join(" • ")}</div>
                     <div className="mt-1 text-xs text-slate-400">Suggested components: {item.suggestedComponents.join(" • ")}</div>
+                    {item.comparisonCriteria.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Comparison criteria: {item.comparisonCriteria.join(", ")}</div>
+                    ) : null}
+                    {item.faqThemes.length ? (
+                      <div className="mt-1 text-xs text-slate-400">FAQ themes: {item.faqThemes.join(", ")}</div>
+                    ) : null}
+                    {item.localModifiers.length ? (
+                      <div className="mt-1 text-xs text-slate-400">Local modifiers: {item.localModifiers.join(", ")}</div>
+                    ) : null}
+                    {item.entityCoverageTargets.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Entity coverage targets: {item.entityCoverageTargets.join(", ")}
+                      </div>
+                    ) : null}
+                    {item.internalLinkOpportunities.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Internal link opportunities: {item.internalLinkOpportunities.join(" | ")}
+                      </div>
+                    ) : null}
                     {item.linkedReinforcementItemIds?.length ? (
                       <div className="mt-1 text-xs text-slate-400">
                         Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}

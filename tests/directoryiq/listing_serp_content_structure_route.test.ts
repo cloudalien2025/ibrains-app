@@ -180,7 +180,8 @@ describe("directoryiq listing serp content structure route", () => {
     expect(json.ok).toBe(true);
     expect(json.contentStructure.listing.id).toBe("321");
     expect(json.contentStructure.summary.dataStatus).toBe("structure_recommendations_identified");
-    expect(json.meta.source).toBe("first_party_serp_content_structure_v1");
+    expect(json.contentStructure.summary.serpPatternSource).toBe("serp_cache");
+    expect(json.meta.source).toBe("first_party_serp_content_structure_v2");
     expect(listSerpStatusMock).toHaveBeenCalledWith("321");
   });
 
@@ -272,7 +273,8 @@ describe("directoryiq listing serp content structure route", () => {
     expect(res.status).toBe(200);
     expect(json.ok).toBe(true);
     expect(json.contentStructure.summary.dataStatus).toBe("no_major_structure_recommendations_identified");
-    expect(json.contentStructure.summary.serpPatternStatus).toBe("patterns_unavailable");
+    expect(json.contentStructure.summary.serpPatternStatus).toBe("patterns_available");
+    expect(json.contentStructure.summary.serpPatternSource).toBe("intent_fixture");
   });
 
   it("returns explicit failure state when serp status retrieval throws", async () => {

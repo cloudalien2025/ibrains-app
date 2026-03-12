@@ -231,8 +231,12 @@ describe("listing serp content structure service", () => {
 
     expect(result.summary.dataStatus).toBe("structure_recommendations_identified");
     expect(result.summary.serpPatternStatus).toBe("patterns_available");
+    expect(result.summary.serpPatternSource).toBe("serp_cache");
     expect(result.items[0].id).toBe("structure_decision_comparison");
     expect(result.items[0].priority).toBe("high");
+    expect(result.items[0].recommendedTitlePattern).toContain("Acme Plumbing");
+    expect(result.items[0].suggestedH2Structure.length).toBeGreaterThan(0);
+    expect(result.items[0].internalLinkOpportunities.length).toBeGreaterThan(0);
     expect(result.items[0].serpPatternSummary?.commonHeadings.length).toBeGreaterThan(0);
     expect(result.serpPatternSummary?.targetLengthBand).toEqual({ min: 1000, median: 1400, max: 1800 });
   });
@@ -314,7 +318,8 @@ describe("listing serp content structure service", () => {
     });
 
     expect(result.summary.dataStatus).toBe("no_major_structure_recommendations_identified");
-    expect(result.summary.serpPatternStatus).toBe("patterns_unavailable");
+    expect(result.summary.serpPatternStatus).toBe("patterns_available");
+    expect(result.summary.serpPatternSource).toBe("intent_fixture");
     expect(result.items).toEqual([]);
   });
 });
