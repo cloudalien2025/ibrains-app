@@ -110,6 +110,9 @@ describe("directoryiq listing selection intent clusters route", () => {
     expect(json.ok).toBe(true);
     expect(json.intentClusters.listing.id).toBe("321");
     expect(json.intentClusters.summary.dataStatus).toBe("clusters_identified");
+    expect(json.intentClusters.intentProfile.primaryIntent).toBeDefined();
+    expect(Array.isArray(json.intentClusters.intentProfile.secondaryIntents)).toBe(true);
+    expect(Array.isArray(json.intentClusters.intentProfile.clusterPriorityRanking)).toBe(true);
     expect(json.intentClusters.items[0].id).toBeDefined();
     expect(json.meta.source).toBe("first_party_selection_intent_clusters_v1");
   });

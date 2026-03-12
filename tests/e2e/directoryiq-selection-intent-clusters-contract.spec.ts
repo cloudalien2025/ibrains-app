@@ -205,6 +205,27 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
               evaluatedAt: "2026-03-10T00:00:03.000Z",
               dataStatus: "clusters_identified",
             },
+            intentProfile: {
+              primaryIntent: "hire_trusted_local_service",
+              secondaryIntents: ["compare_alternatives", "validate_trust_signals"],
+              targetEntities: ["Acme Plumbing", "plumbing service"],
+              supportingEntities: ["menu", "reviews", "service scope"],
+              localModifiers: ["site-1"],
+              comparisonFrames: ["Acme Plumbing vs competing providers in site-1"],
+              supportedEntities: ["Guide"],
+              missingEntities: ["credentials"],
+              clusterPriorityRanking: [
+                {
+                  clusterId: "proof_depth",
+                  title: "Proof Depth",
+                  priority: "high",
+                  score: 32,
+                  rationale: "Support evidence is thin.",
+                },
+              ],
+              confidence: "medium",
+              dataStatus: "intent_resolved",
+            },
             items: [
               {
                 id: "close_unlinked_support_mentions",
@@ -242,7 +263,9 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "AI Selection Opportunities" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Target Selection Intent" })).toBeVisible();
+    await expect(page.getByText("Primary Intent")).toBeVisible();
+    await expect(page.getByText("hire_trusted_local_service")).toBeVisible();
     await expect(page.getByText("Close unlinked support mentions")).toBeVisible();
     await expect(page.getByText("Repair bidirectional flywheel links")).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
@@ -270,6 +293,27 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
               evaluatedAt: "2026-03-10T00:00:03.000Z",
               dataStatus: "no_major_reinforcement_intent_clusters_identified",
             },
+            intentProfile: {
+              primaryIntent: "select_best_local_option",
+              secondaryIntents: [],
+              targetEntities: ["Acme Plumbing"],
+              supportingEntities: [],
+              localModifiers: [],
+              comparisonFrames: ["Acme Plumbing vs nearby alternatives in this area"],
+              supportedEntities: [],
+              missingEntities: ["reviews"],
+              clusterPriorityRanking: [
+                {
+                  clusterId: "comparison_clarity",
+                  title: "Comparison Clarity",
+                  priority: "high",
+                  score: 20,
+                  rationale: "Comparison support is weak.",
+                },
+              ],
+              confidence: "low",
+              dataStatus: "intent_resolved",
+            },
             items: [],
           },
         }),
@@ -278,7 +322,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "AI Selection Opportunities" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Target Selection Intent" })).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });

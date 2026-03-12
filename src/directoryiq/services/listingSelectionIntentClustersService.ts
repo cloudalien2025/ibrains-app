@@ -2,6 +2,11 @@ import type { FlywheelRecommendationType, ListingFlywheelLinksModel } from "@/sr
 import type { AuthorityGapType, ListingAuthorityGapsModel } from "@/src/directoryiq/services/listingGapsService";
 import type { RecommendedActionType, ListingRecommendedActionsModel } from "@/src/directoryiq/services/listingRecommendedActionsService";
 import type { ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
+import type {
+  ListingSelectionIntentContext,
+  ListingSelectionIntentProfile,
+} from "@/src/directoryiq/services/listingSelectionIntentResolverService";
+import { resolveListingSelectionIntent } from "@/src/directoryiq/services/listingSelectionIntentResolverService";
 
 export type SelectionIntentClusterPriority = "high" | "medium" | "low";
 
@@ -42,6 +47,7 @@ export type ListingSelectionIntentClustersModel = {
     evaluatedAt: string;
     dataStatus: "clusters_identified" | "no_major_reinforcement_intent_clusters_identified";
   };
+  intentProfile?: ListingSelectionIntentProfile;
   items: SelectionIntentClusterItem[];
 };
 
@@ -100,6 +106,7 @@ export function buildListingSelectionIntentClusters(input: {
   gaps: ListingAuthorityGapsModel;
   actions: ListingRecommendedActionsModel;
   flywheel: ListingFlywheelLinksModel;
+  listingContext?: ListingSelectionIntentContext;
   evaluatedAt?: string;
 }): ListingSelectionIntentClustersModel {
   const evaluatedAt = input.evaluatedAt ?? new Date().toISOString();
@@ -230,6 +237,14 @@ export function buildListingSelectionIntentClusters(input: {
   const highPriorityCount = items.filter((item) => item.priority === "high").length;
   const mediumPriorityCount = items.filter((item) => item.priority === "medium").length;
   const lowPriorityCount = items.filter((item) => item.priority === "low").length;
+  const intentProfile = resolveListingSelectionIntent({
+    listing: support.listing,
+    listingContext: input.listingContext,
+    support,
+    gaps,
+    actions,
+    flywheel,
+  });
 
   return {
     listing: {
@@ -246,6 +261,7 @@ export function buildListingSelectionIntentClusters(input: {
       evaluatedAt,
       dataStatus: items.length > 0 ? "clusters_identified" : "no_major_reinforcement_intent_clusters_identified",
     },
+    intentProfile,
     items,
   };
 }

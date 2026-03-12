@@ -312,6 +312,28 @@ type SelectionIntentClusterItem = {
   };
 };
 
+type SelectionIntentPriorityRank = {
+  clusterId: "intent_match" | "proof_depth" | "local_relevance" | "comparison_clarity";
+  title: string;
+  priority: "high" | "medium" | "low";
+  score: number;
+  rationale: string;
+};
+
+type ListingSelectionIntentProfile = {
+  primaryIntent: string;
+  secondaryIntents: string[];
+  targetEntities: string[];
+  supportingEntities: string[];
+  localModifiers: string[];
+  comparisonFrames: string[];
+  supportedEntities: string[];
+  missingEntities: string[];
+  clusterPriorityRanking: SelectionIntentPriorityRank[];
+  confidence: "high" | "medium" | "low";
+  dataStatus: "intent_resolved" | "low_context";
+};
+
 type ListingSelectionIntentClustersModel = {
   listing: {
     id: string;
@@ -327,6 +349,7 @@ type ListingSelectionIntentClustersModel = {
     evaluatedAt: string;
     dataStatus: "clusters_identified" | "no_major_reinforcement_intent_clusters_identified";
   };
+  intentProfile?: ListingSelectionIntentProfile;
   items: SelectionIntentClusterItem[];
 };
 
@@ -850,7 +873,17 @@ export default function ListingOptimizationClient({
         const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/intent-clusters${siteQuery}`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ support, gaps, actions, flywheel }),
+          body: JSON.stringify({
+            support,
+            gaps,
+            actions,
+            flywheel,
+            listingContext: {
+              title: listing?.listing.listing_name ?? support.listing.title ?? effectiveListingId,
+              canonicalUrl: listing?.listing.listing_url ?? support.listing.canonicalUrl ?? null,
+              siteLabel: siteIdParam,
+            },
+          }),
         });
         const json = (await response.json().catch(() => ({}))) as ListingSelectionIntentClustersResponse;
         if (!active) return;
@@ -882,7 +915,7 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, actions, flywheel, supportError, gapsError, actionsError, flywheelError]);
+  }, [effectiveListingId, siteQuery, siteIdParam, listing, support, gaps, actions, flywheel, supportError, gapsError, actionsError, flywheelError]);
 
   useEffect(() => {
     if (!effectiveListingId) return;
@@ -1310,6 +1343,19 @@ export default function ListingOptimizationClient({
     evaluatedAt: "",
     lastGraphRunAt: null,
     dataStatus: "no_meaningful_gaps" as const,
+  };
+  const intentProfile = intentClusters?.intentProfile ?? {
+    primaryIntent: "intent_not_resolved",
+    secondaryIntents: [],
+    targetEntities: [],
+    supportingEntities: [],
+    localModifiers: [],
+    comparisonFrames: [],
+    supportedEntities: [],
+    missingEntities: [],
+    clusterPriorityRanking: [],
+    confidence: "low" as const,
+    dataStatus: "low_context" as const,
   };
   const optimizeListingAction = multiAction?.items.find((item) => item.key === "optimize_listing_description");
   const optimizeActionExecutable =
@@ -1752,7 +1798,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="AI Selection Opportunities" subtitle="High-intent opportunities to increase confidence and conversion.">
+      <HudCard title="Target Selection Intent" subtitle="What this listing should be selected for and where support is still missing.">
         {intentClustersError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {intentClustersError}
@@ -1765,22 +1811,138 @@ export default function ListingOptimizationClient({
 
         {intentClusters && !intentClustersError ? (
           <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Clusters</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{intentClusters.summary.totalClusters}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Primary Intent</div>
+                <div className="mt-1 text-base font-semibold text-slate-100">{intentProfile.primaryIntent}</div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-rose-200">{intentClusters.summary.highPriorityCount}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Intent Confidence</div>
+                <div className="mt-1 text-base font-semibold text-slate-100">{intentProfile.confidence}</div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Secondary Intents</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.secondaryIntents.length ? (
+                    intentProfile.secondaryIntents.map((intent) => (
+                      <span key={intent} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
+                        {intent}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No secondary intents resolved.</div>
+                  )}
+                </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{intentClusters.summary.mediumPriorityCount}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Local Modifiers</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.localModifiers.length ? (
+                    intentProfile.localModifiers.map((modifier) => (
+                      <span key={modifier} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
+                        {modifier}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No local modifiers detected from current listing context.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Target Entities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.targetEntities.length ? (
+                    intentProfile.targetEntities.map((entity) => (
+                      <span key={entity} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
+                        {entity}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No target entities resolved.</div>
+                  )}
+                </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{intentClusters.summary.lowPriorityCount}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting Entities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.supportingEntities.length ? (
+                    intentProfile.supportingEntities.map((entity) => (
+                      <span key={entity} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
+                        {entity}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No supporting entities resolved.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supported Entities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.supportedEntities.length ? (
+                    intentProfile.supportedEntities.map((entity) => (
+                      <span key={entity} className="rounded border border-emerald-300/40 px-2 py-0.5 text-[11px] text-emerald-100">
+                        {entity}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No verified support entities yet.</div>
+                  )}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing Entities</div>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {intentProfile.missingEntities.length ? (
+                    intentProfile.missingEntities.map((entity) => (
+                      <span key={entity} className="rounded border border-amber-300/40 px-2 py-0.5 text-[11px] text-amber-100">
+                        {entity}
+                      </span>
+                    ))
+                  ) : (
+                    <div className="text-sm text-slate-400">No major missing entities detected.</div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Comparison Frames</div>
+              <div className="mt-2 space-y-1">
+                {intentProfile.comparisonFrames.map((frame) => (
+                  <div key={frame} className="text-sm text-slate-200">
+                    {frame}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Cluster Priority Ranking</div>
+              <div className="mt-2 space-y-2">
+                {intentProfile.clusterPriorityRanking.map((cluster) => (
+                  <div key={cluster.clusterId} className="rounded border border-white/10 bg-black/10 p-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{cluster.title}</div>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        {cluster.priority}
+                      </span>
+                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                        score {cluster.score}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-xs text-slate-400">{cluster.rationale}</div>
+                  </div>
+                ))}
               </div>
             </div>
 

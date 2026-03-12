@@ -6,6 +6,7 @@ import type { ListingFlywheelLinksModel } from "@/src/directoryiq/services/listi
 import type { ListingAuthorityGapsModel } from "@/src/directoryiq/services/listingGapsService";
 import type { ListingRecommendedActionsModel } from "@/src/directoryiq/services/listingRecommendedActionsService";
 import { buildListingSelectionIntentClusters } from "@/src/directoryiq/services/listingSelectionIntentClustersService";
+import type { ListingSelectionIntentContext } from "@/src/directoryiq/services/listingSelectionIntentResolverService";
 import type { ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
 
 type IntentClustersRequest = {
@@ -13,6 +14,7 @@ type IntentClustersRequest = {
   gaps?: ListingAuthorityGapsModel;
   actions?: ListingRecommendedActionsModel;
   flywheel?: ListingFlywheelLinksModel;
+  listingContext?: ListingSelectionIntentContext;
 };
 
 function listingIdMatchesPath(payloadId: string, pathListingId: string): boolean {
@@ -30,7 +32,7 @@ export async function POST(
     const { listingId } = await Promise.resolve(params);
     const resolvedListingId = decodeURIComponent(listingId);
     const body = (await req.json().catch(() => ({}))) as IntentClustersRequest;
-    const { support, gaps, actions, flywheel } = body;
+    const { support, gaps, actions, flywheel, listingContext } = body;
 
     if (!support || !gaps || !actions || !flywheel) {
       return NextResponse.json(
@@ -65,7 +67,7 @@ export async function POST(
       );
     }
 
-    const intentClusters = buildListingSelectionIntentClusters({ support, gaps, actions, flywheel });
+    const intentClusters = buildListingSelectionIntentClusters({ support, gaps, actions, flywheel, listingContext });
     return NextResponse.json({
       ok: true,
       intentClusters,
