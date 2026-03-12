@@ -6,6 +6,7 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { getAllListingsWithEvaluations, getDirectoryIqSettings } from "@/app/api/directoryiq/_utils/selectionData";
 import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
+import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
 import { scheduleSnapshotRefresh } from "@/app/api/_utils/snapshots";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
@@ -90,9 +91,7 @@ async function loadDashboard(userId: string) {
     last_optimized: card.lastOptimized,
   }));
 
-  const connected = sites.some(
-    (site) => site.enabled && site.secretPresent && site.baseUrl.trim().length > 0 && site.listingsDataId != null
-  );
+  const connected = hasCanonicalDirectoryIqConnection(sites);
 
   return {
     connected,

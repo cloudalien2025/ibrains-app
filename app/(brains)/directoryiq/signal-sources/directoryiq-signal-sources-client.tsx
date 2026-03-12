@@ -675,8 +675,8 @@ export default function DirectoryIqSignalSourcesClient() {
                 <h3 className="text-sm font-semibold text-white">{connectorMeta[connectorId].name}</h3>
                 <p className="text-xs text-slate-400">
                   {state.connected
-                    ? `Connected (${state.masked_secret})${state.updated_at ? ` · Saved ${new Date(state.updated_at).toLocaleString()}` : ""}`
-                    : "Disconnected"}
+                    ? `Credential saved (${state.masked_secret})${state.updated_at ? ` · Saved ${new Date(state.updated_at).toLocaleString()}` : ""}`
+                    : "Credential not configured"}
                 </p>
                 {state.label ? <p className="text-xs text-slate-500">Label: {state.label}</p> : null}
               </div>
