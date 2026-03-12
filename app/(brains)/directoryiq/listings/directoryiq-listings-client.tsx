@@ -107,7 +107,7 @@ export default function DirectoryIqListingsClient() {
         onSearchChange={setSearchTerm}
       />
 
-      <HudCard title="Listings" subtitle="AI Agent Selection scoring for each listing.">
+      <HudCard title="Listings" subtitle="AI Visibility and AI Selection score for each listing.">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
           <label className="flex items-center gap-2">
             <span>Site</span>
@@ -188,7 +188,7 @@ export default function DirectoryIqListingsClient() {
                           href={`/directoryiq/listings/${encodeURIComponent(row.listing_id)}${row.site_id ? `?site_id=${row.site_id}` : ""}`}
                           className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100"
                         >
-                          Optimize
+                          Improve
                         </Link>
                       </td>
                     </tr>

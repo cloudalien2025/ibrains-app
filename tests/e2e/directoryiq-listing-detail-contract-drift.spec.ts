@@ -100,10 +100,10 @@ test.describe("DirectoryIQ listing-detail contract drift", () => {
     const heroImage = page.getByTestId("directoryiq-hero-image");
     await expect(heroImage).toBeVisible();
     await expect(heroImage).toHaveAttribute("src", imagePath);
-    await expect(page.getByText("OpenAI not configured.")).toHaveCount(0);
-    await expect(page.getByText("Brilliant Directories not configured.")).toHaveCount(0);
-    await expect(page.getByText("OpenAI Connected")).toHaveCount(2);
-    await expect(page.getByText("BD Connected")).toHaveCount(2);
+    await expect(page.getByText("AI connection not configured.")).toHaveCount(0);
+    await expect(page.getByText("Website connection not configured.")).toHaveCount(0);
+    await expect(page.getByText("AI Connected")).toHaveCount(2);
+    await expect(page.getByText("Website Connected")).toHaveCount(2);
     expect(integrationsCalls).toBe(0);
   });
 });

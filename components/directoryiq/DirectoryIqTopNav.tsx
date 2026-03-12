@@ -62,7 +62,7 @@ export default function DirectoryIqTopNav({
             DirectoryIQ
           </div>
           <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${connected ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-100" : "border-amber-300/40 bg-amber-400/10 text-amber-100"}`}>
-            {connected ? "Connected BD Site" : "BD Site Not Connected"}
+            {connected ? "Website Connected" : "Website Not Connected"}
           </span>
         </div>
 

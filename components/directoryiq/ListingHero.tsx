@@ -19,7 +19,7 @@ function chipToneClass(tone: "good" | "warn" | "neutral"): string {
   return "border-cyan-300/30 bg-cyan-400/10 text-cyan-100";
 }
 
-export default function ListingHero({ title, subtitle = "Listing Optimization", imageUrl, score, chips }: ListingHeroProps) {
+export default function ListingHero({ title, subtitle = "AI Visibility", imageUrl, score, chips }: ListingHeroProps) {
   const [imageFailed, setImageFailed] = useState(false);
   const hasImage = Boolean(imageUrl) && !imageFailed;
   const visibleChips = useMemo(() => chips.slice(0, 2), [chips]);
@@ -52,7 +52,7 @@ export default function ListingHero({ title, subtitle = "Listing Optimization", 
             data-testid="directoryiq-hero-glass-panel"
             className="w-64 rounded-2xl border border-white/20 bg-white/10 p-4 shadow-[0_10px_36px_rgba(2,6,23,0.45)] backdrop-blur-md"
           >
-            <div className="text-[11px] uppercase tracking-[0.1em] text-slate-200">AI Agent Selection</div>
+            <div className="text-[11px] uppercase tracking-[0.1em] text-slate-200">AI Selection Score</div>
             <div className="mt-1 text-4xl font-semibold text-white">{score}</div>
             <div className="mt-3 flex flex-wrap gap-1.5">
               {visibleChips.map((chip) => (
@@ -75,7 +75,7 @@ export default function ListingHero({ title, subtitle = "Listing Optimization", 
             className="w-full rounded-2xl border border-white/20 bg-white/10 p-3 shadow-[0_10px_36px_rgba(2,6,23,0.45)] backdrop-blur-md"
           >
             <div className="flex items-center justify-between gap-3">
-              <div className="text-[11px] uppercase tracking-[0.1em] text-slate-200">AI Agent Selection</div>
+              <div className="text-[11px] uppercase tracking-[0.1em] text-slate-200">AI Selection Score</div>
               <div className="text-2xl font-semibold text-white">{score}</div>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">

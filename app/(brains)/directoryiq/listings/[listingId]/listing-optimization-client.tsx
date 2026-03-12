@@ -9,6 +9,7 @@ import NeonButton from "@/components/ecomviper/NeonButton";
 import ListingHero from "@/components/directoryiq/ListingHero";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
+type WorkspaceView = "helping" | "missing" | "improvements" | "publish";
 
 type ListingDetailResponse = {
   listing: {
@@ -643,6 +644,7 @@ export default function ListingOptimizationClient({
   const [multiAction, setMultiAction] = useState<ListingMultiActionUpgradeModel | null>(null);
   const [multiActionError, setMultiActionError] = useState<string | null>(null);
   const [multiActionLoading, setMultiActionLoading] = useState(true);
+  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("helping");
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -1316,7 +1318,7 @@ export default function ListingOptimizationClient({
 
   return (
     <>
-      <TopBar breadcrumbs={["Home", "DirectoryIQ", "Listing Optimization"]} searchPlaceholder="Search listing optimization..." />
+      <TopBar breadcrumbs={["Home", "DirectoryIQ", "AI Visibility"]} searchPlaceholder="Search AI visibility..." />
 
       <ListingHero
         title={displayName}
@@ -1327,19 +1329,19 @@ export default function ListingOptimizationClient({
           {
             label:
               integrations.openaiConfigured === null
-                ? "OpenAI Status Pending"
+                ? "AI Status Pending"
                 : integrations.openaiConfigured
-                  ? "OpenAI Connected"
-                  : "OpenAI Missing",
+                  ? "AI Connected"
+                  : "AI Not Connected",
             tone: integrations.openaiConfigured === null ? "neutral" : integrations.openaiConfigured ? "good" : "warn",
           },
           {
             label:
               integrations.bdConfigured === null
-                ? "BD Status Pending"
+                ? "Website Status Pending"
                 : integrations.bdConfigured
-                  ? "BD Connected"
-                  : "BD Missing",
+                  ? "Website Connected"
+                  : "Website Not Connected",
             tone: integrations.bdConfigured === null ? "neutral" : integrations.bdConfigured ? "good" : "warn",
           },
         ]}
@@ -1347,15 +1349,15 @@ export default function ListingOptimizationClient({
 
       {integrations.openaiConfigured === false ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          OpenAI not configured. Configure it in{" "}
-          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Signal Sources</Link>.
+          AI connection not configured. Configure it in{" "}
+          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Connections</Link>.
         </div>
       ) : null}
 
       {integrations.bdConfigured === false ? (
         <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          Brilliant Directories not configured. Configure it in{" "}
-          <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Signal Sources</Link>.
+          Website connection not configured. Configure it in{" "}
+          <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Connections</Link>.
         </div>
       ) : null}
 
@@ -1374,7 +1376,59 @@ export default function ListingOptimizationClient({
         </div>
       ) : null}
 
-      <HudCard title="Current Support" subtitle="Current authority relationships reinforcing this listing.">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">What's Helping</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.inboundLinkedSupportCount}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Visibility Gaps</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{gapsSummary.totalGaps}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Recommended Improvements</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{actions?.summary.totalActions ?? 0}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Trust Signals</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.connectedSupportPageCount}</div>
+        </div>
+      </div>
+
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <button
+          type="button"
+          onClick={() => setWorkspaceView("helping")}
+          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "helping" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
+        >
+          What's Helping
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceView("missing")}
+          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "missing" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
+        >
+          What's Missing
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceView("improvements")}
+          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "improvements" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
+        >
+          Recommended Improvements
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceView("publish")}
+          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "publish" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
+        >
+          Publish
+        </button>
+      </div>
+
+      {workspaceView === "helping" ? (
+      <>
+      <HudCard title="What's Helping" subtitle="Current trust and visibility signals supporting this listing.">
         {supportError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {supportError}
@@ -1481,7 +1535,7 @@ export default function ListingOptimizationClient({
         </div>
       </HudCard>
 
-      <HudCard title="Flywheel Links" subtitle="Bidirectional link opportunities to reinforce listing authority clusters.">
+      <HudCard title="Trust Signals" subtitle="Cross-link opportunities that strengthen AI visibility.">
         {flywheelError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {flywheelError}
@@ -1560,8 +1614,11 @@ export default function ListingOptimizationClient({
           </>
         ) : null}
       </HudCard>
+      </>
+      ) : null}
 
-      <HudCard title="Authority Gaps" subtitle="Deterministic diagnostics showing where support authority is missing.">
+      {workspaceView === "missing" ? (
+      <HudCard title="Visibility Gaps" subtitle="What AI systems still struggle to verify about this listing.">
         {gapsError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {gapsError}
@@ -1595,7 +1652,7 @@ export default function ListingOptimizationClient({
 
         {gapsSummary.dataStatus === "no_meaningful_gaps" && !gapsError ? (
           <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-            No major authority gaps found for this listing.
+            No major visibility gaps found for this listing.
           </div>
         ) : null}
 
@@ -1619,8 +1676,11 @@ export default function ListingOptimizationClient({
           </div>
         ) : null}
       </HudCard>
+      ) : null}
 
-      <HudCard title="Recommended Actions" subtitle="Prioritized actions derived from Current Support + Authority Gaps.">
+      {workspaceView === "improvements" ? (
+      <>
+      <HudCard title="Recommended Improvements" subtitle="Highest-impact updates to improve AI selection and trust.">
         {actionsError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {actionsError}
@@ -1692,7 +1752,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="Selection Intent Clusters" subtitle="Deterministic reinforcement clusters prioritized from support, gaps, actions, and flywheel evidence.">
+      <HudCard title="AI Selection Opportunities" subtitle="High-intent opportunities to increase confidence and conversion.">
         {intentClustersError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {intentClustersError}
@@ -1772,7 +1832,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="Blog Reinforcement Plan" subtitle="Deterministic reinforcement planning derived from support, gaps, actions, flywheel links, and intent clusters.">
+      <HudCard title="Content Plan" subtitle="Content ideas that strengthen visibility and trust around this listing.">
         {reinforcementPlanError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {reinforcementPlanError}
@@ -1856,7 +1916,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="SERP-Informed Content Structure" subtitle="Canonical structure guidance derived from SERP patterns, intent clusters, and reinforcement planning.">
+      <HudCard title="Search Visibility Structure" subtitle="Page structure ideas based on search visibility patterns.">
         {contentStructureError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {contentStructureError}
@@ -1949,10 +2009,13 @@ export default function ListingOptimizationClient({
           </>
         ) : null}
       </HudCard>
+      </>
+      ) : null}
 
+      {workspaceView === "publish" ? (
       <HudCard
-        title="Generate Upgrade Multi-Action System"
-        subtitle="Deterministic action control plane informed by support, gaps, flywheel, intent, reinforcement, and SERP structure signals."
+        title="Improve This Listing"
+        subtitle="Create and publish improvements from your highest-priority visibility recommendations."
       >
         {multiActionError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -1961,7 +2024,7 @@ export default function ListingOptimizationClient({
         ) : null}
 
         {multiActionLoading && !multiActionError ? (
-          <div className="text-sm text-slate-300">Evaluating multi-action upgrade options...</div>
+          <div className="text-sm text-slate-300">Preparing improvement options...</div>
         ) : null}
 
         {multiAction && !multiActionError ? (
@@ -2040,7 +2103,7 @@ export default function ListingOptimizationClient({
             ) : null}
 
             <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-              <h4 className="text-sm font-semibold text-cyan-100">Execution Surface: optimize_listing_description</h4>
+              <h4 className="text-sm font-semibold text-cyan-100">Publish Surface: Listing Description</h4>
               {optimizeActionBlocked ? (
                 <div className="mt-2 text-sm text-amber-100">
                   {optimizeListingAction?.blockingReasons?.join(" ") ?? "This action is currently blocked."}
@@ -2049,7 +2112,7 @@ export default function ListingOptimizationClient({
 
               <div className="mt-3 flex flex-wrap gap-2">
                 <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating" || !optimizeActionExecutable}>
-                  {state === "generating" ? "Generating..." : "Generate Upgrade"}
+                  {state === "generating" ? "Preparing..." : "Improve This Listing"}
                 </NeonButton>
 
                 {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
@@ -2067,14 +2130,14 @@ export default function ListingOptimizationClient({
 
               {(state === "generated" || state === "ready_to_push" || state === "done") && proposedDescription ? (
                 <details open className="mt-3 rounded-lg border border-white/10 p-3">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-100">Generated Upgrade</summary>
+                  <summary className="cursor-pointer text-sm font-medium text-slate-100">Draft Improvements</summary>
                   <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-900/80 p-3 text-sm text-slate-200">{proposedDescription}</pre>
                 </details>
               ) : null}
 
               {state === "ready_to_push" ? (
                 <div className="mt-3 space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-                  <h4 className="text-sm font-semibold text-cyan-100">Diff Viewer</h4>
+                  <h4 className="text-sm font-semibold text-cyan-100">Change Preview</h4>
                   <div className="max-h-96 overflow-auto rounded border border-white/10">
                     {diffRows.map((row, index) => (
                       <div key={`${row.type}-${index}`} className="grid grid-cols-2 gap-2 border-b border-white/10 p-2 text-xs">
@@ -2095,7 +2158,7 @@ export default function ListingOptimizationClient({
                   </label>
 
                   <NeonButton onClick={() => void approveAndPush()} disabled={!approved || !integrations.bdConfigured}>
-                    Approve & Push to BD
+                    Publish Improvements
                   </NeonButton>
                 </div>
               ) : null}
@@ -2103,6 +2166,7 @@ export default function ListingOptimizationClient({
           </div>
         ) : null}
       </HudCard>
+      ) : null}
     </>
   );
 }

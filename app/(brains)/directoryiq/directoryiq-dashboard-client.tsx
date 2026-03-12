@@ -127,7 +127,7 @@ export default function DirectoryIqDashboardClient() {
   return (
     <>
       <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-        <h1 className="text-xl font-semibold text-slate-100">DirectoryIQ Dashboard</h1>
+        <h1 className="text-xl font-semibold text-slate-100">AI Visibility Dashboard</h1>
         <p className="mt-1 text-sm text-slate-300">
           Monitor site readiness and move one listing at a time into optimization.
         </p>
@@ -144,7 +144,7 @@ export default function DirectoryIqDashboardClient() {
         />
       ) : null}
 
-      <HudCard title="AI Agent Selection Readiness" subtitle="Site-level read-only snapshot">
+      <HudCard title="AI Selection Readiness" subtitle="Site-level snapshot">
         {uiState.showReadinessMetrics && data ? (
           <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
             <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
@@ -167,7 +167,7 @@ export default function DirectoryIqDashboardClient() {
         {uiState.showError ? <div className="mt-4 text-sm text-rose-200">{error}</div> : null}
       </HudCard>
 
-      <HudCard title="Listings" subtitle="Per-listing optimization only. No bulk updates.">
+      <HudCard title="Listings" subtitle="Improve AI visibility one listing at a time.">
         {uiState.showListingsZeroState ? (
           <div className="text-sm text-slate-300">No listings found yet. Connect and refresh analysis.</div>
         ) : null}
@@ -197,8 +197,8 @@ export default function DirectoryIqDashboardClient() {
                         href={`/directoryiq/listings/${encodeURIComponent(listing.listing_id)}`}
                         className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100"
                       >
-                        Optimize
-                      </Link>
+                          Improve
+                        </Link>
                     </td>
                   </tr>
                 ))}
