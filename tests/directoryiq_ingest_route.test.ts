@@ -53,6 +53,7 @@ describe("directoryiq ingest route", () => {
     vi.clearAllMocks();
     // @ts-expect-error test override
     global.fetch = vi.fn();
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
   });
 
   it("returns structured BD errors", async () => {

@@ -59,7 +59,7 @@ export async function proxyDirectoryIqRead(req: NextRequest, upstreamPathname: s
 export async function proxyDirectoryIqRequest(
   req: NextRequest,
   upstreamPathname: string,
-  method: "GET" | "POST"
+  method: "GET" | "POST" | "DELETE"
 ): Promise<NextResponse> {
   try {
     const base = resolveDirectoryIqApiBase();

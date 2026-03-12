@@ -2,6 +2,8 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import {
   isDirectoryIqConnector,
   type DirectoryIqCredentialStatus,
@@ -26,6 +28,10 @@ function providerToConnector(provider: string): DirectoryIqConnector {
 }
 
 export async function GET(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "GET");
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
@@ -66,6 +72,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "POST");
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
@@ -131,6 +141,10 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "DELETE");
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);

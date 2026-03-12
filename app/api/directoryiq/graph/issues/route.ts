@@ -1,9 +1,15 @@
 import crypto from "crypto";
 import { NextRequest, NextResponse } from "next/server";
+import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getIssues } from "@/src/directoryiq/graph/graphService";
 
 export async function GET(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRead(req, "/api/directoryiq/graph/issues");
+  }
+
   const reqId = crypto.randomUUID();
 
   try {

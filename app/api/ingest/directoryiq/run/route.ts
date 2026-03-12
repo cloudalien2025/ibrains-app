@@ -2,10 +2,16 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { BdIngestError, runDirectoryIqFullIngest } from "@/app/api/directoryiq/_utils/ingest";
+import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { isAdminRequest } from "@/app/api/directoryiq/_utils/bdSites";
 
 export async function POST(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/ingest/directoryiq/run", "POST");
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);

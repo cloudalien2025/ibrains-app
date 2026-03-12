@@ -3,6 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser } from "@/app/api/ecomviper/_utils/user";
 import { createBdSite, isAdminRequest, listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
+import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { resolveDirectoryIqUserId } from "@/app/api/directoryiq/_utils/userContext";
 
 function asString(value: unknown): string {
@@ -30,6 +32,10 @@ function normalizeBaseUrl(value: string): string {
 }
 
 export async function GET(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/directoryiq/sites", "GET");
+  }
+
   try {
     const userId = resolveDirectoryIqUserId(req);
     await ensureUser(userId);
@@ -45,6 +51,10 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRequest(req, "/api/directoryiq/sites", "POST");
+  }
+
   try {
     const userId = resolveDirectoryIqUserId(req);
     await ensureUser(userId);
