@@ -539,6 +539,7 @@ type ListingSerpContentStructureResponse = {
 
 type MultiActionPriority = "high" | "medium" | "low";
 type MultiActionStatus = "available" | "blocked" | "not_recommended";
+type MultiActionReadinessState = "ready" | "blocked" | "abstained";
 type MultiActionKey =
   | "optimize_listing_description"
   | "repair_flywheel_links"
@@ -547,10 +548,33 @@ type MultiActionKey =
   | "publish_local_context_support"
   | "strengthen_anchor_intent"
   | "implement_serp_structure_recommendations";
+type MultiActionType =
+  | "listing_detail_improvement"
+  | "content_reinforcement_asset"
+  | "blueprint_driven_asset"
+  | "internal_link_trust_signal"
+  | "orchestration";
 
 type ListingMultiActionUpgradeItem = {
+  actionId: string;
+  actionType: MultiActionType;
   key: MultiActionKey;
   title: string;
+  description: string;
+  whyItMatters: string;
+  sourceSignals: {
+    primaryIntent?: string;
+    intentClusterIds?: SelectionIntentClusterId[];
+    reinforcementItemIds?: BlogReinforcementPlanItemId[];
+    blueprintItemIds?: ContentStructureItemId[];
+    gapTypes?: AuthorityGapType[];
+    recommendedActionKeys?: RecommendedActionType[];
+    flywheelTypes?: FlywheelRecommendationType[];
+  };
+  expectedImpact: string;
+  dependencies: string[];
+  recommendedPriority: MultiActionPriority;
+  readinessState: MultiActionReadinessState;
   priority: MultiActionPriority;
   status: MultiActionStatus;
   rationale: string;
@@ -591,6 +615,10 @@ type ListingMultiActionUpgradeModel = {
     lowPriorityCount: number;
     evaluatedAt: string;
     dataStatus: "upgrade_actions_available" | "no_major_upgrade_actions_available";
+  };
+  grouped: {
+    byReadiness: Record<MultiActionReadinessState, string[]>;
+    bySurface: Record<"listing" | "blog" | "support_page" | "cluster", string[]>;
   };
   items: ListingMultiActionUpgradeItem[];
 };
@@ -2249,8 +2277,8 @@ export default function ListingOptimizationClient({
 
       {workspaceView === "publish" ? (
       <HudCard
-        title="Improve This Listing"
-        subtitle="Create and publish improvements from your highest-priority visibility recommendations."
+        title="Improve This Listing System"
+        subtitle="Coordinated multi-action plan from intent, reinforcement, and content blueprint signals."
       >
         {multiActionError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -2283,6 +2311,21 @@ export default function ListingOptimizationClient({
               </div>
             </div>
 
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready Actions</div>
+                <div className="mt-1 text-xl font-semibold text-emerald-100">{multiAction.grouped?.byReadiness?.ready?.length ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked Actions</div>
+                <div className="mt-1 text-xl font-semibold text-amber-100">{multiAction.grouped?.byReadiness?.blocked?.length ?? 0}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Abstained Actions</div>
+                <div className="mt-1 text-xl font-semibold text-cyan-100">{multiAction.grouped?.byReadiness?.abstained?.length ?? 0}</div>
+              </div>
+            </div>
+
             {multiAction.summary.dataStatus === "no_major_upgrade_actions_available" ? (
               <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
                 No major upgrade actions available.
@@ -2290,50 +2333,79 @@ export default function ListingOptimizationClient({
             ) : null}
 
             {multiAction.summary.dataStatus === "upgrade_actions_available" ? (
-              <div className="space-y-2">
-                {multiAction.items.map((item) => (
-                  <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-100">{item.title}</div>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.priority}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.status}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.targetSurface}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.key}
-                      </span>
+              <div className="space-y-4">
+                {(["ready", "blocked", "abstained"] as const).map((groupKey) => {
+                  const groupedItems = multiAction.items.filter((item) => item.readinessState === groupKey);
+                  if (!groupedItems.length) return null;
+                  return (
+                    <div key={groupKey} className="space-y-2">
+                      <div className="text-xs uppercase tracking-[0.08em] text-slate-400">
+                        {groupKey === "ready" ? "Ready Actions" : groupKey === "blocked" ? "Blocked Actions" : "Abstained Actions"}
+                      </div>
+                      {groupedItems.map((item) => (
+                        <div key={item.actionId} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-slate-100">{item.title}</div>
+                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                              {item.recommendedPriority}
+                            </span>
+                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                              {item.readinessState}
+                            </span>
+                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                              {item.actionType}
+                            </span>
+                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                              {item.targetSurface}
+                            </span>
+                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                              {item.actionId}
+                            </span>
+                          </div>
+                          <div className="mt-1 text-sm text-slate-300">{item.description}</div>
+                          <div className="mt-1 text-xs text-slate-400">Why it matters: {item.whyItMatters}</div>
+                          <div className="mt-1 text-xs text-slate-400">Expected impact: {item.expectedImpact}</div>
+                          <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                          {item.sourceSignals.primaryIntent ? (
+                            <div className="mt-1 text-xs text-slate-400">Primary intent: {item.sourceSignals.primaryIntent}</div>
+                          ) : null}
+                          {item.dependencies.length ? (
+                            <div className="mt-1 text-xs text-amber-100">Dependencies: {item.dependencies.join(", ")}</div>
+                          ) : (
+                            <div className="mt-1 text-xs text-slate-400">Dependencies: none</div>
+                          )}
+                          {item.previewPayload ? (
+                            <div className="mt-1 text-xs text-slate-400">
+                              Preview detail ({item.previewPayload.mode}): {item.previewPayload.detail}
+                            </div>
+                          ) : null}
+                          {item.linkedGapTypes?.length ? (
+                            <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
+                          ) : null}
+                          {item.linkedIntentClusterIds?.length ? (
+                            <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
+                          ) : null}
+                          {item.linkedReinforcementItemIds?.length ? (
+                            <div className="mt-1 text-xs text-slate-400">
+                              Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
+                            </div>
+                          ) : null}
+                          {item.linkedStructureItemIds?.length ? (
+                            <div className="mt-1 text-xs text-slate-400">
+                              Linked structure items: {item.linkedStructureItemIds.join(", ")}
+                            </div>
+                          ) : null}
+                          {item.blockingReasons?.length ? (
+                            <div className="mt-1 text-xs text-amber-100">Blocked: {item.blockingReasons.join(" ")}</div>
+                          ) : null}
+                          {item.previewCapability?.note ? (
+                            <div className="mt-1 text-xs text-slate-400">Preview metadata: {item.previewCapability.note}</div>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
-                    <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
-                    {item.linkedGapTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
-                    ) : null}
-                    {item.linkedIntentClusterIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
-                    ) : null}
-                    {item.linkedReinforcementItemIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
-                      </div>
-                    ) : null}
-                    {item.linkedStructureItemIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Linked structure items: {item.linkedStructureItemIds.join(", ")}
-                      </div>
-                    ) : null}
-                    {item.blockingReasons?.length ? (
-                      <div className="mt-1 text-xs text-amber-100">Blocked: {item.blockingReasons.join(" ")}</div>
-                    ) : null}
-                    {item.previewCapability?.note ? (
-                      <div className="mt-1 text-xs text-slate-400">Preview metadata: {item.previewCapability.note}</div>
-                    ) : null}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
 

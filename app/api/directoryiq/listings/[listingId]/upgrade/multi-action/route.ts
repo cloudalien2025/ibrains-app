@@ -97,7 +97,7 @@ export async function POST(
       ok: true,
       multiAction,
       meta: {
-        source: "first_party_multi_action_upgrade_v1",
+        source: "first_party_multi_action_upgrade_v2",
         evaluatedAt: multiAction.summary.evaluatedAt,
         dataStatus: multiAction.summary.dataStatus,
       },

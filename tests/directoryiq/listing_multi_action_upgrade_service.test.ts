@@ -234,8 +234,14 @@ describe("listing multi action upgrade service", () => {
     expect(result.summary.dataStatus).toBe("upgrade_actions_available");
     expect(result.summary.availableCount).toBeGreaterThan(0);
     expect(result.items[0].key).toBe("optimize_listing_description");
+    expect(result.items[0].actionId).toBe("optimize_listing_description");
+    expect(result.items[0].actionType).toBe("listing_detail_improvement");
+    expect(result.items[0].readinessState).toBe("ready");
+    expect(result.items[0].whyItMatters.length).toBeGreaterThan(0);
+    expect(result.items[0].sourceSignals.gapTypes?.length).toBeGreaterThan(0);
     expect(result.items[0].status).toBe("available");
     expect(result.items[0].previewCapability?.supported).toBe(true);
+    expect(result.grouped.byReadiness.ready.length).toBeGreaterThan(0);
   });
 
   it("returns intentional no-action state when all actions are not recommended", () => {
