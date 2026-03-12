@@ -3,7 +3,6 @@ import { NextRequest } from "next/server";
 
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
-const resolveDirectoryIqUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 
 const siteStub = {
   id: "site-1",
@@ -29,9 +28,6 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
   resolveUserId,
 }));
-vi.mock("@/app/api/directoryiq/_utils/userContext", () => ({
-  resolveDirectoryIqUserId,
-}));
 
 vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
   listBdSites,
@@ -50,6 +46,7 @@ describe("directoryiq bd sites routes", () => {
   });
 
   it("lists sites", async () => {
+    resolveUserId.mockReturnValueOnce("11111111-1111-4111-8111-111111111111");
     const { GET } = await import("@/app/api/directoryiq/sites/route");
     const req = new NextRequest("http://localhost/api/directoryiq/sites", {
       headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
@@ -58,6 +55,7 @@ describe("directoryiq bd sites routes", () => {
     const json = await res.json();
     expect(res.status).toBe(200);
     expect(json.sites.length).toBe(1);
+    expect(listBdSites).toHaveBeenCalledWith("11111111-1111-4111-8111-111111111111");
   });
 
   it("returns 403 when plan limit reached", async () => {

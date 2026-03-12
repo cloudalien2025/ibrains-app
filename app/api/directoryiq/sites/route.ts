@@ -1,11 +1,10 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { ensureUser } from "@/app/api/ecomviper/_utils/user";
+import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { createBdSite, isAdminRequest, listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
-import { resolveDirectoryIqUserId } from "@/app/api/directoryiq/_utils/userContext";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -37,7 +36,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const userId = resolveDirectoryIqUserId(req);
+    const userId = resolveUserId(req);
     await ensureUser(userId);
     const sites = await listBdSites(userId);
     const isAdmin = isAdminRequest(req);
@@ -56,7 +55,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const userId = resolveDirectoryIqUserId(req);
+    const userId = resolveUserId(req);
     await ensureUser(userId);
 
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
