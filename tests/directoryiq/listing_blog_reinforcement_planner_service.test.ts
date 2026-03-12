@@ -174,6 +174,27 @@ describe("listing blog reinforcement planner service", () => {
           evaluatedAt: "2026-03-11T00:00:00.000Z",
           dataStatus: "clusters_identified",
         },
+        intentProfile: {
+          primaryIntent: "hire_trusted_local_service",
+          secondaryIntents: ["compare_alternatives", "validate_trust_signals", "confirm_local_fit"],
+          targetEntities: ["Acme Plumbing", "plumber", "Denver"],
+          supportingEntities: ["reviews", "credentials", "coverage area"],
+          localModifiers: ["Denver"],
+          comparisonFrames: ["Acme Plumbing vs nearby plumbing providers in Denver"],
+          supportedEntities: ["reviews"],
+          missingEntities: ["credentials", "coverage area"],
+          clusterPriorityRanking: [
+            {
+              clusterId: "proof_depth",
+              title: "Proof Depth",
+              priority: "high",
+              score: 34,
+              rationale: "Support evidence is thin.",
+            },
+          ],
+          confidence: "medium",
+          dataStatus: "intent_resolved",
+        },
         items: [
           { id: "close_unlinked_support_mentions", title: "", priority: "high", rationale: "", evidenceSummary: "" },
           { id: "repair_bidirectional_flywheel_links", title: "", priority: "high", rationale: "", evidenceSummary: "" },
@@ -196,6 +217,10 @@ describe("listing blog reinforcement planner service", () => {
       "refresh_anchor_intent_post",
     ]);
     expect(result.items[0]?.priority).toBe("high");
+    expect(result.items[0]?.recommendationType).toBeDefined();
+    expect(result.items[0]?.targetIntent).toBeDefined();
+    expect(result.items[0]?.suggestedInternalLinkPattern).toContain("->");
+    expect(result.items[0]?.reinforcesListingId).toBe("321");
   });
 
   it("returns intentional no-plan state when no major reinforcement signals exist", () => {

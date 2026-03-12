@@ -369,6 +369,12 @@ type ListingSelectionIntentClustersResponse = {
 };
 
 type BlogReinforcementPlanPriority = "high" | "medium" | "low";
+type BlogReinforcementRecommendationType =
+  | "blog_idea"
+  | "local_guide"
+  | "comparison_page"
+  | "faq_support_page"
+  | "category_reinforcement_asset";
 
 type BlogReinforcementPlanItemId =
   | "publish_comparison_decision_post"
@@ -382,11 +388,19 @@ type BlogReinforcementPlanItem = {
   id: BlogReinforcementPlanItemId;
   title: string;
   priority: BlogReinforcementPlanPriority;
+  recommendationType?: BlogReinforcementRecommendationType;
+  targetIntent?: string;
+  whyItMatters?: string;
+  reinforcesListingId?: string;
+  expectedSelectionImpact?: string;
+  suggestedInternalLinkPattern?: string;
+  rankingContext?: string;
   rationale: string;
   evidenceSummary: string;
   suggestedContentPurpose: string;
   suggestedTargetSurface: "blog" | "support_page" | "comparison" | "faq" | "local_guide" | "cluster_hub";
   suggestedAngle?: string;
+  missingSupportEntities?: string[];
   linkedGapTypes?: AuthorityGapType[];
   linkedIntentClusterIds?: SelectionIntentClusterId[];
   linkedActionKeys?: RecommendedActionType[];
@@ -2049,10 +2063,32 @@ export default function ListingOptimizationClient({
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
+                    {item.targetIntent ? <div className="mt-1 text-xs text-slate-400">Target intent: {item.targetIntent}</div> : null}
+                    {item.whyItMatters ? <div className="mt-1 text-xs text-slate-400">Why it matters: {item.whyItMatters}</div> : null}
+                    {item.expectedSelectionImpact ? (
+                      <div className="mt-1 text-xs text-slate-400">Expected impact: {item.expectedSelectionImpact}</div>
+                    ) : null}
+                    {item.suggestedInternalLinkPattern ? (
+                      <div className="mt-1 text-xs text-slate-400">Internal links: {item.suggestedInternalLinkPattern}</div>
+                    ) : null}
+                    {item.rankingContext ? (
+                      <div className="mt-1 text-xs text-slate-400">Priority context: {item.rankingContext}</div>
+                    ) : null}
+                    {item.recommendationType ? (
+                      <div className="mt-1 text-xs text-slate-400">Recommendation type: {item.recommendationType}</div>
+                    ) : null}
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                     <div className="mt-1 text-xs text-slate-400">Purpose: {item.suggestedContentPurpose}</div>
+                    {item.reinforcesListingId ? (
+                      <div className="mt-1 text-xs text-slate-400">Reinforces listing: {item.reinforcesListingId}</div>
+                    ) : null}
                     {item.suggestedAngle ? (
                       <div className="mt-1 text-xs text-slate-400">Suggested angle: {item.suggestedAngle}</div>
+                    ) : null}
+                    {item.missingSupportEntities?.length ? (
+                      <div className="mt-1 text-xs text-slate-400">
+                        Missing entities: {item.missingSupportEntities.join(", ")}
+                      </div>
                     ) : null}
                     {item.linkedGapTypes?.length ? (
                       <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
