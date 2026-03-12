@@ -596,6 +596,10 @@ type ListingMultiActionUpgradeItem = {
     requiresBdForPush?: boolean;
     note?: string;
   };
+  previewPayload?: {
+    mode: "live_preview" | "planning_only";
+    detail: string;
+  };
 };
 
 type ListingMultiActionUpgradeModel = {
