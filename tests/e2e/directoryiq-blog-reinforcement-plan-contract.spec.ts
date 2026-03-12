@@ -217,7 +217,8 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Blog Reinforcement Plan" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible();
     await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible();
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
     await expect(page.getByText("No major reinforcement plan items identified.")).toHaveCount(0);
@@ -247,7 +248,8 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Blog Reinforcement Plan" })).toBeVisible();
+    await page.getByRole("button", { name: "Recommended Improvements" }).click();
+    await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible();
     await expect(page.getByText("No major reinforcement plan items identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
   });
