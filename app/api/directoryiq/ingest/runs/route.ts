@@ -1,6 +1,8 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
+import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
@@ -16,6 +18,10 @@ type RunRow = {
 };
 
 export async function GET(req: NextRequest) {
+  if (!shouldServeDirectoryIqLocally(req)) {
+    return proxyDirectoryIqRead(req, "/api/directoryiq/ingest/runs");
+  }
+
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);

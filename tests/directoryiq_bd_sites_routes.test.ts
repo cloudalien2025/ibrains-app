@@ -46,6 +46,7 @@ vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
 describe("directoryiq bd sites routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
   });
 
   it("lists sites", async () => {
