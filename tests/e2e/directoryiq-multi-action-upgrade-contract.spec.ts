@@ -250,10 +250,32 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
               evaluatedAt: "2026-03-10T00:00:07.000Z",
               dataStatus: "upgrade_actions_available",
             },
+            grouped: {
+              byReadiness: {
+                ready: ["optimize_listing_description", "repair_flywheel_links"],
+                blocked: [],
+                abstained: [],
+              },
+              bySurface: {
+                listing: ["optimize_listing_description", "repair_flywheel_links"],
+                blog: [],
+                support_page: [],
+                cluster: [],
+              },
+            },
             items: [
               {
+                actionId: "optimize_listing_description",
+                actionType: "listing_detail_improvement",
                 key: "optimize_listing_description",
                 title: "Generate and review listing description upgrade",
+                description: "Draft listing updates aligned to intent and blueprint signals.",
+                whyItMatters: "Listing quality is the main conversion surface.",
+                sourceSignals: { primaryIntent: "hire_trusted_local_service" },
+                expectedImpact: "High expected impact on conversion confidence.",
+                dependencies: [],
+                recommendedPriority: "high",
+                readinessState: "ready",
                 priority: "high",
                 status: "available",
                 rationale: "Keep listing copy optimization as the execution entrypoint.",
@@ -267,10 +289,20 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
                   requiresApprovalToken: true,
                   requiresBdForPush: true,
                 },
+                previewPayload: { mode: "live_preview", detail: "Generate and preview listing detail improvements." },
               },
               {
+                actionId: "repair_flywheel_links",
+                actionType: "internal_link_trust_signal",
                 key: "repair_flywheel_links",
                 title: "Repair listing-to-support flywheel links",
+                description: "Repair reciprocal links between listing and support pages.",
+                whyItMatters: "Trust-signal flow requires reciprocal links.",
+                sourceSignals: { primaryIntent: "hire_trusted_local_service" },
+                expectedImpact: "Medium expected impact on trust pathways.",
+                dependencies: [],
+                recommendedPriority: "medium",
+                readinessState: "ready",
                 priority: "medium",
                 status: "available",
                 rationale: "Bidirectional links should be established.",
@@ -280,11 +312,12 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
                   supported: false,
                   note: "No dedicated preview route yet; execute via manual link/module updates.",
                 },
+                previewPayload: { mode: "planning_only", detail: "Link repair package for trust-signal flow." },
               },
             ],
           },
           meta: {
-            source: "first_party_multi_action_upgrade_v1",
+            source: "first_party_multi_action_upgrade_v2",
             evaluatedAt: "2026-03-10T00:00:07.000Z",
             dataStatus: "upgrade_actions_available",
           },
@@ -294,9 +327,11 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Publish" }).click();
-    await expect(page.getByRole("heading", { name: "Improve This Listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Improve This Listing System" })).toBeVisible();
     await expect(page.getByText("Generate and review listing description upgrade")).toBeVisible();
     await expect(page.getByText("Repair listing-to-support flywheel links")).toBeVisible();
+    await expect(page.getByText("Ready Actions").first()).toBeVisible();
+    await expect(page.getByText("Why it matters: Listing quality is the main conversion surface.")).toBeVisible();
     await expect(page.getByText("No major upgrade actions available.")).toHaveCount(0);
 
     await page.unroute(`**/api/directoryiq/listings/${listingId}/upgrade/multi-action**`);
@@ -319,31 +354,64 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
               evaluatedAt: "2026-03-10T00:00:07.000Z",
               dataStatus: "no_major_upgrade_actions_available",
             },
+            grouped: {
+              byReadiness: {
+                ready: [],
+                blocked: [],
+                abstained: ["optimize_listing_description", "repair_flywheel_links"],
+              },
+              bySurface: {
+                listing: ["optimize_listing_description", "repair_flywheel_links"],
+                blog: [],
+                support_page: [],
+                cluster: [],
+              },
+            },
             items: [
               {
+                actionId: "optimize_listing_description",
+                actionType: "listing_detail_improvement",
                 key: "optimize_listing_description",
                 title: "Generate and review listing description upgrade",
+                description: "No-op.",
+                whyItMatters: "No-op.",
+                sourceSignals: {},
+                expectedImpact: "None.",
+                dependencies: [],
+                recommendedPriority: "high",
+                readinessState: "abstained",
                 priority: "high",
                 status: "not_recommended",
                 rationale: "No major signals.",
                 evidenceSummary: "Authority gaps: 0.",
                 targetSurface: "listing",
                 previewCapability: { supported: true },
+                previewPayload: { mode: "planning_only", detail: "No-op." },
               },
               {
+                actionId: "repair_flywheel_links",
+                actionType: "internal_link_trust_signal",
                 key: "repair_flywheel_links",
                 title: "Repair listing-to-support flywheel links",
+                description: "No-op.",
+                whyItMatters: "No-op.",
+                sourceSignals: {},
+                expectedImpact: "None.",
+                dependencies: [],
+                recommendedPriority: "medium",
+                readinessState: "abstained",
                 priority: "medium",
                 status: "not_recommended",
                 rationale: "No major signals.",
                 evidenceSummary: "Outbound support links: 2.",
                 targetSurface: "listing",
                 previewCapability: { supported: false },
+                previewPayload: { mode: "planning_only", detail: "No-op." },
               },
             ],
           },
           meta: {
-            source: "first_party_multi_action_upgrade_v1",
+            source: "first_party_multi_action_upgrade_v2",
             evaluatedAt: "2026-03-10T00:00:07.000Z",
             dataStatus: "no_major_upgrade_actions_available",
           },
@@ -353,7 +421,7 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Publish" }).click();
-    await expect(page.getByRole("heading", { name: "Improve This Listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Improve This Listing System" })).toBeVisible();
     await expect(page.getByText("No major upgrade actions available.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate multi-action upgrade system.")).toHaveCount(0);
   });

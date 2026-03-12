@@ -181,7 +181,9 @@ describe("directoryiq listing multi-action upgrade route", () => {
     expect(json.ok).toBe(true);
     expect(json.multiAction.listing.id).toBe("321");
     expect(json.multiAction.summary.dataStatus).toBe("upgrade_actions_available");
-    expect(json.meta.source).toBe("first_party_multi_action_upgrade_v1");
+    expect(json.multiAction.items[0].actionId).toBeDefined();
+    expect(json.multiAction.items[0].actionType).toBeDefined();
+    expect(json.meta.source).toBe("first_party_multi_action_upgrade_v2");
   });
 
   it("returns intentional no-action state", async () => {
