@@ -234,7 +234,7 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Flywheel Links" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Trust Signals" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toBeVisible();
     await expect(page.getByText("Add a category or guide page into the link cluster")).toBeVisible();
     await expect(page.getByText("No major flywheel opportunities found.")).toHaveCount(0);
@@ -274,7 +274,7 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Flywheel Links" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Trust Signals" })).toBeVisible();
     await expect(page.getByText("No major flywheel opportunities found.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate flywheel links.")).toHaveCount(0);
   });
