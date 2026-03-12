@@ -63,8 +63,12 @@ export default function AuthorityBlogsClient() {
       setLoading(true);
       setError(null);
       const response = await fetch("/api/directoryiq/authority/blogs", { cache: "no-store" });
-      const json = (await response.json().catch(() => ({}))) as { blogs?: AuthorityBlog[]; error?: { message?: string } };
-      if (!response.ok) {
+      const json = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        blogs?: AuthorityBlog[];
+        error?: { message?: string };
+      };
+      if (!response.ok || json.ok === false) {
         setError(json.error?.message ?? "Failed to load authority blogs.");
         setLoading(false);
         return;

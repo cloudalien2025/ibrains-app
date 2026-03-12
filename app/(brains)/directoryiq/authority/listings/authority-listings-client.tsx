@@ -46,8 +46,12 @@ export default function AuthorityListingsClient() {
     setLoading(true);
     setError(null);
     const response = await fetch("/api/directoryiq/authority/listings", { cache: "no-store" });
-    const json = (await response.json().catch(() => ({}))) as { listings?: AuthorityListing[]; error?: { message?: string } };
-    if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      listings?: AuthorityListing[];
+      error?: { message?: string };
+    };
+    if (!response.ok || json.ok === false) {
       setError(json.error?.message ?? "Failed to load authority listings.");
       setLoading(false);
       return;

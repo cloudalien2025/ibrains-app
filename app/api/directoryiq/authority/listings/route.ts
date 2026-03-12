@@ -63,14 +63,13 @@ export async function GET(req: NextRequest) {
       return NextResponse.json(
         {
           ok: false,
-          listings: [],
           error: {
             message,
             code: "INTERNAL_ERROR",
             reqId,
           },
         },
-        { status: 200 }
+        { status: 500 }
       );
     }
   }
