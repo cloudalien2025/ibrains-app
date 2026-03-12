@@ -59,6 +59,25 @@ describe("directoryiq authority read routes local host parity", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("returns explicit 500 error for authority overview failures", async () => {
+    getAuthorityOverviewMock.mockRejectedValueOnce(new Error("overview exploded"));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("@/app/api/directoryiq/authority/overview/route");
+    const req = new NextRequest("http://127.0.0.1/api/directoryiq/authority/overview", {
+      headers: { "x-forwarded-host": "127.0.0.1" },
+    });
+    const res = await GET(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.overview).toBeUndefined();
+    expect(json.error?.code).toBe("INTERNAL_ERROR");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("serves authority blogs locally on api host and avoids proxy fetch recursion", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -77,6 +96,25 @@ describe("directoryiq authority read routes local host parity", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("returns explicit 500 error for authority blogs failures", async () => {
+    getAuthorityBlogsMock.mockRejectedValueOnce(new Error("blogs exploded"));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("@/app/api/directoryiq/authority/blogs/route");
+    const req = new NextRequest("http://127.0.0.1/api/directoryiq/authority/blogs", {
+      headers: { "x-forwarded-host": "127.0.0.1" },
+    });
+    const res = await GET(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.blogs).toBeUndefined();
+    expect(json.error?.code).toBe("INTERNAL_ERROR");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("serves authority listings locally on api host and avoids proxy fetch recursion", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -92,6 +130,25 @@ describe("directoryiq authority read routes local host parity", () => {
     expect(json.ok).toBe(true);
     expect(Array.isArray(json.listings)).toBe(true);
     expect(getAuthorityListingsMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("returns explicit 500 error for authority listings failures", async () => {
+    getAuthorityListingsMock.mockRejectedValueOnce(new Error("listings exploded"));
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { GET } = await import("@/app/api/directoryiq/authority/listings/route");
+    const req = new NextRequest("http://127.0.0.1/api/directoryiq/authority/listings", {
+      headers: { "x-forwarded-host": "127.0.0.1" },
+    });
+    const res = await GET(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(json.ok).toBe(false);
+    expect(json.listings).toBeUndefined();
+    expect(json.error?.code).toBe("INTERNAL_ERROR");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

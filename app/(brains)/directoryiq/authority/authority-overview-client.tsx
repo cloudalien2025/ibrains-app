@@ -46,8 +46,12 @@ export default function AuthorityOverviewClient({
     setLoading(true);
     setError(null);
     const response = await fetch("/api/directoryiq/authority/overview", { cache: "no-store" });
-    const json = (await response.json().catch(() => ({}))) as { overview?: Overview; error?: { message?: string } };
-    if (!response.ok) {
+    const json = (await response.json().catch(() => ({}))) as {
+      ok?: boolean;
+      overview?: Overview;
+      error?: { message?: string };
+    };
+    if (!response.ok || json.ok === false) {
       setError(json.error?.message ?? "Failed to load overview.");
       setLoading(false);
       return;
