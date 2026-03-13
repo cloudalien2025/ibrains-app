@@ -75,6 +75,7 @@ export type ListingCard = {
   listingId: string;
   name: string;
   url: string | null;
+  category: string | null;
   authorityStatus: "Strong" | "Needs Support";
   trustStatus: "Strong" | "Needs Trust";
   lastOptimized: string | null;
@@ -102,6 +103,24 @@ function clamp(n: number, min: number, max: number): number {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function readListingCategory(raw: Record<string, unknown>): string | null {
+  const primaryCategory = raw.primary_category;
+  const candidates = [
+    asString(raw.group_category),
+    asString(raw.category),
+    asString(raw.category_name),
+    typeof primaryCategory === "string" ? primaryCategory : asString((primaryCategory as Record<string, unknown> | undefined)?.name),
+    asString(raw.listing_category),
+  ];
+
+  for (const candidate of candidates) {
+    const trimmed = candidate.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return null;
 }
 
 function readListingId(raw: Record<string, unknown>, fallback: string): string {
@@ -133,11 +152,7 @@ function parseListing(row: ListingRow, posts: AuthorityPostRow[], settings: Dire
   const raw = (row.raw_json ?? {}) as Record<string, unknown>;
   const title = row.title ?? asString(raw.title) ?? row.source_id;
   const description = extractListingDescription(raw);
-  const category =
-    asString(raw.group_category) ||
-    asString(raw.category) ||
-    asString(raw.category_name) ||
-    asString((raw.primary_category as Record<string, unknown> | undefined)?.name);
+  const category = readListingCategory(raw) ?? "";
   const location =
     asString(raw.post_location) ||
     asString(raw.location) ||
@@ -497,6 +512,7 @@ export async function getAllListingsWithEvaluations(
       listingId: readListingId(raw, listing.source_id),
       name: listing.title ?? readListingId(raw, listing.source_id),
       url: listing.url,
+      category: readListingCategory(raw),
       authorityStatus: evaluation.scores.authority >= 70 ? "Strong" : "Needs Support",
       trustStatus: evaluation.scores.trust >= 70 ? "Strong" : "Needs Trust",
       lastOptimized: posts.some((post) => post.status === "published") ? listing.updated_at : null,
