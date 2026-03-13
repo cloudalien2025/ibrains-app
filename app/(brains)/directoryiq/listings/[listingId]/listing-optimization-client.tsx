@@ -672,7 +672,8 @@ type UiError = {
 const UUID_PATTERN =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 
-function toPlainLabel(value: string): string {
+function toPlainLabel(value: string | null | undefined): string {
+  if (typeof value !== "string") return "";
   return value
     .replace(UUID_PATTERN, "this location")
     .replace(/[_-]+/g, " ")
@@ -680,7 +681,7 @@ function toPlainLabel(value: string): string {
     .trim();
 }
 
-function toTitleWords(value: string): string {
+function toTitleWords(value: string | null | undefined): string {
   const plain = toPlainLabel(value);
   if (!plain) return plain;
   return plain
@@ -689,7 +690,8 @@ function toTitleWords(value: string): string {
     .join(" ");
 }
 
-function toPlainIntent(value: string): string {
+function toPlainIntent(value: string | null | undefined): string {
+  if (!value) return "";
   const mapped: Record<string, string> = {
     choose_best_dining_option: "Why diners choose this listing nearby",
     book_best_place_to_stay: "Why guests book this stay over nearby options",
@@ -709,7 +711,7 @@ function toPlainIntent(value: string): string {
   return mapped[value] ?? toTitleWords(value);
 }
 
-function cleanCustomerText(value: string): string {
+function cleanCustomerText(value: string | null | undefined): string {
   return toPlainLabel(value)
     .replace(/\s*->\s*/g, " to ")
     .replace(/\b(?:listing|site)\s*:\s*[a-z0-9-]+\b/gi, "this listing");
