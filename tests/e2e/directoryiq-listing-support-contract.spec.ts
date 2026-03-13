@@ -146,7 +146,7 @@ test.describe("DirectoryIQ listing support contract", () => {
     await expect(page.getByText("No inbound linked support detected yet.")).toBeVisible();
     await expect(page.getByText("No unlinked mentions detected yet.")).toBeVisible();
     await expect(page.getByText("No outbound support links detected yet.")).toBeVisible();
-    await expect(page.getByText("No connected support pages detected yet.")).toBeVisible();
+    await expect(page.getByText("Support diagnostics are not available yet.").first()).toBeVisible();
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
   });
 });

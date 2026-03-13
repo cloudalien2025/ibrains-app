@@ -7,7 +7,6 @@ import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import ListingHero from "@/components/directoryiq/ListingHero";
-import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
 import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fetchWithTimeout";
 import { resolveDetailMetricDisplayValue } from "@/lib/directoryiq/detailMetricState";
 
@@ -1597,7 +1596,6 @@ export default function ListingOptimizationClient({
       <TopBar
         breadcrumbs={["Home", "DirectoryIQ", "AI Visibility"]}
         searchPlaceholder="Search AI visibility..."
-        mobileMenuItems={directoryIqNavItems}
       />
 
       <ListingHero
