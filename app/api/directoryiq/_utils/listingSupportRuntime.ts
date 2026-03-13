@@ -207,44 +207,37 @@ export async function resolveListingSupportModel(
   listingId: string
 ): Promise<SupportResolution> {
   const resolvedListingId = decodeURIComponent(listingId);
-  const localSupport = await resolveLocalSupport(req, resolvedListingId);
-  const localHasSignals = hasMaterialSupportSignals(localSupport);
-  if (requestHost(req) === targetHost() || localHasSignals) {
+  if (requestHost(req) !== targetHost()) {
+    const upstreamListingId = encodeURIComponent(resolvedListingId);
+    const supportRes = await proxyDirectoryIqRead(req, `/api/directoryiq/listings/${upstreamListingId}/support`);
+    const supportJson = (await supportRes.clone().json().catch(() => null)) as UpstreamSupportResponse | null;
+
+    if (supportRes.ok && supportJson?.ok && supportJson.support) {
+      return {
+        support: supportJson.support,
+        source: "external_proxy_support_v1",
+        fallbackApplied: false,
+        dataStatus: hasMaterialSupportSignals(supportJson.support) ? "supported" : "no_support_data",
+      };
+    }
+
+    const localSupport = await resolveLocalSupport(req, resolvedListingId);
+    const localHasSignals = hasMaterialSupportSignals(localSupport);
     return {
       support: localSupport,
       source: "local_support_service_v1",
-      fallbackApplied: false,
+      fallbackApplied: true,
       dataStatus: localHasSignals ? "supported" : "no_support_data",
+      upstreamStatus: supportRes.status,
     };
   }
 
-  const upstreamListingId = encodeURIComponent(resolvedListingId);
-  const supportRes = await proxyDirectoryIqRead(req, `/api/directoryiq/listings/${upstreamListingId}/support`);
-  const supportJson = (await supportRes.clone().json().catch(() => null)) as UpstreamSupportResponse | null;
-  if (supportRes.ok && supportJson?.ok && supportJson.support) {
-    const upstreamHasSignals = hasMaterialSupportSignals(supportJson.support);
-    if (!upstreamHasSignals) {
-      return {
-        support: localSupport,
-        source: "local_support_service_v1",
-        fallbackApplied: true,
-        dataStatus: localHasSignals ? "supported" : "no_support_data",
-        upstreamStatus: supportRes.status,
-      };
-    }
-    return {
-      support: supportJson.support,
-      source: "external_proxy_support_v1",
-      fallbackApplied: false,
-      dataStatus: "supported",
-    };
-  }
-
+  const localSupport = await resolveLocalSupport(req, resolvedListingId);
+  const localHasSignals = hasMaterialSupportSignals(localSupport);
   return {
     support: localSupport,
     source: "local_support_service_v1",
-    fallbackApplied: true,
+    fallbackApplied: false,
     dataStatus: localHasSignals ? "supported" : "no_support_data",
-    upstreamStatus: supportRes.status,
   };
 }
