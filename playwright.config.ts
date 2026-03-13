@@ -21,8 +21,8 @@ const chromiumArgs = needsNoSandbox
       "--disable-crash-reporter",
       "--disable-features=Crashpad,CrashpadHandler",
       "--disable-breakpad",
-      "--no-zygote",
-      "--single-process",
+      // `--single-process` is unstable in CI/root containers and causes browser crashes.
+      "--disable-dev-shm-usage",
     ]
   : [];
 const chromiumLaunchOptions = needsNoSandbox
