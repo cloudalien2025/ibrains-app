@@ -1,4 +1,10 @@
-import { ChevronRight, Search, User } from "lucide-react";
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { ChevronRight, Menu, Search, User, X } from "lucide-react";
+import type { DirectoryIqNavItem } from "@/lib/directoryiq/navItems";
 
 interface TopBarProps {
   breadcrumbs: string[];
@@ -6,6 +12,7 @@ interface TopBarProps {
   userLabel?: string;
   searchValue?: string;
   onSearchChange?: (value: string) => void;
+  mobileMenuItems?: DirectoryIqNavItem[];
 }
 
 export default function TopBar({
@@ -14,7 +21,15 @@ export default function TopBar({
   userLabel = "Ariel Viper",
   searchValue,
   onSearchChange,
+  mobileMenuItems,
 }: TopBarProps) {
+  const pathname = usePathname();
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  useEffect(() => {
+    setMobileMenuOpen(false);
+  }, [pathname]);
+
   return (
     <header
       data-testid="ecomviper-topbar"
@@ -34,8 +49,8 @@ export default function TopBar({
           ))}
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="relative w-64 max-w-[60vw]">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative w-56 max-w-[44vw] sm:w-64 sm:max-w-[60vw]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               type="search"
@@ -49,8 +64,40 @@ export default function TopBar({
             <User className="h-4 w-4" />
             {userLabel}
           </div>
+          {mobileMenuItems?.length ? (
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen((value) => !value)}
+              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-100 lg:hidden"
+              aria-label="Toggle DirectoryIQ navigation"
+              aria-expanded={mobileMenuOpen}
+            >
+              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
+          ) : null}
         </div>
       </div>
+
+      {mobileMenuOpen && mobileMenuItems?.length ? (
+        <nav className="mt-3 grid gap-2 lg:hidden">
+          {mobileMenuItems.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
+            return (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  active
+                    ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100"
+                    : "border-white/10 bg-white/[0.03] text-slate-200"
+                }`}
+              >
+                {item.label}
+              </Link>
+            );
+          })}
+        </nav>
+      ) : null}
     </header>
   );
 }

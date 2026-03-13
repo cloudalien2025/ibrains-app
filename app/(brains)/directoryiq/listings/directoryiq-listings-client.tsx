@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
+import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
 import {
   applyListingsTableModel,
   formatCategoryLabel,
@@ -105,6 +106,7 @@ export default function DirectoryIqListingsClient() {
         searchPlaceholder="Search listings..."
         searchValue={searchTerm}
         onSearchChange={setSearchTerm}
+        mobileMenuItems={directoryIqNavItems}
       />
 
       <HudCard title="Listings" subtitle="AI Visibility and AI Selection score for each listing.">

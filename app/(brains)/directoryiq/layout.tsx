@@ -5,19 +5,10 @@ import LockedBrainView from "@/components/brains/LockedBrainView";
 import { isEntitled, resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { brainCatalogById } from "@/lib/brains/brainCatalog";
 import { aiSelectionCopy } from "@/lib/copy/aiSelectionCopy";
-import DirectoryIqMobileNav from "@/components/directoryiq/DirectoryIqMobileNav";
+import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-const navItems = [
-  { href: "/directoryiq", label: "Dashboard" },
-  { href: "/directoryiq/listings", label: "Listings" },
-  { href: "/directoryiq/authority", label: "Authority" },
-  { href: "/directoryiq/graph-integrity", label: "Graph Integrity" },
-  { href: "/directoryiq/signal-sources", label: "Connections" },
-  { href: "/directoryiq/versions", label: "History" },
-];
 
 export default async function DirectoryIqLayout({ children }: { children: ReactNode }) {
   const headersList = await headers();
@@ -32,9 +23,8 @@ export default async function DirectoryIqLayout({ children }: { children: ReactN
     <BrainWorkspaceFrame
       brainLabel="DirectoryIQ"
       subtitle={aiSelectionCopy.directoryiq.shellSubtitle}
-      navItems={navItems}
+      navItems={directoryIqNavItems}
     >
-      <DirectoryIqMobileNav items={navItems} />
       {children}
     </BrainWorkspaceFrame>
   );
