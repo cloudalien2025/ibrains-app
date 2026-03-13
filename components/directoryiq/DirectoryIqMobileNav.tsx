@@ -19,18 +19,21 @@ export default function DirectoryIqMobileNav({ items }: { items: NavItem[] }) {
   }, [pathname]);
 
   return (
-    <section className="lg:hidden">
-      <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-2">
-        <button
-          type="button"
-          onClick={() => setOpen((value) => !value)}
-          className="flex w-full items-center justify-between rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-slate-100"
-          aria-label="Toggle DirectoryIQ navigation"
-          aria-expanded={open}
-        >
-          <span>DirectoryIQ Navigation</span>
-          {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
-        </button>
+    <section className="lg:hidden" data-testid="directoryiq-mobile-header">
+      <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <span className="min-w-0 truncate text-sm font-semibold tracking-[0.08em] text-cyan-100">DirectoryIQ</span>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-white/10 bg-white/[0.04] text-slate-100"
+            aria-label="Toggle DirectoryIQ navigation"
+            aria-expanded={open}
+            data-testid="directoryiq-mobile-menu-trigger"
+          >
+            {open ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
+          </button>
+        </div>
 
         {open ? (
           <nav className="mt-2 grid gap-2">

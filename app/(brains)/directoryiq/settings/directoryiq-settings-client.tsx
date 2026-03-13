@@ -5,7 +5,6 @@ import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
-import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
 
 const VERTICALS = ["home-services", "health-medical", "legal-financial", "hospitality-travel", "education", "general"] as const;
 
@@ -59,7 +58,6 @@ export default function DirectoryIqSettingsClient() {
       <TopBar
         breadcrumbs={["Home", "DirectoryIQ", "Settings"]}
         searchPlaceholder="Search settings..."
-        mobileMenuItems={directoryIqNavItems}
       />
 
       {error ? <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
