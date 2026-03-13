@@ -20,6 +20,8 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);
+      expect(defaultViewText).not.toContain("->");
+      expect(defaultViewText).not.toContain("Recommendation type:");
 
       await page.getByRole("button", { name: "Step 2: What's Missing" }).click();
       await expect(page.getByRole("heading", { name: "Step 2: Find What Is Still Missing" })).toBeVisible();
