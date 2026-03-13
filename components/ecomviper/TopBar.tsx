@@ -35,8 +35,8 @@ export default function TopBar({
       data-testid="ecomviper-topbar"
       className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-4 backdrop-blur-xl shadow-[0_20px_45px_rgba(2,6,23,0.75)]"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-1 text-xs uppercase tracking-[0.12em] text-slate-400">
+      <div className="flex flex-wrap items-start justify-between gap-3 lg:items-center">
+        <div className="order-1 flex min-w-0 flex-1 flex-wrap items-center gap-1 text-xs uppercase tracking-[0.12em] text-slate-400">
           {breadcrumbs.map((crumb, index) => (
             <span key={`${crumb}-${index}`} className="flex items-center gap-1">
               {index > 0 ? <ChevronRight className="h-3.5 w-3.5 text-cyan-300/80" /> : null}
@@ -49,8 +49,20 @@ export default function TopBar({
           ))}
         </div>
 
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="relative w-56 max-w-[44vw] sm:w-64 sm:max-w-[60vw]">
+        {mobileMenuItems?.length ? (
+          <button
+            type="button"
+            onClick={() => setMobileMenuOpen((value) => !value)}
+            className="order-2 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-100 lg:hidden"
+            aria-label="Toggle DirectoryIQ navigation"
+            aria-expanded={mobileMenuOpen}
+          >
+            {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </button>
+        ) : null}
+
+        <div className="order-3 flex min-w-0 w-full items-center gap-2 lg:order-2 lg:w-auto">
+          <div className="relative min-w-0 flex-1 lg:w-64 lg:max-w-[60vw]">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
             <input
               type="search"
@@ -60,21 +72,10 @@ export default function TopBar({
               className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-2 pl-9 pr-3 text-sm text-slate-100 placeholder:text-slate-500 outline-none ring-cyan-300/40 transition focus:border-cyan-300/40 focus:ring-2"
             />
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-xs font-medium tracking-[0.08em] text-cyan-100 uppercase">
+          <div className="flex shrink-0 items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-2.5 py-2 text-xs font-medium tracking-[0.08em] text-cyan-100 uppercase sm:px-3">
             <User className="h-4 w-4" />
-            {userLabel}
+            <span className="hidden sm:inline">{userLabel}</span>
           </div>
-          {mobileMenuItems?.length ? (
-            <button
-              type="button"
-              onClick={() => setMobileMenuOpen((value) => !value)}
-              className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-100 lg:hidden"
-              aria-label="Toggle DirectoryIQ navigation"
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
-          ) : null}
         </div>
       </div>
 
