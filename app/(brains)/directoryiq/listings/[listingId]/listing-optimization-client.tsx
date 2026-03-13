@@ -908,7 +908,7 @@ export default function ListingOptimizationClient({
 
   useEffect(() => {
     if (!effectiveListingId) return;
-    const supportReady = Boolean(support) && supportMeta?.dataStatus === "supported";
+    const supportReady = Boolean(support) && supportMeta?.dataStatus !== "no_support_data";
     const gapsReady = Boolean(gaps) && gaps?.summary.dataStatus !== "analysis_unavailable";
 
     if (supportError || gapsError) {
@@ -1306,7 +1306,7 @@ export default function ListingOptimizationClient({
 
   useEffect(() => {
     if (!effectiveListingId) return;
-    const supportReady = Boolean(support) && supportMeta?.dataStatus === "supported";
+    const supportReady = Boolean(support) && supportMeta?.dataStatus !== "no_support_data";
     const gapsReady = Boolean(gaps) && gaps?.summary.dataStatus !== "analysis_unavailable";
 
     if (supportError || gapsError) {
@@ -1482,7 +1482,7 @@ export default function ListingOptimizationClient({
   const displayScore = listing?.evaluation.totalScore ?? 0;
   const supportSummary = support?.summary ?? null;
   const gapsSummary = gaps?.summary ?? null;
-  const supportResolved = Boolean(supportSummary) && supportMeta?.dataStatus === "supported";
+  const supportResolved = Boolean(supportSummary) && supportMeta?.dataStatus !== "no_support_data";
   const supportUnresolved = !supportLoading && (!supportResolved || Boolean(supportError));
   const gapsUnavailable =
     gapsSummary?.dataStatus === "analysis_unavailable" || gapsMeta?.dataStatus === "analysis_unavailable";

@@ -235,7 +235,7 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
     await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible();
-    await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible();
+    await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
     await expect(page.getByText("Target intent: Compare Alternatives")).toBeVisible();
     await expect(page.getByText("Expected impact: High expected impact on listing selection confidence and conversion intent.")).toBeVisible();

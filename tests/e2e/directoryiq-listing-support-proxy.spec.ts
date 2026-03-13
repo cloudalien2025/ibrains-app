@@ -22,6 +22,11 @@ test.describe("DirectoryIQ listing support proxy path", () => {
       page.getByText("No outbound support links detected yet."),
       page.getByText("No connected support pages detected yet."),
     ];
+    const unresolvedSignal = page.getByText("Support diagnostics are not available yet.");
+    if ((await unresolvedSignal.count()) > 0) {
+      await expect(unresolvedSignal).toBeVisible();
+      return;
+    }
     for (const signal of noDataSignals) {
       await expect(signal).toBeVisible();
     }

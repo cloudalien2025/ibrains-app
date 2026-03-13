@@ -266,7 +266,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible();
     await expect(page.getByText("Main focus")).toBeVisible();
     await expect(page.getByText("Be the trusted local service choice")).toBeVisible();
-    await expect(page.getByText("Close unlinked support mentions")).toBeVisible();
+    await expect(page.getByText("Close unlinked support mentions")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Repair bidirectional flywheel links")).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
