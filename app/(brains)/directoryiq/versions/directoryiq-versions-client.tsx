@@ -4,6 +4,7 @@ import { useState } from "react";
 import TopBar from "@/components/ecomviper/TopBar";
 import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
+import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
 
 type VersionRow = {
   id: string;
@@ -72,7 +73,11 @@ export default function DirectoryIqVersionsClient({
 
   return (
     <>
-      <TopBar breadcrumbs={["Home", "DirectoryIQ", "Versions"]} searchPlaceholder="Search versions..." />
+      <TopBar
+        breadcrumbs={["Home", "DirectoryIQ", "Versions"]}
+        searchPlaceholder="Search versions..."
+        mobileMenuItems={directoryIqNavItems}
+      />
 
       {error ? <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">{error}</div> : null}
 
