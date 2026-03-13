@@ -235,15 +235,11 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
     await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Publish a comparison decision stage post")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
-    await expect(page.getByText("Target intent: Compare Alternatives")).toBeVisible();
-    await expect(page.getByText("Expected impact: High expected impact on listing selection confidence and conversion intent.")).toBeVisible();
-    await expect(
-      page.getByText(
-        "Internal links: comparison-asset -> https://example.com/listings/acme-plumbing; listing -> comparison block -> comparison-asset"
-      )
-    ).toBeVisible();
+    await expect(page.getByText("Comparison stage users need alternatives context before selecting.")).toBeVisible();
+    await expect(page.getByText("Create this asset and link it to the listing and related proof pages.")).toHaveCount(2);
+    await expect(page.getByText("Internal links: comparison-asset -> https://example.com/listings/acme-plumbing; listing -> comparison block -> comparison-asset")).toHaveCount(0);
     await expect(page.getByText("No major reinforcement plan items identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
 

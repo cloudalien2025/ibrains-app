@@ -147,8 +147,8 @@ function comparisonFrames(primaryIntent: string, listingTitle: string, localModi
   }
   return [
     `${listingTitle} vs nearby alternatives in ${localHint}`,
-    `Trust and quality comparison`,
-    `Best local fit comparison`,
+    `Trust signals and quality proof comparison`,
+    `When this listing is the right local choice`,
   ];
 }
 

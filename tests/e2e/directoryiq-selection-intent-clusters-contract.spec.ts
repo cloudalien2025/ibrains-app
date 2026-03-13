@@ -265,8 +265,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     await page.getByRole("button", { name: "Step 3: Recommended Improvements" }).click();
     await expect(page.getByText("Step 3: Add the right content and proof")).toBeVisible();
     await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Main focus")).toBeVisible();
-    await expect(page.getByText("Be the trusted local service choice", { exact: true })).toBeVisible();
+    await expect(page.getByText("Be the trusted local service to hire", { exact: true })).toBeVisible();
     await expect(page.getByText("Close unlinked support mentions")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Repair bidirectional flywheel links")).toBeVisible();
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);

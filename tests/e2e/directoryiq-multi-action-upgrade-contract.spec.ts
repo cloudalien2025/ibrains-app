@@ -329,9 +329,9 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
     await page.getByRole("button", { name: "Publish" }).click();
     await expect(page.getByRole("heading", { name: "Step 4: Review And Publish Improvements" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Generate and review listing description upgrade")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Repair listing-to-support flywheel links")).toBeVisible();
+    await expect(page.getByText("Repair listing to support flywheel links")).toBeVisible();
     await expect(page.getByText("Ready Actions").first()).toBeVisible();
-    await expect(page.getByText("Why it matters: Listing quality is the main conversion surface.")).toBeVisible();
+    await expect(page.getByText("Listing quality is the main conversion surface.")).toBeVisible();
     await expect(page.getByText("No major upgrade actions available.")).toHaveCount(0);
 
     await page.unroute(`**/api/directoryiq/listings/${listingId}/upgrade/multi-action**`);
