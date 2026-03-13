@@ -72,6 +72,7 @@ export type DirectoryIqSettings = {
 };
 
 export type ListingCard = {
+  sourceId: string;
   listingId: string;
   name: string;
   url: string | null;
@@ -509,6 +510,7 @@ export async function getAllListingsWithEvaluations(
 
     const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     cards.push({
+      sourceId: listing.source_id,
       listingId: readListingId(raw, listing.source_id),
       name: listing.title ?? readListingId(raw, listing.source_id),
       url: listing.url,

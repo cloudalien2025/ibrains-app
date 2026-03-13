@@ -8,11 +8,14 @@ import { getAllListingsWithEvaluations, getDirectoryIqSettings } from "@/app/api
 import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
 import { scheduleSnapshotRefresh } from "@/app/api/_utils/snapshots";
+import { normalizeDashboardListingsContract } from "@/app/api/directoryiq/_utils/dashboardListingsContract";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 const DASHBOARD_PATH = "/api/directoryiq/dashboard";
 
 type DashboardListing = {
+  listing_row_id: string;
+  listing_source_id: string;
   listing_id: string;
   listing_name: string;
   category: string | null;
@@ -86,6 +89,8 @@ async function loadDashboard(userId: string) {
   ]);
 
   const listings: DashboardListing[] = listingEval.cards.map((card) => ({
+    listing_row_id: card.sourceId,
+    listing_source_id: card.sourceId,
     listing_id: card.listingId,
     listing_name: card.name,
     category: card.category,
@@ -115,6 +120,40 @@ async function loadDashboard(userId: string) {
   };
 }
 
+async function normalizeProxyDashboardResponse(response: NextResponse, userId: string): Promise<NextResponse> {
+  if (response.status >= 400) return response;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.toLowerCase().includes("application/json")) return response;
+
+  try {
+    const payload = (await response.clone().json()) as Record<string, unknown>;
+    const listingsRaw = payload.listings;
+    if (!Array.isArray(listingsRaw)) return NextResponse.json(payload, { status: response.status });
+
+    const canonical = await getAllListingsWithEvaluations(userId);
+    const canonicalRows = canonical.cards.map((card) => ({
+      sourceId: card.sourceId,
+      listingId: card.listingId,
+      category: card.category,
+      siteId: card.siteId ?? null,
+    }));
+    const listings = normalizeDashboardListingsContract(
+      listingsRaw.filter((row): row is Record<string, unknown> => !!row && typeof row === "object"),
+      canonicalRows
+    );
+
+    return NextResponse.json(
+      {
+        ...payload,
+        listings,
+      },
+      { status: response.status }
+    );
+  } catch {
+    return response;
+  }
+}
+
 export async function GET(req: NextRequest) {
   if (requestHost(req) === targetHost()) {
     try {
@@ -128,7 +167,9 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return proxyDirectoryIqRequest(req, DASHBOARD_PATH, "GET");
+  const proxied = await proxyDirectoryIqRequest(req, DASHBOARD_PATH, "GET");
+  const userId = resolveUserId(req);
+  return normalizeProxyDashboardResponse(proxied, userId);
 }
 
 export async function POST(req: NextRequest) {
@@ -145,5 +186,7 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return proxyDirectoryIqRequest(req, DASHBOARD_PATH, "POST");
+  const proxied = await proxyDirectoryIqRequest(req, DASHBOARD_PATH, "POST");
+  const userId = resolveUserId(req);
+  return normalizeProxyDashboardResponse(proxied, userId);
 }

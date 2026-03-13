@@ -225,7 +225,7 @@ export default function DirectoryIqDashboardClient() {
               </thead>
               <tbody>
                 {visibleListings.map((listing) => (
-                  <tr key={listing.listing_id} className="border-t border-white/10">
+                  <tr key={listing.listing_row_id ?? listing.listing_source_id ?? listing.listing_id} className="border-t border-white/10">
                     <td className="py-2 pr-3 text-slate-100">{listing.listing_name}</td>
                     <td className="py-2 pr-3">{resolveDashboardListingCategory(listing) ?? "-"}</td>
                     <td className="py-2 pr-3">{listing.score}</td>

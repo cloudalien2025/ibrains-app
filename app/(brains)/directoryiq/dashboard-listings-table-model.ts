@@ -1,4 +1,6 @@
 export type DashboardListingRow = {
+  listing_row_id?: string | null;
+  listing_source_id?: string | null;
   listing_id: string;
   listing_name: string;
   category?: string | null;
