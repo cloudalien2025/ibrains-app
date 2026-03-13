@@ -75,9 +75,11 @@ describe("directoryiq listing gaps route", () => {
     expect(json.gaps.summary.highCount).toBe(0);
     expect(json.gaps.summary.mediumCount).toBe(0);
     expect(json.gaps.summary.lowCount).toBe(0);
+    expect(json.gaps.summary.dataStatus).toBe("analysis_unavailable");
     expect(json.meta.source).toBe("directoryiq_support_derived_gaps_v1");
     expect(json.meta.supportSource).toBe("local_support_service_v1");
     expect(json.meta.supportDataStatus).toBe("no_support_data");
+    expect(json.meta.dataStatus).toBe("analysis_unavailable");
     expect(json.meta.supportFallbackApplied).toBe(true);
   });
 });

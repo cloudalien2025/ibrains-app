@@ -553,18 +553,27 @@ export async function getListingEvaluation(
   settings: DirectoryIqSettings;
 }> {
   const settings = await getDirectoryIqSettings(userId);
+  const normalizedListingId = listingId.includes(":") ? listingId.split(":", 2)[1] ?? listingId : listingId;
 
   let listingRows: ListingRow[] = [];
   if (siteId) {
-    const sourceId = `${siteId}:${listingId}`;
+    const sourceIdCandidates = Array.from(
+      new Set([`${siteId}:${normalizedListingId}`, listingId, `${siteId}:${listingId}`].map((value) => value.trim()).filter(Boolean))
+    );
     listingRows = await query<ListingRow>(
       `
       SELECT source_id, bd_site_id, title, url, updated_at, raw_json
       FROM directoryiq_nodes
-      WHERE user_id = $1 AND source_type = 'listing' AND source_id = $2
+      WHERE user_id = $1
+        AND source_type = 'listing'
+        AND (
+          source_id = ANY($2::text[])
+          OR (bd_site_id = $3 AND raw_json->>'listing_id' = $4)
+        )
+      ORDER BY updated_at DESC
       LIMIT 1
       `,
-      [userId, sourceId]
+      [userId, sourceIdCandidates, siteId, normalizedListingId]
     );
   } else {
     listingRows = await query<ListingRow>(

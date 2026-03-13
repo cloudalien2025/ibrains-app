@@ -100,6 +100,8 @@ type ListingSupportResponse = {
     source: string;
     evaluatedAt: string;
     dataStatus: "supported" | "no_support_data";
+    fallbackApplied?: boolean;
+    upstreamStatus?: number | null;
   };
   error?: {
     message?: string;
@@ -148,7 +150,7 @@ type ListingAuthorityGapsModel = {
     lowCount: number;
     evaluatedAt: string;
     lastGraphRunAt: string | null;
-    dataStatus: "gaps_found" | "no_meaningful_gaps";
+    dataStatus: "gaps_found" | "no_meaningful_gaps" | "analysis_unavailable";
   };
   items: AuthorityGapItem[];
 };
@@ -159,7 +161,8 @@ type ListingAuthorityGapsResponse = {
   meta?: {
     source: string;
     evaluatedAt: string;
-    dataStatus: "gaps_found" | "no_meaningful_gaps";
+    dataStatus: "gaps_found" | "no_meaningful_gaps" | "analysis_unavailable";
+    supportDataStatus?: "supported" | "no_support_data";
   };
   error?: {
     message?: string;
@@ -743,9 +746,13 @@ export default function ListingOptimizationClient({
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<UiError | null>(initialError);
   const [support, setSupport] = useState<ListingSupportModel | null>(null);
+  const [supportMeta, setSupportMeta] = useState<ListingSupportResponse["meta"] | null>(null);
   const [supportError, setSupportError] = useState<string | null>(null);
+  const [supportLoading, setSupportLoading] = useState(true);
   const [gaps, setGaps] = useState<ListingAuthorityGapsModel | null>(null);
+  const [gapsMeta, setGapsMeta] = useState<ListingAuthorityGapsResponse["meta"] | null>(null);
   const [gapsError, setGapsError] = useState<string | null>(null);
+  const [gapsLoading, setGapsLoading] = useState(true);
   const [actions, setActions] = useState<ListingRecommendedActionsModel | null>(null);
   const [actionsError, setActionsError] = useState<string | null>(null);
   const [actionsLoading, setActionsLoading] = useState(true);
@@ -833,6 +840,7 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
+        setSupportLoading(true);
         const supportRes = await fetch(supportPath, {
           cache: "no-store",
         });
@@ -844,20 +852,26 @@ export default function ListingOptimizationClient({
               : supportJson.error?.message ?? "Failed to load support model.";
           setSupportError(supportMessage);
           setSupport(null);
+          setSupportMeta(null);
           return;
         }
 
         setSupport(supportJson.support ?? null);
+        setSupportMeta(supportJson.meta ?? null);
         setSupportError(null);
       } catch (supportErr) {
         const message = supportErr instanceof Error ? supportErr.message : "Failed to load support model.";
         setSupportError(message);
         setSupport(null);
+        setSupportMeta(null);
+      } finally {
+        setSupportLoading(false);
       }
     })();
 
     void (async () => {
       try {
+        setGapsLoading(true);
         const gapsRes = await fetch(gapsPath, {
           cache: "no-store",
         });
@@ -869,15 +883,20 @@ export default function ListingOptimizationClient({
               : gapsJson.error?.message ?? "Failed to evaluate authority gaps.";
           setGapsError(gapsMessage);
           setGaps(null);
+          setGapsMeta(null);
           return;
         }
 
         setGaps(gapsJson.gaps ?? null);
+        setGapsMeta(gapsJson.meta ?? null);
         setGapsError(null);
       } catch (gapsErr) {
         const message = gapsErr instanceof Error ? gapsErr.message : "Failed to evaluate authority gaps.";
         setGapsError(message);
         setGaps(null);
+        setGapsMeta(null);
+      } finally {
+        setGapsLoading(false);
       }
     })();
   }
@@ -889,6 +908,8 @@ export default function ListingOptimizationClient({
 
   useEffect(() => {
     if (!effectiveListingId) return;
+    const supportReady = Boolean(support) && supportMeta?.dataStatus === "supported";
+    const gapsReady = Boolean(gaps) && gaps?.summary.dataStatus !== "analysis_unavailable";
 
     if (supportError || gapsError) {
       setActions(null);
@@ -897,7 +918,13 @@ export default function ListingOptimizationClient({
       return;
     }
 
-    if (!support || !gaps) {
+    if (!supportReady || !gapsReady) {
+      if (!supportLoading && !gapsLoading) {
+        setActions(null);
+        setActionsLoading(false);
+        setActionsError("Actions are not available until support and gap diagnostics finish.");
+        return;
+      }
       setActionsLoading(true);
       setActionsError(null);
       return;
@@ -943,7 +970,17 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, supportError, gapsError]);
+  }, [
+    effectiveListingId,
+    siteQuery,
+    support,
+    supportMeta,
+    supportLoading,
+    gaps,
+    gapsLoading,
+    supportError,
+    gapsError,
+  ]);
 
   useEffect(() => {
     if (!effectiveListingId) return;
@@ -1269,6 +1306,8 @@ export default function ListingOptimizationClient({
 
   useEffect(() => {
     if (!effectiveListingId) return;
+    const supportReady = Boolean(support) && supportMeta?.dataStatus === "supported";
+    const gapsReady = Boolean(gaps) && gaps?.summary.dataStatus !== "analysis_unavailable";
 
     if (supportError || gapsError) {
       setFlywheel(null);
@@ -1277,7 +1316,13 @@ export default function ListingOptimizationClient({
       return;
     }
 
-    if (!support || !gaps) {
+    if (!supportReady || !gapsReady) {
+      if (!supportLoading && !gapsLoading) {
+        setFlywheel(null);
+        setFlywheelLoading(false);
+        setFlywheelError("Flywheel evaluation is not available until support and gap diagnostics finish.");
+        return;
+      }
       setFlywheelLoading(true);
       setFlywheelError(null);
       return;
@@ -1323,7 +1368,17 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, supportError, gapsError]);
+  }, [
+    effectiveListingId,
+    siteQuery,
+    support,
+    supportMeta,
+    supportLoading,
+    gaps,
+    gapsLoading,
+    supportError,
+    gapsError,
+  ]);
 
   async function generateUpgrade() {
     if (!effectiveListingId) return;
@@ -1425,21 +1480,24 @@ export default function ListingOptimizationClient({
     "Listing";
   const displayUrl = listing?.listing.listing_url ?? null;
   const displayScore = listing?.evaluation.totalScore ?? 0;
-  const supportSummary = support?.summary ?? {
-    inboundLinkedSupportCount: 0,
-    mentionWithoutLinkCount: 0,
-    outboundSupportLinkCount: 0,
-    connectedSupportPageCount: 0,
-    lastGraphRunAt: null,
-  };
-  const gapsSummary = gaps?.summary ?? {
-    totalGaps: 0,
-    highCount: 0,
-    mediumCount: 0,
-    lowCount: 0,
-    evaluatedAt: "",
-    lastGraphRunAt: null,
-    dataStatus: "no_meaningful_gaps" as const,
+  const supportSummary = support?.summary ?? null;
+  const gapsSummary = gaps?.summary ?? null;
+  const supportResolved = Boolean(supportSummary) && supportMeta?.dataStatus === "supported";
+  const supportUnresolved = !supportLoading && (!supportResolved || Boolean(supportError));
+  const gapsUnavailable =
+    gapsSummary?.dataStatus === "analysis_unavailable" || gapsMeta?.dataStatus === "analysis_unavailable";
+  const gapsResolved = Boolean(gapsSummary) && !gapsUnavailable;
+  const gapsUnresolved = !gapsLoading && (!gapsResolved || Boolean(gapsError));
+  const topMetricValue = (
+    value: number | null | undefined,
+    opts: {
+      loading: boolean;
+      unresolved: boolean;
+    }
+  ): string => {
+    if (opts.loading) return "...";
+    if (opts.unresolved || value == null) return "—";
+    return String(value);
   };
   const intentProfile = intentClusters?.intentProfile ?? {
     primaryIntent: "intent_not_resolved",
@@ -1532,19 +1590,39 @@ export default function ListingOptimizationClient({
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Support Signals Found</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.inboundLinkedSupportCount}</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">
+            {topMetricValue(supportSummary?.inboundLinkedSupportCount, {
+              loading: supportLoading,
+              unresolved: supportUnresolved,
+            })}
+          </div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Things Still Missing</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">{gapsSummary.totalGaps}</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">
+            {topMetricValue(gapsSummary?.totalGaps, {
+              loading: gapsLoading,
+              unresolved: gapsUnresolved,
+            })}
+          </div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Next Improvements</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">{actions?.summary.totalActions ?? 0}</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">
+            {topMetricValue(actions?.summary.totalActions, {
+              loading: actionsLoading,
+              unresolved: Boolean(actionsError) || (!actionsLoading && !actions),
+            })}
+          </div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Proof Pages Connected</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.connectedSupportPageCount}</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">
+            {topMetricValue(supportSummary?.connectedSupportPageCount, {
+              loading: supportLoading,
+              unresolved: supportUnresolved,
+            })}
+          </div>
         </div>
       </div>
 
@@ -1592,28 +1670,55 @@ export default function ListingOptimizationClient({
           </div>
         ) : null}
 
+        {supportLoading ? <div className="text-sm text-slate-300">Loading support diagnostics...</div> : null}
+        {supportUnresolved ? (
+          <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            Support diagnostics are not available yet.
+          </div>
+        ) : null}
+
         <div className="mt-3 grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting Links In</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.inboundLinkedSupportCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(supportSummary?.inboundLinkedSupportCount, {
+                loading: supportLoading,
+                unresolved: supportUnresolved,
+              })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions Without Links</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.mentionWithoutLinkCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(supportSummary?.mentionWithoutLinkCount, {
+                loading: supportLoading,
+                unresolved: supportUnresolved,
+              })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Outbound Support Links</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.outboundSupportLinkCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(supportSummary?.outboundSupportLinkCount, {
+                loading: supportLoading,
+                unresolved: supportUnresolved,
+              })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected Support Pages</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.connectedSupportPageCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(supportSummary?.connectedSupportPageCount, {
+                loading: supportLoading,
+                unresolved: supportUnresolved,
+              })}
+            </div>
           </div>
         </div>
 
         <div className="mt-3 text-xs text-slate-400">
-          {supportSummary.lastGraphRunAt
-            ? `Last graph refresh: ${new Date(supportSummary.lastGraphRunAt).toLocaleString()}`
+          {supportSummary?.lastGraphRunAt
+            ? `Last graph refresh: ${new Date(supportSummary?.lastGraphRunAt).toLocaleString()}`
             : "Last graph refresh: Not available yet."}
         </div>
 
@@ -1642,7 +1747,9 @@ export default function ListingOptimizationClient({
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-400">No inbound linked support detected yet.</div>
+                <div className="text-sm text-slate-400">
+                  {supportUnresolved ? "Support diagnostics are not available yet." : "No inbound linked support detected yet."}
+                </div>
               )}
             </div>
           </section>
@@ -1661,7 +1768,9 @@ export default function ListingOptimizationClient({
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-400">No unlinked mentions detected yet.</div>
+                <div className="text-sm text-slate-400">
+                  {supportUnresolved ? "Support diagnostics are not available yet." : "No unlinked mentions detected yet."}
+                </div>
               )}
             </div>
           </section>
@@ -1678,7 +1787,9 @@ export default function ListingOptimizationClient({
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-400">No outbound support links detected yet.</div>
+                <div className="text-sm text-slate-400">
+                  {supportUnresolved ? "Support diagnostics are not available yet." : "No outbound support links detected yet."}
+                </div>
               )}
             </div>
           </section>
@@ -1695,7 +1806,9 @@ export default function ListingOptimizationClient({
                   </div>
                 ))
               ) : (
-                <div className="text-sm text-slate-400">No connected support pages detected yet.</div>
+                <div className="text-sm text-slate-400">
+                  {supportUnresolved ? "Support diagnostics are not available yet." : "No connected support pages detected yet."}
+                </div>
               )}
             </div>
           </section>
@@ -1792,38 +1905,56 @@ export default function ListingOptimizationClient({
           </div>
         ) : null}
 
+        {gapsLoading && !gapsError ? (
+          <div className="text-sm text-slate-300">Evaluating visibility gaps...</div>
+        ) : null}
+
+        {gapsSummary?.dataStatus === "analysis_unavailable" && !gapsLoading && !gapsError ? (
+          <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
+            Gap analysis is not available yet.
+          </div>
+        ) : null}
+
         <div className="mt-3 grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Gaps</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{gapsSummary.totalGaps}</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(gapsSummary?.totalGaps, { loading: gapsLoading, unresolved: gapsUnresolved })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-rose-200">{gapsSummary.highCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-rose-200">
+              {topMetricValue(gapsSummary?.highCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-amber-100">{gapsSummary.mediumCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-amber-100">
+              {topMetricValue(gapsSummary?.mediumCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-cyan-100">{gapsSummary.lowCount}</div>
+            <div className="mt-1 text-2xl font-semibold text-cyan-100">
+              {topMetricValue(gapsSummary?.lowCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
+            </div>
           </div>
         </div>
 
         <div className="mt-3 text-xs text-slate-400">
-          {gapsSummary.lastGraphRunAt
-            ? `Last graph refresh: ${new Date(gapsSummary.lastGraphRunAt).toLocaleString()}`
+          {gapsSummary?.lastGraphRunAt
+            ? `Last graph refresh: ${new Date(gapsSummary?.lastGraphRunAt).toLocaleString()}`
             : "Last graph refresh: Not available yet."}
         </div>
 
-        {gapsSummary.dataStatus === "no_meaningful_gaps" && !gapsError ? (
+        {gapsSummary?.dataStatus === "no_meaningful_gaps" && !gapsError ? (
           <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
             No major visibility gaps found for this listing.
           </div>
         ) : null}
 
-        {gapsSummary.dataStatus === "gaps_found" ? (
+        {gapsSummary?.dataStatus === "gaps_found" ? (
           <div className="mt-4 space-y-2">
             {gaps?.items.map((item) => (
               <div key={item.type} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
