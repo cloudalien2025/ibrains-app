@@ -21,7 +21,21 @@ function chipToneClass(tone: "good" | "warn" | "neutral"): string {
 
 export default function ListingHero({ title, subtitle = "AI Visibility", imageUrl, score, chips }: ListingHeroProps) {
   const [imageFailed, setImageFailed] = useState(false);
-  const hasImage = Boolean(imageUrl) && !imageFailed;
+  const placeholderImage =
+    "data:image/svg+xml;utf8," +
+    encodeURIComponent(
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 600">
+        <defs>
+          <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#020617"/>
+            <stop offset="60%" stop-color="#0f172a"/>
+            <stop offset="100%" stop-color="#082f49"/>
+          </linearGradient>
+        </defs>
+        <rect width="1200" height="600" fill="url(#bg)"/>
+      </svg>`
+    );
+  const heroImageSrc = imageUrl && !imageFailed ? imageUrl : placeholderImage;
   const visibleChips = useMemo(() => chips.slice(0, 2), [chips]);
 
   return (
@@ -29,20 +43,16 @@ export default function ListingHero({ title, subtitle = "AI Visibility", imageUr
       data-testid="directoryiq-listing-hero"
       className="relative h-[200px] overflow-hidden rounded-2xl border border-cyan-300/20 bg-slate-950 sm:h-[260px] lg:h-[320px]"
     >
-      {hasImage ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          data-testid="directoryiq-hero-image"
-          src={imageUrl ?? ""}
-          alt={`Image of ${title}`}
-          loading="eager"
-          decoding="async"
-          onError={() => setImageFailed(true)}
-          className="absolute inset-0 h-full w-full object-cover"
-        />
-      ) : (
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_12%_20%,rgba(56,189,248,0.25),transparent_48%),radial-gradient(circle_at_86%_74%,rgba(14,165,233,0.22),transparent_40%),linear-gradient(140deg,#020617_0%,#0f172a_54%,#082f49_100%)]" />
-      )}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        data-testid="directoryiq-hero-image"
+        src={heroImageSrc}
+        alt={`Image of ${title}`}
+        loading="eager"
+        decoding="async"
+        onError={() => setImageFailed(true)}
+        className="absolute inset-0 h-full w-full object-cover"
+      />
 
       <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/35 to-slate-900/15" />
 

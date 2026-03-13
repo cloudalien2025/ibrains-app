@@ -665,6 +665,44 @@ type UiError = {
   listingId?: string;
 };
 
+const UUID_PATTERN =
+  /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+
+function toPlainLabel(value: string): string {
+  return value
+    .replace(UUID_PATTERN, "this location")
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function toTitleWords(value: string): string {
+  const plain = toPlainLabel(value);
+  if (!plain) return plain;
+  return plain
+    .split(" ")
+    .map((word) => (word.length ? word[0].toUpperCase() + word.slice(1) : word))
+    .join(" ");
+}
+
+function toPlainIntent(value: string): string {
+  const mapped: Record<string, string> = {
+    choose_best_dining_option: "Be the clear dining choice",
+    book_best_place_to_stay: "Be the trusted place to stay",
+    select_best_local_activity: "Be the best local activity choice",
+    hire_trusted_local_service: "Be the trusted local service choice",
+    select_best_local_option: "Be the best local option",
+    intent_not_resolved: "Not enough context yet",
+  };
+  return mapped[value] ?? toTitleWords(value);
+}
+
+function toListingReference(value?: string | null): string {
+  if (!value) return "this listing";
+  if (UUID_PATTERN.test(value) || /^\d+$/.test(value)) return "this listing";
+  return toPlainLabel(value);
+}
+
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
   return {
     message: json.error?.message ?? fallback,
@@ -1383,7 +1421,7 @@ export default function ListingOptimizationClient({
   const displayName =
     listing?.listing.listing_name?.trim() ||
     listing?.listing.listing_name ||
-    (fallbackId ? `Listing #${fallbackId}` : "Listing");
+    "Listing";
   const displayUrl = listing?.listing.listing_url ?? null;
   const displayScore = listing?.evaluation.totalScore ?? 0;
   const supportSummary = support?.summary ?? {
@@ -1419,6 +1457,12 @@ export default function ListingOptimizationClient({
   const optimizeActionExecutable =
     optimizeListingAction?.status === "available" && optimizeListingAction.previewCapability?.supported === true;
   const optimizeActionBlocked = optimizeListingAction?.status === "blocked";
+  const stepLabels: Record<WorkspaceView, string> = {
+    helping: "Step 1: Confirm what this listing should be known for",
+    missing: "Step 2: Find what is still missing",
+    improvements: "Step 3: Add the right content and proof",
+    publish: "Step 4: Review and publish improvements",
+  };
 
   return (
     <>
@@ -1469,7 +1513,7 @@ export default function ListingOptimizationClient({
         <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
           {error.message}
           {error.status !== undefined ? ` (status: ${error.status})` : ""}
-          {error.listingId ? ` (listing: ${error.listingId})` : ""}
+          {error.listingId ? " (listing context unavailable)" : ""}
           {error.reqId ? ` (reqId: ${error.reqId})` : ""}
         </div>
       ) : null}
@@ -1482,21 +1526,25 @@ export default function ListingOptimizationClient({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">What's Helping</div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Support Signals Found</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.inboundLinkedSupportCount}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Visibility Gaps</div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Things Still Missing</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{gapsSummary.totalGaps}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Recommended Improvements</div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Next Improvements</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{actions?.summary.totalActions ?? 0}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Trust Signals</div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Proof Pages Connected</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{supportSummary.connectedSupportPageCount}</div>
         </div>
+      </div>
+
+      <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-100">
+        {stepLabels[workspaceView]}
       </div>
 
       <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -1505,34 +1553,34 @@ export default function ListingOptimizationClient({
           onClick={() => setWorkspaceView("helping")}
           className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "helping" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
         >
-          What's Helping
+          Step 1: What's Helping
         </button>
         <button
           type="button"
           onClick={() => setWorkspaceView("missing")}
           className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "missing" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
         >
-          What's Missing
+          Step 2: What's Missing
         </button>
         <button
           type="button"
           onClick={() => setWorkspaceView("improvements")}
           className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "improvements" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
         >
-          Recommended Improvements
+          Step 3: Recommended Improvements
         </button>
         <button
           type="button"
           onClick={() => setWorkspaceView("publish")}
           className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "publish" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
         >
-          Publish
+          Step 4: Publish
         </button>
       </div>
 
       {workspaceView === "helping" ? (
       <>
-      <HudCard title="What's Helping" subtitle="Current trust and visibility signals supporting this listing.">
+      <HudCard title="Step 1: What's Helping And What This Listing Should Be Known For" subtitle="Start with the goal, then review the proof already connected to this listing.">
         {supportError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {supportError}
@@ -1564,14 +1612,24 @@ export default function ListingOptimizationClient({
             : "Last graph refresh: Not available yet."}
         </div>
 
+        <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">What this listing should be known for</div>
+          <div className="mt-1 text-base font-semibold text-slate-100">{toPlainIntent(intentProfile.primaryIntent)}</div>
+          {intentProfile.secondaryIntents.length ? (
+            <div className="mt-2 text-xs text-slate-300">
+              Also relevant for: {intentProfile.secondaryIntents.slice(0, 3).map((value) => toPlainLabel(value)).join(", ")}
+            </div>
+          ) : null}
+        </div>
+
         <div className="mt-5 space-y-5">
           <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Inbound Linked Support</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Helpful pages already linking here</div>
             <div className="mt-2 space-y-2">
               {support?.inboundLinkedSupport?.length ? (
                 support.inboundLinkedSupport.map((item) => (
                   <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? item.sourceId}</div>
+                    <div className="text-sm text-slate-100">{item.title ?? "Support page"}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
                     <div className="mt-1 text-xs text-slate-400">
                       {item.sourceType} · Anchors: {item.anchors.length ? item.anchors.join(", ") : "None captured"}
@@ -1585,12 +1643,12 @@ export default function ListingOptimizationClient({
           </section>
 
           <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions Without Links</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions that need a link</div>
             <div className="mt-2 space-y-2">
               {support?.mentionsWithoutLinks?.length ? (
                 support.mentionsWithoutLinks.map((item) => (
                   <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? item.sourceId}</div>
+                    <div className="text-sm text-slate-100">{item.title ?? "Mentioned support page"}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
                     <div className="mt-1 text-xs text-slate-400">
                       {item.sourceType} · {item.mentionSnippet ?? "No snippet captured"}
@@ -1604,7 +1662,7 @@ export default function ListingOptimizationClient({
           </section>
 
           <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Listing Outbound Support Links</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Helpful pages linked from this listing</div>
             <div className="mt-2 space-y-2">
               {support?.outboundSupportLinks?.length ? (
                 support.outboundSupportLinks.map((item, index) => (
@@ -1621,12 +1679,12 @@ export default function ListingOptimizationClient({
           </section>
 
           <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected Support Pages</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Support pages already connected</div>
             <div className="mt-2 space-y-2">
               {support?.connectedSupportPages?.length ? (
                 support.connectedSupportPages.map((item, index) => (
                   <div key={`${item.id ?? "support"}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? item.id ?? "Support page"}</div>
+                    <div className="text-sm text-slate-100">{item.title ?? "Support page"}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.type}</div>
                   </div>
@@ -1639,7 +1697,7 @@ export default function ListingOptimizationClient({
         </div>
       </HudCard>
 
-      <HudCard title="Trust Signals" subtitle="Cross-link opportunities that strengthen AI visibility.">
+      <HudCard title="Proof and Trust Signals" subtitle="Suggested link improvements that strengthen trust and visibility.">
         {flywheelError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {flywheelError}
@@ -1698,7 +1756,7 @@ export default function ListingOptimizationClient({
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                     <div className="mt-1 text-xs text-slate-400">
-                      Source: {item.sourceEntity.title} → Target: {item.targetEntity.title}
+                      Source: {toPlainLabel(item.sourceEntity.title)} → Target: {toPlainLabel(item.targetEntity.title)}
                     </div>
                     {item.anchorGuidance?.suggestedAnchorText ? (
                       <div className="mt-1 text-xs text-slate-400">
@@ -1722,7 +1780,7 @@ export default function ListingOptimizationClient({
       ) : null}
 
       {workspaceView === "missing" ? (
-      <HudCard title="Visibility Gaps" subtitle="What AI systems still struggle to verify about this listing.">
+      <HudCard title="Step 2: Find What Is Still Missing" subtitle="These are the biggest missing proof points to fix next.">
         {gapsError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {gapsError}
@@ -1769,12 +1827,13 @@ export default function ListingOptimizationClient({
                   <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
                     {item.severity}
                   </span>
-                  <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                    {item.type}
-                  </span>
                 </div>
                 <div className="mt-1 text-sm text-slate-300">{item.explanation}</div>
                 <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                  <div className="mt-1 text-xs text-slate-500">Internal category: {toPlainLabel(item.type)}</div>
+                </details>
               </div>
             ))}
           </div>
@@ -1784,7 +1843,7 @@ export default function ListingOptimizationClient({
 
       {workspaceView === "improvements" ? (
       <>
-      <HudCard title="Recommended Improvements" subtitle="Highest-impact updates to improve AI selection and trust.">
+      <HudCard title="Step 3: Recommended Improvements" subtitle="Here is what to create or update next, in plain priority order.">
         {actionsError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {actionsError}
@@ -1831,23 +1890,23 @@ export default function ListingOptimizationClient({
                       <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
                         {item.priority}
                       </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.key}
-                      </span>
                       {item.targetSurface ? (
                         <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                          {item.targetSurface}
+                          {toPlainLabel(item.targetSurface)}
                         </span>
                       ) : null}
                     </div>
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
-                    {item.linkedGapTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
-                    ) : null}
-                    {item.dependsOn?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Depends on: {item.dependsOn.join(", ")}</div>
-                    ) : null}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                      {item.linkedGapTypes?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Related missing items: {item.linkedGapTypes.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                      {item.dependsOn?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Depends on: {item.dependsOn.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                    </details>
                   </div>
                 ))}
               </div>
@@ -1856,7 +1915,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="Target Selection Intent" subtitle="What this listing should be selected for and where support is still missing.">
+      <HudCard title="What This Listing Should Be Known For" subtitle="This keeps your content focused on the right customer intent.">
         {intentClustersError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {intentClustersError}
@@ -1871,23 +1930,23 @@ export default function ListingOptimizationClient({
           <>
             <div className="mt-3 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Primary Intent</div>
-                <div className="mt-1 text-base font-semibold text-slate-100">{intentProfile.primaryIntent}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Main focus</div>
+                <div className="mt-1 text-base font-semibold text-slate-100">{toPlainIntent(intentProfile.primaryIntent)}</div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Intent Confidence</div>
-                <div className="mt-1 text-base font-semibold text-slate-100">{intentProfile.confidence}</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Confidence</div>
+                <div className="mt-1 text-base font-semibold text-slate-100">{toTitleWords(intentProfile.confidence)}</div>
               </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Secondary Intents</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Also relevant for</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {intentProfile.secondaryIntents.length ? (
                     intentProfile.secondaryIntents.map((intent) => (
                       <span key={intent} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
-                        {intent}
+                        {toPlainLabel(intent)}
                       </span>
                     ))
                   ) : (
@@ -1901,7 +1960,7 @@ export default function ListingOptimizationClient({
                   {intentProfile.localModifiers.length ? (
                     intentProfile.localModifiers.map((modifier) => (
                       <span key={modifier} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
-                        {modifier}
+                        {toPlainLabel(modifier)}
                       </span>
                     ))
                   ) : (
@@ -1913,12 +1972,12 @@ export default function ListingOptimizationClient({
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Target Entities</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Topics to clearly mention</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {intentProfile.targetEntities.length ? (
                     intentProfile.targetEntities.map((entity) => (
                       <span key={entity} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
-                        {entity}
+                        {toPlainLabel(entity)}
                       </span>
                     ))
                   ) : (
@@ -1927,12 +1986,12 @@ export default function ListingOptimizationClient({
                 </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting Entities</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Helpful supporting topics</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {intentProfile.supportingEntities.length ? (
                     intentProfile.supportingEntities.map((entity) => (
                       <span key={entity} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
-                        {entity}
+                        {toPlainLabel(entity)}
                       </span>
                     ))
                   ) : (
@@ -1944,12 +2003,12 @@ export default function ListingOptimizationClient({
 
             <div className="mt-4 grid gap-3 md:grid-cols-2">
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supported Entities</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Already covered well</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {intentProfile.supportedEntities.length ? (
                     intentProfile.supportedEntities.map((entity) => (
                       <span key={entity} className="rounded border border-emerald-300/40 px-2 py-0.5 text-[11px] text-emerald-100">
-                        {entity}
+                        {toPlainLabel(entity)}
                       </span>
                     ))
                   ) : (
@@ -1958,12 +2017,12 @@ export default function ListingOptimizationClient({
                 </div>
               </div>
               <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing Entities</div>
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Still missing</div>
                 <div className="mt-2 flex flex-wrap gap-2">
                   {intentProfile.missingEntities.length ? (
                     intentProfile.missingEntities.map((entity) => (
                       <span key={entity} className="rounded border border-amber-300/40 px-2 py-0.5 text-[11px] text-amber-100">
-                        {entity}
+                        {toPlainLabel(entity)}
                       </span>
                     ))
                   ) : (
@@ -1973,36 +2032,35 @@ export default function ListingOptimizationClient({
               </div>
             </div>
 
-            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Comparison Frames</div>
-              <div className="mt-2 space-y-1">
-                {intentProfile.comparisonFrames.map((frame) => (
-                  <div key={frame} className="text-sm text-slate-200">
-                    {frame}
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Cluster Priority Ranking</div>
-              <div className="mt-2 space-y-2">
-                {intentProfile.clusterPriorityRanking.map((cluster) => (
-                  <div key={cluster.clusterId} className="rounded border border-white/10 bg-black/10 p-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <div className="text-sm font-semibold text-slate-100">{cluster.title}</div>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {cluster.priority}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        score {cluster.score}
-                      </span>
+            <details className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+              <summary className="cursor-pointer text-xs uppercase tracking-[0.08em] text-slate-400">Show advanced details</summary>
+              <div className="mt-3">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Comparison ideas</div>
+                <div className="mt-2 space-y-1">
+                  {intentProfile.comparisonFrames.map((frame) => (
+                    <div key={frame} className="text-sm text-slate-200">
+                      {toPlainLabel(frame)}
                     </div>
-                    <div className="mt-1 text-xs text-slate-400">{cluster.rationale}</div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
+              <div className="mt-4">
+                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Internal priority ranking</div>
+                <div className="mt-2 space-y-2">
+                  {intentProfile.clusterPriorityRanking.map((cluster) => (
+                    <div key={cluster.clusterId} className="rounded border border-white/10 bg-black/10 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-sm font-semibold text-slate-100">{toPlainLabel(cluster.title)}</div>
+                        <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
+                          {toTitleWords(cluster.priority)}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-xs text-slate-400">{toPlainLabel(cluster.rationale)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </details>
 
             {intentClusters.summary.dataStatus === "no_major_reinforcement_intent_clusters_identified" ? (
               <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
@@ -2019,12 +2077,9 @@ export default function ListingOptimizationClient({
                       <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
                         {item.priority}
                       </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.id}
-                      </span>
                       {item.suggestedReinforcementDirection ? (
                         <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                          {item.suggestedReinforcementDirection.surface}
+                          {toPlainLabel(item.suggestedReinforcementDirection.surface)}
                         </span>
                       ) : null}
                     </div>
@@ -2035,15 +2090,15 @@ export default function ListingOptimizationClient({
                         Direction: {item.suggestedReinforcementDirection.direction}
                       </div>
                     ) : null}
-                    {item.linkedGapTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
-                    ) : null}
-                    {item.linkedActionKeys?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked actions: {item.linkedActionKeys.join(", ")}</div>
-                    ) : null}
-                    {item.linkedFlywheelTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}</div>
-                    ) : null}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                      {item.linkedGapTypes?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Related missing items: {item.linkedGapTypes.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                      {item.linkedActionKeys?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Related actions: {item.linkedActionKeys.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                    </details>
                   </div>
                 ))}
               </div>
@@ -2052,7 +2107,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="Content Plan" subtitle="Content ideas that strengthen visibility and trust around this listing.">
+      <HudCard title="What To Create Next (Content Plan)" subtitle="Content ideas to build trust, prove fit, and help customers choose this listing.">
         {reinforcementPlanError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {reinforcementPlanError}
@@ -2100,14 +2155,11 @@ export default function ListingOptimizationClient({
                         {item.priority}
                       </span>
                       <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.id}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.suggestedTargetSurface}
+                        {toPlainLabel(item.suggestedTargetSurface)}
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
-                    {item.targetIntent ? <div className="mt-1 text-xs text-slate-400">Target intent: {item.targetIntent}</div> : null}
+                    {item.targetIntent ? <div className="mt-1 text-xs text-slate-400">Target intent: {toPlainIntent(item.targetIntent)}</div> : null}
                     {item.whyItMatters ? <div className="mt-1 text-xs text-slate-400">Why it matters: {item.whyItMatters}</div> : null}
                     {item.expectedSelectionImpact ? (
                       <div className="mt-1 text-xs text-slate-400">Expected impact: {item.expectedSelectionImpact}</div>
@@ -2124,7 +2176,7 @@ export default function ListingOptimizationClient({
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                     <div className="mt-1 text-xs text-slate-400">Purpose: {item.suggestedContentPurpose}</div>
                     {item.reinforcesListingId ? (
-                      <div className="mt-1 text-xs text-slate-400">Reinforces listing: {item.reinforcesListingId}</div>
+                      <div className="mt-1 text-xs text-slate-400">Reinforces listing: {toListingReference(item.reinforcesListingId)}</div>
                     ) : null}
                     {item.suggestedAngle ? (
                       <div className="mt-1 text-xs text-slate-400">Suggested angle: {item.suggestedAngle}</div>
@@ -2134,22 +2186,15 @@ export default function ListingOptimizationClient({
                         Missing entities: {item.missingSupportEntities.join(", ")}
                       </div>
                     ) : null}
-                    {item.linkedGapTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
-                    ) : null}
-                    {item.linkedIntentClusterIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}
-                      </div>
-                    ) : null}
-                    {item.linkedActionKeys?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked actions: {item.linkedActionKeys.join(", ")}</div>
-                    ) : null}
-                    {item.linkedFlywheelTypes?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Linked flywheel signals: {item.linkedFlywheelTypes.join(", ")}
-                      </div>
-                    ) : null}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                      {item.linkedGapTypes?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Related missing items: {item.linkedGapTypes.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                      {item.linkedActionKeys?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Related actions: {item.linkedActionKeys.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                    </details>
                   </div>
                 ))}
               </div>
@@ -2158,7 +2203,7 @@ export default function ListingOptimizationClient({
         ) : null}
       </HudCard>
 
-      <HudCard title="Search Visibility Structure" subtitle="Page structure ideas based on search visibility patterns.">
+      <HudCard title="How To Organize This Page" subtitle="A simple page blueprint based on intent and proven search patterns.">
         {contentStructureError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {contentStructureError}
@@ -2197,11 +2242,11 @@ export default function ListingOptimizationClient({
                 {contentStructure.serpPatternSummary.targetLengthBand
                   ? ` · target length ${contentStructure.serpPatternSummary.targetLengthBand.min}-${contentStructure.serpPatternSummary.targetLengthBand.max} words (median ${contentStructure.serpPatternSummary.targetLengthBand.median})`
                   : ""}
-                {` · source ${contentStructure.summary.serpPatternSource}`}
+                {` · source ${toPlainLabel(contentStructure.summary.serpPatternSource)}`}
               </div>
             ) : (
               <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                SERP pattern coverage is not available yet; structure recommendations are based on {contentStructure.summary.serpPatternSource}.
+                SERP pattern coverage is not available yet; structure recommendations are based on {toPlainLabel(contentStructure.summary.serpPatternSource)}.
               </div>
             )}
 
@@ -2221,17 +2266,14 @@ export default function ListingOptimizationClient({
                         {item.priority}
                       </span>
                       <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.id}
-                      </span>
-                      <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                        {item.suggestedStructureType}
+                        {toPlainLabel(item.suggestedStructureType)}
                       </span>
                     </div>
                     <div className="mt-1 text-sm text-slate-300">{item.rationale}</div>
                     <div className="mt-1 text-xs text-slate-400">Recommended asset type: {item.recommendedContentType}</div>
-                    <div className="mt-1 text-xs text-slate-400">Title pattern: {item.recommendedTitlePattern}</div>
-                    <div className="mt-1 text-xs text-slate-400">Suggested H1: {item.suggestedH1}</div>
-                    <div className="mt-1 text-xs text-slate-400">Suggested H2 structure: {item.suggestedH2Structure.join(" • ")}</div>
+                    <div className="mt-1 text-xs text-slate-400">Title pattern: {toPlainLabel(item.recommendedTitlePattern)}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested H1: {toPlainLabel(item.suggestedH1)}</div>
+                    <div className="mt-1 text-xs text-slate-400">Suggested H2 structure: {item.suggestedH2Structure.map((value) => toPlainLabel(value)).join(" • ")}</div>
                     <div className="mt-1 text-xs text-slate-400">Why this structure matters: {item.whyThisStructureMatters}</div>
                     <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                     <div className="mt-1 text-xs text-slate-400">Suggested sections: {item.suggestedSections.join(" • ")}</div>
@@ -2243,32 +2285,29 @@ export default function ListingOptimizationClient({
                       <div className="mt-1 text-xs text-slate-400">FAQ themes: {item.faqThemes.join(", ")}</div>
                     ) : null}
                     {item.localModifiers.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Local modifiers: {item.localModifiers.join(", ")}</div>
+                      <div className="mt-1 text-xs text-slate-400">Local modifiers: {item.localModifiers.map((value) => toPlainLabel(value)).join(", ")}</div>
                     ) : null}
                     {item.entityCoverageTargets.length ? (
                       <div className="mt-1 text-xs text-slate-400">
-                        Entity coverage targets: {item.entityCoverageTargets.join(", ")}
+                        Entity coverage targets: {item.entityCoverageTargets.map((value) => toPlainLabel(value)).join(", ")}
                       </div>
                     ) : null}
                     {item.internalLinkOpportunities.length ? (
                       <div className="mt-1 text-xs text-slate-400">
-                        Internal link opportunities: {item.internalLinkOpportunities.join(" | ")}
+                        Internal link opportunities: {item.internalLinkOpportunities.map((value) => toPlainLabel(value)).join(" | ")}
                       </div>
                     ) : null}
-                    {item.linkedReinforcementItemIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">
-                        Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
-                      </div>
-                    ) : null}
-                    {item.linkedIntentClusterIds?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
-                    ) : null}
-                    {item.serpPatternSummary?.commonHeadings?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">SERP headings: {item.serpPatternSummary.commonHeadings.join(", ")}</div>
-                    ) : null}
-                    {item.serpPatternSummary?.commonQuestions?.length ? (
-                      <div className="mt-1 text-xs text-slate-400">SERP questions: {item.serpPatternSummary.commonQuestions.join(", ")}</div>
-                    ) : null}
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                      {item.linkedReinforcementItemIds?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">
+                          Related content ideas: {item.linkedReinforcementItemIds.map((value) => toPlainLabel(value)).join(", ")}
+                        </div>
+                      ) : null}
+                      {item.serpPatternSummary?.commonHeadings?.length ? (
+                        <div className="mt-1 text-xs text-slate-500">Common headings: {item.serpPatternSummary.commonHeadings.map((value) => toPlainLabel(value)).join(", ")}</div>
+                      ) : null}
+                    </details>
                   </div>
                 ))}
               </div>
@@ -2281,8 +2320,8 @@ export default function ListingOptimizationClient({
 
       {workspaceView === "publish" ? (
       <HudCard
-        title="Improve This Listing System"
-        subtitle="Coordinated multi-action plan from intent, reinforcement, and content blueprint signals."
+        title="Step 4: Review And Publish Improvements"
+        subtitle="Follow this guided checklist to publish the right improvements in order."
       >
         {multiActionError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -2351,19 +2390,13 @@ export default function ListingOptimizationClient({
                           <div className="flex flex-wrap items-center gap-2">
                             <div className="text-sm font-semibold text-slate-100">{item.title}</div>
                             <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                              {item.recommendedPriority}
+                              {toTitleWords(item.recommendedPriority)}
                             </span>
                             <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                              {item.readinessState}
+                              {toTitleWords(item.readinessState)}
                             </span>
                             <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                              {item.actionType}
-                            </span>
-                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                              {item.targetSurface}
-                            </span>
-                            <span className="rounded border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-slate-300">
-                              {item.actionId}
+                              {toPlainLabel(item.targetSurface)}
                             </span>
                           </div>
                           <div className="mt-1 text-sm text-slate-300">{item.description}</div>
@@ -2371,7 +2404,7 @@ export default function ListingOptimizationClient({
                           <div className="mt-1 text-xs text-slate-400">Expected impact: {item.expectedImpact}</div>
                           <div className="mt-1 text-xs text-slate-400">{item.evidenceSummary}</div>
                           {item.sourceSignals.primaryIntent ? (
-                            <div className="mt-1 text-xs text-slate-400">Primary intent: {item.sourceSignals.primaryIntent}</div>
+                            <div className="mt-1 text-xs text-slate-400">Primary intent: {toPlainIntent(item.sourceSignals.primaryIntent)}</div>
                           ) : null}
                           {item.dependencies.length ? (
                             <div className="mt-1 text-xs text-amber-100">Dependencies: {item.dependencies.join(", ")}</div>
@@ -2383,22 +2416,25 @@ export default function ListingOptimizationClient({
                               Preview detail ({item.previewPayload.mode}): {item.previewPayload.detail}
                             </div>
                           ) : null}
-                          {item.linkedGapTypes?.length ? (
-                            <div className="mt-1 text-xs text-slate-400">Linked gaps: {item.linkedGapTypes.join(", ")}</div>
-                          ) : null}
-                          {item.linkedIntentClusterIds?.length ? (
-                            <div className="mt-1 text-xs text-slate-400">Linked intent clusters: {item.linkedIntentClusterIds.join(", ")}</div>
-                          ) : null}
-                          {item.linkedReinforcementItemIds?.length ? (
-                            <div className="mt-1 text-xs text-slate-400">
-                              Linked reinforcement items: {item.linkedReinforcementItemIds.join(", ")}
-                            </div>
-                          ) : null}
-                          {item.linkedStructureItemIds?.length ? (
-                            <div className="mt-1 text-xs text-slate-400">
-                              Linked structure items: {item.linkedStructureItemIds.join(", ")}
-                            </div>
-                          ) : null}
+                          <details className="mt-2">
+                            <summary className="cursor-pointer text-xs text-slate-400">Show details</summary>
+                            {item.linkedGapTypes?.length ? (
+                              <div className="mt-1 text-xs text-slate-500">Related missing items: {item.linkedGapTypes.map((value) => toPlainLabel(value)).join(", ")}</div>
+                            ) : null}
+                            {item.linkedIntentClusterIds?.length ? (
+                              <div className="mt-1 text-xs text-slate-500">Related focus signals: {item.linkedIntentClusterIds.map((value) => toPlainLabel(value)).join(", ")}</div>
+                            ) : null}
+                            {item.linkedReinforcementItemIds?.length ? (
+                              <div className="mt-1 text-xs text-slate-500">
+                                Related content ideas: {item.linkedReinforcementItemIds.map((value) => toPlainLabel(value)).join(", ")}
+                              </div>
+                            ) : null}
+                            {item.linkedStructureItemIds?.length ? (
+                              <div className="mt-1 text-xs text-slate-500">
+                                Related page-structure ideas: {item.linkedStructureItemIds.map((value) => toPlainLabel(value)).join(", ")}
+                              </div>
+                            ) : null}
+                          </details>
                           {item.blockingReasons?.length ? (
                             <div className="mt-1 text-xs text-amber-100">Blocked: {item.blockingReasons.join(" ")}</div>
                           ) : null}

@@ -237,7 +237,7 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible();
     await expect(page.getByText("Publish a comparison decision-stage post")).toBeVisible();
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
-    await expect(page.getByText("Target intent: compare_alternatives")).toBeVisible();
+    await expect(page.getByText("Target intent: Compare Alternatives")).toBeVisible();
     await expect(page.getByText("Expected impact: High expected impact on listing selection confidence and conversion intent.")).toBeVisible();
     await expect(
       page.getByText(

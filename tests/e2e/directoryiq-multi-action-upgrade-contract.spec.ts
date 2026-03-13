@@ -327,7 +327,7 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Publish" }).click();
-    await expect(page.getByRole("heading", { name: "Improve This Listing System" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 4: Review And Publish Improvements" })).toBeVisible();
     await expect(page.getByText("Generate and review listing description upgrade")).toBeVisible();
     await expect(page.getByText("Repair listing-to-support flywheel links")).toBeVisible();
     await expect(page.getByText("Ready Actions").first()).toBeVisible();
@@ -421,7 +421,7 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Publish" }).click();
-    await expect(page.getByRole("heading", { name: "Improve This Listing System" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 4: Review And Publish Improvements" })).toBeVisible();
     await expect(page.getByText("No major upgrade actions available.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate multi-action upgrade system.")).toHaveCount(0);
   });

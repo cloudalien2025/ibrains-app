@@ -109,7 +109,7 @@ test.describe("DirectoryIQ authority gaps contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "What's Missing" }).click();
-    await expect(page.getByRole("heading", { name: "Visibility Gaps" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Find What Is Still Missing" })).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toBeVisible();
     await expect(page.getByText("Missing comparison support content")).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
@@ -152,7 +152,7 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("button", { name: "What's Missing" })).toBeVisible();
     await page.getByRole("button", { name: "What's Missing" }).click();
-    await expect(page.getByRole("heading", { name: "Visibility Gaps" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Find What Is Still Missing" })).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
   });
