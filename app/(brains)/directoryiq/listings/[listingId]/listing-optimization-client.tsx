@@ -11,7 +11,6 @@ import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fet
 import { resolveDetailMetricDisplayValue } from "@/lib/directoryiq/detailMetricState";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
-type WorkspaceView = "helping" | "missing" | "improvements" | "publish";
 
 type ListingDetailResponse = {
   listing: {
@@ -692,11 +691,11 @@ function toTitleWords(value: string): string {
 
 function toPlainIntent(value: string): string {
   const mapped: Record<string, string> = {
-    choose_best_dining_option: "Be the first choice for nearby diners",
-    book_best_place_to_stay: "Be the trusted place to book nearby",
-    select_best_local_activity: "Be the easiest local activity to choose",
-    hire_trusted_local_service: "Be the trusted local service to hire",
-    select_best_local_option: "Be the clear local choice in this area",
+    choose_best_dining_option: "Why diners choose this listing nearby",
+    book_best_place_to_stay: "Why guests book this stay over nearby options",
+    select_best_local_activity: "Why this activity is the easiest local pick",
+    hire_trusted_local_service: "Why this service is trusted locally",
+    select_best_local_option: "Why this listing is the strongest local fit",
     compare_alternatives: "Help customers compare options quickly",
     confirm_local_fit: "Show why this listing fits local needs",
     validate_trust_signals: "Prove trust with clear evidence",
@@ -721,6 +720,23 @@ function compactList(values: Array<string | null | undefined>, limit = 3): strin
     .map((value) => (value ? cleanCustomerText(value) : ""))
     .filter(Boolean)
     .slice(0, limit);
+}
+
+function connectNowReadyItemsCount(support: ListingSupportModel | null, flywheel: ListingFlywheelLinksModel | null): number {
+  const mentionCount = support?.mentionsWithoutLinks.length ?? 0;
+  const flywheelCount =
+    flywheel?.items.filter((item) => item.type !== "category_or_guide_page_should_join_cluster").length ?? 0;
+  return mentionCount + flywheelCount;
+}
+
+function createQueueItemsCount(
+  reinforcementPlan: ListingBlogReinforcementPlanModel | null,
+  flywheel: ListingFlywheelLinksModel | null
+): number {
+  const planCount = reinforcementPlan?.items.length ?? 0;
+  const flywheelCreateCount =
+    flywheel?.items.filter((item) => item.type === "category_or_guide_page_should_join_cluster").length ?? 0;
+  return planCount + flywheelCreateCount;
 }
 
 function toPriorityLabel(value: string): string {
@@ -809,12 +825,6 @@ function CompactRecommendationCard({
   );
 }
 
-function toListingReference(value?: string | null): string {
-  if (!value) return "this listing";
-  if (UUID_PATTERN.test(value) || /^\d+$/.test(value)) return "this listing";
-  return toPlainLabel(value);
-}
-
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
   return {
     message: json.error?.message ?? fallback,
@@ -880,7 +890,6 @@ export default function ListingOptimizationClient({
   const [multiAction, setMultiAction] = useState<ListingMultiActionUpgradeModel | null>(null);
   const [multiActionError, setMultiActionError] = useState<string | null>(null);
   const [multiActionLoading, setMultiActionLoading] = useState(true);
-  const [workspaceView, setWorkspaceView] = useState<WorkspaceView>("helping");
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -1647,7 +1656,6 @@ export default function ListingOptimizationClient({
     await loadListingAndIntegrations();
   }
 
-  const fallbackId = effectiveListingId || (listingId && listingId !== "undefined" && listingId !== "null" ? listingId : "");
   const displayName =
     listing?.listing.listing_name?.trim() ||
     listing?.listing.listing_name ||
@@ -1691,12 +1699,35 @@ export default function ListingOptimizationClient({
   const optimizeActionExecutable =
     optimizeListingAction?.status === "available" && optimizeListingAction.previewCapability?.supported === true;
   const optimizeActionBlocked = optimizeListingAction?.status === "blocked";
-  const stepLabels: Record<WorkspaceView, string> = {
-    helping: "Step 1: Confirm what this listing should be known for",
-    missing: "Step 2: Find what is still missing",
-    improvements: "Step 3: Add the right content and proof",
-    publish: "Step 4: Review and publish improvements",
-  };
+  const largestGap = gaps?.items[0] ?? null;
+  const fastestWinAction = actions?.items[0] ?? null;
+  const fastestWinLinkOpportunity = support?.mentionsWithoutLinks[0] ?? null;
+  const biggestBlocker = supportUnresolved
+    ? "Support diagnostics are not available yet."
+    : largestGap
+      ? cleanCustomerText(largestGap.title)
+      : "No major blockers detected right now.";
+  const fastestWin = fastestWinLinkOpportunity
+    ? `Add a direct listing link from ${cleanCustomerText(fastestWinLinkOpportunity.title ?? "an existing support page")}.`
+    : fastestWinAction
+      ? cleanCustomerText(fastestWinAction.title)
+      : "Run the listing audit to identify the next fast win.";
+  const missionChecks = [
+    Boolean(support && !supportUnresolved),
+    Boolean(gaps && !gapsUnresolved),
+    Boolean(connectNowReadyItemsCount(support, flywheel) > 0 || createQueueItemsCount(reinforcementPlan, flywheel) > 0),
+    Boolean(optimizeListingAction),
+    state === "done" || Boolean(multiAction?.grouped.byReadiness.ready.length),
+  ];
+  const missionProgress = Math.round((missionChecks.filter(Boolean).length / missionChecks.length) * 100);
+  const connectNowFlywheelItems =
+    flywheel?.items.filter((item) => item.type !== "category_or_guide_page_should_join_cluster") ?? [];
+  const createFirstFlywheelItems = flywheel?.items.filter((item) => item.type === "category_or_guide_page_should_join_cluster") ?? [];
+  const createQueue = reinforcementPlan?.items ?? [];
+  const listingUpgradeItems =
+    multiAction?.items.filter((item) => item.targetSurface === "listing" || item.key === "optimize_listing_description") ?? [];
+  const launchReadyItems = multiAction?.items.filter((item) => item.readinessState === "ready") ?? [];
+  const launchBlockedItems = multiAction?.items.filter((item) => item.readinessState === "blocked") ?? [];
 
   return (
     <>
@@ -1763,97 +1794,36 @@ export default function ListingOptimizationClient({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Support Signals Found</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">
-            {topMetricValue(supportSummary?.inboundLinkedSupportCount, {
-              loading: supportLoading,
-              unresolved: supportUnresolved,
-            })}
-          </div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Things Still Missing</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">
-            {topMetricValue(gapsSummary?.totalGaps, {
-              loading: gapsLoading,
-              unresolved: gapsUnresolved,
-            })}
-          </div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
+          <div className="mt-1 text-sm font-medium text-slate-100">{biggestBlocker}</div>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Next Improvements</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">
-            {topMetricValue(actions?.summary.totalActions, {
-              loading: actionsLoading,
-              unresolved: Boolean(actionsError) || (!actionsLoading && !actions),
-            })}
-          </div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
+          <div className="mt-1 text-sm font-medium text-slate-100">{fastestWin}</div>
         </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Proof Pages Connected</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">
-            {topMetricValue(supportSummary?.connectedSupportPageCount, {
-              loading: supportLoading,
-              unresolved: supportUnresolved,
-            })}
-          </div>
+        <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
+          <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
         </div>
       </div>
 
-      <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 px-4 py-3 text-sm text-cyan-100">
-        {stepLabels[workspaceView]}
-      </div>
-
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        <button
-          type="button"
-          onClick={() => setWorkspaceView("helping")}
-          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "helping" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
-        >
-          Step 1: What's Helping
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceView("missing")}
-          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "missing" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
-        >
-          Step 2: What's Missing
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceView("improvements")}
-          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "improvements" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
-        >
-          Step 3: Recommended Improvements
-        </button>
-        <button
-          type="button"
-          onClick={() => setWorkspaceView("publish")}
-          className={`rounded-lg border px-3 py-2 text-sm ${workspaceView === "publish" ? "border-cyan-300/40 bg-cyan-400/12 text-cyan-100" : "border-white/10 bg-white/[0.03] text-slate-200"}`}
-        >
-          Step 4: Publish
-        </button>
-      </div>
-
-      {workspaceView === "helping" ? (
-      <>
-      <HudCard title="Step 1: What's Helping And What This Listing Should Be Known For" subtitle="Start with the goal, then review the proof already connected to this listing.">
+      <HudCard
+        title="Step 1: Audit this listing"
+        subtitle="Review current support, top gaps, and the next best move."
+      >
+        {supportLoading ? <div className="text-sm text-slate-300">Loading support diagnostics...</div> : null}
         {supportError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {supportError}
           </div>
         ) : null}
-
-        {supportLoading ? <div className="text-sm text-slate-300">Loading support diagnostics...</div> : null}
-        {supportUnresolved ? (
-          <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
-            Support diagnostics are not available yet.
-          </div>
-        ) : null}
-
         <div className="mt-3 grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting Links In</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Supporting links in</div>
             <div className="mt-1 text-2xl font-semibold text-slate-100">
               {topMetricValue(supportSummary?.inboundLinkedSupportCount, {
                 loading: supportLoading,
@@ -1862,7 +1832,7 @@ export default function ListingOptimizationClient({
             </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions Without Links</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions without links</div>
             <div className="mt-1 text-2xl font-semibold text-slate-100">
               {topMetricValue(supportSummary?.mentionWithoutLinkCount, {
                 loading: supportLoading,
@@ -1871,16 +1841,7 @@ export default function ListingOptimizationClient({
             </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Outbound Support Links</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">
-              {topMetricValue(supportSummary?.outboundSupportLinkCount, {
-                loading: supportLoading,
-                unresolved: supportUnresolved,
-              })}
-            </div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected Support Pages</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Connected support pages</div>
             <div className="mt-1 text-2xl font-semibold text-slate-100">
               {topMetricValue(supportSummary?.connectedSupportPageCount, {
                 loading: supportLoading,
@@ -1888,830 +1849,305 @@ export default function ListingOptimizationClient({
               })}
             </div>
           </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total gaps</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {topMetricValue(gapsSummary?.totalGaps, {
+                loading: gapsLoading,
+                unresolved: gapsUnresolved,
+              })}
+            </div>
+          </div>
         </div>
-
-        <div className="mt-3 text-xs text-slate-400">
-          {supportSummary?.lastGraphRunAt
-            ? `Last graph refresh: ${new Date(supportSummary?.lastGraphRunAt).toLocaleString()}`
-            : "Last graph refresh: Not available yet."}
-        </div>
-
-        <div className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">What this listing should be known for</div>
-          <div className="mt-1 text-base font-semibold text-slate-100">{toPlainIntent(intentProfile.primaryIntent)}</div>
-          {intentProfile.secondaryIntents.length ? (
-            <div className="mt-2 text-xs text-slate-300">
-              Also relevant for: {intentProfile.secondaryIntents.slice(0, 3).map((value) => toPlainLabel(value)).join(", ")}
-            </div>
-          ) : null}
-        </div>
-
-        <div className="mt-5 space-y-5">
-          <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Helpful pages already linking here</div>
-            <div className="mt-2 space-y-2">
-              {support?.inboundLinkedSupport?.length ? (
-                support.inboundLinkedSupport.map((item) => (
-                  <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? "Support page"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {item.sourceType} · Anchors: {item.anchors.length ? item.anchors.join(", ") : "None captured"}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-slate-400">
-                  {supportUnresolved ? "Support diagnostics are not available yet." : "No inbound linked support detected yet."}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mentions that need a link</div>
-            <div className="mt-2 space-y-2">
-              {support?.mentionsWithoutLinks?.length ? (
-                support.mentionsWithoutLinks.map((item) => (
-                  <div key={`${item.sourceId}-${item.url ?? ""}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? "Mentioned support page"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
-                    <div className="mt-1 text-xs text-slate-400">
-                      {item.sourceType} · {item.mentionSnippet ?? "No snippet captured"}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-slate-400">
-                  {supportUnresolved ? "Support diagnostics are not available yet." : "No unlinked mentions detected yet."}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Helpful pages linked from this listing</div>
-            <div className="mt-2 space-y-2">
-              {support?.outboundSupportLinks?.length ? (
-                support.outboundSupportLinks.map((item, index) => (
-                  <div key={`${item.targetId ?? "target"}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? item.url ?? "Support link"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.targetType ?? "support"} · Listing links out</div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-slate-400">
-                  {supportUnresolved ? "Support diagnostics are not available yet." : "No outbound support links detected yet."}
-                </div>
-              )}
-            </div>
-          </section>
-
-          <section>
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Support pages already connected</div>
-            <div className="mt-2 space-y-2">
-              {support?.connectedSupportPages?.length ? (
-                support.connectedSupportPages.map((item, index) => (
-                  <div key={`${item.id ?? "support"}-${index}`} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-sm text-slate-100">{item.title ?? "Support page"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.url ?? "-"}</div>
-                    <div className="mt-1 text-xs text-slate-400">{item.type}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-sm text-slate-400">
-                  {supportUnresolved ? "Support diagnostics are not available yet." : "No connected support pages detected yet."}
-                </div>
-              )}
-            </div>
-          </section>
+        <div className="mt-4 space-y-2">
+          {gaps?.items.slice(0, 3).map((item) => (
+            <CompactRecommendationCard
+              key={item.type}
+              title={cleanCustomerText(item.title)}
+              priority={item.severity}
+              whyItMatters={cleanCustomerText(item.explanation)}
+              nextStep="Close this gap before scaling new publishing work."
+              includeItems={compactList(item.evidence?.anchors ?? [])}
+              includeLabel="What to include"
+              primaryAction="Fix this in the next optimization cycle."
+              detailItems={[
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "URLs", value: item.evidence?.urls?.slice(0, 3).join(", ") ?? null },
+                { label: "Entities", value: item.evidence?.entities?.slice(0, 4).join(", ") ?? null },
+              ]}
+            />
+          ))}
         </div>
       </HudCard>
 
-      <HudCard title="Proof and Trust Signals" subtitle="Suggested link improvements that strengthen trust and visibility.">
+      <HudCard
+        title="Step 2: Connect existing pages"
+        subtitle="Use opportunities you can execute now because the pages already exist."
+      >
+        {flywheelLoading ? <div className="text-sm text-slate-300">Evaluating link opportunities...</div> : null}
         {flywheelError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {flywheelError}
           </div>
         ) : null}
-
-        {flywheelLoading && !flywheelError ? (
-          <div className="text-sm text-slate-300">Evaluating flywheel links...</div>
-        ) : null}
-
-        {flywheel && !flywheelError ? (
-          <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Recommendations</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{flywheel.summary.totalRecommendations}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-rose-200">{flywheel.summary.highPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{flywheel.summary.mediumPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{flywheel.summary.lowPriorityCount}</div>
-              </div>
-            </div>
-
-            {flywheel.summary.dataStatus === "no_major_flywheel_opportunities" ? (
-              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major flywheel opportunities found.
-              </div>
-            ) : null}
-
-            {flywheel.summary.dataStatus === "flywheel_opportunities_found" ? (
-              <div className="mt-4 space-y-2">
-                {flywheel.items.map((item) => (
-                  <CompactRecommendationCard
-                    key={item.key}
-                    title={cleanCustomerText(item.title)}
-                    priority={item.priority}
-                    whyItMatters={cleanCustomerText(item.rationale)}
-                    nextStep={`Link ${cleanCustomerText(item.sourceEntity.title)} to ${cleanCustomerText(item.targetEntity.title)} with contextual language.`}
-                    includeItems={compactList([
-                      item.anchorGuidance?.suggestedAnchorText ? `Anchor text: ${item.anchorGuidance.suggestedAnchorText}` : null,
-                    ])}
-                    includeLabel="What to include"
-                    primaryAction="Add or repair the recommended internal link pair."
-                    detailItems={[
-                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                      { label: "Source", value: cleanCustomerText(item.sourceEntity.title) },
-                      { label: "Target", value: cleanCustomerText(item.targetEntity.title) },
-                      { label: "Anchor guidance", value: item.anchorGuidance?.guidance ? cleanCustomerText(item.anchorGuidance.guidance) : null },
-                      {
-                        label: "Related gaps",
-                        value: item.linkedGapTypes?.length ? item.linkedGapTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      { label: "Recommendation type", value: cleanCustomerText(item.type) },
-                      { label: "Suggested surface", value: item.suggestedSurface ? cleanCustomerText(item.suggestedSurface) : null },
-                    ]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </HudCard>
-      </>
-      ) : null}
-
-      {workspaceView === "missing" ? (
-      <HudCard title="Step 2: Find What Is Still Missing" subtitle="These are the biggest missing proof points to fix next.">
-        {gapsError ? (
-          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
-            {gapsError}
-          </div>
-        ) : null}
-
-        {gapsLoading && !gapsError ? (
-          <div className="text-sm text-slate-300">Evaluating visibility gaps...</div>
-        ) : null}
-
-        {gapsSummary?.dataStatus === "analysis_unavailable" && !gapsLoading && !gapsError ? (
-          <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100">
-            Gap analysis is not available yet.
-          </div>
-        ) : null}
-
-        <div className="mt-3 grid gap-3 md:grid-cols-4">
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Gaps</div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Pages that already exist</div>
             <div className="mt-1 text-2xl font-semibold text-slate-100">
-              {topMetricValue(gapsSummary?.totalGaps, { loading: gapsLoading, unresolved: gapsUnresolved })}
+              {support?.connectedSupportPages.length ?? 0}
             </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-rose-200">
-              {topMetricValue(gapsSummary?.highCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
-            </div>
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Links you can add now</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{connectNowFlywheelItems.length}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-amber-100">
-              {topMetricValue(gapsSummary?.mediumCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
-            </div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Severity</div>
-            <div className="mt-1 text-2xl font-semibold text-cyan-100">
-              {topMetricValue(gapsSummary?.lowCount, { loading: gapsLoading, unresolved: gapsUnresolved })}
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing pages moved to Step 3</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">
+              {createFirstFlywheelItems.length}
             </div>
           </div>
         </div>
-
-        <div className="mt-3 text-xs text-slate-400">
-          {gapsSummary?.lastGraphRunAt
-            ? `Last graph refresh: ${new Date(gapsSummary?.lastGraphRunAt).toLocaleString()}`
-            : "Last graph refresh: Not available yet."}
-        </div>
-
-        {gapsSummary?.dataStatus === "no_meaningful_gaps" && !gapsError ? (
-          <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-            No major visibility gaps found for this listing.
-          </div>
-        ) : null}
-
-        {gapsSummary?.dataStatus === "gaps_found" ? (
-          <div className="mt-4 space-y-2">
-            {gaps?.items.map((item) => (
-              <CompactRecommendationCard
-                key={item.type}
-                title={cleanCustomerText(item.title)}
-                priority={item.severity}
-                whyItMatters={cleanCustomerText(item.explanation)}
-                nextStep="Add the missing proof directly on the listing or in a support page, then connect it with a clear link."
-                includeItems={compactList(item.evidence?.anchors ?? [])}
-                includeLabel="What to include"
-                primaryAction="Close this gap in your next update cycle."
-                detailItems={[
-                  { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                  { label: "Internal category", value: cleanCustomerText(item.type) },
-                  { label: "URLs", value: item.evidence?.urls?.slice(0, 3).join(", ") ?? null },
-                  { label: "Entities", value: item.evidence?.entities?.slice(0, 4).join(", ") ?? null },
-                ]}
-              />
-            ))}
-          </div>
-        ) : null}
-      </HudCard>
-      ) : null}
-
-      {workspaceView === "improvements" ? (
-      <>
-      <HudCard title="Step 3: Recommended Improvements" subtitle="Here is what to create or update next, in plain priority order.">
-        {actionsError ? (
-          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
-            {actionsError}
-          </div>
-        ) : null}
-
-        {actionsLoading && !actionsError ? (
-          <div className="text-sm text-slate-300">Evaluating recommended actions...</div>
-        ) : null}
-
-        {actions && !actionsError ? (
-          <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Actions</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{actions.summary.totalActions}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-rose-200">{actions.summary.highPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{actions.summary.mediumPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{actions.summary.lowPriorityCount}</div>
-              </div>
-            </div>
-
-            {actions.summary.dataStatus === "no_major_actions_recommended" ? (
-              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major actions recommended at this time.
-              </div>
-            ) : null}
-
-            {actions.summary.dataStatus === "actions_recommended" ? (
-              <div className="mt-4 space-y-2">
-                {actions.items.map((item) => (
-                  <CompactRecommendationCard
-                    key={item.key}
-                    title={cleanCustomerText(item.title)}
-                    priority={item.priority}
-                    whyItMatters={cleanCustomerText(item.rationale)}
-                    nextStep={
-                      item.targetSurface
-                        ? `Apply this on the ${cleanCustomerText(item.targetSurface)} surface first.`
-                        : "Apply this in the next listing optimization update."
-                    }
-                    primaryAction="Execute this recommendation in priority order."
-                    detailItems={[
-                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                      {
-                        label: "Related missing items",
-                        value: item.linkedGapTypes?.length ? item.linkedGapTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      {
-                        label: "Dependencies",
-                        value: item.dependsOn?.length ? item.dependsOn.map((value) => cleanCustomerText(value)).join(", ") : "None",
-                      },
-                      { label: "Target surface", value: item.targetSurface ? cleanCustomerText(item.targetSurface) : null },
-                    ]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </HudCard>
-
-      <HudCard title="What This Listing Should Be Known For" subtitle="This keeps your content focused on the right customer intent.">
-        {intentClustersError ? (
-          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
-            {intentClustersError}
-          </div>
-        ) : null}
-
-        {intentClustersLoading && !intentClustersError ? (
-          <div className="text-sm text-slate-300">Resolving selection intent clusters...</div>
-        ) : null}
-
-        {intentClusters && !intentClustersError ? (
-          <>
+        <div className="mt-4 space-y-2">
+          {connectNowFlywheelItems.slice(0, 6).map((item) => (
             <CompactRecommendationCard
-              title={toPlainIntent(intentProfile.primaryIntent)}
-              priority={intentProfile.confidence}
-              whyItMatters="This defines how customers evaluate this listing and which proof to prioritize first."
-              nextStep="Center your listing copy and support content around this primary decision intent."
-              includeItems={compactList(
-                intentProfile.missingEntities.length ? intentProfile.missingEntities : intentProfile.targetEntities,
-                5
-              )}
-              includeLabel={intentProfile.missingEntities.length ? "What to include next" : "Topics to emphasize"}
-              primaryAction="Align your next content update to this intent before adding more assets."
+              key={item.key}
+              title={cleanCustomerText(item.title)}
+              priority={item.priority}
+              whyItMatters={cleanCustomerText(item.rationale)}
+              nextStep={`Add a direct link between ${cleanCustomerText(item.sourceEntity.title)} and ${cleanCustomerText(item.targetEntity.title)}.`}
+              includeItems={compactList([
+                item.anchorGuidance?.suggestedAnchorText ? `Suggested anchor: ${item.anchorGuidance.suggestedAnchorText}` : null,
+              ])}
+              includeLabel="What to include"
+              primaryAction="Execute this link update now."
               detailItems={[
-                {
-                  label: "Secondary intents",
-                  value: intentProfile.secondaryIntents.length
-                    ? intentProfile.secondaryIntents.map((intent) => toPlainIntent(intent)).join(", ")
-                    : "None resolved",
-                },
-                {
-                  label: "Local modifiers",
-                  value: intentProfile.localModifiers.length ? intentProfile.localModifiers.map((value) => cleanCustomerText(value)).join(", ") : "None detected",
-                },
-                {
-                  label: "Helpful supporting topics",
-                  value: intentProfile.supportingEntities.length
-                    ? intentProfile.supportingEntities.map((value) => cleanCustomerText(value)).join(", ")
-                    : "None resolved",
-                },
-                {
-                  label: "Already covered",
-                  value: intentProfile.supportedEntities.length
-                    ? intentProfile.supportedEntities.map((value) => cleanCustomerText(value)).join(", ")
-                    : "No verified support entities yet",
-                },
-                {
-                  label: "Comparison ideas",
-                  value: intentProfile.comparisonFrames.length
-                    ? intentProfile.comparisonFrames.map((value) => cleanCustomerText(value)).join(", ")
-                    : "No comparison ideas yet",
-                },
-                {
-                  label: "Priority ranking",
-                  value: intentProfile.clusterPriorityRanking.length
-                    ? intentProfile.clusterPriorityRanking
-                        .map((cluster) => `${cleanCustomerText(cluster.title)} (${toPriorityLabel(cluster.priority)})`)
-                        .join(", ")
-                    : "No ranking details",
-                },
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "Source page", value: cleanCustomerText(item.sourceEntity.title) },
+                { label: "Target page", value: cleanCustomerText(item.targetEntity.title) },
+                { label: "Anchor guidance", value: item.anchorGuidance?.guidance ? cleanCustomerText(item.anchorGuidance.guidance) : null },
               ]}
             />
-
-            {intentClusters.summary.dataStatus === "no_major_reinforcement_intent_clusters_identified" ? (
-              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major reinforcement intent clusters identified.
-              </div>
-            ) : null}
-
-            {intentClusters.summary.dataStatus === "clusters_identified" ? (
-              <div className="mt-4 space-y-2">
-                {intentClusters.items.map((item) => (
-                  <CompactRecommendationCard
-                    key={item.id}
-                    title={cleanCustomerText(item.title)}
-                    priority={item.priority}
-                    whyItMatters={cleanCustomerText(item.rationale)}
-                    nextStep={
-                      item.suggestedReinforcementDirection
-                        ? cleanCustomerText(item.suggestedReinforcementDirection.direction)
-                        : "Create the related support asset and connect it back to this listing."
-                    }
-                    primaryAction="Implement this focus area in the next support content update."
-                    detailItems={[
-                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                      {
-                        label: "Related missing items",
-                        value: item.linkedGapTypes?.length ? item.linkedGapTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      {
-                        label: "Related actions",
-                        value: item.linkedActionKeys?.length ? item.linkedActionKeys.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      {
-                        label: "Linked flywheel types",
-                        value: item.linkedFlywheelTypes?.length ? item.linkedFlywheelTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                    ]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
+          ))}
+        </div>
+        {createFirstFlywheelItems.length ? (
+          <details className="mt-4 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <summary className="cursor-pointer text-sm font-medium text-slate-100">Pages missing (create first in Step 3)</summary>
+            <div className="mt-3 space-y-2">
+              {createFirstFlywheelItems.map((item) => (
+                <div key={item.key} className="rounded-lg border border-white/10 bg-black/10 p-3 text-sm text-slate-300">
+                  {cleanCustomerText(item.title)}
+                </div>
+              ))}
+            </div>
+          </details>
         ) : null}
       </HudCard>
 
-      <HudCard title="What To Create Next (Content Plan)" subtitle="Content ideas to build trust, prove fit, and help customers choose this listing.">
+      <HudCard
+        title="Step 3: Create support content"
+        subtitle="Generate the missing content assets that strengthen selection readiness."
+      >
+        {reinforcementPlanLoading || contentStructureLoading ? (
+          <div className="text-sm text-slate-300">Preparing content plan...</div>
+        ) : null}
         {reinforcementPlanError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {reinforcementPlanError}
           </div>
         ) : null}
-
-        {reinforcementPlanLoading && !reinforcementPlanError ? (
-          <div className="text-sm text-slate-300">Building reinforcement plan...</div>
+        {intentClusters ? (
+          <CompactRecommendationCard
+            title={toPlainIntent(intentProfile.primaryIntent)}
+            priority={intentProfile.confidence}
+            whyItMatters="This intent drives what support content should be created first."
+            nextStep="Start with one high-priority asset mapped to this intent."
+            includeItems={compactList(intentProfile.missingEntities.length ? intentProfile.missingEntities : intentProfile.targetEntities, 5)}
+            includeLabel="What to include"
+            primaryAction="Create your first support asset from this intent."
+            detailItems={[
+              {
+                label: "Secondary intents",
+                value: intentProfile.secondaryIntents.length
+                  ? intentProfile.secondaryIntents.map((intent) => toPlainIntent(intent)).join(", ")
+                  : "None resolved",
+              },
+              {
+                label: "Local modifiers",
+                value: intentProfile.localModifiers.length
+                  ? intentProfile.localModifiers.map((value) => cleanCustomerText(value)).join(", ")
+                  : "None detected",
+              },
+            ]}
+          />
         ) : null}
-
-        {reinforcementPlan && !reinforcementPlanError ? (
-          <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Plan Items</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{reinforcementPlan.summary.totalPlanItems}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-rose-200">{reinforcementPlan.summary.highPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{reinforcementPlan.summary.mediumPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{reinforcementPlan.summary.lowPriorityCount}</div>
-              </div>
-            </div>
-
-            {reinforcementPlan.summary.dataStatus === "no_major_reinforcement_plan_items_identified" ? (
-              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major reinforcement plan items identified.
-              </div>
-            ) : null}
-
-            {reinforcementPlan.summary.dataStatus === "plan_items_identified" ? (
-              <div className="mt-4 space-y-2">
-                {reinforcementPlan.items.map((item) => (
-                  <CompactRecommendationCard
-                    key={item.id}
-                    title={cleanCustomerText(item.title)}
-                    priority={item.priority}
-                    whyItMatters={cleanCustomerText(item.whyItMatters ?? item.rationale)}
-                    nextStep={cleanCustomerText(item.suggestedContentPurpose)}
-                    includeItems={compactList(
-                      item.missingSupportEntities?.length
-                        ? item.missingSupportEntities
-                        : [item.suggestedAngle, item.targetIntent ? toPlainIntent(item.targetIntent) : null]
-                    )}
-                    includeLabel="What to include"
-                    primaryAction="Create this asset and link it to the listing and related proof pages."
-                    detailItems={[
-                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                      { label: "Expected impact", value: item.expectedSelectionImpact ? cleanCustomerText(item.expectedSelectionImpact) : null },
-                      { label: "Target intent", value: item.targetIntent ? toPlainIntent(item.targetIntent) : null },
-                      { label: "Suggested angle", value: item.suggestedAngle ? cleanCustomerText(item.suggestedAngle) : null },
-                      { label: "Priority context", value: item.rankingContext ? cleanCustomerText(item.rankingContext) : null },
-                      { label: "Recommendation type", value: item.recommendationType ? cleanCustomerText(item.recommendationType) : null },
-                      { label: "Target surface", value: cleanCustomerText(item.suggestedTargetSurface) },
-                      { label: "Internal linking pattern", value: item.suggestedInternalLinkPattern ? cleanCustomerText(item.suggestedInternalLinkPattern) : null },
-                      {
-                        label: "Related missing items",
-                        value: item.linkedGapTypes?.length ? item.linkedGapTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      {
-                        label: "Related actions",
-                        value: item.linkedActionKeys?.length ? item.linkedActionKeys.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      { label: "Reinforces", value: item.reinforcesListingId ? toListingReference(item.reinforcesListingId) : null },
-                    ]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
+        <div className="mt-4 space-y-2">
+          {createQueue.map((item) => (
+            <CompactRecommendationCard
+              key={item.id}
+              title={cleanCustomerText(item.title)}
+              priority={item.priority}
+              whyItMatters={cleanCustomerText(item.whyItMatters ?? item.rationale)}
+              nextStep={cleanCustomerText(item.suggestedContentPurpose)}
+              includeItems={compactList([
+                "Generate title",
+                "Generate outline",
+                "Generate draft",
+                "Generate featured image",
+                "Generate internal link plan",
+              ], 5)}
+              includeLabel="What will be generated"
+              primaryAction="Queue this content asset for generation."
+              detailItems={[
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "Expected impact", value: item.expectedSelectionImpact ? cleanCustomerText(item.expectedSelectionImpact) : null },
+                { label: "Target intent", value: item.targetIntent ? toPlainIntent(item.targetIntent) : null },
+                { label: "Suggested angle", value: item.suggestedAngle ? cleanCustomerText(item.suggestedAngle) : null },
+                { label: "Internal linking plan", value: item.suggestedInternalLinkPattern ? cleanCustomerText(item.suggestedInternalLinkPattern) : null },
+              ]}
+            />
+          ))}
+          {contentStructure?.items.slice(0, 2).map((item) => (
+            <CompactRecommendationCard
+              key={item.id}
+              title={`Structure: ${cleanCustomerText(item.title)}`}
+              priority={item.priority}
+              whyItMatters={cleanCustomerText(item.whyThisStructureMatters)}
+              nextStep={`Use "${cleanCustomerText(item.suggestedH1)}" and the suggested section order when drafting.`}
+              includeItems={compactList(item.suggestedSections, 4)}
+              includeLabel="Outline starter"
+              primaryAction="Apply this structure in the draft."
+              detailItems={[
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "Title pattern", value: cleanCustomerText(item.recommendedTitlePattern) },
+                { label: "Suggested components", value: item.suggestedComponents.map((value) => cleanCustomerText(value)).join(", ") },
+              ]}
+            />
+          ))}
+        </div>
       </HudCard>
 
-      <HudCard title="How To Organize This Page" subtitle="A simple page blueprint based on intent and proven search patterns.">
-        {contentStructureError ? (
-          <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
-            {contentStructureError}
-          </div>
-        ) : null}
-
-        {contentStructureLoading && !contentStructureError ? (
-          <div className="text-sm text-slate-300">Evaluating SERP-informed content structure...</div>
-        ) : null}
-
-        {contentStructure && !contentStructureError ? (
-          <>
-            <div className="mt-3 grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Recommendations</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{contentStructure.summary.totalRecommendations}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">High Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-rose-200">{contentStructure.summary.highPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Medium Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{contentStructure.summary.mediumPriorityCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Low Priority</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{contentStructure.summary.lowPriorityCount}</div>
-              </div>
-            </div>
-
-            {contentStructure.serpPatternSummary ? (
-              <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                SERP pattern coverage: {contentStructure.serpPatternSummary.readySlotCount}/{contentStructure.serpPatternSummary.totalSlotCount} ready slot
-                {contentStructure.serpPatternSummary.readySlotCount === 1 ? "" : "s"}
-                {contentStructure.serpPatternSummary.targetLengthBand
-                  ? ` · target length ${contentStructure.serpPatternSummary.targetLengthBand.min}-${contentStructure.serpPatternSummary.targetLengthBand.max} words (median ${contentStructure.serpPatternSummary.targetLengthBand.median})`
-                  : ""}
-                {` · source ${toPlainLabel(contentStructure.summary.serpPatternSource)}`}
-              </div>
-            ) : (
-              <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-300">
-                SERP pattern coverage is not available yet; structure recommendations are based on {toPlainLabel(contentStructure.summary.serpPatternSource)}.
-              </div>
-            )}
-
-            {contentStructure.summary.dataStatus === "no_major_structure_recommendations_identified" ? (
-              <div className="mt-4 rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major structure recommendations identified.
-              </div>
-            ) : null}
-
-            {contentStructure.summary.dataStatus === "structure_recommendations_identified" ? (
-              <div className="mt-4 space-y-2">
-                {contentStructure.items.map((item) => (
-                  <CompactRecommendationCard
-                    key={item.id}
-                    title={cleanCustomerText(item.title)}
-                    priority={item.priority}
-                    whyItMatters={cleanCustomerText(item.whyThisStructureMatters)}
-                    nextStep={`Use "${cleanCustomerText(item.suggestedH1)}" as the page H1 and follow the suggested section order.`}
-                    includeItems={compactList(item.suggestedSections, 4)}
-                    includeLabel="What to include"
-                    primaryAction="Use this blueprint when creating or updating the page."
-                    detailItems={[
-                      { label: "Rationale", value: cleanCustomerText(item.rationale) },
-                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                      { label: "Recommended asset type", value: cleanCustomerText(item.recommendedContentType) },
-                      { label: "Title pattern", value: cleanCustomerText(item.recommendedTitlePattern) },
-                      { label: "Suggested H2 structure", value: item.suggestedH2Structure.map((value) => cleanCustomerText(value)).join(" | ") },
-                      { label: "Suggested components", value: item.suggestedComponents.map((value) => cleanCustomerText(value)).join(", ") },
-                      { label: "Comparison criteria", value: item.comparisonCriteria.length ? item.comparisonCriteria.map((value) => cleanCustomerText(value)).join(", ") : null },
-                      { label: "FAQ themes", value: item.faqThemes.length ? item.faqThemes.map((value) => cleanCustomerText(value)).join(", ") : null },
-                      { label: "Local modifiers", value: item.localModifiers.length ? item.localModifiers.map((value) => cleanCustomerText(value)).join(", ") : null },
-                      {
-                        label: "Entity coverage targets",
-                        value: item.entityCoverageTargets.length ? item.entityCoverageTargets.map((value) => cleanCustomerText(value)).join(", ") : null,
-                      },
-                      {
-                        label: "Internal link opportunities",
-                        value: item.internalLinkOpportunities.length
-                          ? item.internalLinkOpportunities.map((value) => cleanCustomerText(value)).join(" | ")
-                          : null,
-                      },
-                      {
-                        label: "Related content ideas",
-                        value: item.linkedReinforcementItemIds?.length
-                          ? item.linkedReinforcementItemIds.map((value) => cleanCustomerText(value)).join(", ")
-                          : null,
-                      },
-                      {
-                        label: "Common headings",
-                        value: item.serpPatternSummary?.commonHeadings?.length
-                          ? item.serpPatternSummary.commonHeadings.map((value) => cleanCustomerText(value)).join(", ")
-                          : null,
-                      },
-                    ]}
-                  />
-                ))}
-              </div>
-            ) : null}
-          </>
-        ) : null}
-      </HudCard>
-      </>
-      ) : null}
-
-      {workspaceView === "publish" ? (
       <HudCard
-        title="Step 4: Review And Publish Improvements"
-        subtitle="Follow this guided checklist to publish the right improvements in order."
+        title="Step 4: Upgrade the listing"
+        subtitle="Improve listing-page copy and trust blocks before launch."
       >
+        {multiActionLoading ? <div className="text-sm text-slate-300">Preparing listing upgrade actions...</div> : null}
         {multiActionError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
             {multiActionError}
           </div>
         ) : null}
+        <div className="mt-3 space-y-2">
+          {listingUpgradeItems.map((item) => (
+            <CompactRecommendationCard
+              key={item.actionId}
+              title={cleanCustomerText(item.title)}
+              priority={item.recommendedPriority}
+              whyItMatters={cleanCustomerText(item.whyItMatters)}
+              nextStep={cleanCustomerText(item.description)}
+              includeItems={compactList([item.expectedImpact])}
+              includeLabel="Expected outcome"
+              primaryAction={item.readinessState === "blocked" ? "Unblock dependencies, then run this." : "Run this listing upgrade now."}
+              detailItems={[
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "Dependencies", value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None" },
+                { label: "Blocking reasons", value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null },
+              ]}
+            />
+          ))}
+        </div>
 
-        {multiActionLoading && !multiActionError ? (
-          <div className="text-sm text-slate-300">Preparing improvement options...</div>
-        ) : null}
-
-        {multiAction && !multiActionError ? (
-          <div className="space-y-4 rounded-xl border border-white/10 bg-white/[0.03] p-4">
-            <div className="grid gap-3 md:grid-cols-4">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Total Actions</div>
-                <div className="mt-1 text-2xl font-semibold text-slate-100">{multiAction.summary.totalActions}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Available</div>
-                <div className="mt-1 text-2xl font-semibold text-emerald-100">{multiAction.summary.availableCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked</div>
-                <div className="mt-1 text-2xl font-semibold text-amber-100">{multiAction.summary.blockedCount}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Not Recommended</div>
-                <div className="mt-1 text-2xl font-semibold text-cyan-100">{multiAction.summary.notRecommendedCount}</div>
-              </div>
+        <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
+          <h4 className="text-sm font-semibold text-cyan-100">Listing copy upgrade</h4>
+          {optimizeActionBlocked ? (
+            <div className="mt-2 text-sm text-amber-100">
+              {optimizeListingAction?.blockingReasons?.join(" ") ?? "This action is currently blocked."}
             </div>
-
-            <div className="grid gap-3 md:grid-cols-3">
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready Actions</div>
-                <div className="mt-1 text-xl font-semibold text-emerald-100">{multiAction.grouped?.byReadiness?.ready?.length ?? 0}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked Actions</div>
-                <div className="mt-1 text-xl font-semibold text-amber-100">{multiAction.grouped?.byReadiness?.blocked?.length ?? 0}</div>
-              </div>
-              <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Abstained Actions</div>
-                <div className="mt-1 text-xl font-semibold text-cyan-100">{multiAction.grouped?.byReadiness?.abstained?.length ?? 0}</div>
-              </div>
-            </div>
-
-            {multiAction.summary.dataStatus === "no_major_upgrade_actions_available" ? (
-              <div className="rounded-lg border border-emerald-300/30 bg-emerald-400/10 px-3 py-2 text-sm text-emerald-100">
-                No major upgrade actions available.
-              </div>
+          ) : null}
+          <div className="mt-3 flex flex-wrap gap-2">
+            <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating" || !optimizeActionExecutable}>
+              {state === "generating" ? "Preparing..." : "Generate listing upgrade"}
+            </NeonButton>
+            {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
+              <NeonButton variant="secondary" onClick={() => void previewChanges()} disabled={state === "previewing" || !optimizeActionExecutable}>
+                {state === "previewing" ? "Preparing..." : "Preview upgrade"}
+              </NeonButton>
             ) : null}
-
-            {multiAction.summary.dataStatus === "upgrade_actions_available" ? (
-              <div className="space-y-4">
-                {(["ready", "blocked", "abstained"] as const).map((groupKey) => {
-                  const groupedItems = multiAction.items.filter((item) => item.readinessState === groupKey);
-                  if (!groupedItems.length) return null;
-                  return (
-                    <div key={groupKey} className="space-y-2">
-                      <div className="text-xs uppercase tracking-[0.08em] text-slate-400">
-                        {groupKey === "ready" ? "Ready Actions" : groupKey === "blocked" ? "Blocked Actions" : "Abstained Actions"}
-                      </div>
-                      {groupedItems.map((item) => (
-                        <CompactRecommendationCard
-                          key={item.actionId}
-                          title={cleanCustomerText(item.title)}
-                          priority={item.recommendedPriority}
-                          whyItMatters={cleanCustomerText(item.whyItMatters)}
-                          nextStep={cleanCustomerText(item.description)}
-                          includeItems={compactList([
-                            item.expectedImpact,
-                            item.sourceSignals.primaryIntent ? `Primary intent: ${toPlainIntent(item.sourceSignals.primaryIntent)}` : null,
-                          ])}
-                          includeLabel="What to include"
-                          primaryAction={
-                            item.readinessState === "blocked"
-                              ? "Unblock dependencies first, then run this action."
-                              : "Run this action in this publish cycle."
-                          }
-                          detailItems={[
-                            { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                            { label: "Readiness", value: cleanCustomerText(item.readinessState) },
-                            { label: "Target surface", value: cleanCustomerText(item.targetSurface) },
-                            {
-                              label: "Dependencies",
-                              value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
-                            },
-                            {
-                              label: "Related missing items",
-                              value: item.linkedGapTypes?.length ? item.linkedGapTypes.map((value) => cleanCustomerText(value)).join(", ") : null,
-                            },
-                            {
-                              label: "Related focus signals",
-                              value: item.linkedIntentClusterIds?.length
-                                ? item.linkedIntentClusterIds.map((value) => cleanCustomerText(value)).join(", ")
-                                : null,
-                            },
-                            {
-                              label: "Related content ideas",
-                              value: item.linkedReinforcementItemIds?.length
-                                ? item.linkedReinforcementItemIds.map((value) => cleanCustomerText(value)).join(", ")
-                                : null,
-                            },
-                            {
-                              label: "Related page-structure ideas",
-                              value: item.linkedStructureItemIds?.length
-                                ? item.linkedStructureItemIds.map((value) => cleanCustomerText(value)).join(", ")
-                                : null,
-                            },
-                            {
-                              label: "Blocked reason",
-                              value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
-                            },
-                            {
-                              label: "Preview details",
-                              value: item.previewPayload ? cleanCustomerText(`${item.previewPayload.mode}: ${item.previewPayload.detail}`) : null,
-                            },
-                            { label: "Preview metadata", value: item.previewCapability?.note ? cleanCustomerText(item.previewCapability.note) : null },
-                          ]}
-                        />
-                      ))}
-                    </div>
-                  );
-                })}
-              </div>
+            {(state === "generated" || state === "ready_to_push" || state === "done") ? (
+              <NeonButton variant="secondary" onClick={() => void generateUpgrade()} disabled={!optimizeActionExecutable}>
+                Regenerate
+              </NeonButton>
             ) : null}
+          </div>
+          {(state === "generated" || state === "ready_to_push" || state === "done") && proposedDescription ? (
+            <details open className="mt-3 rounded-lg border border-white/10 p-3">
+              <summary className="cursor-pointer text-sm font-medium text-slate-100">Show details</summary>
+              <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-900/80 p-3 text-sm text-slate-200">{proposedDescription}</pre>
+            </details>
+          ) : null}
+        </div>
+      </HudCard>
 
-            <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-              <h4 className="text-sm font-semibold text-cyan-100">Publish Surface: Listing Description</h4>
-              {optimizeActionBlocked ? (
-                <div className="mt-2 text-sm text-amber-100">
-                  {optimizeListingAction?.blockingReasons?.join(" ") ?? "This action is currently blocked."}
+      <HudCard
+        title="Step 5: Launch and measure"
+        subtitle="Review what is ready, publish safely, and track impact."
+      >
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready to launch</div>
+            <div className="mt-1 text-2xl font-semibold text-emerald-100">{launchReadyItems.length}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked</div>
+            <div className="mt-1 text-2xl font-semibold text-amber-100">{launchBlockedItems.length}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Score right now</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
+          </div>
+        </div>
+        <div className="mt-4 space-y-2">
+          {launchReadyItems.slice(0, 4).map((item) => (
+            <CompactRecommendationCard
+              key={item.actionId}
+              title={cleanCustomerText(item.title)}
+              priority={item.recommendedPriority}
+              whyItMatters={cleanCustomerText(item.whyItMatters)}
+              nextStep="Review and publish this item in the current launch cycle."
+              primaryAction="Publish this approved improvement."
+              detailItems={[
+                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                { label: "Dependencies", value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None" },
+              ]}
+            />
+          ))}
+        </div>
+        {state === "ready_to_push" ? (
+          <div className="mt-4 space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
+            <h4 className="text-sm font-semibold text-cyan-100">Final review before publish</h4>
+            <div className="max-h-96 overflow-auto rounded border border-white/10">
+              {diffRows.map((row, index) => (
+                <div key={`${row.type}-${index}`} className="grid grid-cols-2 gap-2 border-b border-white/10 p-2 text-xs">
+                  <div className="rounded bg-slate-900/80 p-2 text-slate-300">{row.left || " "}</div>
+                  <div className="rounded bg-slate-900/80 p-2 text-cyan-100">{row.right || " "}</div>
                 </div>
-              ) : null}
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating" || !optimizeActionExecutable}>
-                  {state === "generating" ? "Preparing..." : "Improve This Listing"}
-                </NeonButton>
-
-                {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
-                  <NeonButton variant="secondary" onClick={() => void previewChanges()} disabled={state === "previewing" || !optimizeActionExecutable}>
-                    {state === "previewing" ? "Preparing..." : "Preview Changes"}
-                  </NeonButton>
-                ) : null}
-
-                {(state === "generated" || state === "ready_to_push" || state === "done") ? (
-                  <NeonButton variant="secondary" onClick={() => void generateUpgrade()} disabled={!optimizeActionExecutable}>
-                    Regenerate
-                  </NeonButton>
-                ) : null}
-              </div>
-
-              {(state === "generated" || state === "ready_to_push" || state === "done") && proposedDescription ? (
-                <details open className="mt-3 rounded-lg border border-white/10 p-3">
-                  <summary className="cursor-pointer text-sm font-medium text-slate-100">Draft Improvements</summary>
-                  <pre className="mt-3 whitespace-pre-wrap rounded bg-slate-900/80 p-3 text-sm text-slate-200">{proposedDescription}</pre>
-                </details>
-              ) : null}
-
-              {state === "ready_to_push" ? (
-                <div className="mt-3 space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-                  <h4 className="text-sm font-semibold text-cyan-100">Change Preview</h4>
-                  <div className="max-h-96 overflow-auto rounded border border-white/10">
-                    {diffRows.map((row, index) => (
-                      <div key={`${row.type}-${index}`} className="grid grid-cols-2 gap-2 border-b border-white/10 p-2 text-xs">
-                        <div className="rounded bg-slate-900/80 p-2 text-slate-300">{row.left || " "}</div>
-                        <div className="rounded bg-slate-900/80 p-2 text-cyan-100">{row.right || " "}</div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <label className="flex items-start gap-2 text-sm text-slate-200">
-                    <input
-                      type="checkbox"
-                      checked={approved}
-                      onChange={(event) => setApproved(event.target.checked)}
-                      className="mt-0.5"
-                    />
-                    <span>I reviewed the diff and approve this push.</span>
-                  </label>
-
-                  <NeonButton onClick={() => void approveAndPush()} disabled={!approved || !integrations.bdConfigured}>
-                    Publish Improvements
-                  </NeonButton>
-                </div>
-              ) : null}
+              ))}
             </div>
+            <label className="flex items-start gap-2 text-sm text-slate-200">
+              <input
+                type="checkbox"
+                checked={approved}
+                onChange={(event) => setApproved(event.target.checked)}
+                className="mt-0.5"
+              />
+              <span>I reviewed the changes and approve launch.</span>
+            </label>
+            <NeonButton onClick={() => void approveAndPush()} disabled={!approved || !integrations.bdConfigured}>
+              Publish improvements
+            </NeonButton>
           </div>
         ) : null}
       </HudCard>
-      ) : null}
     </>
   );
 }
