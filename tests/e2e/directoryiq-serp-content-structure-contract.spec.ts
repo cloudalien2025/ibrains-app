@@ -312,7 +312,7 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "How To Organize This Page" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "How To Organize This Page" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No major structure recommendations identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
   });

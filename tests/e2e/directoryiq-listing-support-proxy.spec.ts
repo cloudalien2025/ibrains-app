@@ -23,6 +23,14 @@ test.describe("DirectoryIQ listing support proxy path", () => {
       page.getByText("No connected support pages detected yet."),
     ];
     const unresolvedSignal = page.getByText("Support diagnostics are not available yet.").first();
+    const noConnectedSignal = page.getByText("No connected support pages detected yet.").first();
+
+    await expect
+      .poll(async () => (await unresolvedSignal.count()) + (await noConnectedSignal.count()), {
+        timeout: 15_000,
+      })
+      .toBeGreaterThan(0);
+
     if ((await unresolvedSignal.count()) > 0) {
       await expect(unresolvedSignal).toBeVisible();
       return;

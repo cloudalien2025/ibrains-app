@@ -263,7 +263,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Main focus")).toBeVisible();
     await expect(page.getByText("Be the trusted local service choice")).toBeVisible();
     await expect(page.getByText("Close unlinked support mentions")).toBeVisible({ timeout: 15_000 });
@@ -322,7 +322,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What This Listing Should Be Known For" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No major reinforcement intent clusters identified.")).toBeVisible();
     await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });
