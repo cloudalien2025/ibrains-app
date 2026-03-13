@@ -54,6 +54,21 @@ describe("directoryiq listings read route proxy", () => {
     expect(String(json.error)).toContain("connect ETIMEDOUT");
   });
 
+  it("returns 504 when external DirectoryIQ API request times out", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new DOMException("Aborted", "AbortError"));
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings");
+    const res = await GET(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(504);
+    expect(json.ok).toBe(false);
+    expect(String(json.error)).toContain("timed out");
+  });
+
   it("maps category from group_category in upstream listings payload", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

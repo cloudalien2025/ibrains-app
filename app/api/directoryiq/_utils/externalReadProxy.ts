@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+const DEFAULT_PROXY_TIMEOUT_MS = 12000;
 
 const FORWARDED_REQUEST_HEADERS = [
   "accept",
@@ -61,6 +62,10 @@ export async function proxyDirectoryIqRequest(
   upstreamPathname: string,
   method: "GET" | "POST" | "DELETE"
 ): Promise<NextResponse> {
+  const timeoutMs = Number(process.env.DIRECTORYIQ_PROXY_TIMEOUT_MS ?? DEFAULT_PROXY_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timeoutHandle = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const base = resolveDirectoryIqApiBase();
     const target = new URL(upstreamPathname, `${base}/`);
@@ -71,6 +76,7 @@ export async function proxyDirectoryIqRequest(
       method,
       headers: buildForwardHeaders(req),
       cache: "no-store",
+      signal: controller.signal,
     });
 
     const body = await upstream.text();
@@ -84,7 +90,15 @@ export async function proxyDirectoryIqRequest(
       },
     });
   } catch (error) {
+    if (error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("aborted"))) {
+      return NextResponse.json(
+        { ok: false, error: `DirectoryIQ API request timed out after ${timeoutMs}ms` },
+        { status: 504 }
+      );
+    }
     const message = error instanceof Error ? error.message : "Failed to reach DirectoryIQ API";
     return NextResponse.json({ ok: false, error: message }, { status: 502 });
+  } finally {
+    clearTimeout(timeoutHandle);
   }
 }
