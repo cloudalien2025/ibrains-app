@@ -15,9 +15,12 @@ const DASHBOARD_PATH = "/api/directoryiq/dashboard";
 type DashboardListing = {
   listing_id: string;
   listing_name: string;
+  category: string | null;
   score: number;
   authority_status: string;
+  authority_score: number;
   trust_status: string;
+  trust_score: number;
   last_optimized: string | null;
 };
 
@@ -85,9 +88,12 @@ async function loadDashboard(userId: string) {
   const listings: DashboardListing[] = listingEval.cards.map((card) => ({
     listing_id: card.listingId,
     listing_name: card.name,
+    category: card.category,
     score: card.evaluation.totalScore,
     authority_status: card.authorityStatus.toLowerCase().replace(/\s+/g, "_"),
+    authority_score: card.evaluation.scores.authority,
     trust_status: card.trustStatus.toLowerCase().replace(/\s+/g, "_"),
+    trust_score: card.evaluation.scores.trust,
     last_optimized: card.lastOptimized,
   }));
 

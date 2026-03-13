@@ -5,6 +5,14 @@ import Link from "next/link";
 import HudCard from "@/components/ecomviper/HudCard";
 import DirectoryIqTopNav from "@/components/directoryiq/DirectoryIqTopNav";
 import { deriveDashboardUiState } from "./dashboard-client-state";
+import {
+  resolveDashboardListingCategory,
+  sortDashboardListings,
+  toggleDashboardListingsSort,
+  type DashboardListingRow,
+  type DashboardListingsSort,
+  type DashboardListingsSortKey,
+} from "./dashboard-listings-table-model";
 
 type DashboardResponse = {
   connected: boolean;
@@ -16,14 +24,7 @@ type DashboardResponse = {
     authority: number;
     actionability: number;
   };
-  listings: Array<{
-    listing_id: string;
-    listing_name: string;
-    score: number;
-    authority_status: string;
-    trust_status: string;
-    last_optimized: string | null;
-  }>;
+  listings: DashboardListingRow[];
   vertical_detected: string;
   vertical_override: string | null;
   last_analyzed_at: string | null;
@@ -66,6 +67,7 @@ export default function DirectoryIqDashboardClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [progressIndex, setProgressIndex] = useState(0);
+  const [sort, setSort] = useState<DashboardListingsSort | null>(null);
 
   const progressLabel = useMemo(() => {
     const progressMessages = data?.progress_messages ?? EMPTY.progress_messages;
@@ -80,6 +82,8 @@ export default function DirectoryIqDashboardClient() {
     error,
     listingsCount: data?.listings.length ?? 0,
   });
+
+  const visibleListings = useMemo(() => sortDashboardListings(data?.listings ?? [], sort), [data?.listings, sort]);
 
   async function load() {
     setLoading(true);
@@ -123,6 +127,20 @@ export default function DirectoryIqDashboardClient() {
     const timer = setInterval(() => setProgressIndex((value) => value + 1), 1200);
     return () => clearInterval(timer);
   }, [loading]);
+
+  function handleSort(key: DashboardListingsSortKey) {
+    setSort((current) => toggleDashboardListingsSort(current, key));
+  }
+
+  function renderSortIndicator(key: DashboardListingsSortKey): string {
+    if (sort?.key !== key) return "↕";
+    return sort.direction === "asc" ? "↑" : "↓";
+  }
+
+  function renderAriaSort(key: DashboardListingsSortKey): "none" | "ascending" | "descending" {
+    if (sort?.key !== key) return "none";
+    return sort.direction === "asc" ? "ascending" : "descending";
+  }
 
   return (
     <>
@@ -176,18 +194,40 @@ export default function DirectoryIqDashboardClient() {
             <table className="min-w-full text-left text-sm">
               <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
                 <tr>
-                  <th className="py-2 pr-3">Listing</th>
-                  <th className="py-2 pr-3">Score</th>
-                  <th className="py-2 pr-3">Authority</th>
-                  <th className="py-2 pr-3">Trust</th>
+                  <th className="py-2 pr-3" aria-sort={renderAriaSort("listing")}>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("listing")}>
+                      Listing <span aria-hidden="true">{renderSortIndicator("listing")}</span>
+                    </button>
+                  </th>
+                  <th className="py-2 pr-3" aria-sort={renderAriaSort("category")}>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("category")}>
+                      Category <span aria-hidden="true">{renderSortIndicator("category")}</span>
+                    </button>
+                  </th>
+                  <th className="py-2 pr-3" aria-sort={renderAriaSort("score")}>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("score")}>
+                      Score <span aria-hidden="true">{renderSortIndicator("score")}</span>
+                    </button>
+                  </th>
+                  <th className="py-2 pr-3" aria-sort={renderAriaSort("authority")}>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("authority")}>
+                      Authority <span aria-hidden="true">{renderSortIndicator("authority")}</span>
+                    </button>
+                  </th>
+                  <th className="py-2 pr-3" aria-sort={renderAriaSort("trust")}>
+                    <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("trust")}>
+                      Trust <span aria-hidden="true">{renderSortIndicator("trust")}</span>
+                    </button>
+                  </th>
                   <th className="py-2 pr-3">Last optimized</th>
                   <th className="py-2 pr-3">Action</th>
                 </tr>
               </thead>
               <tbody>
-                {data.listings.map((listing) => (
+                {visibleListings.map((listing) => (
                   <tr key={listing.listing_id} className="border-t border-white/10">
                     <td className="py-2 pr-3 text-slate-100">{listing.listing_name}</td>
+                    <td className="py-2 pr-3">{resolveDashboardListingCategory(listing) ?? "-"}</td>
                     <td className="py-2 pr-3">{listing.score}</td>
                     <td className="py-2 pr-3">{humanizeState(listing.authority_status)}</td>
                     <td className="py-2 pr-3">{humanizeState(listing.trust_status)}</td>
