@@ -236,4 +236,55 @@ describe("listing support service", () => {
     expect(support.outboundSupportLinks.map((row) => row.url)).toEqual(["https://example.com/aaa", "https://example.com/zzz"]);
     expect(support.connectedSupportPages.map((row) => row.id)).toEqual(["hub-a", "hub-z"]);
   });
+
+  it("keeps inbound support when backlink/hub tables are unavailable", async () => {
+    getLatestRun.mockResolvedValue({
+      id: "run-4",
+      status: "completed",
+      stats: {},
+      startedAt: "2026-03-08T01:00:00Z",
+      completedAt: "2026-03-08T02:00:00Z",
+    });
+
+    queryDb.mockImplementation(async (sql: string) => {
+      if (sql.includes("FROM authority_graph_nodes") && sql.includes("node_type = 'listing'")) {
+        return [{ id: "listing-node", external_id: "651", canonical_url: "https://www.vailvacay.com/listings/tivoli-lodge", title: "Tivoli Lodge" }];
+      }
+      if (sql.includes("FROM authority_graph_edges")) {
+        return [
+          {
+            edge_id: "edge-1",
+            edge_type: "internal_link",
+            blog_node_id: "blog-64",
+            blog_external_id: "64",
+            blog_title: "The 30 Best Hotels in Vail, Colorado",
+            blog_url: "https://www.vailvacay.com/blog/best-hotels-in-vail-colorado",
+            anchor_text: "Tivoli Lodge Vail",
+            context_snippet: "Support link present.",
+            detected_at: "2026-03-07T10:00:00Z",
+          },
+        ];
+      }
+      if (sql.includes("FROM directoryiq_listing_backlinks") || sql.includes("FROM directoryiq_hub_members")) {
+        const error = new Error("relation does not exist");
+        (error as Error & { code?: string }).code = "42P01";
+        throw error;
+      }
+      return [];
+    });
+
+    const support = await getListingCurrentSupport({
+      tenantId: "default",
+      listingId: "651",
+      listingLookupIds: ["651"],
+      listingTitle: "Tivoli Lodge",
+      listingUrl: null,
+      siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+    });
+
+    expect(support.summary.inboundLinkedSupportCount).toBe(1);
+    expect(support.inboundLinkedSupport[0]?.sourceId).toBe("64");
+    expect(support.summary.outboundSupportLinkCount).toBe(0);
+    expect(support.summary.connectedSupportPageCount).toBe(0);
+  });
 });
