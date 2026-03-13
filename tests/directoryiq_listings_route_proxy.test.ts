@@ -159,6 +159,16 @@ describe("directoryiq listings read route proxy", () => {
     vi.doMock("@/app/api/directoryiq/_utils/selectionData", () => ({ getAllListingsWithEvaluations }));
     vi.doMock("@/app/api/ecomviper/_utils/db", () => ({ query }));
     vi.doMock("@/app/api/ecomviper/_utils/user", () => ({ resolveUserId }));
+    vi.doMock("@/app/api/directoryiq/_utils/bdSites", () => ({
+      listBdSites: vi.fn().mockResolvedValue([
+        {
+          id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+          label: "VailVacay",
+          baseUrl: "https://www.vailvacay.com",
+          enabled: true,
+        },
+      ]),
+    }));
 
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -229,6 +239,16 @@ describe("directoryiq listings read route proxy", () => {
     vi.doMock("@/app/api/directoryiq/_utils/selectionData", () => ({ getAllListingsWithEvaluations }));
     vi.doMock("@/app/api/ecomviper/_utils/db", () => ({ query }));
     vi.doMock("@/app/api/ecomviper/_utils/user", () => ({ resolveUserId }));
+    vi.doMock("@/app/api/directoryiq/_utils/bdSites", () => ({
+      listBdSites: vi.fn().mockResolvedValue([
+        {
+          id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+          label: "VailVacay",
+          baseUrl: "https://www.vailvacay.com",
+          enabled: true,
+        },
+      ]),
+    }));
 
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -254,5 +274,93 @@ describe("directoryiq listings read route proxy", () => {
     expect(fetchMock).not.toHaveBeenCalled();
     expect(json.listings[0]?.category).toBeNull();
     expect(json.listings[0]?.group_category).toBeNull();
+  });
+
+  it("defaults to the single connected site and drops duplicate pseudo-site rows", async () => {
+    const getAllListingsWithEvaluations = vi.fn().mockResolvedValue({
+      cards: [
+        {
+          listingId: "3",
+          name: "Listing 3",
+          url: "https://www.vailvacay.com/listings/3",
+          authorityStatus: "Needs Support",
+          trustStatus: "Needs Trust",
+          lastOptimized: null,
+          evaluation: {
+            score: 55,
+            scores: {
+              structure: 60,
+              clarity: 60,
+              trust: 50,
+              authority: 50,
+              actionability: 55,
+            },
+          },
+          siteId: null,
+          siteLabel: null,
+        },
+        {
+          listingId: "3",
+          name: "Listing 3",
+          url: "https://www.vailvacay.com/listings/3",
+          authorityStatus: "Needs Support",
+          trustStatus: "Needs Trust",
+          lastOptimized: null,
+          evaluation: {
+            score: 55,
+            scores: {
+              structure: 60,
+              clarity: 60,
+              trust: 50,
+              authority: 50,
+              actionability: 55,
+            },
+          },
+          siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+          siteLabel: "VailVacay",
+        },
+      ],
+    });
+    const query = vi.fn().mockResolvedValue([
+      {
+        source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:3",
+        bd_site_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        listing_id: "3",
+        group_category: "Lodging",
+        category: null,
+      },
+    ]);
+    const resolveUserId = vi.fn().mockReturnValue("00000000-0000-4000-8000-000000000001");
+    const listBdSites = vi.fn().mockResolvedValue([
+      {
+        id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        label: "VailVacay",
+        baseUrl: "https://www.vailvacay.com",
+        enabled: true,
+      },
+    ]);
+
+    vi.doMock("@/app/api/directoryiq/_utils/selectionData", () => ({ getAllListingsWithEvaluations }));
+    vi.doMock("@/app/api/ecomviper/_utils/db", () => ({ query }));
+    vi.doMock("@/app/api/ecomviper/_utils/user", () => ({ resolveUserId }));
+    vi.doMock("@/app/api/directoryiq/_utils/bdSites", () => ({ listBdSites }));
+
+    delete process.env.DIRECTORYIQ_API_BASE;
+    const { GET } = await import("@/app/api/directoryiq/listings/route");
+    const req = new NextRequest("https://directoryiq-api.ibrains.ai/api/directoryiq/listings", {
+      headers: {
+        host: "directoryiq-api.ibrains.ai",
+      },
+    });
+    const res = await GET(req);
+    const json = (await res.json()) as { listings: Array<{ listing_id: string; site_id: string | null }> };
+
+    expect(res.status).toBe(200);
+    expect(getAllListingsWithEvaluations).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      ["5c82f5c1-a45f-4b25-a0d4-1b749d962415"]
+    );
+    expect(json.listings).toHaveLength(1);
+    expect(json.listings[0]?.site_id).toBe("5c82f5c1-a45f-4b25-a0d4-1b749d962415");
   });
 });

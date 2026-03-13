@@ -46,7 +46,11 @@ export async function resolveListingEvaluation(params: {
         }))
       );
     }
-    resolvedSiteId = rows[0]?.siteId ?? null;
+    if (uniqueSites.size === 1) {
+      resolvedSiteId = Array.from(uniqueSites.keys())[0] ?? null;
+    } else {
+      resolvedSiteId = rows[0]?.siteId ?? null;
+    }
   }
 
   const listingEval = await getListingEvaluation(params.userId, listingId, resolvedSiteId ?? undefined);

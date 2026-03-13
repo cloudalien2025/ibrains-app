@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { getAllListingsWithEvaluations } from "@/app/api/directoryiq/_utils/selectionData";
+import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
@@ -119,6 +120,16 @@ function resolveSiteFilter(req: NextRequest): string[] | null {
   return null;
 }
 
+async function resolveSiteFilterForUser(req: NextRequest, userId: string): Promise<string[] | null> {
+  const explicit = resolveSiteFilter(req);
+  if (explicit) return explicit;
+
+  const sites = await listBdSites(userId);
+  const enabledSiteIds = sites.filter((site) => site.enabled).map((site) => site.id);
+  if (enabledSiteIds.length === 1) return [enabledSiteIds[0]];
+  return null;
+}
+
 function listingIdFromRow(row: ListingCategoryRow): string {
   const direct = row.listing_id?.trim() ?? "";
   if (direct) return direct;
@@ -174,11 +185,11 @@ async function categoryMapForUser(userId: string, siteIds: string[] | null): Pro
 
 async function buildLocalListingsPayload(req: NextRequest): Promise<NextResponse> {
   const userId = resolveUserId(req);
-  const siteIds = resolveSiteFilter(req);
+  const siteIds = await resolveSiteFilterForUser(req, userId);
   const { cards } = await getAllListingsWithEvaluations(userId, siteIds);
   const categories = await categoryMapForUser(userId, siteIds);
 
-  const listings: LocalListingRow[] = cards.map((card) => {
+  const mappedListings: LocalListingRow[] = cards.map((card) => {
     const mapped = categories.get(listingMapKey(card.siteId ?? null, card.listingId)) ?? { category: null, group: null };
     return {
       listing_id: card.listingId,
@@ -195,6 +206,18 @@ async function buildLocalListingsPayload(req: NextRequest): Promise<NextResponse
       group_category: mapped.group,
     };
   });
+  const hasRealSiteForListing = new Set(
+    mappedListings.filter((row) => row.site_id).map((row) => row.listing_id)
+  );
+  const dedupeKey = new Set<string>();
+  const listings: LocalListingRow[] = [];
+  for (const row of mappedListings) {
+    if (!row.site_id && hasRealSiteForListing.has(row.listing_id)) continue;
+    const key = `${row.site_id ?? ""}:${row.listing_id}`;
+    if (dedupeKey.has(key)) continue;
+    dedupeKey.add(key);
+    listings.push(row);
+  }
 
   return NextResponse.json(
     {

@@ -153,34 +153,44 @@ async function resolveLocalSupport(req: NextRequest, listingId: string): Promise
     )
   );
 
-  let bestSupport: ListingSupportModel | null = null;
-  let bestScore = -1;
+  const supportResults = await Promise.all(
+    tenantCandidates.map(async (tenantId) => {
+      try {
+        const support = await getListingCurrentSupport({
+          tenantId,
+          listingId: context.listingId,
+          listingLookupIds: lookupIds,
+          siteId: context.siteId,
+          listingTitle: context.title,
+          listingUrl: context.canonicalUrl,
+        });
+        return { tenantId, support };
+      } catch {
+        return null;
+      }
+    })
+  );
+
+  const successful = supportResults.filter((item): item is { tenantId: string; support: ListingSupportModel } => Boolean(item));
 
   for (const tenantId of tenantCandidates) {
-    try {
-      const support = await getListingCurrentSupport({
-        tenantId,
-        listingId: context.listingId,
-        listingLookupIds: lookupIds,
-        siteId: context.siteId,
-        listingTitle: context.title,
-        listingUrl: context.canonicalUrl,
-      });
+    const hit = successful.find((item) => item.tenantId === tenantId);
+    if (hit && hasMaterialSupportSignals(hit.support)) {
+      return hit.support;
+    }
+  }
 
-      if (hasMaterialSupportSignals(support)) {
-        return support;
-      }
-
-      const score =
-        (support.listing.canonicalUrl ? 3 : 0) +
-        (support.summary.lastGraphRunAt ? 2 : 0) +
-        ((support.listing.title ?? "").trim() && support.listing.title !== context.listingId ? 1 : 0);
-      if (score > bestScore) {
-        bestScore = score;
-        bestSupport = support;
-      }
-    } catch {
-      continue;
+  let bestSupport: ListingSupportModel | null = null;
+  let bestScore = -1;
+  for (const item of successful) {
+    const support = item.support;
+    const score =
+      (support.listing.canonicalUrl ? 3 : 0) +
+      (support.summary.lastGraphRunAt ? 2 : 0) +
+      ((support.listing.title ?? "").trim() && support.listing.title !== context.listingId ? 1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSupport = support;
     }
   }
 

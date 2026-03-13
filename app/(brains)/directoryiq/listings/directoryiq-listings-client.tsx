@@ -32,8 +32,9 @@ export default function DirectoryIqListingsClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [sites, setSites] = useState<BdSite[]>([]);
-  const [selectedSite, setSelectedSite] = useState<string>("auto");
+  const [selectedSite, setSelectedSite] = useState<string>("");
   const [isAdmin, setIsAdmin] = useState(false);
+  const [sitesReady, setSitesReady] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [sort, setSort] = useState<ListingsSort>({ key: "listing", direction: "asc" });
 
@@ -45,11 +46,21 @@ export default function DirectoryIqListingsClient() {
         is_admin?: boolean;
       };
       if (response.ok) {
-        setSites(json.sites ?? []);
-        setIsAdmin(Boolean(json.is_admin));
+        const loadedSites = (json.sites ?? []).filter((site) => site.enabled);
+        const admin = Boolean(json.is_admin);
+        setSites(loadedSites);
+        setIsAdmin(admin);
+        setSelectedSite((current) => {
+          if (current && current !== "all") return current;
+          if (admin) return current || "all";
+          if (loadedSites.length === 1) return loadedSites[0].id;
+          return loadedSites[0]?.id ?? "";
+        });
       }
     } catch {
       setSites([]);
+    } finally {
+      setSitesReady(true);
     }
   }
 
@@ -60,7 +71,7 @@ export default function DirectoryIqListingsClient() {
       const search = new URLSearchParams();
       if (site === "all") {
         search.set("site", "all");
-      } else if (site && site !== "auto") {
+      } else if (site) {
         search.set("site_id", site);
       }
       const url = `/api/directoryiq/listings${search.toString() ? `?${search.toString()}` : ""}`;
@@ -80,8 +91,9 @@ export default function DirectoryIqListingsClient() {
   }, []);
 
   useEffect(() => {
+    if (!sitesReady) return;
     void loadListings(selectedSite);
-  }, [selectedSite]);
+  }, [selectedSite, sitesReady]);
 
   const visibleRows = useMemo(() => applyListingsTableModel(rows, searchTerm, sort), [rows, searchTerm, sort]);
 
@@ -111,22 +123,30 @@ export default function DirectoryIqListingsClient() {
 
       <HudCard title="Listings" subtitle="AI Visibility and AI Selection score for each listing.">
         <div className="mb-4 flex flex-wrap items-center gap-3 text-xs text-slate-300">
-          <label className="flex items-center gap-2">
-            <span>Site</span>
-            <select
-              value={selectedSite}
-              onChange={(event) => setSelectedSite(event.target.value)}
-              className="rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1 text-xs text-slate-200"
-            >
-              <option value="auto">Default</option>
-              {isAdmin ? <option value="all">All Sites</option> : null}
-              {sites.map((site) => (
-                <option key={site.id} value={site.id}>
-                  {site.label || site.baseUrl}
-                </option>
-              ))}
-            </select>
-          </label>
+          {isAdmin || sites.length > 1 ? (
+            <label className="flex items-center gap-2">
+              <span>Site</span>
+              <select
+                value={selectedSite}
+                onChange={(event) => setSelectedSite(event.target.value)}
+                className="rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1 text-xs text-slate-200"
+              >
+                {isAdmin ? <option value="all">All Sites</option> : null}
+                {sites.map((site) => (
+                  <option key={site.id} value={site.id}>
+                    {site.label || site.baseUrl}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : sites.length === 1 ? (
+            <div className="flex items-center gap-2">
+              <span>Site</span>
+              <span className="rounded-lg border border-white/10 bg-slate-900/70 px-2 py-1 text-xs text-slate-200">
+                {sites[0].label || sites[0].baseUrl}
+              </span>
+            </div>
+          ) : null}
         </div>
 
         {loading ? <div className="text-sm text-slate-300">Scanning listings...</div> : null}
@@ -187,7 +207,13 @@ export default function DirectoryIqListingsClient() {
                       <td className="py-2 pr-3">{row.last_optimized ? new Date(row.last_optimized).toLocaleString() : "-"}</td>
                       <td className="py-2 pr-3">
                         <Link
-                          href={`/directoryiq/listings/${encodeURIComponent(row.listing_id)}${row.site_id ? `?site_id=${row.site_id}` : ""}`}
+                          href={`/directoryiq/listings/${encodeURIComponent(row.listing_id)}${
+                            row.site_id
+                              ? `?site_id=${row.site_id}`
+                              : selectedSite && selectedSite !== "all"
+                                ? `?site_id=${selectedSite}`
+                                : ""
+                          }`}
                           className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100"
                         >
                           Improve

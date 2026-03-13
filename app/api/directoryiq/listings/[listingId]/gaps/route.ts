@@ -92,7 +92,8 @@ function buildAuthorityGaps(
 
 function emptyAuthorityGaps(
   support: Awaited<ReturnType<typeof resolveListingSupportModel>>["support"],
-  evaluatedAt: string
+  evaluatedAt: string,
+  dataStatus: "no_meaningful_gaps" | "analysis_unavailable"
 ) {
   return {
     listing: {
@@ -108,7 +109,7 @@ function emptyAuthorityGaps(
       lowCount: 0,
       evaluatedAt,
       lastGraphRunAt: support.summary.lastGraphRunAt ?? null,
-      dataStatus: "no_meaningful_gaps" as const,
+      dataStatus,
     },
     items: [] as AuthorityGapItem[],
   };
@@ -124,10 +125,9 @@ export async function GET(
     const { listingId } = await Promise.resolve(params);
     const supportResolution = await resolveListingSupportModel(req, listingId);
     const evaluatedAt = new Date().toISOString();
-    const gaps =
-      supportResolution.dataStatus === "supported"
-        ? buildAuthorityGaps(supportResolution.support, evaluatedAt)
-        : emptyAuthorityGaps(supportResolution.support, evaluatedAt);
+    const gaps = supportResolution.dataStatus === "supported"
+      ? buildAuthorityGaps(supportResolution.support, evaluatedAt)
+      : emptyAuthorityGaps(supportResolution.support, evaluatedAt, "analysis_unavailable");
 
     return NextResponse.json({
       ok: true,
