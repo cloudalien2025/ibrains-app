@@ -8,6 +8,8 @@ import HudCard from "@/components/ecomviper/HudCard";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import ListingHero from "@/components/directoryiq/ListingHero";
 import { directoryIqNavItems } from "@/lib/directoryiq/navItems";
+import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fetchWithTimeout";
+import { resolveDetailMetricDisplayValue } from "@/lib/directoryiq/detailMetricState";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type WorkspaceView = "helping" | "missing" | "improvements" | "publish";
@@ -730,6 +732,7 @@ export default function ListingOptimizationClient({
   initialIntegrations,
   initialError = null,
 }: ListingOptimizationClientProps) {
+  const DETAIL_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_DIRECTORYIQ_DETAIL_TIMEOUT_MS ?? "8000");
   const searchParams = useSearchParams();
   const siteIdParam = searchParams.get("site_id");
   const siteQuery = siteIdParam ? `?site_id=${encodeURIComponent(siteIdParam)}` : "";
@@ -783,8 +786,11 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const listingRes = await fetch(listingPath, { cache: "no-store" });
-        const listingJson = (await listingRes.json().catch(() => ({}))) as ListingDetailPayload & ApiErrorShape;
+        const { response: listingRes, json: listingJson } = await fetchJsonWithTimeout<ListingDetailPayload & ApiErrorShape>(
+          listingPath,
+          { cache: "no-store" },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         const listingPayload =
           (listingJson as ListingDetailResponse).listing ??
           (listingJson as { data?: ListingDetailResponse }).data?.listing;
@@ -803,7 +809,12 @@ export default function ListingOptimizationClient({
           evaluation: evaluationPayload ?? { totalScore: 0 },
         });
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to load listing details.";
+        const message =
+          err instanceof RequestTimeoutError
+            ? "Listing details request timed out."
+            : err instanceof Error
+              ? err.message
+              : "Failed to load listing details.";
         setError({ message, status: 0, listingId: effectiveListingId });
         setListing(null);
       }
@@ -811,8 +822,11 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch("/api/directoryiq/signal-sources", { cache: "no-store" });
-        const json = (await response.json().catch(() => ({}))) as SignalSourcesResponse & ApiErrorShape;
+        const { response, json } = await fetchJsonWithTimeout<SignalSourcesResponse & ApiErrorShape>(
+          "/api/directoryiq/signal-sources",
+          { cache: "no-store" },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!response.ok) {
           setIntegrations({
             openaiConfigured: null,
@@ -841,10 +855,11 @@ export default function ListingOptimizationClient({
     void (async () => {
       try {
         setSupportLoading(true);
-        const supportRes = await fetch(supportPath, {
-          cache: "no-store",
-        });
-        const supportJson = (await supportRes.json().catch(() => ({}))) as ListingSupportResponse;
+        const { response: supportRes, json: supportJson } = await fetchJsonWithTimeout<ListingSupportResponse>(
+          supportPath,
+          { cache: "no-store" },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!supportRes.ok || !supportJson.ok) {
           const supportMessage =
             typeof supportJson.error === "string"
@@ -860,7 +875,12 @@ export default function ListingOptimizationClient({
         setSupportMeta(supportJson.meta ?? null);
         setSupportError(null);
       } catch (supportErr) {
-        const message = supportErr instanceof Error ? supportErr.message : "Failed to load support model.";
+        const message =
+          supportErr instanceof RequestTimeoutError
+            ? "Support diagnostics request timed out."
+            : supportErr instanceof Error
+              ? supportErr.message
+              : "Failed to load support model.";
         setSupportError(message);
         setSupport(null);
         setSupportMeta(null);
@@ -872,10 +892,11 @@ export default function ListingOptimizationClient({
     void (async () => {
       try {
         setGapsLoading(true);
-        const gapsRes = await fetch(gapsPath, {
-          cache: "no-store",
-        });
-        const gapsJson = (await gapsRes.json().catch(() => ({}))) as ListingAuthorityGapsResponse;
+        const { response: gapsRes, json: gapsJson } = await fetchJsonWithTimeout<ListingAuthorityGapsResponse>(
+          gapsPath,
+          { cache: "no-store" },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!gapsRes.ok || !gapsJson.ok) {
           const gapsMessage =
             typeof gapsJson.error === "string"
@@ -891,7 +912,12 @@ export default function ListingOptimizationClient({
         setGapsMeta(gapsJson.meta ?? null);
         setGapsError(null);
       } catch (gapsErr) {
-        const message = gapsErr instanceof Error ? gapsErr.message : "Failed to evaluate authority gaps.";
+        const message =
+          gapsErr instanceof RequestTimeoutError
+            ? "Gap analysis request timed out."
+            : gapsErr instanceof Error
+              ? gapsErr.message
+              : "Failed to evaluate authority gaps.";
         setGapsError(message);
         setGaps(null);
         setGapsMeta(null);
@@ -936,12 +962,15 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/actions${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ support, gaps }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingRecommendedActionsResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingRecommendedActionsResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/actions${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.actions) {
@@ -960,7 +989,12 @@ export default function ListingOptimizationClient({
         setActionsLoading(false);
       } catch (actionsErr) {
         if (!active) return;
-        const message = actionsErr instanceof Error ? actionsErr.message : "Failed to evaluate recommended actions.";
+        const message =
+          actionsErr instanceof RequestTimeoutError
+            ? "Recommended actions request timed out."
+            : actionsErr instanceof Error
+              ? actionsErr.message
+              : "Failed to evaluate recommended actions.";
         setActions(null);
         setActionsError(message);
         setActionsLoading(false);
@@ -1004,22 +1038,25 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/intent-clusters${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            support,
-            gaps,
-            actions,
-            flywheel,
-            listingContext: {
-              title: listing?.listing.listing_name ?? support.listing.title ?? effectiveListingId,
-              canonicalUrl: listing?.listing.listing_url ?? support.listing.canonicalUrl ?? null,
-              siteLabel: siteIdParam,
-            },
-          }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingSelectionIntentClustersResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingSelectionIntentClustersResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/intent-clusters${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              support,
+              gaps,
+              actions,
+              flywheel,
+              listingContext: {
+                title: listing?.listing.listing_name ?? support.listing.title ?? effectiveListingId,
+                canonicalUrl: listing?.listing.listing_url ?? support.listing.canonicalUrl ?? null,
+                siteLabel: siteIdParam,
+              },
+            }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.intentClusters) {
@@ -1039,7 +1076,11 @@ export default function ListingOptimizationClient({
       } catch (intentClustersErr) {
         if (!active) return;
         const message =
-          intentClustersErr instanceof Error ? intentClustersErr.message : "Failed to evaluate selection intent clusters.";
+          intentClustersErr instanceof RequestTimeoutError
+            ? "Intent cluster evaluation timed out."
+            : intentClustersErr instanceof Error
+              ? intentClustersErr.message
+              : "Failed to evaluate selection intent clusters.";
         setIntentClusters(null);
         setIntentClustersError(message);
         setIntentClustersLoading(false);
@@ -1073,12 +1114,15 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/reinforcement-plan${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingBlogReinforcementPlanResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingBlogReinforcementPlanResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/reinforcement-plan${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.reinforcementPlan) {
@@ -1098,7 +1142,11 @@ export default function ListingOptimizationClient({
       } catch (reinforcementPlanErr) {
         if (!active) return;
         const message =
-          reinforcementPlanErr instanceof Error ? reinforcementPlanErr.message : "Failed to evaluate blog reinforcement plan.";
+          reinforcementPlanErr instanceof RequestTimeoutError
+            ? "Content plan evaluation timed out."
+            : reinforcementPlanErr instanceof Error
+              ? reinforcementPlanErr.message
+              : "Failed to evaluate blog reinforcement plan.";
         setReinforcementPlan(null);
         setReinforcementPlanError(message);
         setReinforcementPlanLoading(false);
@@ -1152,12 +1200,15 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/content-structure${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters, reinforcementPlan }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingSerpContentStructureResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingSerpContentStructureResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/content-structure${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps, actions, flywheel, intentClusters, reinforcementPlan }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.contentStructure) {
@@ -1177,9 +1228,11 @@ export default function ListingOptimizationClient({
       } catch (contentStructureErr) {
         if (!active) return;
         const message =
-          contentStructureErr instanceof Error
-            ? contentStructureErr.message
-            : "Failed to evaluate SERP-informed content structure.";
+          contentStructureErr instanceof RequestTimeoutError
+            ? "Content structure evaluation timed out."
+            : contentStructureErr instanceof Error
+              ? contentStructureErr.message
+              : "Failed to evaluate SERP-informed content structure.";
         setContentStructure(null);
         setContentStructureError(message);
         setContentStructureLoading(false);
@@ -1236,24 +1289,27 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/multi-action${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            support,
-            gaps,
-            actions,
-            flywheel,
-            intentClusters,
-            reinforcementPlan,
-            contentStructure,
-            integrations: {
-              openaiConfigured: Boolean(integrations.openaiConfigured),
-              bdConfigured: Boolean(integrations.bdConfigured),
-            },
-          }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingMultiActionUpgradeResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingMultiActionUpgradeResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/multi-action${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              support,
+              gaps,
+              actions,
+              flywheel,
+              intentClusters,
+              reinforcementPlan,
+              contentStructure,
+              integrations: {
+                openaiConfigured: Boolean(integrations.openaiConfigured),
+                bdConfigured: Boolean(integrations.bdConfigured),
+              },
+            }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.multiAction) {
@@ -1273,7 +1329,11 @@ export default function ListingOptimizationClient({
       } catch (multiActionErr) {
         if (!active) return;
         const message =
-          multiActionErr instanceof Error ? multiActionErr.message : "Failed to evaluate multi-action upgrade system.";
+          multiActionErr instanceof RequestTimeoutError
+            ? "Improve-this-listing actions timed out."
+            : multiActionErr instanceof Error
+              ? multiActionErr.message
+              : "Failed to evaluate multi-action upgrade system.";
         setMultiAction(null);
         setMultiActionError(message);
         setMultiActionLoading(false);
@@ -1334,12 +1394,15 @@ export default function ListingOptimizationClient({
 
     void (async () => {
       try {
-        const response = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/flywheel-links${siteQuery}`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ support, gaps }),
-        });
-        const json = (await response.json().catch(() => ({}))) as ListingFlywheelLinksResponse;
+        const { response, json } = await fetchJsonWithTimeout<ListingFlywheelLinksResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/flywheel-links${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
         if (!active) return;
 
         if (!response.ok || !json.ok || !json.flywheel) {
@@ -1358,7 +1421,12 @@ export default function ListingOptimizationClient({
         setFlywheelLoading(false);
       } catch (flywheelErr) {
         if (!active) return;
-        const message = flywheelErr instanceof Error ? flywheelErr.message : "Failed to evaluate flywheel links.";
+        const message =
+          flywheelErr instanceof RequestTimeoutError
+            ? "Proof and trust signal evaluation timed out."
+            : flywheelErr instanceof Error
+              ? flywheelErr.message
+              : "Failed to evaluate flywheel links.";
         setFlywheel(null);
         setFlywheelError(message);
         setFlywheelLoading(false);
@@ -1494,11 +1562,12 @@ export default function ListingOptimizationClient({
       loading: boolean;
       unresolved: boolean;
     }
-  ): string => {
-    if (opts.loading) return "...";
-    if (opts.unresolved || value == null) return "—";
-    return String(value);
-  };
+  ): string =>
+    resolveDetailMetricDisplayValue({
+      loading: opts.loading,
+      unresolved: opts.unresolved,
+      value,
+    });
   const intentProfile = intentClusters?.intentProfile ?? {
     primaryIntent: "intent_not_resolved",
     secondaryIntents: [],
