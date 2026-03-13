@@ -63,12 +63,18 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "What's Helping" }).click();
+    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "What's Helping" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
 
     await expect
       .poll(async () => {
-        const supportCard = page.locator("div").filter({ hasText: "Support Signals Found" }).first();
-        const missingCard = page.locator("div").filter({ hasText: "Things Still Missing" }).first();
+        const supportCard = page.locator("div").filter({ hasText: "Supporting links in" }).first();
+        const missingCard = page.locator("div").filter({ hasText: "Total gaps" }).first();
         return {
           support: await supportCard.textContent(),
           missing: await missingCard.textContent(),
@@ -89,14 +95,9 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
         return unavailableCount + timeoutCount;
       })
       .toBeGreaterThan(0);
-    await page.getByRole("button", { name: "What's Missing" }).click();
     await expect(page.getByText("Evaluating visibility gaps...")).toHaveCount(0);
-    await expect
-      .poll(async () => {
-        const unavailableCount = await page.getByText("Gap analysis is not available yet.").count();
-        const timeoutCount = await page.getByText("Gap analysis request timed out.").count();
-        return unavailableCount + timeoutCount;
-      })
-      .toBeGreaterThan(0);
+    await expect(page.getByText("Flywheel evaluation failed because support and gaps diagnostics are unavailable.")).toBeVisible();
+    await expect(page.getByText("Reinforcement planning failed because prerequisite diagnostics are unavailable.")).toBeVisible();
+    await expect(page.getByText("Multi-action upgrade evaluation failed because prerequisite diagnostics are unavailable.")).toBeVisible();
   });
 });
