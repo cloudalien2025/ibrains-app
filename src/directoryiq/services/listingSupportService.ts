@@ -95,6 +95,12 @@ type HubRow = {
   topic_slug: string | null;
 };
 
+function isMissingRelationError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const code = (error as { code?: string }).code;
+  return code === "42P01";
+}
+
 function buildZeroSummary(lastGraphRunAt: string | null): ListingSupportSummary {
   return {
     inboundLinkedSupportCount: 0,
@@ -268,23 +274,28 @@ export async function getListingCurrentSupport(params: {
     }))
     .sort((left, right) => sortText(left.sourceId).localeCompare(sortText(right.sourceId)));
 
-  const outboundRows = await queryDb<OutboundRow>(
-    `
-    SELECT
-      lb.blog_node_id AS blog_node_id,
-      lb.blog_url AS blog_url,
-      b.title AS blog_title,
-      b.canonical_url AS blog_canonical_url
-    FROM directoryiq_listing_backlinks lb
-    LEFT JOIN authority_graph_nodes b
-      ON b.id = lb.blog_node_id
-    WHERE lb.tenant_id = $1
-      AND lb.listing_id = $2
-      AND lb.status = 'present'
-    ORDER BY lb.updated_at DESC
-    `,
-    [params.tenantId, params.listingId]
-  );
+  let outboundRows: OutboundRow[] = [];
+  try {
+    outboundRows = await queryDb<OutboundRow>(
+      `
+      SELECT
+        lb.blog_node_id AS blog_node_id,
+        lb.blog_url AS blog_url,
+        b.title AS blog_title,
+        b.canonical_url AS blog_canonical_url
+      FROM directoryiq_listing_backlinks lb
+      LEFT JOIN authority_graph_nodes b
+        ON b.id = lb.blog_node_id
+      WHERE lb.tenant_id = $1
+        AND lb.listing_id = $2
+        AND lb.status = 'present'
+      ORDER BY lb.updated_at DESC
+      `,
+      [params.tenantId, params.listingId]
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+  }
 
   const outboundSupportLinks: ListingSupportOutbound[] = outboundRows
     .map((row) => {
@@ -299,23 +310,28 @@ export async function getListingCurrentSupport(params: {
     })
     .sort((left, right) => sortText(left.url).localeCompare(sortText(right.url)));
 
-  const hubRows = await queryDb<HubRow>(
-    `
-    SELECT
-      h.id AS hub_id,
-      h.title AS hub_title,
-      h.category_slug AS category_slug,
-      h.geo_slug AS geo_slug,
-      h.topic_slug AS topic_slug
-    FROM directoryiq_hub_members m
-    JOIN directoryiq_hubs h ON h.id = m.hub_id
-    WHERE m.tenant_id = $1
-      AND m.member_type = 'listing'
-      AND m.member_id = $2
-    ORDER BY h.updated_at DESC
-    `,
-    [params.tenantId, params.listingId]
-  );
+  let hubRows: HubRow[] = [];
+  try {
+    hubRows = await queryDb<HubRow>(
+      `
+      SELECT
+        h.id AS hub_id,
+        h.title AS hub_title,
+        h.category_slug AS category_slug,
+        h.geo_slug AS geo_slug,
+        h.topic_slug AS topic_slug
+      FROM directoryiq_hub_members m
+      JOIN directoryiq_hubs h ON h.id = m.hub_id
+      WHERE m.tenant_id = $1
+        AND m.member_type = 'listing'
+        AND m.member_id = $2
+      ORDER BY h.updated_at DESC
+      `,
+      [params.tenantId, params.listingId]
+    );
+  } catch (error) {
+    if (!isMissingRelationError(error)) throw error;
+  }
 
   const connectedSupportPages: ListingSupportConnectedPage[] = hubRows
     .map((row) => {

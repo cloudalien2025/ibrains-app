@@ -6,6 +6,7 @@ import { getListingCurrentSupport, type ListingSupportModel } from "@/src/direct
 import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+const DEFAULT_AUTHORITY_TENANT_ID = "default";
 
 export type SupportResolution = {
   support: ListingSupportModel;
@@ -136,7 +137,6 @@ async function resolveListingContext(
 }
 
 async function resolveLocalSupport(req: NextRequest, listingId: string): Promise<ListingSupportModel> {
-  const tenantId = resolveUserId(req);
   const context = await resolveListingContext(req, listingId);
   const lookupIds = Array.from(
     new Set(
@@ -145,19 +145,46 @@ async function resolveLocalSupport(req: NextRequest, listingId: string): Promise
         .filter(Boolean)
     )
   );
+  const tenantCandidates = Array.from(
+    new Set(
+      [resolveUserId(req), DEFAULT_AUTHORITY_TENANT_ID]
+        .map((value) => value.trim())
+        .filter(Boolean)
+    )
+  );
 
-  try {
-    return await getListingCurrentSupport({
-      tenantId,
-      listingId: context.listingId,
-      listingLookupIds: lookupIds,
-      siteId: context.siteId,
-      listingTitle: context.title,
-      listingUrl: context.canonicalUrl,
-    });
-  } catch {
-    return fallbackSupport(context.listingId, context.siteId);
+  let bestSupport: ListingSupportModel | null = null;
+  let bestScore = -1;
+
+  for (const tenantId of tenantCandidates) {
+    try {
+      const support = await getListingCurrentSupport({
+        tenantId,
+        listingId: context.listingId,
+        listingLookupIds: lookupIds,
+        siteId: context.siteId,
+        listingTitle: context.title,
+        listingUrl: context.canonicalUrl,
+      });
+
+      if (hasMaterialSupportSignals(support)) {
+        return support;
+      }
+
+      const score =
+        (support.listing.canonicalUrl ? 3 : 0) +
+        (support.summary.lastGraphRunAt ? 2 : 0) +
+        ((support.listing.title ?? "").trim() && support.listing.title !== context.listingId ? 1 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        bestSupport = support;
+      }
+    } catch {
+      continue;
+    }
   }
+
+  return bestSupport ?? fallbackSupport(context.listingId, context.siteId);
 }
 
 type UpstreamSupportResponse = {
