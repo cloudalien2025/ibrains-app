@@ -78,27 +78,29 @@ jobs:
       - name: Copy artifact to droplet
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
           source: build.tar.gz
-          target: /root/
+          target: ${{ secrets.DEPLOY_PATH }}
 
       - name: Deploy on droplet
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: root
-          key: ${{ secrets.DROPLET_SSH_KEY }}
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT }}
           script: |
             set -e
-            cd /root/ibrains-app
+            cd ${{ secrets.DEPLOY_PATH }}
 
-            tar -xzf /root/build.tar.gz
+            tar -xzf ${{ secrets.DEPLOY_PATH }}/build.tar.gz
 
             npm ci --omit=dev
 
-            systemctl restart ibrains-next.service
+            systemctl restart ${{ secrets.SERVICE_NAME }}
 
             sleep 2
 
