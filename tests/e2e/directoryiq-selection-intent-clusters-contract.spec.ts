@@ -81,6 +81,20 @@ const gapsResponse = {
 
 test.describe("DirectoryIQ selection intent clusters contract", () => {
   test("renders deterministic cluster and no-cluster states", async ({ page }) => {
+    const selectCreateSupportContentStep = async () => {
+      const desktopSwitcher = page.getByTestId("listing-step-switcher-desktop");
+      const createSupportStepTab = page.getByTestId("listing-step-nav-desktop-create-support-content");
+      await expect(desktopSwitcher).toBeVisible({ timeout: 15_000 });
+      await expect(createSupportStepTab).toBeVisible({ timeout: 15_000 });
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        await createSupportStepTab.click();
+        if ((await createSupportStepTab.getAttribute("aria-selected")) === "true") {
+          return;
+        }
+      }
+      await expect(createSupportStepTab).toHaveAttribute("aria-selected", "true", { timeout: 15_000 });
+    };
+
     await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(listingResponse) });
     });
@@ -262,7 +276,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
+    await selectCreateSupportContentStep();
     const stepWorkspace = page.getByTestId("listing-active-step-workspace");
     await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toBeVisible({ timeout: 15_000 });
@@ -321,7 +335,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
+    await selectCreateSupportContentStep();
     await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("Why this listing is the strongest local fit", { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toHaveCount(0);
