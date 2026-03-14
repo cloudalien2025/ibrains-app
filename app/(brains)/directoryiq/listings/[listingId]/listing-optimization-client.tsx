@@ -965,8 +965,8 @@ export default function ListingOptimizationClient({
   const [multiActionError, setMultiActionError] = useState<string | null>(null);
   const [multiActionLoading, setMultiActionLoading] = useState(true);
   const requestedStep = parseMissionStep(searchParams.get("step"));
-  const [activeStepId, setActiveStepId] = useState<MissionStepId>(requestedStep ?? "audit");
-  const [stepLockedByUser, setStepLockedByUser] = useState(Boolean(requestedStep));
+  const [activeStepId, setActiveStepId] = useState<MissionStepId>("audit");
+  const [stepLockedByUser, setStepLockedByUser] = useState(false);
   const [hasUserAction, setHasUserAction] = useState(false);
   const [completedSteps, setCompletedSteps] = useState<Record<MissionStepId, boolean>>(() => createMissionStepCompletionMap());
 
@@ -1852,16 +1852,17 @@ export default function ListingOptimizationClient({
   });
 
   useEffect(() => {
+    if (!effectiveListingId) return;
+    setHasUserAction(false);
+    setCompletedSteps(createMissionStepCompletionMap());
     if (requestedStep) {
       setActiveStepId(requestedStep);
       setStepLockedByUser(true);
+      return;
     }
-  }, [requestedStep]);
-
-  useEffect(() => {
-    if (stepLockedByUser || requestedStep) return;
-    setActiveStepId(recommendedStepId);
-  }, [recommendedStepId, requestedStep, stepLockedByUser]);
+    setActiveStepId("audit");
+    setStepLockedByUser(false);
+  }, [effectiveListingId, requestedStep]);
 
   const setMissionStep = (stepId: MissionStepId, options?: { lock?: boolean; persistInUrl?: boolean }) => {
     if (options?.lock) {
