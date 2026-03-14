@@ -431,8 +431,15 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
     await expectMissionControlSteps(page);
     await expect(page.getByRole("button", { name: "Publish" })).toHaveCount(0);
     await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Generate and review listing description upgrade")).toHaveCount(0);
-    await expect(page.getByText("Repair listing to support flywheel links")).toHaveCount(0);
+    const noActionStep4Section = page
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: "Step 4: Upgrade the listing" }) })
+      .first();
+    await expect(noActionStep4Section.getByText("Generate and review listing description upgrade").first()).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(noActionStep4Section.getByText("Repair listing to support flywheel links").first()).toBeVisible();
+    await expect(noActionStep4Section.getByText("No major upgrade actions available.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate multi-action upgrade system.")).toHaveCount(0);
   });
 });
