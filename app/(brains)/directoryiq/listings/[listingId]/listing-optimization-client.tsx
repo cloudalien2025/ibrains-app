@@ -708,6 +708,16 @@ const MISSION_STEPS: MissionStepConfig[] = [
   },
 ];
 
+function createMissionStepCompletionMap(initial = false): Record<MissionStepId, boolean> {
+  return {
+    audit: initial,
+    "connect-existing-pages": initial,
+    "create-support-content": initial,
+    "upgrade-the-listing": initial,
+    "launch-and-measure": initial,
+  };
+}
+
 function parseMissionStep(value: string | null): MissionStepId | null {
   if (!value) return null;
   const parsed = value.trim().toLowerCase();
@@ -939,6 +949,12 @@ export default function ListingOptimizationClient({
   const requestedStep = parseMissionStep(searchParams.get("step"));
   const [activeStepId, setActiveStepId] = useState<MissionStepId>(requestedStep ?? "audit");
   const [stepLockedByUser, setStepLockedByUser] = useState(Boolean(requestedStep));
+  const [hasUserAction, setHasUserAction] = useState(false);
+  const [completedSteps, setCompletedSteps] = useState<Record<MissionStepId, boolean>>(() => createMissionStepCompletionMap());
+
+  const markStepCompleted = (stepId: MissionStepId) => {
+    setCompletedSteps((previous) => (previous[stepId] ? previous : { ...previous, [stepId]: true }));
+  };
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -1615,6 +1631,7 @@ export default function ListingOptimizationClient({
   async function generateUpgrade() {
     if (!effectiveListingId) return;
 
+    setHasUserAction(true);
     setState("generating");
     setError(null);
     setNotice(null);
@@ -1642,12 +1659,14 @@ export default function ListingOptimizationClient({
     setApprovalToken("");
     setApproved(false);
     setState("generated");
+    markStepCompleted("upgrade-the-listing");
     setNotice("Upgrade draft generated.");
   }
 
   async function previewChanges() {
     if (!effectiveListingId || !draftId) return;
 
+    setHasUserAction(true);
     setState("previewing");
     setError(null);
     setNotice(null);
@@ -1678,6 +1697,7 @@ export default function ListingOptimizationClient({
   async function approveAndPush() {
     if (!effectiveListingId || !draftId) return;
 
+    setHasUserAction(true);
     setState("pushing");
     setError(null);
     setNotice(null);
@@ -1701,6 +1721,7 @@ export default function ListingOptimizationClient({
     }
 
     setState("done");
+    markStepCompleted("launch-and-measure");
     setNotice("Listing upgrade pushed successfully.");
     await loadListingAndIntegrations();
   }
@@ -1783,17 +1804,22 @@ export default function ListingOptimizationClient({
   const activeStepConfig = MISSION_STEPS[activeStepIndex];
   const canGoBack = activeStepIndex > 0;
   const canGoNext = activeStepIndex < MISSION_STEPS.length - 1;
-  const missionProgress = Math.round((stepCompletionSignals.filter(Boolean).length / stepCompletionSignals.length) * 100);
+  const completedStepCount = MISSION_STEPS.filter((step) => completedSteps[step.id]).length;
+  const missionProgress = Math.round((completedStepCount / MISSION_STEPS.length) * 100);
+  const missionProgressLabel =
+    missionProgress === 0 ? (hasUserAction ? "In progress" : "Not started") : missionProgress === 100 ? "Completed" : "In progress";
   const stepStatusMap = MISSION_STEPS.reduce<Record<MissionStepId, MissionStepStatus>>((acc, step, index) => {
-    const isReady = stepCompletionSignals[index];
-    if (index < recommendedStepIndex && isReady) {
+    if (completedSteps[step.id]) {
       acc[step.id] = "completed";
       return acc;
     }
-    if (index === recommendedStepIndex) {
-      acc[step.id] = activeStepId === step.id ? "in_progress" : "ready";
+
+    const isReady = stepCompletionSignals[index];
+    if (activeStepId === step.id && hasUserAction) {
+      acc[step.id] = "in_progress";
       return acc;
     }
+
     acc[step.id] = isReady ? "ready" : "not_started";
     return acc;
   }, {
@@ -1817,6 +1843,9 @@ export default function ListingOptimizationClient({
   }, [recommendedStepId, requestedStep, stepLockedByUser]);
 
   const setMissionStep = (stepId: MissionStepId, options?: { lock?: boolean; persistInUrl?: boolean }) => {
+    if (options?.lock) {
+      setHasUserAction(true);
+    }
     setActiveStepId(stepId);
     if (options?.lock) {
       setStepLockedByUser(true);
@@ -1826,6 +1855,13 @@ export default function ListingOptimizationClient({
       params.set("step", stepId);
       window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
     }
+  };
+
+  const goToNextStep = () => {
+    if (!canGoNext) return;
+    markStepCompleted(activeStepConfig.id);
+    setHasUserAction(true);
+    setMissionStep(MISSION_STEPS[activeStepIndex + 1].id, { lock: true, persistInUrl: true });
   };
 
   const stepPanels: Record<MissionStepId, ReactNode> = {
@@ -2239,26 +2275,22 @@ export default function ListingOptimizationClient({
         </div>
       ) : null}
 
-      <div className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur">
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
+      <div
+        className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur lg:hidden"
+        data-testid="listing-mobile-sticky-strip"
+      >
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">{`Step ${activeStepIndex + 1}`}</div>
+            <div className="text-sm font-semibold text-slate-100">{activeStepConfig.title}</div>
           </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
-            <div className="mt-1 text-sm font-medium text-slate-100">{biggestBlocker}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
-            <div className="mt-1 text-sm font-medium text-slate-100">{fastestWin}</div>
-          </div>
-          <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3">
-            <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
-            <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
+          <div className="text-right">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
+            <div className="text-base font-semibold text-cyan-100">{missionProgress}%</div>
+            <div className="text-[11px] text-slate-300">{missionProgressLabel}</div>
           </div>
         </div>
-        <div className="mt-2 lg:hidden">
+        <div className="mt-2">
           <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Mission steps">
             {MISSION_STEPS.map((step, index) => {
               const isActive = step.id === activeStepId;
@@ -2282,6 +2314,26 @@ export default function ListingOptimizationClient({
               );
             })}
           </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" data-testid="listing-summary-cards">
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
+          <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
+          <div className="mt-1 text-sm font-medium text-slate-100">{biggestBlocker}</div>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
+          <div className="mt-1 text-sm font-medium text-slate-100">{fastestWin}</div>
+        </div>
+        <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3" data-testid="listing-mission-progress-card">
+          <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
+          <div className="mt-1 text-2xl font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
+          <div className="text-xs text-cyan-100/90">{missionProgressLabel}</div>
         </div>
       </div>
 
@@ -2363,7 +2415,7 @@ export default function ListingOptimizationClient({
           <button
             type="button"
             className="rounded-lg border border-emerald-300/30 bg-emerald-400/15 px-3 py-2 text-sm font-medium text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
-            onClick={() => setMissionStep(MISSION_STEPS[activeStepIndex + 1].id, { lock: true, persistInUrl: true })}
+            onClick={goToNextStep}
             disabled={!canGoNext}
             data-testid="listing-step-next"
           >
