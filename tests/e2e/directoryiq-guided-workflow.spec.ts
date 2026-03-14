@@ -39,7 +39,8 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
 
   test("keeps step navigation reachable on narrow viewport", async ({ page }) => {
     await page.goto(`/directoryiq/listings/${listingIds[0]}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("listing-step-nav-mobile-audit")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-mobile-toggle")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-mobile-audit")).not.toBeVisible();
     await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
     await expect(page.getByTestId("listing-mission-progress-percent")).not.toHaveText("100%");
 
@@ -48,11 +49,11 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
     );
     expect(stickyStripPosition).toBe("sticky");
 
-    const summaryCardsPosition = await page.getByTestId("listing-summary-cards").evaluate(
-      (node) => window.getComputedStyle(node).position
-    );
-    expect(summaryCardsPosition).not.toBe("sticky");
+    await expect(page.getByTestId("listing-summary-cards")).not.toBeVisible();
+    await expect(page.getByText("Current step: Step", { exact: false })).not.toBeVisible();
 
+    await page.getByTestId("listing-step-nav-mobile-toggle").click();
+    await expect(page.getByTestId("listing-step-nav-mobile-audit")).toBeVisible();
     await page.getByTestId("listing-step-nav-mobile-launch-and-measure").click();
     await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
 

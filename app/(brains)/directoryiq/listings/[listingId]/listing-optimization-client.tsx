@@ -918,6 +918,8 @@ export default function ListingOptimizationClient({
   const [diffRows, setDiffRows] = useState<DiffRow[]>([]);
   const [approvalToken, setApprovalToken] = useState("");
   const [approved, setApproved] = useState(false);
+  const [mobileStepsOpen, setMobileStepsOpen] = useState(false);
+  const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<UiError | null>(initialError);
   const [support, setSupport] = useState<ListingSupportModel | null>(null);
@@ -2276,48 +2278,61 @@ export default function ListingOptimizationClient({
       ) : null}
 
       <div
-        className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur lg:hidden"
+        className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-1.5 backdrop-blur lg:hidden"
         data-testid="listing-mobile-sticky-strip"
       >
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
-          <div>
-            <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">{`Step ${activeStepIndex + 1}`}</div>
-            <div className="text-sm font-semibold text-slate-100">{activeStepConfig.title}</div>
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">{`Step ${activeStepIndex + 1}`}</div>
+            <div className="truncate text-sm font-semibold text-slate-100">{activeStepConfig.title}</div>
           </div>
-          <div className="text-right">
-            <div className="text-[11px] uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
-            <div className="text-base font-semibold text-cyan-100">{missionProgress}%</div>
-            <div className="text-[11px] text-slate-300">{missionProgressLabel}</div>
+          <div className="shrink-0 text-right">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">Progress</div>
+            <div className="text-sm font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
           </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-md border border-white/20 px-2 py-1 text-xs font-medium text-slate-200"
+            onClick={() => setMobileStepsOpen((value) => !value)}
+            aria-expanded={mobileStepsOpen}
+            data-testid="listing-step-nav-mobile-toggle"
+          >
+            Steps
+          </button>
         </div>
-        <div className="mt-2">
-          <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Mission steps">
-            {MISSION_STEPS.map((step, index) => {
-              const isActive = step.id === activeStepId;
-              return (
-                <button
-                  key={step.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={isActive}
-                  className={`min-w-fit rounded-lg border px-3 py-2 text-left text-xs transition ${
-                    isActive
-                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
-                      : "border-white/15 bg-white/[0.03] text-slate-300"
-                  }`}
-                  onClick={() => setMissionStep(step.id, { lock: true, persistInUrl: true })}
-                  data-testid={`listing-step-nav-mobile-${step.id}`}
-                >
-                  <div className="font-semibold">{`Step ${index + 1}: ${step.title}`}</div>
-                  <div className="text-[11px] text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
-                </button>
-              );
-            })}
+        {mobileStepsOpen ? (
+          <div className="mt-2 rounded-lg border border-white/10 bg-slate-950/90 p-2" data-testid="listing-step-nav-mobile-drawer">
+            <div className="space-y-1" role="tablist" aria-label="Mission steps">
+              {MISSION_STEPS.map((step, index) => {
+                const isActive = step.id === activeStepId;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`w-full rounded-lg border px-2.5 py-2 text-left text-xs transition ${
+                      isActive
+                        ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                        : "border-white/15 bg-white/[0.03] text-slate-300"
+                    }`}
+                    onClick={() => {
+                      setMissionStep(step.id, { lock: true, persistInUrl: true });
+                      setMobileStepsOpen(false);
+                    }}
+                    data-testid={`listing-step-nav-mobile-${step.id}`}
+                  >
+                    <div className="font-semibold">{`Step ${index + 1}: ${step.title}`}</div>
+                    <div className="text-[11px] text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-        </div>
+        ) : null}
       </div>
 
-      <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" data-testid="listing-summary-cards">
+      <div className="mt-3 hidden gap-2 sm:grid-cols-2 xl:grid-cols-4 lg:grid" data-testid="listing-summary-cards">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
           <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
           <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
@@ -2332,9 +2347,33 @@ export default function ListingOptimizationClient({
         </div>
         <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3" data-testid="listing-mission-progress-card">
           <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
-          <div className="mt-1 text-2xl font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
+          <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
           <div className="text-xs text-cyan-100/90">{missionProgressLabel}</div>
         </div>
+      </div>
+
+      <div className="mt-2 lg:hidden">
+        <button
+          type="button"
+          className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-300"
+          onClick={() => setMobileInsightsOpen((value) => !value)}
+          aria-expanded={mobileInsightsOpen}
+          data-testid="listing-mobile-insights-toggle"
+        >
+          Insights
+        </button>
+        {mobileInsightsOpen ? (
+          <div className="mt-2 space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3" data-testid="listing-mobile-insights-panel">
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
+              <div className="mt-1 text-sm text-slate-200">{biggestBlocker}</div>
+            </div>
+            <div>
+              <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
+              <div className="mt-1 text-sm text-slate-200">{fastestWin}</div>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       <div className="mt-3 grid gap-4 lg:grid-cols-[220px,minmax(0,1fr),240px] lg:items-start">
@@ -2367,11 +2406,7 @@ export default function ListingOptimizationClient({
         </aside>
 
         <div className="space-y-3">
-          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-300">
-            <div className="font-semibold text-slate-100">{`Current step: Step ${activeStepIndex + 1} - ${activeStepConfig.title}`}</div>
-            <div className="mt-1">Status: {missionStepStatusLabel(stepStatusMap[activeStepConfig.id])}</div>
-            <div className="mt-1">{activeStepConfig.subtitle}</div>
-          </div>
+          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">{`Status: ${missionStepStatusLabel(stepStatusMap[activeStepConfig.id])}`}</div>
           <div data-testid="listing-active-step-workspace">{stepPanels[activeStepId]}</div>
         </div>
 
