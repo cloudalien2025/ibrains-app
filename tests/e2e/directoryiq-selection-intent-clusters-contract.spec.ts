@@ -263,12 +263,13 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
-    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Why this service is trusted locally", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Publish a reinforcement blog post with reciprocal linking")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Structure: Reciprocal authority support module")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
-    await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
+    const stepWorkspace = page.getByTestId("listing-active-step-workspace");
+    await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("Publish a reinforcement blog post with reciprocal linking")).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("Structure: Reciprocal authority support module")).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
+    await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
 
     await page.unroute(`**/api/directoryiq/listings/${listingId}/intent-clusters**`);
     await page.route(`**/api/directoryiq/listings/${listingId}/intent-clusters**`, async (route) => {
@@ -321,10 +322,10 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
-    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Why this listing is the strongest local fit", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Why this service is trusted locally", { exact: true })).toHaveCount(0);
-    await expect(page.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
-    await expect(page.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
+    await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("Why this listing is the strongest local fit", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toHaveCount(0);
+    await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
+    await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });
 });
