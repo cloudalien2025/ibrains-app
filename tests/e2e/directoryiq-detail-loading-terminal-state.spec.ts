@@ -64,10 +64,10 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-connect-existing-pages")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-create-support-content")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-upgrade-the-listing")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toBeVisible();
     await expect(page.getByRole("button", { name: "What's Helping" })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
 
@@ -96,8 +96,14 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
       })
       .toBeGreaterThan(0);
     await expect(page.getByText("Evaluating visibility gaps...")).toHaveCount(0);
+    await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
+    await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
     await expect(page.getByText("Flywheel evaluation failed because support and gaps diagnostics are unavailable.")).toBeVisible();
+    await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
+    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
     await expect(page.getByText("Reinforcement planning failed because prerequisite diagnostics are unavailable.")).toBeVisible();
+    await page.getByTestId("listing-step-nav-desktop-upgrade-the-listing").click();
+    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
     await expect(page.getByText("Multi-action upgrade evaluation failed because prerequisite diagnostics are unavailable.")).toBeVisible();
   });
 });

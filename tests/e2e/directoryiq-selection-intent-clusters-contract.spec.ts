@@ -262,6 +262,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
     await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Why this service is trusted locally", { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Publish a reinforcement blog post with reciprocal linking")).toBeVisible({ timeout: 15_000 });
@@ -319,6 +320,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
     await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Why this listing is the strongest local fit", { exact: true })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Why this service is trusted locally", { exact: true })).toHaveCount(0);

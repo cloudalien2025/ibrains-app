@@ -157,10 +157,9 @@ test.describe("DirectoryIQ recommended actions contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Optimize listing authority structure")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Optimize listing authority structure").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Run the listing audit to identify the next fast win.")).toHaveCount(0);
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
@@ -198,9 +197,9 @@ test.describe("DirectoryIQ recommended actions contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
     await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Run the listing audit to identify the next fast win.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Run the listing audit to identify the next fast win.").first()).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Optimize listing authority structure")).toHaveCount(0);
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);

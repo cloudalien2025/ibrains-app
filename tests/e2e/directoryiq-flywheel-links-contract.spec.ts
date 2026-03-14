@@ -234,6 +234,7 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
     await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toBeVisible();
     await expect(page.getByText("Pages missing (create first in Step 3)")).toBeVisible();
@@ -276,6 +277,7 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
     await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toHaveCount(0);
     await expect(page.getByText("Add a category or guide page into the link cluster")).toHaveCount(0);

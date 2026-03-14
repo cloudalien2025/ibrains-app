@@ -21,10 +21,11 @@ const integrationsResponse = {
 
 async function expectMissionControlSteps(page: Page) {
   await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-audit")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-connect-existing-pages")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-create-support-content")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-upgrade-the-listing")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toBeVisible();
 }
 
 test.describe("DirectoryIQ authority gaps contract", () => {
