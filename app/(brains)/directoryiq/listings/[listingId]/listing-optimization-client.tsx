@@ -815,6 +815,8 @@ type CompactRecommendationCardProps = {
   includeItems?: string[];
   includeLabel?: string;
   primaryAction?: string | null;
+  onPrimaryAction?: (() => void) | undefined;
+  primaryActionDisabled?: boolean;
   detailItems?: RecommendationDetailItem[];
 };
 
@@ -826,9 +828,14 @@ function CompactRecommendationCard({
   includeItems = [],
   includeLabel = "What to include",
   primaryAction,
+  onPrimaryAction,
+  primaryActionDisabled = false,
   detailItems = [],
 }: CompactRecommendationCardProps) {
-  const detailRows = detailItems.filter((item) => item.value !== null && item.value !== undefined && item.value !== "");
+  const detailRows = [
+    ...(includeItems.length ? [{ label: includeLabel, value: includeItems.join(" | ") }] : []),
+    ...detailItems,
+  ].filter((item) => item.value !== null && item.value !== undefined && item.value !== "");
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
       <div className="flex flex-wrap items-center gap-2">
@@ -847,23 +854,15 @@ function CompactRecommendationCard({
           <div className="mt-1 text-sm text-slate-300">{nextStep}</div>
         </>
       ) : null}
-      {includeItems.length ? (
-        <>
-          <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">{includeLabel}</div>
-          <div className="mt-1 flex flex-wrap gap-2">
-            {includeItems.map((item) => (
-              <span key={item} className="rounded border border-white/20 px-2 py-0.5 text-[11px] text-slate-200">
-                {item}
-              </span>
-            ))}
-          </div>
-        </>
-      ) : null}
       {primaryAction ? (
-        <>
-          <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Primary action</div>
-          <div className="mt-1 text-sm text-cyan-100">{primaryAction}</div>
-        </>
+        <button
+          type="button"
+          className="mt-3 rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/50 disabled:cursor-not-allowed disabled:opacity-50"
+          onClick={onPrimaryAction}
+          disabled={primaryActionDisabled}
+        >
+          {primaryAction}
+        </button>
       ) : null}
       {detailRows.length ? (
         <details className="mt-3">
@@ -879,6 +878,25 @@ function CompactRecommendationCard({
       ) : null}
     </div>
   );
+}
+
+function classifyStep4Action(item: ListingMultiActionUpgradeItem): "copy" | "trust-proof" | "internal-links" {
+  if (item.key === "repair_flywheel_links" || item.actionType === "internal_link_trust_signal") {
+    return "internal-links";
+  }
+  if (item.key === "optimize_listing_description" || item.key === "implement_serp_structure_recommendations") {
+    return "copy";
+  }
+  return "trust-proof";
+}
+
+function step4ActionLabel(item: ListingMultiActionUpgradeItem): string {
+  if (item.readinessState === "blocked") return "Resolve blockers";
+  if (item.key === "optimize_listing_description") return "Generate update";
+  if (item.key === "repair_flywheel_links") return "Add links now";
+  if (item.key === "strengthen_anchor_intent") return "Add proof now";
+  if (item.key === "implement_serp_structure_recommendations") return "Preview update";
+  return "Save for launch";
 }
 
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
@@ -918,8 +936,6 @@ export default function ListingOptimizationClient({
   const [diffRows, setDiffRows] = useState<DiffRow[]>([]);
   const [approvalToken, setApprovalToken] = useState("");
   const [approved, setApproved] = useState(false);
-  const [mobileStepsOpen, setMobileStepsOpen] = useState(false);
-  const [mobileInsightsOpen, setMobileInsightsOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [error, setError] = useState<UiError | null>(initialError);
   const [support, setSupport] = useState<ListingSupportModel | null>(null);
@@ -1790,6 +1806,9 @@ export default function ListingOptimizationClient({
   const createQueue = reinforcementPlan?.items ?? [];
   const listingUpgradeItems =
     multiAction?.items.filter((item) => item.targetSurface === "listing" || item.key === "optimize_listing_description") ?? [];
+  const step4CopyItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "copy");
+  const step4TrustItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "trust-proof");
+  const step4InternalLinkItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "internal-links");
   const launchReadyItems = multiAction?.items.filter((item) => item.readinessState === "ready") ?? [];
   const launchBlockedItems = multiAction?.items.filter((item) => item.readinessState === "blocked") ?? [];
   const stepCompletionSignals = [
@@ -1923,7 +1942,7 @@ export default function ListingOptimizationClient({
               nextStep="Close this gap before scaling new publishing work."
               includeItems={compactList(item.evidence?.anchors ?? [])}
               includeLabel="What to include"
-              primaryAction="Fix this in the next optimization cycle."
+              primaryAction="Plan fix"
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "URLs", value: item.evidence?.urls?.slice(0, 3).join(", ") ?? null },
@@ -1968,7 +1987,7 @@ export default function ListingOptimizationClient({
                 item.anchorGuidance?.suggestedAnchorText ? `Suggested anchor: ${item.anchorGuidance.suggestedAnchorText}` : null,
               ])}
               includeLabel="What to include"
-              primaryAction="Execute this link update now."
+              primaryAction="Add links now"
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "Source page", value: cleanCustomerText(item.sourceEntity.title) },
@@ -2016,7 +2035,7 @@ export default function ListingOptimizationClient({
               5
             )}
             includeLabel="What to include"
-            primaryAction="Create your first support asset from this intent."
+            primaryAction="Generate draft"
             detailItems={[
               {
                 label: "Secondary intents",
@@ -2046,7 +2065,7 @@ export default function ListingOptimizationClient({
                 5
               )}
               includeLabel="What will be generated"
-              primaryAction="Queue this content asset for generation."
+              primaryAction="Generate draft"
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 {
@@ -2071,7 +2090,7 @@ export default function ListingOptimizationClient({
               nextStep={`Use "${cleanCustomerText(item.suggestedH1)}" and the suggested section order when drafting.`}
               includeItems={compactList(item.suggestedSections, 4)}
               includeLabel="Outline starter"
-              primaryAction="Apply this structure in the draft."
+              primaryAction="Use this outline"
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "Title pattern", value: cleanCustomerText(item.recommendedTitlePattern) },
@@ -2093,34 +2112,130 @@ export default function ListingOptimizationClient({
             {multiActionError}
           </div>
         ) : null}
-        <div className="mt-3 space-y-2">
-          {listingUpgradeItems.map((item) => (
-            <CompactRecommendationCard
-              key={item.actionId}
-              title={cleanCustomerText(item.title)}
-              priority={item.recommendedPriority}
-              whyItMatters={cleanCustomerText(item.whyItMatters)}
-              nextStep={cleanCustomerText(item.description)}
-              includeItems={compactList([item.expectedImpact])}
-              includeLabel="Expected outcome"
-              primaryAction={item.readinessState === "blocked" ? "Unblock dependencies, then run this." : "Run this listing upgrade now."}
-              detailItems={[
-                { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                {
-                  label: "Dependencies",
-                  value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
-                },
-                {
-                  label: "Blocking reasons",
-                  value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
-                },
-              ]}
-            />
-          ))}
+        <div className="mt-3 grid gap-2 sm:grid-cols-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Copy improvements</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{step4CopyItems.length}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Trust / proof improvements</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{step4TrustItems.length}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Internal link improvements</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{step4InternalLinkItems.length}</div>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-4">
+          <div>
+            <h4 className="text-sm font-semibold text-cyan-100">Copy improvements</h4>
+            <div className="mt-2 space-y-2">
+              {step4CopyItems.length ? (
+                step4CopyItems.map((item) => (
+                  <CompactRecommendationCard
+                    key={item.actionId}
+                    title={cleanCustomerText(item.title)}
+                    priority={item.recommendedPriority}
+                    whyItMatters={cleanCustomerText(item.whyItMatters)}
+                    nextStep={cleanCustomerText(item.description)}
+                    includeItems={compactList([item.expectedImpact])}
+                    includeLabel="Expected outcome"
+                    primaryAction={step4ActionLabel(item)}
+                    onPrimaryAction={item.key === "optimize_listing_description" ? () => void generateUpgrade() : undefined}
+                    primaryActionDisabled={item.key === "optimize_listing_description" && (state === "generating" || !optimizeActionExecutable)}
+                    detailItems={[
+                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                      {
+                        label: "Dependencies",
+                        value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
+                      },
+                      {
+                        label: "Blocking reasons",
+                        value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
+                      },
+                    ]}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-300">
+                  No copy upgrades are queued right now.
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-cyan-100">Trust / proof improvements</h4>
+            <div className="mt-2 space-y-2">
+              {step4TrustItems.length ? (
+                step4TrustItems.map((item) => (
+                  <CompactRecommendationCard
+                    key={item.actionId}
+                    title={cleanCustomerText(item.title)}
+                    priority={item.recommendedPriority}
+                    whyItMatters={cleanCustomerText(item.whyItMatters)}
+                    nextStep={cleanCustomerText(item.description)}
+                    includeItems={compactList([item.expectedImpact])}
+                    includeLabel="Expected outcome"
+                    primaryAction={step4ActionLabel(item)}
+                    detailItems={[
+                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                      {
+                        label: "Dependencies",
+                        value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
+                      },
+                      {
+                        label: "Blocking reasons",
+                        value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
+                      },
+                    ]}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-300">
+                  No trust or proof upgrades are queued right now.
+                </div>
+              )}
+            </div>
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-cyan-100">Internal link improvements</h4>
+            <div className="mt-2 space-y-2">
+              {step4InternalLinkItems.length ? (
+                step4InternalLinkItems.map((item) => (
+                  <CompactRecommendationCard
+                    key={item.actionId}
+                    title={cleanCustomerText(item.title)}
+                    priority={item.recommendedPriority}
+                    whyItMatters={cleanCustomerText(item.whyItMatters)}
+                    nextStep={cleanCustomerText(item.description)}
+                    includeItems={compactList([item.expectedImpact])}
+                    includeLabel="Expected outcome"
+                    primaryAction={step4ActionLabel(item)}
+                    detailItems={[
+                      { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
+                      {
+                        label: "Dependencies",
+                        value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
+                      },
+                      {
+                        label: "Blocking reasons",
+                        value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
+                      },
+                    ]}
+                  />
+                ))
+              ) : (
+                <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-300">
+                  No internal linking upgrades are queued right now.
+                </div>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="mt-4 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
-          <h4 className="text-sm font-semibold text-cyan-100">Listing copy upgrade</h4>
+          <h4 className="text-sm font-semibold text-cyan-100">Step 4 execution console</h4>
           {optimizeActionBlocked ? (
             <div className="mt-2 text-sm text-amber-100">
               {optimizeListingAction?.blockingReasons?.join(" ") ?? "This action is currently blocked."}
@@ -2128,11 +2243,22 @@ export default function ListingOptimizationClient({
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2">
             <NeonButton onClick={() => void generateUpgrade()} disabled={state === "generating" || !optimizeActionExecutable}>
-              {state === "generating" ? "Preparing..." : "Generate listing upgrade"}
+              {state === "generating" ? "Preparing..." : "Generate update"}
             </NeonButton>
             {(state === "generated" || state === "previewing" || state === "ready_to_push" || state === "done") && draftId ? (
               <NeonButton variant="secondary" onClick={() => void previewChanges()} disabled={state === "previewing" || !optimizeActionExecutable}>
-                {state === "previewing" ? "Preparing..." : "Preview upgrade"}
+                {state === "previewing" ? "Preparing..." : "Preview update"}
+              </NeonButton>
+            ) : null}
+            {(state === "generated" || state === "ready_to_push" || state === "done") ? (
+              <NeonButton
+                variant="secondary"
+                onClick={() => {
+                  markStepCompleted("upgrade-the-listing");
+                  setMissionStep("launch-and-measure", { lock: true, persistInUrl: true });
+                }}
+              >
+                Save for launch
               </NeonButton>
             ) : null}
             {(state === "generated" || state === "ready_to_push" || state === "done") ? (
@@ -2174,7 +2300,7 @@ export default function ListingOptimizationClient({
               priority={item.recommendedPriority}
               whyItMatters={cleanCustomerText(item.whyItMatters)}
               nextStep="Review and publish this item in the current launch cycle."
-              primaryAction="Publish this approved improvement."
+              primaryAction="Publish now"
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 {
@@ -2277,59 +2403,67 @@ export default function ListingOptimizationClient({
         </div>
       ) : null}
 
-      <div
-        className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-1.5 backdrop-blur lg:hidden"
-        data-testid="listing-mobile-sticky-strip"
-      >
-        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-2.5 py-2">
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">{`Step ${activeStepIndex + 1}`}</div>
-            <div className="truncate text-sm font-semibold text-slate-100">{activeStepConfig.title}</div>
+      <div className="mt-3 rounded-xl border border-white/10 bg-white/[0.03] p-3 lg:hidden" data-testid="listing-mobile-mission-header">
+        <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Listing mission</div>
+        <div className="mt-1 text-base font-semibold text-slate-100">{displayName}</div>
+        <div className="mt-3 grid gap-2 grid-cols-2">
+          <div className="rounded-lg border border-white/10 bg-black/10 p-2">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Selection score</div>
+            <div className="mt-1 text-lg font-semibold text-slate-100">{displayScore}</div>
           </div>
-          <div className="shrink-0 text-right">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">Progress</div>
-            <div className="text-sm font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
+          <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-2">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">Mission progress</div>
+            <div className="mt-1 text-lg font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
+            <div className="text-[11px] text-cyan-100/90">{missionProgressLabel}</div>
           </div>
-          <button
-            type="button"
-            className="shrink-0 rounded-md border border-white/20 px-2 py-1 text-xs font-medium text-slate-200"
-            onClick={() => setMobileStepsOpen((value) => !value)}
-            aria-expanded={mobileStepsOpen}
-            data-testid="listing-step-nav-mobile-toggle"
-          >
-            Steps
-          </button>
+          <div className="rounded-lg border border-white/10 bg-black/10 p-2">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Biggest blocker</div>
+            <div className="mt-1 text-xs text-slate-200">{biggestBlocker}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/10 p-2">
+            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Fastest win</div>
+            <div className="mt-1 text-xs text-slate-200">{fastestWin}</div>
+          </div>
         </div>
-        {mobileStepsOpen ? (
-          <div className="mt-2 rounded-lg border border-white/10 bg-slate-950/90 p-2" data-testid="listing-step-nav-mobile-drawer">
-            <div className="space-y-1" role="tablist" aria-label="Mission steps">
-              {MISSION_STEPS.map((step, index) => {
-                const isActive = step.id === activeStepId;
-                return (
-                  <button
-                    key={step.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isActive}
-                    className={`w-full rounded-lg border px-2.5 py-2 text-left text-xs transition ${
-                      isActive
-                        ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
-                        : "border-white/15 bg-white/[0.03] text-slate-300"
-                    }`}
-                    onClick={() => {
-                      setMissionStep(step.id, { lock: true, persistInUrl: true });
-                      setMobileStepsOpen(false);
-                    }}
-                    data-testid={`listing-step-nav-mobile-${step.id}`}
-                  >
-                    <div className="font-semibold">{`Step ${index + 1}: ${step.title}`}</div>
-                    <div className="text-[11px] text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
-                  </button>
-                );
-              })}
-            </div>
+      </div>
+
+      <div className="mt-3 lg:hidden" data-testid="listing-step-switcher-mobile">
+        <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Mission steps</div>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Mission steps">
+          {MISSION_STEPS.map((step, index) => {
+            const isActive = step.id === activeStepId;
+            return (
+              <button
+                key={step.id}
+                type="button"
+                role="tab"
+                aria-selected={isActive}
+                className={`shrink-0 rounded-lg border px-3 py-2 text-left text-xs transition ${
+                  isActive
+                    ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                    : "border-white/15 bg-white/[0.03] text-slate-300"
+                }`}
+                onClick={() => setMissionStep(step.id, { lock: true, persistInUrl: true })}
+                data-testid={`listing-step-nav-mobile-${step.id}`}
+              >
+                <div className="font-semibold">{`Step ${index + 1}`}</div>
+                <div className="text-[11px]">{step.title}</div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="mt-2 rounded-lg border border-white/10 bg-white/[0.02] p-3 lg:hidden" data-testid="listing-mobile-quick-wins">
+        <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Quick wins</div>
+        <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+          <div className="shrink-0 rounded-md border border-emerald-300/25 bg-emerald-400/10 px-2.5 py-1.5 text-xs text-emerald-100">
+            Fastest win: {fastestWin}
           </div>
-        ) : null}
+          <div className="shrink-0 rounded-md border border-amber-300/25 bg-amber-400/10 px-2.5 py-1.5 text-xs text-amber-100">
+            Biggest blocker: {biggestBlocker}
+          </div>
+        </div>
       </div>
 
       <div className="mt-3 hidden gap-2 sm:grid-cols-2 xl:grid-cols-4 lg:grid" data-testid="listing-summary-cards">
@@ -2350,30 +2484,6 @@ export default function ListingOptimizationClient({
           <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
           <div className="text-xs text-cyan-100/90">{missionProgressLabel}</div>
         </div>
-      </div>
-
-      <div className="mt-2 lg:hidden">
-        <button
-          type="button"
-          className="w-full rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-left text-xs font-semibold uppercase tracking-[0.08em] text-slate-300"
-          onClick={() => setMobileInsightsOpen((value) => !value)}
-          aria-expanded={mobileInsightsOpen}
-          data-testid="listing-mobile-insights-toggle"
-        >
-          Insights
-        </button>
-        {mobileInsightsOpen ? (
-          <div className="mt-2 space-y-2 rounded-lg border border-white/10 bg-white/[0.02] p-3" data-testid="listing-mobile-insights-panel">
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
-              <div className="mt-1 text-sm text-slate-200">{biggestBlocker}</div>
-            </div>
-            <div>
-              <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
-              <div className="mt-1 text-sm text-slate-200">{fastestWin}</div>
-            </div>
-          </div>
-        ) : null}
       </div>
 
       <div className="mt-3 grid gap-4 lg:grid-cols-[220px,minmax(0,1fr),240px] lg:items-start">
@@ -2406,7 +2516,6 @@ export default function ListingOptimizationClient({
         </aside>
 
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">{`Status: ${missionStepStatusLabel(stepStatusMap[activeStepConfig.id])}`}</div>
           <div data-testid="listing-active-step-workspace">{stepPanels[activeStepId]}</div>
         </div>
 
@@ -2428,7 +2537,7 @@ export default function ListingOptimizationClient({
         </aside>
       </div>
 
-      <div className="sticky bottom-0 z-20 mt-4 rounded-xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur">
+      <div className="sticky bottom-0 z-20 mt-4 rounded-xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-2">
           <button
             type="button"
