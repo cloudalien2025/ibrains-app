@@ -268,10 +268,9 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "How To Organize This Page" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Decision comparison structure")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("This structure aligns with decision stage intent and improves selection confidence.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Structure: Decision comparison structure")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("This structure aligns with decision stage intent and improves selection confidence.")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Recommended asset type: comparison_page")).toHaveCount(0);
     await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
@@ -309,9 +308,10 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "How To Organize This Page" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("No major structure recommendations identified.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Not enough context yet", { exact: true })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Structure: Decision comparison structure")).toHaveCount(0);
+    await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
   });
 });
