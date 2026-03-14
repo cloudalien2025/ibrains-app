@@ -21,8 +21,8 @@ const chromiumArgs = needsNoSandbox
       "--disable-crash-reporter",
       "--disable-features=Crashpad,CrashpadHandler",
       "--disable-breakpad",
-      "--no-zygote",
-      "--single-process",
+      // `--single-process` is unstable in CI/root containers and causes browser crashes.
+      "--disable-dev-shm-usage",
     ]
   : [];
 const chromiumLaunchOptions = needsNoSandbox
@@ -54,6 +54,7 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: ["**/e2e/**/*.spec.ts", "**/ui-audit/**/*.hero.spec.ts", "**/ui-audit/**/*.shell.spec.ts"],
   retries: 1,
+  workers: process.env.CI ? 1 : undefined,
   timeout: 45_000,
   outputDir,
   webServer: {

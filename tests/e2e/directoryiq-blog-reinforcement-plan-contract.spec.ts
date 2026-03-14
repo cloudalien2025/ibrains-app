@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const listingId = "321";
 
@@ -18,6 +18,14 @@ const integrationsResponse = {
   openaiConfigured: true,
   bdConfigured: true,
 };
+
+async function expectMissionControlSteps(page: Page) {
+  await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+}
 
 test.describe("DirectoryIQ blog reinforcement plan contract", () => {
   test("renders deterministic plan and no-plan states", async ({ page }) => {
@@ -233,13 +241,11 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible({ timeout: 15_000 });
+    await expectMissionControlSteps(page);
+    await expect(page.getByRole("button", { name: "Recommended Improvements" })).toHaveCount(0);
     await expect(page.getByText("Publish a comparison decision stage post")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
     await expect(page.getByText("Comparison stage users need alternatives context before selecting.")).toBeVisible();
-    await expect(page.getByText("Create this asset and link it to the listing and related proof pages.")).toHaveCount(2);
-    await expect(page.getByText("Internal links: comparison-asset -> https://example.com/listings/acme-plumbing; listing -> comparison block -> comparison-asset")).toHaveCount(0);
     await expect(page.getByText("No major reinforcement plan items identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
 
@@ -267,9 +273,11 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "Content Plan" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("No major reinforcement plan items identified.")).toBeVisible();
+    await expectMissionControlSteps(page);
+    await expect(page.getByRole("button", { name: "Recommended Improvements" })).toHaveCount(0);
+    await expect(page.getByText("Not enough context yet")).toBeVisible();
+    await expect(page.getByText("Publish a comparison decision stage post")).toHaveCount(0);
+    await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
   });
 });

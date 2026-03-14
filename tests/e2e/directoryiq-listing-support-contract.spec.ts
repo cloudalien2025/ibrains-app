@@ -18,9 +18,12 @@ const integrationsResponse = {
   openaiConfigured: true,
   bdConfigured: true,
 };
+const listingUrl = `/directoryiq/listings/${listingId}?site_id=site-1`;
 
 test.describe("DirectoryIQ listing support contract", () => {
   test("renders canonical supported and intentional no-data support states", async ({ page }) => {
+    const step1Section = page.locator("div").filter({ has: page.getByRole("heading", { name: "Step 1: Audit this listing" }) }).first();
+
     await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {
       await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(listingResponse) });
     });
@@ -98,12 +101,16 @@ test.describe("DirectoryIQ listing support contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "What's Helping" })).toBeVisible();
-    await expect(page.getByText("How to choose a plumber")).toBeVisible();
-    await expect(page.getByText("Emergency plumbing checklist")).toBeVisible();
-    await expect(page.getByText("Water heater tips")).toBeVisible();
-    await expect(page.getByText("Plumbing · Austin")).toBeVisible();
+    await page.goto(listingUrl, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
+    await expect(page.getByText("Loading support diagnostics...")).toHaveCount(0);
+    await expect(step1Section.getByText("Supporting links in", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Mentions without links", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Connected support pages", { exact: true })).toBeVisible();
+    const supportedPageText = await page.locator("body").innerText();
+    expect(supportedPageText).toMatch(/SUPPORTING LINKS IN\s*1/i);
+    expect(supportedPageText).toMatch(/MENTIONS WITHOUT LINKS\s*1/i);
+    expect(supportedPageText).toMatch(/CONNECTED SUPPORT PAGES\s*1/i);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
 
     await page.unroute(`**/api/directoryiq/listings/${listingId}/support**`);
@@ -141,12 +148,17 @@ test.describe("DirectoryIQ listing support contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "What's Helping" })).toBeVisible();
-    await expect(page.getByText("No inbound linked support detected yet.")).toBeVisible();
-    await expect(page.getByText("No unlinked mentions detected yet.")).toBeVisible();
-    await expect(page.getByText("No outbound support links detected yet.")).toBeVisible();
-    await expect(page.getByText("Support diagnostics are not available yet.").first()).toBeVisible();
+    await page.goto(listingUrl, { waitUntil: "domcontentloaded" });
+    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
+    await expect(page.getByText("Loading support diagnostics...")).toHaveCount(0);
+    await expect(step1Section.getByText("Supporting links in", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Mentions without links", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Connected support pages", { exact: true })).toBeVisible();
+    const noDataPageText = await page.locator("body").innerText();
+    expect(noDataPageText).toMatch(/SUPPORTING LINKS IN\s*—/i);
+    expect(noDataPageText).toMatch(/MENTIONS WITHOUT LINKS\s*—/i);
+    expect(noDataPageText).toMatch(/CONNECTED SUPPORT PAGES\s*—/i);
+    expect(noDataPageText).toContain("Support diagnostics are not available yet.");
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
   });
 });

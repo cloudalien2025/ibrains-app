@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 const listingId = "321";
 
@@ -18,6 +18,14 @@ const integrationsResponse = {
   openaiConfigured: true,
   bdConfigured: true,
 };
+
+async function expectMissionControlSteps(page: Page) {
+  await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+}
 
 test.describe("DirectoryIQ authority gaps contract", () => {
   test("renders structured gaps and intentional no-gap state", async ({ page }) => {
@@ -108,8 +116,8 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "What's Missing" }).click();
-    await expect(page.getByRole("heading", { name: "Step 2: Find What Is Still Missing" })).toBeVisible();
+    await expectMissionControlSteps(page);
+    await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
     await expect(page.getByText("No support posts are linking to this listing")).toBeVisible();
     await expect(page.getByText("Missing comparison support content")).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
@@ -150,10 +158,11 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("button", { name: "What's Missing" })).toBeVisible();
-    await page.getByRole("button", { name: "What's Missing" }).click();
-    await expect(page.getByRole("heading", { name: "Step 2: Find What Is Still Missing" })).toBeVisible();
-    await expect(page.getByText("No major visibility gaps found for this listing.")).toBeVisible();
+    await expectMissionControlSteps(page);
+    await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
+    await expect(page.getByText("Total gaps")).toBeVisible();
+    await expect(page.getByText("No support posts are linking to this listing")).toHaveCount(0);
+    await expect(page.getByText("Missing comparison support content")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
   });
 });
