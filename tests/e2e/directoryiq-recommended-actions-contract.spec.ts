@@ -158,10 +158,10 @@ test.describe("DirectoryIQ recommended actions contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "Recommended Improvements" })).toBeVisible();
-    await expect(page.getByText("Optimize listing authority structure")).toBeVisible();
-    await expect(page.getByText("Add flywheel links between listing and support assets")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Optimize listing authority structure")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Run the listing audit to identify the next fast win.")).toHaveCount(0);
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
 
@@ -199,9 +199,10 @@ test.describe("DirectoryIQ recommended actions contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByRole("button", { name: "Recommended Improvements" }).click();
-    await expect(page.getByRole("heading", { name: "Recommended Improvements" })).toBeVisible();
-    await expect(page.getByText("No major actions recommended at this time.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Run the listing audit to identify the next fast win.")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Optimize listing authority structure")).toHaveCount(0);
+    await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
   });
 });
