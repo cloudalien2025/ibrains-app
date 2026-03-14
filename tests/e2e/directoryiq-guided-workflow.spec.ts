@@ -8,6 +8,19 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
   for (const listingId of listingIds) {
     test(`shows guided workflow for listing ${listingId}`, async ({ page }) => {
       await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
+      await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
+      await expect(page.locator("[data-testid^='listing-step-nav-desktop-']")).toHaveCount(5);
+      await expect(page.locator("[data-testid='listing-step-switcher-desktop'] .space-y-2")).toHaveCount(0);
+
+      const switcherBox = await page.getByTestId("listing-step-switcher-desktop").boundingBox();
+      const workspaceBox = await page.getByTestId("listing-active-step-workspace").boundingBox();
+      expect(switcherBox).not.toBeNull();
+      expect(workspaceBox).not.toBeNull();
+      if (switcherBox && workspaceBox) {
+        expect(workspaceBox.y).toBeGreaterThan(switcherBox.y);
+        expect(workspaceBox.y - (switcherBox.y + switcherBox.height)).toBeLessThan(80);
+      }
+
       await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).not.toBeVisible();
 
