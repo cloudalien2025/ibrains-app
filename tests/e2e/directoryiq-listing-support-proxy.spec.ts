@@ -17,6 +17,7 @@ test.describe("DirectoryIQ listing support proxy path", () => {
     );
     expect(supportResponse.status()).toBe(200);
 
+    await page.getByTestId("listing-step-nav-desktop-audit").click();
     await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible({ timeout: 15_000 });
     await expect(step1Section.getByText("Supporting links in", { exact: true })).toBeVisible();
     await expect(step1Section.getByText("Mentions without links", { exact: true })).toBeVisible();

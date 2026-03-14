@@ -669,6 +669,67 @@ type UiError = {
   listingId?: string;
 };
 
+type MissionStepId =
+  | "audit"
+  | "connect-existing-pages"
+  | "create-support-content"
+  | "upgrade-the-listing"
+  | "launch-and-measure";
+
+type MissionStepStatus = "not_started" | "in_progress" | "ready" | "completed";
+
+type MissionStepConfig = {
+  id: MissionStepId;
+  title: string;
+  subtitle: string;
+};
+
+const MISSION_STEPS: MissionStepConfig[] = [
+  { id: "audit", title: "Audit this listing", subtitle: "Review current support, top gaps, and the next best move." },
+  {
+    id: "connect-existing-pages",
+    title: "Connect existing pages",
+    subtitle: "Use opportunities you can execute now because the pages already exist.",
+  },
+  {
+    id: "create-support-content",
+    title: "Create support content",
+    subtitle: "Generate the missing content assets that strengthen selection readiness.",
+  },
+  {
+    id: "upgrade-the-listing",
+    title: "Upgrade the listing",
+    subtitle: "Improve listing-page copy and trust blocks before launch.",
+  },
+  {
+    id: "launch-and-measure",
+    title: "Launch and measure",
+    subtitle: "Review what is ready, publish safely, and track impact.",
+  },
+];
+
+function parseMissionStep(value: string | null): MissionStepId | null {
+  if (!value) return null;
+  const parsed = value.trim().toLowerCase();
+  if (
+    parsed === "audit" ||
+    parsed === "connect-existing-pages" ||
+    parsed === "create-support-content" ||
+    parsed === "upgrade-the-listing" ||
+    parsed === "launch-and-measure"
+  ) {
+    return parsed;
+  }
+  return null;
+}
+
+function missionStepStatusLabel(status: MissionStepStatus): string {
+  if (status === "in_progress") return "In progress";
+  if (status === "ready") return "Ready";
+  if (status === "completed") return "Completed";
+  return "Not started";
+}
+
 const UUID_PATTERN =
   /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
 
@@ -722,23 +783,6 @@ function compactList(values: Array<string | null | undefined>, limit = 3): strin
     .map((value) => (value ? cleanCustomerText(value) : ""))
     .filter(Boolean)
     .slice(0, limit);
-}
-
-function connectNowReadyItemsCount(support: ListingSupportModel | null, flywheel: ListingFlywheelLinksModel | null): number {
-  const mentionCount = support?.mentionsWithoutLinks.length ?? 0;
-  const flywheelCount =
-    flywheel?.items.filter((item) => item.type !== "category_or_guide_page_should_join_cluster").length ?? 0;
-  return mentionCount + flywheelCount;
-}
-
-function createQueueItemsCount(
-  reinforcementPlan: ListingBlogReinforcementPlanModel | null,
-  flywheel: ListingFlywheelLinksModel | null
-): number {
-  const planCount = reinforcementPlan?.items.length ?? 0;
-  const flywheelCreateCount =
-    flywheel?.items.filter((item) => item.type === "category_or_guide_page_should_join_cluster").length ?? 0;
-  return planCount + flywheelCreateCount;
 }
 
 function toPriorityLabel(value: string): string {
@@ -892,6 +936,9 @@ export default function ListingOptimizationClient({
   const [multiAction, setMultiAction] = useState<ListingMultiActionUpgradeModel | null>(null);
   const [multiActionError, setMultiActionError] = useState<string | null>(null);
   const [multiActionLoading, setMultiActionLoading] = useState(true);
+  const requestedStep = parseMissionStep(searchParams.get("step"));
+  const [activeStepId, setActiveStepId] = useState<MissionStepId>(requestedStep ?? "audit");
+  const [stepLockedByUser, setStepLockedByUser] = useState(Boolean(requestedStep));
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -1714,14 +1761,6 @@ export default function ListingOptimizationClient({
     : fastestWinAction
       ? cleanCustomerText(fastestWinAction.title)
       : "Run the listing audit to identify the next fast win.";
-  const missionChecks = [
-    Boolean(support && !supportUnresolved),
-    Boolean(gaps && !gapsUnresolved),
-    Boolean(connectNowReadyItemsCount(support, flywheel) > 0 || createQueueItemsCount(reinforcementPlan, flywheel) > 0),
-    Boolean(optimizeListingAction),
-    state === "done" || Boolean(multiAction?.grouped.byReadiness.ready.length),
-  ];
-  const missionProgress = Math.round((missionChecks.filter(Boolean).length / missionChecks.length) * 100);
   const connectNowFlywheelItems =
     flywheel?.items.filter((item) => item.type !== "category_or_guide_page_should_join_cluster") ?? [];
   const createFirstFlywheelItems = flywheel?.items.filter((item) => item.type === "category_or_guide_page_should_join_cluster") ?? [];
@@ -1730,93 +1769,68 @@ export default function ListingOptimizationClient({
     multiAction?.items.filter((item) => item.targetSurface === "listing" || item.key === "optimize_listing_description") ?? [];
   const launchReadyItems = multiAction?.items.filter((item) => item.readinessState === "ready") ?? [];
   const launchBlockedItems = multiAction?.items.filter((item) => item.readinessState === "blocked") ?? [];
+  const stepCompletionSignals = [
+    supportResolved && gapsResolved,
+    !flywheelLoading && !flywheelError && Boolean(flywheel),
+    !reinforcementPlanLoading && !reinforcementPlanError && !contentStructureLoading,
+    !multiActionLoading && !multiActionError && Boolean(optimizeListingAction),
+    state === "done" || launchReadyItems.length > 0,
+  ];
+  const unresolvedStepIndex = stepCompletionSignals.findIndex((value) => !value);
+  const recommendedStepIndex = unresolvedStepIndex === -1 ? MISSION_STEPS.length - 1 : unresolvedStepIndex;
+  const recommendedStepId = MISSION_STEPS[recommendedStepIndex].id;
+  const activeStepIndex = Math.max(0, MISSION_STEPS.findIndex((step) => step.id === activeStepId));
+  const activeStepConfig = MISSION_STEPS[activeStepIndex];
+  const canGoBack = activeStepIndex > 0;
+  const canGoNext = activeStepIndex < MISSION_STEPS.length - 1;
+  const missionProgress = Math.round((stepCompletionSignals.filter(Boolean).length / stepCompletionSignals.length) * 100);
+  const stepStatusMap = MISSION_STEPS.reduce<Record<MissionStepId, MissionStepStatus>>((acc, step, index) => {
+    const isReady = stepCompletionSignals[index];
+    if (index < recommendedStepIndex && isReady) {
+      acc[step.id] = "completed";
+      return acc;
+    }
+    if (index === recommendedStepIndex) {
+      acc[step.id] = activeStepId === step.id ? "in_progress" : "ready";
+      return acc;
+    }
+    acc[step.id] = isReady ? "ready" : "not_started";
+    return acc;
+  }, {
+    audit: "not_started",
+    "connect-existing-pages": "not_started",
+    "create-support-content": "not_started",
+    "upgrade-the-listing": "not_started",
+    "launch-and-measure": "not_started",
+  });
 
-  return (
-    <>
-      <TopBar
-        breadcrumbs={["Home", "DirectoryIQ", "AI Visibility"]}
-        searchPlaceholder="Search AI visibility..."
-      />
+  useEffect(() => {
+    if (requestedStep) {
+      setActiveStepId(requestedStep);
+      setStepLockedByUser(true);
+    }
+  }, [requestedStep]);
 
-      <ListingHero
-        title={displayName}
-        subtitle={displayUrl ?? undefined}
-        imageUrl={listing?.listing.mainImageUrl ?? null}
-        score={displayScore}
-        chips={[
-          {
-            label:
-              integrations.openaiConfigured === null
-                ? "AI Status Pending"
-                : integrations.openaiConfigured
-                  ? "AI Connected"
-                  : "AI Not Connected",
-            tone: integrations.openaiConfigured === null ? "neutral" : integrations.openaiConfigured ? "good" : "warn",
-          },
-          {
-            label:
-              integrations.bdConfigured === null
-                ? "Website Status Pending"
-                : integrations.bdConfigured
-                  ? "Website Connected"
-                  : "Website Not Connected",
-            tone: integrations.bdConfigured === null ? "neutral" : integrations.bdConfigured ? "good" : "warn",
-          },
-        ]}
-      />
+  useEffect(() => {
+    if (stepLockedByUser || requestedStep) return;
+    setActiveStepId(recommendedStepId);
+  }, [recommendedStepId, requestedStep, stepLockedByUser]);
 
-      {integrations.openaiConfigured === false ? (
-        <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          AI connection not configured. Configure it in{" "}
-          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Connections</Link>.
-        </div>
-      ) : null}
+  const setMissionStep = (stepId: MissionStepId, options?: { lock?: boolean; persistInUrl?: boolean }) => {
+    setActiveStepId(stepId);
+    if (options?.lock) {
+      setStepLockedByUser(true);
+    }
+    if (options?.persistInUrl && typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      params.set("step", stepId);
+      window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
+    }
+  };
 
-      {integrations.bdConfigured === false ? (
-        <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          Website connection not configured. Configure it in{" "}
-          <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Connections</Link>.
-        </div>
-      ) : null}
-
-      {error ? (
-        <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
-          {error.message}
-          {error.status !== undefined ? ` (status: ${error.status})` : ""}
-          {error.listingId ? " (listing context unavailable)" : ""}
-          {error.reqId ? ` (reqId: ${error.reqId})` : ""}
-        </div>
-      ) : null}
-
-      {notice ? (
-        <div className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-          {notice}
-        </div>
-      ) : null}
-
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
-          <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
-          <div className="mt-1 text-sm font-medium text-slate-100">{biggestBlocker}</div>
-        </div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
-          <div className="mt-1 text-sm font-medium text-slate-100">{fastestWin}</div>
-        </div>
-        <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3">
-          <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
-          <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
-        </div>
-      </div>
-
-      <HudCard
-        title="Step 1: Audit this listing"
-        subtitle="Review current support, top gaps, and the next best move."
-      >
+  const stepPanels: Record<MissionStepId, ReactNode> = {
+    audit: (
+      <HudCard title="Step 1: Audit this listing" subtitle={MISSION_STEPS[0].subtitle}>
         {supportLoading ? <div className="text-sm text-slate-300">Loading support diagnostics...</div> : null}
         {supportError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -1881,11 +1895,9 @@ export default function ListingOptimizationClient({
           ))}
         </div>
       </HudCard>
-
-      <HudCard
-        title="Step 2: Connect existing pages"
-        subtitle="Use opportunities you can execute now because the pages already exist."
-      >
+    ),
+    "connect-existing-pages": (
+      <HudCard title="Step 2: Connect existing pages" subtitle={MISSION_STEPS[1].subtitle}>
         {flywheelLoading ? <div className="text-sm text-slate-300">Evaluating link opportunities...</div> : null}
         {flywheelError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -1895,9 +1907,7 @@ export default function ListingOptimizationClient({
         <div className="mt-3 grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Pages that already exist</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">
-              {support?.connectedSupportPages.length ?? 0}
-            </div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{support?.connectedSupportPages.length ?? 0}</div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Links you can add now</div>
@@ -1905,9 +1915,7 @@ export default function ListingOptimizationClient({
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing pages moved to Step 3</div>
-            <div className="mt-1 text-2xl font-semibold text-slate-100">
-              {createFirstFlywheelItems.length}
-            </div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{createFirstFlywheelItems.length}</div>
           </div>
         </div>
         <div className="mt-4 space-y-2">
@@ -1927,7 +1935,10 @@ export default function ListingOptimizationClient({
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "Source page", value: cleanCustomerText(item.sourceEntity.title) },
                 { label: "Target page", value: cleanCustomerText(item.targetEntity.title) },
-                { label: "Anchor guidance", value: item.anchorGuidance?.guidance ? cleanCustomerText(item.anchorGuidance.guidance) : null },
+                {
+                  label: "Anchor guidance",
+                  value: item.anchorGuidance?.guidance ? cleanCustomerText(item.anchorGuidance.guidance) : null,
+                },
               ]}
             />
           ))}
@@ -1945,11 +1956,9 @@ export default function ListingOptimizationClient({
           </details>
         ) : null}
       </HudCard>
-
-      <HudCard
-        title="Step 3: Create support content"
-        subtitle="Generate the missing content assets that strengthen selection readiness."
-      >
+    ),
+    "create-support-content": (
+      <HudCard title="Step 3: Create support content" subtitle={MISSION_STEPS[2].subtitle}>
         {reinforcementPlanLoading || contentStructureLoading ? (
           <div className="text-sm text-slate-300">Preparing content plan...</div>
         ) : null}
@@ -1964,7 +1973,10 @@ export default function ListingOptimizationClient({
             priority={intentProfile.confidence}
             whyItMatters="This intent drives what support content should be created first."
             nextStep="Start with one high-priority asset mapped to this intent."
-            includeItems={compactList(intentProfile.missingEntities.length ? intentProfile.missingEntities : intentProfile.targetEntities, 5)}
+            includeItems={compactList(
+              intentProfile.missingEntities.length ? intentProfile.missingEntities : intentProfile.targetEntities,
+              5
+            )}
             includeLabel="What to include"
             primaryAction="Create your first support asset from this intent."
             detailItems={[
@@ -1991,21 +2003,24 @@ export default function ListingOptimizationClient({
               priority={item.priority}
               whyItMatters={cleanCustomerText(item.whyItMatters ?? item.rationale)}
               nextStep={cleanCustomerText(item.suggestedContentPurpose)}
-              includeItems={compactList([
-                "Generate title",
-                "Generate outline",
-                "Generate draft",
-                "Generate featured image",
-                "Generate internal link plan",
-              ], 5)}
+              includeItems={compactList(
+                ["Generate title", "Generate outline", "Generate draft", "Generate featured image", "Generate internal link plan"],
+                5
+              )}
               includeLabel="What will be generated"
               primaryAction="Queue this content asset for generation."
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                { label: "Expected impact", value: item.expectedSelectionImpact ? cleanCustomerText(item.expectedSelectionImpact) : null },
+                {
+                  label: "Expected impact",
+                  value: item.expectedSelectionImpact ? cleanCustomerText(item.expectedSelectionImpact) : null,
+                },
                 { label: "Target intent", value: item.targetIntent ? toPlainIntent(item.targetIntent) : null },
                 { label: "Suggested angle", value: item.suggestedAngle ? cleanCustomerText(item.suggestedAngle) : null },
-                { label: "Internal linking plan", value: item.suggestedInternalLinkPattern ? cleanCustomerText(item.suggestedInternalLinkPattern) : null },
+                {
+                  label: "Internal linking plan",
+                  value: item.suggestedInternalLinkPattern ? cleanCustomerText(item.suggestedInternalLinkPattern) : null,
+                },
               ]}
             />
           ))}
@@ -2022,17 +2037,18 @@ export default function ListingOptimizationClient({
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "Title pattern", value: cleanCustomerText(item.recommendedTitlePattern) },
-                { label: "Suggested components", value: item.suggestedComponents.map((value) => cleanCustomerText(value)).join(", ") },
+                {
+                  label: "Suggested components",
+                  value: item.suggestedComponents.map((value) => cleanCustomerText(value)).join(", "),
+                },
               ]}
             />
           ))}
         </div>
       </HudCard>
-
-      <HudCard
-        title="Step 4: Upgrade the listing"
-        subtitle="Improve listing-page copy and trust blocks before launch."
-      >
+    ),
+    "upgrade-the-listing": (
+      <HudCard title="Step 4: Upgrade the listing" subtitle={MISSION_STEPS[3].subtitle}>
         {multiActionLoading ? <div className="text-sm text-slate-300">Preparing listing upgrade actions...</div> : null}
         {multiActionError ? (
           <div className="rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
@@ -2052,8 +2068,14 @@ export default function ListingOptimizationClient({
               primaryAction={item.readinessState === "blocked" ? "Unblock dependencies, then run this." : "Run this listing upgrade now."}
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                { label: "Dependencies", value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None" },
-                { label: "Blocking reasons", value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null },
+                {
+                  label: "Dependencies",
+                  value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
+                },
+                {
+                  label: "Blocking reasons",
+                  value: item.blockingReasons?.length ? item.blockingReasons.map((value) => cleanCustomerText(value)).join(" ") : null,
+                },
               ]}
             />
           ))}
@@ -2089,11 +2111,9 @@ export default function ListingOptimizationClient({
           ) : null}
         </div>
       </HudCard>
-
-      <HudCard
-        title="Step 5: Launch and measure"
-        subtitle="Review what is ready, publish safely, and track impact."
-      >
+    ),
+    "launch-and-measure": (
+      <HudCard title="Step 5: Launch and measure" subtitle={MISSION_STEPS[4].subtitle}>
         <div className="grid gap-3 md:grid-cols-3">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready to launch</div>
@@ -2119,7 +2139,10 @@ export default function ListingOptimizationClient({
               primaryAction="Publish this approved improvement."
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
-                { label: "Dependencies", value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None" },
+                {
+                  label: "Dependencies",
+                  value: item.dependencies.length ? item.dependencies.map((value) => cleanCustomerText(value)).join(", ") : "None",
+                },
               ]}
             />
           ))}
@@ -2150,6 +2173,204 @@ export default function ListingOptimizationClient({
           </div>
         ) : null}
       </HudCard>
+    ),
+  };
+
+  return (
+    <>
+      <TopBar
+        breadcrumbs={["Home", "DirectoryIQ", "AI Visibility"]}
+        searchPlaceholder="Search AI visibility..."
+      />
+
+      <ListingHero
+        title={displayName}
+        subtitle={displayUrl ?? undefined}
+        imageUrl={listing?.listing.mainImageUrl ?? null}
+        score={displayScore}
+        chips={[
+          {
+            label:
+              integrations.openaiConfigured === null
+                ? "AI Status Pending"
+                : integrations.openaiConfigured
+                  ? "AI Connected"
+                  : "AI Not Connected",
+            tone: integrations.openaiConfigured === null ? "neutral" : integrations.openaiConfigured ? "good" : "warn",
+          },
+          {
+            label:
+              integrations.bdConfigured === null
+                ? "Website Status Pending"
+                : integrations.bdConfigured
+                  ? "Website Connected"
+                  : "Website Not Connected",
+            tone: integrations.bdConfigured === null ? "neutral" : integrations.bdConfigured ? "good" : "warn",
+          },
+        ]}
+      />
+
+      {integrations.openaiConfigured === false ? (
+        <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          AI connection not configured. Configure it in{" "}
+          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Connections</Link>.
+        </div>
+      ) : null}
+
+      {integrations.bdConfigured === false ? (
+        <div className="rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
+          Website connection not configured. Configure it in{" "}
+          <Link href="/directoryiq/signal-sources?connector=brilliant-directories" className="underline">Connections</Link>.
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="rounded-xl border border-rose-300/30 bg-rose-400/10 px-4 py-3 text-sm text-rose-100">
+          {error.message}
+          {error.status !== undefined ? ` (status: ${error.status})` : ""}
+          {error.listingId ? " (listing context unavailable)" : ""}
+          {error.reqId ? ` (reqId: ${error.reqId})` : ""}
+        </div>
+      ) : null}
+
+      {notice ? (
+        <div className="rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          {notice}
+        </div>
+      ) : null}
+
+      <div className="sticky top-14 z-20 -mx-2 rounded-xl border border-white/10 bg-slate-950/95 px-2 py-2 backdrop-blur">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Selection Score</div>
+            <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
+            <div className="mt-1 text-sm font-medium text-slate-100">{biggestBlocker}</div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Fastest Win</div>
+            <div className="mt-1 text-sm font-medium text-slate-100">{fastestWin}</div>
+          </div>
+          <div className="rounded-lg border border-cyan-300/20 bg-cyan-400/10 p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-cyan-100">Mission Progress</div>
+            <div className="mt-1 text-2xl font-semibold text-cyan-100">{missionProgress}%</div>
+          </div>
+        </div>
+        <div className="mt-2 lg:hidden">
+          <div className="flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Mission steps">
+            {MISSION_STEPS.map((step, index) => {
+              const isActive = step.id === activeStepId;
+              return (
+                <button
+                  key={step.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={isActive}
+                  className={`min-w-fit rounded-lg border px-3 py-2 text-left text-xs transition ${
+                    isActive
+                      ? "border-cyan-300/50 bg-cyan-400/20 text-cyan-100"
+                      : "border-white/15 bg-white/[0.03] text-slate-300"
+                  }`}
+                  onClick={() => setMissionStep(step.id, { lock: true, persistInUrl: true })}
+                  data-testid={`listing-step-nav-mobile-${step.id}`}
+                >
+                  <div className="font-semibold">{`Step ${index + 1}: ${step.title}`}</div>
+                  <div className="text-[11px] text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-4 lg:grid-cols-[220px,minmax(0,1fr),240px] lg:items-start">
+        <aside className="hidden lg:block lg:sticky lg:top-32">
+          <nav className="rounded-xl border border-white/10 bg-slate-950/65 p-3" aria-label="Mission step navigation">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mission Steps</div>
+            <div className="mt-3 space-y-2">
+              {MISSION_STEPS.map((step, index) => {
+                const isActive = step.id === activeStepId;
+                return (
+                  <button
+                    key={step.id}
+                    type="button"
+                    className={`w-full rounded-lg border p-3 text-left transition ${
+                      isActive
+                        ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
+                        : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/25"
+                    }`}
+                    onClick={() => setMissionStep(step.id, { lock: true, persistInUrl: true })}
+                    data-testid={`listing-step-nav-desktop-${step.id}`}
+                  >
+                    <div className="text-xs uppercase tracking-[0.08em] text-slate-400">{`Step ${index + 1}`}</div>
+                    <div className="mt-1 text-sm font-semibold">{step.title}</div>
+                    <div className="mt-1 text-xs text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        <div className="space-y-3">
+          <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-sm text-slate-300">
+            <div className="font-semibold text-slate-100">{`Current step: Step ${activeStepIndex + 1} - ${activeStepConfig.title}`}</div>
+            <div className="mt-1">Status: {missionStepStatusLabel(stepStatusMap[activeStepConfig.id])}</div>
+            <div className="mt-1">{activeStepConfig.subtitle}</div>
+          </div>
+          <div data-testid="listing-active-step-workspace">{stepPanels[activeStepId]}</div>
+        </div>
+
+        <aside className="hidden lg:block lg:sticky lg:top-32">
+          <div className="space-y-3">
+            <div className="rounded-xl border border-white/10 bg-slate-950/65 p-3">
+              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Quick Wins</div>
+              <div className="mt-2 text-sm text-slate-200">{fastestWin}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/65 p-3">
+              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Biggest Blocker</div>
+              <div className="mt-2 text-sm text-slate-200">{biggestBlocker}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-slate-950/65 p-3">
+              <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready to Launch</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-100">{launchReadyItems.length}</div>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="sticky bottom-0 z-20 mt-4 rounded-xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur">
+        <div className="flex items-center justify-between gap-2">
+          <button
+            type="button"
+            className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setMissionStep(MISSION_STEPS[activeStepIndex - 1].id, { lock: true, persistInUrl: true })}
+            disabled={!canGoBack}
+            data-testid="listing-step-back"
+          >
+            Back
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-cyan-300/30 bg-cyan-400/15 px-3 py-2 text-sm font-medium text-cyan-100"
+            onClick={() => setMissionStep(recommendedStepId, { lock: true, persistInUrl: true })}
+            data-testid="listing-step-review"
+          >
+            Save / Review
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-emerald-300/30 bg-emerald-400/15 px-3 py-2 text-sm font-medium text-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
+            onClick={() => setMissionStep(MISSION_STEPS[activeStepIndex + 1].id, { lock: true, persistInUrl: true })}
+            disabled={!canGoNext}
+            data-testid="listing-step-next"
+          >
+            Next step
+          </button>
+        </div>
+      </div>
     </>
   );
 }
