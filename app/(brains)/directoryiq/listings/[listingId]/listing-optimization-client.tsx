@@ -559,6 +559,31 @@ type MultiActionType =
   | "internal_link_trust_signal"
   | "orchestration";
 
+type LinkOperationStatus = "drafted" | "ready_for_review" | "approved" | "queued_for_launch";
+
+type LinkOperationSource = "flywheel" | "upgrade_internal_link_set";
+
+type LinkOperation = {
+  operationId: string;
+  recommendationId: string;
+  recommendationTitle: string;
+  source: LinkOperationSource;
+  sourcePage: string;
+  targetPage: string;
+  linkDirection: string;
+  suggestedAnchorText: string;
+  suggestedPlacement: string;
+  whyItHelps: string;
+  confidence: string;
+  status: LinkOperationStatus;
+};
+
+type ActiveLinkWorkflow = {
+  recommendationId: string;
+  recommendationTitle: string;
+  whyItHelps: string;
+};
+
 type ListingMultiActionUpgradeItem = {
   actionId: string;
   actionType: MultiActionType;
@@ -816,6 +841,7 @@ type CompactRecommendationCardProps = {
   includeLabel?: string;
   primaryAction?: string | null;
   onPrimaryAction?: (() => void) | undefined;
+  primaryActionTestId?: string;
   primaryActionDisabled?: boolean;
   detailItems?: RecommendationDetailItem[];
 };
@@ -829,6 +855,7 @@ function CompactRecommendationCard({
   includeLabel = "What to include",
   primaryAction,
   onPrimaryAction,
+  primaryActionTestId,
   primaryActionDisabled = false,
   detailItems = [],
 }: CompactRecommendationCardProps) {
@@ -860,6 +887,7 @@ function CompactRecommendationCard({
           className="mt-3 rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-2 text-sm font-medium text-cyan-100 transition hover:border-cyan-200/50 disabled:cursor-not-allowed disabled:opacity-50"
           onClick={onPrimaryAction}
           disabled={primaryActionDisabled}
+          data-testid={primaryActionTestId}
         >
           {primaryAction}
         </button>
@@ -897,6 +925,20 @@ function step4ActionLabel(item: ListingMultiActionUpgradeItem): string {
   if (item.key === "strengthen_anchor_intent") return "Add proof now";
   if (item.key === "implement_serp_structure_recommendations") return "Preview update";
   return "Save for launch";
+}
+
+function linkOperationStatusLabel(status: LinkOperationStatus): string {
+  if (status === "drafted") return "Drafted";
+  if (status === "ready_for_review") return "Ready for review";
+  if (status === "approved") return "Approved";
+  return "Queued for launch";
+}
+
+function linkOperationStatusClassName(status: LinkOperationStatus): string {
+  if (status === "drafted") return "border-white/20 bg-white/5 text-slate-200";
+  if (status === "ready_for_review") return "border-cyan-300/30 bg-cyan-400/10 text-cyan-100";
+  if (status === "approved") return "border-emerald-300/35 bg-emerald-400/10 text-emerald-100";
+  return "border-amber-300/35 bg-amber-400/10 text-amber-100";
 }
 
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
@@ -964,6 +1006,8 @@ export default function ListingOptimizationClient({
   const [multiAction, setMultiAction] = useState<ListingMultiActionUpgradeModel | null>(null);
   const [multiActionError, setMultiActionError] = useState<string | null>(null);
   const [multiActionLoading, setMultiActionLoading] = useState(true);
+  const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
+  const [activeLinkWorkflow, setActiveLinkWorkflow] = useState<ActiveLinkWorkflow | null>(null);
   const requestedStep = parseMissionStep(searchParams.get("step"));
   const [activeStepId, setActiveStepId] = useState<MissionStepId>("audit");
   const [stepLockedByUser, setStepLockedByUser] = useState(false);
@@ -1809,14 +1853,21 @@ export default function ListingOptimizationClient({
   const step4CopyItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "copy");
   const step4TrustItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "trust-proof");
   const step4InternalLinkItems = listingUpgradeItems.filter((item) => classifyStep4Action(item) === "internal-links");
+  const activeLinkWorkflowOperations = activeLinkWorkflow
+    ? linkOperations.filter((item) => item.recommendationId === activeLinkWorkflow.recommendationId)
+    : [];
+  const approvedLinkOperations = linkOperations.filter((item) => item.status === "approved");
+  const queuedLinkOperations = linkOperations.filter((item) => item.status === "queued_for_launch");
   const launchReadyItems = multiAction?.items.filter((item) => item.readinessState === "ready") ?? [];
   const launchBlockedItems = multiAction?.items.filter((item) => item.readinessState === "blocked") ?? [];
+  const launchReadyTotal = launchReadyItems.length + queuedLinkOperations.length;
+  const launchReviewTotal = approvedLinkOperations.length;
   const stepCompletionSignals = [
     supportResolved && gapsResolved,
     !flywheelLoading && !flywheelError && Boolean(flywheel),
     !reinforcementPlanLoading && !reinforcementPlanError && !contentStructureLoading,
     !multiActionLoading && !multiActionError && Boolean(optimizeListingAction),
-    state === "done" || launchReadyItems.length > 0,
+    state === "done" || launchReadyItems.length > 0 || queuedLinkOperations.length > 0,
   ];
   const unresolvedStepIndex = stepCompletionSignals.findIndex((value) => !value);
   const recommendedStepIndex = unresolvedStepIndex === -1 ? MISSION_STEPS.length - 1 : unresolvedStepIndex;
@@ -1877,6 +1928,133 @@ export default function ListingOptimizationClient({
       params.set("step", stepId);
       window.history.replaceState({}, "", `${window.location.pathname}?${params.toString()}`);
     }
+  };
+
+  const openLinkWorkflow = ({
+    recommendationId,
+    recommendationTitle,
+    whyItHelps,
+    preparedOperations,
+  }: {
+    recommendationId: string;
+    recommendationTitle: string;
+    whyItHelps: string;
+    preparedOperations: LinkOperation[];
+  }) => {
+    if (!preparedOperations.length) return;
+    setHasUserAction(true);
+    setLinkOperations((previous) => {
+      const previousById = new Map(previous.map((item) => [item.operationId, item]));
+      const preparedIds = new Set(preparedOperations.map((item) => item.operationId));
+      const updated = previous.map((item) => {
+        if (item.recommendationId !== recommendationId) return item;
+        if (!preparedIds.has(item.operationId)) return item;
+        const prepared = preparedOperations.find((candidate) => candidate.operationId === item.operationId);
+        if (!prepared) return item;
+        return {
+          ...prepared,
+          suggestedAnchorText: item.suggestedAnchorText,
+          status: item.status === "drafted" ? "ready_for_review" : item.status,
+        };
+      });
+
+      for (const operation of preparedOperations) {
+        if (previousById.has(operation.operationId)) continue;
+        updated.push({ ...operation, status: "ready_for_review" });
+      }
+
+      return updated;
+    });
+    setActiveLinkWorkflow({
+      recommendationId,
+      recommendationTitle,
+      whyItHelps,
+    });
+  };
+
+  const updateLinkOperation = (operationId: string, updates: Partial<LinkOperation>) => {
+    setLinkOperations((previous) =>
+      previous.map((item) => (item.operationId === operationId ? { ...item, ...updates } : item))
+    );
+  };
+
+  const closeLinkWorkflow = () => {
+    setActiveLinkWorkflow(null);
+  };
+
+  const prepareFlywheelOperations = (item: FlywheelRecommendationItem, recommendationId = item.key): LinkOperation[] => {
+    const sourcePage = cleanCustomerText(item.sourceEntity.title);
+    const targetPage = cleanCustomerText(item.targetEntity.title);
+    const suggestedAnchorText = cleanCustomerText(item.anchorGuidance?.suggestedAnchorText ?? "");
+    return [
+      {
+        operationId: `flywheel:${recommendationId}:${item.key}`,
+        recommendationId,
+        recommendationTitle: cleanCustomerText(item.title),
+        source: "flywheel",
+        sourcePage: sourcePage || "Support page",
+        targetPage: targetPage || "Listing page",
+        linkDirection: `${sourcePage || "Support page"} to ${targetPage || "Listing page"}`,
+        suggestedAnchorText: suggestedAnchorText || `Learn more about ${targetPage || "this listing"}`,
+        suggestedPlacement:
+          cleanCustomerText(item.anchorGuidance?.guidance) ||
+          `Add this link where ${sourcePage || "this page"} mentions ${targetPage || "the listing"}.`,
+        whyItHelps: cleanCustomerText(item.rationale),
+        confidence: toPriorityLabel(item.priority),
+        status: "drafted",
+      },
+    ];
+  };
+
+  const openFlywheelWorkflow = (item: FlywheelRecommendationItem) => {
+    openLinkWorkflow({
+      recommendationId: item.key,
+      recommendationTitle: cleanCustomerText(item.title),
+      whyItHelps: cleanCustomerText(item.rationale),
+      preparedOperations: prepareFlywheelOperations(item),
+    });
+  };
+
+  const openUpgradeInternalLinkWorkflow = (item: ListingMultiActionUpgradeItem) => {
+    const relatedOperations = connectNowFlywheelItems.length
+      ? connectNowFlywheelItems.slice(0, 4).flatMap((flywheelItem) => prepareFlywheelOperations(flywheelItem, item.actionId))
+      : [
+          {
+            operationId: `upgrade:${item.actionId}:0`,
+            recommendationId: item.actionId,
+            recommendationTitle: cleanCustomerText(item.title),
+            source: "upgrade_internal_link_set" as const,
+            sourcePage: displayName,
+            targetPage: "Connected support page",
+            linkDirection: `${displayName} to connected support page`,
+            suggestedAnchorText: cleanCustomerText(item.expectedImpact) || "Learn more",
+            suggestedPlacement: cleanCustomerText(item.description),
+            whyItHelps: cleanCustomerText(item.whyItMatters),
+            confidence: toPriorityLabel(item.recommendedPriority),
+            status: "drafted" as const,
+          },
+        ];
+
+    openLinkWorkflow({
+      recommendationId: item.actionId,
+      recommendationTitle: cleanCustomerText(item.title),
+      whyItHelps: cleanCustomerText(item.whyItMatters),
+      preparedOperations: relatedOperations.map((operation, index) => ({
+        ...operation,
+        operationId: `upgrade:${item.actionId}:${index}`,
+        recommendationTitle: cleanCustomerText(item.title),
+        source: "upgrade_internal_link_set",
+      })),
+    });
+  };
+
+  const approveAllActiveLinkOperations = () => {
+    if (!activeLinkWorkflow) return;
+    setLinkOperations((previous) =>
+      previous.map((item) =>
+        item.recommendationId === activeLinkWorkflow.recommendationId ? { ...item, status: "approved" } : item
+      )
+    );
   };
 
   const goToNextStep = () => {
@@ -1989,6 +2167,8 @@ export default function ListingOptimizationClient({
               ])}
               includeLabel="What to include"
               primaryAction="Add links now"
+              onPrimaryAction={() => openFlywheelWorkflow(item)}
+              primaryActionTestId={`open-link-operations-flywheel-${item.key}`}
               detailItems={[
                 { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                 { label: "Source page", value: cleanCustomerText(item.sourceEntity.title) },
@@ -2179,6 +2359,8 @@ export default function ListingOptimizationClient({
                     includeItems={compactList([item.expectedImpact])}
                     includeLabel="Expected outcome"
                     primaryAction={step4ActionLabel(item)}
+                    onPrimaryAction={item.key === "repair_flywheel_links" ? () => openUpgradeInternalLinkWorkflow(item) : undefined}
+                    primaryActionTestId={item.key === "repair_flywheel_links" ? `open-link-operations-upgrade-${item.actionId}` : undefined}
                     detailItems={[
                       { label: "Evidence", value: cleanCustomerText(item.evidenceSummary) },
                       {
@@ -2279,10 +2461,18 @@ export default function ListingOptimizationClient({
     ),
     "launch-and-measure": (
       <HudCard title="Step 5: Launch and measure" subtitle={MISSION_STEPS[4].subtitle}>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready to launch</div>
-            <div className="mt-1 text-2xl font-semibold text-emerald-100">{launchReadyItems.length}</div>
+            <div className="mt-1 text-2xl font-semibold text-emerald-100" data-testid="step5-ready-to-launch-count">
+              {launchReadyTotal}
+            </div>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+            <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Review items</div>
+            <div className="mt-1 text-2xl font-semibold text-cyan-100" data-testid="step5-review-items-count">
+              {launchReviewTotal}
+            </div>
           </div>
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Blocked</div>
@@ -2292,6 +2482,11 @@ export default function ListingOptimizationClient({
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Score right now</div>
             <div className="mt-1 text-2xl font-semibold text-slate-100">{displayScore}</div>
           </div>
+        </div>
+        <div className="mt-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 px-3 py-2 text-sm text-cyan-100">
+          Ready to launch: {queuedLinkOperations.length} link operation{queuedLinkOperations.length === 1 ? "" : "s"}.
+          {" "}
+          Review items: {approvedLinkOperations.length} approved internal link update{approvedLinkOperations.length === 1 ? "" : "s"}.
         </div>
         <div className="mt-4 space-y-2">
           {launchReadyItems.slice(0, 4).map((item) => (
@@ -2311,6 +2506,37 @@ export default function ListingOptimizationClient({
               ]}
             />
           ))}
+          {linkOperations
+            .filter((item) => item.status === "approved" || item.status === "queued_for_launch")
+            .slice(0, 6)
+            .map((item) => (
+              <CompactRecommendationCard
+                key={item.operationId}
+                title={item.recommendationTitle}
+                priority={item.confidence}
+                whyItMatters={item.whyItHelps}
+                nextStep={
+                  item.status === "queued_for_launch"
+                    ? "Queued for the next launch cycle."
+                    : "Approved and waiting to be queued for launch."
+                }
+                primaryAction={item.status === "queued_for_launch" ? "Queued for launch" : "Queue for launch"}
+                onPrimaryAction={
+                  item.status === "queued_for_launch"
+                    ? undefined
+                    : () => updateLinkOperation(item.operationId, { status: "queued_for_launch" })
+                }
+                primaryActionDisabled={item.status === "queued_for_launch"}
+                detailItems={[
+                  { label: "Source page", value: item.sourcePage },
+                  { label: "Target page", value: item.targetPage },
+                  { label: "Direction", value: item.linkDirection },
+                  { label: "Suggested anchor", value: item.suggestedAnchorText },
+                  { label: "Suggested placement", value: item.suggestedPlacement },
+                  { label: "Status", value: linkOperationStatusLabel(item.status) },
+                ]}
+              />
+            ))}
         </div>
         {state === "ready_to_push" ? (
           <div className="mt-4 space-y-3 rounded-lg border border-cyan-300/20 bg-cyan-400/5 p-3">
@@ -2532,11 +2758,107 @@ export default function ListingOptimizationClient({
             </div>
             <div className="rounded-xl border border-white/10 bg-slate-950/65 p-3">
               <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Ready to Launch</div>
-              <div className="mt-1 text-2xl font-semibold text-emerald-100">{launchReadyItems.length}</div>
+              <div className="mt-1 text-2xl font-semibold text-emerald-100">{launchReadyTotal}</div>
             </div>
           </div>
         </aside>
       </div>
+
+      {activeLinkWorkflow ? (
+        <div className="fixed inset-0 z-40 bg-black/70 backdrop-blur-sm" data-testid="link-operations-workflow-overlay">
+          <div className="flex h-full items-end justify-end sm:items-stretch">
+            <div
+              className="h-[92vh] w-full rounded-t-2xl border border-white/10 bg-slate-950 p-4 shadow-2xl sm:h-full sm:max-w-2xl sm:rounded-none sm:border-l"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Link Operations Workflow"
+              data-testid="link-operations-workflow-panel"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Link Operations</div>
+                  <h3 className="mt-1 text-lg font-semibold text-cyan-100">{activeLinkWorkflow.recommendationTitle}</h3>
+                  <p className="mt-1 text-sm text-slate-300">{activeLinkWorkflow.whyItHelps}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closeLinkWorkflow}
+                  className="rounded-lg border border-white/20 px-3 py-2 text-xs text-slate-200 transition hover:border-white/35"
+                  data-testid="link-operations-close"
+                >
+                  Close
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="rounded-lg border border-emerald-300/30 bg-emerald-400/15 px-3 py-2 text-sm font-medium text-emerald-100"
+                  onClick={approveAllActiveLinkOperations}
+                >
+                  Approve all operations
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-white/20 px-3 py-2 text-sm text-slate-200"
+                  onClick={closeLinkWorkflow}
+                >
+                  Cancel
+                </button>
+              </div>
+              <div className="mt-4 space-y-3 overflow-auto pb-4" style={{ maxHeight: "calc(92vh - 210px)" }}>
+                {activeLinkWorkflowOperations.map((operation) => (
+                  <div key={operation.operationId} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="text-sm font-semibold text-slate-100">{operation.sourcePage}</div>
+                      <span className="text-xs text-slate-400">to</span>
+                      <div className="text-sm font-semibold text-slate-100">{operation.targetPage}</div>
+                      <span
+                        className={`rounded border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${linkOperationStatusClassName(operation.status)}`}
+                      >
+                        {linkOperationStatusLabel(operation.status)}
+                      </span>
+                    </div>
+                    <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Direction</div>
+                    <div className="mt-1 text-sm text-slate-300">{operation.linkDirection}</div>
+                    <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Suggested anchor text</div>
+                    <input
+                      type="text"
+                      value={operation.suggestedAnchorText}
+                      onChange={(event) => updateLinkOperation(operation.operationId, { suggestedAnchorText: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-white/15 bg-black/20 px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 transition focus:ring"
+                      data-testid={`link-operation-anchor-input-${operation.operationId}`}
+                    />
+                    <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Suggested placement</div>
+                    <div className="mt-1 text-sm text-slate-300">{operation.suggestedPlacement}</div>
+                    <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Why this helps</div>
+                    <div className="mt-1 text-sm text-slate-300">{operation.whyItHelps}</div>
+                    <div className="mt-2 text-xs uppercase tracking-[0.08em] text-slate-400">Confidence</div>
+                    <div className="mt-1 text-sm text-slate-300">{operation.confidence}</div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => updateLinkOperation(operation.operationId, { status: "approved" })}
+                        className="rounded-lg border border-emerald-300/30 bg-emerald-400/15 px-3 py-2 text-sm font-medium text-emerald-100"
+                        data-testid={`link-operation-approve-${operation.operationId}`}
+                      >
+                        Approve
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateLinkOperation(operation.operationId, { status: "queued_for_launch" })}
+                        className="rounded-lg border border-cyan-300/30 bg-cyan-400/15 px-3 py-2 text-sm font-medium text-cyan-100"
+                        data-testid={`link-operation-queue-${operation.operationId}`}
+                      >
+                        Queue for launch
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="sticky bottom-0 z-20 mt-4 rounded-xl border border-white/10 bg-slate-950/95 p-3 backdrop-blur lg:hidden">
         <div className="flex items-center justify-between gap-2">
