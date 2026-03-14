@@ -3,40 +3,29 @@ import { expect, test } from "@playwright/test";
 test.describe("DirectoryIQ listing support proxy path", () => {
   test("loads current support without DB timeout error text", async ({ page }) => {
     const listingId = "99";
+    const step1Section = page
+      .locator("div")
+      .filter({ has: page.getByRole("heading", { name: "Step 1: Audit this listing" }) })
+      .first();
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.waitForResponse(
+    const supportResponse = await page.waitForResponse(
       (response) =>
         response.url().includes(`/api/directoryiq/listings/${listingId}/support`) &&
         response.request().method() === "GET",
       { timeout: 15_000 }
     );
+    expect(supportResponse.status()).toBe(200);
 
-    await expect(page.getByRole("heading", { name: "What's Helping" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(step1Section.getByText("Supporting links in", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Mentions without links", { exact: true })).toBeVisible();
+    await expect(step1Section.getByText("Connected support pages", { exact: true })).toBeVisible();
+    const pageText = await page.locator("body").innerText();
+    expect(pageText).toMatch(/SUPPORTING LINKS IN\s*(\d+|—)/i);
+    expect(pageText).toMatch(/MENTIONS WITHOUT LINKS\s*(\d+|—)/i);
+    expect(pageText).toMatch(/CONNECTED SUPPORT PAGES\s*(\d+|—)/i);
     await expect(page.getByText(/connect ETIMEDOUT/i)).toHaveCount(0);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
-
-    const noDataSignals = [
-      page.getByText("No inbound linked support detected yet."),
-      page.getByText("No unlinked mentions detected yet."),
-      page.getByText("No outbound support links detected yet."),
-      page.getByText("No connected support pages detected yet."),
-    ];
-    const unresolvedSignal = page.getByText("Support diagnostics are not available yet.").first();
-    const noConnectedSignal = page.getByText("No connected support pages detected yet.").first();
-
-    await expect
-      .poll(async () => (await unresolvedSignal.count()) + (await noConnectedSignal.count()), {
-        timeout: 15_000,
-      })
-      .toBeGreaterThan(0);
-
-    if ((await unresolvedSignal.count()) > 0) {
-      await expect(unresolvedSignal).toBeVisible();
-      return;
-    }
-    for (const signal of noDataSignals) {
-      await expect(signal).toBeVisible();
-    }
   });
 });
