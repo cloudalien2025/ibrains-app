@@ -166,8 +166,9 @@ test.describe("DirectoryIQ site routing and unresolved metrics contract", () => 
 
     await expect(page).toHaveURL(new RegExp(`/directoryiq/listings/${listingId}\\?site_id=${siteId}`));
     await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Support diagnostics are not available yet.").first()).toBeVisible();
-    await expect(page.getByText("Run the listing audit to identify the next fast win.").first()).toBeVisible();
+    const quickWinsPanel = page.locator("aside").filter({ has: page.getByText("Quick Wins") }).first();
+    await expect(quickWinsPanel.getByText("Support diagnostics are not available yet.")).toBeVisible();
+    await expect(quickWinsPanel.getByText("Run the listing audit to identify the next fast win.")).toBeVisible();
     await expect(page.getByText("Gap analysis is not available yet.")).toHaveCount(0);
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
     const unresolvedMetricCount = await page.getByText("—").count();
