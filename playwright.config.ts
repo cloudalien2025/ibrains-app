@@ -54,6 +54,7 @@ export default defineConfig({
   testDir: "./tests",
   testMatch: ["**/e2e/**/*.spec.ts", "**/ui-audit/**/*.hero.spec.ts", "**/ui-audit/**/*.shell.spec.ts"],
   retries: 1,
+  workers: process.env.CI ? 1 : undefined,
   timeout: 45_000,
   outputDir,
   webServer: {
