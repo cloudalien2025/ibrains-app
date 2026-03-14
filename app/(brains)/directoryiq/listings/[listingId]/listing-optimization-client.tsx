@@ -2713,18 +2713,24 @@ export default function ListingOptimizationClient({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-4 lg:grid-cols-[220px,minmax(0,1fr),240px] lg:items-start">
-        <aside className="hidden lg:block lg:sticky lg:top-32">
-          <nav className="rounded-xl border border-white/10 bg-slate-950/65 p-3" aria-label="Mission step navigation">
+      <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr),240px] lg:items-start">
+        <div className="space-y-3">
+          <nav
+            className="hidden rounded-xl border border-white/10 bg-slate-950/65 p-3 lg:block"
+            aria-label="Mission step navigation"
+            data-testid="listing-step-switcher-desktop"
+          >
             <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Mission Steps</div>
-            <div className="mt-3 space-y-2">
+            <div className="mt-3 flex flex-wrap gap-2" role="tablist" aria-label="Mission steps desktop switcher">
               {MISSION_STEPS.map((step, index) => {
                 const isActive = step.id === activeStepId;
                 return (
                   <button
                     key={step.id}
                     type="button"
-                    className={`w-full rounded-lg border p-3 text-left transition ${
+                    role="tab"
+                    aria-selected={isActive}
+                    className={`min-w-[140px] flex-1 rounded-lg border px-3 py-2 text-left transition ${
                       isActive
                         ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100"
                         : "border-white/10 bg-white/[0.02] text-slate-300 hover:border-white/25"
@@ -2732,17 +2738,18 @@ export default function ListingOptimizationClient({
                     onClick={() => setMissionStep(step.id, { lock: true, persistInUrl: true })}
                     data-testid={`listing-step-nav-desktop-${step.id}`}
                   >
-                    <div className="text-xs uppercase tracking-[0.08em] text-slate-400">{`Step ${index + 1}`}</div>
-                    <div className="mt-1 text-sm font-semibold">{step.title}</div>
-                    <div className="mt-1 text-xs text-slate-400">{missionStepStatusLabel(stepStatusMap[step.id])}</div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] uppercase tracking-[0.08em] text-slate-400">{`Step ${index + 1}`}</span>
+                      <span className="rounded-full border border-white/15 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-300">
+                        {missionStepStatusLabel(stepStatusMap[step.id])}
+                      </span>
+                    </div>
+                    <div className="mt-1 truncate text-sm font-semibold">{step.title}</div>
                   </button>
                 );
               })}
             </div>
           </nav>
-        </aside>
-
-        <div className="space-y-3">
           <div data-testid="listing-active-step-workspace">{stepPanels[activeStepId]}</div>
         </div>
 
