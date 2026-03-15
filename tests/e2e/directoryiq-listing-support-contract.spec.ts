@@ -108,11 +108,11 @@ test.describe("DirectoryIQ listing support contract", () => {
     await openStep1();
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
     await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     const supportedPageText = await page.locator("body").innerText();
-    expect(supportedPageText).toMatch(/EXISTING SUPPORT\s*1/i);
-    expect(supportedPageText).toMatch(/CONNECT NOW\s*\d+/i);
+    expect(supportedPageText).toMatch(/EXISTING SUPPORT\s*\d+/i);
+    expect(supportedPageText).toMatch(/TOP OPPORTUNITIES\s*\d+/i);
     expect(supportedPageText).toMatch(/MISSING ASSETS\s*\d+/i);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
 
@@ -155,7 +155,7 @@ test.describe("DirectoryIQ listing support contract", () => {
     await openStep1();
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
     await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     const noDataPageText = await page.locator("body").innerText();
     expect(noDataPageText).toMatch(/EXISTING SUPPORT\s*0/i);

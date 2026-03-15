@@ -119,7 +119,7 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await expectMissionControlSteps(page);
     await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
     await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
@@ -163,7 +163,7 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await expectMissionControlSteps(page);
     await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
     await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     await expect(page.getByText("No major blockers detected right now.")).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toHaveCount(0);

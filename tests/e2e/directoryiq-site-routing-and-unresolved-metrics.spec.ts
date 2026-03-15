@@ -173,7 +173,7 @@ test.describe("DirectoryIQ site routing and unresolved metrics contract", () => 
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
     await expect(page.getByText("Flywheel evaluation is not available until support and gap diagnostics finish.")).toBeVisible();
     await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     expect(supportRequestUrls.some((url) => url.includes(`site_id=${siteId}`))).toBe(true);
     expect(gapsRequestUrls.some((url) => url.includes(`site_id=${siteId}`))).toBe(true);
