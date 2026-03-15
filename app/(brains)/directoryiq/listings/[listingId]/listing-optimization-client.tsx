@@ -1982,48 +1982,48 @@ export default function ListingOptimizationClient({
                   </div>
                 </div>
 
-                <div className="mt-4 space-y-2" data-testid="step1-derived-recommendations">
+                <div className="mt-4 min-w-0 space-y-2" data-testid="step1-derived-recommendations">
                   <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Derived recommendations (local draft workflow)</div>
                   {derivedRecommendationGroups.map((group) => (
-                    <div key={group.groupKey} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                      <div className="text-sm font-semibold text-slate-100">{normalizeText(group.source.title)}</div>
-                      <div className="mt-1 text-[11px] text-slate-300">
-                        Source: {flywheelEntityTypeLabel(group.source.type)} • ID: {group.source.id}
+                    <div key={group.groupKey} className="min-w-0 rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                      <div className="min-w-0 break-words text-sm font-semibold text-slate-100">{normalizeText(group.source.title)}</div>
+                      <div className="mt-1 min-w-0 break-words text-[11px] text-slate-300">
+                        Source: {flywheelEntityTypeLabel(group.source.type)} • <span className="break-all">ID: {group.source.id}</span>
                       </div>
                       {group.source.url ? (
-                        <a href={group.source.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-cyan-200 underline">
+                        <a href={group.source.url} target="_blank" rel="noreferrer" className="mt-1 block min-w-0 break-all text-[11px] text-cyan-200 underline">
                           {group.source.url}
                         </a>
                       ) : null}
 
-                      <div className="mt-3 space-y-2">
+                      <div className="mt-3 min-w-0 space-y-2">
                         {group.items.map((item) => {
                           const status = linkStatusByKey.get(item.key) ?? "Recommended";
                           const lifecycle = status === "Published" ? "Published" : status === "Approved" ? "Approved" : "Recommended";
                           return (
-                            <div key={item.key} className="rounded-lg border border-white/10 bg-black/20 p-3">
-                              <div className="flex flex-wrap items-center justify-between gap-2">
-                                <div className="text-xs font-semibold text-slate-100">{recommendationTypeLabel(item.type)}</div>
+                            <div key={item.key} className="min-w-0 rounded-lg border border-white/10 bg-black/20 p-3" data-testid="step1-recommendation-card">
+                              <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
+                                <div className="min-w-0 break-words text-xs font-semibold text-slate-100">{recommendationTypeLabel(item.type)}</div>
                                 <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(lifecycle)}`}>
                                   {linkStatusLabel(status)}
                                 </span>
                               </div>
-                              <div className="mt-1 text-xs text-slate-200">{normalizeText(item.title)}</div>
-                              <div className="mt-1 text-[11px] text-slate-400">{normalizeText(item.rationale)}</div>
-                              <div className="mt-2 grid gap-1 text-[11px] text-slate-300 sm:grid-cols-2">
-                                <div>
+                              <div className="mt-1 min-w-0 break-words text-xs text-slate-200">{normalizeText(item.title)}</div>
+                              <div className="mt-1 min-w-0 break-words text-[11px] text-slate-400">{normalizeText(item.rationale)}</div>
+                              <div className="mt-2 grid min-w-0 gap-1 text-[11px] text-slate-300 sm:grid-cols-2">
+                                <div className="min-w-0">
                                   <div className="font-semibold text-slate-200">Source</div>
-                                  <div>Type: {flywheelEntityTypeLabel(item.sourceEntity.type)}</div>
-                                  <div>Title: {normalizeText(item.sourceEntity.title)}</div>
-                                  <div>ID: {item.sourceEntity.id}</div>
-                                  {item.sourceEntity.url ? <a href={item.sourceEntity.url} target="_blank" rel="noreferrer" className="block truncate text-cyan-200 underline">{item.sourceEntity.url}</a> : null}
+                                  <div className="break-words">Type: {flywheelEntityTypeLabel(item.sourceEntity.type)}</div>
+                                  <div className="break-words">Title: {normalizeText(item.sourceEntity.title)}</div>
+                                  <div className="break-all">ID: {item.sourceEntity.id}</div>
+                                  {item.sourceEntity.url ? <a href={item.sourceEntity.url} target="_blank" rel="noreferrer" className="block min-w-0 break-all text-cyan-200 underline">{item.sourceEntity.url}</a> : null}
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                   <div className="font-semibold text-slate-200">Target</div>
-                                  <div>Type: {flywheelEntityTypeLabel(item.targetEntity.type)}</div>
-                                  <div>Title: {normalizeText(item.targetEntity.title)}</div>
-                                  <div>ID: {item.targetEntity.id}</div>
-                                  {item.targetEntity.url ? <a href={item.targetEntity.url} target="_blank" rel="noreferrer" className="block truncate text-cyan-200 underline">{item.targetEntity.url}</a> : null}
+                                  <div className="break-words">Type: {flywheelEntityTypeLabel(item.targetEntity.type)}</div>
+                                  <div className="break-words">Title: {normalizeText(item.targetEntity.title)}</div>
+                                  <div className="break-all">ID: {item.targetEntity.id}</div>
+                                  {item.targetEntity.url ? <a href={item.targetEntity.url} target="_blank" rel="noreferrer" className="block min-w-0 break-all text-cyan-200 underline">{item.targetEntity.url}</a> : null}
                                 </div>
                               </div>
                               <div className="mt-3 flex flex-wrap gap-2">
