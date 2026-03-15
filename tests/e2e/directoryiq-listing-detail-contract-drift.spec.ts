@@ -99,6 +99,11 @@ test.describe("DirectoryIQ listing-detail contract drift", () => {
 
     const heroNode = page.getByTestId("listing-hero-node");
     await expect(heroNode).toBeVisible();
+    await expect(page.getByTestId("listing-hero-overlay")).toBeVisible();
+    await expect(page.getByTestId("listing-hero-title")).toHaveText("Acme Plumbing");
+    await expect(page.getByTestId("listing-hero-url")).toHaveText("https://example.com/listings/acme-plumbing");
+    await expect(page.getByTestId("listing-hero-score")).toContainText("AI Selection Score:");
+    await expect(page.getByTestId("listing-hero-score")).not.toContainText("AI Visibility Score / AI Selection");
     const heroImage = heroNode.locator("img");
     await expect(heroImage).toBeVisible();
     await expect(heroImage).toHaveAttribute("src", imagePath);

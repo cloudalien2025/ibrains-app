@@ -12,7 +12,11 @@ describe("listing mission control rebuild contract", () => {
   it("renders a central authority map hero node", () => {
     expect(source).toContain("data-testid=\"authority-map-canvas\"");
     expect(source).toContain("data-testid=\"listing-hero-node\"");
-    expect(source).toContain("AI Visibility Score");
+    expect(source).toContain("data-testid=\"listing-hero-overlay\"");
+    expect(source).toContain("data-testid=\"listing-hero-title\"");
+    expect(source).toContain("data-testid=\"listing-hero-score\"");
+    expect(source).toContain("AI Selection Score:");
+    expect(source).not.toContain("AI Visibility Score / AI Selection");
   });
 
   it("includes a collapsible See Details drawer with shorthand mapping", () => {
