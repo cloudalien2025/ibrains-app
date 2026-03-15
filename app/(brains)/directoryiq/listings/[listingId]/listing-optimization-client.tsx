@@ -1669,6 +1669,7 @@ export default function ListingOptimizationClient({
   const recommendedMissingItems = missingFlywheelItems.slice(0, 5);
   const existingConnections = connectNowFlywheelItems.slice(0, 5);
   const alreadyConnectedAssets = mapNodes.filter((node) => node.relation === "already_connected").slice(0, 5);
+  const existingSupportCount = support?.summary.connectedSupportPageCount ?? support?.connectedSupportPages.length ?? 0;
   const missingGenerationItems = recommendedMissingItems.slice(0, 5);
   const optimizedFlywheelLinks = useMemo(() => {
     const seen = new Set<string>();
@@ -1900,7 +1901,7 @@ export default function ListingOptimizationClient({
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Existing support</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{alreadyConnectedAssets.length}</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{existingSupportCount}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Connect now</div>
