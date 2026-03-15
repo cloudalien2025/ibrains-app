@@ -186,4 +186,48 @@ describe("directoryiq blog post classification engine", () => {
     expect(output.classification.classification_reason.length).toBeGreaterThan(20);
     expect(output.classification.classification_reason).toMatch(/Assigned/);
   });
+
+  it("calibrates broad editorial travel posts away from needs-review sink", () => {
+    const cases = [
+      {
+        title: "Things to Do in Vail in Summer: 11 Amazing Activities You Can't Miss",
+        expected: "Pillar",
+      },
+      {
+        title: "Things To Do Between Vail and Denver: 9 Essential Stops",
+        expected: "Cluster",
+      },
+      {
+        title: "The 40 Best Restaurants in Vail, Colorado",
+        expected: "Pillar",
+      },
+      {
+        title: "Where to Snowshoe in Vail: 7 Amazing Trails and Tours to Explore",
+        expected: "Cluster",
+      },
+      {
+        title: "How Many Skiers Per Day at Vail? 7 Shocking Stats",
+        expected: "Proof",
+      },
+      {
+        title: "How Did Vail Acquire Park City? 7 Shocking Details",
+        expected: "Proof",
+      },
+    ] as const;
+
+    for (const sample of cases) {
+      const output = classifyBlogPost({
+        postId: `sample-${sample.expected}`,
+        title: sample.title,
+        h1: sample.title,
+        intro: sample.title,
+        bodyText: sample.title,
+        listingRelationships: [],
+      });
+
+      expect(output.classification.primary_type).toBe(sample.expected);
+      expect(output.classification.primary_type).not.toBe("Needs Review");
+      expect(output.classification.classification_reason).toMatch(/Assigned/);
+    }
+  });
 });
