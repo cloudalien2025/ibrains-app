@@ -8,6 +8,7 @@ import {
   listBlogLayerRows,
   listListingLayerRows,
   listMentionsWithoutLinks,
+  mergeNodeMeta,
   listOrphanListings,
   listWeakAnchors,
   upsertEdge,
@@ -19,9 +20,14 @@ import {
 import {
   type GraphIssue,
   type GraphEvidence,
-  type EdgeType,
   weakAnchorDetector,
 } from "@/src/directoryiq/domain/authorityGraph";
+import {
+  classifyBlogPost,
+  type BlogPostClassificationResult,
+  type FlywheelStatusByTarget,
+  type ListingRelationshipSignal,
+} from "@/src/directoryiq/services/blogPostClassificationEngine";
 
 type ListingNodeRow = {
   source_id: string;
@@ -106,6 +112,16 @@ type AuthorityBlogRow = {
   entities: BlogEntity[];
   suggestedListingTargets: BlogSuggestion[];
   missingInternalLinksRecommendations: string[];
+  primary_type: BlogPostClassificationResult["primary_type"];
+  intent_labels: BlogPostClassificationResult["intent_labels"];
+  confidence: BlogPostClassificationResult["confidence"];
+  parent_pillar_id: BlogPostClassificationResult["parent_pillar_id"];
+  dominant_listing_id: BlogPostClassificationResult["dominant_listing_id"];
+  target_entity_ids: BlogPostClassificationResult["target_entity_ids"];
+  flywheel_status_by_target: FlywheelStatusByTarget[];
+  selection_value: BlogPostClassificationResult["selection_value"];
+  classification_reason: BlogPostClassificationResult["classification_reason"];
+  review_candidate: boolean;
 };
 
 type ListingEvidence = {
@@ -260,6 +276,10 @@ function normalizeForMatch(value: string): string {
     .trim();
 }
 
+function includesAny(text: string, patterns: string[]): boolean {
+  return patterns.some((pattern) => text.includes(pattern));
+}
+
 function buildDeterministicAliases(name: string): string[] {
   const base = normalizeForMatch(name);
   if (!base) return [];
@@ -361,6 +381,143 @@ function makeSnippet(text: string, needle: string): string {
   const start = Math.max(0, index - 80);
   const end = Math.min(text.length, index + query.length + 80);
   return text.slice(start, end).trim();
+}
+
+function defaultClassification(reason: string): BlogPostClassificationResult {
+  return {
+    primary_type: "Needs Review",
+    intent_labels: [],
+    confidence: "Low",
+    parent_pillar_id: null,
+    dominant_listing_id: null,
+    target_entity_ids: [],
+    flywheel_status_by_target: [],
+    selection_value: "Low",
+    classification_reason: reason,
+  };
+}
+
+function safeRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return {};
+}
+
+function parseH1(html: string): string {
+  const match = html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
+  if (!match) return "";
+  return stripHtml(match[1] ?? "").trim();
+}
+
+function parseIntro(text: string): string {
+  const normalized = stripHtml(text);
+  if (!normalized) return "";
+  const sentenceBreak = normalized.search(/[.!?]\s/);
+  if (sentenceBreak > 0) {
+    return normalized.slice(0, sentenceBreak + 1).trim();
+  }
+  return normalized.slice(0, 220).trim();
+}
+
+function parsePersistedClassification(meta: Record<string, unknown>): BlogPostClassificationResult | null {
+  const classification = safeRecord(meta.blog_post_classification);
+  const primaryType = classification.primary_type;
+  const confidence = classification.confidence;
+  const selectionValue = classification.selection_value;
+  const reason = classification.classification_reason;
+  if (typeof primaryType !== "string" || typeof confidence !== "string" || typeof selectionValue !== "string" || typeof reason !== "string") {
+    return null;
+  }
+
+  const intentLabels = Array.isArray(classification.intent_labels)
+    ? classification.intent_labels.filter((value): value is BlogPostClassificationResult["intent_labels"][number] => typeof value === "string")
+    : [];
+  const targetEntityIds = Array.isArray(classification.target_entity_ids)
+    ? classification.target_entity_ids.filter((value): value is string => typeof value === "string")
+    : [];
+  const flywheelByTarget = Array.isArray(classification.flywheel_status_by_target)
+    ? classification.flywheel_status_by_target
+        .map((entry) => safeRecord(entry))
+        .filter((entry) => typeof entry.target_entity_id === "string" && typeof entry.status === "string")
+        .map((entry) => ({
+          target_entity_id: entry.target_entity_id as string,
+          status: entry.status as FlywheelStatusByTarget["status"],
+        }))
+    : [];
+
+  return {
+    primary_type: primaryType as BlogPostClassificationResult["primary_type"],
+    intent_labels: intentLabels,
+    confidence: confidence as BlogPostClassificationResult["confidence"],
+    parent_pillar_id: typeof classification.parent_pillar_id === "string" ? classification.parent_pillar_id : null,
+    dominant_listing_id: typeof classification.dominant_listing_id === "string" ? classification.dominant_listing_id : null,
+    target_entity_ids: targetEntityIds,
+    flywheel_status_by_target: flywheelByTarget,
+    selection_value: selectionValue as BlogPostClassificationResult["selection_value"],
+    classification_reason: reason,
+  };
+}
+
+type SourceBlogSignalRow = {
+  source_id: string;
+  raw_json: Record<string, unknown> | null;
+};
+
+async function loadBlogSignalMap(sourceIds: string[]): Promise<Map<string, SourceBlogSignalRow>> {
+  if (!sourceIds.length) return new Map();
+
+  try {
+    const rows = await queryDb<SourceBlogSignalRow>(
+      `
+      SELECT source_id, raw_json
+      FROM directoryiq_nodes
+      WHERE source_type = 'blog_post'
+        AND source_id = ANY($1::text[])
+      `,
+      [sourceIds]
+    );
+
+    const out = new Map<string, SourceBlogSignalRow>();
+    for (const row of rows) {
+      out.set(row.source_id, row);
+    }
+    return out;
+  } catch {
+    return new Map();
+  }
+}
+
+type ReciprocalLinkRow = {
+  blog_external_id: string;
+  listing_external_id: string;
+};
+
+async function loadReciprocalLinkPairs(tenantId: string): Promise<Set<string>> {
+  const rows = await queryDb<ReciprocalLinkRow>(
+    `
+    SELECT
+      b.external_id AS blog_external_id,
+      l.external_id AS listing_external_id
+    FROM authority_graph_edges e
+    JOIN authority_graph_nodes l
+      ON l.id = e.from_node_id
+     AND l.tenant_id = e.tenant_id
+     AND l.node_type = 'listing'
+     AND l.status = 'active'
+    JOIN authority_graph_nodes b
+      ON b.id = e.to_node_id
+     AND b.tenant_id = e.tenant_id
+     AND b.node_type = 'blog_post'
+     AND b.status = 'active'
+    WHERE e.tenant_id = $1
+      AND e.status = 'active'
+      AND e.edge_type = 'internal_link'
+    `,
+    [tenantId]
+  );
+
+  return new Set(rows.map((row) => `${row.blog_external_id}::${row.listing_external_id}`));
 }
 
 function toEvidence(row: AuthorityGraphIssueRow): GraphEvidence | null {
@@ -876,7 +1033,13 @@ export async function getAuthorityBlogs(input: { tenantId: string }): Promise<Au
     }
   }
 
-  return Array.from(grouped.values()).map(({ head, rows }) => {
+  const blogExternalIds = Array.from(grouped.values()).map(({ head }) => head.blog_external_id);
+  const [signalMap, reciprocalPairs] = await Promise.all([
+    loadBlogSignalMap(blogExternalIds),
+    loadReciprocalLinkPairs(input.tenantId),
+  ]);
+
+  return Promise.all(Array.from(grouped.values()).map(async ({ head, rows }) => {
     const linkedRows = rows.filter((row) => row.edge_type === "internal_link" && row.listing_node_id);
     const mentionRows = rows.filter((row) => row.edge_type === "mention_without_link" && row.listing_node_id);
     const entityRows = rows.filter((row) => row.listing_node_id && (row.edge_type === "internal_link" || row.edge_type === "mention_without_link"));
@@ -900,6 +1063,94 @@ export async function getAuthorityBlogs(input: { tenantId: string }): Promise<Au
     const missingInternalLinksRecommendations = suggestedTargets.map((target) => target.recommendation);
     const linkedCount = linkedListingIds.size;
     const mentionsCount = mentionListingIds.size;
+    const persistedClassification = parsePersistedClassification(safeRecord(head.blog_meta));
+
+    const signalRow = signalMap.get(head.blog_external_id);
+    const rawSignal = safeRecord(signalRow?.raw_json);
+    const html = extractHtml(rawSignal);
+    const text = extractPlainText(rawSignal);
+    const h1 = parseH1(html);
+    const intro = parseIntro(text || stripHtml(html));
+    const bodyLower = normalizeForMatch(text || stripHtml(html));
+    const conclusion = bodyLower.slice(Math.max(0, bodyLower.length - 420));
+
+    const listingSignalsMap = new Map<string, ListingRelationshipSignal>();
+    for (const row of entityRows) {
+      if (!row.listing_external_id) continue;
+      const listingId = row.listing_external_id;
+      const listingName = row.listing_title ?? listingId;
+      const searchableName = normalizeForMatch(listingName);
+      const recommendationOrCtaFavoring =
+        searchableName.length > 2 &&
+        includesAny(
+          bodyLower,
+          [`book ${searchableName}`, `reserve ${searchableName}`, `choose ${searchableName}`, `recommend ${searchableName}`, `call ${searchableName}`]
+        );
+      const conclusionReinforces =
+        searchableName.length > 2 &&
+        includesAny(conclusion, [`${searchableName} is`, `recommend ${searchableName}`, `${searchableName} remains`, `choose ${searchableName}`]);
+
+      const current = listingSignalsMap.get(listingId) ?? {
+        listingId,
+        listingName,
+        listingUrl: row.listing_url,
+        appearsInTitle: searchableName.length > 2 && normalizeForMatch(head.blog_title ?? "").includes(searchableName),
+        appearsInH1OrIntro:
+          searchableName.length > 2 &&
+          (normalizeForMatch(h1).includes(searchableName) || normalizeForMatch(intro).includes(searchableName)),
+        meaningfulBodyMentions: 0,
+        hasDirectLink: false,
+        recommendationOrCtaFavoring: false,
+        conclusionReinforces: false,
+        hasReciprocalLink: false,
+        hasMention: false,
+      };
+
+      if (row.edge_type === "mention_without_link") {
+        current.hasMention = true;
+        current.meaningfulBodyMentions += 1;
+      }
+      if (row.edge_type === "internal_link") {
+        current.hasMention = true;
+        current.hasDirectLink = true;
+        current.meaningfulBodyMentions += 1;
+      }
+
+      current.recommendationOrCtaFavoring = current.recommendationOrCtaFavoring || recommendationOrCtaFavoring;
+      current.conclusionReinforces = current.conclusionReinforces || conclusionReinforces;
+      current.hasReciprocalLink = reciprocalPairs.has(`${head.blog_external_id}::${listingId}`);
+      listingSignalsMap.set(listingId, current);
+    }
+
+    const listingSignals = Array.from(listingSignalsMap.values());
+    const computed =
+      listingSignals.length || (head.blog_title ?? "").trim() || text.trim()
+        ? classifyBlogPost({
+            postId: head.blog_external_id,
+            title: head.blog_title ?? "",
+            h1,
+            intro,
+            bodyText: text || stripHtml(html),
+            listingRelationships: listingSignals,
+          }).classification
+        : defaultClassification("Assigned Needs Review because no blog text or relationship signals were available.");
+
+    const classification = computed ?? persistedClassification ?? defaultClassification("Assigned Needs Review due to unavailable signals.");
+    const reviewCandidate = classification.primary_type === "Needs Review" || classification.confidence === "Low";
+
+    const persistedComparable = JSON.stringify(persistedClassification ?? {});
+    const computedComparable = JSON.stringify(classification);
+    if (persistedComparable !== computedComparable) {
+      await mergeNodeMeta({
+        tenantId: input.tenantId,
+        nodeId: head.blog_node_id,
+        patch: {
+          blog_post_classification: classification,
+          blog_post_classification_version: "directoryiq_blog_classification_v1",
+          blog_post_classified_at: new Date().toISOString(),
+        },
+      });
+    }
 
     return {
       blogNodeId: head.blog_node_id,
@@ -913,8 +1164,18 @@ export async function getAuthorityBlogs(input: { tenantId: string }): Promise<Au
       entities,
       suggestedListingTargets: suggestedTargets,
       missingInternalLinksRecommendations,
+      primary_type: classification.primary_type,
+      intent_labels: classification.intent_labels,
+      confidence: classification.confidence,
+      parent_pillar_id: classification.parent_pillar_id,
+      dominant_listing_id: classification.dominant_listing_id,
+      target_entity_ids: classification.target_entity_ids,
+      flywheel_status_by_target: classification.flywheel_status_by_target,
+      selection_value: classification.selection_value,
+      classification_reason: classification.classification_reason,
+      review_candidate: reviewCandidate,
     };
-  });
+  }));
 }
 
 export async function getAuthorityListings(input: { tenantId: string }): Promise<AuthorityListingRow[]> {
