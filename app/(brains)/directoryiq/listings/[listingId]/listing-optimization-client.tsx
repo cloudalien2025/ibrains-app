@@ -364,6 +364,79 @@ type ListingMultiActionUpgradeResponse = {
   } | string;
 };
 
+type RecommendedActionItem = {
+  key: string;
+  priority: "high" | "medium" | "low";
+  title: string;
+  rationale: string;
+  evidenceSummary: string;
+  targetSurface?: "listing" | "blog" | "support_page" | "cluster";
+};
+
+type ListingRecommendedActionsModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalActions: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "actions_recommended" | "no_major_actions_recommended";
+  };
+  items: RecommendedActionItem[];
+};
+
+type ListingRecommendedActionsResponse = {
+  ok: boolean;
+  actions?: ListingRecommendedActionsModel;
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
+type SelectionIntentClusterItem = {
+  id: string;
+  title: string;
+  priority: "high" | "medium" | "low";
+  rationale: string;
+  evidenceSummary: string;
+};
+
+type ListingSelectionIntentClustersModel = {
+  listing: {
+    id: string;
+    title: string;
+    canonicalUrl?: string | null;
+    siteId?: string | null;
+  };
+  summary: {
+    totalClusters: number;
+    highPriorityCount: number;
+    mediumPriorityCount: number;
+    lowPriorityCount: number;
+    evaluatedAt: string;
+    dataStatus: "clusters_identified" | "no_major_reinforcement_intent_clusters_identified";
+  };
+  items: SelectionIntentClusterItem[];
+};
+
+type ListingSelectionIntentClustersResponse = {
+  ok: boolean;
+  intentClusters?: ListingSelectionIntentClustersModel;
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  } | string;
+};
+
 type DiffRow = {
   left: string;
   right: string;
@@ -406,7 +479,7 @@ function normalizeMissionStepQuery(value: string | null): MissionStepId | null {
   return null;
 }
 
-type MapNodeCategory = "blog" | "mention" | "event" | "coupon";
+type MapNodeCategory = "blog_post" | "page" | "support" | "hub" | "category" | "location" | "comparison" | "faq" | "local_guide";
 
 type AuthorityMapNode = {
   id: string;
@@ -417,6 +490,8 @@ type AuthorityMapNode = {
   lifecycle: LifecycleState;
   details: string;
   source: "existing" | "missing" | "generated";
+  relation: "already_connected" | "recommended_connection" | "recommended_missing";
+  url?: string | null;
 };
 
 type LinkOperationStatus = "Detected" | "Recommended" | "Approved" | "Published";
@@ -497,16 +572,6 @@ function mapNodeLayout(index: number): { x: number; y: number } {
   return points[index % points.length];
 }
 
-function isLikelyEvent(title: string): boolean {
-  const lower = title.toLowerCase();
-  return ["event", "festival", "classic", "show", "expo", "weekend"].some((term) => lower.includes(term));
-}
-
-function isLikelyCoupon(title: string): boolean {
-  const lower = title.toLowerCase();
-  return ["coupon", "deal", "discount", "offer", "special"].some((term) => lower.includes(term));
-}
-
 function lifecycleClassName(state: LifecycleState): string {
   if (state === "Published") return "border-emerald-300/40 bg-emerald-400/15 text-emerald-100";
   if (state === "Approved") return "border-cyan-300/40 bg-cyan-400/15 text-cyan-100";
@@ -516,10 +581,33 @@ function lifecycleClassName(state: LifecycleState): string {
 }
 
 function nodeCategoryLabel(category: MapNodeCategory): string {
-  if (category === "blog") return "Blog Post";
-  if (category === "mention") return "Mention";
-  if (category === "event") return "Event";
-  return "Coupon";
+  if (category === "blog_post") return "Blog Post";
+  if (category === "support") return "Support Asset";
+  if (category === "hub") return "Hub Page";
+  if (category === "category") return "Category Page";
+  if (category === "location") return "Location Page";
+  if (category === "comparison") return "Comparison Page";
+  if (category === "faq") return "FAQ Asset";
+  if (category === "local_guide") return "Local Guide";
+  return "Page";
+}
+
+function mapConnectionPoints(index: number): { x1: number; y1: number; x2: number; y2: number } {
+  const point = mapNodeLayout(index);
+  const cx = 50;
+  const cy = 50;
+  const rx = 31;
+  const ry = 24;
+  const nodeRadius = 4.5;
+  const dx = point.x - cx;
+  const dy = point.y - cy;
+  const distance = Math.hypot(dx, dy) || 1;
+  const edgeScale = 1 / Math.sqrt((dx * dx) / (rx * rx) + (dy * dy) / (ry * ry));
+  const x1 = cx + dx * edgeScale;
+  const y1 = cy + dy * edgeScale;
+  const x2 = point.x - (dx / distance) * nodeRadius;
+  const y2 = point.y - (dy / distance) * nodeRadius;
+  return { x1, y1, x2, y2 };
 }
 
 type ListingOptimizationClientProps = {
@@ -562,6 +650,14 @@ export default function ListingOptimizationClient({
   const [flywheel, setFlywheel] = useState<ListingFlywheelLinksModel | null>(null);
   const [flywheelError, setFlywheelError] = useState<string | null>(null);
   const [flywheelLoading, setFlywheelLoading] = useState(true);
+
+  const [actions, setActions] = useState<ListingRecommendedActionsModel | null>(null);
+  const [actionsError, setActionsError] = useState<string | null>(null);
+  const [actionsLoading, setActionsLoading] = useState(true);
+
+  const [intentClusters, setIntentClusters] = useState<ListingSelectionIntentClustersModel | null>(null);
+  const [intentClustersError, setIntentClustersError] = useState<string | null>(null);
+  const [intentClustersLoading, setIntentClustersLoading] = useState(true);
 
   const [reinforcementPlan, setReinforcementPlan] = useState<ListingBlogReinforcementPlanModel | null>(null);
   const [reinforcementPlanError, setReinforcementPlanError] = useState<string | null>(null);
@@ -815,8 +911,120 @@ export default function ListingOptimizationClient({
   }, [effectiveListingId, siteQuery, support, gaps, supportMeta, gapsMeta, supportError, gapsError, supportLoading, gapsLoading, DETAIL_REQUEST_TIMEOUT_MS]);
 
   useEffect(() => {
-    if (!effectiveListingId || !support || !gaps || !flywheel) {
-      setReinforcementPlanLoading(true);
+    if (!effectiveListingId || !support || !gaps) {
+      if (!supportLoading && !gapsLoading) {
+        setActions(null);
+        setActionsError("Recommended actions are unavailable until support and gap diagnostics are ready.");
+        setActionsLoading(false);
+      } else {
+        setActionsLoading(true);
+        setActionsError(null);
+      }
+      return;
+    }
+
+    let active = true;
+    setActionsLoading(true);
+    setActionsError(null);
+
+    void (async () => {
+      try {
+        const { response, json } = await fetchJsonWithTimeout<ListingRecommendedActionsResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/actions${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
+        if (!active) return;
+        if (!response.ok || !json.ok || !json.actions) {
+          const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to evaluate recommended actions.";
+          setActions(null);
+          setActionsError(message);
+          setActionsLoading(false);
+          return;
+        }
+        setActions(json.actions);
+        setActionsError(null);
+        setActionsLoading(false);
+      } catch (err) {
+        if (!active) return;
+        setActions(null);
+        setActionsError(stringifyErrorMessage(err, "Actions evaluation"));
+        setActionsLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveListingId, siteQuery, support, gaps, supportLoading, gapsLoading, DETAIL_REQUEST_TIMEOUT_MS]);
+
+  useEffect(() => {
+    if (!effectiveListingId || !support || !gaps || !flywheel || !actions) {
+      if (!flywheelLoading && !actionsLoading) {
+        setIntentClusters(null);
+        setIntentClustersError("Intent clustering is unavailable until flywheel and recommended actions are ready.");
+        setIntentClustersLoading(false);
+      } else {
+        setIntentClustersLoading(true);
+        setIntentClustersError(null);
+      }
+      return;
+    }
+
+    let active = true;
+    setIntentClustersLoading(true);
+    setIntentClustersError(null);
+
+    void (async () => {
+      try {
+        const { response, json } = await fetchJsonWithTimeout<ListingSelectionIntentClustersResponse>(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/intent-clusters${siteQuery}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ support, gaps, actions, flywheel }),
+          },
+          DETAIL_REQUEST_TIMEOUT_MS
+        );
+        if (!active) return;
+        if (!response.ok || !json.ok || !json.intentClusters) {
+          const message =
+            typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to evaluate intent clusters.";
+          setIntentClusters(null);
+          setIntentClustersError(message);
+          setIntentClustersLoading(false);
+          return;
+        }
+        setIntentClusters(json.intentClusters);
+        setIntentClustersError(null);
+        setIntentClustersLoading(false);
+      } catch (err) {
+        if (!active) return;
+        setIntentClusters(null);
+        setIntentClustersError(stringifyErrorMessage(err, "Intent cluster evaluation"));
+        setIntentClustersLoading(false);
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [effectiveListingId, siteQuery, support, gaps, actions, flywheel, flywheelLoading, actionsLoading, DETAIL_REQUEST_TIMEOUT_MS]);
+
+  useEffect(() => {
+    if (!effectiveListingId || !support || !gaps || !flywheel || !actions || !intentClusters) {
+      if (!intentClustersLoading && !actionsLoading && !flywheelLoading) {
+        setReinforcementPlan(null);
+        setReinforcementPlanError("Content generation planning is unavailable until upstream intelligence is ready.");
+        setReinforcementPlanLoading(false);
+      } else {
+        setReinforcementPlanLoading(true);
+        setReinforcementPlanError(null);
+      }
       return;
     }
 
@@ -831,7 +1039,7 @@ export default function ListingOptimizationClient({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ support, gaps, flywheel, actions: { summary: { totalActions: 0 }, items: [] } }),
+            body: JSON.stringify({ support, gaps, flywheel, actions, intentClusters }),
           },
           DETAIL_REQUEST_TIMEOUT_MS
         );
@@ -857,11 +1065,18 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, flywheel, DETAIL_REQUEST_TIMEOUT_MS]);
+  }, [effectiveListingId, siteQuery, support, gaps, flywheel, actions, intentClusters, flywheelLoading, actionsLoading, intentClustersLoading, DETAIL_REQUEST_TIMEOUT_MS]);
 
   useEffect(() => {
-    if (!effectiveListingId || !support || !gaps || !flywheel || !reinforcementPlan) {
-      setContentStructureLoading(true);
+    if (!effectiveListingId || !support || !gaps || !flywheel || !actions || !intentClusters || !reinforcementPlan) {
+      if (!reinforcementPlanLoading && !intentClustersLoading && !actionsLoading) {
+        setContentStructure(null);
+        setContentStructureError("SERP-informed structure is unavailable until reinforcement planning is ready.");
+        setContentStructureLoading(false);
+      } else {
+        setContentStructureLoading(true);
+        setContentStructureError(null);
+      }
       return;
     }
 
@@ -876,7 +1091,7 @@ export default function ListingOptimizationClient({
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ support, gaps, flywheel, reinforcementPlan, actions: { summary: { totalActions: 0 }, items: [] } }),
+            body: JSON.stringify({ support, gaps, flywheel, actions, intentClusters, reinforcementPlan }),
           },
           DETAIL_REQUEST_TIMEOUT_MS
         );
@@ -902,11 +1117,18 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, flywheel, reinforcementPlan, DETAIL_REQUEST_TIMEOUT_MS]);
+  }, [effectiveListingId, siteQuery, support, gaps, flywheel, actions, intentClusters, reinforcementPlan, reinforcementPlanLoading, intentClustersLoading, actionsLoading, DETAIL_REQUEST_TIMEOUT_MS]);
 
   useEffect(() => {
-    if (!effectiveListingId || !support || !gaps || !flywheel || !reinforcementPlan || !contentStructure) {
-      setMultiActionLoading(true);
+    if (!effectiveListingId || !support || !gaps || !flywheel || !actions || !intentClusters || !reinforcementPlan || !contentStructure) {
+      if (!contentStructureLoading && !reinforcementPlanLoading) {
+        setMultiAction(null);
+        setMultiActionError("Listing optimization actions are unavailable until upstream analysis is complete.");
+        setMultiActionLoading(false);
+      } else {
+        setMultiActionLoading(true);
+        setMultiActionError(null);
+      }
       return;
     }
 
@@ -925,10 +1147,10 @@ export default function ListingOptimizationClient({
               support,
               gaps,
               flywheel,
+              actions,
+              intentClusters,
               reinforcementPlan,
               contentStructure,
-              actions: { summary: { totalActions: 0 }, items: [] },
-              intentClusters: { summary: { totalClusters: 0 }, items: [] },
               integrations: {
                 openaiConfigured: Boolean(integrations.openaiConfigured),
                 bdConfigured: Boolean(integrations.bdConfigured),
@@ -959,7 +1181,7 @@ export default function ListingOptimizationClient({
     return () => {
       active = false;
     };
-  }, [effectiveListingId, siteQuery, support, gaps, flywheel, reinforcementPlan, contentStructure, integrations.openaiConfigured, integrations.bdConfigured, DETAIL_REQUEST_TIMEOUT_MS]);
+  }, [effectiveListingId, siteQuery, support, gaps, flywheel, actions, intentClusters, reinforcementPlan, contentStructure, contentStructureLoading, reinforcementPlanLoading, integrations.openaiConfigured, integrations.bdConfigured, DETAIL_REQUEST_TIMEOUT_MS]);
 
   const displayName = listing?.listing.listing_name || support?.listing.title || "Listing";
   const displayUrl = listing?.listing.listing_url ?? support?.listing.canonicalUrl ?? null;
@@ -992,87 +1214,133 @@ export default function ListingOptimizationClient({
 
   const mapNodes = useMemo<AuthorityMapNode[]>(() => {
     const nodes: AuthorityMapNode[] = [];
+    const seenTitles = new Set<string>();
+    let existingIndex = 0;
+    let generatedIndex = 0;
+    let missingIndex = 0;
 
-    const publishedContentIds = new Set(
-      Object.values(contentAssets)
-        .filter((asset) => asset.status === "Published")
-        .map((asset) => asset.title)
-    );
+    const toExistingCategory = (type: string): MapNodeCategory => {
+      if (type === "blog_post") return "blog_post";
+      if (type === "support") return "support";
+      if (type === "hub") return "hub";
+      if (type === "category") return "category";
+      if (type === "location") return "location";
+      return "page";
+    };
 
-    const blogSources = [
-      ...(support?.inboundLinkedSupport ?? []).map((item) => normalizeText(item.title) || "Support Blog"),
-      ...(support?.connectedSupportPages ?? []).map((item) => normalizeText(item.title) || "Support Page"),
-      ...Object.values(contentAssets).map((item) => normalizeText(item.title)),
-    ].filter(Boolean);
+    const toPlanCategory = (surface?: string): MapNodeCategory => {
+      if (surface === "comparison") return "comparison";
+      if (surface === "faq") return "faq";
+      if (surface === "local_guide") return "local_guide";
+      if (surface === "support_page") return "support";
+      if (surface === "cluster_hub") return "hub";
+      return "blog_post";
+    };
 
-    const mentionSources = (support?.mentionsWithoutLinks ?? []).map((item) => normalizeText(item.title) || "External Mention");
-
-    const eventCandidates = [...blogSources, ...missingFlywheelItems.map((item) => normalizeText(item.title))].filter((value) => isLikelyEvent(value));
-    const couponCandidates = [...blogSources, ...missingFlywheelItems.map((item) => normalizeText(item.title))].filter((value) => isLikelyCoupon(value));
-
-    blogSources.slice(0, 4).forEach((title, index) => {
-      const label = `B${index + 1}`;
-      const isPublished = publishedContentIds.has(title) || linkOperations.some((op) => op.targetPage === title && op.status === "Published");
+    for (const item of support?.inboundLinkedSupport ?? []) {
+      const title = normalizeText(item.title) || "Support Asset";
+      const key = title.toLowerCase();
+      if (seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      existingIndex += 1;
       nodes.push({
-        id: `blog-${index}`,
-        label,
+        id: `existing-inbound-${item.sourceId}`,
+        label: `E${existingIndex}`,
         title,
-        category: "blog",
-        connectionTone: isPublished ? "flywheel" : "standard",
-        lifecycle: isPublished ? "Published" : "Detected",
-        details: `${label} = ${title}`,
+        category: toExistingCategory(item.sourceType),
+        connectionTone: "flywheel",
+        lifecycle: "Published",
+        details: `E${existingIndex}: ${title}`,
         source: "existing",
+        relation: "already_connected",
+        url: item.url ?? null,
       });
-    });
+    }
 
-    mentionSources.slice(0, 3).forEach((title, index) => {
-      const label = `M${index + 1}`;
+    for (const item of support?.connectedSupportPages ?? []) {
+      const title = normalizeText(item.title) || "Connected Support Page";
+      const key = title.toLowerCase();
+      if (seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      existingIndex += 1;
       nodes.push({
-        id: `mention-${index}`,
-        label,
+        id: `existing-connected-${item.id ?? existingIndex}`,
+        label: `E${existingIndex}`,
         title,
-        category: "mention",
+        category: toExistingCategory(item.type),
+        connectionTone: "flywheel",
+        lifecycle: "Published",
+        details: `E${existingIndex}: ${title}`,
+        source: "existing",
+        relation: "already_connected",
+        url: item.url ?? null,
+      });
+    }
+
+    for (const item of support?.mentionsWithoutLinks ?? []) {
+      const title = normalizeText(item.title) || "Support Mention";
+      const key = title.toLowerCase();
+      if (seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      existingIndex += 1;
+      nodes.push({
+        id: `existing-mention-${item.sourceId}`,
+        label: `E${existingIndex}`,
+        title,
+        category: toExistingCategory(item.sourceType),
         connectionTone: "standard",
         lifecycle: "Recommended",
-        details: `${label} = ${title}`,
+        details: `E${existingIndex}: ${title}`,
         source: "existing",
+        relation: "recommended_connection",
+        url: item.url ?? null,
       });
-    });
+    }
 
-    const eventTitles = eventCandidates.length ? eventCandidates : ["Local Event Guide Opportunity"];
-    eventTitles.slice(0, 2).forEach((title, index) => {
-      const label = `E${index + 1}`;
-      const published = Object.values(contentAssets).some((asset) => asset.title === title && asset.status === "Published");
+    for (const item of reinforcementPlan?.items.slice(0, 5) ?? []) {
+      const asset = contentAssets[item.id];
+      if (!asset || asset.status === "Recommended") continue;
+      const title = normalizeText(asset.title || item.title) || "Generated Support Asset";
+      const key = title.toLowerCase();
+      if (seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      generatedIndex += 1;
       nodes.push({
-        id: `event-${index}`,
-        label,
+        id: `generated-${item.id}`,
+        label: `G${generatedIndex}`,
         title,
-        category: "event",
-        connectionTone: published ? "flywheel" : "standard",
-        lifecycle: published ? "Published" : "Recommended",
-        details: `${label} = ${title}`,
-        source: eventCandidates.length ? "existing" : "missing",
+        category: toPlanCategory(item.suggestedTargetSurface),
+        connectionTone: asset.status === "Published" ? "flywheel" : "standard",
+        lifecycle: asset.status,
+        details: `G${generatedIndex}: ${title}`,
+        source: "generated",
+        relation: asset.status === "Published" ? "already_connected" : "recommended_connection",
+        url: asset.publishedUrl || null,
       });
-    });
+    }
 
-    const couponTitles = couponCandidates.length ? couponCandidates : ["Seasonal Deals and Coupons"];
-    couponTitles.slice(0, 2).forEach((title, index) => {
-      const label = `C${index + 1}`;
-      const published = Object.values(contentAssets).some((asset) => asset.title === title && asset.status === "Published");
+    for (const item of missingFlywheelItems.slice(0, 5)) {
+      const title = normalizeText(item.title) || "Missing Support Asset";
+      const key = title.toLowerCase();
+      if (seenTitles.has(key)) continue;
+      seenTitles.add(key);
+      missingIndex += 1;
       nodes.push({
-        id: `coupon-${index}`,
-        label,
+        id: `missing-flywheel-${item.key}`,
+        label: `M${missingIndex}`,
         title,
-        category: "coupon",
-        connectionTone: published ? "flywheel" : "standard",
-        lifecycle: published ? "Published" : "Recommended",
-        details: `${label} = ${title}`,
-        source: couponCandidates.length ? "existing" : "missing",
+        category: "blog_post",
+        connectionTone: "standard",
+        lifecycle: "Recommended",
+        details: `M${missingIndex}: ${title}`,
+        source: "missing",
+        relation: "recommended_missing",
+        url: item.targetEntity.url ?? null,
       });
-    });
+    }
 
-    return nodes.slice(0, 10);
-  }, [support, missingFlywheelItems, contentAssets, linkOperations]);
+    return nodes.slice(0, 8);
+  }, [support, missingFlywheelItems, reinforcementPlan, contentAssets]);
 
   useEffect(() => {
     if (!mapNodes.length) return;
@@ -1097,7 +1365,7 @@ export default function ListingOptimizationClient({
         : "No major blockers detected right now.";
   const fastestWin = fastestWinLink
     ? `Add ${fastestWinLink.suggestedAnchorText} from ${fastestWinLink.sourcePage}.`
-    : "Generate one missing authority asset from Step 3.";
+    : "Generate one missing authority asset from Step 2.";
 
   const missionProgress = useMemo(() => {
     const connectionsDone = linkOperations.some((item) => item.status === "Approved" || item.status === "Published");
@@ -1399,48 +1667,41 @@ export default function ListingOptimizationClient({
   }
 
   const recommendedMissingItems = missingFlywheelItems.slice(0, 5);
-  const existingConnections = connectNowFlywheelItems.filter(
-    (item) => !linkOperations.some((operation) => operation.key === item.key && operation.status === "Published")
-  );
-
-  const optimizedFlywheelLinks = linkOperations.slice(0, 5).map((item) => item.suggestedAnchorText);
+  const existingConnections = connectNowFlywheelItems.slice(0, 5);
+  const alreadyConnectedAssets = mapNodes.filter((node) => node.relation === "already_connected").slice(0, 5);
+  const existingSupportCount = support?.summary.connectedSupportPageCount ?? support?.connectedSupportPages.length ?? 0;
+  const missingGenerationItems = recommendedMissingItems.slice(0, 5);
+  const optimizedFlywheelLinks = useMemo(() => {
+    const seen = new Set<string>();
+    const links: string[] = [];
+    for (const node of mapNodes) {
+      if (node.relation === "already_connected" || node.relation === "recommended_connection") {
+        const normalized = node.title.trim();
+        if (!normalized || seen.has(normalized.toLowerCase())) continue;
+        seen.add(normalized.toLowerCase());
+        links.push(normalized);
+      }
+      if (links.length >= 5) break;
+    }
+    return links;
+  }, [mapNodes]);
 
   return (
     <>
       <TopBar breadcrumbs={["Home", "DirectoryIQ", "Listing Mission Control"]} searchPlaceholder="Search listing mission..." />
 
       <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-mission-header">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Listing mission control</div>
+        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
           <div>
-            <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Listing mission</div>
-            <h1 className="mt-1 text-2xl font-semibold text-slate-100">{displayName}</h1>
+            <h1 className="text-2xl font-semibold text-slate-100">{displayName}</h1>
             {displayUrl ? (
               <Link className="mt-1 block text-xs text-cyan-200 underline underline-offset-4" href={displayUrl} target="_blank">
                 {displayUrl}
               </Link>
             ) : null}
           </div>
-          <div className="rounded-xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-right">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">AI Visibility / AI Selection</div>
-            <div className="mt-1 text-3xl font-semibold text-cyan-100" data-testid="listing-score">
-              {computedScore}
-            </div>
-          </div>
-        </div>
-
-        <div className="mt-4 grid gap-2 md:grid-cols-3">
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Biggest blocker</div>
-            <div className="mt-1 text-sm text-slate-100">{biggestBlocker}</div>
-          </div>
-          <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Fastest win</div>
-            <div className="mt-1 text-sm text-slate-100">{fastestWin}</div>
-          </div>
-          <div className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 p-3">
-            <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">Mission progress</div>
-            <div className="mt-1 text-2xl font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
-          </div>
+          <div className="text-xs text-slate-300">Step order: Make Connections, Generate Content, Optimize Listing</div>
         </div>
       </div>
 
@@ -1470,11 +1731,11 @@ export default function ListingOptimizationClient({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-100">Authority Map</h2>
-                <p className="text-xs text-slate-400">The listing is the central authority node. Orange lines are standard, green lines are flywheel connections.</p>
+                <p className="text-xs text-slate-400">Listing-first authority view with connected, recommended, and missing support assets.</p>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-slate-300">
-                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Standard</span>
-                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Flywheel</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Connected</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Recommended</span>
               </div>
             </div>
 
@@ -1482,25 +1743,43 @@ export default function ListingOptimizationClient({
               <div className="relative mx-auto aspect-[16/10] max-w-4xl" data-testid="authority-map-canvas">
                 <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {mapNodes.map((node, index) => {
-                    const point = mapNodeLayout(index);
+                    const line = mapConnectionPoints(index);
                     const stroke = node.connectionTone === "flywheel" ? "rgba(52,211,153,0.9)" : "rgba(251,146,60,0.9)";
-                    return <line key={`line-${node.id}`} x1="50" y1="50" x2={point.x} y2={point.y} stroke={stroke} strokeWidth="1.2" />;
+                    return (
+                      <line
+                        key={`line-${node.id}`}
+                        x1={line.x1}
+                        y1={line.y1}
+                        x2={line.x2}
+                        y2={line.y2}
+                        stroke={stroke}
+                        strokeWidth="0.65"
+                        strokeLinecap="round"
+                      />
+                    );
                   })}
                 </svg>
 
-                <div className="absolute left-1/2 top-1/2 w-[52%] -translate-x-1/2 -translate-y-1/2 rounded-[28px] border border-cyan-300/40 bg-slate-900/90 p-3 shadow-2xl" data-testid="listing-hero-node">
-                  <div className="flex items-center gap-3">
-                    <div className="h-14 w-20 overflow-hidden rounded-lg border border-white/20 bg-slate-900">
-                      {listing?.listing.mainImageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={listing.listing.mainImageUrl} alt={displayName} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full items-center justify-center text-[11px] text-slate-400">No image</div>
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold text-slate-100">{displayName}</div>
-                      <div className="mt-1 inline-flex rounded-full border border-cyan-300/35 px-2 py-0.5 text-[11px] text-cyan-100">AI Visibility Score {computedScore}</div>
+                <div
+                  className="absolute left-1/2 top-1/2 h-[58%] w-[62%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[999px] border border-cyan-300/45 bg-slate-900 shadow-2xl"
+                  data-testid="listing-hero-node"
+                >
+                  {listing?.listing.mainImageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={listing.listing.mainImageUrl} alt={displayName} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-300">No listing image</div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <div className="truncate text-sm font-semibold text-white">{displayName}</div>
+                    {displayUrl ? (
+                      <Link className="mt-1 block truncate text-xs text-cyan-100 underline underline-offset-4" href={displayUrl} target="_blank">
+                        {displayUrl}
+                      </Link>
+                    ) : null}
+                    <div className="mt-1 inline-flex rounded-full border border-cyan-200/60 bg-black/30 px-2 py-0.5 text-[11px] text-cyan-100">
+                      AI Visibility Score / AI Selection {computedScore}
                     </div>
                   </div>
                 </div>
@@ -1512,7 +1791,7 @@ export default function ListingOptimizationClient({
                     <button
                       key={node.id}
                       type="button"
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
                         selected
                           ? "border-cyan-200/80 bg-cyan-400/20 text-cyan-100"
                           : node.connectionTone === "flywheel"
@@ -1546,7 +1825,7 @@ export default function ListingOptimizationClient({
               <span className="text-xs text-slate-400">{detailsOpen ? "Hide" : "Show"}</span>
             </button>
             {detailsOpen ? (
-              <div className="mt-3 grid gap-2 sm:grid-cols-2" data-testid="authority-details-content">
+              <div className="mt-3 grid gap-2 sm:grid-cols-3" data-testid="authority-details-content">
                 {mapNodes.map((node) => (
                   <button
                     key={`detail-${node.id}`}
@@ -1563,9 +1842,33 @@ export default function ListingOptimizationClient({
             {selectedMapNode ? (
               <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-slate-200" data-testid="authority-node-inspector">
                 <div className="font-semibold text-slate-100">{selectedMapNode.label}: {selectedMapNode.title}</div>
-                <div className="mt-1 text-xs text-slate-400">{nodeCategoryLabel(selectedMapNode.category)} • {selectedMapNode.source} • {selectedMapNode.connectionTone === "flywheel" ? "Flywheel connection" : "Standard connection"}</div>
+                <div className="mt-1 text-xs text-slate-400">
+                  {nodeCategoryLabel(selectedMapNode.category)} • {selectedMapNode.lifecycle} • {selectedMapNode.relation.replace(/_/g, " ")}
+                </div>
+                {selectedMapNode.url ? (
+                  <a href={selectedMapNode.url} target="_blank" rel="noreferrer" className="mt-2 block truncate text-xs text-cyan-200 underline">
+                    {selectedMapNode.url}
+                  </a>
+                ) : null}
               </div>
             ) : null}
+          </section>
+
+          <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-3" data-testid="mission-status-strip">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Biggest blocker</div>
+                <div className="mt-1 line-clamp-2 text-sm text-slate-100">{biggestBlocker}</div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Fastest win</div>
+                <div className="mt-1 line-clamp-2 text-sm text-slate-100">{fastestWin}</div>
+              </div>
+              <div className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-2">
+                <div className="text-[10px] uppercase tracking-[0.08em] text-cyan-100">Mission progress</div>
+                <div className="mt-1 text-xl font-semibold text-cyan-100" data-testid="listing-mission-progress-percent">{missionProgress}%</div>
+              </div>
+            </div>
           </section>
 
           <nav className="rounded-2xl border border-white/10 bg-slate-950/70 p-2" data-testid="listing-step-switcher-desktop">
@@ -1593,12 +1896,12 @@ export default function ListingOptimizationClient({
             {activeStepId === "make-connections" ? (
               <div data-testid="step-make-connections">
                 <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
-                <p className="mt-1 text-sm text-slate-400">Identify existing support, missing support, and the top five flywheel opportunities.</p>
+                <p className="mt-1 text-sm text-slate-400">Identify what already supports this listing, what is missing, and which missing assets should be created next.</p>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Existing support</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{support?.connectedSupportPages.length ?? 0}</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{existingSupportCount}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Connect now</div>
@@ -1606,7 +1909,7 @@ export default function ListingOptimizationClient({
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Missing assets</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{recommendedMissingItems.length}</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{missingGenerationItems.length}</div>
                   </div>
                 </div>
 
@@ -1614,6 +1917,19 @@ export default function ListingOptimizationClient({
                 {supportError || gapsError || flywheelError ? (
                   <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
                     {supportError || gapsError || flywheelError}
+                  </div>
+                ) : null}
+
+                {alreadyConnectedAssets.length ? (
+                  <div className="mt-4 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
+                    <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
+                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
+                      {alreadyConnectedAssets.map((node) => (
+                        <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
+                          {node.label}: {node.title}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 ) : null}
 
@@ -1654,8 +1970,8 @@ export default function ListingOptimizationClient({
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step1-missing-connections">
                   <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to route into Step 3</div>
                   <div className="mt-2 space-y-1">
-                    {recommendedMissingItems.length ? (
-                      recommendedMissingItems.map((item) => (
+                    {missingGenerationItems.length ? (
+                      missingGenerationItems.map((item) => (
                         <div key={item.key} className="text-sm text-slate-200">{normalizeText(item.title)}</div>
                       ))
                     ) : (
@@ -1721,7 +2037,11 @@ export default function ListingOptimizationClient({
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step2-flywheel-links">
                   <div className="text-sm font-semibold text-slate-100">Read more about {displayName}</div>
                   <ul className="mt-2 space-y-1 text-sm text-slate-200">
-                    {optimizedFlywheelLinks.length ? optimizedFlywheelLinks.map((item) => <li key={item}>• {item}</li>) : <li>• No flywheel links approved yet.</li>}
+                    {optimizedFlywheelLinks.length ? (
+                      optimizedFlywheelLinks.map((item) => <li key={item}>• {item}</li>)
+                    ) : (
+                      <li>• Add or generate support assets in Step 1 and Step 2 to populate this module.</li>
+                    )}
                   </ul>
                 </div>
               </div>
@@ -1732,9 +2052,16 @@ export default function ListingOptimizationClient({
                 <h3 className="text-lg font-semibold text-slate-100">Step 2: Generate Content</h3>
                 <p className="mt-1 text-sm text-slate-400">Generate missing authority assets, approve them, and publish directly.</p>
 
-                {reinforcementPlanLoading || contentStructureLoading ? <div className="mt-3 text-sm text-slate-300">Loading content opportunities...</div> : null}
-                {reinforcementPlanError || contentStructureError ? (
-                  <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{reinforcementPlanError || contentStructureError}</div>
+                {actionsLoading || intentClustersLoading || reinforcementPlanLoading || contentStructureLoading ? <div className="mt-3 text-sm text-slate-300">Loading content opportunities...</div> : null}
+                {actionsError || intentClustersError || reinforcementPlanError || contentStructureError ? (
+                  <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
+                    {actionsError || intentClustersError || reinforcementPlanError || contentStructureError || "Content generation intelligence is not available yet."}
+                  </div>
+                ) : null}
+                {!reinforcementPlanLoading && !reinforcementPlanError && (reinforcementPlan?.items?.length ?? 0) === 0 ? (
+                  <div className="mt-3 rounded-lg border border-white/10 bg-black/20 px-3 py-2 text-sm text-slate-300">
+                    No high-priority missing authority assets are currently detected. Step 1 can still recommend up to five missing opportunities when support gaps appear.
+                  </div>
                 ) : null}
 
                 <div className="mt-4 space-y-2" data-testid="step3-content-assets">
@@ -1749,6 +2076,9 @@ export default function ListingOptimizationClient({
                           <div>
                             <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
                             <div className="mt-1 text-xs text-slate-400">{normalizeText(item.suggestedContentPurpose)}</div>
+                            <div className="mt-1 text-[11px] text-slate-300">
+                              Type: <span className="text-slate-100">{normalizeText(item.suggestedTargetSurface)}</span> • Status: <span className="text-slate-100">{asset.status}</span>
+                            </div>
                           </div>
                           <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}>{asset.status}</span>
                         </div>
