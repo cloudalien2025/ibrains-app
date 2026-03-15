@@ -1796,18 +1796,28 @@ export default function ListingOptimizationClient({
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-300">No listing image</div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
-                  <div className="absolute inset-0 flex items-center justify-center p-3 text-center sm:items-end sm:justify-start sm:text-left sm:p-4">
-                    <div className="w-full max-w-[92%]">
-                    <div className="truncate text-sm font-semibold text-white">{displayName}</div>
-                    {displayUrl ? (
-                      <Link className="mt-1 block truncate text-xs text-cyan-100 underline underline-offset-4" href={displayUrl} target="_blank">
-                        {displayUrl}
-                      </Link>
-                    ) : null}
-                    <div className="mt-1 inline-flex rounded-full border border-cyan-200/60 bg-black/30 px-2 py-0.5 text-[11px] text-cyan-100">
-                      AI Visibility Score / AI Selection {computedScore}
-                    </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/10" />
+                  <div className="absolute inset-x-2 bottom-2 sm:inset-x-3 sm:bottom-3" data-testid="listing-hero-overlay">
+                    <div className="rounded-2xl border border-white/30 bg-black/35 px-3 py-2.5 text-left shadow-xl backdrop-blur-sm sm:px-4 sm:py-3">
+                      <div className="truncate text-sm font-semibold text-white sm:text-[15px]" data-testid="listing-hero-title">
+                        {displayName}
+                      </div>
+                      {displayUrl ? (
+                        <Link
+                          className="mt-1 block max-w-full break-all text-[11px] text-cyan-100 underline underline-offset-4 sm:text-xs"
+                          href={displayUrl}
+                          target="_blank"
+                          data-testid="listing-hero-url"
+                        >
+                          {displayUrl}
+                        </Link>
+                      ) : null}
+                      <div
+                        className="mt-2 inline-flex rounded-full border border-cyan-200/60 bg-black/30 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
+                        data-testid="listing-hero-score"
+                      >
+                        AI Selection Score: {computedScore}
+                      </div>
                     </div>
                   </div>
                 </div>
