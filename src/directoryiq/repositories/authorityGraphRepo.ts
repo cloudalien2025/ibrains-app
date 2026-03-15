@@ -59,6 +59,7 @@ type BlogLayerRow = {
   blog_external_id: string;
   blog_title: string | null;
   blog_url: string | null;
+  blog_meta: Record<string, unknown> | null;
   edge_type: string | null;
   listing_node_id: string | null;
   listing_external_id: string | null;
@@ -114,6 +115,24 @@ export async function upsertNode(input: {
   );
 
   return rows[0];
+}
+
+export async function mergeNodeMeta(input: {
+  tenantId: string;
+  nodeId: string;
+  patch: Record<string, unknown>;
+}): Promise<void> {
+  await queryDb(
+    `
+    UPDATE authority_graph_nodes
+    SET
+      meta = COALESCE(meta, '{}'::jsonb) || $3::jsonb,
+      updated_at = now()
+    WHERE tenant_id = $1
+      AND id = $2
+    `,
+    [input.tenantId, input.nodeId, JSON.stringify(input.patch)]
+  );
 }
 
 export async function upsertEdge(input: {
@@ -427,6 +446,7 @@ export async function listBlogLayerRows(tenantId: string): Promise<BlogLayerRow[
       b.external_id AS blog_external_id,
       b.title AS blog_title,
       b.canonical_url AS blog_url,
+      b.meta AS blog_meta,
       e.edge_type AS edge_type,
       l.id AS listing_node_id,
       l.external_id AS listing_external_id,
