@@ -7,7 +7,10 @@ import { queryDb } from "@/src/directoryiq/repositories/db";
 
 const STATUSES = new Set(["open", "ignored", "resolved"]);
 
-export async function POST(req: NextRequest, context: { params: { id: string } }) {
+export async function POST(
+  req: NextRequest,
+  context: { params: Promise<{ id: string }> | { id: string } }
+) {
   const reqId = crypto.randomUUID();
 
   try {
@@ -33,7 +36,7 @@ export async function POST(req: NextRequest, context: { params: { id: string } }
       );
     }
 
-    const leakId = context.params.id;
+    const { id: leakId } = await Promise.resolve(context.params);
     const rows = await queryDb<{ id: string }>(
       `
       UPDATE directoryiq_authority_leaks
