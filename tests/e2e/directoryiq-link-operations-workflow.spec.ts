@@ -301,7 +301,8 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await mockListingApis(page);
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Acme Plumbing" })).toBeVisible();
+    await expect(page.getByTestId("authority-map-zone")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
     await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
