@@ -125,11 +125,12 @@ async function handleCheck(origin: string, check: string): Promise<CheckResult> 
 
 export async function POST(
   req: NextRequest,
-  { params }: { params: { check: string } }
+  { params }: { params: Promise<{ check: string }> | { check: string } }
 ) {
   try {
     const origin = new URL(req.url).origin;
-    const result = await handleCheck(origin, params.check);
+    const { check } = await Promise.resolve(params);
+    const result = await handleCheck(origin, check);
     return NextResponse.json(result, { status: result.ok ? 200 : 500 });
   } catch (e: any) {
     return NextResponse.json(
