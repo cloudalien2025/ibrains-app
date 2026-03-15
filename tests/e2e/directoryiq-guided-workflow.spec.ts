@@ -25,7 +25,7 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);
-      expect(defaultViewText).not.toContain("->");
+      expect(defaultViewText).toContain("Step order: Make Connections -> Generate Content -> Optimize Listing");
       expect(defaultViewText).not.toContain("Recommendation type:");
     });
   }
