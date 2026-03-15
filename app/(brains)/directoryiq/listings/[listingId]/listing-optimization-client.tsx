@@ -1700,7 +1700,7 @@ export default function ListingOptimizationClient({
               </Link>
             ) : null}
           </div>
-          <div className="text-xs text-slate-300">Step order: Make Connections -&gt; Generate Content -&gt; Optimize Listing</div>
+          <div className="text-xs text-slate-300">Step order: Make Connections, Generate Content, Optimize Listing</div>
         </div>
       </div>
 
@@ -1894,7 +1894,7 @@ export default function ListingOptimizationClient({
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-active-step-workspace">
             {activeStepId === "make-connections" ? (
               <div data-testid="step-make-connections">
-                <h3 className="text-lg font-semibold text-slate-100">Make Connections</h3>
+                <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
                 <p className="mt-1 text-sm text-slate-400">Identify what already supports this listing, what is missing, and which missing assets should be created next.</p>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -1903,7 +1903,7 @@ export default function ListingOptimizationClient({
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{alreadyConnectedAssets.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Top opportunities</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Connect now</div>
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{existingConnections.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -1966,7 +1966,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step1-missing-connections">
-                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to generate in Step 2</div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to route into Step 3</div>
                   <div className="mt-2 space-y-1">
                     {missingGenerationItems.length ? (
                       missingGenerationItems.map((item) => (
