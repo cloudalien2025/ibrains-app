@@ -2,28 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
-  getAllListingsWithEvaluations: vi.fn().mockResolvedValue({
-    cards: [
-      {
-        sourceId: "site-a:142",
-        listingId: "142",
-        category: "Hotels",
-        siteId: "site-a",
-      },
-      {
-        sourceId: "site-b:142",
-        listingId: "142",
-        category: "Hotels",
-        siteId: "site-b",
-      },
-      {
-        sourceId: "site-a:128",
-        listingId: "128",
-        category: "Ski Rentals",
-        siteId: "site-a",
-      },
-    ],
-  }),
+  getAllListingsWithEvaluations: vi.fn(),
   getDirectoryIqSettings: vi.fn(),
 }));
 
@@ -56,6 +35,7 @@ describe("directoryiq dashboard route proxy", () => {
     process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
     const { GET } = await import("@/app/api/directoryiq/dashboard/route");
+    const { getAllListingsWithEvaluations } = await import("@/app/api/directoryiq/_utils/selectionData");
     const req = new NextRequest("http://localhost/api/directoryiq/dashboard", {
       headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
     });
@@ -65,11 +45,12 @@ describe("directoryiq dashboard route proxy", () => {
 
     expect(res.status).toBe(200);
     expect(json.connected).toBe(true);
-    expect(json.listings[0].category).toBe("Hotels");
-    expect(json.listings[1].category).toBe("Hotels");
-    expect(json.listings[2].category).toBe("Ski Rentals");
+    expect(json.listings[0].category).toBeUndefined();
+    expect(json.listings[1].category).toBeUndefined();
+    expect(json.listings[2].category).toBeUndefined();
     expect(new Set(json.listings.map((row: { listing_row_id: string }) => row.listing_row_id)).size).toBe(3);
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(getAllListingsWithEvaluations).not.toHaveBeenCalled();
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/dashboard");
     expect(init.method).toBe("GET");

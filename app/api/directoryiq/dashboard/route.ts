@@ -120,7 +120,7 @@ async function loadDashboard(userId: string) {
   };
 }
 
-async function normalizeProxyDashboardResponse(response: NextResponse, userId: string): Promise<NextResponse> {
+async function normalizeProxyDashboardResponse(response: NextResponse): Promise<NextResponse> {
   if (response.status >= 400) return response;
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.toLowerCase().includes("application/json")) return response;
@@ -130,16 +130,9 @@ async function normalizeProxyDashboardResponse(response: NextResponse, userId: s
     const listingsRaw = payload.listings;
     if (!Array.isArray(listingsRaw)) return NextResponse.json(payload, { status: response.status });
 
-    const canonical = await getAllListingsWithEvaluations(userId);
-    const canonicalRows = canonical.cards.map((card) => ({
-      sourceId: card.sourceId,
-      listingId: card.listingId,
-      category: card.category,
-      siteId: card.siteId ?? null,
-    }));
     const listings = normalizeDashboardListingsContract(
       listingsRaw.filter((row): row is Record<string, unknown> => !!row && typeof row === "object"),
-      canonicalRows
+      []
     );
 
     return NextResponse.json(
@@ -168,8 +161,7 @@ export async function GET(req: NextRequest) {
   }
 
   const proxied = await proxyDirectoryIqRequest(req, DASHBOARD_PATH, "GET");
-  const userId = resolveUserId(req);
-  return normalizeProxyDashboardResponse(proxied, userId);
+  return normalizeProxyDashboardResponse(proxied);
 }
 
 export async function POST(req: NextRequest) {
@@ -187,6 +179,5 @@ export async function POST(req: NextRequest) {
   }
 
   const proxied = await proxyDirectoryIqRequest(req, DASHBOARD_PATH, "POST");
-  const userId = resolveUserId(req);
-  return normalizeProxyDashboardResponse(proxied, userId);
+  return normalizeProxyDashboardResponse(proxied);
 }
