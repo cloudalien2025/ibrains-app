@@ -92,7 +92,7 @@ test.describe("DirectoryIQ authority blogs classification contract", () => {
     await expect(page.getByRole("columnheader", { name: "Primary Type" })).toBeVisible();
     await expect(page.getByRole("columnheader", { name: "Selection Value" })).toBeVisible();
     await expect(page.getByTestId("authority-blog-row-blog-review")).toBeVisible();
-    await expect(page.getByTestId("authority-blog-review-pill")).toHaveCount(1);
+    await expect(page.locator("tbody").getByTestId("authority-blog-review-pill")).toHaveCount(1);
 
     await page.getByTestId("authority-blog-filter-primary-type").selectOption("Comparison");
     await expect(page.getByTestId("authority-blog-row-blog-comparison")).toBeVisible();

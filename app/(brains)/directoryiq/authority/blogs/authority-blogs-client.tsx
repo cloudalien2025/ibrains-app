@@ -361,7 +361,50 @@ export default function AuthorityBlogsClient() {
               </label>
             </div>
 
-            <div className="overflow-x-auto">
+            <div data-testid="authority-blog-mobile-list" className="space-y-3 md:hidden">
+              {filteredRows.map((row) => (
+                <article
+                  key={row.blogNodeId}
+                  data-testid={`authority-blog-mobile-card-${row.blogExternalId}`}
+                  className="min-w-0 rounded-lg border border-white/10 bg-white/[0.02] p-3"
+                >
+                  <div className="flex min-w-0 items-start justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelected(row)}
+                      className="min-w-0 flex-1 text-left text-cyan-100 underline-offset-2 hover:underline"
+                    >
+                      <span className="block break-words">{row.blogTitle ?? row.blogExternalId}</span>
+                    </button>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] ${statusClass(row.status)}`}>
+                      {row.status.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {row.review_candidate ? (
+                    <div
+                      data-testid="authority-blog-review-pill"
+                      className="mt-2 inline-flex max-w-full rounded border border-amber-300/40 bg-amber-400/10 px-1.5 py-0.5 text-[10px] uppercase tracking-[0.08em] text-amber-100"
+                    >
+                      Review Candidate
+                    </div>
+                  ) : null}
+
+                  <div className="mt-2 text-xs text-slate-500 break-all">{row.blogUrl ?? "-"}</div>
+
+                  <div
+                    data-testid="authority-blog-mobile-classification"
+                    className="mt-3 flex min-w-0 flex-wrap gap-1.5 text-[11px] text-slate-200"
+                  >
+                    <span className="rounded border border-white/20 bg-white/[0.04] px-2 py-0.5 break-words">Type: {row.primary_type}</span>
+                    <span className="rounded border border-white/20 bg-white/[0.04] px-2 py-0.5">Confidence: {row.confidence}</span>
+                    <span className="rounded border border-white/20 bg-white/[0.04] px-2 py-0.5">Selection: {row.selection_value}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <div className="hidden overflow-x-auto md:block">
               <table className="min-w-full text-left text-sm">
                 <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
                   <tr>
