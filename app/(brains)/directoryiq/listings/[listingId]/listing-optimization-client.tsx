@@ -489,8 +489,8 @@ type AuthorityMapNode = {
   connectionTone: MapConnectionTone;
   lifecycle: LifecycleState;
   details: string;
-  source: "existing" | "missing" | "generated";
-  relation: "already_connected" | "recommended_connection" | "recommended_missing";
+  source: "connected" | "mention";
+  relation: "already_connected" | "mention_without_link";
   url?: string | null;
 };
 
@@ -1248,15 +1248,9 @@ export default function ListingOptimizationClient({
         .map((operation) => normalizeText(operation.targetPage).toLowerCase())
         .filter(Boolean)
     );
-    const publishedGeneratedTitles = new Set(
-      Object.values(contentAssets)
-        .filter((asset) => asset.status === "Published")
-        .map((asset) => normalizeText(asset.title).toLowerCase())
-        .filter(Boolean)
-    );
-    let existingIndex = 0;
-    let generatedIndex = 0;
-    let missingIndex = 0;
+    let connectedIndex = 0;
+    let connectedBlogIndex = 0;
+    let mentionIndex = 0;
 
     const toExistingCategory = (type: string): MapNodeCategory => {
       if (type === "blog_post") return "blog_post";
@@ -1267,39 +1261,28 @@ export default function ListingOptimizationClient({
       return "support";
     };
 
-    const toPlanCategory = (surface?: string): MapNodeCategory => {
-      if (surface === "comparison") return "comparison";
-      if (surface === "faq") return "faq";
-      if (surface === "local_guide") return "local_guide";
-      if (surface === "support_page") return "support";
-      if (surface === "cluster_hub") return "hub";
-      return "blog_post";
-    };
-
-    const toFlywheelEntityCategory = (entityType: string): MapNodeCategory => {
-      if (entityType === "blog_post") return "blog_post";
-      if (entityType === "guide_page") return "support";
-      if (entityType === "category_page") return "category";
-      if (entityType === "support_page") return "support";
-      return "support";
-    };
-
     for (const item of support?.inboundLinkedSupport ?? []) {
       const title = normalizeText(item.title) || "Support Asset";
       const key = title.toLowerCase();
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
-      existingIndex += 1;
-      const isFlywheel = publishedFlywheelTargetTitles.has(key) || publishedGeneratedTitles.has(key);
+      const isBlogPost = item.sourceType === "blog_post";
+      if (isBlogPost) {
+        connectedBlogIndex += 1;
+      } else {
+        connectedIndex += 1;
+      }
+      const label = isBlogPost ? `B${connectedBlogIndex}` : `E${connectedIndex}`;
+      const isFlywheel = publishedFlywheelTargetTitles.has(key);
       nodes.push({
         id: `existing-inbound-${item.sourceId}`,
-        label: `E${existingIndex}`,
+        label,
         title,
         category: toExistingCategory(item.sourceType),
         connectionTone: isFlywheel ? "flywheel" : "standard",
         lifecycle: "Published",
-        details: `E${existingIndex}: ${title}`,
-        source: "existing",
+        details: `${label}: ${title}`,
+        source: "connected",
         relation: "already_connected",
         url: item.url ?? null,
       });
@@ -1310,17 +1293,18 @@ export default function ListingOptimizationClient({
       const key = title.toLowerCase();
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
-      existingIndex += 1;
-      const isFlywheel = publishedFlywheelTargetTitles.has(key) || publishedGeneratedTitles.has(key);
+      connectedIndex += 1;
+      const label = `E${connectedIndex}`;
+      const isFlywheel = publishedFlywheelTargetTitles.has(key);
       nodes.push({
-        id: `existing-connected-${item.id ?? existingIndex}`,
-        label: `E${existingIndex}`,
+        id: `existing-connected-${item.id ?? connectedIndex}`,
+        label,
         title,
         category: toExistingCategory(item.type),
         connectionTone: isFlywheel ? "flywheel" : "standard",
         lifecycle: "Published",
-        details: `E${existingIndex}: ${title}`,
-        source: "existing",
+        details: `${label}: ${title}`,
+        source: "connected",
         relation: "already_connected",
         url: item.url ?? null,
       });
@@ -1331,66 +1315,24 @@ export default function ListingOptimizationClient({
       const key = title.toLowerCase();
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
-      existingIndex += 1;
+      mentionIndex += 1;
+      const label = `M${mentionIndex}`;
       nodes.push({
         id: `existing-mention-${item.sourceId}`,
-        label: `E${existingIndex}`,
+        label,
         title,
         category: toExistingCategory(item.sourceType),
         connectionTone: "standard",
-        lifecycle: "Recommended",
-        details: `E${existingIndex}: ${title}`,
-        source: "existing",
-        relation: "recommended_connection",
+        lifecycle: "Detected",
+        details: `${label}: ${title}`,
+        source: "mention",
+        relation: "mention_without_link",
         url: item.url ?? null,
       });
     }
 
-    for (const item of reinforcementPlan?.items.slice(0, 5) ?? []) {
-      const asset = contentAssets[item.id];
-      if (!asset || asset.status === "Recommended") continue;
-      const title = normalizeText(asset.title || item.title) || "Generated Support Asset";
-      const key = title.toLowerCase();
-      if (seenTitles.has(key)) continue;
-      seenTitles.add(key);
-      generatedIndex += 1;
-      const isFlywheel = asset.flywheelStatus === "Published" || publishedFlywheelTargetTitles.has(key);
-      nodes.push({
-        id: `generated-${item.id}`,
-        label: `G${generatedIndex}`,
-        title,
-        category: toPlanCategory(item.suggestedTargetSurface),
-        connectionTone: isFlywheel ? "flywheel" : "standard",
-        lifecycle: asset.status,
-        details: `G${generatedIndex}: ${title}`,
-        source: "generated",
-        relation: isFlywheel ? "already_connected" : "recommended_connection",
-        url: asset.publishedUrl || null,
-      });
-    }
-
-    for (const item of missingFlywheelItems.slice(0, 5)) {
-      const title = normalizeText(item.title) || "Missing Support Asset";
-      const key = title.toLowerCase();
-      if (seenTitles.has(key)) continue;
-      seenTitles.add(key);
-      missingIndex += 1;
-      nodes.push({
-        id: `missing-flywheel-${item.key}`,
-        label: `M${missingIndex}`,
-        title,
-        category: toFlywheelEntityCategory(item.targetEntity.type),
-        connectionTone: "standard",
-        lifecycle: "Recommended",
-        details: `M${missingIndex}: ${title}`,
-        source: "missing",
-        relation: "recommended_missing",
-        url: item.targetEntity.url ?? null,
-      });
-    }
-
     return nodes.slice(0, 8);
-  }, [support, missingFlywheelItems, reinforcementPlan, contentAssets, linkOperations]);
+  }, [support, linkOperations]);
 
   useEffect(() => {
     if (!mapNodes.length) return;
@@ -1724,7 +1666,7 @@ export default function ListingOptimizationClient({
     const seen = new Set<string>();
     const links: string[] = [];
     for (const node of mapNodes) {
-      if (node.relation === "already_connected" || node.relation === "recommended_connection") {
+      if (node.relation === "already_connected") {
         const normalized = node.title.trim();
         if (!normalized || seen.has(normalized.toLowerCase())) continue;
         seen.add(normalized.toLowerCase());
@@ -1765,11 +1707,11 @@ export default function ListingOptimizationClient({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-100">Authority Map</h2>
-                <p className="text-xs text-slate-400">Listing-first authority view with connected, recommended, and missing support assets.</p>
+                <p className="text-xs text-slate-400">Listing-first authority view with real connected assets and real mentions.</p>
               </div>
               <div className="flex max-w-full flex-wrap items-center gap-2 text-[11px] text-slate-300">
                 <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Flywheel</span>
-                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Support / Recommended</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Real Connected / Mention</span>
               </div>
             </div>
 
@@ -1879,7 +1821,7 @@ export default function ListingOptimizationClient({
               <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-slate-200" data-testid="authority-node-inspector">
                 <div className="font-semibold text-slate-100">{selectedMapNode.label}: {selectedMapNode.title}</div>
                 <div className="mt-1 text-xs text-slate-400">
-                  {nodeCategoryLabel(selectedMapNode.category)} • {selectedMapNode.lifecycle} • {selectedMapNode.relation.replace(/_/g, " ")}
+                  {nodeCategoryLabel(selectedMapNode.category)} • {selectedMapNode.lifecycle} • {selectedMapNode.relation === "already_connected" ? "already connected" : "mention without link"}
                 </div>
                 {selectedMapNode.url ? (
                   <a href={selectedMapNode.url} target="_blank" rel="noreferrer" className="mt-2 block truncate text-xs text-cyan-200 underline">
