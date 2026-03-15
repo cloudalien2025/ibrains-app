@@ -386,7 +386,7 @@ test.describe("DirectoryIQ listings Improve entrypoint", () => {
     await page.goto(`/directoryiq/listings/${firstListingId}?site_id=${siteId}&step=launch-and-measure`, {
       waitUntil: "domcontentloaded",
     });
-    await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
 
     await page.goto(`/directoryiq/listings?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
 
@@ -395,7 +395,7 @@ test.describe("DirectoryIQ listings Improve entrypoint", () => {
 
     await expect(page).toHaveURL(new RegExp(`/directoryiq/listings/${secondListingId}\\?site_id=${siteId}`));
     await expect(page).not.toHaveURL(/step=/);
-    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
   });
 });

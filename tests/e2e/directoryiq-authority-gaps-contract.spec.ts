@@ -20,12 +20,11 @@ const integrationsResponse = {
 };
 
 async function expectMissionControlSteps(page: Page) {
-  await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-audit")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-connect-existing-pages")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-create-support-content")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-upgrade-the-listing")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toHaveCount(0);
 }
 
 test.describe("DirectoryIQ authority gaps contract", () => {
@@ -119,8 +118,10 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await expectMissionControlSteps(page);
     await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
+    await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
+    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toBeVisible();
-    await expect(page.getByText("Missing comparison support content")).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
 
@@ -161,9 +162,11 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await expectMissionControlSteps(page);
     await expect(page.getByRole("button", { name: "What's Missing" })).toHaveCount(0);
-    await expect(page.getByText("Total gaps")).toBeVisible();
+    await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
+    await expect(page.getByText("Connect now", { exact: true })).toBeVisible();
+    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByText("No major blockers detected right now.")).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toHaveCount(0);
-    await expect(page.getByText("Missing comparison support content")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
   });
 });

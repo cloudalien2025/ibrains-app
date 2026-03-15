@@ -389,10 +389,22 @@ type UiError = {
 type MissionStepId = "make-connections" | "optimize-listing" | "generate-content";
 
 const MISSION_STEPS: Array<{ id: MissionStepId; label: string }> = [
-  { id: "make-connections", label: "Step 1 — Make Connections" },
-  { id: "optimize-listing", label: "Step 2 — Optimize Listing" },
-  { id: "generate-content", label: "Step 3 — Generate Content" },
+  { id: "make-connections", label: "Step 1: Make Connections" },
+  { id: "generate-content", label: "Step 2: Generate Content" },
+  { id: "optimize-listing", label: "Step 3: Optimize Listing" },
 ];
+
+function normalizeMissionStepQuery(value: string | null): MissionStepId | null {
+  if (!value) return null;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "make-connections" || normalized === "step-1" || normalized === "step1") return "make-connections";
+  if (normalized === "generate-content" || normalized === "step-2" || normalized === "step2") return "generate-content";
+  if (normalized === "optimize-listing" || normalized === "step-3" || normalized === "step3") return "optimize-listing";
+  // Backwards compatibility with previous labels/routes.
+  if (normalized === "connect-existing-pages" || normalized === "create-support-content") return "generate-content";
+  if (normalized === "upgrade-the-listing") return "optimize-listing";
+  return null;
+}
 
 type MapNodeCategory = "blog" | "mention" | "event" | "coupon";
 
@@ -526,6 +538,7 @@ export default function ListingOptimizationClient({
   const DETAIL_REQUEST_TIMEOUT_MS = Number(process.env.NEXT_PUBLIC_DIRECTORYIQ_DETAIL_TIMEOUT_MS ?? "8000");
   const searchParams = useSearchParams();
   const siteIdParam = searchParams.get("site_id");
+  const stepParam = searchParams.get("step");
   const siteQuery = siteIdParam ? `?site_id=${encodeURIComponent(siteIdParam)}` : "";
   const hasValidListingId = Boolean(listingId) && listingId !== "undefined" && listingId !== "null";
   const effectiveListingId = hasValidListingId ? listingId : "";
@@ -580,6 +593,12 @@ export default function ListingOptimizationClient({
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
+
+  useEffect(() => {
+    const queryStep = normalizeMissionStepQuery(stepParam);
+    if (!queryStep) return;
+    setActiveStepId(queryStep);
+  }, [stepParam]);
 
   useEffect(() => {
     if (!storageKey || typeof window === "undefined") return;
@@ -1573,7 +1592,7 @@ export default function ListingOptimizationClient({
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-active-step-workspace">
             {activeStepId === "make-connections" ? (
               <div data-testid="step-make-connections">
-                <h3 className="text-lg font-semibold text-slate-100">Step 1 — Make Connections</h3>
+                <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
                 <p className="mt-1 text-sm text-slate-400">Identify existing support, missing support, and the top five flywheel opportunities.</p>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
@@ -1649,7 +1668,7 @@ export default function ListingOptimizationClient({
 
             {activeStepId === "optimize-listing" ? (
               <div data-testid="step-optimize-listing">
-                <h3 className="text-lg font-semibold text-slate-100">Step 2 — Optimize Listing</h3>
+                <h3 className="text-lg font-semibold text-slate-100">Step 3: Optimize Listing</h3>
                 <p className="mt-1 text-sm text-slate-400">Build the strongest AI-ready listing package, then approve and publish.</p>
 
                 {multiActionLoading ? <div className="mt-3 text-sm text-slate-300">Loading optimization actions...</div> : null}
@@ -1710,7 +1729,7 @@ export default function ListingOptimizationClient({
 
             {activeStepId === "generate-content" ? (
               <div data-testid="step-generate-content">
-                <h3 className="text-lg font-semibold text-slate-100">Step 3 — Generate Content</h3>
+                <h3 className="text-lg font-semibold text-slate-100">Step 2: Generate Content</h3>
                 <p className="mt-1 text-sm text-slate-400">Generate missing authority assets, approve them, and publish directly.</p>
 
                 {reinforcementPlanLoading || contentStructureLoading ? <div className="mt-3 text-sm text-slate-300">Loading content opportunities...</div> : null}

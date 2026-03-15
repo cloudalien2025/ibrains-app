@@ -97,13 +97,15 @@ test.describe("DirectoryIQ listing-detail contract drift", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
 
-    const heroImage = page.getByTestId("directoryiq-hero-image");
+    const heroNode = page.getByTestId("listing-hero-node");
+    await expect(heroNode).toBeVisible();
+    const heroImage = heroNode.locator("img");
     await expect(heroImage).toBeVisible();
     await expect(heroImage).toHaveAttribute("src", imagePath);
     await expect(page.getByText("AI connection not configured.")).toHaveCount(0);
     await expect(page.getByText("Website connection not configured.")).toHaveCount(0);
-    await expect(page.getByText("AI Connected")).toHaveCount(2);
-    await expect(page.getByText("Website Connected")).toHaveCount(2);
+    await expect(page.getByText("AI Connected")).toHaveCount(0);
+    await expect(page.getByText("Website Connected")).toHaveCount(0);
     expect(integrationsCalls).toBe(0);
   });
 });

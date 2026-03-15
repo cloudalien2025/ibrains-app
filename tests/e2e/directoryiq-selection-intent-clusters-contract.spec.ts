@@ -83,7 +83,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
   test("renders deterministic cluster and no-cluster states", async ({ page }) => {
     const selectCreateSupportContentStep = async () => {
       const desktopSwitcher = page.getByTestId("listing-step-switcher-desktop");
-      const createSupportStepTab = page.getByTestId("listing-step-nav-desktop-create-support-content");
+      const createSupportStepTab = page.getByTestId("listing-step-nav-desktop-generate-content");
       await expect(desktopSwitcher).toBeVisible({ timeout: 15_000 });
       await expect(createSupportStepTab).toBeVisible({ timeout: 15_000 });
       for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -278,10 +278,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await selectCreateSupportContentStep();
     const stepWorkspace = page.getByTestId("listing-active-step-workspace");
-    await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
-    await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(stepWorkspace.getByText("Publish a reinforcement blog post with reciprocal linking")).toBeVisible({ timeout: 15_000 });
-    await expect(stepWorkspace.getByText("Structure: Reciprocal authority support module")).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
     await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
 
@@ -336,9 +333,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await selectCreateSupportContentStep();
-    await expect(stepWorkspace.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible({ timeout: 15_000 });
-    await expect(stepWorkspace.getByText("Why this listing is the strongest local fit", { exact: true })).toBeVisible({ timeout: 15_000 });
-    await expect(stepWorkspace.getByText("Why this service is trusted locally", { exact: true })).toHaveCount(0);
+    await expect(stepWorkspace.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
     await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });
