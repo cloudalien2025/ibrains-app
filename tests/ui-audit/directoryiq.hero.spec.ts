@@ -53,16 +53,10 @@ test.describe("DirectoryIQ listing hero visuals", () => {
     const grid = page.locator(".ecomviper-grid");
     await expect(grid).toBeVisible();
 
-    const heroContainer = page.getByTestId("listing-mission-header");
-    await heroContainer.waitFor({ state: "visible", timeout: 15_000 });
-    await expect(heroContainer).toBeVisible();
-
-    const hero = page.getByTestId("listing-mission-header");
-    await expect(hero.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
-    const heroTitle = hero.getByRole("heading", { level: 1 });
-    const titleText = (await heroTitle.textContent())?.trim() ?? "";
-    expect(titleText).not.toMatch(/undefined/i);
-    expect(titleText.length).toBeGreaterThan(0);
+    const authorityMap = page.getByTestId("authority-map-zone");
+    await authorityMap.waitFor({ state: "visible", timeout: 15_000 });
+    await expect(authorityMap).toBeVisible();
+    await expect(authorityMap.getByRole("heading", { name: "Authority Map" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("listing-hero-node")).toBeVisible();
 
     const fatalConsoleErrors = consoleErrors.filter((entry) => !isIgnorableConsoleError(entry));
