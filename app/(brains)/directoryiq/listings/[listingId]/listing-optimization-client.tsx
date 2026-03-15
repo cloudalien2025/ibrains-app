@@ -1798,7 +1798,7 @@ export default function ListingOptimizationClient({
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
                   <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3" data-testid="listing-hero-overlay">
-                    <div className="w-full max-w-[94%] rounded-2xl border border-white/35 bg-black/18 px-3 py-2.5 text-center shadow-lg backdrop-blur-md sm:max-w-[88%] sm:px-4 sm:py-3">
+                    <div className="w-full max-w-[94%] rounded-2xl border border-white/35 bg-black/10 px-3 py-2.5 text-center shadow-lg backdrop-blur-md sm:max-w-[88%] sm:px-4 sm:py-3">
                       <div className="truncate text-sm font-semibold text-white sm:text-[15px]" data-testid="listing-hero-title">
                         {displayName}
                       </div>
