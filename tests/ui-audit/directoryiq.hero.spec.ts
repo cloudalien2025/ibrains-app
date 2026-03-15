@@ -57,6 +57,7 @@ test.describe("DirectoryIQ listing hero visuals", () => {
     await authorityMap.waitFor({ state: "visible", timeout: 15_000 });
     await expect(authorityMap).toBeVisible();
     await expect(authorityMap.getByRole("heading", { name: "Authority Map" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
     await expect(page.getByTestId("listing-hero-node")).toBeVisible();
 
     const fatalConsoleErrors = consoleErrors.filter((entry) => !isIgnorableConsoleError(entry));
