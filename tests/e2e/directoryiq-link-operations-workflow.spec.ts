@@ -354,4 +354,96 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
   });
+
+  test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await mockListingApis(page);
+
+    await page.unroute(`**/api/directoryiq/listings/${listingId}/flywheel-links**`);
+    const longSourceTitle = ("Source title " + "extended context words ".repeat(16)).trim();
+    const longTargetTitle = ("Target title " + "expanded destination words ".repeat(16)).trim();
+    const longSourceId = `source-${"a".repeat(120)}`;
+    const longTargetId = `target-${"b".repeat(120)}`;
+    const longSourceUrl = `https://example.com/blog/${"long-source-segment-".repeat(10)}final`;
+    const longTargetUrl = `https://example.com/listings/${"long-target-segment-".repeat(10)}final`;
+
+    await page.route(`**/api/directoryiq/listings/${listingId}/flywheel-links**`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          flywheel: {
+            listing: {
+              id: listingId,
+              title: "Acme Plumbing",
+              canonicalUrl: "https://example.com/listings/acme-plumbing",
+              siteId: "site-1",
+            },
+            summary: {
+              totalRecommendations: 1,
+              highPriorityCount: 1,
+              mediumPriorityCount: 0,
+              lowPriorityCount: 0,
+              evaluatedAt: "2026-03-14T00:00:05.000Z",
+              dataStatus: "flywheel_opportunities_found",
+            },
+            items: [
+              {
+                key: "rec-long-mobile",
+                type: "blog_posts_should_link_to_listing",
+                priority: "high",
+                title: "Long content should remain inside the card",
+                rationale: "Ensure long source and target identity details wrap safely.",
+                evidenceSummary: "Mobile-safe wrapping check.",
+                sourceEntity: {
+                  id: longSourceId,
+                  type: "blog_post",
+                  title: longSourceTitle,
+                  url: longSourceUrl,
+                },
+                targetEntity: {
+                  id: longTargetId,
+                  type: "listing",
+                  title: longTargetTitle,
+                  url: longTargetUrl,
+                },
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-make-connections").click();
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+
+    const derivedSection = page.getByTestId("step1-derived-recommendations");
+    const firstCard = page.getByTestId("step1-recommendation-card").first();
+    await expect(derivedSection).toBeVisible();
+    await expect(firstCard).toContainText(longSourceTitle);
+    await expect(firstCard).toContainText(longTargetTitle);
+    await expect(firstCard).toContainText(longSourceUrl);
+    await expect(firstCard).toContainText(longTargetUrl);
+
+    const overflow = await page.evaluate(() => {
+      const viewportWidth = window.innerWidth;
+      const root = document.documentElement;
+      const body = document.body;
+      const pageScrollWidth = Math.max(root.scrollWidth, body ? body.scrollWidth : 0);
+      const cards = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="step1-recommendation-card"]'));
+      const cardsOverflowViewport = cards.some((card) => card.getBoundingClientRect().right > viewportWidth + 1);
+      const cardsInternalOverflow = cards.some((card) => card.scrollWidth > card.clientWidth + 1);
+      return {
+        hasPageOverflow: pageScrollWidth > viewportWidth + 1,
+        cardsOverflowViewport,
+        cardsInternalOverflow,
+      };
+    });
+
+    expect(overflow.cardsOverflowViewport).toBe(false);
+    expect(overflow.cardsInternalOverflow).toBe(false);
+    expect(overflow.hasPageOverflow).toBe(false);
+  });
 });
