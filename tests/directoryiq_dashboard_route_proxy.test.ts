@@ -71,7 +71,11 @@ describe("directoryiq dashboard route proxy", () => {
     const { POST } = await import("@/app/api/directoryiq/dashboard/route");
     const req = new NextRequest("http://localhost/api/directoryiq/dashboard", {
       method: "POST",
-      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+      headers: {
+        "x-user-id": "00000000-0000-4000-8000-000000000001",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ action: "refresh" }),
     });
 
     const res = await POST(req);
@@ -81,5 +85,6 @@ describe("directoryiq dashboard route proxy", () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://directoryiq-api.ibrains.ai/api/directoryiq/dashboard");
     expect(init.method).toBe("POST");
+    expect(init.body).toBe(JSON.stringify({ action: "refresh" }));
   });
 });

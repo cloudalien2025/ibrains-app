@@ -35,6 +35,9 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
 }));
+vi.mock("@/app/api/directoryiq/_utils/runtimeParity", () => ({
+  shouldServeDirectoryIqLocally: vi.fn(() => true),
+}));
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getListingEvaluation,

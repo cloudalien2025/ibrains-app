@@ -71,18 +71,20 @@ export async function proxyDirectoryIqRequest(
     const target = new URL(upstreamPathname, `${base}/`);
     const search = req.nextUrl.searchParams.toString();
     if (search) target.search = search;
+    const body = method === "GET" ? undefined : await req.text();
 
     const upstream = await fetch(target.toString(), {
       method,
       headers: buildForwardHeaders(req),
+      body,
       cache: "no-store",
       signal: controller.signal,
     });
 
-    const body = await upstream.text();
+    const upstreamBody = await upstream.text();
     const contentType = upstream.headers.get("content-type") ?? "application/json; charset=utf-8";
 
-    return new NextResponse(body, {
+    return new NextResponse(upstreamBody, {
       status: upstream.status,
       headers: {
         "content-type": contentType,
