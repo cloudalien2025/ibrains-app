@@ -1946,7 +1946,7 @@ export default function ListingOptimizationClient({
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-active-step-workspace">
             {activeStepId === "make-connections" ? (
               <div data-testid="step-make-connections">
-                <h3 className="text-lg font-semibold text-slate-100">Make Connections</h3>
+                <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
                 <p className="mt-1 text-sm text-slate-400">Identify what already supports this listing, what is missing, and which missing assets should be created next.</p>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
