@@ -107,12 +107,14 @@ test.describe("DirectoryIQ listing support contract", () => {
     await page.goto(listingUrl, { waitUntil: "domcontentloaded" });
     await openStep1();
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
-    await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
+    await expect(page.getByText("Real existing connections", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Real mentions without links", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Derived recommendations", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     const supportedPageText = await page.locator("body").innerText();
-    expect(supportedPageText).toMatch(/EXISTING SUPPORT\s*\d+/i);
-    expect(supportedPageText).toMatch(/TOP OPPORTUNITIES\s*\d+/i);
+    expect(supportedPageText).toMatch(/REAL EXISTING CONNECTIONS\s*\d+/i);
+    expect(supportedPageText).toMatch(/REAL MENTIONS WITHOUT LINKS\s*\d+/i);
+    expect(supportedPageText).toMatch(/DERIVED RECOMMENDATIONS\s*\d+/i);
     expect(supportedPageText).toMatch(/MISSING ASSETS\s*\d+/i);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
 
@@ -154,11 +156,12 @@ test.describe("DirectoryIQ listing support contract", () => {
     await page.goto(listingUrl, { waitUntil: "domcontentloaded" });
     await openStep1();
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
-    await expect(page.getByText("Existing support", { exact: true })).toBeVisible();
-    await expect(page.getByText("Top opportunities", { exact: true })).toBeVisible();
+    await expect(page.getByText("Real existing connections", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Real mentions without links", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("Derived recommendations", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
     const noDataPageText = await page.locator("body").innerText();
-    expect(noDataPageText).toMatch(/EXISTING SUPPORT\s*0/i);
+    expect(noDataPageText).toMatch(/REAL EXISTING CONNECTIONS\s*0/i);
     expect(noDataPageText).toContain("Flywheel evaluation is not available until support and gap diagnostics finish.");
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
   });

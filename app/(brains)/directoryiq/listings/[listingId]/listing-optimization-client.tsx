@@ -605,6 +605,28 @@ function nodeCategoryLabel(category: MapNodeCategory): string {
   return "Support Asset";
 }
 
+function recommendationTypeLabel(type: FlywheelRecommendationItem["type"]): string {
+  if (type === "blog_posts_should_link_to_listing") return "Add listing link from support post";
+  if (type === "listing_should_link_back_to_support_post") return "Add reciprocal listing link";
+  if (type === "missing_reciprocal_link") return "Complete reciprocal link pair";
+  if (type === "strengthen_anchor_text") return "Strengthen anchor text";
+  return "Expand cluster support";
+}
+
+function flywheelEntityTypeLabel(type: FlywheelRecommendationItem["sourceEntity"]["type"]): string {
+  if (type === "listing") return "Listing";
+  if (type === "blog_post") return "Blog post";
+  if (type === "guide_page") return "Guide page";
+  if (type === "category_page") return "Category page";
+  return "Support page";
+}
+
+function linkStatusLabel(status: LinkOperationStatus): string {
+  if (status === "Approved") return "Ready (Draft)";
+  if (status === "Published") return "Queued (Draft)";
+  return "Recommended";
+}
+
 function mapConnectionPoints(index: number, mobileTuned = false): { x1: number; y1: number; x2: number; y2: number } {
   const point = mapNodeLayout(index, mobileTuned);
   const cx = 50;
@@ -1661,7 +1683,35 @@ export default function ListingOptimizationClient({
   const recommendedMissingItems = missingFlywheelItems.slice(0, 5);
   const existingConnections = connectNowFlywheelItems.slice(0, 5);
   const alreadyConnectedAssets = mapNodes.filter((node) => node.relation === "already_connected").slice(0, 5);
+  const mentionWithoutLinkAssets = mapNodes.filter((node) => node.relation === "mention_without_link").slice(0, 5);
   const missingGenerationItems = recommendedMissingItems.slice(0, 5);
+  const linkStatusByKey = useMemo(() => {
+    return new Map(linkOperations.map((operation) => [operation.key, operation.status]));
+  }, [linkOperations]);
+  const derivedRecommendationGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        groupKey: string;
+        source: FlywheelRecommendationItem["sourceEntity"];
+        items: FlywheelRecommendationItem[];
+      }
+    >();
+    for (const item of existingConnections) {
+      const groupKey = `${item.sourceEntity.type}:${item.sourceEntity.id}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.items.push(item);
+      } else {
+        groups.set(groupKey, {
+          groupKey,
+          source: item.sourceEntity,
+          items: [item],
+        });
+      }
+    }
+    return Array.from(groups.values());
+  }, [existingConnections]);
   const optimizedFlywheelLinks = useMemo(() => {
     const seen = new Set<string>();
     const links: string[] = [];
@@ -1876,13 +1926,17 @@ export default function ListingOptimizationClient({
                 <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
                 <p className="mt-1 text-sm text-slate-400">Identify what already supports this listing, what is missing, and which missing assets should be created next.</p>
 
-                <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Existing support</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Real existing connections</div>
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{alreadyConnectedAssets.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Top opportunities</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Real mentions without links</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{mentionWithoutLinkAssets.length}</div>
+                  </div>
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Derived recommendations</div>
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{existingConnections.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -1898,49 +1952,107 @@ export default function ListingOptimizationClient({
                   </div>
                 ) : null}
 
-                <div className="mt-4 space-y-2" data-testid="step1-existing-connections">
-                  {existingConnections.slice(0, 5).map((item) => {
-                    const op = linkOperations.find((operation) => operation.key === item.key);
-                    const status = op?.status ?? "Recommended";
-                    return (
-                      <div key={item.key} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(status === "Published" ? "Published" : status === "Approved" ? "Approved" : "Recommended")}`}>{status}</span>
+                <div className="mt-4 rounded-xl border border-emerald-300/25 bg-emerald-400/10 p-3" data-testid="step1-real-existing-connections">
+                  <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Real existing connections</div>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
+                    {alreadyConnectedAssets.length ? (
+                      alreadyConnectedAssets.map((node) => (
+                        <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
+                          {node.label}: {node.title}
+                        </span>
+                      ))
+                    ) : (
+                      <div className="text-sm text-emerald-100/80">No real connected assets were detected.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 rounded-xl border border-amber-300/25 bg-amber-400/10 p-3" data-testid="step1-real-mentions-without-links">
+                  <div className="text-xs uppercase tracking-[0.08em] text-amber-100">Real mentions without links</div>
+                  <div className="mt-2 space-y-1 text-xs text-amber-100">
+                    {mentionWithoutLinkAssets.length ? (
+                      mentionWithoutLinkAssets.map((node) => (
+                        <div key={node.id} className="rounded-lg border border-amber-200/30 px-2 py-1">
+                          {node.label}: {node.title}
                         </div>
-                        <div className="mt-1 text-xs text-slate-400">{normalizeText(item.rationale)}</div>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                            onClick={() => approveLink(item.key)}
-                            disabled={status === "Approved" || status === "Published"}
-                          >
-                            Approve link
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100"
-                            onClick={() => publishLink(item.key)}
-                            disabled={status === "Published"}
-                          >
-                            Publish to Site
-                          </button>
-                        </div>
+                      ))
+                    ) : (
+                      <div className="text-sm text-amber-100/80">No unlinked mentions were detected.</div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-4 space-y-2" data-testid="step1-derived-recommendations">
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Derived recommendations (local draft workflow)</div>
+                  {derivedRecommendationGroups.map((group) => (
+                    <div key={group.groupKey} className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
+                      <div className="text-sm font-semibold text-slate-100">{normalizeText(group.source.title)}</div>
+                      <div className="mt-1 text-[11px] text-slate-300">
+                        Source: {flywheelEntityTypeLabel(group.source.type)} • ID: {group.source.id}
                       </div>
-                    );
-                  })}
-                  {alreadyConnectedAssets.length ? (
-                    <div className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
-                      <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
-                        {alreadyConnectedAssets.map((node) => (
-                          <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
-                            {node.label}: {node.title}
-                          </span>
-                        ))}
+                      {group.source.url ? (
+                        <a href={group.source.url} target="_blank" rel="noreferrer" className="mt-1 block truncate text-[11px] text-cyan-200 underline">
+                          {group.source.url}
+                        </a>
+                      ) : null}
+
+                      <div className="mt-3 space-y-2">
+                        {group.items.map((item) => {
+                          const status = linkStatusByKey.get(item.key) ?? "Recommended";
+                          const lifecycle = status === "Published" ? "Published" : status === "Approved" ? "Approved" : "Recommended";
+                          return (
+                            <div key={item.key} className="rounded-lg border border-white/10 bg-black/20 p-3">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-xs font-semibold text-slate-100">{recommendationTypeLabel(item.type)}</div>
+                                <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(lifecycle)}`}>
+                                  {linkStatusLabel(status)}
+                                </span>
+                              </div>
+                              <div className="mt-1 text-xs text-slate-200">{normalizeText(item.title)}</div>
+                              <div className="mt-1 text-[11px] text-slate-400">{normalizeText(item.rationale)}</div>
+                              <div className="mt-2 grid gap-1 text-[11px] text-slate-300 sm:grid-cols-2">
+                                <div>
+                                  <div className="font-semibold text-slate-200">Source</div>
+                                  <div>Type: {flywheelEntityTypeLabel(item.sourceEntity.type)}</div>
+                                  <div>Title: {normalizeText(item.sourceEntity.title)}</div>
+                                  <div>ID: {item.sourceEntity.id}</div>
+                                  {item.sourceEntity.url ? <a href={item.sourceEntity.url} target="_blank" rel="noreferrer" className="block truncate text-cyan-200 underline">{item.sourceEntity.url}</a> : null}
+                                </div>
+                                <div>
+                                  <div className="font-semibold text-slate-200">Target</div>
+                                  <div>Type: {flywheelEntityTypeLabel(item.targetEntity.type)}</div>
+                                  <div>Title: {normalizeText(item.targetEntity.title)}</div>
+                                  <div>ID: {item.targetEntity.id}</div>
+                                  {item.targetEntity.url ? <a href={item.targetEntity.url} target="_blank" rel="noreferrer" className="block truncate text-cyan-200 underline">{item.targetEntity.url}</a> : null}
+                                </div>
+                              </div>
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                                  onClick={() => approveLink(item.key)}
+                                  disabled={status === "Approved" || status === "Published"}
+                                >
+                                  Mark Ready
+                                </button>
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100"
+                                  onClick={() => publishLink(item.key)}
+                                  disabled={status === "Published"}
+                                >
+                                  Queue for Publish
+                                </button>
+                              </div>
+                              <div className="mt-2 text-[11px] text-slate-400">Local draft state only. This does not publish to Brilliant Directories.</div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
+                  ))}
+                  {!derivedRecommendationGroups.length ? (
+                    <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-sm text-slate-300">No derived recommendations right now.</div>
                   ) : null}
                 </div>
 
@@ -2116,13 +2228,13 @@ export default function ListingOptimizationClient({
             <div className="mt-2">Listing improvements: {listingLifecycle}</div>
             <div>Blog posts: {publishedContent.length} Published / {approvedContent.length} Approved</div>
             <div>Featured images: {approvedImages.length} ready</div>
-            <div>Flywheel links: {publishedLinkCount} Published / {approvedLinkCount} Approved</div>
+            <div>Flywheel links: {publishedLinkCount} Queued (draft) / {approvedLinkCount} Ready (draft)</div>
           </div>
         </aside>
       </div>
 
       <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/70 p-3 text-xs text-slate-400" data-testid="map-refresh-summary">
-        Map refresh logic: connections switch from orange to green when assets or links move to Published. Score refresh path: base listing score + deterministic publish bonuses.
+        Map refresh logic: connections switch from orange to green when links are queued in this draft workspace. Score refresh path: base listing score + deterministic publish bonuses.
       </div>
     </>
   );
