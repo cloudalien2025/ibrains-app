@@ -44,13 +44,22 @@ test.describe("DirectoryIQ flywheel links contract", () => {
               siteId: "site-1",
             },
             summary: {
-              inboundLinkedSupportCount: 0,
-              mentionWithoutLinkCount: 2,
+              inboundLinkedSupportCount: 1,
+              mentionWithoutLinkCount: 1,
               outboundSupportLinkCount: 0,
               connectedSupportPageCount: 0,
               lastGraphRunAt: "2026-03-10T00:00:00.000Z",
             },
-            inboundLinkedSupport: [],
+            inboundLinkedSupport: [
+              {
+                sourceId: "blog-1",
+                sourceType: "blog_post",
+                title: "Winter plumbing prep guide",
+                url: "https://example.com/blog/winter-plumbing-prep",
+                anchors: ["Acme Plumbing"],
+                relationshipType: "links_to_listing",
+              },
+            ],
             mentionsWithoutLinks: [
               {
                 sourceId: "blog-2",
@@ -236,9 +245,18 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
     await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByTestId("authority-node-B1")).toBeVisible();
+    await expect(page.getByTestId("authority-node-M1")).toBeVisible();
+    await expect(page.getByTestId("authority-node-G1")).toHaveCount(0);
     await expect(page.getByText("Blog post should link directly to the listing")).toBeVisible();
     await expect(page.getByText("Missing support to generate in Step 2")).toBeVisible();
     await expect(page.getByText("Add a category or guide page into the link cluster")).toBeVisible();
+    await page.getByTestId("authority-details-toggle").click();
+    const detailsDrawer = page.getByTestId("authority-details-drawer");
+    const detailsContent = detailsDrawer.getByTestId("authority-details-content");
+    await expect(detailsContent.getByRole("button", { name: /B1: Winter plumbing prep guide/i })).toBeVisible();
+    await expect(detailsContent.getByRole("button", { name: /M1: Emergency plumbing checklist/i })).toBeVisible();
+    await expect(detailsDrawer.getByText("Add a category or guide page into the link cluster")).toHaveCount(0);
     await expect(page.getByText("No major flywheel opportunities found.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate flywheel links.")).toHaveCount(0);
 
