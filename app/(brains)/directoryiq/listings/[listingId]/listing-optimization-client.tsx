@@ -1796,9 +1796,9 @@ export default function ListingOptimizationClient({
                   ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-300">No listing image</div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/25 to-black/10" />
-                  <div className="absolute inset-x-2 bottom-2 sm:inset-x-3 sm:bottom-3" data-testid="listing-hero-overlay">
-                    <div className="rounded-2xl border border-white/30 bg-black/35 px-3 py-2.5 text-left shadow-xl backdrop-blur-sm sm:px-4 sm:py-3">
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
+                  <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3" data-testid="listing-hero-overlay">
+                    <div className="w-full max-w-[94%] rounded-2xl border border-white/35 bg-black/18 px-3 py-2.5 text-center shadow-lg backdrop-blur-md sm:max-w-[88%] sm:px-4 sm:py-3">
                       <div className="truncate text-sm font-semibold text-white sm:text-[15px]" data-testid="listing-hero-title">
                         {displayName}
                       </div>
@@ -1812,11 +1812,13 @@ export default function ListingOptimizationClient({
                           {displayUrl}
                         </Link>
                       ) : null}
-                      <div
-                        className="mt-2 inline-flex rounded-full border border-cyan-200/60 bg-black/30 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
-                        data-testid="listing-hero-score"
-                      >
-                        AI Selection Score: {computedScore}
+                      <div className="mt-2 flex justify-center">
+                        <div
+                          className="inline-flex rounded-full border border-cyan-200/60 bg-black/20 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
+                          data-testid="listing-hero-score"
+                        >
+                          AI Selection Score: {computedScore}
+                        </div>
                       </div>
                     </div>
                   </div>
