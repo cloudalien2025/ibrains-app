@@ -193,7 +193,8 @@ test.describe("DirectoryIQ recommended actions contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId("listing-mission-header")).toBeVisible();
+    await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
+    await expect(page.getByTestId("authority-map-zone")).toBeVisible();
     await expect(page.getByText("Biggest blocker")).toBeVisible();
     await expect(page.getByText("Fastest win")).toBeVisible();
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);

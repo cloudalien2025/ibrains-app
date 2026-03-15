@@ -1736,23 +1736,8 @@ export default function ListingOptimizationClient({
   }, [mapNodes]);
 
   return (
-    <>
+    <div className="overflow-x-hidden">
       <TopBar breadcrumbs={["Home", "DirectoryIQ", "Listing Mission Control"]} searchPlaceholder="Search listing mission..." />
-
-      <div className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-mission-header">
-        <div className="text-[11px] uppercase tracking-[0.08em] text-slate-400">Listing mission control</div>
-        <div className="mt-1 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-slate-100">{displayName}</h1>
-            {displayUrl ? (
-              <Link className="mt-1 block text-xs text-cyan-200 underline underline-offset-4" href={displayUrl} target="_blank">
-                {displayUrl}
-              </Link>
-            ) : null}
-          </div>
-          <div className="text-xs text-slate-300">Step order: Make Connections -&gt; Generate Content -&gt; Optimize Listing</div>
-        </div>
-      </div>
 
       {integrations.openaiConfigured === false ? (
         <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
@@ -1774,22 +1759,22 @@ export default function ListingOptimizationClient({
         <div className="mt-3 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{notice}</div>
       ) : null}
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
-        <div className="space-y-4">
+      <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
+        <div className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="authority-map-zone">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold text-slate-100">Authority Map</h2>
                 <p className="text-xs text-slate-400">Listing-first authority view with connected, recommended, and missing support assets.</p>
               </div>
-              <div className="flex items-center gap-2 text-[11px] text-slate-300">
+              <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-300">
                 <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Flywheel</span>
                 <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Support / Recommended</span>
               </div>
             </div>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-              <div className="relative mx-auto aspect-[7/8] max-w-4xl sm:aspect-[16/10]" data-testid="authority-map-canvas">
+              <div className="relative mx-auto aspect-[7/8] w-full max-w-4xl overflow-hidden sm:aspect-[16/10]" data-testid="authority-map-canvas">
                 <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {mapNodes.map((node, index) => {
                     const line = mapConnectionPoints(index, isMobileMapViewport);
@@ -2166,7 +2151,7 @@ export default function ListingOptimizationClient({
           </section>
         </div>
 
-        <aside className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="publish-execution-layer">
+        <aside className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="publish-execution-layer">
           <h2 className="text-base font-semibold text-slate-100">Ready to Publish</h2>
           <ul className="mt-3 space-y-2 text-sm text-slate-200">
             <li>{listingIsReady ? 1 : 0} listing update approved</li>
@@ -2197,6 +2182,6 @@ export default function ListingOptimizationClient({
       <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/70 p-3 text-xs text-slate-400" data-testid="map-refresh-summary">
         Map refresh logic: connections switch from orange to green when assets or links move to Published. Score refresh path: base listing score + deterministic publish bonuses.
       </div>
-    </>
+    </div>
   );
 }

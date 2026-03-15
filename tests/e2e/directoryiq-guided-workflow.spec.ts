@@ -9,7 +9,6 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
     test(`shows guided workflow for listing ${listingId}`, async ({ page }) => {
       await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
 
-      await expect(page.getByTestId("listing-mission-header")).toBeVisible();
       await expect(page.getByTestId("authority-map-zone")).toBeVisible();
       await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
       await expect(page.locator("[data-testid^='listing-step-nav-desktop-']")).toHaveCount(3);
@@ -25,7 +24,7 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);
-      expect(defaultViewText).toContain("Step order: Make Connections -> Generate Content -> Optimize Listing");
+      expect(defaultViewText).not.toContain("Step order:");
       expect(defaultViewText).not.toContain("Recommendation type:");
     });
   }
@@ -37,16 +36,26 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
   test("keeps step navigation reachable on narrow viewport", async ({ page }) => {
     await page.goto(`/directoryiq/listings/${listingIds[0]}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
 
-    await expect(page.getByTestId("listing-mission-header")).toBeVisible();
+    await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
+    await expect(page.getByTestId("authority-map-zone")).toBeVisible();
     await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
     await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
     await expect(page.getByTestId("listing-mission-progress-percent")).not.toHaveText("100%");
 
-    const headerPosition = await page.getByTestId("listing-mission-header").evaluate((node) =>
+    const headerPosition = await page.getByTestId("authority-map-zone").evaluate((node) =>
       window.getComputedStyle(node).position
     );
     expect(headerPosition).toBe("static");
+
+    const hasHorizontalOverflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth);
+    expect(hasHorizontalOverflow).toBe(false);
+
+    const mapBox = await page.getByTestId("authority-map-zone").boundingBox();
+    const detailsBox = await page.getByTestId("authority-details-drawer").boundingBox();
+    expect(mapBox).not.toBeNull();
+    expect(detailsBox).not.toBeNull();
+    expect((mapBox?.y ?? 0)).toBeLessThan(detailsBox?.y ?? 0);
 
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
     await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
