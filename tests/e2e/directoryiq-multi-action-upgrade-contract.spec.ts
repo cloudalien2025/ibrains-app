@@ -20,11 +20,10 @@ const integrationsResponse = {
 };
 
 async function expectMissionControlSteps(page: Page) {
-  await expect(page.getByTestId("listing-step-nav-desktop-audit")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-connect-existing-pages")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-create-support-content")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-upgrade-the-listing")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toHaveCount(0);
 }
 
 test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
@@ -333,11 +332,11 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expectMissionControlSteps(page);
-    await expect(page.getByRole("button", { name: "Publish" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    const step4Section = page.locator("div").filter({ has: page.getByRole("heading", { name: "Step 4: Upgrade the listing" }) }).first();
+    await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible({ timeout: 15_000 });
+    const step4Section = page.locator("div").filter({ has: page.getByRole("heading", { name: "Step 3: Optimize Listing" }) }).first();
     await expect(step4Section.getByText("Generate and review listing description upgrade").first()).toBeVisible({ timeout: 15_000 });
     await expect(step4Section.getByText("Repair listing to support flywheel links").first()).toBeVisible();
     await expect(page.getByText("No major upgrade actions available.")).toHaveCount(0);
@@ -427,13 +426,13 @@ test.describe("DirectoryIQ multi-action generate upgrade contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
+    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expectMissionControlSteps(page);
-    await expect(page.getByRole("button", { name: "Publish" })).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible({ timeout: 15_000 });
     const noActionStep4Section = page
       .locator("div")
-      .filter({ has: page.getByRole("heading", { name: "Step 4: Upgrade the listing" }) })
+      .filter({ has: page.getByRole("heading", { name: "Step 3: Optimize Listing" }) })
       .first();
     await expect(noActionStep4Section.getByText("Generate and review listing description upgrade").first()).toBeVisible({
       timeout: 15_000,

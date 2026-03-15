@@ -157,11 +157,45 @@ test.describe("DirectoryIQ recommended actions contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    const quickWinsPanel = page.locator("aside").filter({ has: page.getByText("Quick Wins") }).first();
-    await expect(quickWinsPanel.getByText("Optimize listing authority structure")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Run the listing audit to identify the next fast win.")).toHaveCount(0);
+    await page.route(`**/api/directoryiq/listings/${listingId}/flywheel-links**`, async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: true,
+          flywheel: {
+            listing: { id: listingId, title: "Acme Plumbing", canonicalUrl: "https://example.com/listings/acme-plumbing", siteId: "site-1" },
+            summary: {
+              totalRecommendations: 1,
+              highPriorityCount: 1,
+              mediumPriorityCount: 0,
+              lowPriorityCount: 0,
+              evaluatedAt: "2026-03-10T00:00:03.000Z",
+              dataStatus: "flywheel_opportunities_found",
+            },
+            items: [
+              {
+                key: "rec-1",
+                type: "blog_posts_should_link_to_listing",
+                priority: "high",
+                title: "Blog post should link directly to the listing",
+                rationale: "Supports fastest win generation.",
+                evidenceSummary: "Mentions without links: 2.",
+                sourceEntity: { id: "blog-1", type: "blog_post", title: "Emergency checklist" },
+                targetEntity: { id: listingId, type: "listing", title: "Acme Plumbing" },
+              },
+            ],
+          },
+        }),
+      });
+    });
+
+    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
+    await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId("listing-mission-header")).toBeVisible();
+    await expect(page.getByText("Biggest blocker")).toBeVisible();
+    await expect(page.getByText("Fastest win")).toBeVisible();
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
 
@@ -198,10 +232,10 @@ test.describe("DirectoryIQ recommended actions contract", () => {
       });
     });
 
-    await page.goto(`/directoryiq/listings/${listingId}?step=upgrade-the-listing`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible({ timeout: 15_000 });
-    await expect(quickWinsPanel.getByText("Run the listing audit to identify the next fast win.")).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Optimize listing authority structure")).toHaveCount(0);
+    await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
+    await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Fastest win")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No major actions recommended at this time.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate recommended actions.")).toHaveCount(0);
   });

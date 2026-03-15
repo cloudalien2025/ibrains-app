@@ -8,36 +8,20 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
   for (const listingId of listingIds) {
     test(`shows guided workflow for listing ${listingId}`, async ({ page }) => {
       await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
+
+      await expect(page.getByTestId("listing-mission-header")).toBeVisible();
+      await expect(page.getByTestId("authority-map-zone")).toBeVisible();
       await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
-      await expect(page.locator("[data-testid^='listing-step-nav-desktop-']")).toHaveCount(5);
-      await expect(page.locator("[data-testid='listing-step-switcher-desktop'] .space-y-2")).toHaveCount(0);
+      await expect(page.locator("[data-testid^='listing-step-nav-desktop-']")).toHaveCount(3);
 
-      const switcherBox = await page.getByTestId("listing-step-switcher-desktop").boundingBox();
-      const workspaceBox = await page.getByTestId("listing-active-step-workspace").boundingBox();
-      expect(switcherBox).not.toBeNull();
-      expect(workspaceBox).not.toBeNull();
-      if (switcherBox && workspaceBox) {
-        expect(workspaceBox.y).toBeGreaterThan(switcherBox.y);
-        expect(workspaceBox.y - (switcherBox.y + switcherBox.height)).toBeLessThan(80);
-      }
+      await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+      await page.getByTestId("listing-step-nav-desktop-generate-content").click();
+      await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+      await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
+      await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
 
-      await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).not.toBeVisible();
-
-      await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
-      await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).not.toBeVisible();
-
-      await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
-      await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
-
-      await page.getByTestId("listing-step-nav-desktop-upgrade-the-listing").click();
-      await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
-
-      await page.getByTestId("listing-step-nav-desktop-launch-and-measure").click();
-      await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
-
-      await expect(page.getByTestId("directoryiq-hero-image")).toBeVisible();
+      await expect(page.getByTestId("listing-hero-node")).toBeVisible();
+      await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);
@@ -52,26 +36,20 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
 
   test("keeps step navigation reachable on narrow viewport", async ({ page }) => {
     await page.goto(`/directoryiq/listings/${listingIds[0]}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByTestId("listing-mobile-mission-header")).toBeVisible();
-    await expect(page.getByTestId("listing-step-switcher-mobile")).toBeVisible();
-    await expect(page.getByTestId("listing-step-nav-mobile-audit")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-    await expect(page.getByTestId("listing-mission-progress-percent")).not.toHaveText("100%");
-    await expect(page.getByTestId("listing-mobile-quick-wins")).toBeVisible();
 
-    const headerPosition = await page.getByTestId("listing-mobile-mission-header").evaluate(
-      (node) => window.getComputedStyle(node).position
+    await expect(page.getByTestId("listing-mission-header")).toBeVisible();
+    await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
+    await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByTestId("listing-mission-progress-percent")).not.toHaveText("100%");
+
+    const headerPosition = await page.getByTestId("listing-mission-header").evaluate((node) =>
+      window.getComputedStyle(node).position
     );
     expect(headerPosition).toBe("static");
-    await expect(page.getByTestId("listing-mobile-sticky-strip")).toHaveCount(0);
 
-    await expect(page.getByTestId("listing-summary-cards")).not.toBeVisible();
-    await expect(page.getByText("Current step: Step", { exact: false })).toHaveCount(0);
-
-    await page.getByTestId("listing-step-nav-mobile-launch-and-measure").click();
-    await expect(page.getByRole("heading", { name: "Step 5: Launch and measure" })).toBeVisible();
-
-    await page.getByTestId("listing-step-back").click();
-    await expect(page.getByRole("heading", { name: "Step 4: Upgrade the listing" })).toBeVisible();
+    await page.getByTestId("listing-step-nav-desktop-generate-content").click();
+    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
   });
 });

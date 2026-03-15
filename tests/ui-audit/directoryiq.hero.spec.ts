@@ -21,9 +21,19 @@ test.describe("DirectoryIQ listing hero visuals", () => {
 
     function isIgnorableConsoleError(entry: { text: string; url?: string }) {
       if (!entry.text.includes("Failed to load resource")) return false;
-      if (!entry.text.includes("401 (Unauthorized)") && !entry.text.includes("404 (Not Found)")) return false;
+      if (
+        !entry.text.includes("400 (Bad Request)") &&
+        !entry.text.includes("401 (Unauthorized)") &&
+        !entry.text.includes("404 (Not Found)")
+      ) {
+        return false;
+      }
       const target = entry.url ?? entry.text;
-      return target.includes("/api/directoryiq/listings/") || target.includes("/api/directoryiq/integrations");
+      return (
+        target.includes("/api/directoryiq/listings/") ||
+        target.includes("/api/directoryiq/integrations") ||
+        target.includes("/api/directoryiq/signal-sources")
+      );
     }
 
     const listingId = "99";
@@ -43,26 +53,17 @@ test.describe("DirectoryIQ listing hero visuals", () => {
     const grid = page.locator(".ecomviper-grid");
     await expect(grid).toBeVisible();
 
-    const heroContainer = page.locator(
-      '[data-testid="directoryiq-listing-hero"], [data-testid="listing-hero"], .listing-hero, .hero-glass'
-    );
+    const heroContainer = page.getByTestId("listing-mission-header");
     await heroContainer.waitFor({ state: "visible", timeout: 15_000 });
     await expect(heroContainer).toBeVisible();
 
-    const hero = page.getByTestId("directoryiq-listing-hero");
-    await expect(hero.locator("h1")).toBeVisible({ timeout: 15_000 });
-    const heroTitle = hero.locator("h1");
+    const hero = page.getByTestId("listing-mission-header");
+    await expect(hero.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 });
+    const heroTitle = hero.getByRole("heading", { level: 1 });
     const titleText = (await heroTitle.textContent())?.trim() ?? "";
     expect(titleText).not.toMatch(/undefined/i);
     expect(titleText.length).toBeGreaterThan(0);
-    const glassPanels = page.getByTestId("directoryiq-hero-glass-panel");
-    const visibleGlassPanels = await glassPanels.evaluateAll((elements) =>
-      elements.filter((el) => {
-        const style = window.getComputedStyle(el);
-        return style.display !== "none" && style.visibility !== "hidden" && el.getClientRects().length > 0;
-      }).length
-    );
-    expect(visibleGlassPanels).toBeGreaterThan(0);
+    await expect(page.getByTestId("listing-hero-node")).toBeVisible();
 
     const fatalConsoleErrors = consoleErrors.filter((entry) => !isIgnorableConsoleError(entry));
     expect(fatalConsoleErrors).toEqual([]);

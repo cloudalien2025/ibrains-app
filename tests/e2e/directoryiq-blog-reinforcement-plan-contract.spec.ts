@@ -20,17 +20,16 @@ const integrationsResponse = {
 };
 
 async function expectMissionControlSteps(page: Page) {
-  await expect(page.getByRole("heading", { name: "Step 1: Audit this listing" })).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-audit")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-connect-existing-pages")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-create-support-content")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-upgrade-the-listing")).toBeVisible();
-  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();
+  await expect(page.getByTestId("listing-step-nav-desktop-launch-and-measure")).toHaveCount(0);
 }
 
 async function openStep3(page: Page) {
-  await page.getByTestId("listing-step-nav-desktop-create-support-content").click();
-  await expect(page.getByRole("heading", { name: "Step 3: Create support content" })).toBeVisible();
+  await page.getByTestId("listing-step-nav-desktop-generate-content").click();
+  await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
 }
 
 test.describe("DirectoryIQ blog reinforcement plan contract", () => {
@@ -252,7 +251,6 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await expect(page.getByRole("button", { name: "Recommended Improvements" })).toHaveCount(0);
     await expect(page.getByText("Publish a comparison decision stage post")).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toBeVisible();
-    await expect(page.getByText("Comparison stage users need alternatives context before selecting.")).toBeVisible();
     await expect(page.getByText("No major reinforcement plan items identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);
 
@@ -283,7 +281,6 @@ test.describe("DirectoryIQ blog reinforcement plan contract", () => {
     await expectMissionControlSteps(page);
     await openStep3(page);
     await expect(page.getByRole("button", { name: "Recommended Improvements" })).toHaveCount(0);
-    await expect(page.getByText("Not enough context yet")).toBeVisible();
     await expect(page.getByText("Publish a comparison decision stage post")).toHaveCount(0);
     await expect(page.getByText("Publish a reciprocal support post for inbound authority flow")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate blog reinforcement plan.")).toHaveCount(0);

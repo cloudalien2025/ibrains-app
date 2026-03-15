@@ -234,11 +234,10 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
+    await page.getByTestId("listing-step-nav-desktop-make-connections").click();
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toBeVisible();
-    await expect(page.getByText("Pages missing (create first in Step 3)")).toBeVisible();
-    await page.getByText("Pages missing (create first in Step 3)").click();
+    await expect(page.getByText("Missing support to route into Step 3")).toBeVisible();
     await expect(page.getByText("Add a category or guide page into the link cluster")).toBeVisible();
     await expect(page.getByText("No major flywheel opportunities found.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate flywheel links.")).toHaveCount(0);
@@ -277,11 +276,11 @@ test.describe("DirectoryIQ flywheel links contract", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
-    await page.getByTestId("listing-step-nav-desktop-connect-existing-pages").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Connect existing pages" })).toBeVisible();
+    await page.getByTestId("listing-step-nav-desktop-make-connections").click();
+    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toHaveCount(0);
     await expect(page.getByText("Add a category or guide page into the link cluster")).toHaveCount(0);
-    await expect(page.getByText("Pages missing (create first in Step 3)")).toHaveCount(0);
+    await expect(page.getByText("Missing support to route into Step 3")).toBeVisible();
     await expect(page.getByText("Failed to evaluate flywheel links.")).toHaveCount(0);
   });
 });
