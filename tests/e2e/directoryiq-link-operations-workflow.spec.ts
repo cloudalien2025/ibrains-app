@@ -299,6 +299,13 @@ test.describe("DirectoryIQ link operations workflow", () => {
   test("supports approve and publish actions in Step 1 and surfaces persistent publish layer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockListingApis(page);
+    const listingApiMutations: string[] = [];
+    page.on("request", (request) => {
+      const isListingApi = request.url().includes(`/api/directoryiq/listings/${listingId}/`);
+      if (isListingApi && request.method() !== "GET") {
+        listingApiMutations.push(`${request.method()} ${request.url()}`);
+      }
+    });
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await expect(page.getByTestId("authority-map-zone")).toBeVisible();
@@ -306,14 +313,30 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
     await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
+    await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
+    await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
+    await expect(page.getByTestId("step1-missing-connections")).toBeVisible();
 
+    const derivedSection = page.getByTestId("step1-derived-recommendations");
     await expect(page.getByText("Emergency checklist should link to the listing")).toBeVisible();
+    await expect(derivedSection.getByText("Source: Blog post • ID: blog-1")).toBeVisible();
+    await expect(derivedSection.getByText("Type: Blog post").first()).toBeVisible();
+    await expect(derivedSection.getByText("Type: Listing").first()).toBeVisible();
+    await expect(derivedSection.getByText("ID: 654").first()).toBeVisible();
+    await expect(derivedSection.getByText("https://example.com/blog/emergency-checklist").first()).toBeVisible();
+    await expect(derivedSection.getByText("https://example.com/listings/acme-plumbing").first()).toBeVisible();
+    await expect(derivedSection.getByText("Local draft state only. This does not publish to Brilliant Directories.").first()).toBeVisible();
+    await expect(page.getByTestId("step1-derived-recommendations").getByRole("button", { name: "Publish to Site" })).toHaveCount(0);
 
-    const firstConnection = page.getByTestId("step1-existing-connections").locator("> div").first();
-    await page.getByRole("button", { name: "Approve link" }).first().click();
-    await expect(firstConnection.getByText("Approved")).toBeVisible();
+    const postMutationCount = listingApiMutations.length;
+    await page.getByRole("button", { name: "Mark Ready" }).first().click();
+    await expect(page.getByText("Ready (Draft)").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Publish to Site" }).first().click();
+    await page.getByRole("button", { name: "Queue for Publish" }).first().click();
+    await expect(page.getByText("Queued (Draft)").first()).toBeVisible();
+    const postClickMutations = listingApiMutations.slice(postMutationCount);
+    expect(postClickMutations.some((entry) => /\/(publish|push|authority)\b/.test(entry))).toBe(false);
 
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
     await expect(page.getByRole("heading", { name: "Ready to Publish" })).toBeVisible();

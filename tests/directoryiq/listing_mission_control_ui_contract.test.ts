@@ -33,10 +33,12 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("Step 5:");
   });
 
-  it("shows Step 1 existing vs missing connection sections", () => {
-    expect(source).toContain("data-testid=\"step1-existing-connections\"");
+  it("shows Step 1 real assets and derived recommendation sections", () => {
+    expect(source).toContain("data-testid=\"step1-real-existing-connections\"");
+    expect(source).toContain("data-testid=\"step1-real-mentions-without-links\"");
+    expect(source).toContain("data-testid=\"step1-derived-recommendations\"");
     expect(source).toContain("data-testid=\"step1-missing-connections\"");
-    expect(source).toContain("existingConnections");
+    expect(source).toContain("derivedRecommendationGroups");
     expect(source).toContain("recommendedMissingItems");
   });
 
