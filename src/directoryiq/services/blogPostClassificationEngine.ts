@@ -144,6 +144,24 @@ function isClearComparisonIntent(text: string, listingCount: number): boolean {
 }
 
 function isBroadTopic(titleText: string, bodyText: string, listingCount: number): boolean {
+  const narrowSubtopicSignals = includesAny(titleText, [
+    "between ",
+    "trail",
+    "trails",
+    "tour",
+    "tours",
+    "snowshoe",
+    "hike",
+    "hiking",
+    "stops",
+    "route",
+    "itinerary",
+    "weekend",
+    "for families",
+    "for couples",
+    "on a budget",
+  ]);
+
   const broadTitle = includesAny(titleText, [
     "guide",
     "best",
@@ -163,7 +181,7 @@ function isBroadTopic(titleText: string, bodyText: string, listingCount: number)
     "in this guide",
   ]);
 
-  return (broadTitle || categoryLanguage) && listingCount !== 1;
+  return (broadTitle || categoryLanguage) && !narrowSubtopicSignals && listingCount !== 1;
 }
 
 function deriveParentPillarId(title: string): string | null {
@@ -191,15 +209,55 @@ function isClusterCandidate(titleText: string, bodyText: string, listingCount: n
     "itinerary",
     "weekend",
     "checklist",
+    "between ",
+    "trail",
+    "trails",
+    "tour",
+    "tours",
+    "snowshoe",
+    "hike",
+    "hiking",
+    "stops",
+    "route",
   ]);
 
-  const supportingLanguage = includesAny(bodyText, ["within this category", "subtopic", "focused on", "specific to"]);
+  const supportingLanguage = includesAny(bodyText, [
+    "within this category",
+    "subtopic",
+    "focused on",
+    "specific to",
+    "day trip",
+    "stop by",
+    "stops along",
+    "local route",
+  ]);
 
   return narrowIntent || supportingLanguage;
 }
 
 function isTrustProofDominant(text: string): boolean {
-  const trustHits = ["review", "award", "trusted", "testimonials", "locals", "verified", "credibility"].filter((keyword) =>
+  const trustHits = [
+    "review",
+    "award",
+    "trusted",
+    "testimonials",
+    "locals",
+    "verified",
+    "credibility",
+    "stats",
+    "stat",
+    "data",
+    "history",
+    "historical",
+    "facts",
+    "fact",
+    "details",
+    "detail",
+    "how many",
+    "how did",
+    "acquire",
+    "acquired",
+  ].filter((keyword) =>
     text.includes(keyword)
   ).length;
   return trustHits >= 2;
@@ -275,7 +333,7 @@ function classifyPrimaryType(input: BlogPostClassificationInput): {
       dominantListingId: null,
       parentPillarId: null,
       listingScores,
-      reason: "Assigned Proof because trust and credibility evidence dominate the post.",
+      reason: "Assigned Proof because evidence-oriented trust, stats, or factual authority signals dominate the post.",
     };
   }
 
