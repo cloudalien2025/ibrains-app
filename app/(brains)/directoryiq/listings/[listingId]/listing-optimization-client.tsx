@@ -558,8 +558,8 @@ function stringifyErrorMessage(error: unknown, fallback: string): string {
   return fallback;
 }
 
-function mapNodeLayout(index: number): { x: number; y: number } {
-  const points = [
+function mapNodeLayout(index: number, mobileTuned = false): { x: number; y: number } {
+  const desktopPoints = [
     { x: 12, y: 18 },
     { x: 50, y: 10 },
     { x: 86, y: 18 },
@@ -569,6 +569,19 @@ function mapNodeLayout(index: number): { x: number; y: number } {
     { x: 14, y: 74 },
     { x: 10, y: 46 },
   ];
+  const mobilePoints = [
+    { x: 18, y: 12 },
+    { x: 50, y: 8 },
+    { x: 82, y: 12 },
+    { x: 91, y: 32 },
+    { x: 91, y: 68 },
+    { x: 82, y: 88 },
+    { x: 50, y: 92 },
+    { x: 18, y: 88 },
+    { x: 9, y: 68 },
+    { x: 9, y: 32 },
+  ];
+  const points = mobileTuned ? mobilePoints : desktopPoints;
   return points[index % points.length];
 }
 
@@ -583,22 +596,22 @@ function lifecycleClassName(state: LifecycleState): string {
 function nodeCategoryLabel(category: MapNodeCategory): string {
   if (category === "blog_post") return "Blog Post";
   if (category === "support") return "Support Asset";
-  if (category === "hub") return "Hub Page";
-  if (category === "category") return "Category Page";
-  if (category === "location") return "Location Page";
+  if (category === "hub") return "Support Asset";
+  if (category === "category") return "Support Asset";
+  if (category === "location") return "Support Asset";
   if (category === "comparison") return "Comparison Page";
   if (category === "faq") return "FAQ Asset";
   if (category === "local_guide") return "Local Guide";
-  return "Page";
+  return "Support Asset";
 }
 
-function mapConnectionPoints(index: number): { x1: number; y1: number; x2: number; y2: number } {
-  const point = mapNodeLayout(index);
+function mapConnectionPoints(index: number, mobileTuned = false): { x1: number; y1: number; x2: number; y2: number } {
+  const point = mapNodeLayout(index, mobileTuned);
   const cx = 50;
   const cy = 50;
-  const rx = 31;
-  const ry = 24;
-  const nodeRadius = 4.5;
+  const rx = mobileTuned ? 36 : 31;
+  const ry = mobileTuned ? 20 : 24;
+  const nodeRadius = mobileTuned ? 4 : 4.5;
   const dx = point.x - cx;
   const dy = point.y - cy;
   const distance = Math.hypot(dx, dy) || 1;
@@ -687,6 +700,7 @@ export default function ListingOptimizationClient({
   const [listingApprovedForPublish, setListingApprovedForPublish] = useState(false);
   const [selectedMapNodeId, setSelectedMapNodeId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [isMobileMapViewport, setIsMobileMapViewport] = useState(false);
   const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
 
@@ -695,6 +709,19 @@ export default function ListingOptimizationClient({
     if (!queryStep) return;
     setActiveStepId(queryStep);
   }, [stepParam]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const media = window.matchMedia("(max-width: 639px)");
+    const sync = () => setIsMobileMapViewport(media.matches);
+    sync();
+    if (typeof media.addEventListener === "function") {
+      media.addEventListener("change", sync);
+      return () => media.removeEventListener("change", sync);
+    }
+    media.addListener(sync);
+    return () => media.removeListener(sync);
+  }, []);
 
   useEffect(() => {
     if (!storageKey || typeof window === "undefined") return;
@@ -1215,6 +1242,18 @@ export default function ListingOptimizationClient({
   const mapNodes = useMemo<AuthorityMapNode[]>(() => {
     const nodes: AuthorityMapNode[] = [];
     const seenTitles = new Set<string>();
+    const publishedFlywheelTargetTitles = new Set(
+      linkOperations
+        .filter((operation) => operation.status === "Published")
+        .map((operation) => normalizeText(operation.targetPage).toLowerCase())
+        .filter(Boolean)
+    );
+    const publishedGeneratedTitles = new Set(
+      Object.values(contentAssets)
+        .filter((asset) => asset.status === "Published")
+        .map((asset) => normalizeText(asset.title).toLowerCase())
+        .filter(Boolean)
+    );
     let existingIndex = 0;
     let generatedIndex = 0;
     let missingIndex = 0;
@@ -1225,7 +1264,7 @@ export default function ListingOptimizationClient({
       if (type === "hub") return "hub";
       if (type === "category") return "category";
       if (type === "location") return "location";
-      return "page";
+      return "support";
     };
 
     const toPlanCategory = (surface?: string): MapNodeCategory => {
@@ -1237,18 +1276,27 @@ export default function ListingOptimizationClient({
       return "blog_post";
     };
 
+    const toFlywheelEntityCategory = (entityType: string): MapNodeCategory => {
+      if (entityType === "blog_post") return "blog_post";
+      if (entityType === "guide_page") return "support";
+      if (entityType === "category_page") return "category";
+      if (entityType === "support_page") return "support";
+      return "support";
+    };
+
     for (const item of support?.inboundLinkedSupport ?? []) {
       const title = normalizeText(item.title) || "Support Asset";
       const key = title.toLowerCase();
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
       existingIndex += 1;
+      const isFlywheel = publishedFlywheelTargetTitles.has(key) || publishedGeneratedTitles.has(key);
       nodes.push({
         id: `existing-inbound-${item.sourceId}`,
         label: `E${existingIndex}`,
         title,
         category: toExistingCategory(item.sourceType),
-        connectionTone: "flywheel",
+        connectionTone: isFlywheel ? "flywheel" : "standard",
         lifecycle: "Published",
         details: `E${existingIndex}: ${title}`,
         source: "existing",
@@ -1263,12 +1311,13 @@ export default function ListingOptimizationClient({
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
       existingIndex += 1;
+      const isFlywheel = publishedFlywheelTargetTitles.has(key) || publishedGeneratedTitles.has(key);
       nodes.push({
         id: `existing-connected-${item.id ?? existingIndex}`,
         label: `E${existingIndex}`,
         title,
         category: toExistingCategory(item.type),
-        connectionTone: "flywheel",
+        connectionTone: isFlywheel ? "flywheel" : "standard",
         lifecycle: "Published",
         details: `E${existingIndex}: ${title}`,
         source: "existing",
@@ -1305,16 +1354,17 @@ export default function ListingOptimizationClient({
       if (seenTitles.has(key)) continue;
       seenTitles.add(key);
       generatedIndex += 1;
+      const isFlywheel = asset.flywheelStatus === "Published" || publishedFlywheelTargetTitles.has(key);
       nodes.push({
         id: `generated-${item.id}`,
         label: `G${generatedIndex}`,
         title,
         category: toPlanCategory(item.suggestedTargetSurface),
-        connectionTone: asset.status === "Published" ? "flywheel" : "standard",
+        connectionTone: isFlywheel ? "flywheel" : "standard",
         lifecycle: asset.status,
         details: `G${generatedIndex}: ${title}`,
         source: "generated",
-        relation: asset.status === "Published" ? "already_connected" : "recommended_connection",
+        relation: isFlywheel ? "already_connected" : "recommended_connection",
         url: asset.publishedUrl || null,
       });
     }
@@ -1329,7 +1379,7 @@ export default function ListingOptimizationClient({
         id: `missing-flywheel-${item.key}`,
         label: `M${missingIndex}`,
         title,
-        category: "blog_post",
+        category: toFlywheelEntityCategory(item.targetEntity.type),
         connectionTone: "standard",
         lifecycle: "Recommended",
         details: `M${missingIndex}: ${title}`,
@@ -1340,7 +1390,7 @@ export default function ListingOptimizationClient({
     }
 
     return nodes.slice(0, 8);
-  }, [support, missingFlywheelItems, reinforcementPlan, contentAssets]);
+  }, [support, missingFlywheelItems, reinforcementPlan, contentAssets, linkOperations]);
 
   useEffect(() => {
     if (!mapNodes.length) return;
@@ -1669,7 +1719,6 @@ export default function ListingOptimizationClient({
   const recommendedMissingItems = missingFlywheelItems.slice(0, 5);
   const existingConnections = connectNowFlywheelItems.slice(0, 5);
   const alreadyConnectedAssets = mapNodes.filter((node) => node.relation === "already_connected").slice(0, 5);
-  const existingSupportCount = support?.summary.connectedSupportPageCount ?? support?.connectedSupportPages.length ?? 0;
   const missingGenerationItems = recommendedMissingItems.slice(0, 5);
   const optimizedFlywheelLinks = useMemo(() => {
     const seen = new Set<string>();
@@ -1701,7 +1750,7 @@ export default function ListingOptimizationClient({
               </Link>
             ) : null}
           </div>
-          <div className="text-xs text-slate-300">Step order: Make Connections, Generate Content, Optimize Listing</div>
+          <div className="text-xs text-slate-300">Step order: Make Connections -&gt; Generate Content -&gt; Optimize Listing</div>
         </div>
       </div>
 
@@ -1734,16 +1783,16 @@ export default function ListingOptimizationClient({
                 <p className="text-xs text-slate-400">Listing-first authority view with connected, recommended, and missing support assets.</p>
               </div>
               <div className="flex items-center gap-2 text-[11px] text-slate-300">
-                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Connected</span>
-                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Recommended</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-emerald-300" />Flywheel</span>
+                <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full bg-orange-300" />Support / Recommended</span>
               </div>
             </div>
 
             <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-              <div className="relative mx-auto aspect-[16/10] max-w-4xl" data-testid="authority-map-canvas">
+              <div className="relative mx-auto aspect-[7/8] max-w-4xl sm:aspect-[16/10]" data-testid="authority-map-canvas">
                 <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
                   {mapNodes.map((node, index) => {
-                    const line = mapConnectionPoints(index);
+                    const line = mapConnectionPoints(index, isMobileMapViewport);
                     const stroke = node.connectionTone === "flywheel" ? "rgba(52,211,153,0.9)" : "rgba(251,146,60,0.9)";
                     return (
                       <line
@@ -1761,7 +1810,7 @@ export default function ListingOptimizationClient({
                 </svg>
 
                 <div
-                  className="absolute left-1/2 top-1/2 h-[58%] w-[62%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[999px] border border-cyan-300/45 bg-slate-900 shadow-2xl"
+                  className="absolute left-1/2 top-1/2 h-[44%] w-[74%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[999px] border border-cyan-300/45 bg-slate-900 shadow-2xl sm:h-[58%] sm:w-[62%]"
                   data-testid="listing-hero-node"
                 >
                   {listing?.listing.mainImageUrl ? (
@@ -1771,7 +1820,8 @@ export default function ListingOptimizationClient({
                     <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-300">No listing image</div>
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-black/10" />
-                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                  <div className="absolute inset-0 flex items-center justify-center p-3 text-center sm:items-end sm:justify-start sm:text-left sm:p-4">
+                    <div className="w-full max-w-[92%]">
                     <div className="truncate text-sm font-semibold text-white">{displayName}</div>
                     {displayUrl ? (
                       <Link className="mt-1 block truncate text-xs text-cyan-100 underline underline-offset-4" href={displayUrl} target="_blank">
@@ -1781,17 +1831,18 @@ export default function ListingOptimizationClient({
                     <div className="mt-1 inline-flex rounded-full border border-cyan-200/60 bg-black/30 px-2 py-0.5 text-[11px] text-cyan-100">
                       AI Visibility Score / AI Selection {computedScore}
                     </div>
+                    </div>
                   </div>
                 </div>
 
                 {mapNodes.map((node, index) => {
-                  const point = mapNodeLayout(index);
+                  const point = mapNodeLayout(index, isMobileMapViewport);
                   const selected = node.id === selectedMapNodeId;
                   return (
                     <button
                       key={node.id}
                       type="button"
-                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-3 py-1 text-[11px] font-semibold transition ${
+                      className={`absolute -translate-x-1/2 -translate-y-1/2 rounded-full border px-2 py-1 text-[10px] font-semibold transition sm:px-3 sm:text-[11px] ${
                         selected
                           ? "border-cyan-200/80 bg-cyan-400/20 text-cyan-100"
                           : node.connectionTone === "flywheel"
@@ -1901,10 +1952,10 @@ export default function ListingOptimizationClient({
                 <div className="mt-4 grid gap-2 sm:grid-cols-3">
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
                     <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Existing support</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{existingSupportCount}</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{alreadyConnectedAssets.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Connect now</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Top opportunities</div>
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{existingConnections.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -1917,19 +1968,6 @@ export default function ListingOptimizationClient({
                 {supportError || gapsError || flywheelError ? (
                   <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">
                     {supportError || gapsError || flywheelError}
-                  </div>
-                ) : null}
-
-                {alreadyConnectedAssets.length ? (
-                  <div className="mt-4 rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
-                    <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
-                    <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
-                      {alreadyConnectedAssets.map((node) => (
-                        <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
-                          {node.label}: {node.title}
-                        </span>
-                      ))}
-                    </div>
                   </div>
                 ) : null}
 
@@ -1965,10 +2003,22 @@ export default function ListingOptimizationClient({
                       </div>
                     );
                   })}
+                  {alreadyConnectedAssets.length ? (
+                    <div className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
+                      <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
+                        {alreadyConnectedAssets.map((node) => (
+                          <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
+                            {node.label}: {node.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step1-missing-connections">
-                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to route into Step 3</div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to generate in Step 2</div>
                   <div className="mt-2 space-y-1">
                     {missingGenerationItems.length ? (
                       missingGenerationItems.map((item) => (
