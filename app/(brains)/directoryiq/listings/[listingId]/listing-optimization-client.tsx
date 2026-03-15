@@ -1972,18 +1972,6 @@ export default function ListingOptimizationClient({
                 ) : null}
 
                 <div className="mt-4 space-y-2" data-testid="step1-existing-connections">
-                  {alreadyConnectedAssets.length ? (
-                    <div className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
-                      <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
-                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
-                        {alreadyConnectedAssets.map((node) => (
-                          <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
-                            {node.label}: {node.title}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
                   {existingConnections.slice(0, 5).map((item) => {
                     const op = linkOperations.find((operation) => operation.key === item.key);
                     const status = op?.status ?? "Recommended";
@@ -2015,6 +2003,18 @@ export default function ListingOptimizationClient({
                       </div>
                     );
                   })}
+                  {alreadyConnectedAssets.length ? (
+                    <div className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 p-3">
+                      <div className="text-xs uppercase tracking-[0.08em] text-emerald-100">Already connected</div>
+                      <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-100">
+                        {alreadyConnectedAssets.map((node) => (
+                          <span key={node.id} className="rounded-full border border-emerald-200/35 px-2 py-1">
+                            {node.label}: {node.title}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step1-missing-connections">
