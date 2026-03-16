@@ -244,12 +244,12 @@ test.describe("DirectoryIQ flywheel links contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByTestId("authority-node-B1")).toBeVisible();
     await expect(page.getByTestId("authority-node-M1")).toBeVisible();
     await expect(page.getByTestId("authority-node-G1")).toHaveCount(0);
     await expect(page.getByText("Blog post should link directly to the listing")).toBeVisible();
-    await expect(page.getByText("Missing support to generate in Step 2")).toBeVisible();
+    await expect(page.getByText("Missing support to create in Step 2")).toBeVisible();
     await expect(page.getByText("Add a category or guide page into the link cluster")).toBeVisible();
     await page.getByTestId("authority-details-toggle").click();
     const detailsDrawer = page.getByTestId("authority-details-drawer");
@@ -295,10 +295,10 @@ test.describe("DirectoryIQ flywheel links contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByText("Blog post should link directly to the listing")).toHaveCount(0);
     await expect(page.getByText("Add a category or guide page into the link cluster")).toHaveCount(0);
-    await expect(page.getByText("Missing support to generate in Step 2")).toBeVisible();
+    await expect(page.getByText("Missing support to create in Step 2")).toBeVisible();
     await expect(page.getByText("Failed to evaluate flywheel links.")).toHaveCount(0);
   });
 });

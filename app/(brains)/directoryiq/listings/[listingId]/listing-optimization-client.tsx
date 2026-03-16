@@ -6,6 +6,15 @@ import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fetchWithTimeout";
+import {
+  MISSION_CONTROL_STEPS,
+  REQUIRED_VALID_SUPPORT_COUNT,
+  STEP3_UNLOCK_CONTRACT,
+  normalizeSupportCandidates,
+  summarizeSupportValidity,
+  type MissionStepId,
+  type SupportSlotKey,
+} from "@/lib/directoryiq/missionControlContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -459,22 +468,15 @@ type UiError = {
   listingId?: string;
 };
 
-type MissionStepId = "make-connections" | "optimize-listing" | "generate-content";
-
-const MISSION_STEPS: Array<{ id: MissionStepId; label: string }> = [
-  { id: "make-connections", label: "Step 1: Make Connections" },
-  { id: "generate-content", label: "Step 2: Generate Content" },
-  { id: "optimize-listing", label: "Step 3: Optimize Listing" },
-];
-
 function normalizeMissionStepQuery(value: string | null): MissionStepId | null {
   if (!value) return null;
   const normalized = value.trim().toLowerCase();
-  if (normalized === "make-connections" || normalized === "step-1" || normalized === "step1") return "make-connections";
-  if (normalized === "generate-content" || normalized === "step-2" || normalized === "step2") return "generate-content";
+  if (normalized === "find-support" || normalized === "step-1" || normalized === "step1") return "find-support";
+  if (normalized === "create-support" || normalized === "step-2" || normalized === "step2") return "create-support";
   if (normalized === "optimize-listing" || normalized === "step-3" || normalized === "step3") return "optimize-listing";
   // Backwards compatibility with previous labels/routes.
-  if (normalized === "connect-existing-pages" || normalized === "create-support-content") return "generate-content";
+  if (normalized === "make-connections" || normalized === "connect-existing-pages") return "find-support";
+  if (normalized === "generate-content" || normalized === "create-support-content") return "create-support";
   if (normalized === "upgrade-the-listing") return "optimize-listing";
   return null;
 }
@@ -613,6 +615,33 @@ function recommendationTypeLabel(type: FlywheelRecommendationItem["type"]): stri
   return "Expand cluster support";
 }
 
+function missionStepContract(stepId: MissionStepId) {
+  return MISSION_CONTROL_STEPS.find((step) => step.id === stepId) ?? MISSION_CONTROL_STEPS[0];
+}
+
+function reinforcementPlanSlot(itemId: BlogReinforcementPlanItem["id"]): SupportSlotKey {
+  if (itemId === "publish_comparison_decision_post") return "comparison_alternatives";
+  if (itemId === "publish_local_context_guide") return "location_intent_proximity";
+  if (itemId === "publish_faq_support_post") return "experience_itinerary_problem_solving";
+  if (itemId === "publish_cluster_hub_support_page") return "audience_fit_use_case";
+  if (itemId === "publish_reciprocal_support_post") return "best_of_recommendation";
+  return "unclassified";
+}
+
+function step2StatusLabel(input: { assetStatus: LifecycleState; slotHasValidSupport: boolean; hasUpgradeCandidates: boolean }): string {
+  if (input.slotHasValidSupport) return "Already Valid";
+  if (input.assetStatus === "Published") return "Published";
+  if (input.assetStatus === "Generated" || input.assetStatus === "Approved") return "Needs Review";
+  if (input.hasUpgradeCandidates) return "Upgrade Now";
+  return "Create Now";
+}
+
+function stepNavTestIdSuffix(stepId: MissionStepId): string {
+  if (stepId === "find-support") return "make-connections";
+  if (stepId === "create-support") return "generate-content";
+  return "optimize-listing";
+}
+
 function flywheelEntityTypeLabel(type: FlywheelRecommendationItem["sourceEntity"]["type"]): string {
   if (type === "listing") return "Listing";
   if (type === "blog_post") return "Blog post";
@@ -623,7 +652,7 @@ function flywheelEntityTypeLabel(type: FlywheelRecommendationItem["sourceEntity"
 
 function linkStatusLabel(status: LinkOperationStatus): string {
   if (status === "Approved") return "In Mission Plan";
-  if (status === "Published") return "Queued (Draft)";
+  if (status === "Published") return "In Mission Plan";
   return "Recommended";
 }
 
@@ -717,7 +746,7 @@ export default function ListingOptimizationClient({
     return `directoryiq:listings:mission-control:${effectiveListingId}${suffix}`;
   }, [effectiveListingId, siteIdParam]);
 
-  const [activeStepId, setActiveStepId] = useState<MissionStepId>("make-connections");
+  const [activeStepId, setActiveStepId] = useState<MissionStepId>("find-support");
   const [listingLifecycle, setListingLifecycle] = useState<LifecycleState>("Detected");
   const [listingApprovedForPublish, setListingApprovedForPublish] = useState(false);
   const [selectedMapNodeId, setSelectedMapNodeId] = useState<string | null>(null);
@@ -751,7 +780,8 @@ export default function ListingOptimizationClient({
     if (!raw) return;
     try {
       const parsed = JSON.parse(raw) as PersistedMissionState;
-      setActiveStepId(parsed.activeStepId ?? "make-connections");
+      const persistedStep = normalizeMissionStepQuery((parsed.activeStepId as string | null | undefined) ?? null);
+      setActiveStepId(persistedStep ?? "find-support");
       setListingLifecycle(parsed.listingLifecycle ?? "Detected");
       setListingApprovedForPublish(Boolean(parsed.listingApprovedForPublish));
       setSelectedMapNodeId(parsed.selectedMapNodeId ?? null);
@@ -1368,6 +1398,37 @@ export default function ListingOptimizationClient({
   }, [mapNodes, selectedMapNodeId]);
 
   const selectedMapNode = mapNodes.find((node) => node.id === selectedMapNodeId) ?? null;
+  const step1Contract = missionStepContract("find-support");
+  const step2Contract = missionStepContract("create-support");
+  const step3Contract = missionStepContract("optimize-listing");
+
+  const normalizedSupportCandidates = useMemo(
+    () =>
+      normalizeSupportCandidates({
+        inboundLinkedSupport: (support?.inboundLinkedSupport ?? []).map((item) => ({
+          id: item.sourceId,
+          title: item.title,
+          url: item.url ?? null,
+          sourceType: item.sourceType,
+          anchors: item.anchors,
+          relationshipType: "links_to_listing" as const,
+        })),
+        mentionsWithoutLinks: (support?.mentionsWithoutLinks ?? []).map((item) => ({
+          id: item.sourceId,
+          title: item.title,
+          url: item.url ?? null,
+          sourceType: item.sourceType,
+          anchors: [],
+          relationshipType: "mentions_without_link" as const,
+        })),
+      }),
+    [support]
+  );
+  const supportValidity = useMemo(() => summarizeSupportValidity(normalizedSupportCandidates), [normalizedSupportCandidates]);
+  const validSupportFoundCount = supportValidity.validCount;
+  const missingSupportSlotsText = supportValidity.missingSlotTypes.map((slot) => slot.label).join(" • ");
+  const missionPlanSelectionCount = linkOperations.filter((item) => item.status === "Approved" || item.status === "Published").length;
+  const step3Locked = validSupportFoundCount < REQUIRED_VALID_SUPPORT_COUNT;
 
   const largestGap = gaps?.items[0] ?? null;
   const fastestWinLink = linkOperations.find((item) => item.status === "Recommended") ?? null;
@@ -1379,7 +1440,7 @@ export default function ListingOptimizationClient({
         : "No major blockers detected right now.";
   const fastestWin = fastestWinLink
     ? `Add ${fastestWinLink.suggestedAnchorText} from ${fastestWinLink.sourcePage}.`
-    : "Generate one missing authority asset from Step 2.";
+    : "Create one missing support asset from Step 2.";
 
   const missionProgress = useMemo(() => {
     const connectionsDone = linkOperations.some((item) => item.status === "Approved" || item.status === "Published");
@@ -1914,7 +1975,7 @@ export default function ListingOptimizationClient({
 
           <nav className="rounded-2xl border border-white/10 bg-slate-950/70 p-2" data-testid="listing-step-switcher-desktop">
             <div className="grid gap-2 sm:grid-cols-3" role="tablist" aria-label="Listing workflow steps">
-              {MISSION_STEPS.map((step) => {
+              {MISSION_CONTROL_STEPS.map((step) => {
                 const isActive = activeStepId === step.id;
                 return (
                   <button
@@ -1924,7 +1985,7 @@ export default function ListingOptimizationClient({
                     aria-selected={isActive}
                     className={`rounded-lg border px-3 py-2 text-left text-sm ${isActive ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-100" : "border-white/15 bg-white/[0.03] text-slate-300"}`}
                     onClick={() => setActiveStepId(step.id)}
-                    data-testid={`listing-step-nav-desktop-${step.id}`}
+                    data-testid={`listing-step-nav-desktop-${stepNavTestIdSuffix(step.id)}`}
                   >
                     {step.label}
                   </button>
@@ -1934,10 +1995,10 @@ export default function ListingOptimizationClient({
           </nav>
 
           <section className="rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="listing-active-step-workspace">
-            {activeStepId === "make-connections" ? (
+            {activeStepId === "find-support" ? (
               <div data-testid="step-make-connections">
-                <h3 className="text-lg font-semibold text-slate-100">Step 1: Make Connections</h3>
-                <p className="mt-1 text-sm text-slate-400">Identify what already supports this listing, what is missing, and which missing assets should be created next.</p>
+                <h3 className="text-lg font-semibold text-slate-100">{step1Contract.label}</h3>
+                <p className="mt-1 text-sm text-slate-400">{step1Contract.description}</p>
 
                 <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
@@ -1949,13 +2010,24 @@ export default function ListingOptimizationClient({
                     <div className="mt-1 text-2xl font-semibold text-slate-100">{mentionWithoutLinkAssets.length}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Derived recommendations</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{existingConnections.length}</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Valid support found</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{validSupportFoundCount}</div>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Missing assets</div>
-                    <div className="mt-1 text-2xl font-semibold text-slate-100">{missingGenerationItems.length}</div>
+                    <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">In mission plan</div>
+                    <div className="mt-1 text-2xl font-semibold text-slate-100">{missionPlanSelectionCount}</div>
                   </div>
+                </div>
+
+                <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-300" data-testid="step1-validity-summary">
+                  <div>
+                    Valid support posts found: {validSupportFoundCount} / {REQUIRED_VALID_SUPPORT_COUNT}
+                  </div>
+                  <div className="mt-1">Upgrade candidates: {supportValidity.upgradeCandidateCount}</div>
+                  <div className="mt-1">
+                    Missing support types: {missingSupportSlotsText || "None"}
+                  </div>
+                  <div className="mt-1">Mission plan is a selection state only. Publishing is handled in Steps 2 and 3.</div>
                 </div>
 
                 {supportLoading || gapsLoading || flywheelLoading ? <div className="mt-3 text-sm text-slate-300">Loading connection intelligence...</div> : null}
@@ -2070,7 +2142,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3" data-testid="step1-missing-connections">
-                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to generate in Step 2</div>
+                  <div className="text-xs uppercase tracking-[0.08em] text-slate-400">Missing support to create in Step 2</div>
                   <div className="mt-2 space-y-1">
                     {missingGenerationItems.length ? (
                       missingGenerationItems.map((item) => (
@@ -2086,8 +2158,22 @@ export default function ListingOptimizationClient({
 
             {activeStepId === "optimize-listing" ? (
               <div data-testid="step-optimize-listing">
-                <h3 className="text-lg font-semibold text-slate-100">Step 3: Optimize Listing</h3>
-                <p className="mt-1 text-sm text-slate-400">Build the strongest AI-ready listing package, then approve and publish.</p>
+                <h3 className="text-lg font-semibold text-slate-100">{step3Contract.label}</h3>
+                <p className="mt-1 text-sm text-slate-400">{step3Contract.description}</p>
+
+                {step3Locked ? (
+                  <div className="mt-3 rounded-lg border border-amber-300/30 bg-amber-400/10 px-3 py-2 text-sm text-amber-100" data-testid="step3-locked-state">
+                    <div className="font-semibold">{STEP3_UNLOCK_CONTRACT.lockHeading}</div>
+                    <div className="mt-1">
+                      {STEP3_UNLOCK_CONTRACT.lockBody}
+                    </div>
+                    <div className="mt-1">
+                      Valid support now: {validSupportFoundCount} / {STEP3_UNLOCK_CONTRACT.requiredValidSupportCount}
+                    </div>
+                    <div className="mt-1">{STEP3_UNLOCK_CONTRACT.lockHint}</div>
+                    <div className="mt-1 text-xs text-amber-100/80">{STEP3_UNLOCK_CONTRACT.approximationNote}</div>
+                  </div>
+                ) : null}
 
                 {multiActionLoading ? <div className="mt-3 text-sm text-slate-300">Loading optimization actions...</div> : null}
                 {multiActionError ? <div className="mt-3 rounded-lg border border-rose-300/30 bg-rose-400/10 px-3 py-2 text-sm text-rose-100">{multiActionError}</div> : null}
@@ -2107,10 +2193,10 @@ export default function ListingOptimizationClient({
                 <div className="mt-4 rounded-xl border border-cyan-300/30 bg-cyan-400/10 p-3" data-testid="step2-execution-console">
                   <div className="text-sm font-semibold text-cyan-100">Optimization execution</div>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <NeonButton onClick={() => void generateListingUpgrade()} disabled={uiState === "generating"}>Generate Listing Optimization</NeonButton>
-                    <NeonButton variant="secondary" onClick={() => void previewListingUpgrade()} disabled={!draftId || uiState === "previewing"}>Preview Changes</NeonButton>
-                    <NeonButton variant="secondary" onClick={() => setListingApprovedForPublish(true)} disabled={uiState !== "ready_to_push"}>Approve Listing Update</NeonButton>
-                    <NeonButton onClick={() => void publishListingUpgrade()} disabled={uiState !== "ready_to_push" || !listingApprovedForPublish || integrations.bdConfigured !== true}>Publish to Site</NeonButton>
+                    <NeonButton onClick={() => void generateListingUpgrade()} disabled={uiState === "generating" || step3Locked}>Generate Listing Optimization</NeonButton>
+                    <NeonButton variant="secondary" onClick={() => void previewListingUpgrade()} disabled={!draftId || uiState === "previewing" || step3Locked}>Preview Changes</NeonButton>
+                    <NeonButton variant="secondary" onClick={() => setListingApprovedForPublish(true)} disabled={uiState !== "ready_to_push" || step3Locked}>Approve Listing Update</NeonButton>
+                    <NeonButton onClick={() => void publishListingUpgrade()} disabled={uiState !== "ready_to_push" || !listingApprovedForPublish || integrations.bdConfigured !== true || step3Locked}>Publish to Site</NeonButton>
                   </div>
                   <div className="mt-2 text-xs text-slate-200">Lifecycle: <span className={`rounded border px-2 py-0.5 ${lifecycleClassName(listingLifecycle)}`}>{listingLifecycle}</span></div>
                 </div>
@@ -2142,17 +2228,17 @@ export default function ListingOptimizationClient({
                     {optimizedFlywheelLinks.length ? (
                       optimizedFlywheelLinks.map((item) => <li key={item}>• {item}</li>)
                     ) : (
-                      <li>• Add or generate support assets in Step 1 and Step 2 to populate this module.</li>
+                      <li>• Add or create support assets in Step 1 and Step 2 to populate this module.</li>
                     )}
                   </ul>
                 </div>
               </div>
             ) : null}
 
-            {activeStepId === "generate-content" ? (
+            {activeStepId === "create-support" ? (
               <div data-testid="step-generate-content">
-                <h3 className="text-lg font-semibold text-slate-100">Step 2: Generate Content</h3>
-                <p className="mt-1 text-sm text-slate-400">Generate missing authority assets, approve them, and publish directly.</p>
+                <h3 className="text-lg font-semibold text-slate-100">{step2Contract.label}</h3>
+                <p className="mt-1 text-sm text-slate-400">{step2Contract.description}</p>
 
                 {actionsLoading || intentClustersLoading || reinforcementPlanLoading || contentStructureLoading ? <div className="mt-3 text-sm text-slate-300">Loading content opportunities...</div> : null}
                 {actionsError || intentClustersError || reinforcementPlanError || contentStructureError ? (
@@ -2171,6 +2257,15 @@ export default function ListingOptimizationClient({
                     const slot = index + 1;
                     const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
                     const blueprint = contentStructure?.items[index] ?? null;
+                    const slotKey = reinforcementPlanSlot(item.id);
+                    const slotHasValidSupport = normalizedSupportCandidates.some(
+                      (candidate) => candidate.validityState === "valid" && candidate.dimensions.primarySlot === slotKey
+                    );
+                    const contractStatus = step2StatusLabel({
+                      assetStatus: asset.status,
+                      slotHasValidSupport,
+                      hasUpgradeCandidates: supportValidity.upgradeCandidateCount > 0,
+                    });
 
                     return (
                       <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
@@ -2179,10 +2274,10 @@ export default function ListingOptimizationClient({
                             <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
                             <div className="mt-1 text-xs text-slate-400">{normalizeText(item.suggestedContentPurpose)}</div>
                             <div className="mt-1 text-[11px] text-slate-300">
-                              Type: <span className="text-slate-100">{normalizeText(item.suggestedTargetSurface)}</span> • Status: <span className="text-slate-100">{asset.status}</span>
+                              Type: <span className="text-slate-100">{normalizeText(item.suggestedTargetSurface)}</span> • Status: <span className="text-slate-100">{contractStatus}</span>
                             </div>
                           </div>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}>{asset.status}</span>
+                          <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}>{contractStatus}</span>
                         </div>
 
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">

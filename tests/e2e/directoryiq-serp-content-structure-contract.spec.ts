@@ -269,7 +269,7 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("Recommended asset type: comparison_page")).toHaveCount(0);
     await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
@@ -308,7 +308,7 @@ test.describe("DirectoryIQ SERP-informed content structure contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByText("No major structure recommendations identified.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate SERP-informed content structure.")).toHaveCount(0);
   });

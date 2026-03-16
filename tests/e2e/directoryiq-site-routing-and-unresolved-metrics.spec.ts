@@ -165,7 +165,7 @@ test.describe("DirectoryIQ site routing and unresolved metrics contract", () => 
     await page.getByRole("link", { name: "Improve" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/directoryiq/listings/${listingId}\\?site_id=${siteId}`));
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
     await expect(page.getByTestId("authority-map-zone")).toBeVisible();
     await expect(page.getByText("Biggest blocker")).toBeVisible();
@@ -176,7 +176,10 @@ test.describe("DirectoryIQ site routing and unresolved metrics contract", () => 
     await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
     await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
-    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Valid support posts found:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Upgrade candidates:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Missing support types:");
     expect(supportRequestUrls.some((url) => url.includes(`site_id=${siteId}`))).toBe(true);
     expect(gapsRequestUrls.some((url) => url.includes(`site_id=${siteId}`))).toBe(true);
   });

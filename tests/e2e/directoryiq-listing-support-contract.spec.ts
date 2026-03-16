@@ -24,7 +24,7 @@ test.describe("DirectoryIQ listing support contract", () => {
   test("renders canonical supported and intentional no-data support states", async ({ page }) => {
     const openStep1 = async () => {
       await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-      await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     };
 
     await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {
@@ -109,13 +109,16 @@ test.describe("DirectoryIQ listing support contract", () => {
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
     await expect(page.getByText("Real existing connections", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Real mentions without links", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Derived recommendations", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Valid support posts found:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Upgrade candidates:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Missing support types:");
     const supportedPageText = await page.locator("body").innerText();
     expect(supportedPageText).toMatch(/REAL EXISTING CONNECTIONS\s*\d+/i);
     expect(supportedPageText).toMatch(/REAL MENTIONS WITHOUT LINKS\s*\d+/i);
-    expect(supportedPageText).toMatch(/DERIVED RECOMMENDATIONS\s*\d+/i);
-    expect(supportedPageText).toMatch(/MISSING ASSETS\s*\d+/i);
+    expect(supportedPageText).toMatch(/VALID SUPPORT FOUND\s*\d+/i);
+    expect(supportedPageText).toMatch(/IN MISSION PLAN\s*\d+/i);
     await expect(page.getByText("Failed to load support model.")).toHaveCount(0);
 
     await page.unroute(`**/api/directoryiq/listings/${listingId}/support**`);
@@ -158,8 +161,11 @@ test.describe("DirectoryIQ listing support contract", () => {
     await expect(page.getByText("Loading connection intelligence...")).toHaveCount(0);
     await expect(page.getByText("Real existing connections", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("Real mentions without links", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Derived recommendations", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Valid support posts found:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Upgrade candidates:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Missing support types:");
     const noDataPageText = await page.locator("body").innerText();
     expect(noDataPageText).toMatch(/REAL EXISTING CONNECTIONS\s*0/i);
     expect(noDataPageText).toContain("Flywheel evaluation is not available until support and gap diagnostics finish.");

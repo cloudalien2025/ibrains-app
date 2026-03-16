@@ -312,7 +312,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
     await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
@@ -351,7 +351,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
@@ -421,7 +421,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
 
     const derivedSection = page.getByTestId("step1-derived-recommendations");
     const firstCard = page.getByTestId("step1-recommendation-card").first();
