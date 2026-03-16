@@ -20,7 +20,7 @@ const integrationsResponse = {
 };
 
 async function expectMissionControlSteps(page: Page) {
-  await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();
@@ -29,7 +29,7 @@ async function expectMissionControlSteps(page: Page) {
 
 async function openStep3(page: Page) {
   await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-  await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
 }
 
 test.describe("DirectoryIQ blog reinforcement plan contract", () => {

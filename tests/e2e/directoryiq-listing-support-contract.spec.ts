@@ -24,7 +24,7 @@ test.describe("DirectoryIQ listing support contract", () => {
   test("renders canonical supported and intentional no-data support states", async ({ page }) => {
     const openStep1 = async () => {
       await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-      await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     };
 
     await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {

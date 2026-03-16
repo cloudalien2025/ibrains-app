@@ -27,12 +27,11 @@ describe("listing mission control rebuild contract", () => {
   });
 
   it("uses only three mission steps and opens Step 1 by default", () => {
-    expect(source).toContain("Step 1: Make Connections");
-    expect(source).toContain("Step 2: Generate Content");
-    expect(source).toContain("Step 3: Optimize Listing");
-    expect(source.indexOf("Step 1: Make Connections")).toBeLessThan(source.indexOf("Step 2: Generate Content"));
-    expect(source.indexOf("Step 2: Generate Content")).toBeLessThan(source.indexOf("Step 3: Optimize Listing"));
-    expect(source).toContain("useState<MissionStepId>(\"make-connections\")");
+    expect(source).toContain("MISSION_CONTROL_STEPS");
+    expect(source).toContain("missionStepContract(\"find-support\")");
+    expect(source).toContain("missionStepContract(\"create-support\")");
+    expect(source).toContain("missionStepContract(\"optimize-listing\")");
+    expect(source).toContain("useState<MissionStepId>(\"find-support\")");
     expect(source).not.toContain("Step 4:");
     expect(source).not.toContain("Step 5:");
   });
@@ -55,6 +54,9 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("Optimized listing package");
     expect(source).toContain("Read more about");
     expect(source).toContain("data-testid=\"step2-flywheel-links\"");
+    expect(source).toContain("data-testid=\"step3-locked-state\"");
+    expect(source).toContain("STEP3_UNLOCK_CONTRACT.lockBody");
+    expect(source).toContain("requiredValidSupportCount");
   });
 
   it("shows Step 2 generated content assets tied back to listing support", () => {

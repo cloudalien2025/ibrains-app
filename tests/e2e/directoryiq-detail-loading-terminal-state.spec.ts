@@ -63,7 +63,7 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
     });
 
     await page.goto(`/directoryiq/listings/${listingId}?site_id=${siteId}`, { waitUntil: "domcontentloaded" });
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
     await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
     await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();
@@ -77,11 +77,11 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
         /(Support diagnostics request timed out\.|Gap analysis request timed out\.|Flywheel evaluation failed because support and gaps diagnostics are unavailable\.)/i
       );
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByTestId("step-make-connections")).toBeVisible();
     await expect(page.getByText("Support diagnostics are unavailable.")).toBeVisible();
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();

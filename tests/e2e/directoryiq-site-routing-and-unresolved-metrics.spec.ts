@@ -165,7 +165,7 @@ test.describe("DirectoryIQ site routing and unresolved metrics contract", () => 
     await page.getByRole("link", { name: "Improve" }).click();
 
     await expect(page).toHaveURL(new RegExp(`/directoryiq/listings/${listingId}\\?site_id=${siteId}`));
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
     await expect(page.getByTestId("authority-map-zone")).toBeVisible();
     await expect(page.getByText("Biggest blocker")).toBeVisible();

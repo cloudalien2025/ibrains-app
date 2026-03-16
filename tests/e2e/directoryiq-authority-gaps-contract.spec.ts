@@ -20,7 +20,7 @@ const integrationsResponse = {
 };
 
 async function expectMissionControlSteps(page: Page) {
-  await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-generate-content")).toBeVisible();
   await expect(page.getByTestId("listing-step-nav-desktop-optimize-listing")).toBeVisible();

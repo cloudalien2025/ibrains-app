@@ -13,9 +13,9 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
       await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
       await expect(page.locator("[data-testid^='listing-step-nav-desktop-']")).toHaveCount(3);
 
-      await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
       await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-      await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
       await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
       await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
 
@@ -24,7 +24,7 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);
-      expect(defaultViewText).not.toContain("Step order: Make Connections -> Generate Content -> Optimize Listing");
+      expect(defaultViewText).not.toContain("Step order: Find Support -> Create Support -> Optimize Listing");
       expect(defaultViewText).not.toContain("Recommendation type:");
     });
   }
@@ -40,7 +40,7 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
     await expect(page.getByTestId("listing-mission-header")).toHaveCount(0);
     await expect(page.getByTestId("listing-step-switcher-desktop")).toBeVisible();
     await expect(page.getByTestId("listing-step-nav-desktop-make-connections")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
     await expect(page.getByTestId("listing-mission-progress-percent")).not.toHaveText("100%");
 
     const mapZoneBox = await page.getByTestId("authority-map-zone").boundingBox();
@@ -58,7 +58,7 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
     expect(hasHorizontalOverflow).toBe(false);
 
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Generate Content" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
   });
 });

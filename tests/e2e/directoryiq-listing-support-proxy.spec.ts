@@ -13,7 +13,7 @@ test.describe("DirectoryIQ listing support proxy path", () => {
     expect(supportResponse.status()).toBe(200);
 
     await page.getByTestId("listing-step-nav-desktop-make-connections").click();
-    await expect(page.getByRole("heading", { name: "Step 1: Make Connections" })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible({ timeout: 15_000 });
     await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
     await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
