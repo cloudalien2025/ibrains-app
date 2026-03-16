@@ -622,7 +622,7 @@ function flywheelEntityTypeLabel(type: FlywheelRecommendationItem["sourceEntity"
 }
 
 function linkStatusLabel(status: LinkOperationStatus): string {
-  if (status === "Approved") return "Ready (Draft)";
+  if (status === "Approved") return "In Mission Plan";
   if (status === "Published") return "Queued (Draft)";
   return "Recommended";
 }
@@ -1654,12 +1654,13 @@ export default function ListingOptimizationClient({
     setNotice(`${current.title} published to site.`);
   }
 
-  function approveLink(itemKey: string) {
-    setLinkOperations((previous) => previous.map((item) => (item.key === itemKey ? { ...item, status: "Approved" } : item)));
-  }
-
-  function publishLink(itemKey: string) {
-    setLinkOperations((previous) => previous.map((item) => (item.key === itemKey ? { ...item, status: "Published" } : item)));
+  function setLinkMissionPlan(itemKey: string, inMissionPlan: boolean) {
+    setLinkOperations((previous) =>
+      previous.map((item) => {
+        if (item.key !== itemKey || item.status === "Published") return item;
+        return { ...item, status: inMissionPlan ? "Approved" : "Recommended" };
+      })
+    );
   }
 
   async function publishAllApprovedAssets() {
@@ -2038,25 +2039,25 @@ export default function ListingOptimizationClient({
                                   {item.targetEntity.url ? <a href={item.targetEntity.url} target="_blank" rel="noreferrer" className="block min-w-0 break-all text-cyan-200 underline">{item.targetEntity.url}</a> : null}
                                 </div>
                               </div>
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                <button
-                                  type="button"
-                                  className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                                  onClick={() => approveLink(item.key)}
-                                  disabled={status === "Approved" || status === "Published"}
+                              <div className="mt-3">
+                                <label
+                                  className="flex min-w-0 cursor-pointer items-center gap-2 rounded-lg border border-white/15 bg-white/[0.03] px-3 py-2 text-xs text-slate-100"
+                                  data-testid="step1-recommendation-plan-control"
                                 >
-                                  Mark Ready
-                                </button>
-                                <button
-                                  type="button"
-                                  className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100"
-                                  onClick={() => publishLink(item.key)}
-                                  disabled={status === "Published"}
-                                >
-                                  Queue for Publish
-                                </button>
+                                  <input
+                                    type="checkbox"
+                                    className="h-4 w-4 shrink-0 accent-cyan-400"
+                                    checked={status === "Approved" || status === "Published"}
+                                    onChange={(event) => setLinkMissionPlan(item.key, event.target.checked)}
+                                    disabled={status === "Published"}
+                                    data-testid="step1-recommendation-plan-checkbox"
+                                  />
+                                  <span className="min-w-0 break-words">
+                                    {status === "Approved" || status === "Published" ? "In Mission Plan" : "Add to Mission Plan"}
+                                  </span>
+                                </label>
                               </div>
-                              <div className="mt-2 text-[11px] text-slate-400">Local draft state only. This does not publish to Brilliant Directories.</div>
+                              <div className="mt-2 text-[11px] text-slate-400">Planning state only. This does not publish to Brilliant Directories.</div>
                             </div>
                           );
                         })}

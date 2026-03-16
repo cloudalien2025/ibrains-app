@@ -296,7 +296,7 @@ async function mockListingApis(page: Page): Promise<void> {
 }
 
 test.describe("DirectoryIQ link operations workflow", () => {
-  test("supports approve and publish actions in Step 1 and surfaces persistent publish layer", async ({ page }) => {
+  test("supports mission plan selection in Step 1 and surfaces persistent publish layer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockListingApis(page);
     const listingApiMutations: string[] = [];
@@ -326,15 +326,19 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(derivedSection.getByText("ID: 654").first()).toBeVisible();
     await expect(derivedSection.getByText("https://example.com/blog/emergency-checklist").first()).toBeVisible();
     await expect(derivedSection.getByText("https://example.com/listings/acme-plumbing").first()).toBeVisible();
-    await expect(derivedSection.getByText("Local draft state only. This does not publish to Brilliant Directories.").first()).toBeVisible();
+    await expect(derivedSection.getByText("Planning state only. This does not publish to Brilliant Directories.").first()).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations").getByRole("button", { name: "Publish to Site" })).toHaveCount(0);
+    await expect(derivedSection.getByRole("button", { name: "Mark Ready" })).toHaveCount(0);
+    await expect(derivedSection.getByRole("button", { name: "Queue for Publish" })).toHaveCount(0);
+    await expect(derivedSection.getByLabel("Add to Mission Plan").first()).toBeVisible();
 
     const postMutationCount = listingApiMutations.length;
-    await page.getByRole("button", { name: "Mark Ready" }).first().click();
-    await expect(page.getByText("Ready (Draft)").first()).toBeVisible();
+    await derivedSection.getByLabel("Add to Mission Plan").first().check();
+    await expect(derivedSection.getByLabel("In Mission Plan").first()).toBeChecked();
+    await expect(page.getByText("In Mission Plan").first()).toBeVisible();
 
-    await page.getByRole("button", { name: "Queue for Publish" }).first().click();
-    await expect(page.getByText("Queued (Draft)").first()).toBeVisible();
+    await derivedSection.getByLabel("In Mission Plan").first().uncheck();
+    await expect(derivedSection.getByLabel("Add to Mission Plan").first()).not.toBeChecked();
     const postClickMutations = listingApiMutations.slice(postMutationCount);
     expect(postClickMutations.some((entry) => /\/(publish|push|authority)\b/.test(entry))).toBe(false);
 

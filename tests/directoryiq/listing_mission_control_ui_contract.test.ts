@@ -41,6 +41,11 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("data-testid=\"step1-real-existing-connections\"");
     expect(source).toContain("data-testid=\"step1-real-mentions-without-links\"");
     expect(source).toContain("data-testid=\"step1-derived-recommendations\"");
+    expect(source).toContain("data-testid=\"step1-recommendation-plan-checkbox\"");
+    expect(source).toContain("Add to Mission Plan");
+    expect(source).toContain("In Mission Plan");
+    expect(source).not.toContain("Mark Ready");
+    expect(source).not.toContain("Queue for Publish");
     expect(source).toContain("data-testid=\"step1-missing-connections\"");
     expect(source).toContain("derivedRecommendationGroups");
     expect(source).toContain("recommendedMissingItems");
