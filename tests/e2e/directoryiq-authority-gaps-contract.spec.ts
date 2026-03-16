@@ -121,7 +121,10 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
     await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
-    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Valid support posts found:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Upgrade candidates:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Missing support types:");
     await expect(page.getByText("No support posts are linking to this listing")).toBeVisible();
     await expect(page.getByText("No major visibility gaps found for this listing.")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
@@ -166,7 +169,10 @@ test.describe("DirectoryIQ authority gaps contract", () => {
     await expect(page.getByTestId("step1-real-existing-connections")).toBeVisible();
     await expect(page.getByTestId("step1-real-mentions-without-links")).toBeVisible();
     await expect(page.getByTestId("step1-derived-recommendations")).toBeVisible();
-    await expect(page.getByText("Missing assets", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toBeVisible();
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Valid support posts found:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Upgrade candidates:");
+    await expect(page.getByTestId("step1-validity-summary")).toContainText("Missing support types:");
     await expect(page.getByText("No major blockers detected right now.")).toBeVisible();
     await expect(page.getByText("No support posts are linking to this listing")).toHaveCount(0);
     await expect(page.getByText("Failed to evaluate authority gaps.")).toHaveCount(0);
