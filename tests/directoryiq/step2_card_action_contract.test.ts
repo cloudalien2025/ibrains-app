@@ -4,8 +4,10 @@ import {
   deriveStep2PrimaryAction,
   deriveStep2SecondaryAction,
   deriveStep2StatusLabel,
+  pickStep2NextActionCandidate,
   shouldAllowStep2DraftGeneration,
   shouldAllowStep2PipelineRun,
+  summarizeStep2StatusBuckets,
 } from "@/lib/directoryiq/step2CardActionContract";
 
 describe("step2 card action contract", () => {
@@ -26,7 +28,7 @@ describe("step2 card action contract", () => {
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toEqual({ kind: "run_pipeline", label: "Create Support" });
+    ).toEqual({ kind: "run_pipeline", label: "Write Article" });
 
     expect(
       deriveStep2PrimaryAction({
@@ -34,7 +36,7 @@ describe("step2 card action contract", () => {
         recommendedAction: "upgrade",
         countsTowardRequiredFive: false,
       })
-    ).toEqual({ kind: "run_pipeline", label: "Upgrade Support" });
+    ).toEqual({ kind: "run_pipeline", label: "Improve Article" });
   });
 
   it("hides primary actions while in progress", () => {
@@ -91,7 +93,7 @@ describe("step2 card action contract", () => {
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toEqual({ kind: "run_pipeline", label: "Retry" });
+    ).toEqual({ kind: "run_pipeline", label: "Try Again" });
 
     expect(
       deriveStep2PrimaryAction({
@@ -99,14 +101,14 @@ describe("step2 card action contract", () => {
         recommendedAction: "upgrade",
         countsTowardRequiredFive: false,
       })
-    ).toEqual({ kind: "run_pipeline", label: "Retry" });
+    ).toEqual({ kind: "run_pipeline", label: "Try Again" });
   });
 
   it("derives at most one passive secondary action", () => {
     expect(deriveStep2SecondaryAction({ publishedUrl: null })).toEqual({ kind: "none" });
     expect(deriveStep2SecondaryAction({ publishedUrl: "https://example.com/post" })).toEqual({
       kind: "view_post",
-      label: "View Post",
+      label: "View Article",
       href: "https://example.com/post",
     });
   });
@@ -118,48 +120,88 @@ describe("step2 card action contract", () => {
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Create Ready");
+    ).toBe("Ready to Write");
     expect(
       deriveStep2StatusLabel({
         internalState: "not_started",
         recommendedAction: "upgrade",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Upgrade Ready");
+    ).toBe("Needs Improvement");
     expect(
       deriveStep2StatusLabel({
         internalState: "brief_ready",
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Creating");
+    ).toBe("Working…");
     expect(
       deriveStep2StatusLabel({
         internalState: "publishing",
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Publishing");
+    ).toBe("Working…");
     expect(
       deriveStep2StatusLabel({
         internalState: "confirmed_valid",
         recommendedAction: "confirm",
         countsTowardRequiredFive: true,
       })
-    ).toBe("Already Valid");
+    ).toBe("Live");
     expect(
       deriveStep2StatusLabel({
         internalState: "needs_review",
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Needs Review");
+    ).toBe("Needs Attention");
     expect(
       deriveStep2StatusLabel({
         internalState: "failed",
         recommendedAction: "create",
         countsTowardRequiredFive: false,
       })
-    ).toBe("Failed");
+    ).toBe("Needs Attention");
+  });
+
+  it("summarizes status buckets for top-level Step 2 progress chips", () => {
+    expect(
+      summarizeStep2StatusBuckets(["Live", "Ready to Write", "Needs Improvement", "Working…", "Needs Attention"])
+    ).toEqual({
+      live: 1,
+      readyToWrite: 2,
+      needsAttention: 1,
+    });
+  });
+
+  it("picks the best write-next candidate in deterministic priority", () => {
+    expect(
+      pickStep2NextActionCandidate([
+        {
+          slotId: "s1",
+          actionInput: { internalState: "not_started", recommendedAction: "upgrade", countsTowardRequiredFive: false },
+        },
+        {
+          slotId: "s2",
+          actionInput: { internalState: "not_started", recommendedAction: "create", countsTowardRequiredFive: false },
+        },
+      ])
+    ).toEqual({
+      slotId: "s2",
+      primaryAction: { kind: "run_pipeline", label: "Write Article" },
+    });
+
+    expect(
+      pickStep2NextActionCandidate([
+        {
+          slotId: "s1",
+          actionInput: { internalState: "needs_review", recommendedAction: "create", countsTowardRequiredFive: false },
+        },
+      ])
+    ).toEqual({
+      slotId: "s1",
+      primaryAction: { kind: "run_pipeline", label: "Try Again" },
+    });
   });
 });

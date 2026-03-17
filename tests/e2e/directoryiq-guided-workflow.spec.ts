@@ -15,7 +15,7 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
 
       await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
       await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-      await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Build Support Articles" })).toBeVisible();
       await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
       await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
 
@@ -58,7 +58,7 @@ test.describe("DirectoryIQ guided listing optimization workflow mobile", () => {
     expect(hasHorizontalOverflow).toBe(false);
 
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build Support Articles" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
   });
 });

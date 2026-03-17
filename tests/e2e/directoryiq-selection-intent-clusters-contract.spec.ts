@@ -278,7 +278,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await selectCreateSupportContentStep();
     const stepWorkspace = page.getByTestId("listing-active-step-workspace");
-    await expect(stepWorkspace.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByRole("heading", { name: "Build Support Articles" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
     await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
 
@@ -333,7 +333,7 @@ test.describe("DirectoryIQ selection intent clusters contract", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}`, { waitUntil: "domcontentloaded" });
     await selectCreateSupportContentStep();
-    await expect(stepWorkspace.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible({ timeout: 15_000 });
+    await expect(stepWorkspace.getByRole("heading", { name: "Build Support Articles" })).toBeVisible({ timeout: 15_000 });
     await expect(stepWorkspace.getByText("No major reinforcement intent clusters identified.")).toHaveCount(0);
     await expect(stepWorkspace.getByText("Failed to evaluate selection intent clusters.")).toHaveCount(0);
   });

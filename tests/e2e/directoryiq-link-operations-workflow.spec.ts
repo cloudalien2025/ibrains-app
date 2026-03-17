@@ -351,11 +351,11 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
     await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
-    await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Build Support Articles" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
     await expect(page.getByTestId("step2-progress-summary")).toBeVisible();
     await expect(page.getByTestId("step2-slot-list")).toBeVisible();
-    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Already Valid|Create Ready|Upgrade Ready|Creating|Publishing|Published|Needs Review|Failed/);
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Live|Ready to Write|Needs Improvement|Working…|Needs Attention/);
     await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
@@ -387,16 +387,16 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const status = page.getByTestId(`step2-slot-status-${slotId}`);
     const primaryAction = page.getByTestId(`step2-slot-primary-action-${slotId}`);
 
-    await expect(status).toContainText("Create Ready");
-    await expect(primaryAction).toHaveText("Create Support");
+    await expect(status).toContainText("Ready to Write");
+    await expect(primaryAction).toHaveText("Write Article");
     await primaryAction.click();
 
-    await expect(status).toContainText("Creating");
+    await expect(status).toContainText("Working…");
     await expect(primaryAction).toHaveCount(0);
 
-    await expect(status).toContainText("Failed");
-    await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText("Draft failed governance validation.");
-    await expect(primaryAction).toHaveText("Retry");
+    await expect(status).toContainText("Needs Attention");
+    await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText("did not pass quality checks");
+    await expect(primaryAction).toHaveText("Try Again");
 
     expect(draftRequestBody).toBeTruthy();
     const step2Contract = (draftRequestBody?.["step2_contract"] as Record<string, unknown> | undefined) ?? undefined;
