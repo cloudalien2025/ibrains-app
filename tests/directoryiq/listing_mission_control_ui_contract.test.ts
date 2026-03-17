@@ -69,7 +69,11 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("data-testid={`step2-slot-status-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-actions-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid={`step2-slot-openai-setup-cta-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid=\"step2-openai-setup-cta\"");
+    expect(source).toContain("OpenAI is not configured for this site.");
+    expect(source).toContain("Connect it in DirectoryIQ > Signal Sources to generate support articles.");
     expect(source).toContain("Build Support Articles");
     expect(source).toContain("Create the articles that help AI engines understand and recommend this listing.");
     expect(source).not.toContain("Run Slot Pipeline");
