@@ -2692,7 +2692,7 @@ export default function ListingOptimizationClient({
                           <div className="mt-1 text-xs text-slate-300">
                             {step2CardDescription({
                               status,
-                              purpose: normalizeText(item.suggestedContentPurpose) || normalizeText(blueprint?.recommendedWinningAngle),
+                              purpose: normalizeText(item.suggestedContentPurpose) || normalizeText(blueprint?.suggestedH1),
                               title: item.title,
                               listingName: displayName,
                             })}

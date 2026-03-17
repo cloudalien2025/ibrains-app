@@ -126,7 +126,7 @@ export function deriveStep2StatusLabel(input: Omit<Step2CardActionInput, "publis
 
 export function shouldAllowStep2DraftGeneration(input: Omit<Step2CardActionInput, "publishedUrl">): boolean {
   const primary = deriveStep2PrimaryAction(input);
-  return primary.kind === "run_pipeline" && primary.label !== "Retry";
+  return primary.kind === "run_pipeline" && primary.label !== "Try Again";
 }
 
 export function shouldAllowStep2PipelineRun(input: Omit<Step2CardActionInput, "publishedUrl">): boolean {
