@@ -7,6 +7,24 @@ const shouldServeDirectoryIqLocally = vi.fn(() => false);
 const proxyDirectoryIqRequest = vi.fn(async (_req: NextRequest, upstreamPath: string) =>
   NextResponse.json({ ok: true, upstreamPath })
 );
+const getDirectoryIqOpenAiKey = vi.fn(async () => "sk-test");
+const upsertAuthorityPostDraft = vi.fn(async () => {});
+const normalizePostType = vi.fn(() => "local_guide");
+const normalizeSlot = vi.fn(() => 1);
+const buildGovernedPrompt = vi.fn(() => "prompt");
+const validateDraftHtml = vi.fn(() => ({ valid: true, hasContextualListingLink: true, errors: [] as string[] }));
+const generateAuthorityDraft = vi.fn(async () => "<p>draft</p><a href=\"https://example.com/listings/acme\">link</a>");
+const validateOpenAiKeyPresent = vi.fn((value: string) => value);
+const resolveListingEvaluation = vi.fn(async () => ({
+  listingEval: {
+    listing: {
+      source_id: "listing-source-1",
+      title: "Acme",
+      url: "https://example.com/listings/acme",
+      raw_json: { description: "desc" },
+    },
+  },
+}));
 
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
@@ -19,6 +37,34 @@ vi.mock("@/app/api/directoryiq/_utils/runtimeParity", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/externalReadProxy", () => ({
   proxyDirectoryIqRequest,
+}));
+
+vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
+  getDirectoryIqOpenAiKey,
+}));
+
+vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
+  upsertAuthorityPostDraft,
+}));
+
+vi.mock("@/app/api/directoryiq/_utils/authority", () => ({
+  normalizePostType,
+  normalizeSlot,
+}));
+
+vi.mock("@/lib/directoryiq/contentGovernance", () => ({
+  buildGovernedPrompt,
+  validateDraftHtml,
+}));
+
+vi.mock("@/lib/openai/serverClient", () => ({
+  generateAuthorityDraft,
+  validateOpenAiKeyPresent,
+}));
+
+vi.mock("@/app/api/directoryiq/_utils/listingResolve", () => ({
+  resolveListingEvaluation,
+  ListingSiteRequiredError: class ListingSiteRequiredError extends Error {},
 }));
 
 describe("directoryiq authority runtime parity proxy", () => {
@@ -61,5 +107,27 @@ describe("directoryiq authority runtime parity proxy", () => {
       "POST"
     );
     expect(ensureUser).not.toHaveBeenCalled();
+  });
+
+  it("serves draft locally when step2_writer=1 even if host mismatches", async () => {
+    const draftRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+
+    const draftReq = new NextRequest(
+      "https://app.ibrains.ai/api/directoryiq/listings/3/authority/1/draft?site_id=s1&step2_writer=1",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ type: "local_guide", focus_topic: "topic", title: "title" }),
+      }
+    );
+
+    const draftRes = await draftRoute.POST(draftReq, { params: { listingId: "3", slot: "1" } });
+    const json = await draftRes.json();
+
+    expect(draftRes.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(proxyDirectoryIqRequest).not.toHaveBeenCalled();
+    expect(ensureUser).toHaveBeenCalled();
+    expect(upsertAuthorityPostDraft).toHaveBeenCalled();
   });
 });

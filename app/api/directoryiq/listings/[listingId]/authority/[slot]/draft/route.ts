@@ -22,7 +22,8 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
 ) {
-  if (!shouldServeDirectoryIqLocally(req)) {
+  const forceStep2WriterLocal = req.nextUrl.searchParams.get("step2_writer") === "1";
+  if (!forceStep2WriterLocal && !shouldServeDirectoryIqLocally(req)) {
     const { listingId, slot } = await Promise.resolve(params);
     return proxyDirectoryIqRequest(
       req,
