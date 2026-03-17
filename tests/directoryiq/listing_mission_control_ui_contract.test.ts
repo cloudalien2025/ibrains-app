@@ -95,7 +95,9 @@ describe("listing mission control rebuild contract", () => {
   it("routes Step 2 pipeline draft generation through contract input with strict gating", () => {
     expect(source).toContain("function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput");
     expect(source).toContain("step2_contract:");
+    expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
+    expect(source).toContain("deriveStep2StatusLabel(actionInput)");
     expect(source).toContain("shouldAllowStep2PipelineRun(actionInput)");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");

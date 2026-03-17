@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   deriveStep2PrimaryAction,
   deriveStep2SecondaryAction,
+  deriveStep2StatusLabel,
   shouldAllowStep2DraftGeneration,
   shouldAllowStep2PipelineRun,
 } from "@/lib/directoryiq/step2CardActionContract";
@@ -37,20 +38,24 @@ describe("step2 card action contract", () => {
   });
 
   it("hides primary actions while in progress", () => {
-    const primary = deriveStep2PrimaryAction({
-      internalState: "generating",
-      recommendedAction: "create",
-      countsTowardRequiredFive: false,
-    });
+    const inProgressStates = ["researching", "brief_ready", "generating", "image_ready", "publishing"] as const;
 
-    expect(primary).toEqual({ kind: "none" });
-    expect(
-      shouldAllowStep2PipelineRun({
-        internalState: "generating",
+    for (const internalState of inProgressStates) {
+      const primary = deriveStep2PrimaryAction({
+        internalState,
         recommendedAction: "create",
         countsTowardRequiredFive: false,
-      })
-    ).toBe(false);
+      });
+
+      expect(primary).toEqual({ kind: "none" });
+      expect(
+        shouldAllowStep2PipelineRun({
+          internalState,
+          recommendedAction: "create",
+          countsTowardRequiredFive: false,
+        })
+      ).toBe(false);
+    }
   });
 
   it("blocks draft generation for valid/in-progress states and allows actionable create state", () => {
@@ -104,5 +109,57 @@ describe("step2 card action contract", () => {
       label: "View Post",
       href: "https://example.com/post",
     });
+  });
+
+  it("derives deterministic status labels for ready, in-progress, valid, and recovery states", () => {
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "not_started",
+        recommendedAction: "create",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Create Ready");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "not_started",
+        recommendedAction: "upgrade",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Upgrade Ready");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "brief_ready",
+        recommendedAction: "create",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Creating");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "publishing",
+        recommendedAction: "create",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Publishing");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "confirmed_valid",
+        recommendedAction: "confirm",
+        countsTowardRequiredFive: true,
+      })
+    ).toBe("Already Valid");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "needs_review",
+        recommendedAction: "create",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Needs Review");
+    expect(
+      deriveStep2StatusLabel({
+        internalState: "failed",
+        recommendedAction: "create",
+        countsTowardRequiredFive: false,
+      })
+    ).toBe("Failed");
   });
 });

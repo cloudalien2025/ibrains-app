@@ -355,12 +355,53 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
     await expect(page.getByTestId("step2-progress-summary")).toBeVisible();
     await expect(page.getByTestId("step2-slot-list")).toBeVisible();
-    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Already Valid|Creating|Publishing|Published|Needs Review|Failed/);
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Already Valid|Create Ready|Upgrade Ready|Creating|Publishing|Published|Needs Review|Failed/);
     await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
     await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
+  });
+
+  test("keeps Step 2 create payload truthful and suppresses primary actions while running", async ({ page }) => {
+    await mockListingApis(page);
+
+    let draftRequestBody: Record<string, unknown> | null = null;
+    await page.route(`**/api/directoryiq/listings/${listingId}/authority/1/draft**`, async (route) => {
+      draftRequestBody = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
+      await new Promise((resolve) => setTimeout(resolve, 200));
+      await route.fulfill({
+        status: 422,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ok: false,
+          error: { message: "Draft failed governance validation." },
+        }),
+      });
+    });
+
+    await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-generate-content").click();
+
+    const slotId = "publish_comparison_decision_post";
+    const status = page.getByTestId(`step2-slot-status-${slotId}`);
+    const primaryAction = page.getByTestId(`step2-slot-primary-action-${slotId}`);
+
+    await expect(status).toContainText("Create Ready");
+    await expect(primaryAction).toHaveText("Create Support");
+    await primaryAction.click();
+
+    await expect(status).toContainText("Creating");
+    await expect(primaryAction).toHaveCount(0);
+
+    await expect(status).toContainText("Failed");
+    await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText("Draft failed governance validation.");
+    await expect(primaryAction).toHaveText("Retry");
+
+    expect(draftRequestBody).toBeTruthy();
+    const step2Contract = (draftRequestBody?.["step2_contract"] as Record<string, unknown> | undefined) ?? undefined;
+    expect(step2Contract).toBeTruthy();
+    expect(step2Contract?.["research_artifact"]).toBeTruthy();
   });
 
   test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {

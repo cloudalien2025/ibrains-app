@@ -23,6 +23,16 @@ export type Step2SecondaryAction =
   | { kind: "none" }
   | { kind: "view_post"; label: "View Post"; href: string };
 
+export type Step2CardStatusLabel =
+  | "Already Valid"
+  | "Create Ready"
+  | "Upgrade Ready"
+  | "Creating"
+  | "Publishing"
+  | "Published"
+  | "Needs Review"
+  | "Failed";
+
 export type Step2CardActionInput = {
   internalState: Step2InternalState;
   recommendedAction: Step2RecommendedAction;
@@ -68,6 +78,42 @@ export function deriveStep2SecondaryAction(input: Pick<Step2CardActionInput, "pu
     label: "View Post",
     href: input.publishedUrl,
   };
+}
+
+export function deriveStep2StatusLabel(input: Omit<Step2CardActionInput, "publishedUrl">): Step2CardStatusLabel {
+  if (
+    input.internalState === "confirmed_valid" ||
+    input.internalState === "valid" ||
+    (input.recommendedAction === "confirm" && input.countsTowardRequiredFive)
+  ) {
+    return "Already Valid";
+  }
+
+  if (STEP2_IN_PROGRESS_STATES.has(input.internalState)) {
+    return input.internalState === "publishing" ? "Publishing" : "Creating";
+  }
+
+  if (input.internalState === "published" || input.internalState === "linked") {
+    return "Published";
+  }
+
+  if (input.internalState === "failed") {
+    return "Failed";
+  }
+
+  if (input.internalState === "needs_review") {
+    return "Needs Review";
+  }
+
+  if (input.recommendedAction === "upgrade") {
+    return "Upgrade Ready";
+  }
+
+  if (input.recommendedAction === "create") {
+    return "Create Ready";
+  }
+
+  return "Needs Review";
 }
 
 export function shouldAllowStep2DraftGeneration(input: Omit<Step2CardActionInput, "publishedUrl">): boolean {
