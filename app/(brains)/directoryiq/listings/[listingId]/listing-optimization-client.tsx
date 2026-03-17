@@ -37,6 +37,7 @@ import {
 import {
   deriveStep2PrimaryAction,
   deriveStep2SecondaryAction,
+  deriveStep2StatusLabel,
   shouldAllowStep2PipelineRun,
 } from "@/lib/directoryiq/step2CardActionContract";
 
@@ -1748,9 +1749,9 @@ export default function ListingOptimizationClient({
   async function generateContentDraft(
     item: BlogReinforcementPlanItem,
     slot: number,
-    contractInput?: Pick<Step2DraftContractInput, "missionPlanSlot" | "supportBrief" | "seoPackage">
-  ): Promise<boolean> {
-    if (!effectiveListingId) return false;
+    contractInput?: Step2DraftContractInput
+  ): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
+    if (!effectiveListingId) return { ok: false, errorMessage: "Listing context is missing." };
     const current = initializeContentAsset(item, slot);
 
     setContentAssets((previous) => ({
@@ -1770,18 +1771,20 @@ export default function ListingOptimizationClient({
               mission_plan_slot: contractInput.missionPlanSlot,
               support_brief: contractInput.supportBrief,
               seo_package: contractInput.seoPackage,
+              research_artifact: contractInput.researchArtifact,
             }
           : undefined,
       }),
     });
     const json = (await res.json().catch(() => ({}))) as { draft_html?: string; error?: { message?: string } | string };
     if (!res.ok) {
-      setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft." });
+      const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft.";
+      setError({ message });
       setContentAssets((previous) => ({
         ...previous,
         [item.id]: { ...current, status: "Recommended" },
       }));
-      return false;
+      return { ok: false, errorMessage: message };
     }
 
     setContentAssets((previous) => ({
@@ -1793,7 +1796,7 @@ export default function ListingOptimizationClient({
       },
     }));
     setNotice(`Generated draft for ${current.title}.`);
-    return true;
+    return { ok: true };
   }
 
   async function generateContentImage(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
@@ -1931,7 +1934,7 @@ export default function ListingOptimizationClient({
 
     const actionInput = step2ActionInput(input.missionSlot, runtime);
     if (!shouldAllowStep2PipelineRun(actionInput)) {
-      const status = step2StatusLabel(actionInput.internalState).toLowerCase();
+      const status = deriveStep2StatusLabel(actionInput).toLowerCase();
       setNotice(`${input.missionSlot.slot_label} is ${status} and has no executable action right now.`);
       return;
     }
@@ -1950,8 +1953,8 @@ export default function ListingOptimizationClient({
 
     patchStep2Runtime(slotId, { internalState: "generating" });
     const generated = await generateContentDraft(input.item, input.slot, contractInput);
-    if (!generated) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Draft generation failed." });
+    if (!generated.ok) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: generated.errorMessage });
       return;
     }
 
@@ -2583,9 +2586,9 @@ export default function ListingOptimizationClient({
                     const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
                     const blueprint = contentStructure?.items[index] ?? null;
                     const runtime = step2Runtime[missionSlot.slot_id];
-                    const contractStatus = runtime?.userState ?? step2StatusLabel("not_started");
                     const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
                     const actionInput = step2ActionInput(missionSlot, runtime);
+                    const contractStatus = deriveStep2StatusLabel(actionInput);
                     const primaryAction = deriveStep2PrimaryAction(actionInput);
                     const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
 
