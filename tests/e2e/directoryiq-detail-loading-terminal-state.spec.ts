@@ -84,6 +84,6 @@ test.describe("DirectoryIQ listing detail terminal loading state", () => {
     await expect(page.getByRole("heading", { name: "Step 2: Create Support" })).toBeVisible();
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
-    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
   });
 });

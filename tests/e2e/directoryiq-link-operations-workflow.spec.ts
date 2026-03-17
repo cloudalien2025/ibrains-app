@@ -296,7 +296,7 @@ async function mockListingApis(page: Page): Promise<void> {
 }
 
 test.describe("DirectoryIQ link operations workflow", () => {
-  test("supports mission plan selection in Step 1 and surfaces persistent publish layer", async ({ page }) => {
+  test("supports mission plan selection in Step 1 without exposing publish execution layer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await mockListingApis(page);
     const listingApiMutations: string[] = [];
@@ -342,11 +342,11 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const postClickMutations = listingApiMutations.slice(postMutationCount);
     expect(postClickMutations.some((entry) => /\/(publish|push|authority)\b/.test(entry))).toBe(false);
 
-    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Ready to Publish" })).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "Ready to Publish" })).toHaveCount(0);
   });
 
-  test("keeps publish execution layer visible while switching steps", async ({ page }) => {
+  test("shows publish execution layer only in Step 2 while switching steps", async ({ page }) => {
     await mockListingApis(page);
 
     await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
@@ -360,7 +360,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
-    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
   });
 
   test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {
