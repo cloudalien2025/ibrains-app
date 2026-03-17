@@ -60,9 +60,11 @@ describe("listing mission control rebuild contract", () => {
   });
 
   it("shows Step 2 generated content assets tied back to listing support", () => {
-    expect(source).toContain("data-testid=\"step3-content-assets\"");
+    expect(source).toContain("data-testid=\"step2-slot-list\"");
+    expect(source).toContain("data-testid=\"step2-progress-summary\"");
+    expect(source).toContain("data-testid={`step2-slot-status-${missionSlot.slot_id}`}");
     expect(source).toContain("Supports listing:");
-    expect(source).toContain("Generate Draft");
+    expect(source).toContain("Run Slot Pipeline");
   });
 
   it("keeps publish layer persistent with required CTA set", () => {

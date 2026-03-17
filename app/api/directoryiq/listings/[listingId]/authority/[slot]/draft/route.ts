@@ -58,6 +58,11 @@ export async function POST(
       type?: string;
       focus_topic?: string;
       title?: string;
+      step2_contract?: {
+        mission_plan_slot?: Record<string, unknown>;
+        support_brief?: Record<string, unknown>;
+        seo_package?: Record<string, unknown>;
+      };
     };
 
     const postType = normalizePostType((body.type ?? "").trim());
@@ -131,6 +136,7 @@ export async function POST(
         quality_score: 72,
         generated_at: new Date().toISOString(),
         governance_passed: true,
+        step2_contract: body.step2_contract ?? null,
       },
     });
 

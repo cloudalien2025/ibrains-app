@@ -85,6 +85,29 @@ export async function POST(
     if (!post || !post.draft_html || !post.title) {
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft content is required before publish.");
     }
+    const postMetadata = (post.metadata_json ?? {}) as Record<string, unknown>;
+    const step2Contract = (postMetadata.step2_contract ?? null) as
+      | {
+          seo_package?: {
+            primary_focus_keyword?: string;
+            post_title?: string;
+            seo_title?: string;
+            meta_description?: string;
+            slug?: string;
+            featured_image_filename?: string;
+            featured_image_alt_text?: string;
+          };
+        }
+      | null;
+    const seoPackage = step2Contract?.seo_package;
+    const metadataReady = Boolean(
+      seoPackage?.primary_focus_keyword &&
+        seoPackage?.seo_title &&
+        seoPackage?.meta_description &&
+        seoPackage?.slug &&
+        seoPackage?.featured_image_filename &&
+        seoPackage?.featured_image_alt_text
+    );
 
     if (post.blog_to_listing_link_status !== "linked") {
       throw new AuthorityRouteError(
@@ -112,6 +135,14 @@ export async function POST(
       title: post.title,
       html: post.draft_html,
       featuredImageUrl: post.featured_image_url,
+      seoPackage: {
+        primaryFocusKeyword: seoPackage?.primary_focus_keyword,
+        seoTitle: seoPackage?.seo_title,
+        metaDescription: seoPackage?.meta_description,
+        slug: seoPackage?.slug,
+        featuredImageFilename: seoPackage?.featured_image_filename,
+        featuredImageAltText: seoPackage?.featured_image_alt_text,
+      },
     });
 
     if (!publishResult.ok) {
@@ -195,9 +226,18 @@ export async function POST(
       blogToListingStatus: "linked",
       listingToBlogStatus,
       metadata: {
+        ...postMetadata,
         published_at: new Date().toISOString(),
         reciprocal_link_inserted: listingPush.ok,
         listing_true_post_id: mapping.truePostId,
+        step2_publish_truth: {
+          published: true,
+          linked: true,
+          metadata_ready: metadataReady,
+          featured_image_attached: Boolean(post.featured_image_url),
+          featured_image_fallback_recorded: !post.featured_image_url,
+          step3_consumable: listingPush.ok && post.blog_to_listing_link_status === "linked",
+        },
       },
     });
 
@@ -241,6 +281,7 @@ export async function POST(
       reqId,
       published_url: publishedUrl,
       listing_to_blog_status: listingToBlogStatus,
+      metadata_ready: metadataReady,
       version_id: versionId,
       requires_manual_approval: true,
       auto_publish: false,
