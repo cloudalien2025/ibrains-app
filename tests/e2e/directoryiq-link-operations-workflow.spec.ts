@@ -15,6 +15,14 @@ const listingResponse = {
 };
 
 async function mockListingApis(page: Page): Promise<void> {
+  const openAiConnected = true;
+  await mockListingApisWithOptions(page, { openAiConnected });
+}
+
+async function mockListingApisWithOptions(
+  page: Page,
+  options: { openAiConnected: boolean }
+): Promise<void> {
   await page.route(`**/api/directoryiq/listings/${listingId}?**`, async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(listingResponse) });
   });
@@ -29,7 +37,7 @@ async function mockListingApis(page: Page): Promise<void> {
       contentType: "application/json",
       body: JSON.stringify({
         connectors: [
-          { connector_id: "openai", connected: true },
+          { connector_id: "openai", connected: options.openAiConnected },
           { connector_id: "brilliant_directories_api", connected: true },
         ],
       }),
@@ -405,6 +413,21 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const step2Contract = (draftRequestBody?.["step2_contract"] as Record<string, unknown> | undefined) ?? undefined;
     expect(step2Contract).toBeTruthy();
     expect(step2Contract?.["research_artifact"]).toBeTruthy();
+  });
+
+  test("blocks Step 2 write actions when OpenAI signal source is missing", async ({ page }) => {
+    await mockListingApisWithOptions(page, { openAiConnected: false });
+
+    await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
+    await page.getByTestId("listing-step-nav-desktop-generate-content").click();
+
+    await expect(page.getByText("OpenAI is not configured for this site.").first()).toBeVisible();
+    await expect(page.getByText("Connect it in DirectoryIQ > Signal Sources to generate support articles.").first()).toBeVisible();
+    await expect(page.getByTestId("step2-openai-setup-cta")).toBeVisible();
+    await expect(page.getByTestId("step2-slot-openai-setup-cta-publish_comparison_decision_post")).toBeVisible();
+    await expect(page.getByTestId("step2-write-next-article")).toHaveCount(0);
+    await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toHaveCount(0);
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText("Needs Attention");
   });
 
   test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {

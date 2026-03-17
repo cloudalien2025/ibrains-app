@@ -130,6 +130,10 @@ type ListingSupportResponse = {
     dataStatus: "supported" | "no_support_data";
     fallbackApplied?: boolean;
     upstreamStatus?: number | null;
+    blockerCode?: string;
+    blockerMessage?: string;
+    errorCode?: string;
+    errorMessage?: string;
   };
   error?: {
     message?: string;
@@ -719,10 +723,26 @@ function step2CardDescription(input: { status: Step2CardStatusLabel; purpose: st
   return `Helps AI engines understand why ${input.listingName} is a strong choice for ${normalizeText(input.title)}.`;
 }
 
+const OPENAI_SETUP_BLOCKER_TITLE = "OpenAI is not configured for this site.";
+const OPENAI_SETUP_BLOCKER_BODY = "Connect it in DirectoryIQ > Signal Sources to generate support articles.";
+
+function isOpenAiSetupMissing(raw: string | null | undefined): boolean {
+  const lower = normalizeText(raw).toLowerCase();
+  if (!lower) return false;
+  return (
+    lower.includes("openai_key_missing") ||
+    lower.includes("openai api not configured") ||
+    lower.includes("openai is not configured for this site")
+  );
+}
+
 function translateStep2ErrorMessage(raw: string | null | undefined): string {
   const message = normalizeText(raw);
   if (!message) return "We couldn't start this article right now. Please try again.";
   const lower = message.toLowerCase();
+  if (isOpenAiSetupMissing(message)) {
+    return `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`;
+  }
   if (lower.includes("unsupported state")) return "We couldn't start this article right now. Please try again.";
   if (lower.includes("authenticate") || lower.includes("token") || lower.includes("authorization")) {
     return "We couldn't verify the site connection for this article. Reconnect the site and try again.";
@@ -1633,6 +1653,34 @@ export default function ListingOptimizationClient({
     });
   }, [step2MissionSlots]);
 
+  const openAiBlockerFromSupportMeta = useMemo(() => {
+    const supportMetaRecord = supportMeta as Record<string, unknown> | null;
+    const metaCodeCandidates = [
+      typeof supportMetaRecord?.blockerCode === "string" ? supportMetaRecord.blockerCode : "",
+      typeof supportMetaRecord?.blocker_code === "string" ? supportMetaRecord.blocker_code : "",
+      typeof supportMetaRecord?.errorCode === "string" ? supportMetaRecord.errorCode : "",
+      typeof supportMetaRecord?.error_code === "string" ? supportMetaRecord.error_code : "",
+    ];
+    if (metaCodeCandidates.some((code) => normalizeText(code).toUpperCase() === "OPENAI_KEY_MISSING")) return true;
+
+    const metaMessageCandidates = [
+      typeof supportMetaRecord?.blockerMessage === "string" ? supportMetaRecord.blockerMessage : "",
+      typeof supportMetaRecord?.blocker_message === "string" ? supportMetaRecord.blocker_message : "",
+      typeof supportMetaRecord?.errorMessage === "string" ? supportMetaRecord.errorMessage : "",
+      typeof supportMetaRecord?.error_message === "string" ? supportMetaRecord.error_message : "",
+      supportError ?? "",
+    ];
+    return metaMessageCandidates.some((value) => isOpenAiSetupMissing(value));
+  }, [supportMeta, supportError]);
+
+  const openAiBlockerFromRuntime = useMemo(
+    () => Object.values(step2Runtime).some((runtime) => isOpenAiSetupMissing(runtime.errorMessage)),
+    [step2Runtime]
+  );
+
+  const step2OpenAiSetupBlocked =
+    integrations.openaiConfigured === false || openAiBlockerFromSupportMeta || openAiBlockerFromRuntime;
+
   const step2Progress = useMemo(() => {
     const slotStates = step2MissionSlots.map((slot) => ({
       counts_toward_required_five: step2Runtime[slot.slot_id]?.countsTowardRequiredFive ?? slot.counts_toward_required_five_now,
@@ -1651,7 +1699,9 @@ export default function ListingOptimizationClient({
         const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
         const actionInput = step2ActionInput(missionSlot, runtime);
         const status = deriveStep2StatusLabel(actionInput);
-        const primaryAction = deriveStep2PrimaryAction(actionInput);
+        const setupBlocked = step2OpenAiSetupBlocked && (status === "Ready to Write" || status === "Needs Improvement");
+        const primaryAction = setupBlocked ? ({ kind: "none" } as const) : deriveStep2PrimaryAction(actionInput);
+        const effectiveStatus = setupBlocked ? ("Needs Attention" as const) : status;
         const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
         return {
           missionSlot,
@@ -1661,18 +1711,20 @@ export default function ListingOptimizationClient({
           blueprint,
           runtime,
           actionInput,
-          status,
+          status: effectiveStatus,
           primaryAction,
           secondaryAction,
+          setupBlocked,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime]);
+  }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime, step2OpenAiSetupBlocked]);
   const step2StatusBuckets = useMemo(
     () => summarizeStep2StatusBuckets(step2SlotViewModels.map((entry) => entry.status)),
     [step2SlotViewModels]
   );
   const step2NextCandidate = useMemo(() => {
+    if (step2OpenAiSetupBlocked) return null;
     const selected = pickStep2NextActionCandidate(
       step2SlotViewModels.map((entry) => ({
         slotId: entry.missionSlot.slot_id,
@@ -1681,7 +1733,7 @@ export default function ListingOptimizationClient({
     );
     if (!selected) return null;
     return step2SlotViewModels.find((entry) => entry.missionSlot.slot_id === selected.slotId) ?? null;
-  }, [step2SlotViewModels]);
+  }, [step2SlotViewModels, step2OpenAiSetupBlocked]);
 
   const largestGap = gaps?.items[0] ?? null;
   const fastestWinLink = linkOperations.find((item) => item.status === "Recommended") ?? null;
@@ -1856,11 +1908,19 @@ export default function ListingOptimizationClient({
           : undefined,
       }),
     });
-    const json = (await res.json().catch(() => ({}))) as { draft_html?: string; error?: { message?: string } | string };
+    const json = (await res.json().catch(() => ({}))) as {
+      draft_html?: string;
+      error?: { message?: string; code?: string } | string;
+    };
     if (!res.ok) {
       const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft.";
+      const code = typeof json.error === "string" ? "" : normalizeText(json.error?.code).toUpperCase();
       const translatedMessage = translateStep2ErrorMessage(message);
-      setError({ message: translatedMessage });
+      if (code === "OPENAI_KEY_MISSING" || isOpenAiSetupMissing(message)) {
+        setError({ message: `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}` });
+      } else {
+        setError({ message: translatedMessage });
+      }
       setContentAssets((previous) => ({
         ...previous,
         [item.id]: { ...current, status: "Recommended" },
@@ -2014,6 +2074,12 @@ export default function ListingOptimizationClient({
     if (!runtime) return;
 
     const actionInput = step2ActionInput(input.missionSlot, runtime);
+    if (step2OpenAiSetupBlocked) {
+      const blockerMessage = `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`;
+      setError({ message: blockerMessage });
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: blockerMessage });
+      return;
+    }
     if (!shouldAllowStep2PipelineRun(actionInput)) {
       setNotice("This article is already live or currently working. Choose another article.");
       return;
@@ -2194,7 +2260,10 @@ export default function ListingOptimizationClient({
 
       {integrations.openaiConfigured === false ? (
         <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-          AI connection not configured. Configure it in <Link href="/directoryiq/signal-sources?connector=openai" className="underline">Connections</Link>.
+          {OPENAI_SETUP_BLOCKER_TITLE}{" "}
+          <Link href="/directoryiq/signal-sources?connector=openai" className="underline">
+            {OPENAI_SETUP_BLOCKER_BODY}
+          </Link>
         </div>
       ) : null}
 
@@ -2663,25 +2732,42 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
-                  <NeonButton
-                    onClick={() => {
-                      if (!step2NextCandidate) return;
-                      void executeStep2SlotPipeline({
-                        missionSlot: step2NextCandidate.missionSlot,
-                        item: step2NextCandidate.item,
-                        slot: step2NextCandidate.slot,
-                      });
-                    }}
-                    disabled={!step2NextCandidate}
-                    data-testid="step2-write-next-article"
-                  >
-                    Write Next Article
-                  </NeonButton>
-                  {!step2NextCandidate ? <span className="text-xs text-slate-400">All articles are currently live or working.</span> : null}
+                  {step2OpenAiSetupBlocked ? (
+                    <>
+                      <Link
+                        href="/directoryiq/signal-sources?connector=openai"
+                        className="inline-flex rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-medium text-amber-100"
+                        data-testid="step2-openai-setup-cta"
+                      >
+                        Connect OpenAI in Signal Sources
+                      </Link>
+                      <span className="text-xs text-amber-100/90">
+                        {OPENAI_SETUP_BLOCKER_TITLE} {OPENAI_SETUP_BLOCKER_BODY}
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <NeonButton
+                        onClick={() => {
+                          if (!step2NextCandidate) return;
+                          void executeStep2SlotPipeline({
+                            missionSlot: step2NextCandidate.missionSlot,
+                            item: step2NextCandidate.item,
+                            slot: step2NextCandidate.slot,
+                          });
+                        }}
+                        disabled={!step2NextCandidate}
+                        data-testid="step2-write-next-article"
+                      >
+                        Write Next Article
+                      </NeonButton>
+                      {!step2NextCandidate ? <span className="text-xs text-slate-400">All articles are currently live or working.</span> : null}
+                    </>
+                  )}
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, status, primaryAction, secondaryAction }) => (
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, status, primaryAction, secondaryAction, setupBlocked }) => (
                     <div
                       key={item.id}
                       className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
@@ -2708,7 +2794,16 @@ export default function ListingOptimizationClient({
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
-                        {primaryAction.kind === "run_pipeline" ? (
+                        {setupBlocked ? (
+                          <Link
+                            href="/directoryiq/signal-sources?connector=openai"
+                            className="inline-flex rounded-lg border border-amber-300/35 bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-100"
+                            data-testid={`step2-slot-openai-setup-cta-${missionSlot.slot_id}`}
+                          >
+                            Connect OpenAI
+                          </Link>
+                        ) : null}
+                        {!setupBlocked && primaryAction.kind === "run_pipeline" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
@@ -2733,9 +2828,11 @@ export default function ListingOptimizationClient({
                         ) : null}
                       </div>
 
-                      {runtime?.errorMessage ? (
+                      {runtime?.errorMessage || setupBlocked ? (
                         <div className="mt-2 text-xs text-rose-200" data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>
-                          {translateStep2ErrorMessage(runtime.errorMessage)}
+                          {setupBlocked
+                            ? `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`
+                            : translateStep2ErrorMessage(runtime.errorMessage)}
                         </div>
                       ) : null}
                     </div>
