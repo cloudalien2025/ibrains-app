@@ -367,7 +367,9 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await mockListingApis(page);
 
     let draftRequestBody: Record<string, unknown> | null = null;
+    let draftRequestUrl = "";
     await page.route(`**/api/directoryiq/listings/${listingId}/authority/1/draft**`, async (route) => {
+      draftRequestUrl = route.request().url();
       draftRequestBody = (route.request().postDataJSON() as Record<string, unknown>) ?? null;
       await new Promise((resolve) => setTimeout(resolve, 200));
       await route.fulfill({
@@ -399,6 +401,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(primaryAction).toHaveText("Try Again");
 
     expect(draftRequestBody).toBeTruthy();
+    expect(draftRequestUrl).toContain("step2_writer=1");
     const step2Contract = (draftRequestBody?.["step2_contract"] as Record<string, unknown> | undefined) ?? undefined;
     expect(step2Contract).toBeTruthy();
     expect(step2Contract?.["research_artifact"]).toBeTruthy();
