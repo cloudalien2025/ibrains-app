@@ -46,6 +46,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("Mark Ready");
     expect(source).not.toContain("Queue for Publish");
     expect(source).toContain("data-testid=\"step1-missing-connections\"");
+    expect(source).toContain("Mission plan is a selection state only. Publishing is handled in Steps 2 and 3.");
+    expect(source).not.toContain("data-testid=\"step1-slot-run-");
     expect(source).toContain("derivedRecommendationGroups");
     expect(source).toContain("recommendedMissingItems");
   });
@@ -67,7 +69,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("Run Slot Pipeline");
   });
 
-  it("keeps publish layer persistent with required CTA set", () => {
+  it("keeps publish layer scoped to Step 2 with required CTA set", () => {
+    expect(source).toContain("{activeStepId === \"create-support\" ? (");
     expect(source).toContain("data-testid=\"publish-execution-layer\"");
     expect(source).toContain("Publish All Approved Assets");
     expect(source).toContain("Preview Changes");
@@ -80,6 +83,13 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("status: \"Published\"");
     expect(source).toContain("computedScore");
     expect(source).toContain("loadListingAndIntegrations()");
+  });
+
+  it("routes Generate Draft through Step 2 contract input", () => {
+    expect(source).toContain("function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput");
+    expect(source).toContain("step2_contract:");
+    expect(source).toContain("onClick={() => void generateStep2Draft({ missionSlot, item, slot })}");
+    expect(source).toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });
 
   it("avoids sticky overlap and vertical nav bloat regressions", () => {

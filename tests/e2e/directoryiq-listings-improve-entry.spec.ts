@@ -396,6 +396,6 @@ test.describe("DirectoryIQ listings Improve entrypoint", () => {
     await expect(page).toHaveURL(new RegExp(`/directoryiq/listings/${secondListingId}\\?site_id=${siteId}`));
     await expect(page).not.toHaveURL(/step=/);
     await expect(page.getByRole("heading", { name: "Step 1: Find Support" })).toBeVisible();
-    await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
+    await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
   });
 });

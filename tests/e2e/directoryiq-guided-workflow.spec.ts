@@ -20,7 +20,7 @@ test.describe("DirectoryIQ guided listing optimization workflow", () => {
       await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
 
       await expect(page.getByTestId("listing-hero-node")).toBeVisible();
-      await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
+      await expect(page.getByTestId("publish-execution-layer")).toHaveCount(0);
 
       const defaultViewText = await page.locator("body").innerText();
       expect(defaultViewText).not.toMatch(uuidPattern);

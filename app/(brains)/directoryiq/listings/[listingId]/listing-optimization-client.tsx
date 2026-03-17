@@ -542,6 +542,13 @@ type ContentAssetState = {
   scoreAfter: number | null;
 };
 
+type Step2DraftContractInput = {
+  missionPlanSlot: Step2MissionPlanSlot;
+  supportBrief: Step2SupportBrief;
+  seoPackage: Step2SeoPackage;
+  researchArtifact: Step2SupportResearchArtifact;
+};
+
 type Step2SlotRuntime = {
   internalState: Step2InternalState;
   userState: Step2UserState;
@@ -1728,11 +1735,7 @@ export default function ListingOptimizationClient({
   async function generateContentDraft(
     item: BlogReinforcementPlanItem,
     slot: number,
-    contractInput?: {
-      missionPlanSlot?: Step2MissionPlanSlot;
-      supportBrief?: Step2SupportBrief;
-      seoPackage?: Step2SeoPackage;
-    }
+    contractInput?: Pick<Step2DraftContractInput, "missionPlanSlot" | "supportBrief" | "seoPackage">
   ): Promise<boolean> {
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
@@ -1942,44 +1945,18 @@ export default function ListingOptimizationClient({
     }
 
     patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null });
-    const relatedResults = (contentStructure?.items ?? [])
-      .slice(0, 5)
-      .map((entry, index) => ({
-        title: normalizeText(entry.recommendedTitlePattern || entry.suggestedH1 || entry.title) || `Result ${index + 1}`,
-        url: `https://research.local/${slugify(input.missionSlot.recommended_focus_keyword)}/${index + 1}`,
-        rank: index + 1,
-      }));
-    const researchArtifact = buildSupportResearchArtifact({
-      slot: input.missionSlot,
-      listingTitle: step2MissionPlan.listing_title,
-      locationCity: step2MissionPlan.location_city,
-      locationRegion: step2MissionPlan.location_region,
-      serpTopResults: relatedResults,
-      competitorHeadings: contentStructure?.items.flatMap((entry) => entry.suggestedSections).slice(0, 8),
-      userQuestions: contentStructure?.items.flatMap((entry) => entry.faqThemes).slice(0, 6),
-    });
-
-    const supportBrief = buildSupportBrief({
-      slot: input.missionSlot,
-      plan: step2MissionPlan,
-      research: researchArtifact,
-    });
-    const seoPackage = buildSeoPackageFromBrief(supportBrief);
+    const contractInput = buildStep2DraftContractInput(input.missionSlot);
     patchStep2Runtime(slotId, {
       internalState: "brief_ready",
-      researchArtifact,
-      supportBrief,
-      seoPackage,
+      researchArtifact: contractInput.researchArtifact,
+      supportBrief: contractInput.supportBrief,
+      seoPackage: contractInput.seoPackage,
       metadataReady: true,
       recommendedAction: action,
     });
 
     patchStep2Runtime(slotId, { internalState: "generating" });
-    const generated = await generateContentDraft(input.item, input.slot, {
-      missionPlanSlot: input.missionSlot,
-      supportBrief,
-      seoPackage,
-    });
+    const generated = await generateContentDraft(input.item, input.slot, contractInput);
     if (!generated) {
       patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Draft generation failed." });
       return;
@@ -2024,6 +2001,71 @@ export default function ListingOptimizationClient({
       publishedUrl: contentAssets[input.item.id]?.publishedUrl || null,
       errorMessage: validity.final_state === "needs_review" ? "Published but missing one or more validity checks." : null,
     });
+  }
+
+  function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput {
+    const relatedResults = (contentStructure?.items ?? [])
+      .slice(0, 5)
+      .map((entry, index) => ({
+        title:
+          normalizeText(entry.recommendedTitlePattern || entry.suggestedH1 || entry.title) ||
+          `Result ${index + 1}`,
+        url: `https://research.local/${slugify(missionSlot.recommended_focus_keyword)}/${index + 1}`,
+        rank: index + 1,
+      }));
+    const researchArtifact = buildSupportResearchArtifact({
+      slot: missionSlot,
+      listingTitle: step2MissionPlan.listing_title,
+      locationCity: step2MissionPlan.location_city,
+      locationRegion: step2MissionPlan.location_region,
+      serpTopResults: relatedResults,
+      competitorHeadings: contentStructure?.items.flatMap((entry) => entry.suggestedSections).slice(0, 8),
+      userQuestions: contentStructure?.items.flatMap((entry) => entry.faqThemes).slice(0, 6),
+    });
+
+    const supportBrief = buildSupportBrief({
+      slot: missionSlot,
+      plan: step2MissionPlan,
+      research: researchArtifact,
+    });
+    const seoPackage = buildSeoPackageFromBrief(supportBrief);
+
+    return {
+      missionPlanSlot: missionSlot,
+      supportBrief,
+      seoPackage,
+      researchArtifact,
+    };
+  }
+
+  async function generateStep2Draft(input: {
+    missionSlot: Step2MissionPlanSlot;
+    item: BlogReinforcementPlanItem;
+    slot: number;
+  }) {
+    const slotId = input.missionSlot.slot_id;
+    const action = classifySlotAction(input.missionSlot);
+    if (action === "confirm") {
+      setNotice(`${input.missionSlot.slot_label} is already valid and does not need a new draft.`);
+      return;
+    }
+
+    patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null, recommendedAction: action });
+    const contractInput = buildStep2DraftContractInput(input.missionSlot);
+    patchStep2Runtime(slotId, {
+      internalState: "brief_ready",
+      researchArtifact: contractInput.researchArtifact,
+      supportBrief: contractInput.supportBrief,
+      seoPackage: contractInput.seoPackage,
+      metadataReady: true,
+    });
+    patchStep2Runtime(slotId, { internalState: "generating" });
+    const generated = await generateContentDraft(input.item, input.slot, contractInput);
+    if (!generated) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Draft generation failed." });
+      return;
+    }
+    patchStep2Runtime(slotId, { internalState: "brief_ready", errorMessage: null });
   }
 
   function setLinkMissionPlan(itemKey: string, inMissionPlan: boolean) {
@@ -2625,7 +2667,14 @@ export default function ListingOptimizationClient({
                           >
                             {missionSlot.recommended_action === "confirm" ? "Confirm Valid Slot" : "Run Slot Pipeline"}
                           </button>
-                          <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" onClick={() => void generateContentDraft(item, slot)}>Generate Draft</button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100"
+                            onClick={() => void generateStep2Draft({ missionSlot, item, slot })}
+                            data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}
+                          >
+                            Generate Draft
+                          </button>
                           <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100" onClick={() => void approveContentAsset(item, slot)} disabled={asset.status === "Detected" || asset.status === "Recommended"}>Approve</button>
                           <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/25 px-3 py-1.5 text-xs font-medium text-emerald-50" onClick={() => void publishContentAsset(item, slot)} disabled={asset.status !== "Approved"}>Publish to Site</button>
                         </div>
@@ -2659,32 +2708,34 @@ export default function ListingOptimizationClient({
           </section>
         </div>
 
-        <aside className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="publish-execution-layer">
-          <h2 className="text-base font-semibold text-slate-100">Ready to Publish</h2>
-          <ul className="mt-3 space-y-2 text-sm text-slate-200">
-            <li>{listingIsReady ? 1 : 0} listing update approved</li>
-            <li>{approvedContent.length} blog posts approved</li>
-            <li>{approvedImages.length} featured images ready</li>
-            <li>{approvedLinkCount} flywheel links ready</li>
-          </ul>
+        {activeStepId === "create-support" ? (
+          <aside className="min-w-0 rounded-2xl border border-white/10 bg-slate-950/70 p-4" data-testid="publish-execution-layer">
+            <h2 className="text-base font-semibold text-slate-100">Ready to Publish</h2>
+            <ul className="mt-3 space-y-2 text-sm text-slate-200">
+              <li>{listingIsReady ? 1 : 0} listing update approved</li>
+              <li>{approvedContent.length} blog posts approved</li>
+              <li>{approvedImages.length} featured images ready</li>
+              <li>{approvedLinkCount} flywheel links ready</li>
+            </ul>
 
-          <div className="mt-4 space-y-2">
-            <NeonButton onClick={() => void publishAllApprovedAssets()} disabled={publishReadyCount === 0 || integrations.bdConfigured !== true}>
-              Publish All Approved Assets
-            </NeonButton>
-            <NeonButton variant="secondary" onClick={() => setActiveStepId("optimize-listing")}>Preview Changes</NeonButton>
-            <NeonButton variant="secondary" onClick={() => void publishAllApprovedAssets()} disabled={publishReadyCount === 0 || integrations.bdConfigured !== true}>Publish Selected</NeonButton>
-            <NeonButton variant="secondary" onClick={() => setNotice("Draft saved for this listing mission.")}>Save as Draft</NeonButton>
-          </div>
+            <div className="mt-4 space-y-2">
+              <NeonButton onClick={() => void publishAllApprovedAssets()} disabled={publishReadyCount === 0 || integrations.bdConfigured !== true}>
+                Publish All Approved Assets
+              </NeonButton>
+              <NeonButton variant="secondary" onClick={() => setActiveStepId("optimize-listing")}>Preview Changes</NeonButton>
+              <NeonButton variant="secondary" onClick={() => void publishAllApprovedAssets()} disabled={publishReadyCount === 0 || integrations.bdConfigured !== true}>Publish Selected</NeonButton>
+              <NeonButton variant="secondary" onClick={() => setNotice("Draft saved for this listing mission.")}>Save as Draft</NeonButton>
+            </div>
 
-          <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
-            <div className="uppercase tracking-[0.08em] text-slate-400">Lifecycle coverage</div>
-            <div className="mt-2">Listing improvements: {listingLifecycle}</div>
-            <div>Blog posts: {publishedContent.length} Published / {approvedContent.length} Approved</div>
-            <div>Featured images: {approvedImages.length} ready</div>
-            <div>Flywheel links: {publishedLinkCount} Queued (draft) / {approvedLinkCount} Ready (draft)</div>
-          </div>
-        </aside>
+            <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-300">
+              <div className="uppercase tracking-[0.08em] text-slate-400">Lifecycle coverage</div>
+              <div className="mt-2">Listing improvements: {listingLifecycle}</div>
+              <div>Blog posts: {publishedContent.length} Published / {approvedContent.length} Approved</div>
+              <div>Featured images: {approvedImages.length} ready</div>
+              <div>Flywheel links: {publishedLinkCount} Queued (draft) / {approvedLinkCount} Ready (draft)</div>
+            </div>
+          </aside>
+        ) : null}
       </div>
 
       <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/70 p-3 text-xs text-slate-400" data-testid="map-refresh-summary">
