@@ -353,6 +353,14 @@ export async function publishBlogPostToBd(params: {
   title: string;
   html: string;
   featuredImageUrl: string | null;
+  seoPackage?: {
+    primaryFocusKeyword?: string;
+    seoTitle?: string;
+    metaDescription?: string;
+    slug?: string;
+    featuredImageFilename?: string;
+    featuredImageAltText?: string;
+  } | null;
 }): Promise<{ ok: boolean; status: number; body: Record<string, unknown> | null }> {
   const form: Record<string, unknown> = {
     output_type: "array",
@@ -368,6 +376,25 @@ export async function publishBlogPostToBd(params: {
 
   if (params.featuredImageUrl) {
     form.featured_image_url = params.featuredImageUrl;
+  }
+
+  if (params.seoPackage?.primaryFocusKeyword) {
+    form.focus_keyword = params.seoPackage.primaryFocusKeyword;
+  }
+  if (params.seoPackage?.seoTitle) {
+    form.seo_title = params.seoPackage.seoTitle;
+  }
+  if (params.seoPackage?.metaDescription) {
+    form.meta_description = params.seoPackage.metaDescription;
+  }
+  if (params.seoPackage?.slug) {
+    form.slug = params.seoPackage.slug;
+  }
+  if (params.seoPackage?.featuredImageFilename) {
+    form.featured_image_filename = params.seoPackage.featuredImageFilename;
+  }
+  if (params.seoPackage?.featuredImageAltText) {
+    form.featured_image_alt_text = params.seoPackage.featuredImageAltText;
   }
 
   const response = await bdRequestWithRetry(() =>

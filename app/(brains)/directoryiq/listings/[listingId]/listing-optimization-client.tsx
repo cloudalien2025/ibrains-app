@@ -15,6 +15,25 @@ import {
   type MissionStepId,
   type SupportSlotKey,
 } from "@/lib/directoryiq/missionControlContract";
+import {
+  buildSeoPackageFromBrief,
+  buildSupportBrief,
+  buildSupportResearchArtifact,
+  classifySlotAction,
+  normalizeSlotValidity,
+  progressTowardRequiredValid,
+  slugify,
+  toStep2UserState,
+  type Step2InternalState,
+  type Step2MissionPlan,
+  type Step2MissionPlanSlot,
+  type Step2PrimarySlot,
+  type Step2RecommendedAction,
+  type Step2SeoPackage,
+  type Step2SupportBrief,
+  type Step2SupportResearchArtifact,
+  type Step2UserState,
+} from "@/lib/directoryiq/step2SupportEngineContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -523,6 +542,24 @@ type ContentAssetState = {
   scoreAfter: number | null;
 };
 
+type Step2SlotRuntime = {
+  internalState: Step2InternalState;
+  userState: Step2UserState;
+  recommendedAction: Step2RecommendedAction;
+  published: boolean;
+  linked: boolean;
+  metadataReady: boolean;
+  qualityPass: boolean;
+  nonDuplicate: boolean;
+  step3Consumable: boolean;
+  countsTowardRequiredFive: boolean;
+  publishedUrl: string | null;
+  researchArtifact: Step2SupportResearchArtifact | null;
+  supportBrief: Step2SupportBrief | null;
+  seoPackage: Step2SeoPackage | null;
+  errorMessage: string | null;
+};
+
 type PersistedMissionState = {
   activeStepId: MissionStepId;
   listingLifecycle: LifecycleState;
@@ -628,12 +665,16 @@ function reinforcementPlanSlot(itemId: BlogReinforcementPlanItem["id"]): Support
   return "unclassified";
 }
 
-function step2StatusLabel(input: { assetStatus: LifecycleState; slotHasValidSupport: boolean; hasUpgradeCandidates: boolean }): string {
-  if (input.slotHasValidSupport) return "Already Valid";
-  if (input.assetStatus === "Published") return "Published";
-  if (input.assetStatus === "Generated" || input.assetStatus === "Approved") return "Needs Review";
-  if (input.hasUpgradeCandidates) return "Upgrade Now";
-  return "Create Now";
+function toStep2PrimarySlot(slotKey: SupportSlotKey): Step2PrimarySlot {
+  if (slotKey === "best_of_recommendation") return "best_of";
+  if (slotKey === "audience_fit_use_case") return "audience_fit";
+  if (slotKey === "location_intent_proximity") return "location_intent";
+  if (slotKey === "comparison_alternatives") return "comparison";
+  return "experience_itinerary";
+}
+
+function step2StatusLabel(state: Step2InternalState): Step2UserState {
+  return toStep2UserState(state);
 }
 
 function stepNavTestIdSuffix(stepId: MissionStepId): string {
@@ -754,6 +795,7 @@ export default function ListingOptimizationClient({
   const [isMobileMapViewport, setIsMobileMapViewport] = useState(false);
   const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
+  const [step2Runtime, setStep2Runtime] = useState<Record<string, Step2SlotRuntime>>({});
 
   useEffect(() => {
     const queryStep = normalizeMissionStepQuery(stepParam);
@@ -1429,6 +1471,117 @@ export default function ListingOptimizationClient({
   const missingSupportSlotsText = supportValidity.missingSlotTypes.map((slot) => slot.label).join(" • ");
   const missionPlanSelectionCount = linkOperations.filter((item) => item.status === "Approved" || item.status === "Published").length;
   const step3Locked = validSupportFoundCount < REQUIRED_VALID_SUPPORT_COUNT;
+  const step2MissionPlan = useMemo<Step2MissionPlan>(() => {
+    const listingName = listing?.listing.listing_name ?? support?.listing.title ?? "Listing";
+    const listingUrl = listing?.listing.listing_url ?? support?.listing.canonicalUrl ?? null;
+    const listingCategory = normalizeText(intentClusters?.items[0]?.title ?? "");
+    const listingSubcategory = normalizeText(intentClusters?.items[1]?.title ?? "");
+    const locationCity = normalizeText(contentStructure?.items[0]?.localModifiers?.[0] ?? "");
+    const locationArea = normalizeText(contentStructure?.items[0]?.localModifiers?.[1] ?? "");
+    const locationRegion = normalizeText(contentStructure?.items[0]?.localModifiers?.[2] ?? "");
+
+    const selectedSlots = (reinforcementPlan?.items ?? []).slice(0, 5).map((item, index) => {
+      const slotKey = reinforcementPlanSlot(item.id);
+      const primarySlot = toStep2PrimarySlot(slotKey);
+      const candidate = normalizedSupportCandidates.find((node) => toStep2PrimarySlot(node.dimensions.primarySlot) === primarySlot) ?? null;
+      const currentState: Step2MissionPlanSlot["current_state"] =
+        candidate?.validityState === "valid"
+          ? "valid"
+          : candidate?.validityState === "upgrade_candidate"
+            ? "upgrade_candidate"
+            : "missing";
+
+      const slotDraft: Step2MissionPlanSlot = {
+        slot_id: item.id,
+        primary_slot: primarySlot,
+        slot_label: normalizeText(item.title) || `Support slot ${index + 1}`,
+        slot_reason: normalizeText(item.rationale) || "Selected from Step 1 mission plan.",
+        target_query_family: [normalizeText(item.title), normalizeText(item.suggestedAngle)].filter(Boolean),
+        recommended_focus_keyword:
+          normalizeText(item.targetIntent) ||
+          normalizeText(contentStructure?.items[index]?.recommendedTitlePattern) ||
+          normalizeText(item.title),
+        recommended_angle: normalizeText(item.suggestedAngle) || normalizeText(item.suggestedContentPurpose) || normalizeText(item.title),
+        existing_candidate_post_id: candidate?.candidate.id ?? null,
+        existing_candidate_url: candidate?.candidate.url ?? null,
+        existing_candidate_title: candidate?.candidate.title ?? null,
+        current_state: currentState,
+        recommended_action: "create",
+        counts_toward_required_five_now: candidate?.validityState === "valid",
+        step1_confidence: 0.8,
+        selected_for_mission: true,
+      };
+      return {
+        ...slotDraft,
+        recommended_action: classifySlotAction(slotDraft),
+      };
+    });
+
+    return {
+      listing_id: effectiveListingId,
+      site_id: siteIdParam ?? null,
+      listing_title: listingName,
+      listing_url: listingUrl,
+      listing_type: "listing",
+      listing_category: listingCategory,
+      listing_subcategory: listingSubcategory,
+      location_city: locationCity,
+      location_area: locationArea,
+      location_region: locationRegion,
+      landmarks: [],
+      differentiators: [],
+      audience_fits: [],
+      core_entities: [listingName],
+      required_valid_support_count: REQUIRED_VALID_SUPPORT_COUNT,
+      selected_slots: selectedSlots,
+    };
+  }, [
+    contentStructure,
+    effectiveListingId,
+    intentClusters,
+    listing,
+    normalizedSupportCandidates,
+    reinforcementPlan,
+    siteIdParam,
+    support,
+  ]);
+  const step2MissionSlots = step2MissionPlan.selected_slots;
+
+  useEffect(() => {
+    if (!step2MissionSlots.length) return;
+    setStep2Runtime((previous) => {
+      const next = { ...previous };
+      for (const slot of step2MissionSlots) {
+        if (next[slot.slot_id]) continue;
+        const isConfirmed = slot.recommended_action === "confirm" && slot.counts_toward_required_five_now;
+        next[slot.slot_id] = {
+          internalState: isConfirmed ? "confirmed_valid" : "not_started",
+          userState: step2StatusLabel(isConfirmed ? "confirmed_valid" : "not_started"),
+          recommendedAction: slot.recommended_action,
+          published: isConfirmed,
+          linked: isConfirmed,
+          metadataReady: isConfirmed,
+          qualityPass: isConfirmed,
+          nonDuplicate: true,
+          step3Consumable: isConfirmed,
+          countsTowardRequiredFive: slot.counts_toward_required_five_now,
+          publishedUrl: slot.existing_candidate_url,
+          researchArtifact: null,
+          supportBrief: null,
+          seoPackage: null,
+          errorMessage: null,
+        };
+      }
+      return next;
+    });
+  }, [step2MissionSlots]);
+
+  const step2Progress = useMemo(() => {
+    const slotStates = step2MissionSlots.map((slot) => ({
+      counts_toward_required_five: step2Runtime[slot.slot_id]?.countsTowardRequiredFive ?? slot.counts_toward_required_five_now,
+    }));
+    return progressTowardRequiredValid(slotStates);
+  }, [step2MissionSlots, step2Runtime]);
 
   const largestGap = gaps?.items[0] ?? null;
   const fastestWinLink = linkOperations.find((item) => item.status === "Recommended") ?? null;
@@ -1572,8 +1725,16 @@ export default function ListingOptimizationClient({
     };
   }
 
-  async function generateContentDraft(item: BlogReinforcementPlanItem, slot: number) {
-    if (!effectiveListingId) return;
+  async function generateContentDraft(
+    item: BlogReinforcementPlanItem,
+    slot: number,
+    contractInput?: {
+      missionPlanSlot?: Step2MissionPlanSlot;
+      supportBrief?: Step2SupportBrief;
+      seoPackage?: Step2SeoPackage;
+    }
+  ): Promise<boolean> {
+    if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
 
     setContentAssets((previous) => ({
@@ -1588,6 +1749,13 @@ export default function ListingOptimizationClient({
         type: "local_guide",
         focus_topic: current.focusTopic,
         title: current.title,
+        step2_contract: contractInput
+          ? {
+              mission_plan_slot: contractInput.missionPlanSlot,
+              support_brief: contractInput.supportBrief,
+              seo_package: contractInput.seoPackage,
+            }
+          : undefined,
       }),
     });
     const json = (await res.json().catch(() => ({}))) as { draft_html?: string; error?: { message?: string } | string };
@@ -1597,7 +1765,7 @@ export default function ListingOptimizationClient({
         ...previous,
         [item.id]: { ...current, status: "Recommended" },
       }));
-      return;
+      return false;
     }
 
     setContentAssets((previous) => ({
@@ -1609,10 +1777,11 @@ export default function ListingOptimizationClient({
       },
     }));
     setNotice(`Generated draft for ${current.title}.`);
+    return true;
   }
 
-  async function generateContentImage(item: BlogReinforcementPlanItem, slot: number) {
-    if (!effectiveListingId) return;
+  async function generateContentImage(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
+    if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
 
     const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/image${siteQuery}`, {
@@ -1624,7 +1793,7 @@ export default function ListingOptimizationClient({
 
     if (!res.ok) {
       setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image." });
-      return;
+      return false;
     }
 
     setContentAssets((previous) => ({
@@ -1636,10 +1805,11 @@ export default function ListingOptimizationClient({
       },
     }));
     setNotice(`Generated featured image for ${current.title}.`);
+    return true;
   }
 
-  async function approveContentAsset(item: BlogReinforcementPlanItem, slot: number) {
-    if (!effectiveListingId) return;
+  async function approveContentAsset(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
+    if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
 
     const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview${siteQuery}`, {
@@ -1655,7 +1825,7 @@ export default function ListingOptimizationClient({
 
     if (!res.ok) {
       setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to approve content asset." });
-      return;
+      return false;
     }
 
     setContentAssets((previous) => ({
@@ -1670,12 +1840,13 @@ export default function ListingOptimizationClient({
       },
     }));
     setNotice(`${current.title} approved for publish.`);
+    return true;
   }
 
-  async function publishContentAsset(item: BlogReinforcementPlanItem, slot: number) {
-    if (!effectiveListingId) return;
+  async function publishContentAsset(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
+    if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
-    if (!current.approvalToken) return;
+    if (!current.approvalToken) return false;
 
     const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/publish${siteQuery}`, {
       method: "POST",
@@ -1689,7 +1860,7 @@ export default function ListingOptimizationClient({
     const json = (await res.json().catch(() => ({}))) as { published_url?: string; error?: { message?: string } | string };
     if (!res.ok) {
       setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset." });
-      return;
+      return false;
     }
 
     setContentAssets((previous) => ({
@@ -1713,6 +1884,146 @@ export default function ListingOptimizationClient({
 
     await loadListingAndIntegrations();
     setNotice(`${current.title} published to site.`);
+    return true;
+  }
+
+  function patchStep2Runtime(slotId: string, patch: Partial<Step2SlotRuntime>) {
+    setStep2Runtime((previous) => {
+      const current = previous[slotId];
+      if (!current) return previous;
+      const nextState = patch.internalState ?? current.internalState;
+      return {
+        ...previous,
+        [slotId]: {
+          ...current,
+          ...patch,
+          internalState: nextState,
+          userState: step2StatusLabel(nextState),
+        },
+      };
+    });
+  }
+
+  async function executeStep2SlotPipeline(input: {
+    missionSlot: Step2MissionPlanSlot;
+    item: BlogReinforcementPlanItem;
+    slot: number;
+  }) {
+    const slotId = input.missionSlot.slot_id;
+    const runtime = step2Runtime[slotId];
+    if (!runtime) return;
+
+    const action = classifySlotAction(input.missionSlot);
+    if (action === "confirm") {
+      const validity = normalizeSlotValidity({
+        published: true,
+        linked: true,
+        metadata_ready: true,
+        relevant: true,
+        slot_strong: true,
+        quality_pass: true,
+        non_duplicate: true,
+        step3_consumable: true,
+      });
+      patchStep2Runtime(slotId, {
+        internalState: "confirmed_valid",
+        published: true,
+        linked: true,
+        metadataReady: true,
+        qualityPass: true,
+        nonDuplicate: true,
+        step3Consumable: true,
+        countsTowardRequiredFive: validity.counts_toward_required_five,
+        publishedUrl: input.missionSlot.existing_candidate_url,
+        errorMessage: null,
+      });
+      setNotice(`${input.missionSlot.slot_label} already satisfies valid-support contract.`);
+      return;
+    }
+
+    patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null });
+    const relatedResults = (contentStructure?.items ?? [])
+      .slice(0, 5)
+      .map((entry, index) => ({
+        title: normalizeText(entry.recommendedTitlePattern || entry.suggestedH1 || entry.title) || `Result ${index + 1}`,
+        url: `https://research.local/${slugify(input.missionSlot.recommended_focus_keyword)}/${index + 1}`,
+        rank: index + 1,
+      }));
+    const researchArtifact = buildSupportResearchArtifact({
+      slot: input.missionSlot,
+      listingTitle: step2MissionPlan.listing_title,
+      locationCity: step2MissionPlan.location_city,
+      locationRegion: step2MissionPlan.location_region,
+      serpTopResults: relatedResults,
+      competitorHeadings: contentStructure?.items.flatMap((entry) => entry.suggestedSections).slice(0, 8),
+      userQuestions: contentStructure?.items.flatMap((entry) => entry.faqThemes).slice(0, 6),
+    });
+
+    const supportBrief = buildSupportBrief({
+      slot: input.missionSlot,
+      plan: step2MissionPlan,
+      research: researchArtifact,
+    });
+    const seoPackage = buildSeoPackageFromBrief(supportBrief);
+    patchStep2Runtime(slotId, {
+      internalState: "brief_ready",
+      researchArtifact,
+      supportBrief,
+      seoPackage,
+      metadataReady: true,
+      recommendedAction: action,
+    });
+
+    patchStep2Runtime(slotId, { internalState: "generating" });
+    const generated = await generateContentDraft(input.item, input.slot, {
+      missionPlanSlot: input.missionSlot,
+      supportBrief,
+      seoPackage,
+    });
+    if (!generated) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Draft generation failed." });
+      return;
+    }
+
+    const imageGenerated = await generateContentImage(input.item, input.slot);
+    if (imageGenerated) {
+      patchStep2Runtime(slotId, { internalState: "image_ready" });
+    }
+
+    patchStep2Runtime(slotId, { internalState: "publishing" });
+    const approved = await approveContentAsset(input.item, input.slot);
+    if (!approved) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Approval preview failed." });
+      return;
+    }
+    const published = await publishContentAsset(input.item, input.slot);
+    if (!published) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Publish failed." });
+      return;
+    }
+
+    const validity = normalizeSlotValidity({
+      published: true,
+      linked: true,
+      metadata_ready: true,
+      relevant: true,
+      slot_strong: true,
+      quality_pass: imageGenerated,
+      non_duplicate: true,
+      step3_consumable: true,
+    });
+    patchStep2Runtime(slotId, {
+      internalState: validity.final_state,
+      published: true,
+      linked: true,
+      metadataReady: true,
+      qualityPass: imageGenerated,
+      nonDuplicate: true,
+      step3Consumable: true,
+      countsTowardRequiredFive: validity.counts_toward_required_five,
+      publishedUrl: contentAssets[input.item.id]?.publishedUrl || null,
+      errorMessage: validity.final_state === "needs_review" ? "Published but missing one or more validity checks." : null,
+    });
   }
 
   function setLinkMissionPlan(itemKey: string, inMissionPlan: boolean) {
@@ -2252,32 +2563,46 @@ export default function ListingOptimizationClient({
                   </div>
                 ) : null}
 
-                <div className="mt-4 space-y-2" data-testid="step3-content-assets">
-                  {(reinforcementPlan?.items ?? []).slice(0, 5).map((item, index) => {
+                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300" data-testid="step2-progress-summary">
+                  <div>
+                    Valid support from Step 2 engine: {step2Progress.valid_count} / {step2Progress.required_count}
+                  </div>
+                  <div className="mt-1">Mission plan slots: {step2MissionSlots.length}</div>
+                </div>
+
+                <div className="mt-4 space-y-2" data-testid="step2-slot-list">
+                  {step2MissionSlots.map((missionSlot, index) => {
+                    const item = (reinforcementPlan?.items ?? []).find((candidate) => candidate.id === missionSlot.slot_id);
+                    if (!item) return null;
                     const slot = index + 1;
                     const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
                     const blueprint = contentStructure?.items[index] ?? null;
-                    const slotKey = reinforcementPlanSlot(item.id);
-                    const slotHasValidSupport = normalizedSupportCandidates.some(
-                      (candidate) => candidate.validityState === "valid" && candidate.dimensions.primarySlot === slotKey
-                    );
-                    const contractStatus = step2StatusLabel({
-                      assetStatus: asset.status,
-                      slotHasValidSupport,
-                      hasUpgradeCandidates: supportValidity.upgradeCandidateCount > 0,
-                    });
+                    const runtime = step2Runtime[missionSlot.slot_id];
+                    const contractStatus = runtime?.userState ?? step2StatusLabel("not_started");
+                    const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
 
                     return (
-                      <div key={item.id} className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                        data-testid={`step2-slot-row-${missionSlot.slot_id}`}
+                      >
                         <div className="flex flex-wrap items-start justify-between gap-2">
                           <div>
                             <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
                             <div className="mt-1 text-xs text-slate-400">{normalizeText(item.suggestedContentPurpose)}</div>
                             <div className="mt-1 text-[11px] text-slate-300">
-                              Type: <span className="text-slate-100">{normalizeText(item.suggestedTargetSurface)}</span> • Status: <span className="text-slate-100">{contractStatus}</span>
+                              Action: <span className="text-slate-100">{runtime?.recommendedAction ?? missionSlot.recommended_action}</span>
+                              {" • "}
+                              Counts toward 5: <span className="text-slate-100">{runtime?.countsTowardRequiredFive ? "yes" : "no"}</span>
                             </div>
                           </div>
-                          <span className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}>{contractStatus}</span>
+                          <span
+                            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}
+                            data-testid={`step2-slot-status-${missionSlot.slot_id}`}
+                          >
+                            {contractStatus}
+                          </span>
                         </div>
 
                         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -2287,13 +2612,20 @@ export default function ListingOptimizationClient({
                           </div>
                           <div className="rounded-lg border border-white/10 bg-black/20 p-2">
                             <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Internal linking plan</div>
-                            <div className="mt-1 text-xs text-slate-200">Link back to {displayName} and 1 related authority post.</div>
+                            <div className="mt-1 text-xs text-slate-200">Listing link required with contextual anchor.</div>
                           </div>
                         </div>
 
                         <div className="mt-3 flex flex-wrap gap-2">
-                          <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void generateContentDraft(item, slot)}>Generate Draft</button>
-                          <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" onClick={() => void generateContentImage(item, slot)}>Generate Image</button>
+                          <button
+                            type="button"
+                            className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                            onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
+                            data-testid={`step2-slot-run-${missionSlot.slot_id}`}
+                          >
+                            {missionSlot.recommended_action === "confirm" ? "Confirm Valid Slot" : "Run Slot Pipeline"}
+                          </button>
+                          <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" onClick={() => void generateContentDraft(item, slot)}>Generate Draft</button>
                           <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100" onClick={() => void approveContentAsset(item, slot)} disabled={asset.status === "Detected" || asset.status === "Recommended"}>Approve</button>
                           <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/25 px-3 py-1.5 text-xs font-medium text-emerald-50" onClick={() => void publishContentAsset(item, slot)} disabled={asset.status !== "Approved"}>Publish to Site</button>
                         </div>
@@ -2302,7 +2634,21 @@ export default function ListingOptimizationClient({
                           <div>Supports listing: <span className="text-slate-100">{displayName}</span></div>
                           <div>Image state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.imageStatus)}`}>{asset.imageStatus}</span></div>
                           <div>Flywheel state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.flywheelStatus)}`}>{asset.flywheelStatus}</span></div>
-                          {asset.publishedUrl ? <div>Published URL: <a href={asset.publishedUrl} target="_blank" rel="noreferrer" className="text-cyan-200 underline">{asset.publishedUrl}</a></div> : null}
+                          {runtime?.errorMessage ? <div data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>Needs review: {runtime.errorMessage}</div> : null}
+                          {publishedUrl ? (
+                            <div>
+                              Published URL:{" "}
+                              <a
+                                href={publishedUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-cyan-200 underline"
+                                data-testid={`step2-view-post-${missionSlot.slot_id}`}
+                              >
+                                {publishedUrl}
+                              </a>
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     );
