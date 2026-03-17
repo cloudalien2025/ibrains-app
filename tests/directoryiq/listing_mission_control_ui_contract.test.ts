@@ -29,8 +29,8 @@ describe("listing mission control rebuild contract", () => {
   it("uses only three mission steps and opens Step 1 by default", () => {
     expect(source).toContain("MISSION_CONTROL_STEPS");
     expect(source).toContain("missionStepContract(\"find-support\")");
-    expect(source).toContain("missionStepContract(\"create-support\")");
     expect(source).toContain("missionStepContract(\"optimize-listing\")");
+    expect(source).toContain("activeStepId === \"create-support\"");
     expect(source).toContain("useState<MissionStepId>(\"find-support\")");
     expect(source).not.toContain("Step 4:");
     expect(source).not.toContain("Step 5:");
@@ -64,11 +64,14 @@ describe("listing mission control rebuild contract", () => {
   it("shows Step 2 generated content assets tied back to listing support", () => {
     expect(source).toContain("data-testid=\"step2-slot-list\"");
     expect(source).toContain("data-testid=\"step2-progress-summary\"");
+    expect(source).toContain("data-testid=\"step2-next-article-cta\"");
+    expect(source).toContain("data-testid=\"step2-write-next-article\"");
     expect(source).toContain("data-testid={`step2-slot-status-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-actions-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}");
-    expect(source).toContain("Supports listing:");
+    expect(source).toContain("Build Support Articles");
+    expect(source).toContain("Create the articles that help AI engines understand and recommend this listing.");
     expect(source).not.toContain("Run Slot Pipeline");
     expect(source).not.toContain("Confirm Valid Slot");
     expect(source).not.toContain("Generate Draft");
@@ -99,6 +102,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
     expect(source).toContain("deriveStep2StatusLabel(actionInput)");
     expect(source).toContain("shouldAllowStep2PipelineRun(actionInput)");
+    expect(source).toContain("pickStep2NextActionCandidate");
+    expect(source).toContain("summarizeStep2StatusBuckets");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });

@@ -38,7 +38,10 @@ import {
   deriveStep2PrimaryAction,
   deriveStep2SecondaryAction,
   deriveStep2StatusLabel,
+  pickStep2NextActionCandidate,
   shouldAllowStep2PipelineRun,
+  summarizeStep2StatusBuckets,
+  type Step2CardStatusLabel,
 } from "@/lib/directoryiq/step2CardActionContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
@@ -696,6 +699,40 @@ function step2ActionInput(missionSlot: Step2MissionPlanSlot, runtime: Step2SlotR
     recommendedAction: runtime?.recommendedAction ?? missionSlot.recommended_action,
     countsTowardRequiredFive: runtime?.countsTowardRequiredFive ?? missionSlot.counts_toward_required_five_now,
   };
+}
+
+function step2StatusClassName(status: Step2CardStatusLabel): string {
+  if (status === "Live") return "border-emerald-300/40 bg-emerald-400/15 text-emerald-100";
+  if (status === "Ready to Write") return "border-cyan-300/40 bg-cyan-400/15 text-cyan-100";
+  if (status === "Needs Improvement") return "border-amber-300/40 bg-amber-400/15 text-amber-100";
+  if (status === "Working…") return "border-indigo-300/40 bg-indigo-400/15 text-indigo-100";
+  return "border-rose-300/40 bg-rose-400/15 text-rose-100";
+}
+
+function step2CardDescription(input: { status: Step2CardStatusLabel; purpose: string; title: string; listingName: string }): string {
+  const purpose = normalizeText(input.purpose);
+  if (input.status === "Working…") return "DirectoryIQ is building this article now.";
+  if (input.status === "Live") return "This article is live and helping support this listing.";
+  if (input.status === "Needs Improvement") return "This article exists but needs stronger support for this listing.";
+  if (input.status === "Needs Attention") return "We hit a problem while building this article.";
+  if (purpose) return purpose;
+  return `Helps AI engines understand why ${input.listingName} is a strong choice for ${normalizeText(input.title)}.`;
+}
+
+function translateStep2ErrorMessage(raw: string | null | undefined): string {
+  const message = normalizeText(raw);
+  if (!message) return "We couldn't start this article right now. Please try again.";
+  const lower = message.toLowerCase();
+  if (lower.includes("unsupported state")) return "We couldn't start this article right now. Please try again.";
+  if (lower.includes("authenticate") || lower.includes("token") || lower.includes("authorization")) {
+    return "We couldn't verify the site connection for this article. Reconnect the site and try again.";
+  }
+  if (lower.includes("governance validation")) {
+    return "We couldn't complete this article because it did not pass quality checks yet. Please try again.";
+  }
+  if (lower.includes("approval preview failed")) return "We couldn't prepare this article for publishing right now. Please try again.";
+  if (lower.includes("publish failed")) return "We couldn't publish this article right now. Please try again.";
+  return message;
 }
 
 function stepNavTestIdSuffix(stepId: MissionStepId): string {
@@ -1462,7 +1499,6 @@ export default function ListingOptimizationClient({
 
   const selectedMapNode = mapNodes.find((node) => node.id === selectedMapNodeId) ?? null;
   const step1Contract = missionStepContract("find-support");
-  const step2Contract = missionStepContract("create-support");
   const step3Contract = missionStepContract("optimize-listing");
 
   const normalizedSupportCandidates = useMemo(
@@ -1603,6 +1639,49 @@ export default function ListingOptimizationClient({
     }));
     return progressTowardRequiredValid(slotStates);
   }, [step2MissionSlots, step2Runtime]);
+  const step2SlotViewModels = useMemo(() => {
+    return step2MissionSlots
+      .map((missionSlot, index) => {
+        const item = (reinforcementPlan?.items ?? []).find((candidate) => candidate.id === missionSlot.slot_id);
+        if (!item) return null;
+        const slot = index + 1;
+        const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
+        const blueprint = contentStructure?.items[index] ?? null;
+        const runtime = step2Runtime[missionSlot.slot_id];
+        const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
+        const actionInput = step2ActionInput(missionSlot, runtime);
+        const status = deriveStep2StatusLabel(actionInput);
+        const primaryAction = deriveStep2PrimaryAction(actionInput);
+        const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
+        return {
+          missionSlot,
+          item,
+          slot,
+          asset,
+          blueprint,
+          runtime,
+          actionInput,
+          status,
+          primaryAction,
+          secondaryAction,
+        };
+      })
+      .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+  }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime]);
+  const step2StatusBuckets = useMemo(
+    () => summarizeStep2StatusBuckets(step2SlotViewModels.map((entry) => entry.status)),
+    [step2SlotViewModels]
+  );
+  const step2NextCandidate = useMemo(() => {
+    const selected = pickStep2NextActionCandidate(
+      step2SlotViewModels.map((entry) => ({
+        slotId: entry.missionSlot.slot_id,
+        actionInput: entry.actionInput,
+      }))
+    );
+    if (!selected) return null;
+    return step2SlotViewModels.find((entry) => entry.missionSlot.slot_id === selected.slotId) ?? null;
+  }, [step2SlotViewModels]);
 
   const largestGap = gaps?.items[0] ?? null;
   const fastestWinLink = linkOperations.find((item) => item.status === "Recommended") ?? null;
@@ -1779,12 +1858,13 @@ export default function ListingOptimizationClient({
     const json = (await res.json().catch(() => ({}))) as { draft_html?: string; error?: { message?: string } | string };
     if (!res.ok) {
       const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft.";
-      setError({ message });
+      const translatedMessage = translateStep2ErrorMessage(message);
+      setError({ message: translatedMessage });
       setContentAssets((previous) => ({
         ...previous,
         [item.id]: { ...current, status: "Recommended" },
       }));
-      return { ok: false, errorMessage: message };
+      return { ok: false, errorMessage: translatedMessage };
     }
 
     setContentAssets((previous) => ({
@@ -1811,7 +1891,7 @@ export default function ListingOptimizationClient({
     const json = (await res.json().catch(() => ({}))) as { featured_image_url?: string; error?: { message?: string } | string };
 
     if (!res.ok) {
-      setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image." });
+      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image.") });
       return false;
     }
 
@@ -1843,7 +1923,7 @@ export default function ListingOptimizationClient({
     };
 
     if (!res.ok) {
-      setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to approve content asset." });
+      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to approve content asset.") });
       return false;
     }
 
@@ -1878,7 +1958,7 @@ export default function ListingOptimizationClient({
 
     const json = (await res.json().catch(() => ({}))) as { published_url?: string; error?: { message?: string } | string };
     if (!res.ok) {
-      setError({ message: typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset." });
+      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.") });
       return false;
     }
 
@@ -1934,8 +2014,7 @@ export default function ListingOptimizationClient({
 
     const actionInput = step2ActionInput(input.missionSlot, runtime);
     if (!shouldAllowStep2PipelineRun(actionInput)) {
-      const status = deriveStep2StatusLabel(actionInput).toLowerCase();
-      setNotice(`${input.missionSlot.slot_label} is ${status} and has no executable action right now.`);
+      setNotice("This article is already live or currently working. Choose another article.");
       return;
     }
 
@@ -1966,12 +2045,12 @@ export default function ListingOptimizationClient({
     patchStep2Runtime(slotId, { internalState: "publishing" });
     const approved = await approveContentAsset(input.item, input.slot);
     if (!approved) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Approval preview failed." });
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: translateStep2ErrorMessage("Approval preview failed.") });
       return;
     }
     const published = await publishContentAsset(input.item, input.slot);
     if (!published) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Publish failed." });
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: translateStep2ErrorMessage("Publish failed.") });
       return;
     }
 
@@ -2556,8 +2635,8 @@ export default function ListingOptimizationClient({
 
             {activeStepId === "create-support" ? (
               <div data-testid="step-generate-content">
-                <h3 className="text-lg font-semibold text-slate-100">{step2Contract.label}</h3>
-                <p className="mt-1 text-sm text-slate-400">{step2Contract.description}</p>
+                <h3 className="text-lg font-semibold text-slate-100">Build Support Articles</h3>
+                <p className="mt-1 text-sm text-slate-400">Create the articles that help AI engines understand and recommend this listing.</p>
 
                 {actionsLoading || intentClustersLoading || reinforcementPlanLoading || contentStructureLoading ? <div className="mt-3 text-sm text-slate-300">Loading content opportunities...</div> : null}
                 {actionsError || intentClustersError || reinforcementPlanError || contentStructureError ? (
@@ -2571,97 +2650,95 @@ export default function ListingOptimizationClient({
                   </div>
                 ) : null}
 
-                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-xs text-slate-300" data-testid="step2-progress-summary">
-                  <div>
-                    Valid support from Step 2 engine: {step2Progress.valid_count} / {step2Progress.required_count}
+                <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3 text-sm text-slate-200" data-testid="step2-progress-summary">
+                  <div className="font-semibold text-slate-100">
+                    {step2Progress.valid_count} of {step2Progress.required_count} live
                   </div>
-                  <div className="mt-1">Mission plan slots: {step2MissionSlots.length}</div>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs">
+                    <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-emerald-100">Live: {step2StatusBuckets.live}</span>
+                    <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Ready to Write: {step2StatusBuckets.readyToWrite}</span>
+                    <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-rose-100">Needs Attention: {step2StatusBuckets.needsAttention}</span>
+                  </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
+                  <NeonButton
+                    onClick={() => {
+                      if (!step2NextCandidate) return;
+                      void executeStep2SlotPipeline({
+                        missionSlot: step2NextCandidate.missionSlot,
+                        item: step2NextCandidate.item,
+                        slot: step2NextCandidate.slot,
+                      });
+                    }}
+                    disabled={!step2NextCandidate}
+                    data-testid="step2-write-next-article"
+                  >
+                    Write Next Article
+                  </NeonButton>
+                  {!step2NextCandidate ? <span className="text-xs text-slate-400">All articles are currently live or working.</span> : null}
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2MissionSlots.map((missionSlot, index) => {
-                    const item = (reinforcementPlan?.items ?? []).find((candidate) => candidate.id === missionSlot.slot_id);
-                    if (!item) return null;
-                    const slot = index + 1;
-                    const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
-                    const blueprint = contentStructure?.items[index] ?? null;
-                    const runtime = step2Runtime[missionSlot.slot_id];
-                    const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
-                    const actionInput = step2ActionInput(missionSlot, runtime);
-                    const contractStatus = deriveStep2StatusLabel(actionInput);
-                    const primaryAction = deriveStep2PrimaryAction(actionInput);
-                    const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
-
-                    return (
-                      <div
-                        key={item.id}
-                        className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
-                        data-testid={`step2-slot-row-${missionSlot.slot_id}`}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2">
-                          <div>
-                            <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
-                            <div className="mt-1 text-xs text-slate-400">{normalizeText(item.suggestedContentPurpose)}</div>
-                            <div className="mt-1 text-[11px] text-slate-300">
-                              Action: <span className="text-slate-100">{runtime?.recommendedAction ?? missionSlot.recommended_action}</span>
-                              {" • "}
-                              Counts toward 5: <span className="text-slate-100">{runtime?.countsTowardRequiredFive ? "yes" : "no"}</span>
-                            </div>
-                          </div>
-                          <span
-                            className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${lifecycleClassName(asset.status)}`}
-                            data-testid={`step2-slot-status-${missionSlot.slot_id}`}
-                          >
-                            {contractStatus}
-                          </span>
-                        </div>
-
-                        <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">FAQ focus</div>
-                            <div className="mt-1 text-xs text-slate-200">{blueprint?.faqThemes.slice(0, 2).join(" • ") || "Use service, location, and comparison FAQs."}</div>
-                          </div>
-                          <div className="rounded-lg border border-white/10 bg-black/20 p-2">
-                            <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Internal linking plan</div>
-                            <div className="mt-1 text-xs text-slate-200">Listing link required with contextual anchor.</div>
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, status, primaryAction, secondaryAction }) => (
+                    <div
+                      key={item.id}
+                      className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
+                      data-testid={`step2-slot-row-${missionSlot.slot_id}`}
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <div>
+                          <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
+                          <div className="mt-1 text-xs text-slate-300">
+                            {step2CardDescription({
+                              status,
+                              purpose: normalizeText(item.suggestedContentPurpose) || normalizeText(blueprint?.recommendedWinningAngle),
+                              title: item.title,
+                              listingName: displayName,
+                            })}
                           </div>
                         </div>
-
-                        <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
-                          {primaryAction.kind === "run_pipeline" ? (
-                            <button
-                              type="button"
-                              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                              onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
-                              data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}
-                            >
-                              {primaryAction.label}
-                            </button>
-                          ) : null}
-                          {secondaryAction.kind === "view_post" ? (
-                            <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
-                              <a
-                                href={secondaryAction.href}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-cyan-200 underline"
-                                data-testid={`step2-view-post-${missionSlot.slot_id}`}
-                              >
-                                {secondaryAction.label}
-                              </a>
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="mt-2 grid gap-1 text-[11px] text-slate-300">
-                          <div>Supports listing: <span className="text-slate-100">{displayName}</span></div>
-                          <div>Image state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.imageStatus)}`}>{asset.imageStatus}</span></div>
-                          <div>Flywheel state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.flywheelStatus)}`}>{asset.flywheelStatus}</span></div>
-                          {runtime?.errorMessage ? <div data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>Needs review: {runtime.errorMessage}</div> : null}
-                        </div>
+                        <span
+                          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${step2StatusClassName(status)}`}
+                          data-testid={`step2-slot-status-${missionSlot.slot_id}`}
+                        >
+                          {status}
+                        </span>
                       </div>
-                    );
-                  })}
+
+                      <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
+                        {primaryAction.kind === "run_pipeline" ? (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                            onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
+                            data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}
+                          >
+                            {primaryAction.label}
+                          </button>
+                        ) : null}
+                        {secondaryAction.kind === "view_post" ? (
+                          <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
+                            <a
+                              href={secondaryAction.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-cyan-200 underline"
+                              data-testid={`step2-view-post-${missionSlot.slot_id}`}
+                            >
+                              {secondaryAction.label}
+                            </a>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {runtime?.errorMessage ? (
+                        <div className="mt-2 text-xs text-rose-200" data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>
+                          {translateStep2ErrorMessage(runtime.errorMessage)}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
                 </div>
               </div>
             ) : null}
