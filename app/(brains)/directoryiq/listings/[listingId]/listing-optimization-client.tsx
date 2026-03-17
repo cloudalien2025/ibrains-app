@@ -34,6 +34,11 @@ import {
   type Step2SupportResearchArtifact,
   type Step2UserState,
 } from "@/lib/directoryiq/step2SupportEngineContract";
+import {
+  deriveStep2PrimaryAction,
+  deriveStep2SecondaryAction,
+  shouldAllowStep2PipelineRun,
+} from "@/lib/directoryiq/step2CardActionContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -682,6 +687,14 @@ function toStep2PrimarySlot(slotKey: SupportSlotKey): Step2PrimarySlot {
 
 function step2StatusLabel(state: Step2InternalState): Step2UserState {
   return toStep2UserState(state);
+}
+
+function step2ActionInput(missionSlot: Step2MissionPlanSlot, runtime: Step2SlotRuntime | undefined) {
+  return {
+    internalState: runtime?.internalState ?? "not_started",
+    recommendedAction: runtime?.recommendedAction ?? missionSlot.recommended_action,
+    countsTowardRequiredFive: runtime?.countsTowardRequiredFive ?? missionSlot.counts_toward_required_five_now,
+  };
 }
 
 function stepNavTestIdSuffix(stepId: MissionStepId): string {
@@ -1916,34 +1929,14 @@ export default function ListingOptimizationClient({
     const runtime = step2Runtime[slotId];
     if (!runtime) return;
 
-    const action = classifySlotAction(input.missionSlot);
-    if (action === "confirm") {
-      const validity = normalizeSlotValidity({
-        published: true,
-        linked: true,
-        metadata_ready: true,
-        relevant: true,
-        slot_strong: true,
-        quality_pass: true,
-        non_duplicate: true,
-        step3_consumable: true,
-      });
-      patchStep2Runtime(slotId, {
-        internalState: "confirmed_valid",
-        published: true,
-        linked: true,
-        metadataReady: true,
-        qualityPass: true,
-        nonDuplicate: true,
-        step3Consumable: true,
-        countsTowardRequiredFive: validity.counts_toward_required_five,
-        publishedUrl: input.missionSlot.existing_candidate_url,
-        errorMessage: null,
-      });
-      setNotice(`${input.missionSlot.slot_label} already satisfies valid-support contract.`);
+    const actionInput = step2ActionInput(input.missionSlot, runtime);
+    if (!shouldAllowStep2PipelineRun(actionInput)) {
+      const status = step2StatusLabel(actionInput.internalState).toLowerCase();
+      setNotice(`${input.missionSlot.slot_label} is ${status} and has no executable action right now.`);
       return;
     }
 
+    const action = actionInput.recommendedAction;
     patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null });
     const contractInput = buildStep2DraftContractInput(input.missionSlot);
     patchStep2Runtime(slotId, {
@@ -2036,36 +2029,6 @@ export default function ListingOptimizationClient({
       seoPackage,
       researchArtifact,
     };
-  }
-
-  async function generateStep2Draft(input: {
-    missionSlot: Step2MissionPlanSlot;
-    item: BlogReinforcementPlanItem;
-    slot: number;
-  }) {
-    const slotId = input.missionSlot.slot_id;
-    const action = classifySlotAction(input.missionSlot);
-    if (action === "confirm") {
-      setNotice(`${input.missionSlot.slot_label} is already valid and does not need a new draft.`);
-      return;
-    }
-
-    patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null, recommendedAction: action });
-    const contractInput = buildStep2DraftContractInput(input.missionSlot);
-    patchStep2Runtime(slotId, {
-      internalState: "brief_ready",
-      researchArtifact: contractInput.researchArtifact,
-      supportBrief: contractInput.supportBrief,
-      seoPackage: contractInput.seoPackage,
-      metadataReady: true,
-    });
-    patchStep2Runtime(slotId, { internalState: "generating" });
-    const generated = await generateContentDraft(input.item, input.slot, contractInput);
-    if (!generated) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: "Draft generation failed." });
-      return;
-    }
-    patchStep2Runtime(slotId, { internalState: "brief_ready", errorMessage: null });
   }
 
   function setLinkMissionPlan(itemKey: string, inMissionPlan: boolean) {
@@ -2622,6 +2585,9 @@ export default function ListingOptimizationClient({
                     const runtime = step2Runtime[missionSlot.slot_id];
                     const contractStatus = runtime?.userState ?? step2StatusLabel("not_started");
                     const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
+                    const actionInput = step2ActionInput(missionSlot, runtime);
+                    const primaryAction = deriveStep2PrimaryAction(actionInput);
+                    const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
 
                     return (
                       <div
@@ -2658,25 +2624,30 @@ export default function ListingOptimizationClient({
                           </div>
                         </div>
 
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                            onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
-                            data-testid={`step2-slot-run-${missionSlot.slot_id}`}
-                          >
-                            {missionSlot.recommended_action === "confirm" ? "Confirm Valid Slot" : "Run Slot Pipeline"}
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100"
-                            onClick={() => void generateStep2Draft({ missionSlot, item, slot })}
-                            data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}
-                          >
-                            Generate Draft
-                          </button>
-                          <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100" onClick={() => void approveContentAsset(item, slot)} disabled={asset.status === "Detected" || asset.status === "Recommended"}>Approve</button>
-                          <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/25 px-3 py-1.5 text-xs font-medium text-emerald-50" onClick={() => void publishContentAsset(item, slot)} disabled={asset.status !== "Approved"}>Publish to Site</button>
+                        <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
+                          {primaryAction.kind === "run_pipeline" ? (
+                            <button
+                              type="button"
+                              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                              onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
+                              data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}
+                            >
+                              {primaryAction.label}
+                            </button>
+                          ) : null}
+                          {secondaryAction.kind === "view_post" ? (
+                            <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
+                              <a
+                                href={secondaryAction.href}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-cyan-200 underline"
+                                data-testid={`step2-view-post-${missionSlot.slot_id}`}
+                              >
+                                {secondaryAction.label}
+                              </a>
+                            </div>
+                          ) : null}
                         </div>
 
                         <div className="mt-2 grid gap-1 text-[11px] text-slate-300">
@@ -2684,20 +2655,6 @@ export default function ListingOptimizationClient({
                           <div>Image state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.imageStatus)}`}>{asset.imageStatus}</span></div>
                           <div>Flywheel state: <span className={`rounded border px-1.5 py-0.5 ${lifecycleClassName(asset.flywheelStatus)}`}>{asset.flywheelStatus}</span></div>
                           {runtime?.errorMessage ? <div data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>Needs review: {runtime.errorMessage}</div> : null}
-                          {publishedUrl ? (
-                            <div>
-                              Published URL:{" "}
-                              <a
-                                href={publishedUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-cyan-200 underline"
-                                data-testid={`step2-view-post-${missionSlot.slot_id}`}
-                              >
-                                {publishedUrl}
-                              </a>
-                            </div>
-                          ) : null}
                         </div>
                       </div>
                     );

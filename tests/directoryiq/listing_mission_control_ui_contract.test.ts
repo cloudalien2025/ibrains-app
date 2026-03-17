@@ -65,8 +65,15 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("data-testid=\"step2-slot-list\"");
     expect(source).toContain("data-testid=\"step2-progress-summary\"");
     expect(source).toContain("data-testid={`step2-slot-status-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid={`step2-slot-actions-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}");
     expect(source).toContain("Supports listing:");
-    expect(source).toContain("Run Slot Pipeline");
+    expect(source).not.toContain("Run Slot Pipeline");
+    expect(source).not.toContain("Confirm Valid Slot");
+    expect(source).not.toContain("Generate Draft");
+    expect(source).not.toContain(">Approve<");
+    expect(source).not.toContain("onClick={() => void publishContentAsset(item, slot)}");
   });
 
   it("keeps publish layer scoped to Step 2 with required CTA set", () => {
@@ -85,11 +92,13 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("loadListingAndIntegrations()");
   });
 
-  it("routes Generate Draft through Step 2 contract input", () => {
+  it("routes Step 2 pipeline draft generation through contract input with strict gating", () => {
     expect(source).toContain("function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput");
     expect(source).toContain("step2_contract:");
-    expect(source).toContain("onClick={() => void generateStep2Draft({ missionSlot, item, slot })}");
-    expect(source).toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
+    expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
+    expect(source).toContain("shouldAllowStep2PipelineRun(actionInput)");
+    expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
+    expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });
 
   it("avoids sticky overlap and vertical nav bloat regressions", () => {
