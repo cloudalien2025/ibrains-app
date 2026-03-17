@@ -105,6 +105,7 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("pickStep2NextActionCandidate");
     expect(source).toContain("summarizeStep2StatusBuckets");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
+    expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });
 

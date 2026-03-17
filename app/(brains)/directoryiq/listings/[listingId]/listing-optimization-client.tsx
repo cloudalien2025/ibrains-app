@@ -1838,7 +1838,7 @@ export default function ListingOptimizationClient({
       [item.id]: { ...current, status: "Generated" },
     }));
 
-    const draftQuery = siteQuery ? `${siteQuery}&step2_writer=1` : "?step2_writer=1";
+    const draftQuery = siteQuery;
     const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/draft${draftQuery}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
