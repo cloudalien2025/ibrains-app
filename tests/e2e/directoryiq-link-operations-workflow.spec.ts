@@ -401,7 +401,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(primaryAction).toHaveText("Try Again");
 
     expect(draftRequestBody).toBeTruthy();
-    expect(draftRequestUrl).toContain("step2_writer=1");
+    expect(draftRequestUrl).not.toContain("step2_writer=1");
     const step2Contract = (draftRequestBody?.["step2_contract"] as Record<string, unknown> | undefined) ?? undefined;
     expect(step2Contract).toBeTruthy();
     expect(step2Contract?.["research_artifact"]).toBeTruthy();
