@@ -356,7 +356,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("step2-progress-summary")).toBeVisible();
     await expect(page.getByTestId("step2-slot-list")).toBeVisible();
     await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Already Valid|Creating|Publishing|Published|Needs Review|Failed/);
-    await expect(page.getByTestId("step2-slot-run-publish_comparison_decision_post")).toBeVisible();
+    await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
