@@ -405,8 +405,11 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(primaryAction).toHaveCount(0);
 
     await expect(status).toContainText("Needs Attention");
-    await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText("did not pass quality checks");
+    await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText(
+      "Draft validation failed for this article."
+    );
     await expect(primaryAction).toHaveText("Try Again");
+    await expect(page.getByTestId("step2-write-next-article")).toHaveText("Try Again");
 
     expect(draftRequestBody).toBeTruthy();
     expect(draftRequestUrl).not.toContain("step2_writer=1");

@@ -105,8 +105,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
     expect(source).toContain("deriveStep2StatusLabel(actionInput)");
+    expect(source).toContain("deriveStep2SectionCta");
     expect(source).toContain("shouldAllowStep2PipelineRun(actionInput)");
-    expect(source).toContain("pickStep2NextActionCandidate");
     expect(source).toContain("summarizeStep2StatusBuckets");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("step2_writer=1");
