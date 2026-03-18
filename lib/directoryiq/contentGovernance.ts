@@ -33,6 +33,29 @@ export function validateDraftHtml(input: {
   };
 }
 
+export function ensureContextualListingLink(input: {
+  html: string;
+  listingUrl: string;
+  listingTitle: string;
+  focusTopic: string;
+}): string {
+  const html = input.html ?? "";
+  const listingUrl = (input.listingUrl ?? "").trim();
+  if (!listingUrl) return html;
+  if (html.includes(listingUrl)) return html;
+
+  const listingTitle = (input.listingTitle ?? "").trim() || "this listing";
+  const focusTopic = (input.focusTopic ?? "").trim() || "this topic";
+  const sentence = `For ${focusTopic}, see [${listingTitle}](${listingUrl}).`;
+  const normalized = html.trim();
+  if (!normalized) return sentence;
+
+  if (/<(p|div|article|section|main|body)\b/i.test(normalized)) {
+    return `${normalized}\n<p>${sentence}</p>`;
+  }
+  return `${normalized}\n\n${sentence}`;
+}
+
 export function buildImagePrompt(input: { focusTopic: string; imageStylePreference?: string | null }): string {
   const style = (input.imageStylePreference ?? "editorial").trim() || "editorial";
   return `Create a featured image for topic \"${input.focusTopic}\" in ${style} style.`;

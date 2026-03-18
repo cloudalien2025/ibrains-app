@@ -46,6 +46,7 @@ vi.mock("@/lib/openai/serverClient", () => ({
 }));
 vi.mock("@/lib/directoryiq/contentGovernance", () => ({
   buildGovernedPrompt: vi.fn(() => "prompt"),
+  ensureContextualListingLink: vi.fn((input: { html: string }) => input.html),
   validateDraftHtml: vi.fn(() => ({ valid: true, hasContextualListingLink: true, errors: [] })),
   buildImagePrompt: vi.fn(() => "image prompt"),
 }));

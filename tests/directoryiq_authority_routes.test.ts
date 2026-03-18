@@ -22,7 +22,18 @@ const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
 const generateAuthorityDraft = vi.fn(async () => "<p>Draft html</p>");
 const generateAuthorityImage = vi.fn(async () => "data:image/png;base64,abc123");
-const validateDraftHtml = vi.fn(() => ({ valid: true, hasContextualListingLink: true, errors: [] as string[] }));
+const validateDraftHtml = vi.fn((input: { html: string; listingUrl: string }) => {
+  const hasContextualListingLink = Boolean(input.listingUrl) && input.html.includes(input.listingUrl);
+  return {
+    valid: hasContextualListingLink,
+    hasContextualListingLink,
+    errors: hasContextualListingLink ? ([] as string[]) : ["Draft must include a contextual in-body link to the listing URL."],
+  };
+});
+const ensureContextualListingLink = vi.fn((input: { html: string; listingUrl: string; listingTitle: string; focusTopic: string }) => {
+  if (!input.listingUrl || input.html.includes(input.listingUrl)) return input.html;
+  return `${input.html}\n\nFor ${input.focusTopic}, see [${input.listingTitle}](${input.listingUrl}).`;
+});
 const validateOpenAiKeyPresent = vi.fn((value: string | null) => {
   if (!value) throw new AuthorityRouteError(400, "OPENAI_KEY_MISSING", "Missing key");
   return value;
@@ -56,6 +67,7 @@ vi.mock("@/lib/openai/serverClient", () => ({
 vi.mock("@/lib/directoryiq/contentGovernance", () => ({
   buildGovernedPrompt: vi.fn(() => "prompt"),
   validateDraftHtml,
+  ensureContextualListingLink,
   buildImagePrompt: vi.fn(() => "image prompt"),
 }));
 
@@ -205,6 +217,34 @@ describe("directoryiq authority routes", () => {
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
     expect(validateDraftHtml).toHaveBeenCalledWith(
       expect.objectContaining({
+        listingUrl: "https://example.com/listings/fixture-listing",
+      })
+    );
+  });
+
+  it("deterministically enforces contextual listing link before governance validation when draft omits the URL", async () => {
+    generateAuthorityDraft.mockResolvedValueOnce("Plain draft without required listing URL.");
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/2/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Missing Link Draft",
+        focus_topic: "best service area guide",
+        type: "local_guide",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "2" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(ensureContextualListingLink).toHaveBeenCalledTimes(1);
+    expect(validateDraftHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        html: expect.stringContaining("https://example.com/listings/fixture-listing"),
         listingUrl: "https://example.com/listings/fixture-listing",
       })
     );
