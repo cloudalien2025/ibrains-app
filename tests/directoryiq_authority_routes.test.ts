@@ -131,4 +131,38 @@ describe("directoryiq authority routes", () => {
     expect(String(json.error?.message ?? "")).toContain("Draft failed governance validation");
     expect(String(json.error?.details ?? "")).toContain("Missing contextual listing link.");
   });
+
+  it("uses listing URL fallback fields from listing raw_json for draft generation", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: null,
+        raw_json: {
+          description: "Sample listing description",
+          profile_url: "https://example.com/listings/fixture-listing",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Best in Miami",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
+  });
 });

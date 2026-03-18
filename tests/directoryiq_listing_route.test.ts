@@ -105,6 +105,36 @@ describe("directoryiq listing detail route proxy", () => {
     expect(json.listing.mainImageUrl).toBe("https://cdn.example.com/hero.jpg");
   });
 
+  it("normalizes listing_url from upstream permalink/profile_url fields", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          listing: {
+            listing_id: "3",
+            listing_name: "Listing 3",
+            permalink: "https://example.com/listings/3",
+            profile_url: "https://example.com/profile/3",
+          },
+        }),
+        {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/3");
+
+    const res = await GET(req, { params: { listingId: "3" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.listing.listing_url).toBe("https://example.com/profile/3");
+  });
+
   it("forwards Cloudflare Access JWT assertion header for external auth", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ listing: { listing_id: "3" } }), {
