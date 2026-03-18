@@ -32,6 +32,7 @@ export type Step2MissionPlan = {
 export type Step2MissionPlanSlot = {
   slot_id: string;
   primary_slot: Step2PrimarySlot;
+  listing_url?: string | null;
   slot_label: string;
   slot_reason: string;
   target_query_family: string[];
