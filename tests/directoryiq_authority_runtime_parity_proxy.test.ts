@@ -12,6 +12,7 @@ const upsertAuthorityPostDraft = vi.fn(async () => {});
 const normalizePostType = vi.fn(() => "local_guide");
 const normalizeSlot = vi.fn(() => 1);
 const buildGovernedPrompt = vi.fn(() => "prompt");
+const ensureContextualListingLink = vi.fn((input: { html: string }) => input.html);
 const validateDraftHtml = vi.fn(() => ({ valid: true, hasContextualListingLink: true, errors: [] as string[] }));
 const generateAuthorityDraft = vi.fn(async () => "<p>draft</p><a href=\"https://example.com/listings/acme\">link</a>");
 const validateOpenAiKeyPresent = vi.fn((value: string) => value);
@@ -54,6 +55,7 @@ vi.mock("@/app/api/directoryiq/_utils/authority", () => ({
 
 vi.mock("@/lib/directoryiq/contentGovernance", () => ({
   buildGovernedPrompt,
+  ensureContextualListingLink,
   validateDraftHtml,
 }));
 

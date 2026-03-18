@@ -14,7 +14,7 @@ import {
   logAuthorityError,
   logAuthorityInfo,
 } from "@/app/api/directoryiq/_utils/authorityErrors";
-import { buildGovernedPrompt, validateDraftHtml } from "@/lib/directoryiq/contentGovernance";
+import { buildGovernedPrompt, ensureContextualListingLink, validateDraftHtml } from "@/lib/directoryiq/contentGovernance";
 import { generateAuthorityDraft, validateOpenAiKeyPresent } from "@/lib/openai/serverClient";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
@@ -137,7 +137,13 @@ export async function POST(
       focusTopic,
     });
 
-    const html = await generateAuthorityDraft({ apiKey, prompt });
+    const generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+    const html = ensureContextualListingLink({
+      html: generatedHtml,
+      listingUrl,
+      listingTitle: listingName,
+      focusTopic,
+    });
     const validation = validateDraftHtml({ html, listingUrl });
 
     if (!validation.valid) {
