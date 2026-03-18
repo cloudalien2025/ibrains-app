@@ -165,4 +165,48 @@ describe("directoryiq authority routes", () => {
     expect(json.ok).toBe(true);
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
   });
+
+  it("uses step2 contract mission plan listing_url fallback for reciprocal slot draft generation", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: null,
+        raw_json: {
+          description: "Sample listing description",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/4/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Reciprocal support post",
+        focus_topic: "supportive scenario guide",
+        type: "local_guide",
+        step2_contract: {
+          mission_plan_slot: {
+            slot_id: "publish_reciprocal_support_post",
+            listing_url: "https://example.com/listings/fixture-listing",
+          },
+        },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "4" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
+    expect(validateDraftHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        listingUrl: "https://example.com/listings/fixture-listing",
+      })
+    );
+  });
 });
