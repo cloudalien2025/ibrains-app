@@ -36,9 +36,28 @@ export type Step2SummaryBucket = {
   needsAttention: number;
 };
 
+export type Step2SectionCta =
+  | { kind: "none" }
+  | { kind: "setup"; label: "Connect OpenAI in Signal Sources" }
+  | {
+      kind: "run_pipeline";
+      slotId: string;
+      label: "Try Again" | "Fix Article Setup" | "Write Next Article" | "Improve Next Article";
+      blockerMessage: string | null;
+    };
+
 type Step2NextActionCandidateInput = {
   slotId: string;
   actionInput: Omit<Step2CardActionInput, "publishedUrl">;
+};
+
+type Step2SectionCtaInput = {
+  globalSetupBlocked: boolean;
+  items: Array<{
+    slotId: string;
+    primaryAction: Step2PrimaryAction;
+    blockerMessage?: string | null;
+  }>;
 };
 
 export type Step2CardActionInput = {
@@ -172,4 +191,86 @@ export function pickStep2NextActionCandidate(
   const improveCandidate = candidates.find((item) => item.primaryAction.label === "Improve Article");
   if (improveCandidate) return improveCandidate;
   return candidates[0] ?? null;
+}
+
+function normalizeText(value: string | null | undefined): string {
+  if (!value) return "";
+  return value.replace(/\s+/g, " ").trim();
+}
+
+export function isStep2SetupBlockerMessage(value: string | null | undefined): boolean {
+  const lower = normalizeText(value).toLowerCase();
+  if (!lower) return false;
+  return (
+    lower.includes("openai_key_missing") ||
+    lower.includes("openai api not configured") ||
+    lower.includes("openai is not configured for this site") ||
+    lower.includes("authenticate") ||
+    lower.includes("authorization") ||
+    lower.includes("token invalid")
+  );
+}
+
+export function deriveSafeStep2BlockerMessage(input: {
+  message?: string | null;
+  code?: string | null;
+}): string {
+  const code = normalizeText(input.code).toUpperCase();
+  const message = normalizeText(input.message);
+  const lower = message.toLowerCase();
+
+  if (code === "OPENAI_KEY_MISSING" || isStep2SetupBlockerMessage(message)) {
+    return "OpenAI is not configured for this site.";
+  }
+  if (code === "OPENAI_TIMEOUT" || lower.includes("timed out") || lower.includes("timeout")) {
+    return "Upstream generation timed out.";
+  }
+  if (code === "DRAFT_VALIDATION_FAILED" || lower.includes("draft failed governance validation")) {
+    return "Draft validation failed for this article.";
+  }
+  if (code === "OPENAI_AUTH" || lower.includes("authenticate") || lower.includes("authorization")) {
+    return "Site connection needs attention.";
+  }
+  if (code === "OPENAI_UPSTREAM" || code === "OPENAI_RATE_LIMIT") {
+    return "Article generation is temporarily unavailable.";
+  }
+  if (!message) return "We couldn't start this article right now. Please try again.";
+  return message;
+}
+
+export function deriveStep2SectionCta(input: Step2SectionCtaInput): Step2SectionCta {
+  if (input.globalSetupBlocked) {
+    return { kind: "setup", label: "Connect OpenAI in Signal Sources" };
+  }
+
+  for (const item of input.items) {
+    if (item.primaryAction.kind !== "run_pipeline") continue;
+    if (item.primaryAction.label === "Try Again") {
+      const blockerMessage = normalizeText(item.blockerMessage) || null;
+      return {
+        kind: "run_pipeline",
+        slotId: item.slotId,
+        label: isStep2SetupBlockerMessage(blockerMessage) ? "Fix Article Setup" : "Try Again",
+        blockerMessage,
+      };
+    }
+    if (item.primaryAction.label === "Write Article") {
+      return {
+        kind: "run_pipeline",
+        slotId: item.slotId,
+        label: "Write Next Article",
+        blockerMessage: null,
+      };
+    }
+    if (item.primaryAction.label === "Improve Article") {
+      return {
+        kind: "run_pipeline",
+        slotId: item.slotId,
+        label: "Improve Next Article",
+        blockerMessage: null,
+      };
+    }
+  }
+
+  return { kind: "none" };
 }

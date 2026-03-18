@@ -35,10 +35,12 @@ import {
   type Step2UserState,
 } from "@/lib/directoryiq/step2SupportEngineContract";
 import {
+  deriveSafeStep2BlockerMessage,
   deriveStep2PrimaryAction,
+  deriveStep2SectionCta,
   deriveStep2SecondaryAction,
   deriveStep2StatusLabel,
-  pickStep2NextActionCandidate,
+  isStep2SetupBlockerMessage,
   shouldAllowStep2PipelineRun,
   summarizeStep2StatusBuckets,
   type Step2CardStatusLabel,
@@ -726,33 +728,8 @@ function step2CardDescription(input: { status: Step2CardStatusLabel; purpose: st
 const OPENAI_SETUP_BLOCKER_TITLE = "OpenAI is not configured for this site.";
 const OPENAI_SETUP_BLOCKER_BODY = "Connect it in DirectoryIQ > Signal Sources to generate support articles.";
 
-function isOpenAiSetupMissing(raw: string | null | undefined): boolean {
-  const lower = normalizeText(raw).toLowerCase();
-  if (!lower) return false;
-  return (
-    lower.includes("openai_key_missing") ||
-    lower.includes("openai api not configured") ||
-    lower.includes("openai is not configured for this site")
-  );
-}
-
-function translateStep2ErrorMessage(raw: string | null | undefined): string {
-  const message = normalizeText(raw);
-  if (!message) return "We couldn't start this article right now. Please try again.";
-  const lower = message.toLowerCase();
-  if (isOpenAiSetupMissing(message)) {
-    return `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`;
-  }
-  if (lower.includes("unsupported state")) return "We couldn't start this article right now. Please try again.";
-  if (lower.includes("authenticate") || lower.includes("token") || lower.includes("authorization")) {
-    return "We couldn't verify the site connection for this article. Reconnect the site and try again.";
-  }
-  if (lower.includes("governance validation")) {
-    return "We couldn't complete this article because it did not pass quality checks yet. Please try again.";
-  }
-  if (lower.includes("approval preview failed")) return "We couldn't prepare this article for publishing right now. Please try again.";
-  if (lower.includes("publish failed")) return "We couldn't publish this article right now. Please try again.";
-  return message;
+function translateStep2ErrorMessage(raw: string | null | undefined, code?: string | null | undefined): string {
+  return deriveSafeStep2BlockerMessage({ message: raw, code });
 }
 
 function stepNavTestIdSuffix(stepId: MissionStepId): string {
@@ -1670,11 +1647,11 @@ export default function ListingOptimizationClient({
       typeof supportMetaRecord?.error_message === "string" ? supportMetaRecord.error_message : "",
       supportError ?? "",
     ];
-    return metaMessageCandidates.some((value) => isOpenAiSetupMissing(value));
+    return metaMessageCandidates.some((value) => isStep2SetupBlockerMessage(value));
   }, [supportMeta, supportError]);
 
   const openAiBlockerFromRuntime = useMemo(
-    () => Object.values(step2Runtime).some((runtime) => isOpenAiSetupMissing(runtime.errorMessage)),
+    () => Object.values(step2Runtime).some((runtime) => isStep2SetupBlockerMessage(runtime.errorMessage)),
     [step2Runtime]
   );
 
@@ -1723,16 +1700,20 @@ export default function ListingOptimizationClient({
     () => summarizeStep2StatusBuckets(step2SlotViewModels.map((entry) => entry.status)),
     [step2SlotViewModels]
   );
-  const step2NextCandidate = useMemo(() => {
-    if (step2OpenAiSetupBlocked) return null;
-    const selected = pickStep2NextActionCandidate(
-      step2SlotViewModels.map((entry) => ({
+  const step2SectionCta = useMemo(() => {
+    const selected = deriveStep2SectionCta({
+      globalSetupBlocked: step2OpenAiSetupBlocked,
+      items: step2SlotViewModels.map((entry) => ({
         slotId: entry.missionSlot.slot_id,
-        actionInput: entry.actionInput,
-      }))
-    );
-    if (!selected) return null;
-    return step2SlotViewModels.find((entry) => entry.missionSlot.slot_id === selected.slotId) ?? null;
+        primaryAction: entry.primaryAction,
+        blockerMessage: entry.runtime?.errorMessage ?? null,
+      })),
+    });
+    if (selected.kind !== "run_pipeline") return { action: selected, candidate: null as (typeof step2SlotViewModels)[number] | null };
+    return {
+      action: selected,
+      candidate: step2SlotViewModels.find((entry) => entry.missionSlot.slot_id === selected.slotId) ?? null,
+    };
   }, [step2SlotViewModels, step2OpenAiSetupBlocked]);
 
   const largestGap = gaps?.items[0] ?? null;
@@ -1915,8 +1896,8 @@ export default function ListingOptimizationClient({
     if (!res.ok) {
       const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft.";
       const code = typeof json.error === "string" ? "" : normalizeText(json.error?.code).toUpperCase();
-      const translatedMessage = translateStep2ErrorMessage(message);
-      if (code === "OPENAI_KEY_MISSING" || isOpenAiSetupMissing(message)) {
+      const translatedMessage = translateStep2ErrorMessage(message, code);
+      if (code === "OPENAI_KEY_MISSING" || isStep2SetupBlockerMessage(message)) {
         setError({ message: `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}` });
       } else {
         setError({ message: translatedMessage });
@@ -1949,10 +1930,15 @@ export default function ListingOptimizationClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ focus_topic: current.focusTopic }),
     });
-    const json = (await res.json().catch(() => ({}))) as { featured_image_url?: string; error?: { message?: string } | string };
+    const json = (await res.json().catch(() => ({}))) as { featured_image_url?: string; error?: { message?: string; code?: string } | string };
 
     if (!res.ok) {
-      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image.") });
+      setError({
+        message: translateStep2ErrorMessage(
+          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image.",
+          typeof json.error === "string" ? "" : json.error?.code
+        ),
+      });
       return false;
     }
 
@@ -1980,11 +1966,16 @@ export default function ListingOptimizationClient({
     const json = (await res.json().catch(() => ({}))) as {
       approval_token?: string;
       preview?: { score_delta?: { after?: number } };
-      error?: { message?: string } | string;
+      error?: { message?: string; code?: string } | string;
     };
 
     if (!res.ok) {
-      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to approve content asset.") });
+      setError({
+        message: translateStep2ErrorMessage(
+          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to approve content asset.",
+          typeof json.error === "string" ? "" : json.error?.code
+        ),
+      });
       return false;
     }
 
@@ -2017,9 +2008,17 @@ export default function ListingOptimizationClient({
       }),
     });
 
-    const json = (await res.json().catch(() => ({}))) as { published_url?: string; error?: { message?: string } | string };
+    const json = (await res.json().catch(() => ({}))) as {
+      published_url?: string;
+      error?: { message?: string; code?: string } | string;
+    };
     if (!res.ok) {
-      setError({ message: translateStep2ErrorMessage(typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.") });
+      setError({
+        message: translateStep2ErrorMessage(
+          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.",
+          typeof json.error === "string" ? "" : json.error?.code
+        ),
+      });
       return false;
     }
 
@@ -2732,7 +2731,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
-                  {step2OpenAiSetupBlocked ? (
+                  {step2SectionCta.action.kind === "setup" ? (
                     <>
                       <Link
                         href="/directoryiq/signal-sources?connector=openai"
@@ -2745,23 +2744,29 @@ export default function ListingOptimizationClient({
                         {OPENAI_SETUP_BLOCKER_TITLE} {OPENAI_SETUP_BLOCKER_BODY}
                       </span>
                     </>
-                  ) : (
+                  ) : step2SectionCta.action.kind === "run_pipeline" ? (
                     <>
                       <NeonButton
                         onClick={() => {
-                          if (!step2NextCandidate) return;
+                          if (!step2SectionCta.candidate) return;
                           void executeStep2SlotPipeline({
-                            missionSlot: step2NextCandidate.missionSlot,
-                            item: step2NextCandidate.item,
-                            slot: step2NextCandidate.slot,
+                            missionSlot: step2SectionCta.candidate.missionSlot,
+                            item: step2SectionCta.candidate.item,
+                            slot: step2SectionCta.candidate.slot,
                           });
                         }}
-                        disabled={!step2NextCandidate}
+                        disabled={!step2SectionCta.candidate}
                         data-testid="step2-write-next-article"
                       >
-                        Write Next Article
+                        {step2SectionCta.action.label}
                       </NeonButton>
-                      {!step2NextCandidate ? <span className="text-xs text-slate-400">All articles are currently live or working.</span> : null}
+                      {step2SectionCta.action.blockerMessage ? (
+                        <span className="text-xs text-rose-100/90">{translateStep2ErrorMessage(step2SectionCta.action.blockerMessage)}</span>
+                      ) : null}
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-xs text-slate-400">All articles are currently live or working.</span>
                     </>
                   )}
                 </div>

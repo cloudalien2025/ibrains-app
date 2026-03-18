@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  deriveSafeStep2BlockerMessage,
+  deriveStep2SectionCta,
   deriveStep2PrimaryAction,
   deriveStep2SecondaryAction,
   deriveStep2StatusLabel,
+  isStep2SetupBlockerMessage,
   pickStep2NextActionCandidate,
   shouldAllowStep2DraftGeneration,
   shouldAllowStep2PipelineRun,
@@ -203,5 +206,98 @@ describe("step2 card action contract", () => {
       slotId: "s1",
       primaryAction: { kind: "run_pipeline", label: "Try Again" },
     });
+  });
+
+  it("prioritizes retry blocker at section level over write-next", () => {
+    expect(
+      deriveStep2SectionCta({
+        globalSetupBlocked: false,
+        items: [
+          {
+            slotId: "s1",
+            primaryAction: { kind: "run_pipeline", label: "Try Again" },
+            blockerMessage: "Draft validation failed for this article.",
+          },
+          {
+            slotId: "s2",
+            primaryAction: { kind: "run_pipeline", label: "Write Article" },
+          },
+        ],
+      })
+    ).toEqual({
+      kind: "run_pipeline",
+      slotId: "s1",
+      label: "Try Again",
+      blockerMessage: "Draft validation failed for this article.",
+    });
+  });
+
+  it("uses write-next when no retry blocker exists", () => {
+    expect(
+      deriveStep2SectionCta({
+        globalSetupBlocked: false,
+        items: [
+          {
+            slotId: "s2",
+            primaryAction: { kind: "run_pipeline", label: "Write Article" },
+          },
+        ],
+      })
+    ).toEqual({
+      kind: "run_pipeline",
+      slotId: "s2",
+      label: "Write Next Article",
+      blockerMessage: null,
+    });
+  });
+
+  it("uses setup CTA when generation is globally blocked", () => {
+    expect(
+      deriveStep2SectionCta({
+        globalSetupBlocked: true,
+        items: [
+          {
+            slotId: "s2",
+            primaryAction: { kind: "run_pipeline", label: "Write Article" },
+          },
+        ],
+      })
+    ).toEqual({
+      kind: "setup",
+      label: "Connect OpenAI in Signal Sources",
+    });
+  });
+
+  it("maps setup retry blocker to fix-setup section CTA", () => {
+    expect(
+      deriveStep2SectionCta({
+        globalSetupBlocked: false,
+        items: [
+          {
+            slotId: "s1",
+            primaryAction: { kind: "run_pipeline", label: "Try Again" },
+            blockerMessage: "OpenAI API not configured. Go to DirectoryIQ -> Signal Sources.",
+          },
+        ],
+      })
+    ).toEqual({
+      kind: "run_pipeline",
+      slotId: "s1",
+      label: "Fix Article Setup",
+      blockerMessage: "OpenAI API not configured. Go to DirectoryIQ -> Signal Sources.",
+    });
+  });
+
+  it("surfaces safe blocker text from code/message", () => {
+    expect(deriveSafeStep2BlockerMessage({ code: "OPENAI_KEY_MISSING", message: "any" })).toBe(
+      "OpenAI is not configured for this site."
+    );
+    expect(deriveSafeStep2BlockerMessage({ code: "OPENAI_TIMEOUT", message: "request timed out" })).toBe(
+      "Upstream generation timed out."
+    );
+    expect(deriveSafeStep2BlockerMessage({ code: "DRAFT_VALIDATION_FAILED", message: "raw details" })).toBe(
+      "Draft validation failed for this article."
+    );
+    expect(isStep2SetupBlockerMessage("authorization failed")).toBe(true);
   });
 });
