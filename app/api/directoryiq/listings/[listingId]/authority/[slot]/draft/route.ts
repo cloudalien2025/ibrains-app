@@ -34,6 +34,13 @@ function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unkn
   );
 }
 
+function resolveStep2ContractListingUrl(step2Contract: unknown): string {
+  if (!step2Contract || typeof step2Contract !== "object" || Array.isArray(step2Contract)) return "";
+  const missionPlanSlot = (step2Contract as { mission_plan_slot?: unknown }).mission_plan_slot;
+  if (!missionPlanSlot || typeof missionPlanSlot !== "object" || Array.isArray(missionPlanSlot)) return "";
+  return asString((missionPlanSlot as { listing_url?: unknown }).listing_url);
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -107,7 +114,8 @@ export async function POST(
     const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     const listingSourceId = listing.source_id;
     const listingName = listing.title ?? listingSourceId;
-    const listingUrl = resolveCanonicalListingUrl(raw, listing.url);
+    const listingUrl =
+      resolveCanonicalListingUrl(raw, listing.url) || resolveStep2ContractListingUrl(body.step2_contract);
 
     if (!listingUrl) {
       throw new AuthorityRouteError(
