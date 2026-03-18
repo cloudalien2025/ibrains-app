@@ -23,6 +23,19 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string | null {
+  return (
+    asString(raw.url) ||
+    asString(raw.listing_url) ||
+    asString(raw.profile_url) ||
+    asString(raw.link) ||
+    asString(raw.permalink) ||
+    asString(raw.source_url) ||
+    asString(fallback) ||
+    null
+  );
+}
+
 function resolveDirectoryIqApiBase(): string {
   const raw = (
     process.env.DIRECTORYIQ_API_BASE ??
@@ -116,7 +129,7 @@ function normalizeListingPayload(listingId: string, json: unknown): ListingDetai
   const raw = listingCandidate as Record<string, unknown>;
   const normalizedId = asString(raw.listing_id) || listingId;
   const normalizedName = asString(raw.listing_name) || asString(raw.group_name) || normalizedId;
-  const normalizedUrl = asString(raw.listing_url) || asString(raw.url) || null;
+  const normalizedUrl = resolveCanonicalListingUrl(raw, null);
   const evaluation =
     body.evaluation && typeof body.evaluation === "object" && !Array.isArray(body.evaluation)
       ? (body.evaluation as Record<string, unknown>)
@@ -146,7 +159,7 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
 
   const listingIdFromRaw = asString(raw.listing_id) || listingId;
   const listingName = asString(raw.group_name) || asString(listing?.title) || listingIdFromRaw;
-  const listingUrl = asString(raw.url) || asString(listing?.url) || null;
+  const listingUrl = resolveCanonicalListingUrl(raw, listing?.url);
 
   return {
     listing: {

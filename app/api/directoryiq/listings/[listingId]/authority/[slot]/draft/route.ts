@@ -18,6 +18,22 @@ import { buildGovernedPrompt, validateDraftHtml } from "@/lib/directoryiq/conten
 import { generateAuthorityDraft, validateOpenAiKeyPresent } from "@/lib/openai/serverClient";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string {
+  return (
+    asString(raw.url) ||
+    asString(raw.listing_url) ||
+    asString(raw.profile_url) ||
+    asString(raw.link) ||
+    asString(raw.permalink) ||
+    asString(raw.source_url) ||
+    asString(fallback)
+  );
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -88,9 +104,10 @@ export async function POST(
     if (!listing) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
+    const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     const listingSourceId = listing.source_id;
     const listingName = listing.title ?? listingSourceId;
-    const listingUrl = listing.url ?? "";
+    const listingUrl = resolveCanonicalListingUrl(raw, listing.url);
 
     if (!listingUrl) {
       throw new AuthorityRouteError(
@@ -99,8 +116,6 @@ export async function POST(
         "Listing URL is required to enforce contextual blog-to-listing links."
       );
     }
-
-    const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
     const listingDescription =
       (typeof raw.description === "string" && raw.description) ||
       (typeof raw.content === "string" && raw.content) ||
