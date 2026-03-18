@@ -1548,6 +1548,7 @@ export default function ListingOptimizationClient({
       const slotDraft: Step2MissionPlanSlot = {
         slot_id: item.id,
         primary_slot: primarySlot,
+        listing_url: listingUrl ?? support?.listing.canonicalUrl ?? null,
         slot_label: normalizeText(item.title) || `Support slot ${index + 1}`,
         slot_reason: normalizeText(item.rationale) || "Selected from Step 1 mission plan.",
         target_query_family: [normalizeText(item.title), normalizeText(item.suggestedAngle)].filter(Boolean),
