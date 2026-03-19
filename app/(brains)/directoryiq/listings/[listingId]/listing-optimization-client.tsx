@@ -603,6 +603,15 @@ function normalizeText(value: string | null | undefined): string {
   return value.replace(/[_-]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function firstNonEmptyValue(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return null;
+}
+
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
   return {
     message: json.error?.message ?? fallback,
@@ -1360,7 +1369,7 @@ export default function ListingOptimizationClient({
   }, [effectiveListingId, siteQuery, support, gaps, flywheel, actions, intentClusters, reinforcementPlan, contentStructure, contentStructureLoading, reinforcementPlanLoading, integrations.openaiConfigured, integrations.bdConfigured, DETAIL_REQUEST_TIMEOUT_MS]);
 
   const displayName = listing?.listing.listing_name || support?.listing.title || "Listing";
-  const displayUrl = listing?.listing.listing_url ?? support?.listing.canonicalUrl ?? null;
+  const displayUrl = firstNonEmptyValue(listing?.listing.listing_url, support?.listing.canonicalUrl);
   const baseScore = listing?.evaluation.totalScore ?? 0;
 
   const connectNowFlywheelItems = (flywheel?.items ?? []).filter((item) => item.type !== "category_or_guide_page_should_join_cluster");
@@ -1527,7 +1536,7 @@ export default function ListingOptimizationClient({
   const step3Locked = validSupportFoundCount < REQUIRED_VALID_SUPPORT_COUNT;
   const step2MissionPlan = useMemo<Step2MissionPlan>(() => {
     const listingName = listing?.listing.listing_name ?? support?.listing.title ?? "Listing";
-    const listingUrl = listing?.listing.listing_url ?? support?.listing.canonicalUrl ?? null;
+    const listingUrl = firstNonEmptyValue(support?.listing.canonicalUrl, listing?.listing.listing_url);
     const listingCategory = normalizeText(intentClusters?.items[0]?.title ?? "");
     const listingSubcategory = normalizeText(intentClusters?.items[1]?.title ?? "");
     const locationCity = normalizeText(contentStructure?.items[0]?.localModifiers?.[0] ?? "");
@@ -1548,7 +1557,7 @@ export default function ListingOptimizationClient({
       const slotDraft: Step2MissionPlanSlot = {
         slot_id: item.id,
         primary_slot: primarySlot,
-        listing_url: listingUrl ?? support?.listing.canonicalUrl ?? null,
+        listing_url: listingUrl,
         slot_label: normalizeText(item.title) || `Support slot ${index + 1}`,
         slot_reason: normalizeText(item.rationale) || "Selected from Step 1 mission plan.",
         target_query_family: [normalizeText(item.title), normalizeText(item.suggestedAngle)].filter(Boolean),
@@ -2146,17 +2155,26 @@ export default function ListingOptimizationClient({
   }
 
   function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput {
+    const missionPlanSlot: Step2MissionPlanSlot = {
+      ...missionSlot,
+      listing_url: firstNonEmptyValue(
+        missionSlot.listing_url,
+        support?.listing.canonicalUrl,
+        listing?.listing.listing_url,
+        displayUrl
+      ),
+    };
     const relatedResults = (contentStructure?.items ?? [])
       .slice(0, 5)
       .map((entry, index) => ({
         title:
           normalizeText(entry.recommendedTitlePattern || entry.suggestedH1 || entry.title) ||
           `Result ${index + 1}`,
-        url: `https://research.local/${slugify(missionSlot.recommended_focus_keyword)}/${index + 1}`,
+        url: `https://research.local/${slugify(missionPlanSlot.recommended_focus_keyword)}/${index + 1}`,
         rank: index + 1,
       }));
     const researchArtifact = buildSupportResearchArtifact({
-      slot: missionSlot,
+      slot: missionPlanSlot,
       listingTitle: step2MissionPlan.listing_title,
       locationCity: step2MissionPlan.location_city,
       locationRegion: step2MissionPlan.location_region,
@@ -2166,14 +2184,14 @@ export default function ListingOptimizationClient({
     });
 
     const supportBrief = buildSupportBrief({
-      slot: missionSlot,
+      slot: missionPlanSlot,
       plan: step2MissionPlan,
       research: researchArtifact,
     });
     const seoPackage = buildSeoPackageFromBrief(supportBrief);
 
     return {
-      missionPlanSlot: missionSlot,
+      missionPlanSlot,
       supportBrief,
       seoPackage,
       researchArtifact,
