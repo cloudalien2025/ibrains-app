@@ -2,11 +2,9 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { getDirectoryIqOpenAiKey } from "@/app/api/directoryiq/_utils/integrations";
 import { upsertAuthorityPostDraft } from "@/app/api/directoryiq/_utils/selectionData";
 import { normalizePostType, normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
-import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import {
   AuthorityRouteError,
   authorityErrorResponse,
@@ -45,18 +43,6 @@ export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
 ) {
-  const forceStep2WriterLocal = req.nextUrl.searchParams.get("step2_writer") === "1";
-  if (!forceStep2WriterLocal && !shouldServeDirectoryIqLocally(req)) {
-    const { listingId, slot } = await Promise.resolve(params);
-    return proxyDirectoryIqRequest(
-      req,
-      `/api/directoryiq/listings/${encodeURIComponent(decodeURIComponent(listingId))}/authority/${encodeURIComponent(
-        decodeURIComponent(slot)
-      )}/draft`,
-      "POST"
-    );
-  }
-
   let resolvedListingId = "unknown";
   let slotIndex = 0;
   const reqId = authorityReqId();
