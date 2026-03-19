@@ -298,6 +298,20 @@ describe("step2 card action contract", () => {
     expect(deriveSafeStep2BlockerMessage({ code: "DRAFT_VALIDATION_FAILED", message: "raw details" })).toBe(
       "Draft validation failed for this article."
     );
+    expect(deriveSafeStep2BlockerMessage({ code: "DB_TIMEOUT", message: "connect ETIMEDOUT 45.55.71.52:25060" })).toBe(
+      "Article generation is temporarily unavailable. Please try again."
+    );
+    expect(deriveSafeStep2BlockerMessage({ code: "NETWORK_CONNECTIVITY", message: "getaddrinfo ENOTFOUND" })).toBe(
+      "We couldn't reach a required service. Please try again."
+    );
+    expect(
+      deriveSafeStep2BlockerMessage({
+        code: "BAD_REQUEST",
+        message: "Listing URL is required to enforce contextual blog-to-listing links.",
+      })
+    ).toBe(
+      "Article generation requires a listing URL for contextual links. Reconnect or fix listing URL source, then refresh support data."
+    );
     expect(isStep2SetupBlockerMessage("authorization failed")).toBe(true);
   });
 });

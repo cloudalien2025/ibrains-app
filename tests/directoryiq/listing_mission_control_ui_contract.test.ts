@@ -108,6 +108,12 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("support?.listing.canonicalUrl,");
     expect(source).toContain("listing?.listing.listing_url,");
     expect(source).toContain("displayUrl");
+    expect(source).toContain("const STEP2_LISTING_URL_BLOCKER =");
+    expect(source).toContain("Article generation requires a listing URL for contextual links.");
+    expect(source).toContain("const resolvedListingUrlForDraft = firstNonEmptyValue(");
+    expect(source).toContain("if (!resolvedListingUrlForDraft) {");
+    expect(source).toContain("const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));");
+    expect(source).toContain("if (!hasListingUrlPrerequisite) {");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
     expect(source).toContain("deriveStep2StatusLabel(actionInput)");
