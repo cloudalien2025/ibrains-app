@@ -75,7 +75,7 @@ describe("directoryiq authority runtime parity proxy", () => {
     shouldServeDirectoryIqLocally.mockReturnValue(false);
   });
 
-  it("proxies draft and image routes when request host is not DirectoryIQ API host", async () => {
+  it("proxies image route but serves draft locally when request host is not DirectoryIQ API host", async () => {
     const draftRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
     const imageRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
 
@@ -95,33 +95,25 @@ describe("directoryiq authority runtime parity proxy", () => {
 
     expect(draftRes.status).toBe(200);
     expect(imageRes.status).toBe(200);
-    expect(proxyDirectoryIqRequest).toHaveBeenCalledTimes(2);
+    expect(proxyDirectoryIqRequest).toHaveBeenCalledTimes(1);
     expect(proxyDirectoryIqRequest).toHaveBeenNthCalledWith(
       1,
-      draftReq,
-      "/api/directoryiq/listings/3/authority/1/draft",
-      "POST"
-    );
-    expect(proxyDirectoryIqRequest).toHaveBeenNthCalledWith(
-      2,
       imageReq,
       "/api/directoryiq/listings/3/authority/1/image",
       "POST"
     );
-    expect(ensureUser).not.toHaveBeenCalled();
+    expect(ensureUser).toHaveBeenCalledTimes(1);
+    expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
   });
 
-  it("serves draft locally when step2_writer=1 even if host mismatches", async () => {
+  it("serves draft locally without requiring step2_writer when host mismatches", async () => {
     const draftRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
 
-    const draftReq = new NextRequest(
-      "https://app.ibrains.ai/api/directoryiq/listings/3/authority/1/draft?site_id=s1&step2_writer=1",
-      {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ type: "local_guide", focus_topic: "topic", title: "title" }),
-      }
-    );
+    const draftReq = new NextRequest("https://app.ibrains.ai/api/directoryiq/listings/3/authority/1/draft?site_id=s1", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "local_guide", focus_topic: "topic", title: "title" }),
+    });
 
     const draftRes = await draftRoute.POST(draftReq, { params: { listingId: "3", slot: "1" } });
     const json = await draftRes.json();
