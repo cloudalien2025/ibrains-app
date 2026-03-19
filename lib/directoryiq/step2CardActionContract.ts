@@ -234,6 +234,18 @@ export function deriveSafeStep2BlockerMessage(input: {
   if (code === "OPENAI_UPSTREAM" || code === "OPENAI_RATE_LIMIT") {
     return "Article generation is temporarily unavailable.";
   }
+  if (code === "DB_TIMEOUT" || code === "DB_CONNECTIVITY") {
+    return "Article generation is temporarily unavailable. Please try again.";
+  }
+  if (code === "NETWORK_CONNECTIVITY") {
+    return "We couldn't reach a required service. Please try again.";
+  }
+  if (
+    code === "BAD_REQUEST" &&
+    (lower.includes("listing url is required") || lower.includes("contextual blog-to-listing links"))
+  ) {
+    return "Article generation requires a listing URL for contextual links. Reconnect or fix listing URL source, then refresh support data.";
+  }
   if (!message) return "We couldn't start this article right now. Please try again.";
   return message;
 }

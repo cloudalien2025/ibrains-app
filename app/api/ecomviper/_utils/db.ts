@@ -8,13 +8,85 @@ type PoolClient = {
   release: () => void;
 };
 
+const TRANSIENT_DB_CONNECT_CODES = new Set([
+  "ETIMEDOUT",
+  "ECONNRESET",
+  "ECONNREFUSED",
+  "EHOSTUNREACH",
+  "ENETUNREACH",
+  "ENOTFOUND",
+  "57P01",
+  "57P02",
+  "57P03",
+  "53300",
+]);
+
+const DB_CONNECT_TIMEOUT_MS = Number.parseInt(process.env.DATABASE_CONNECTION_TIMEOUT_MS ?? "4000", 10);
+const DB_MAX_CONNECT_RETRIES = Math.max(1, Math.min(3, Number.parseInt(process.env.DATABASE_CONNECT_MAX_ATTEMPTS ?? "2", 10)));
+const DB_RETRY_BACKOFF_MS = Math.max(50, Number.parseInt(process.env.DATABASE_CONNECT_RETRY_BASE_MS ?? "150", 10));
+
+function getErrorCode(error: unknown): string {
+  if (!error || typeof error !== "object") return "";
+  const code = (error as { code?: unknown }).code;
+  return typeof code === "string" ? code.trim().toUpperCase() : "";
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return typeof error === "string" ? error : "";
+}
+
+function isTransientDbConnectError(error: unknown): boolean {
+  const code = getErrorCode(error);
+  if (TRANSIENT_DB_CONNECT_CODES.has(code)) return true;
+  const lower = getErrorMessage(error).toLowerCase();
+  return (
+    lower.includes("timeout") ||
+    lower.includes("timed out") ||
+    lower.includes("connection terminated unexpectedly") ||
+    lower.includes("connection refused") ||
+    lower.includes("econnreset") ||
+    lower.includes("etimedout")
+  );
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function withDbConnectRetry<T>(label: string, operation: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+  let lastError: unknown;
+  while (attempt < DB_MAX_CONNECT_RETRIES) {
+    attempt += 1;
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientDbConnectError(error) || attempt >= DB_MAX_CONNECT_RETRIES) {
+        throw error;
+      }
+      const backoffMs = DB_RETRY_BACKOFF_MS * attempt;
+      console.warn(
+        `[db] transient connect failure label=${label} code=${getErrorCode(error) || "unknown"} attempt=${attempt}/${DB_MAX_CONNECT_RETRIES}; retrying in ${backoffMs}ms`
+      );
+      await delay(backoffMs);
+    }
+  }
+  throw lastError;
+}
+
 function getPool(): Pool {
   if (!pool) {
     const connectionString = process.env.DATABASE_URL;
     if (!connectionString) {
       throw new Error("DATABASE_URL not configured");
     }
-    pool = new Pool({ connectionString });
+    const poolConfig: { connectionString: string } & Record<string, unknown> = {
+      connectionString,
+      connectionTimeoutMillis: DB_CONNECT_TIMEOUT_MS,
+    };
+    pool = new Pool(poolConfig);
   }
   return pool;
 }
@@ -24,7 +96,7 @@ async function ensureSchema(): Promise<void> {
   if (!schemaInitPromise) {
     schemaInitPromise = (async () => {
       const client = getPool();
-      await client.query(`
+      await withDbConnectRetry("ensure_schema", () => client.query(`
         CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
         CREATE TABLE IF NOT EXISTS users (
@@ -345,7 +417,7 @@ async function ensureSchema(): Promise<void> {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           PRIMARY KEY (user_id, brain_id)
         );
-      `);
+      `));
       schemaReady = true;
     })().catch((error) => {
       schemaInitPromise = null;
@@ -357,13 +429,22 @@ async function ensureSchema(): Promise<void> {
 
 export async function query<T>(text: string, params: unknown[] = []): Promise<T[]> {
   await ensureSchema();
-  const result = await getPool().query(text, params);
-  return result.rows as T[];
+  const client = await withDbConnectRetry("query_connect", () =>
+    (getPool() as unknown as { connect: () => Promise<PoolClient> }).connect()
+  );
+  try {
+    const result = await client.query(text, params);
+    return (result as { rows: T[] }).rows;
+  } finally {
+    client.release();
+  }
 }
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   await ensureSchema();
-  const client = await (getPool() as unknown as { connect: () => Promise<PoolClient> }).connect();
+  const client = await withDbConnectRetry("transaction_connect", () =>
+    (getPool() as unknown as { connect: () => Promise<PoolClient> }).connect()
+  );
   try {
     await client.query("BEGIN");
     const result = await fn(client);

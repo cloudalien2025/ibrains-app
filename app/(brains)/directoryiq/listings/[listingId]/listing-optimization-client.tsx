@@ -736,6 +736,8 @@ function step2CardDescription(input: { status: Step2CardStatusLabel; purpose: st
 
 const OPENAI_SETUP_BLOCKER_TITLE = "OpenAI is not configured for this site.";
 const OPENAI_SETUP_BLOCKER_BODY = "Connect it in DirectoryIQ > Signal Sources to generate support articles.";
+const STEP2_LISTING_URL_BLOCKER =
+  "Article generation requires a listing URL for contextual links. Reconnect or fix listing URL source, then refresh support data.";
 
 function translateStep2ErrorMessage(raw: string | null | undefined, code?: string | null | undefined): string {
   return deriveSafeStep2BlockerMessage({ message: raw, code });
@@ -1881,6 +1883,22 @@ export default function ListingOptimizationClient({
       [item.id]: { ...current, status: "Generated" },
     }));
 
+    const resolvedListingUrlForDraft = firstNonEmptyValue(
+      contractInput?.missionPlanSlot.listing_url,
+      step2MissionPlan.listing_url,
+      support?.listing.canonicalUrl,
+      listing?.listing.listing_url,
+      displayUrl
+    );
+    if (!resolvedListingUrlForDraft) {
+      setError({ message: STEP2_LISTING_URL_BLOCKER });
+      setContentAssets((previous) => ({
+        ...previous,
+        [item.id]: { ...current, status: "Recommended" },
+      }));
+      return { ok: false, errorMessage: STEP2_LISTING_URL_BLOCKER };
+    }
+
     const draftQuery = siteQuery;
     const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/draft${draftQuery}`, {
       method: "POST",
@@ -2097,6 +2115,12 @@ export default function ListingOptimizationClient({
     const action = actionInput.recommendedAction;
     patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null });
     const contractInput = buildStep2DraftContractInput(input.missionSlot);
+    const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));
+    if (!hasListingUrlPrerequisite) {
+      setError({ message: STEP2_LISTING_URL_BLOCKER });
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: STEP2_LISTING_URL_BLOCKER });
+      return;
+    }
     patchStep2Runtime(slotId, {
       internalState: "brief_ready",
       researchArtifact: contractInput.researchArtifact,

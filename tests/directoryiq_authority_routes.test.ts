@@ -249,4 +249,67 @@ describe("directoryiq authority routes", () => {
       })
     );
   });
+
+  it("maps transient DB timeout errors to safe message while preserving reqId/code/details", async () => {
+    generateAuthorityDraft.mockRejectedValueOnce(
+      Object.assign(new Error("connect ETIMEDOUT 45.55.71.52:25060"), {
+        code: "ETIMEDOUT",
+        syscall: "connect",
+        address: "45.55.71.52",
+        port: 25060,
+      })
+    );
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Best in Miami",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.error?.code).toBe("DB_TIMEOUT");
+    expect(json.error?.message).toBe("Article generation is temporarily unavailable. Please try again.");
+    expect(typeof json.error?.reqId).toBe("string");
+    expect(String(json.error?.details ?? "")).toContain("ETIMEDOUT");
+    expect(String(json.error?.details ?? "")).toContain("45.55.71.52");
+    expect(String(json.error?.message ?? "").toLowerCase()).not.toContain("etimedout");
+  });
+
+  it("maps transient network connectivity errors to safe message while preserving reqId/code/details", async () => {
+    generateAuthorityDraft.mockRejectedValueOnce(
+      Object.assign(new Error("getaddrinfo ENOTFOUND upstream.service.local"), {
+        code: "ENOTFOUND",
+        syscall: "getaddrinfo",
+      })
+    );
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Best in Miami",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(503);
+    expect(json.error?.code).toBe("NETWORK_CONNECTIVITY");
+    expect(json.error?.message).toBe("We couldn't reach a required service. Please try again.");
+    expect(typeof json.error?.reqId).toBe("string");
+    expect(String(json.error?.details ?? "")).toContain("ENOTFOUND");
+    expect(String(json.error?.message ?? "").toLowerCase()).not.toContain("enotfound");
+  });
 });
