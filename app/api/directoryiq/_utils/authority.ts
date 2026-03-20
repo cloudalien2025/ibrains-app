@@ -1,4 +1,6 @@
 import { type PostType } from "@/lib/directoryiq/selectionEngine";
+import { AUTHORITY_SLOT_MAX, AUTHORITY_SLOT_MIN, isAuthoritySlotInRange } from "@/lib/directoryiq/authoritySlotContract";
+import { AuthorityRouteError } from "@/app/api/directoryiq/_utils/authorityErrors";
 
 const APPROVAL_TOKEN_SECRET = process.env.DIRECTORYIQ_APPROVAL_TOKEN_SECRET ?? "directoryiq-dev-secret";
 
@@ -12,8 +14,14 @@ type ApprovalPayload = {
 };
 
 export function normalizeSlot(slot: string): number {
-  const parsed = Number.parseInt(slot, 10);
-  if (!Number.isFinite(parsed) || parsed < 1) return 1;
+  const parsed = Number(slot);
+  if (!isAuthoritySlotInRange(parsed)) {
+    throw new AuthorityRouteError(
+      400,
+      "BAD_REQUEST",
+      `Slot must be an integer between ${AUTHORITY_SLOT_MIN} and ${AUTHORITY_SLOT_MAX}.`
+    );
+  }
   return parsed;
 }
 

@@ -102,6 +102,53 @@ describe("directoryiq authority routes", () => {
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts slot 5 for draft generation and persistence", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/5/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Fifth slot draft",
+        focus_topic: "experience itinerary support",
+        type: "contextual_guide",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "5" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(upsertAuthorityPostDraft).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "site-1:321",
+      5,
+      expect.any(Object)
+    );
+  });
+
+  it("rejects out-of-range slot values with BAD_REQUEST", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/6/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Invalid slot draft",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "6" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error?.code).toBe("BAD_REQUEST");
+    expect(String(json.error?.message ?? "")).toContain("between 1 and 5");
+    expect(generateAuthorityDraft).not.toHaveBeenCalled();
+    expect(upsertAuthorityPostDraft).not.toHaveBeenCalled();
+  });
+
   it("returns structured error when OpenAI key is missing", async () => {
     getDirectoryIqOpenAiKey.mockResolvedValueOnce(null as unknown as string);
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");

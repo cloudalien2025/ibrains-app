@@ -12,6 +12,7 @@ import {
   type PostType,
   type RiskTier,
 } from "@/lib/directoryiq/selectionEngine";
+import { AUTHORITY_SLOT_COUNT, AUTHORITY_SLOT_MIN } from "@/lib/directoryiq/authoritySlotContract";
 
 type ListingRow = {
   source_id: string;
@@ -353,10 +354,10 @@ export async function getLastAnalyzedAt(userId: string): Promise<string | null> 
 }
 
 export async function ensureAuthoritySlots(userId: string, listingSourceId: string): Promise<void> {
-  const defaultTypes: PostType[] = ["comparison", "best_of", "contextual_guide", "persona_intent"];
+  const defaultTypes: PostType[] = ["comparison", "best_of", "contextual_guide", "persona_intent", "contextual_guide"];
 
-  for (let i = 0; i < 4; i += 1) {
-    const slot = i + 1;
+  for (let i = 0; i < AUTHORITY_SLOT_COUNT; i += 1) {
+    const slot = AUTHORITY_SLOT_MIN + i;
     await query(
       `
       INSERT INTO directoryiq_authority_posts
