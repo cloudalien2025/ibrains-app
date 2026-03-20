@@ -409,4 +409,83 @@ describe("directoryiq authority routes", () => {
     expect(String(json.error?.details ?? "")).toContain("ENOTFOUND");
     expect(String(json.error?.message ?? "").toLowerCase()).not.toContain("enotfound");
   });
+
+  it("emits reqId-scoped boundary and route summary logs for both success and normalized failure", async () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
+    try {
+      const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+
+      const successReq = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Best in Miami",
+          focus_topic: "best service area guide",
+          type: "comparison",
+        }),
+        headers: { "content-type": "application/json" },
+      });
+      const successRes = await POST(successReq, { params: { listingId: "321", slot: "1" } });
+      expect(successRes.status).toBe(200);
+
+      const successSummaryCall = infoSpy.mock.calls.find(
+        (call) => call[0] === "[directoryiq-step2-draft]" && call[1]?.event === "route_request_success"
+      );
+      expect(successSummaryCall).toBeTruthy();
+      expect(successSummaryCall?.[1]).toMatchObject({
+        routeOrigin: "directoryiq.authority.step2.draft",
+        action: "draft",
+      });
+      expect(typeof successSummaryCall?.[1]?.reqId).toBe("string");
+      expect(typeof successSummaryCall?.[1]?.totalElapsedMs).toBe("number");
+
+      generateAuthorityDraft.mockRejectedValueOnce(
+        Object.assign(new Error("Connection terminated due to connection timeout"), {
+          code: "ETIMEDOUT",
+          syscall: "connect",
+        })
+      );
+
+      const failureReq = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Best in Miami",
+          focus_topic: "best service area guide",
+          type: "comparison",
+        }),
+        headers: { "content-type": "application/json" },
+      });
+      const failureRes = await POST(failureReq, { params: { listingId: "321", slot: "1" } });
+      const failureJson = await failureRes.json();
+      expect(failureRes.status).toBe(503);
+      expect(failureJson.error?.code).toBe("NETWORK_CONNECTIVITY");
+
+      const boundaryFailureIndex = errorSpy.mock.calls.findIndex(
+        (call) =>
+          call[0] === "[directoryiq-step2-draft]" &&
+          call[1]?.event === "boundary_failure" &&
+          call[1]?.boundary === "generateAuthorityDraft"
+      );
+      const routeFailureIndex = errorSpy.mock.calls.findIndex(
+        (call) => call[0] === "[directoryiq-step2-draft]" && call[1]?.event === "route_request_failure"
+      );
+
+      expect(boundaryFailureIndex).toBeGreaterThanOrEqual(0);
+      expect(routeFailureIndex).toBeGreaterThanOrEqual(0);
+      expect(boundaryFailureIndex).toBeLessThan(routeFailureIndex);
+
+      const routeFailureCall = errorSpy.mock.calls[routeFailureIndex];
+      expect(routeFailureCall?.[1]).toMatchObject({
+        routeOrigin: "directoryiq.authority.step2.draft",
+        action: "draft",
+        failingBoundary: "generateAuthorityDraft",
+        finalCode: "NETWORK_CONNECTIVITY",
+      });
+      expect(typeof routeFailureCall?.[1]?.reqId).toBe("string");
+      expect(typeof routeFailureCall?.[1]?.totalElapsedMs).toBe("number");
+    } finally {
+      errorSpy.mockRestore();
+      infoSpy.mockRestore();
+    }
+  });
 });

@@ -141,6 +141,36 @@ function classifyTransientInfraError(error: unknown): {
   };
 }
 
+type Step2Boundary =
+  | "ensureUser"
+  | "getDirectoryIqOpenAiKey"
+  | "resolveListingEvaluation"
+  | "generateAuthorityDraft"
+  | "upsertAuthorityPostDraft";
+
+function compactDetail(value: string, max = 320): string {
+  if (!value) return "";
+  return value.length <= max ? value : `${value.slice(0, max)}...`;
+}
+
+function inferFailureFamily(error: unknown): string {
+  if (error instanceof AuthorityRouteError) {
+    if (error.code.startsWith("OPENAI_")) return "openai";
+    if (error.code.startsWith("DB_")) return "db";
+    if (error.code === "NETWORK_CONNECTIVITY") return "network_connectivity";
+    if (error.code === "DRAFT_VALIDATION_FAILED") return "governance";
+    if (error.code === "BAD_REQUEST" || error.code === "NOT_FOUND" || error.code === "TOKEN_INVALID") return "validation";
+    return "internal";
+  }
+  const rawCode = toErrorCode(error);
+  const rawMessage = toErrorMessage(error).toLowerCase();
+  if (TRANSIENT_DB_ERROR_CODES.has(rawCode) || rawMessage.includes("database") || rawMessage.includes("postgres")) return "db_connectivity";
+  if (TRANSIENT_NETWORK_ERROR_CODES.has(rawCode) || rawMessage.includes("timeout") || rawMessage.includes("timed out")) {
+    return "network_connectivity";
+  }
+  return "internal";
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -151,10 +181,77 @@ export async function POST(
   let listingSourceId = "unknown";
   const reqId = authorityReqId();
   const routeOrigin = "directoryiq.authority.step2.draft";
+  const routeStartedAt = Date.now();
+  let failingBoundary: Step2Boundary | null = null;
+
+  function currentListingForLog(): string {
+    return listingSourceId !== "unknown" ? listingSourceId : resolvedListingId;
+  }
+
+  function currentSlotForLog(): number | undefined {
+    return slotIndex > 0 ? slotIndex : undefined;
+  }
+
+  function logBoundaryEvent(
+    level: "info" | "error",
+    phase: "boundary_start" | "boundary_success" | "boundary_failure",
+    boundary: Step2Boundary,
+    extras?: Record<string, unknown>
+  ): void {
+    const payload = {
+      event: phase,
+      routeOrigin,
+      reqId,
+      action: "draft",
+      listingId: currentListingForLog(),
+      slot: currentSlotForLog(),
+      boundary,
+      ...extras,
+    };
+    if (level === "error") {
+      console.error("[directoryiq-step2-draft]", payload);
+      return;
+    }
+    console.info("[directoryiq-step2-draft]", payload);
+  }
+
+  async function runBoundary<T>(boundary: Step2Boundary, operation: () => Promise<T>): Promise<T> {
+    const startedAt = Date.now();
+    logBoundaryEvent("info", "boundary_start", boundary, { phase: "start" });
+    try {
+      const result = await operation();
+      logBoundaryEvent("info", "boundary_success", boundary, {
+        phase: "success",
+        elapsedMs: Date.now() - startedAt,
+      });
+      return result;
+    } catch (error) {
+      failingBoundary = boundary;
+      logBoundaryEvent("error", "boundary_failure", boundary, {
+        phase: "failure",
+        elapsedMs: Date.now() - startedAt,
+        code: error instanceof AuthorityRouteError ? error.code : toErrorCode(error) || undefined,
+        codeFamily: inferFailureFamily(error),
+        details: compactDetail(error instanceof AuthorityRouteError ? error.details ?? toErrorMessage(error) : toErrorMessage(error)) || undefined,
+      });
+      throw error;
+    }
+  }
 
   try {
+    console.info("[directoryiq-step2-draft]", {
+      event: "route_request_start",
+      routeOrigin,
+      reqId,
+      action: "draft",
+      listingId: currentListingForLog(),
+      slot: currentSlotForLog(),
+      site_id: resolvedSiteId,
+      totalElapsedMs: 0,
+    });
+
     const userId = resolveUserId(req);
-    await ensureUser(userId);
+    await runBoundary("ensureUser", () => ensureUser(userId));
 
     const { listingId, slot } = await Promise.resolve(params);
     resolvedListingId = decodeURIComponent(listingId);
@@ -195,13 +292,17 @@ export async function POST(
 
     if (!focusTopic) throw new AuthorityRouteError(400, "BAD_REQUEST", "Focus topic is required.");
 
-    const apiKey = validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId));
+    const apiKey = await runBoundary("getDirectoryIqOpenAiKey", async () =>
+      validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId))
+    );
 
-    const resolved = await resolveListingEvaluation({
-      userId,
-      listingId: resolvedListingId,
-      siteId: resolvedSiteId,
-    });
+    const resolved = await runBoundary("resolveListingEvaluation", () =>
+      resolveListingEvaluation({
+        userId,
+        listingId: resolvedListingId,
+        siteId: resolvedSiteId,
+      })
+    );
     if (!resolved || !resolved.listingEval.listing) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
@@ -237,7 +338,7 @@ export async function POST(
       focusTopic,
     });
 
-    const generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+    const generatedHtml = await runBoundary("generateAuthorityDraft", () => generateAuthorityDraft({ apiKey, prompt }));
     const html = ensureContextualListingLink({
       html: generatedHtml,
       listingUrl,
@@ -255,20 +356,22 @@ export async function POST(
       );
     }
 
-    await upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
-      type: postType,
-      title: title || `${listingName}: ${focusTopic}`,
-      focusTopic,
-      draftMarkdown: html,
-      draftHtml: html,
-      blogToListingStatus: validation.hasContextualListingLink ? "linked" : "missing",
-      metadata: {
-        quality_score: 72,
-        generated_at: new Date().toISOString(),
-        governance_passed: true,
-        step2_contract: body.step2_contract ?? null,
-      },
-    });
+    await runBoundary("upsertAuthorityPostDraft", () =>
+      upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
+        type: postType,
+        title: title || `${listingName}: ${focusTopic}`,
+        focusTopic,
+        draftMarkdown: html,
+        draftHtml: html,
+        blogToListingStatus: validation.hasContextualListingLink ? "linked" : "missing",
+        metadata: {
+          quality_score: 72,
+          generated_at: new Date().toISOString(),
+          governance_passed: true,
+          step2_contract: body.step2_contract ?? null,
+        },
+      })
+    );
 
     logAuthorityInfo({
       reqId,
@@ -287,6 +390,15 @@ export async function POST(
       localCanonicalPath: true,
       codeFamily: "ok",
     });
+    console.info("[directoryiq-step2-draft]", {
+      event: "route_request_success",
+      routeOrigin,
+      reqId,
+      action: "draft",
+      listingId: currentListingForLog(),
+      slot: currentSlotForLog(),
+      totalElapsedMs: Date.now() - routeStartedAt,
+    });
 
     return NextResponse.json({
       ok: true,
@@ -298,6 +410,18 @@ export async function POST(
     });
   } catch (error) {
     if (error instanceof ListingSiteRequiredError) {
+      console.error("[directoryiq-step2-draft]", {
+        event: "route_request_failure",
+        routeOrigin,
+        reqId,
+        action: "draft",
+        listingId: currentListingForLog(),
+        slot: currentSlotForLog(),
+        failingBoundary,
+        finalCode: "BAD_REQUEST",
+        finalCodeFamily: "validation",
+        totalElapsedMs: Date.now() - routeStartedAt,
+      });
       console.error("[directoryiq-step2-draft]", {
         event: "request_failed",
         reqId,
@@ -331,6 +455,19 @@ export async function POST(
     });
 
     if (error instanceof AuthorityRouteError) {
+      const finalCodeFamily = error.code === "DRAFT_VALIDATION_FAILED" ? "governance" : "validation";
+      console.error("[directoryiq-step2-draft]", {
+        event: "route_request_failure",
+        routeOrigin,
+        reqId,
+        action: "draft",
+        listingId: currentListingForLog(),
+        slot: currentSlotForLog(),
+        failingBoundary,
+        finalCode: error.code,
+        finalCodeFamily,
+        totalElapsedMs: Date.now() - routeStartedAt,
+      });
       console.error("[directoryiq-step2-draft]", {
         event: "request_failed",
         reqId,
@@ -352,6 +489,18 @@ export async function POST(
     }
 
     const classified = classifyTransientInfraError(error);
+    console.error("[directoryiq-step2-draft]", {
+      event: "route_request_failure",
+      routeOrigin,
+      reqId,
+      action: "draft",
+      listingId: currentListingForLog(),
+      slot: currentSlotForLog(),
+      failingBoundary,
+      finalCode: classified.code,
+      finalCodeFamily: classified.family,
+      totalElapsedMs: Date.now() - routeStartedAt,
+    });
     console.error("[directoryiq-step2-draft]", {
       event: "request_failed",
       reqId,
