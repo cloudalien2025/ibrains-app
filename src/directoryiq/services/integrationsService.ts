@@ -27,6 +27,8 @@ export type BdConnection = {
   baseUrl: string;
   apiKey: string;
   updatePath: string;
+  dataPostsSearchPath: string;
+  listingsDataId: number;
 };
 
 function asString(value: unknown): string {
@@ -89,11 +91,16 @@ export async function getBdConnection(userId: string, siteId?: string | null): P
   if (!baseUrl) return null;
 
   const updatePath = "/api/v2/data_posts/update";
+  const dataPostsSearchPath = asString(site.blog_posts_path) || "/api/v2/data_posts/search";
+  const envListingsDataId = Number(process.env.DIRECTORYIQ_LISTINGS_DATA_ID ?? "75");
+  const listingsDataId = site.listings_data_id ?? (Number.isFinite(envListingsDataId) ? envListingsDataId : 75);
   const apiKey = decryptSecret(site.secret_ciphertext, `${userId}:directoryiq:bd_site:${site.id}`);
 
   return {
     baseUrl,
     apiKey,
     updatePath,
+    dataPostsSearchPath,
+    listingsDataId,
   };
 }
