@@ -12,6 +12,7 @@ import { makeVersionLabel, verifyApprovalToken } from "@/app/api/directoryiq/_ut
 import { resolveUserFromHeaders } from "@/lib/auth/entitlements";
 import { resolveGraphIntegrityGate } from "@/src/directoryiq/services/graphIntegrity/featureFlags";
 import { recomputeIntegrityDelta } from "@/src/directoryiq/services/graphIntegrity/integrityRunner";
+import { persistListingTruePostMapping } from "@/src/directoryiq/repositories/listingIdentityRepo";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
 export async function POST(
@@ -91,7 +92,8 @@ export async function POST(
       (typeof listing.title === "string" && listing.title) ||
       "";
 
-    const mapping = resolvedTruePostId
+    const usedPersistedMapping = Boolean(resolvedTruePostId);
+    const mapping = usedPersistedMapping
       ? { truePostId: resolvedTruePostId, mappingKey: "slug" as const }
       : await resolveTruePostIdForListing({
           baseUrl: bd.baseUrl,
@@ -108,6 +110,15 @@ export async function POST(
         { error: "Unable to resolve true BD post_id for listing update. Run refresh analysis to rebuild ID mapping." },
         { status: 422 }
       );
+    }
+
+    if (!usedPersistedMapping && mapping.mappingKey !== "unresolved") {
+      await persistListingTruePostMapping({
+        userId,
+        listingId: listingSourceId,
+        truePostId: mapping.truePostId,
+        mappingKey: mapping.mappingKey,
+      });
     }
 
     const push = await pushListingUpdateToBd({

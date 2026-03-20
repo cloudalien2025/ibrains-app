@@ -8,6 +8,7 @@ const getListingFacts = vi.fn();
 const getBdConnection = vi.fn();
 const requestBd = vi.fn();
 const resolveTruePostIdForListing = vi.fn();
+const persistListingTruePostMapping = vi.fn();
 
 vi.mock("@/src/directoryiq/repositories/upgradeDraftRepo", () => ({
   getDraft,
@@ -42,6 +43,10 @@ vi.mock("@/src/directoryiq/adapters/bd/bdClient", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   resolveTruePostIdForListing,
+}));
+
+vi.mock("@/src/directoryiq/repositories/listingIdentityRepo", () => ({
+  persistListingTruePostMapping,
 }));
 
 describe("upgradeService push mapping resolution", () => {
@@ -99,6 +104,7 @@ describe("upgradeService push mapping resolution", () => {
 
     expect(result.ok).toBe(true);
     expect(resolveTruePostIdForListing).not.toHaveBeenCalled();
+    expect(persistListingTruePostMapping).not.toHaveBeenCalled();
     expect(requestBd).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "PUT",
@@ -123,6 +129,12 @@ describe("upgradeService push mapping resolution", () => {
       listingSlug: "fixture-listing",
       listingTitle: "Fixture Listing",
     });
+    expect(persistListingTruePostMapping).toHaveBeenCalledWith({
+      userId: "user-1",
+      listingId: "site-1:321",
+      truePostId: "903",
+      mappingKey: "slug",
+    });
     expect(requestBd).toHaveBeenCalledWith(
       expect.objectContaining({
         method: "PUT",
@@ -139,6 +151,7 @@ describe("upgradeService push mapping resolution", () => {
       code: "BD_MAPPING_MISSING",
       status: 422,
     });
+    expect(persistListingTruePostMapping).not.toHaveBeenCalled();
     expect(requestBd).not.toHaveBeenCalled();
   });
 });

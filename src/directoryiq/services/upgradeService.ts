@@ -6,6 +6,7 @@ import { runUpgradePrompt } from "@/src/directoryiq/adapters/openai/promptRunner
 import { buildListingUpgradePromptV1 } from "@/src/directoryiq/prompts/listing_upgrade_v1";
 import { writeAuditEvent } from "@/src/directoryiq/repositories/auditRepo";
 import { createDraft, getDraft, hashText, markPreviewed, markPushed } from "@/src/directoryiq/repositories/upgradeDraftRepo";
+import { persistListingTruePostMapping } from "@/src/directoryiq/repositories/listingIdentityRepo";
 import { hasBlockedPlaceholders } from "@/src/directoryiq/validators/outputGuards";
 import { getBdConnection, getIntegrationStatus, getOpenAiKey } from "@/src/directoryiq/services/integrationsService";
 import { getListingFacts } from "@/src/directoryiq/services/listingService";
@@ -277,7 +278,8 @@ export async function pushUpgrade(
       stringOrEmpty(listing.raw.group_filename) ||
       stringOrEmpty(listing.url);
     const listingTitle = stringOrEmpty(listing.raw.group_name) || stringOrEmpty(listing.title);
-    const resolvedMapping = persistedTruePostId
+    const usedPersistedMapping = Boolean(persistedTruePostId);
+    const resolvedMapping = usedPersistedMapping
       ? { truePostId: persistedTruePostId, mappingKey: "slug" as const }
       : await resolveTruePostIdForListing({
           baseUrl: bd.baseUrl,
@@ -296,6 +298,15 @@ export async function pushUpgrade(
         code: "BD_MAPPING_MISSING",
         reqId: requestId,
         message: "Unable to resolve BD listing mapping for push.",
+      });
+    }
+
+    if (!usedPersistedMapping && resolvedMapping.mappingKey !== "unresolved") {
+      await persistListingTruePostMapping({
+        userId,
+        listingId,
+        truePostId,
+        mappingKey: resolvedMapping.mappingKey,
       });
     }
 
