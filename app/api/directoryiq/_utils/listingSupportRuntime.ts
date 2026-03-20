@@ -4,6 +4,7 @@ import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { getListingCurrentSupport, type ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
 import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
+import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 const DEFAULT_AUTHORITY_TENANT_ID = "default";
@@ -85,19 +86,6 @@ function fallbackSupport(listingId: string, siteId: string | null): ListingSuppo
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string | null {
-  return (
-    asString(raw.url) ||
-    asString(raw.listing_url) ||
-    asString(raw.profile_url) ||
-    asString(raw.link) ||
-    asString(raw.permalink) ||
-    asString(raw.source_url) ||
-    asString(fallback) ||
-    null
-  );
 }
 
 function stripSitePrefix(input: string): string {

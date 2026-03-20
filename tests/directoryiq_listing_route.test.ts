@@ -2,10 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
+const getListingEvaluationMock = vi.fn();
+
+vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
+  getListingEvaluation: getListingEvaluationMock,
+}));
+
 describe("directoryiq listing detail route proxy", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.unstubAllGlobals();
+    getListingEvaluationMock.mockReset();
     delete process.env.DIRECTORYIQ_API_BASE;
     delete process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE;
   });
@@ -133,6 +140,57 @@ describe("directoryiq listing detail route proxy", () => {
 
     expect(res.status).toBe(200);
     expect(json.listing.listing_url).toBe("https://example.com/profile/3");
+  });
+
+  it("uses canonical URL fallback fields for local detail listing_url", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        title: "Tivoli Lodge",
+        url: null,
+        raw_json: {
+          listing_id: "651",
+          group_name: "Tivoli Lodge",
+          profile_url: "https://www.vailvacay.com/listings/tivoli-lodge",
+        },
+      },
+      evaluation: { totalScore: 77 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/651?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "651" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.listing.listing_url).toBe("https://www.vailvacay.com/listings/tivoli-lodge");
+  });
+
+  it("keeps listing_url null when no truthful canonical URL exists in local detail payload", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        title: "No URL Listing",
+        url: null,
+        raw_json: {
+          listing_id: "652",
+          group_name: "No URL Listing",
+        },
+      },
+      evaluation: { totalScore: 20 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/652?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "652" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.listing.listing_url).toBeNull();
   });
 
   it("forwards Cloudflare Access JWT assertion header for external auth", async () => {
