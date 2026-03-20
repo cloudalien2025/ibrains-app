@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
@@ -21,19 +22,6 @@ type ListingDetailPayload = {
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
-}
-
-function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string | null {
-  return (
-    asString(raw.url) ||
-    asString(raw.listing_url) ||
-    asString(raw.profile_url) ||
-    asString(raw.link) ||
-    asString(raw.permalink) ||
-    asString(raw.source_url) ||
-    asString(fallback) ||
-    null
-  );
 }
 
 function resolveDirectoryIqApiBase(): string {

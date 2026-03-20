@@ -233,4 +233,72 @@ describe("listingSupportRuntime", () => {
       "https://www.vailvacay.com/listings/tivoli-lodge"
     );
   });
+
+  it("keeps canonical URL null for local support lookup when no truthful URL exists", async () => {
+    resolveUserIdMock.mockReturnValue("00000000-0000-4000-8000-000000000001");
+    resolveListingEvaluationMock.mockResolvedValue({
+      siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      listingEval: {
+        listing: {
+          source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:651",
+          title: "Tivoli Lodge",
+          url: null,
+          raw_json: {
+            listing_id: "651",
+            group_name: "Tivoli Lodge",
+          },
+        },
+      },
+    });
+    getListingCurrentSupportMock
+      .mockResolvedValueOnce({
+        listing: {
+          id: "651",
+          title: "Tivoli Lodge",
+          canonicalUrl: null,
+          siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        },
+        summary: {
+          inboundLinkedSupportCount: 0,
+          mentionWithoutLinkCount: 0,
+          outboundSupportLinkCount: 0,
+          connectedSupportPageCount: 0,
+          lastGraphRunAt: null,
+        },
+        inboundLinkedSupport: [],
+        mentionsWithoutLinks: [],
+        outboundSupportLinks: [],
+        connectedSupportPages: [],
+      })
+      .mockResolvedValueOnce({
+        listing: {
+          id: "651",
+          title: "Tivoli Lodge",
+          canonicalUrl: null,
+          siteId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+        },
+        summary: {
+          inboundLinkedSupportCount: 0,
+          mentionWithoutLinkCount: 0,
+          outboundSupportLinkCount: 0,
+          connectedSupportPageCount: 0,
+          lastGraphRunAt: null,
+        },
+        inboundLinkedSupport: [],
+        mentionsWithoutLinks: [],
+        outboundSupportLinks: [],
+        connectedSupportPages: [],
+      });
+
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    const { resolveListingSupportModel } = await import("@/app/api/directoryiq/_utils/listingSupportRuntime");
+    const req = new NextRequest(
+      "http://localhost/api/directoryiq/listings/651/support?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415"
+    );
+
+    await resolveListingSupportModel(req, "651");
+
+    expect(getListingCurrentSupportMock).toHaveBeenCalledTimes(2);
+    expect(getListingCurrentSupportMock.mock.calls[0]?.[0]?.listingUrl).toBeNull();
+  });
 });
