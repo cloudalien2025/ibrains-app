@@ -9,12 +9,15 @@ const proxyDirectoryIqRequest = vi.fn(async (_req: NextRequest, upstreamPath: st
 );
 const getDirectoryIqOpenAiKey = vi.fn(async () => "sk-test");
 const upsertAuthorityPostDraft = vi.fn(async () => {});
+const saveAuthorityImage = vi.fn(async () => {});
 const normalizePostType = vi.fn(() => "local_guide");
 const normalizeSlot = vi.fn(() => 1);
 const buildGovernedPrompt = vi.fn(() => "prompt");
+const buildImagePrompt = vi.fn(() => "image prompt");
 const ensureContextualListingLink = vi.fn((input: { html: string }) => input.html);
 const validateDraftHtml = vi.fn(() => ({ valid: true, hasContextualListingLink: true, errors: [] as string[] }));
 const generateAuthorityDraft = vi.fn(async () => "<p>draft</p><a href=\"https://example.com/listings/acme\">link</a>");
+const generateAuthorityImage = vi.fn(async () => "data:image/png;base64,abc123");
 const validateOpenAiKeyPresent = vi.fn((value: string) => value);
 const resolveListingEvaluation = vi.fn(async () => ({
   listingEval: {
@@ -23,6 +26,9 @@ const resolveListingEvaluation = vi.fn(async () => ({
       title: "Acme",
       url: "https://example.com/listings/acme",
       raw_json: { description: "desc" },
+    },
+    settings: {
+      imageStylePreference: "editorial clean",
     },
   },
 }));
@@ -46,6 +52,7 @@ vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   upsertAuthorityPostDraft,
+  saveAuthorityImage,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/authority", () => ({
@@ -55,12 +62,14 @@ vi.mock("@/app/api/directoryiq/_utils/authority", () => ({
 
 vi.mock("@/lib/directoryiq/contentGovernance", () => ({
   buildGovernedPrompt,
+  buildImagePrompt,
   ensureContextualListingLink,
   validateDraftHtml,
 }));
 
 vi.mock("@/lib/openai/serverClient", () => ({
   generateAuthorityDraft,
+  generateAuthorityImage,
   validateOpenAiKeyPresent,
 }));
 
@@ -75,7 +84,7 @@ describe("directoryiq authority runtime parity proxy", () => {
     shouldServeDirectoryIqLocally.mockReturnValue(false);
   });
 
-  it("proxies image route but serves draft locally when request host is not DirectoryIQ API host", async () => {
+  it("serves both draft and image routes locally when request host is not DirectoryIQ API host", async () => {
     const draftRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
     const imageRoute = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
 
@@ -92,18 +101,16 @@ describe("directoryiq authority runtime parity proxy", () => {
 
     const draftRes = await draftRoute.POST(draftReq, { params: { listingId: "3", slot: "1" } });
     const imageRes = await imageRoute.POST(imageReq, { params: { listingId: "3", slot: "1" } });
+    const imageJson = await imageRes.json();
 
     expect(draftRes.status).toBe(200);
     expect(imageRes.status).toBe(200);
-    expect(proxyDirectoryIqRequest).toHaveBeenCalledTimes(1);
-    expect(proxyDirectoryIqRequest).toHaveBeenNthCalledWith(
-      1,
-      imageReq,
-      "/api/directoryiq/listings/3/authority/1/image",
-      "POST"
-    );
-    expect(ensureUser).toHaveBeenCalledTimes(1);
+    expect(imageJson.ok).toBe(true);
+    expect(imageJson.featured_image_url).toBe("data:image/png;base64,abc123");
+    expect(proxyDirectoryIqRequest).not.toHaveBeenCalled();
+    expect(ensureUser).toHaveBeenCalledTimes(2);
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
+    expect(saveAuthorityImage).toHaveBeenCalledTimes(1);
   });
 
   it("serves draft locally without requiring step2_writer when host mismatches", async () => {
