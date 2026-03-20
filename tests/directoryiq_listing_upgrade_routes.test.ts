@@ -32,6 +32,7 @@ const markListingUpgradePreviewed = vi.fn(async () => {});
 const markListingUpgradePushed = vi.fn(async () => {});
 const addDirectoryIqVersion = vi.fn(async () => "version-1");
 const resolveTruePostIdForListing = vi.fn(async () => ({ truePostId: "123", mappingKey: "slug" as const }));
+const persistListingTruePostMapping = vi.fn(async () => {});
 const getDirectoryIqBdConnection = vi.fn(async () => ({
   baseUrl: "https://example.com",
   apiKey: "k",
@@ -135,6 +136,10 @@ vi.mock("@/src/directoryiq/services/upgradeService", () => ({
   pushUpgrade,
 }));
 
+vi.mock("@/src/directoryiq/repositories/listingIdentityRepo", () => ({
+  persistListingTruePostMapping,
+}));
+
 describe("directoryiq listing upgrade routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -214,5 +219,75 @@ describe("directoryiq listing upgrade routes", () => {
     expect(res.status).toBe(422);
     expect(json.error).toContain("Unable to resolve true BD post_id");
     expect(pushListingUpdateToBd).not.toHaveBeenCalled();
+    expect(persistListingTruePostMapping).not.toHaveBeenCalled();
+  });
+
+  it("listing push route persists resolved true post id when fallback resolver succeeds", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/listing-push/route");
+    const token = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "321",
+      action: "listing_push",
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/listing-push", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_push: true,
+        proposed_description: "Improved description.",
+        approval_token: token,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321" } });
+    expect(res.status).toBe(200);
+    expect(resolveTruePostIdForListing).toHaveBeenCalledTimes(1);
+    expect(persistListingTruePostMapping).toHaveBeenCalledWith({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      truePostId: "123",
+      mappingKey: "slug",
+    });
+  });
+
+  it("listing push route reuses persisted true post id before resolver fallback", async () => {
+    resolveListingEvaluation.mockResolvedValueOnce({
+      siteId: "site-1",
+      listingEval: {
+        listing: {
+          source_id: "site-1:321",
+          title: "Fixture Listing",
+          raw_json: {
+            group_name: "Fixture Listing",
+            group_filename: "fixture-listing",
+            true_post_id: "998",
+          },
+        },
+        evaluation: {
+          totalScore: 44,
+          scores: { structure: 40, clarity: 40, trust: 40, authority: 40, actionability: 40 },
+        },
+      },
+    });
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/listing-push/route");
+    const token = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "321",
+      action: "listing_push",
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/listing-push", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_push: true,
+        proposed_description: "Improved description.",
+        approval_token: token,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321" } });
+    expect(res.status).toBe(200);
+    expect(resolveTruePostIdForListing).not.toHaveBeenCalled();
+    expect(persistListingTruePostMapping).not.toHaveBeenCalled();
   });
 });

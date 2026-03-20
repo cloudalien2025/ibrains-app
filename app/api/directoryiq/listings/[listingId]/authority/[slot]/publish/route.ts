@@ -14,6 +14,7 @@ import {
   pushListingUpdateToBd,
   resolveTruePostIdForListing,
 } from "@/app/api/directoryiq/_utils/integrations";
+import { persistListingTruePostMapping } from "@/src/directoryiq/repositories/listingIdentityRepo";
 import {
   AuthorityRouteError,
   authorityErrorResponse,
@@ -184,7 +185,8 @@ export async function POST(
       (typeof listingRow.title === "string" && listingRow.title) ||
       "";
 
-    const mapping = resolvedTruePostId
+    const usedPersistedMapping = Boolean(resolvedTruePostId);
+    const mapping = usedPersistedMapping
       ? { truePostId: resolvedTruePostId, mappingKey: "slug" as const }
       : await resolveTruePostIdForListing({
           baseUrl: bd.baseUrl,
@@ -195,6 +197,15 @@ export async function POST(
           listingSlug,
           listingTitle,
         });
+
+    if (!usedPersistedMapping && mapping.truePostId && mapping.mappingKey !== "unresolved") {
+      await persistListingTruePostMapping({
+        userId,
+        listingId: listingSourceId,
+        truePostId: mapping.truePostId,
+        mappingKey: mapping.mappingKey,
+      });
+    }
 
     const relatedGuidesHtml = `<h3>Related Guides</h3><ul><li><a href=\"${publishedUrl}\">${post.title}</a></li></ul>`;
 
