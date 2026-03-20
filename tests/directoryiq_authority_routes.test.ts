@@ -20,6 +20,8 @@ const findListingCandidates = vi.fn(async () => [
 ]);
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
+const proxyDirectoryIqRequest = vi.fn(async () => new Response(JSON.stringify({ ok: false }), { status: 502 }));
+const shouldServeDirectoryIqLocally = vi.fn(() => true);
 const generateAuthorityDraft = vi.fn(async () => "<p>Draft html</p>");
 const generateAuthorityImage = vi.fn(async () => "data:image/png;base64,abc123");
 const validateDraftHtml = vi.fn((input: { html: string; listingUrl: string }) => {
@@ -47,8 +49,11 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
 }));
+vi.mock("@/app/api/directoryiq/_utils/externalReadProxy", () => ({
+  proxyDirectoryIqRequest,
+}));
 vi.mock("@/app/api/directoryiq/_utils/runtimeParity", () => ({
-  shouldServeDirectoryIqLocally: vi.fn(() => true),
+  shouldServeDirectoryIqLocally,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
@@ -139,6 +144,27 @@ describe("directoryiq authority routes", () => {
       imagePrompt: "image prompt",
       imageUrl: "data:image/png;base64,abc123",
     });
+  });
+
+  it("keeps image generation on the canonical local path even when parity helper reports proxy host", async () => {
+    shouldServeDirectoryIqLocally.mockReturnValueOnce(false);
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/image", {
+      method: "POST",
+      body: JSON.stringify({
+        focus_topic: "guide image",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(generateAuthorityImage).toHaveBeenCalledTimes(1);
+    expect(proxyDirectoryIqRequest).not.toHaveBeenCalled();
   });
 
   it("returns DRAFT_VALIDATION_FAILED when generated draft misses governance checks", async () => {
