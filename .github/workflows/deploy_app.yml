@@ -102,6 +102,18 @@ jobs:
 
             systemctl restart ${{ secrets.SERVICE_NAME }}
 
-            sleep 2
+            ready=0
+            for attempt in $(seq 1 10); do
+              if curl -fsS http://127.0.0.1:3001/api/_meta/release; then
+                ready=1
+                break
+              fi
+              sleep 2
+            done
 
-            curl -s http://127.0.0.1:3001/api/_meta/release
+            if [ "$ready" -ne 1 ]; then
+              echo "release endpoint did not become ready after restart"
+              systemctl status ${{ secrets.SERVICE_NAME }} --no-pager -l || true
+              journalctl -u ${{ secrets.SERVICE_NAME }} -n 150 --no-pager || true
+              exit 1
+            fi
