@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { AUTHORITY_SLOT_MAX } from "@/lib/directoryiq/authoritySlotContract";
 
 let pool: Pool | null = null;
 let schemaReady = false;
@@ -340,7 +341,7 @@ async function ensureSchema(): Promise<void> {
           id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
           user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
           listing_source_id TEXT NOT NULL,
-          slot_index INTEGER NOT NULL CHECK (slot_index >= 1 AND slot_index <= 4),
+          slot_index INTEGER NOT NULL CHECK (slot_index >= 1 AND slot_index <= ${AUTHORITY_SLOT_MAX}),
           post_type TEXT NOT NULL,
           focus_topic TEXT NOT NULL DEFAULT '',
           title TEXT,
@@ -358,6 +359,13 @@ async function ensureSchema(): Promise<void> {
           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
           UNIQUE (user_id, listing_source_id, slot_index)
         );
+
+        ALTER TABLE directoryiq_authority_posts
+          DROP CONSTRAINT IF EXISTS directoryiq_authority_posts_slot_index_check;
+
+        ALTER TABLE directoryiq_authority_posts
+          ADD CONSTRAINT directoryiq_authority_posts_slot_index_check
+          CHECK (slot_index >= 1 AND slot_index <= ${AUTHORITY_SLOT_MAX});
 
         CREATE INDEX IF NOT EXISTS idx_directoryiq_authority_posts_listing
           ON directoryiq_authority_posts(user_id, listing_source_id);
