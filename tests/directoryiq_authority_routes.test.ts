@@ -117,6 +117,30 @@ describe("directoryiq authority routes", () => {
     expect(saveAuthorityImage).not.toHaveBeenCalled();
   });
 
+  it("returns success shape for image generation and persists the image", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/image", {
+      method: "POST",
+      body: JSON.stringify({
+        focus_topic: "guide image",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(json.featured_image_url).toBe("data:image/png;base64,abc123");
+    expect(json.prompt).toBe("image prompt");
+    expect(generateAuthorityImage).toHaveBeenCalledTimes(1);
+    expect(saveAuthorityImage).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001", "site-1:321", 1, {
+      imagePrompt: "image prompt",
+      imageUrl: "data:image/png;base64,abc123",
+    });
+  });
+
   it("returns DRAFT_VALIDATION_FAILED when generated draft misses governance checks", async () => {
     validateDraftHtml.mockReturnValueOnce({
       valid: false,

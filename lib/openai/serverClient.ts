@@ -160,7 +160,6 @@ export async function generateAuthorityImage(params: {
       prompt: params.prompt,
       size: "1536x1024",
       quality: "medium",
-      response_format: "b64_json",
     },
   });
 
