@@ -11,6 +11,7 @@ import { getBdConnection, getIntegrationStatus, getOpenAiKey } from "@/src/direc
 import { getListingFacts } from "@/src/directoryiq/services/listingService";
 import { DirectoryIqServiceError } from "@/src/directoryiq/services/errors";
 import { issueApprovalToken, verifyApprovalToken } from "@/src/directoryiq/services/tokenService";
+import { resolveTruePostIdForListing } from "@/app/api/directoryiq/_utils/integrations";
 
 export type GenerateUpgradeInput = {
   userId: string;
@@ -41,6 +42,10 @@ export type PushUpgradeResult = {
 
 function reqId(): string {
   return crypto.randomUUID();
+}
+
+function stringOrEmpty(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
 }
 
 function deterministicMockUpgrade(title: string, originalText: string): string {
@@ -266,11 +271,24 @@ export async function pushUpgrade(
       });
     }
 
-    const truePostId =
-      (typeof listing.raw.true_post_id === "string" && listing.raw.true_post_id.trim()) ||
-      (typeof listing.raw.post_id === "string" && listing.raw.post_id.trim()) ||
-      (typeof listing.raw.id === "string" && listing.raw.id.trim()) ||
-      "";
+    const persistedTruePostId = stringOrEmpty(listing.raw.true_post_id);
+    const listingSlug =
+      stringOrEmpty(listing.raw.listing_slug) ||
+      stringOrEmpty(listing.raw.group_filename) ||
+      stringOrEmpty(listing.url);
+    const listingTitle = stringOrEmpty(listing.raw.group_name) || stringOrEmpty(listing.title);
+    const resolvedMapping = persistedTruePostId
+      ? { truePostId: persistedTruePostId, mappingKey: "slug" as const }
+      : await resolveTruePostIdForListing({
+          baseUrl: bd.baseUrl,
+          apiKey: bd.apiKey,
+          dataPostsSearchPath: bd.dataPostsSearchPath,
+          listingsDataId: bd.listingsDataId,
+          listingId,
+          listingSlug,
+          listingTitle,
+        });
+    const truePostId = resolvedMapping.truePostId ?? "";
 
     if (!truePostId) {
       throw new DirectoryIqServiceError({
