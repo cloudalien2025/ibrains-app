@@ -6,6 +6,7 @@ import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fetchWithTimeout";
+import { buildStep2DraftApiUrl } from "@/lib/directoryiq/step2DraftApiHost";
 import {
   MISSION_CONTROL_STEPS,
   REQUIRED_VALID_SUPPORT_COUNT,
@@ -1900,7 +1901,8 @@ export default function ListingOptimizationClient({
     }
 
     const draftQuery = siteQuery;
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/draft${draftQuery}`, {
+    const draftUrl = buildStep2DraftApiUrl(effectiveListingId, slot, draftQuery);
+    const res = await fetch(draftUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
