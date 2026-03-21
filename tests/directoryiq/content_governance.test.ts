@@ -2,9 +2,9 @@ import { describe, expect, it } from "vitest";
 import { ensureContextualListingLink, validateDraftHtml } from "@/lib/directoryiq/contentGovernance";
 
 describe("directoryiq content governance", () => {
-  it("keeps drafts valid when listing URL is already present", () => {
+  it("keeps drafts valid when listing URL is already present as an in-body anchor", () => {
     const listingUrl = "https://example.com/listings/acme";
-    const html = `Intro paragraph with [listing](${listingUrl}).`;
+    const html = `Intro paragraph with <a href="${listingUrl}">listing</a>.`;
     const processed = ensureContextualListingLink({
       html,
       listingUrl,
@@ -24,7 +24,20 @@ describe("directoryiq content governance", () => {
       focusTopic: "acme topic",
     });
     expect(processed).toContain(listingUrl);
+    expect(processed).toContain(`<a href="${listingUrl}">Acme Listing</a>`);
     expect(processed).toContain("For acme topic");
+    expect(validateDraftHtml({ html: processed, listingUrl }).valid).toBe(true);
+  });
+
+  it("adds an anchor when draft only contains a bare listing URL", () => {
+    const listingUrl = "https://example.com/listings/acme";
+    const processed = ensureContextualListingLink({
+      html: `Draft text with bare URL: ${listingUrl}`,
+      listingUrl,
+      listingTitle: "Acme Listing",
+      focusTopic: "acme topic",
+    });
+    expect(processed).toContain(`<a href="${listingUrl}">Acme Listing</a>`);
     expect(validateDraftHtml({ html: processed, listingUrl }).valid).toBe(true);
   });
 
