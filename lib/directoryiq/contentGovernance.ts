@@ -6,6 +6,17 @@ type GovernedPromptInput = {
   focusTopic: string;
 };
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasListingAnchorLink(html: string, listingUrl: string): boolean {
+  if (!listingUrl) return false;
+  const escaped = escapeRegExp(listingUrl);
+  const hrefRegex = new RegExp(`<a\\b[^>]*href=["']${escaped}["'][^>]*>`, "i");
+  return hrefRegex.test(html);
+}
+
 export function buildGovernedPrompt(input: GovernedPromptInput): string {
   return [
     `Post type: ${input.postType}`,
@@ -13,7 +24,7 @@ export function buildGovernedPrompt(input: GovernedPromptInput): string {
     `Listing URL: ${input.listingUrl}`,
     `Listing description: ${input.listingDescription}`,
     `Focus topic: ${input.focusTopic}`,
-    "Requirement: include one contextual in-body link to the listing URL.",
+    "Requirement: include one contextual in-body HTML link to the listing URL using an anchor tag (<a href=\"LISTING_URL\">...).",
   ].join("\n");
 }
 
@@ -22,8 +33,8 @@ export function validateDraftHtml(input: {
   listingUrl: string;
 }): { valid: boolean; errors: string[]; hasContextualListingLink: boolean } {
   const html = input.html ?? "";
-  const listingUrl = input.listingUrl ?? "";
-  const hasContextualListingLink = listingUrl.length > 0 && html.includes(listingUrl);
+  const listingUrl = (input.listingUrl ?? "").trim();
+  const hasContextualListingLink = hasListingAnchorLink(html, listingUrl);
   const errors = hasContextualListingLink ? [] : ["Draft must include a contextual in-body link to the listing URL."];
 
   return {
@@ -42,11 +53,11 @@ export function ensureContextualListingLink(input: {
   const html = input.html ?? "";
   const listingUrl = (input.listingUrl ?? "").trim();
   if (!listingUrl) return html;
-  if (html.includes(listingUrl)) return html;
+  if (hasListingAnchorLink(html, listingUrl)) return html;
 
   const listingTitle = (input.listingTitle ?? "").trim() || "this listing";
   const focusTopic = (input.focusTopic ?? "").trim() || "this topic";
-  const sentence = `For ${focusTopic}, see [${listingTitle}](${listingUrl}).`;
+  const sentence = `For ${focusTopic}, see <a href="${listingUrl}">${listingTitle}</a>.`;
   const normalized = html.trim();
   if (!normalized) return sentence;
 
