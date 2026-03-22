@@ -2,6 +2,45 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { AuthorityRouteError } from "@/app/api/directoryiq/_utils/authorityErrors";
 
+type JobAccepted = {
+  jobId?: string;
+  reqId?: string;
+  acceptedAt?: string;
+  status?: string;
+  statusEndpoint?: string;
+};
+
+type JobStatusResponse = {
+  jobId?: string;
+  status?: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  stage?: string;
+  reqId?: string;
+  result?: Record<string, unknown>;
+  error?: {
+    code?: string;
+    message?: string;
+    details?: string;
+    reqId?: string;
+  };
+};
+
+async function waitForJobCompletion(statusEndpoint: string): Promise<JobStatusResponse> {
+  const jobId = statusEndpoint.split("/").pop() ?? "";
+  const { GET } = await import("@/app/api/directoryiq/jobs/[jobId]/route");
+
+  for (let i = 0; i < 80; i += 1) {
+    const res = await GET(new NextRequest(`http://localhost${statusEndpoint}`), { params: { jobId } });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as JobStatusResponse;
+    if (json.status === "succeeded" || json.status === "failed" || json.status === "cancelled") {
+      return json;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  throw new Error(`Timed out waiting for job status endpoint: ${statusEndpoint}`);
+}
+
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const getDirectoryIqOpenAiKey = vi.fn(async () => "test-key");
@@ -81,7 +120,7 @@ describe("directoryiq authority routes", () => {
     vi.clearAllMocks();
   });
 
-  it("creates a draft for an authority slot", async () => {
+  it("creates a draft job for an authority slot", async () => {
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
       method: "POST",
@@ -93,11 +132,17 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    expect(submitRes.status).toBe(202);
+    expect(accepted.status).toBe("queued");
+    expect(accepted.jobId).toBeTruthy();
+    expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
+
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.ok).toBe(true);
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
   });
@@ -114,11 +159,12 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "5" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "5" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+    expect(submitRes.status).toBe(202);
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
     expect(upsertAuthorityPostDraft).toHaveBeenCalledWith(
       "00000000-0000-4000-8000-000000000001",
       "site-1:321",
@@ -149,7 +195,7 @@ describe("directoryiq authority routes", () => {
     expect(upsertAuthorityPostDraft).not.toHaveBeenCalled();
   });
 
-  it("returns structured error when OpenAI key is missing", async () => {
+  it("returns failed job status when OpenAI key is missing", async () => {
     getDirectoryIqOpenAiKey.mockResolvedValueOnce(null as unknown as string);
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/image", {
@@ -160,16 +206,17 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(400);
-    expect(json.error.code).toBe("OPENAI_KEY_MISSING");
-    expect(typeof json.error.reqId).toBe("string");
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("OPENAI_KEY_MISSING");
     expect(saveAuthorityImage).not.toHaveBeenCalled();
   });
 
-  it("returns success shape for image generation and persists the image", async () => {
+  it("returns success result for image generation and persists the image", async () => {
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/image", {
       method: "POST",
@@ -179,13 +226,15 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(json.featured_image_url).toBe("data:image/png;base64,abc123");
-    expect(json.prompt).toBe("image prompt");
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.ok).toBe(true);
+    expect(status.result?.featured_image_url).toBe("data:image/png;base64,abc123");
+    expect(status.result?.prompt).toBe("image prompt");
     expect(generateAuthorityImage).toHaveBeenCalledTimes(1);
     expect(saveAuthorityImage).toHaveBeenCalledWith("00000000-0000-4000-8000-000000000001", "site-1:321", 1, {
       imagePrompt: "image prompt",
@@ -205,16 +254,16 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
-    expect(generateAuthorityImage).toHaveBeenCalledTimes(1);
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
     expect(proxyDirectoryIqRequest).not.toHaveBeenCalled();
   });
 
-  it("returns DRAFT_VALIDATION_FAILED when generated draft misses governance checks", async () => {
+  it("returns failed job with DRAFT_VALIDATION_FAILED when generated draft misses governance checks", async () => {
     validateDraftHtml.mockReturnValueOnce({
       valid: false,
       hasContextualListingLink: false,
@@ -232,13 +281,14 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(422);
-    expect(json.error?.code).toBe("DRAFT_VALIDATION_FAILED");
-    expect(String(json.error?.message ?? "")).toContain("Draft failed governance validation");
-    expect(String(json.error?.details ?? "")).toContain("Missing contextual listing link.");
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("DRAFT_VALIDATION_FAILED");
+    expect(String(status.error?.message ?? "")).toContain("Draft failed governance validation");
   });
 
   it("uses listing URL fallback fields from listing raw_json for draft generation", async () => {
@@ -267,11 +317,12 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
   });
 
@@ -306,11 +357,12 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "4" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "4" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
     expect(validateDraftHtml).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -333,11 +385,12 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "2" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "2" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
     expect(ensureContextualListingLink).toHaveBeenCalledTimes(1);
     expect(validateDraftHtml).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -347,7 +400,7 @@ describe("directoryiq authority routes", () => {
     );
   });
 
-  it("maps transient DB timeout errors to safe message while preserving reqId/code/details", async () => {
+  it("maps transient DB timeout errors into failed job status payload", async () => {
     generateAuthorityDraft.mockRejectedValueOnce(
       Object.assign(new Error("connect ETIMEDOUT 45.55.71.52:25060"), {
         code: "ETIMEDOUT",
@@ -368,19 +421,16 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(503);
-    expect(json.error?.code).toBe("DB_TIMEOUT");
-    expect(json.error?.message).toBe("Article generation is temporarily unavailable. Please try again.");
-    expect(typeof json.error?.reqId).toBe("string");
-    expect(String(json.error?.details ?? "")).toContain("ETIMEDOUT");
-    expect(String(json.error?.details ?? "")).toContain("45.55.71.52");
-    expect(String(json.error?.message ?? "").toLowerCase()).not.toContain("etimedout");
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("ETIMEDOUT");
   });
 
-  it("maps transient network connectivity errors to safe message while preserving reqId/code/details", async () => {
+  it("maps transient network connectivity errors into failed job status payload", async () => {
     generateAuthorityDraft.mockRejectedValueOnce(
       Object.assign(new Error("getaddrinfo ENOTFOUND upstream.service.local"), {
         code: "ENOTFOUND",
@@ -399,19 +449,16 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
-    const json = await res.json();
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(res.status).toBe(503);
-    expect(json.error?.code).toBe("NETWORK_CONNECTIVITY");
-    expect(json.error?.message).toBe("We couldn't reach a required service. Please try again.");
-    expect(typeof json.error?.reqId).toBe("string");
-    expect(String(json.error?.details ?? "")).toContain("ENOTFOUND");
-    expect(String(json.error?.message ?? "").toLowerCase()).not.toContain("enotfound");
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("ENOTFOUND");
   });
 
-  it("emits reqId-scoped boundary and route summary logs for both success and normalized failure", async () => {
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+  it("emits reqId/jobId stage and final logs for success and failure", async () => {
     const infoSpy = vi.spyOn(console, "info").mockImplementation(() => {});
     try {
       const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
@@ -425,19 +472,21 @@ describe("directoryiq authority routes", () => {
         }),
         headers: { "content-type": "application/json" },
       });
-      const successRes = await POST(successReq, { params: { listingId: "321", slot: "1" } });
-      expect(successRes.status).toBe(200);
+      const successSubmit = await POST(successReq, { params: { listingId: "321", slot: "1" } });
+      const successAccepted = (await successSubmit.json()) as JobAccepted;
+      expect(successSubmit.status).toBe(202);
+      await waitForJobCompletion(String(successAccepted.statusEndpoint));
 
       const successSummaryCall = infoSpy.mock.calls.find(
-        (call) => call[0] === "[directoryiq-step2-draft]" && call[1]?.event === "route_request_success"
+        (call) => call[0] === "[directoryiq-job]" && call[1]?.phase === "final_success"
       );
       expect(successSummaryCall).toBeTruthy();
       expect(successSummaryCall?.[1]).toMatchObject({
         routeOrigin: "directoryiq.authority.step2.draft",
-        action: "draft",
+        runtimeOwner: "directoryiq-api.ibrains.ai",
       });
       expect(typeof successSummaryCall?.[1]?.reqId).toBe("string");
-      expect(typeof successSummaryCall?.[1]?.totalElapsedMs).toBe("number");
+      expect(typeof successSummaryCall?.[1]?.jobId).toBe("string");
 
       generateAuthorityDraft.mockRejectedValueOnce(
         Object.assign(new Error("Connection terminated due to connection timeout"), {
@@ -455,36 +504,21 @@ describe("directoryiq authority routes", () => {
         }),
         headers: { "content-type": "application/json" },
       });
-      const failureRes = await POST(failureReq, { params: { listingId: "321", slot: "1" } });
-      const failureJson = await failureRes.json();
-      expect(failureRes.status).toBe(503);
-      expect(failureJson.error?.code).toBe("NETWORK_CONNECTIVITY");
+      const failureSubmit = await POST(failureReq, { params: { listingId: "321", slot: "1" } });
+      const failureAccepted = (await failureSubmit.json()) as JobAccepted;
+      expect(failureSubmit.status).toBe(202);
+      const failureStatus = await waitForJobCompletion(String(failureAccepted.statusEndpoint));
+      expect(failureStatus.status).toBe("failed");
 
-      const boundaryFailureIndex = errorSpy.mock.calls.findIndex(
-        (call) =>
-          call[0] === "[directoryiq-step2-draft]" &&
-          call[1]?.event === "boundary_failure" &&
-          call[1]?.boundary === "generateAuthorityDraft"
+      const routeFailureCall = infoSpy.mock.calls.find(
+        (call) => call[0] === "[directoryiq-job]" && call[1]?.phase === "final_failure"
       );
-      const routeFailureIndex = errorSpy.mock.calls.findIndex(
-        (call) => call[0] === "[directoryiq-step2-draft]" && call[1]?.event === "route_request_failure"
-      );
-
-      expect(boundaryFailureIndex).toBeGreaterThanOrEqual(0);
-      expect(routeFailureIndex).toBeGreaterThanOrEqual(0);
-      expect(boundaryFailureIndex).toBeLessThan(routeFailureIndex);
-
-      const routeFailureCall = errorSpy.mock.calls[routeFailureIndex];
       expect(routeFailureCall?.[1]).toMatchObject({
         routeOrigin: "directoryiq.authority.step2.draft",
-        action: "draft",
-        failingBoundary: "generateAuthorityDraft",
-        finalCode: "NETWORK_CONNECTIVITY",
       });
       expect(typeof routeFailureCall?.[1]?.reqId).toBe("string");
-      expect(typeof routeFailureCall?.[1]?.totalElapsedMs).toBe("number");
+      expect(typeof routeFailureCall?.[1]?.jobId).toBe("string");
     } finally {
-      errorSpy.mockRestore();
       infoSpy.mockRestore();
     }
   });

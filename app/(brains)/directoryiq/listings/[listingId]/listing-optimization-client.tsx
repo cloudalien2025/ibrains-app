@@ -7,6 +7,7 @@ import TopBar from "@/components/ecomviper/TopBar";
 import NeonButton from "@/components/ecomviper/NeonButton";
 import { fetchJsonWithTimeout, RequestTimeoutError } from "@/lib/directoryiq/fetchWithTimeout";
 import { buildStep2DraftApiUrl } from "@/lib/directoryiq/step2DraftApiHost";
+import { buildDirectoryIqWriteApiUrl } from "@/lib/directoryiq/writeApiHost";
 import {
   MISSION_CONTROL_STEPS,
   REQUIRED_VALID_SUPPORT_COUNT,
@@ -495,6 +496,29 @@ type ApiErrorShape = {
   };
 };
 
+type DirectoryIqJobAccepted = {
+  jobId?: string;
+  reqId?: string;
+  acceptedAt?: string;
+  statusEndpoint?: string;
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  };
+};
+
+type DirectoryIqJobStatus = {
+  status?: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  stage?: string;
+  result?: Record<string, unknown>;
+  error?: {
+    message?: string;
+    code?: string;
+    reqId?: string;
+  };
+};
+
 type UiError = {
   message: string;
   reqId?: string;
@@ -621,6 +645,74 @@ function parseError(json: ApiErrorShape, fallback: string, status?: number, list
     status,
     listingId,
   };
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+async function waitForDirectoryIqJobResult<T extends Record<string, unknown>>(
+  accepted: DirectoryIqJobAccepted,
+  fallback: string,
+  listingId?: string
+): Promise<{ ok: true; data: T } | { ok: false; error: UiError }> {
+  const endpoint = (accepted.statusEndpoint ?? "").trim();
+  if (!endpoint) {
+    return { ok: false, error: { message: fallback, code: "JOB_ENDPOINT_MISSING", listingId } };
+  }
+
+  const timeoutAt = Date.now() + 180_000;
+  const pollDelayMs = 800;
+
+  while (Date.now() < timeoutAt) {
+    await new Promise((resolve) => setTimeout(resolve, pollDelayMs));
+    const statusUrl = buildDirectoryIqWriteApiUrl(endpoint);
+    const statusRes = await fetch(statusUrl, { cache: "no-store" });
+    const statusJson = (await statusRes.json().catch(() => ({}))) as DirectoryIqJobStatus & ApiErrorShape;
+    if (!statusRes.ok) {
+      return { ok: false, error: parseError(statusJson, fallback, statusRes.status, listingId) };
+    }
+
+    if (statusJson.status === "succeeded") {
+      return { ok: true, data: asRecord(statusJson.result) as T };
+    }
+    if (statusJson.status === "failed" || statusJson.status === "cancelled") {
+      return {
+        ok: false,
+        error: {
+          message: statusJson.error?.message ?? fallback,
+          code: statusJson.error?.code,
+          reqId: statusJson.error?.reqId,
+          listingId,
+        },
+      };
+    }
+  }
+
+  return { ok: false, error: { message: `${fallback} Timed out waiting for job completion.`, code: "JOB_TIMEOUT", listingId } };
+}
+
+function isJobAcceptedPayload(value: unknown): value is DirectoryIqJobAccepted {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const payload = value as DirectoryIqJobAccepted;
+  return typeof payload.jobId === "string" && typeof payload.statusEndpoint === "string";
+}
+
+async function resolveDirectoryIqJobOrInline<T extends Record<string, unknown>>(
+  res: Response,
+  json: ApiErrorShape & Record<string, unknown>,
+  fallback: string,
+  listingId?: string
+): Promise<{ ok: true; data: T } | { ok: false; error: UiError }> {
+  if (!res.ok) {
+    return { ok: false, error: parseError(json, fallback, res.status, listingId) };
+  }
+
+  if (res.status === 202 || isJobAcceptedPayload(json)) {
+    return waitForDirectoryIqJobResult<T>(json, fallback, listingId);
+  }
+
+  return { ok: true, data: asRecord(json) as T };
 }
 
 function stringifyErrorMessage(error: unknown, fallback: string): string {
@@ -1773,23 +1865,31 @@ export default function ListingOptimizationClient({
     setUiState("generating");
     setListingLifecycle("Generated");
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/generate${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/generate`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mode: "default" }),
-    });
+      }
+    );
 
-    const json = (await res.json().catch(() => ({}))) as { draftId?: string; proposedDescription?: string } & ApiErrorShape;
-
-    if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+    const settled = await resolveDirectoryIqJobOrInline<{ draftId?: string; proposedDescription?: string }>(
+      res,
+      json,
+      "Failed to generate listing optimization draft.",
+      effectiveListingId
+    );
+    if (!settled.ok) {
       setUiState("idle");
       setListingLifecycle("Recommended");
-      setError(parseError(json, "Failed to generate listing optimization draft."));
+      setError(settled.error);
       return;
     }
 
-    setDraftId(json.draftId ?? "");
-    setProposedDescription(json.proposedDescription ?? "");
+    setDraftId(typeof settled.data.draftId === "string" ? settled.data.draftId : "");
+    setProposedDescription(typeof settled.data.proposedDescription === "string" ? settled.data.proposedDescription : "");
     setDiffRows([]);
     setListingApprovalToken("");
     setListingApprovedForPublish(false);
@@ -1803,21 +1903,30 @@ export default function ListingOptimizationClient({
     setError(null);
     setUiState("previewing");
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/preview${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/preview`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ draftId }),
-    });
+      }
+    );
 
-    const json = (await res.json().catch(() => ({}))) as { diff?: DiffRow[]; approvalToken?: string } & ApiErrorShape;
-    if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+    const settled = await resolveDirectoryIqJobOrInline<{ diff?: DiffRow[]; approvalToken?: string }>(
+      res,
+      json,
+      "Failed to preview listing optimization draft.",
+      effectiveListingId
+    );
+    if (!settled.ok) {
       setUiState("generated");
-      setError(parseError(json, "Failed to preview listing optimization draft."));
+      setError(settled.error);
       return;
     }
 
-    setDiffRows(json.diff ?? []);
-    setListingApprovalToken(json.approvalToken ?? "");
+    setDiffRows(Array.isArray(settled.data.diff) ? settled.data.diff : []);
+    setListingApprovalToken(typeof settled.data.approvalToken === "string" ? settled.data.approvalToken : "");
     setUiState("ready_to_push");
     setListingLifecycle("Approved");
     setNotice("Listing optimization is ready for publish.");
@@ -1830,7 +1939,9 @@ export default function ListingOptimizationClient({
     setError(null);
     setUiState("pushing");
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/push${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/upgrade/push`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1838,12 +1949,19 @@ export default function ListingOptimizationClient({
         approved: true,
         approvalToken: listingApprovalToken,
       }),
-    });
+      }
+    );
 
-    const json = (await res.json().catch(() => ({}))) as ApiErrorShape;
-    if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+    const settled = await resolveDirectoryIqJobOrInline<Record<string, unknown>>(
+      res,
+      json,
+      "Failed to publish listing optimization.",
+      effectiveListingId
+    );
+    if (!settled.ok) {
       setUiState("ready_to_push");
-      setError(parseError(json, "Failed to publish listing optimization."));
+      setError(settled.error);
       return;
     }
 
@@ -1919,13 +2037,16 @@ export default function ListingOptimizationClient({
           : undefined,
       }),
     });
-    const json = (await res.json().catch(() => ({}))) as {
-      draft_html?: string;
-      error?: { message?: string; code?: string } | string;
-    };
-    if (!res.ok) {
-      const message = typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate content draft.";
-      const code = typeof json.error === "string" ? "" : normalizeText(json.error?.code).toUpperCase();
+    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+    const settled = await resolveDirectoryIqJobOrInline<{ draft_html?: string }>(
+      res,
+      json,
+      "Failed to generate content draft.",
+      effectiveListingId
+    );
+    if (!settled.ok) {
+      const message = settled.error.message ?? "Failed to generate content draft.";
+      const code = normalizeText(settled.error.code).toUpperCase();
       const translatedMessage = translateStep2ErrorMessage(message, code);
       if (code === "OPENAI_KEY_MISSING" || isStep2SetupBlockerMessage(message)) {
         setError({ message: `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}` });
@@ -1941,12 +2062,12 @@ export default function ListingOptimizationClient({
 
     setContentAssets((previous) => ({
       ...previous,
-      [item.id]: {
-        ...current,
-        status: "Generated",
-        draftHtml: json.draft_html ?? "",
-      },
-    }));
+        [item.id]: {
+          ...current,
+          status: "Generated",
+          draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
+        },
+      }));
     setNotice(`Generated draft for ${current.title}.`);
     return { ok: true };
   }
@@ -1955,19 +2076,25 @@ export default function ListingOptimizationClient({
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/image${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/image`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ focus_topic: current.focusTopic }),
-    });
-    const json = (await res.json().catch(() => ({}))) as { featured_image_url?: string; error?: { message?: string; code?: string } | string };
+      }
+    );
+    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+    const settled = await resolveDirectoryIqJobOrInline<{ featured_image_url?: string }>(
+      res,
+      json,
+      "Failed to generate featured image.",
+      effectiveListingId
+    );
 
-    if (!res.ok) {
+    if (!settled.ok) {
       setError({
-        message: translateStep2ErrorMessage(
-          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to generate featured image.",
-          typeof json.error === "string" ? "" : json.error?.code
-        ),
+        message: translateStep2ErrorMessage(settled.error.message, settled.error.code),
       });
       return false;
     }
@@ -1977,7 +2104,7 @@ export default function ListingOptimizationClient({
       [item.id]: {
         ...current,
         imageStatus: "Generated",
-        featuredImageUrl: json.featured_image_url ?? "",
+        featuredImageUrl: typeof settled.data.featured_image_url === "string" ? settled.data.featured_image_url : "",
       },
     }));
     setNotice(`Generated featured image for ${current.title}.`);
@@ -1988,11 +2115,14 @@ export default function ListingOptimizationClient({
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
-    });
+      }
+    );
     const json = (await res.json().catch(() => ({}))) as {
       approval_token?: string;
       preview?: { score_delta?: { after?: number } };
@@ -2029,14 +2159,17 @@ export default function ListingOptimizationClient({
     const current = initializeContentAsset(item, slot);
     if (!current.approvalToken) return false;
 
-    const res = await fetch(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/publish${siteQuery}`, {
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/publish`, siteQuery),
+      {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         approve_publish: true,
         approval_token: current.approvalToken,
       }),
-    });
+      }
+    );
 
     const json = (await res.json().catch(() => ({}))) as {
       published_url?: string;

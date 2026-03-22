@@ -91,6 +91,33 @@ const pushUpgrade = vi.fn(async () => {
   return { reqId: "req-push-upgrade", draftId: "draft-1", bdRef: "bd-ref-1" };
 });
 
+type JobAccepted = {
+  jobId?: string;
+  status?: string;
+  statusEndpoint?: string;
+};
+
+type JobStatus = {
+  status?: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+  result?: Record<string, unknown>;
+  error?: { code?: string };
+};
+
+async function waitForJob(statusEndpoint: string): Promise<JobStatus> {
+  const jobId = statusEndpoint.split("/").pop() ?? "";
+  const { GET } = await import("@/app/api/directoryiq/jobs/[jobId]/route");
+
+  for (let i = 0; i < 80; i += 1) {
+    const res = await GET(new NextRequest(`http://localhost${statusEndpoint}`), { params: { jobId } });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as JobStatus;
+    if (json.status === "succeeded" || json.status === "failed" || json.status === "cancelled") return json;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+
+  throw new Error(`Timed out waiting for job: ${statusEndpoint}`);
+}
+
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
   resolveUserId,
@@ -153,10 +180,13 @@ describe("directoryiq listing upgrade routes", () => {
       headers: { "content-type": "application/json" },
     });
     const res = await POST(req, { params: { listingId: "321" } });
-    const json = await res.json();
+    const accepted = (await res.json()) as JobAccepted;
 
-    expect(res.status).toBe(200);
-    expect(json.draftId).toBe("draft-1");
+    expect(res.status).toBe(202);
+    expect(accepted.status).toBe("queued");
+    const status = await waitForJob(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.draftId).toBe("draft-1");
     expect(generateListingUpgradeDraft).toHaveBeenCalledTimes(1);
   });
 
@@ -169,11 +199,12 @@ describe("directoryiq listing upgrade routes", () => {
       headers: { "content-type": "application/json" },
     });
     const res = await POST(req, { params: { listingId: "321" } });
-    const json = await res.json();
+    const accepted = (await res.json()) as JobAccepted;
 
-    expect(res.status).toBe(400);
-    expect(json.error.code).toBe("OPENAI_KEY_MISSING");
-    expect(typeof json.error.reqId).toBe("string");
+    expect(res.status).toBe(202);
+    const status = await waitForJob(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("OPENAI_KEY_MISSING");
   });
 
   it("push route requires explicit preview token + approval", async () => {
@@ -190,9 +221,11 @@ describe("directoryiq listing upgrade routes", () => {
     });
 
     const res = await POST(req, { params: { listingId: "321" } });
-    const json = await res.json();
-    expect(res.status).toBe(200);
-    expect(json.ok).toBe(true);
+    const accepted = (await res.json()) as JobAccepted;
+    expect(res.status).toBe(202);
+    const status = await waitForJob(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.ok).toBe(true);
     expect(markListingUpgradePushed).toHaveBeenCalledTimes(1);
   });
 

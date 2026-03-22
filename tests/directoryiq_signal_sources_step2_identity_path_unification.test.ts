@@ -114,9 +114,13 @@ describe("directoryiq signal-sources + step2 identity-path unification", () => {
 
     const signalRes = await signalSourcesRoute.GET(signalReq);
     const step2Res = await upgradeGenerateRoute.POST(step2Req, { params: { listingId: "321" } });
+    const step2Json = await step2Res.json();
 
     expect(signalRes.status).toBe(200);
-    expect(step2Res.status).toBe(200);
+    expect(step2Res.status).toBe(202);
+    expect(step2Json.status).toBe("queued");
+    expect(step2Json.jobId).toBeTruthy();
+    expect(step2Json.statusEndpoint).toContain("/api/directoryiq/jobs/");
 
     expect(ensureUserMock).toHaveBeenCalledWith("user-owner");
     expect(ensureUserMock).toHaveBeenCalledTimes(2);
