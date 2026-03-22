@@ -23,6 +23,28 @@ const generateAuthorityDraft = vi.fn(async () => "<p>Draft html</p>");
 const generateAuthorityImage = vi.fn(async () => "data:image/png;base64,smoke");
 const validateOpenAiKeyPresent = vi.fn((value: string | null) => value || "smoke-key");
 
+type JobAccepted = {
+  status?: string;
+  statusEndpoint?: string;
+};
+
+type JobStatus = {
+  status?: "queued" | "running" | "succeeded" | "failed" | "cancelled";
+};
+
+async function waitForJob(statusEndpoint: string): Promise<JobStatus> {
+  const jobId = statusEndpoint.split("/").pop() ?? "";
+  const { GET } = await import("@/app/api/directoryiq/jobs/[jobId]/route");
+  for (let i = 0; i < 80; i += 1) {
+    const res = await GET(new NextRequest(`http://localhost${statusEndpoint}`), { params: { jobId } });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as JobStatus;
+    if (json.status === "succeeded" || json.status === "failed" || json.status === "cancelled") return json;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error(`Timed out waiting for job: ${statusEndpoint}`);
+}
+
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
   ensureUser,
   resolveUserId,
@@ -80,8 +102,17 @@ describe("directoryiq authority smoke generation routes", () => {
 
     const draftRes = await draftRoute.POST(draftReq, { params: { listingId: "321", slot: "1" } });
     const imageRes = await imageRoute.POST(imageReq, { params: { listingId: "321", slot: "1" } });
+    const draftAccepted = (await draftRes.json()) as JobAccepted;
+    const imageAccepted = (await imageRes.json()) as JobAccepted;
 
-    expect(draftRes.status).toBe(200);
-    expect(imageRes.status).toBe(200);
+    expect(draftRes.status).toBe(202);
+    expect(imageRes.status).toBe(202);
+    expect(draftAccepted.status).toBe("queued");
+    expect(imageAccepted.status).toBe("queued");
+
+    const draftStatus = await waitForJob(String(draftAccepted.statusEndpoint));
+    const imageStatus = await waitForJob(String(imageAccepted.statusEndpoint));
+    expect(draftStatus.status).toBe("succeeded");
+    expect(imageStatus.status).toBe("succeeded");
   });
 });

@@ -1,21 +1,15 @@
 export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getDirectoryIqOpenAiKey } from "@/app/api/directoryiq/_utils/integrations";
 import { upsertAuthorityPostDraft } from "@/app/api/directoryiq/_utils/selectionData";
 import { normalizePostType, normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
-import {
-  AuthorityRouteError,
-  type AuthorityErrorCode,
-  authorityErrorResponse,
-  authorityReqId,
-  logAuthorityError,
-  logAuthorityInfo,
-} from "@/app/api/directoryiq/_utils/authorityErrors";
+import { AuthorityRouteError, authorityReqId } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { buildGovernedPrompt, ensureContextualListingLink, validateDraftHtml } from "@/lib/directoryiq/contentGovernance";
 import { generateAuthorityDraft, validateOpenAiKeyPresent } from "@/lib/openai/serverClient";
-import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
+import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
+import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
+import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -40,324 +34,131 @@ function resolveStep2ContractListingUrl(step2Contract: unknown): string {
   return asString((missionPlanSlot as { listing_url?: unknown }).listing_url);
 }
 
-const TRANSIENT_NETWORK_ERROR_CODES = new Set([
-  "ETIMEDOUT",
-  "ECONNRESET",
-  "ECONNREFUSED",
-  "EHOSTUNREACH",
-  "ENETUNREACH",
-  "ENOTFOUND",
-  "EPIPE",
-]);
-
-const TRANSIENT_DB_ERROR_CODES = new Set(["57P01", "57P02", "57P03", "53300"]);
-
-function toErrorCode(error: unknown): string {
-  if (!error || typeof error !== "object") return "";
-  const candidate = (error as { code?: unknown }).code;
-  return typeof candidate === "string" ? candidate.trim().toUpperCase() : "";
-}
-
-function toErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return typeof error === "string" ? error : "";
-}
-
-function classifyTransientInfraError(error: unknown): {
-  status: number;
-  code: AuthorityErrorCode;
-  message: string;
-  details?: string;
-  family: "db_timeout" | "db_connectivity" | "network_connectivity" | "internal";
-} {
-  const rawCode = toErrorCode(error);
-  const rawMessage = toErrorMessage(error);
-  const lower = rawMessage.toLowerCase();
-  const syscall = typeof (error as { syscall?: unknown })?.syscall === "string" ? (error as { syscall: string }).syscall : undefined;
-  const address = typeof (error as { address?: unknown })?.address === "string" ? (error as { address: string }).address : undefined;
-  const port = typeof (error as { port?: unknown })?.port === "number" ? (error as { port: number }).port : undefined;
-
-  const detailParts = [
-    rawCode ? `code=${rawCode}` : "",
-    syscall ? `syscall=${syscall}` : "",
-    address ? `address=${address}` : "",
-    typeof port === "number" ? `port=${port}` : "",
-    rawMessage ? `message=${rawMessage}` : "",
-  ].filter(Boolean);
-  const details = detailParts.length ? detailParts.join(" | ") : undefined;
-
-  const looksLikeTimeout = rawCode === "ETIMEDOUT" || lower.includes("timed out") || lower.includes("timeout");
-  const looksLikeDb =
-    lower.includes("database") ||
-    lower.includes("postgres") ||
-    lower.includes("pg:") ||
-    lower.includes("relation ") ||
-    lower.includes("connect etimedout");
-  const looksLikeNetwork =
-    TRANSIENT_NETWORK_ERROR_CODES.has(rawCode) ||
-    lower.includes("socket") ||
-    lower.includes("connect ") ||
-    lower.includes("connection refused") ||
-    lower.includes("getaddrinfo") ||
-    lower.includes("dns");
-  const looksLikeDbTransient = TRANSIENT_DB_ERROR_CODES.has(rawCode);
-
-  if (looksLikeTimeout && looksLikeDb) {
-    return {
-      status: 503,
-      code: "DB_TIMEOUT",
-      message: "Article generation is temporarily unavailable. Please try again.",
-      details,
-      family: "db_timeout",
-    };
-  }
-
-  if (looksLikeDbTransient || (looksLikeDb && looksLikeNetwork)) {
-    return {
-      status: 503,
-      code: "DB_CONNECTIVITY",
-      message: "Article generation is temporarily unavailable. Please try again.",
-      details,
-      family: "db_connectivity",
-    };
-  }
-
-  if (looksLikeTimeout || looksLikeNetwork) {
-    return {
-      status: 503,
-      code: "NETWORK_CONNECTIVITY",
-      message: "We couldn't reach a required service. Please try again.",
-      details,
-      family: "network_connectivity",
-    };
-  }
-
-  return {
-    status: 500,
-    code: "INTERNAL_ERROR",
-    message: "Article generation is temporarily unavailable. Please try again.",
-    details,
-    family: "internal",
-  };
-}
-
-type Step2Boundary =
-  | "ensureUser"
-  | "getDirectoryIqOpenAiKey"
-  | "resolveListingEvaluation"
-  | "generateAuthorityDraft"
-  | "upsertAuthorityPostDraft";
-
-function compactDetail(value: string, max = 320): string {
-  if (!value) return "";
-  return value.length <= max ? value : `${value.slice(0, max)}...`;
-}
-
-function inferFailureFamily(error: unknown): string {
-  if (error instanceof AuthorityRouteError) {
-    if (error.code.startsWith("OPENAI_")) return "openai";
-    if (error.code.startsWith("DB_")) return "db";
-    if (error.code === "NETWORK_CONNECTIVITY") return "network_connectivity";
-    if (error.code === "DRAFT_VALIDATION_FAILED") return "governance";
-    if (error.code === "BAD_REQUEST" || error.code === "NOT_FOUND" || error.code === "TOKEN_INVALID") return "validation";
-    return "internal";
-  }
-  const rawCode = toErrorCode(error);
-  const rawMessage = toErrorMessage(error).toLowerCase();
-  if (TRANSIENT_DB_ERROR_CODES.has(rawCode) || rawMessage.includes("database") || rawMessage.includes("postgres")) return "db_connectivity";
-  if (TRANSIENT_NETWORK_ERROR_CODES.has(rawCode) || rawMessage.includes("timeout") || rawMessage.includes("timed out")) {
-    return "network_connectivity";
-  }
-  return "internal";
-}
-
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
 ) {
-  let resolvedListingId = "unknown";
-  let slotIndex = 0;
-  let resolvedSiteId: string | null = null;
-  let listingSourceId = "unknown";
   const reqId = authorityReqId();
-  const routeOrigin = "directoryiq.authority.step2.draft";
-  const routeStartedAt = Date.now();
-  let failingBoundary: Step2Boundary | null = null;
-
-  function currentListingForLog(): string {
-    return listingSourceId !== "unknown" ? listingSourceId : resolvedListingId;
-  }
-
-  function currentSlotForLog(): number | undefined {
-    return slotIndex > 0 ? slotIndex : undefined;
-  }
-
-  function logBoundaryEvent(
-    level: "info" | "error",
-    phase: "boundary_start" | "boundary_success" | "boundary_failure",
-    boundary: Step2Boundary,
-    extras?: Record<string, unknown>
-  ): void {
-    const payload = {
-      event: phase,
-      routeOrigin,
-      reqId,
-      action: "draft",
-      listingId: currentListingForLog(),
-      slot: currentSlotForLog(),
-      boundary,
-      ...extras,
-    };
-    if (level === "error") {
-      console.error("[directoryiq-step2-draft]", payload);
-      return;
-    }
-    console.info("[directoryiq-step2-draft]", payload);
-  }
-
-  async function runBoundary<T>(boundary: Step2Boundary, operation: () => Promise<T>): Promise<T> {
-    const startedAt = Date.now();
-    logBoundaryEvent("info", "boundary_start", boundary, { phase: "start" });
-    try {
-      const result = await operation();
-      logBoundaryEvent("info", "boundary_success", boundary, {
-        phase: "success",
-        elapsedMs: Date.now() - startedAt,
-      });
-      return result;
-    } catch (error) {
-      failingBoundary = boundary;
-      logBoundaryEvent("error", "boundary_failure", boundary, {
-        phase: "failure",
-        elapsedMs: Date.now() - startedAt,
-        code: error instanceof AuthorityRouteError ? error.code : toErrorCode(error) || undefined,
-        codeFamily: inferFailureFamily(error),
-        details: compactDetail(error instanceof AuthorityRouteError ? error.details ?? toErrorMessage(error) : toErrorMessage(error)) || undefined,
-      });
-      throw error;
-    }
-  }
-
+  const { listingId, slot } = await Promise.resolve(params);
+  const resolvedListingId = decodeURIComponent(listingId);
+  let slotIndex: number;
   try {
-    console.info("[directoryiq-step2-draft]", {
-      event: "route_request_start",
-      routeOrigin,
-      reqId,
-      action: "draft",
-      listingId: currentListingForLog(),
-      slot: currentSlotForLog(),
-      site_id: resolvedSiteId,
-      totalElapsedMs: 0,
-    });
-
-    const userId = resolveUserId(req);
-    await runBoundary("ensureUser", () => ensureUser(userId));
-
-    const { listingId, slot } = await Promise.resolve(params);
-    resolvedListingId = decodeURIComponent(listingId);
     slotIndex = normalizeSlot(slot);
-    resolvedSiteId = req.nextUrl.searchParams.get("site_id")?.trim() || null;
+  } catch (error) {
+    if (error instanceof AuthorityRouteError) {
+      return NextResponse.json(
+        {
+          error: {
+            message: error.message,
+            code: error.code,
+            reqId,
+            details: error.details,
+          },
+        },
+        { status: error.status }
+      );
+    }
+    throw error;
+  }
+  const userId = await requireDirectoryIqWriteUser(req);
+  const siteId = req.nextUrl.searchParams.get("site_id")?.trim() || null;
 
-    logAuthorityInfo({
-      reqId,
-      listingId: resolvedListingId,
-      slot: slotIndex,
-      action: "draft",
-      message: "request received",
-    });
-    console.info("[directoryiq-step2-draft]", {
-      event: "request_received",
-      reqId,
-      routeOrigin,
-      listingId: resolvedListingId,
-      slot: slotIndex,
-      site_id: resolvedSiteId,
-      localCanonicalPath: true,
-    });
-
-    const body = (await req.json().catch(() => ({}))) as {
-      type?: string;
-      focus_topic?: string;
-      title?: string;
-      step2_contract?: {
-        mission_plan_slot?: Record<string, unknown>;
-        support_brief?: Record<string, unknown>;
-        seo_package?: Record<string, unknown>;
-      };
+  const body = (await req.json().catch(() => ({}))) as {
+    type?: string;
+    focus_topic?: string;
+    title?: string;
+    step2_contract?: {
+      mission_plan_slot?: Record<string, unknown>;
+      support_brief?: Record<string, unknown>;
+      seo_package?: Record<string, unknown>;
     };
+  };
 
-    const postType = normalizePostType((body.type ?? "").trim());
-    const focusTopic = (body.focus_topic ?? "").trim();
-    const title = (body.title ?? "").trim();
+  const job = await createDirectoryIqJob({
+    reqId,
+    userId,
+    kind: "step2.draft",
+    listingId: resolvedListingId,
+    siteId,
+    slot: slotIndex,
+  });
 
-    if (!focusTopic) throw new AuthorityRouteError(400, "BAD_REQUEST", "Focus topic is required.");
+  runDirectoryIqJob(job, {
+    routeOrigin: "directoryiq.authority.step2.draft",
+    runtimeOwner: "directoryiq-api.ibrains.ai",
+    startedStage: "generating",
+    processor: async ({ setStage }) => {
+      const postType = normalizePostType((body.type ?? "").trim());
+      const focusTopic = (body.focus_topic ?? "").trim();
+      const title = (body.title ?? "").trim();
 
-    const apiKey = await runBoundary("getDirectoryIqOpenAiKey", async () =>
-      validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId))
-    );
+      if (!focusTopic) {
+        throw new AuthorityRouteError(400, "BAD_REQUEST", "Focus topic is required.");
+      }
 
-    const resolved = await runBoundary("resolveListingEvaluation", () =>
-      resolveListingEvaluation({
+      const apiKey = validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId));
+      const resolved = await resolveListingEvaluation({
         userId,
         listingId: resolvedListingId,
-        siteId: resolvedSiteId,
-      })
-    );
-    if (!resolved || !resolved.listingEval.listing) {
-      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
-    }
+        siteId,
+      });
+      if (!resolved || !resolved.listingEval.listing) {
+        throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+      }
 
-    const detail = resolved.listingEval;
-    const listing = detail.listing;
-    if (!listing) {
-      throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
-    }
-    const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
-    listingSourceId = listing.source_id;
-    const listingName = listing.title ?? listingSourceId;
-    const listingUrl =
-      resolveCanonicalListingUrl(raw, listing.url) || resolveStep2ContractListingUrl(body.step2_contract);
+      const detail = resolved.listingEval;
+      const listing = detail.listing;
+      if (!listing) {
+        throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
+      }
 
-    if (!listingUrl) {
-      throw new AuthorityRouteError(
-        400,
-        "BAD_REQUEST",
-        "Listing URL is required to enforce contextual blog-to-listing links."
-      );
-    }
-    const listingDescription =
-      (typeof raw.description === "string" && raw.description) ||
-      (typeof raw.content === "string" && raw.content) ||
-      "";
+      const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
+      const listingSourceId = listing.source_id;
+      const listingName = listing.title ?? listingSourceId;
+      const listingUrl =
+        resolveCanonicalListingUrl(raw, listing.url) || resolveStep2ContractListingUrl(body.step2_contract);
 
-    const prompt = buildGovernedPrompt({
-      postType,
-      listingTitle: listingName,
-      listingUrl,
-      listingDescription,
-      focusTopic,
-    });
+      if (!listingUrl) {
+        throw new AuthorityRouteError(
+          400,
+          "BAD_REQUEST",
+          "Listing URL is required to enforce contextual blog-to-listing links."
+        );
+      }
+      const listingDescription =
+        (typeof raw.description === "string" && raw.description) ||
+        (typeof raw.content === "string" && raw.content) ||
+        "";
 
-    const generatedHtml = await runBoundary("generateAuthorityDraft", () => generateAuthorityDraft({ apiKey, prompt }));
-    const html = ensureContextualListingLink({
-      html: generatedHtml,
-      listingUrl,
-      listingTitle: listingName,
-      focusTopic,
-    });
-    const validation = validateDraftHtml({ html, listingUrl });
+      const prompt = buildGovernedPrompt({
+        postType,
+        listingTitle: listingName,
+        listingUrl,
+        listingDescription,
+        focusTopic,
+      });
 
-    if (!validation.valid) {
-      throw new AuthorityRouteError(
-        422,
-        "DRAFT_VALIDATION_FAILED",
-        "Draft failed governance validation.",
-        validation.errors.join(" ")
-      );
-    }
+      const generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+      await setStage("validating");
+      const html = ensureContextualListingLink({
+        html: generatedHtml,
+        listingUrl,
+        listingTitle: listingName,
+        focusTopic,
+      });
+      const validation = validateDraftHtml({ html, listingUrl });
 
-    await runBoundary("upsertAuthorityPostDraft", () =>
-      upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
+      if (!validation.valid) {
+        throw new AuthorityRouteError(
+          422,
+          "DRAFT_VALIDATION_FAILED",
+          "Draft failed governance validation.",
+          validation.errors.join(" ")
+        );
+      }
+
+      await setStage("persisting");
+      await upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
         type: postType,
         title: title || `${listingName}: ${focusTopic}`,
         focusTopic,
@@ -370,155 +171,27 @@ export async function POST(
           governance_passed: true,
           step2_contract: body.step2_contract ?? null,
         },
-      })
-    );
+      });
 
-    logAuthorityInfo({
-      reqId,
-      listingId: listingSourceId,
-      slot: slotIndex,
-      action: "draft",
-      message: "draft generated and persisted",
-    });
-    console.info("[directoryiq-step2-draft]", {
-      event: "draft_persisted",
-      reqId,
-      routeOrigin,
-      listingId: listingSourceId,
-      slot: slotIndex,
-      site_id: resolvedSiteId,
-      localCanonicalPath: true,
-      codeFamily: "ok",
-    });
-    console.info("[directoryiq-step2-draft]", {
-      event: "route_request_success",
-      routeOrigin,
-      reqId,
-      action: "draft",
-      listingId: currentListingForLog(),
-      slot: currentSlotForLog(),
-      totalElapsedMs: Date.now() - routeStartedAt,
-    });
+      return {
+        ok: true,
+        reqId,
+        slot: slotIndex,
+        status: "draft",
+        draft_html: html,
+        blog_to_listing_status: validation.hasContextualListingLink ? "linked" : "missing",
+      };
+    },
+  });
 
-    return NextResponse.json({
-      ok: true,
-      reqId,
-      slot: slotIndex,
-      status: "draft",
-      draft_html: html,
-      blog_to_listing_status: validation.hasContextualListingLink ? "linked" : "missing",
-    });
-  } catch (error) {
-    if (error instanceof ListingSiteRequiredError) {
-      console.error("[directoryiq-step2-draft]", {
-        event: "route_request_failure",
-        routeOrigin,
-        reqId,
-        action: "draft",
-        listingId: currentListingForLog(),
-        slot: currentSlotForLog(),
-        failingBoundary,
-        finalCode: "BAD_REQUEST",
-        finalCodeFamily: "validation",
-        totalElapsedMs: Date.now() - routeStartedAt,
-      });
-      console.error("[directoryiq-step2-draft]", {
-        event: "request_failed",
-        reqId,
-        routeOrigin,
-        listingId: resolvedListingId,
-        slot: slotIndex || undefined,
-        site_id: resolvedSiteId,
-        localCanonicalPath: true,
-        codeFamily: "bad_request",
-        code: "BAD_REQUEST",
-      });
-      return authorityErrorResponse({
-        reqId,
-        status: 409,
-        message: "Multiple sites contain this listing. Provide site_id.",
-        code: "BAD_REQUEST",
-        details: JSON.stringify(
-          error.candidates.map((candidate) => ({
-            site_id: candidate.siteId,
-            site_label: candidate.siteLabel,
-          }))
-        ),
-      });
-    }
-    logAuthorityError({
-      reqId,
-      listingId: resolvedListingId,
-      slot: slotIndex || undefined,
-      action: "draft",
-      error,
-    });
-
-    if (error instanceof AuthorityRouteError) {
-      const finalCodeFamily = error.code === "DRAFT_VALIDATION_FAILED" ? "governance" : "validation";
-      console.error("[directoryiq-step2-draft]", {
-        event: "route_request_failure",
-        routeOrigin,
-        reqId,
-        action: "draft",
-        listingId: currentListingForLog(),
-        slot: currentSlotForLog(),
-        failingBoundary,
-        finalCode: error.code,
-        finalCodeFamily,
-        totalElapsedMs: Date.now() - routeStartedAt,
-      });
-      console.error("[directoryiq-step2-draft]", {
-        event: "request_failed",
-        reqId,
-        routeOrigin,
-        listingId: listingSourceId !== "unknown" ? listingSourceId : resolvedListingId,
-        slot: slotIndex || undefined,
-        site_id: resolvedSiteId,
-        localCanonicalPath: true,
-        codeFamily: error.code === "DRAFT_VALIDATION_FAILED" ? "governance" : "validation",
-        code: error.code,
-      });
-      return authorityErrorResponse({
-        reqId,
-        status: error.status,
-        message: error.message,
-        code: error.code,
-        details: error.details,
-      });
-    }
-
-    const classified = classifyTransientInfraError(error);
-    console.error("[directoryiq-step2-draft]", {
-      event: "route_request_failure",
-      routeOrigin,
-      reqId,
-      action: "draft",
-      listingId: currentListingForLog(),
-      slot: currentSlotForLog(),
-      failingBoundary,
-      finalCode: classified.code,
-      finalCodeFamily: classified.family,
-      totalElapsedMs: Date.now() - routeStartedAt,
-    });
-    console.error("[directoryiq-step2-draft]", {
-      event: "request_failed",
-      reqId,
-      routeOrigin,
-      listingId: listingSourceId !== "unknown" ? listingSourceId : resolvedListingId,
-      slot: slotIndex || undefined,
-      site_id: resolvedSiteId,
-      localCanonicalPath: true,
-      codeFamily: classified.family,
-      code: classified.code,
-      details: classified.details,
-    });
-    return authorityErrorResponse({
-      reqId,
-      status: classified.status,
-      message: classified.message,
-      code: classified.code,
-      details: classified.details,
-    });
-  }
+  return NextResponse.json(
+    {
+      jobId: job.id,
+      reqId: job.reqId,
+      acceptedAt: job.acceptedAt,
+      status: job.status,
+      statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+    },
+    { status: 202 }
+  );
 }
