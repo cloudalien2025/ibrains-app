@@ -179,15 +179,29 @@ function asPositiveInteger(value: unknown): number | null {
   return parsed > 0 ? parsed : null;
 }
 
+function resolveDataTypeFromUnknown(candidate: unknown): number | null {
+  if (!candidate) return null;
+  if (Array.isArray(candidate)) {
+    for (const row of candidate) {
+      const resolved = resolveDataTypeFromUnknown(row);
+      if (resolved) return resolved;
+    }
+    return null;
+  }
+  if (typeof candidate !== "object") return null;
+  const typed = candidate as Record<string, unknown>;
+  const direct = asPositiveInteger(typed.data_type);
+  if (direct) return direct;
+  return resolveDataTypeFromUnknown(typed.data ?? typed.category ?? typed.record);
+}
+
 function resolveDataTypeFromCategoryPayload(payload: Record<string, unknown> | null): number | null {
   if (!payload) return null;
-  const message = payload.message;
-  if (message && typeof message === "object" && !Array.isArray(message)) {
-    const fromMessage = asPositiveInteger((message as Record<string, unknown>).data_type);
-    if (fromMessage) return fromMessage;
+  const candidates: unknown[] = [payload.message, payload.data, payload.category, payload];
+  for (const candidate of candidates) {
+    const resolved = resolveDataTypeFromUnknown(candidate);
+    if (resolved) return resolved;
   }
-  const direct = asPositiveInteger(payload.data_type);
-  if (direct) return direct;
   return null;
 }
 

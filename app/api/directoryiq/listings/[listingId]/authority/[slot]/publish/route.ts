@@ -206,6 +206,13 @@ export async function POST(
       blogDataId: bd.blogPostsDataId,
     });
     if (!publishTarget.dataType) {
+      logAuthorityInfo({
+        reqId,
+        listingId: resolvedListingId,
+        slot: slotIndex,
+        action: "publish",
+        message: `failed resolving publish data_type site_id=${resolved.siteId} blog_posts_data_id=${bd.blogPostsDataId} endpoint=/api/v2/data_categories/get/${bd.blogPostsDataId} inspected=message.data_type|message[].data_type|data.data_type|data_type`,
+      });
       throw new AuthorityRouteError(
         400,
         "BAD_REQUEST",
