@@ -8,14 +8,50 @@ type OpenAiRequestParams = {
   payload: JsonObject;
   timeoutMs: number;
   retries: number;
+  requestType: "text" | "image";
 };
 
 function redact(text: string): string {
   return text.length > 320 ? `${text.slice(0, 320)}...` : text;
 }
 
+function sanitizePayloadForEndpoint(path: string, payload: JsonObject): JsonObject {
+  // Guard against leaking chat/structured-output fields into image generations payloads.
+  if (path !== "/v1/images/generations") return payload;
+  if (!Object.prototype.hasOwnProperty.call(payload, "response_format")) return payload;
+
+  const next = { ...payload };
+  delete next.response_format;
+  return next;
+}
+
+function getPayloadModel(payload: JsonObject): string | undefined {
+  const model = payload.model;
+  return typeof model === "string" ? model : undefined;
+}
+
+function buildAuthorityImagePayload(params: {
+  prompt: string;
+  model?: string;
+}): JsonObject {
+  return {
+    model: params.model || process.env.DIRECTORYIQ_OPENAI_IMAGE_MODEL || "gpt-image-1",
+    prompt: params.prompt,
+    size: "1536x1024",
+    quality: "medium",
+  };
+}
+
 async function openAiJsonRequest(params: OpenAiRequestParams): Promise<JsonObject> {
   const url = `https://api.openai.com${params.path}`;
+  const sanitizedPayload = sanitizePayloadForEndpoint(params.path, params.payload);
+  const model = getPayloadModel(sanitizedPayload);
+  console.info("[directoryiq-openai]", {
+    phase: "request",
+    endpoint: params.path,
+    requestType: params.requestType,
+    model,
+  });
   let attempt = 0;
 
   while (attempt <= params.retries) {
@@ -28,7 +64,7 @@ async function openAiJsonRequest(params: OpenAiRequestParams): Promise<JsonObjec
           Authorization: `Bearer ${params.apiKey}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(params.payload),
+        body: JSON.stringify(sanitizedPayload),
         cache: "no-store",
         signal: controller.signal,
       });
@@ -39,6 +75,14 @@ async function openAiJsonRequest(params: OpenAiRequestParams): Promise<JsonObjec
       const apiMessage =
         (json?.error as { message?: string } | undefined)?.message ||
         `OpenAI request failed with status ${response.status}.`;
+      console.warn("[directoryiq-openai]", {
+        phase: "upstream_error",
+        endpoint: params.path,
+        requestType: params.requestType,
+        model,
+        status: response.status,
+        message: redact(apiMessage),
+      });
 
       if (response.status === 401 || response.status === 403) {
         throw new AuthorityRouteError(401, "OPENAI_AUTH", "OpenAI authentication failed.", redact(apiMessage));
@@ -59,6 +103,13 @@ async function openAiJsonRequest(params: OpenAiRequestParams): Promise<JsonObjec
       throw new AuthorityRouteError(502, "OPENAI_UPSTREAM", "OpenAI request failed.", redact(apiMessage));
     } catch (error) {
       if (error instanceof AuthorityRouteError) throw error;
+      console.warn("[directoryiq-openai]", {
+        phase: "request_failure",
+        endpoint: params.path,
+        requestType: params.requestType,
+        model,
+        message: error instanceof Error ? redact(error.message) : "Unknown request failure.",
+      });
       if (controller.signal.aborted) {
         if (attempt < params.retries) {
           await new Promise((resolve) => setTimeout(resolve, 300 * (attempt + 1)));
@@ -91,6 +142,7 @@ export async function generateAuthorityDraft(params: {
     path: "/v1/chat/completions",
     timeoutMs: 45_000,
     retries: 2,
+    requestType: "text",
     payload: {
       model: params.model || process.env.DIRECTORYIQ_OPENAI_TEXT_MODEL || "gpt-4.1-mini",
       temperature: 0.2,
@@ -123,6 +175,7 @@ export async function generateListingUpgradeDraft(params: {
     path: "/v1/chat/completions",
     timeoutMs: 45_000,
     retries: 2,
+    requestType: "text",
     payload: {
       model: params.model || process.env.DIRECTORYIQ_OPENAI_TEXT_MODEL || "gpt-4.1-mini",
       temperature: 0.15,
@@ -155,12 +208,8 @@ export async function generateAuthorityImage(params: {
     path: "/v1/images/generations",
     timeoutMs: 60_000,
     retries: 2,
-    payload: {
-      model: params.model || process.env.DIRECTORYIQ_OPENAI_IMAGE_MODEL || "gpt-image-1",
-      prompt: params.prompt,
-      size: "1536x1024",
-      quality: "medium",
-    },
+    requestType: "image",
+    payload: buildAuthorityImagePayload(params),
   });
 
   const first = (json.data as Array<{ b64_json?: string; url?: string }> | undefined)?.[0];
