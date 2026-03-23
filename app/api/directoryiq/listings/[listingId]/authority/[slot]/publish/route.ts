@@ -11,6 +11,7 @@ import {
 import {
   getDirectoryIqBdConnection,
   publishBlogPostToBd,
+  resolveBlogPostDataTypeForPublish,
   pushListingUpdateToBd,
   resolveTruePostIdForListing,
 } from "@/app/api/directoryiq/_utils/integrations";
@@ -191,12 +192,33 @@ export async function POST(
         "Listing raw payload is missing BD user_id."
       );
     }
+    if (!bd.blogPostsDataId) {
+      throw new AuthorityRouteError(
+        400,
+        "BAD_REQUEST",
+        "BD blog posts data_id is required for publish.",
+        "Site configuration is missing blog_posts_data_id."
+      );
+    }
+    const publishTarget = await resolveBlogPostDataTypeForPublish({
+      baseUrl: bd.baseUrl,
+      apiKey: bd.apiKey,
+      blogDataId: bd.blogPostsDataId,
+    });
+    if (!publishTarget.dataType) {
+      throw new AuthorityRouteError(
+        400,
+        "BAD_REQUEST",
+        "BD blog posts data_type is required for publish.",
+        `Unable to resolve data_type for blog_posts_data_id=${bd.blogPostsDataId}.`
+      );
+    }
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "publish",
-      message: `resolved BD publish identity user_id=${bdUserId ? "present" : "missing"} data_type=${bd.blogPostsDataId ?? "missing"}`,
+      message: `resolved BD publish identity user_id=${bdUserId ? "present" : "missing"} data_type=${publishTarget.dataType} data_type_source=${publishTarget.source}`,
     });
 
     const publishResult = await publishBlogPostToBd({
@@ -204,6 +226,7 @@ export async function POST(
       apiKey: bd.apiKey,
       dataPostsCreatePath: bd.dataPostsCreatePath,
       blogDataId: bd.blogPostsDataId,
+      blogDataType: publishTarget.dataType,
       bdUserId,
       title: post.title,
       html: post.draft_html,

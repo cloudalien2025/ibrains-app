@@ -172,6 +172,49 @@ export async function getDirectoryIqBdConnection(
   };
 }
 
+function asPositiveInteger(value: unknown): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  if (!Number.isInteger(parsed)) return null;
+  return parsed > 0 ? parsed : null;
+}
+
+function resolveDataTypeFromCategoryPayload(payload: Record<string, unknown> | null): number | null {
+  if (!payload) return null;
+  const message = payload.message;
+  if (message && typeof message === "object" && !Array.isArray(message)) {
+    const fromMessage = asPositiveInteger((message as Record<string, unknown>).data_type);
+    if (fromMessage) return fromMessage;
+  }
+  const direct = asPositiveInteger(payload.data_type);
+  if (direct) return direct;
+  return null;
+}
+
+export async function resolveBlogPostDataTypeForPublish(params: {
+  baseUrl: string;
+  apiKey: string;
+  blogDataId: number;
+}): Promise<{ dataType: number | null; source: "data_category_get" | "missing" }> {
+  const response = await bdRequestWithRetry(() =>
+    bdRequestForm({
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      method: "GET",
+      path: `/api/v2/data_categories/get/${encodeURIComponent(String(params.blogDataId))}`,
+    })
+  );
+  if (!response.ok) {
+    return { dataType: null, source: "missing" };
+  }
+
+  const dataType = resolveDataTypeFromCategoryPayload(response.json ?? null);
+  if (!dataType) {
+    return { dataType: null, source: "missing" };
+  }
+  return { dataType, source: "data_category_get" };
+}
+
 export async function resolveTruePostIdForListing(params: {
   baseUrl: string;
   apiKey: string;
@@ -350,6 +393,7 @@ export async function publishBlogPostToBd(params: {
   apiKey: string;
   dataPostsCreatePath: string;
   blogDataId: number | null;
+  blogDataType?: number | null;
   bdUserId?: string | null;
   title: string;
   html: string;
@@ -373,7 +417,10 @@ export async function publishBlogPostToBd(params: {
 
   if (params.blogDataId) {
     form.data_id = params.blogDataId;
-    form.data_type = params.blogDataId;
+  }
+
+  if (params.blogDataType) {
+    form.data_type = params.blogDataType;
   }
 
   if (params.bdUserId) {
