@@ -10,6 +10,7 @@ import { generateAuthorityDraft, validateOpenAiKeyPresent } from "@/lib/openai/s
 import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
+import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -32,6 +33,31 @@ function resolveStep2ContractListingUrl(step2Contract: unknown): string {
   const missionPlanSlot = (step2Contract as { mission_plan_slot?: unknown }).mission_plan_slot;
   if (!missionPlanSlot || typeof missionPlanSlot !== "object" || Array.isArray(missionPlanSlot)) return "";
   return asString((missionPlanSlot as { listing_url?: unknown }).listing_url);
+}
+
+function composeListingUrlFromSite(raw: Record<string, unknown>, siteBaseUrl: string): string {
+  const base = asString(siteBaseUrl);
+  if (!base) return "";
+
+  const pathCandidates = [
+    asString(raw.group_filename),
+    asString(raw.path),
+    asString(raw.url_path),
+    asString(raw.slug),
+    asString(raw.group_slug),
+  ].filter(Boolean);
+
+  for (const pathCandidate of pathCandidates) {
+    const normalizedPath = pathCandidate.replace(/^\/+/, "");
+    if (!normalizedPath) continue;
+    try {
+      return new URL(normalizedPath, `${base.replace(/\/+$/, "")}/`).toString();
+    } catch {
+      continue;
+    }
+  }
+
+  return "";
 }
 
 export async function POST(
@@ -115,8 +141,50 @@ export async function POST(
       const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
       const listingSourceId = listing.source_id;
       const listingName = listing.title ?? listingSourceId;
-      const listingUrl =
-        resolveCanonicalListingUrl(raw, listing.url) || resolveStep2ContractListingUrl(body.step2_contract);
+      const canonicalFromListing = resolveCanonicalListingUrl(raw, listing.url);
+      const step2ContractListingUrl = resolveStep2ContractListingUrl(body.step2_contract);
+      let listingUrl = canonicalFromListing || step2ContractListingUrl;
+      let listingUrlSource = canonicalFromListing ? "listing_fields" : step2ContractListingUrl ? "step2_contract" : "none";
+      let composedFromSite = "";
+      let siteBaseUrl = "";
+
+      if (!listingUrl && resolved.siteId) {
+        const site = await getBdSite(userId, resolved.siteId);
+        siteBaseUrl = asString(site?.base_url);
+        composedFromSite = composeListingUrlFromSite(raw, siteBaseUrl);
+        if (composedFromSite) {
+          listingUrl = composedFromSite;
+          listingUrlSource = "site_base_composed";
+        }
+      }
+
+      console.info("[authority-support]", {
+        reqId,
+        listingId: listingSourceId,
+        slot: slotIndex,
+        action: "draft",
+        site_id: resolved.siteId ?? null,
+        listingUrlResolution: {
+          winner: listingUrlSource,
+          composedUsed: Boolean(composedFromSite),
+          considered: {
+            raw_url: asString(raw.url) || null,
+            raw_listing_url: asString(raw.listing_url) || null,
+            raw_profile_url: asString(raw.profile_url) || null,
+            raw_link: asString(raw.link) || null,
+            raw_permalink: asString(raw.permalink) || null,
+            raw_source_url: asString(raw.source_url) || null,
+            listing_url_column: asString(listing.url) || null,
+            step2_contract_listing_url: step2ContractListingUrl || null,
+            site_base_url: siteBaseUrl || null,
+            raw_group_filename: asString(raw.group_filename) || null,
+            raw_path: asString(raw.path) || null,
+            raw_url_path: asString(raw.url_path) || null,
+            raw_slug: asString(raw.slug) || null,
+            raw_group_slug: asString(raw.group_slug) || null,
+          },
+        },
+      });
 
       if (!listingUrl) {
         throw new AuthorityRouteError(
