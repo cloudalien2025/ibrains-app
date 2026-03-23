@@ -104,6 +104,7 @@ const publishBlogPostToBd = vi.fn(async () => ({
   status: 200,
   body: { post_id: "blog-900", url: "https://example.com/blog/fixture-blog-post" },
 }));
+const resolveBlogPostDataTypeForPublish = vi.fn(async () => ({ dataType: 4, source: "data_category_get" as const }));
 const pushListingUpdateToBd = vi.fn(async () => ({ ok: true, status: 200, body: {} }));
 const resolveTruePostIdForListing = vi.fn(async () => ({ truePostId: "listing-123", mappingKey: "slug" as const }));
 const persistListingTruePostMapping = vi.fn(async () => {});
@@ -133,6 +134,7 @@ vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
   getDirectoryIqBdConnection,
   publishBlogPostToBd,
+  resolveBlogPostDataTypeForPublish,
   pushListingUpdateToBd,
   resolveTruePostIdForListing,
 }));
@@ -728,6 +730,7 @@ describe("directoryiq authority routes", () => {
     expect(publishBlogPostToBd).toHaveBeenCalledWith(
       expect.objectContaining({
         blogDataId: 14,
+        blogDataType: 4,
         bdUserId: "98765",
       })
     );
@@ -767,6 +770,34 @@ describe("directoryiq authority routes", () => {
     expect(res.status).toBe(400);
     expect(json.error?.code).toBe("BAD_REQUEST");
     expect(String(json.error?.message ?? "")).toContain("Listing owner user_id is required");
+    expect(publishBlogPostToBd).not.toHaveBeenCalled();
+  });
+
+  it("returns BAD_REQUEST when publish target data_type cannot be resolved", async () => {
+    resolveBlogPostDataTypeForPublish.mockResolvedValueOnce({ dataType: null, source: "missing" as const });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const approvalToken = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      action: "blog_publish",
+      slot: 1,
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+        approval_token: approvalToken,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error?.code).toBe("BAD_REQUEST");
+    expect(String(json.error?.message ?? "")).toContain("data_type is required");
     expect(publishBlogPostToBd).not.toHaveBeenCalled();
   });
 });

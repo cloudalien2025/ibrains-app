@@ -22,6 +22,7 @@ describe("directoryiq publishBlogPostToBd contract", () => {
       apiKey: "test-key",
       dataPostsCreatePath: "/api/v2/data_posts/create",
       blogDataId: 14,
+      blogDataType: 4,
       bdUserId: "321",
       title: "Fixture title",
       html: "<p>Fixture body</p>",
@@ -38,7 +39,7 @@ describe("directoryiq publishBlogPostToBd contract", () => {
 
     expect(init.method).toBe("POST");
     expect(body.get("user_id")).toBe("321");
-    expect(body.get("data_type")).toBe("14");
+    expect(body.get("data_type")).toBe("4");
     expect(body.get("data_id")).toBe("14");
     expect(body.get("post_title")).toBe("Fixture title");
   });
