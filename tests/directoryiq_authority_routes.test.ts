@@ -242,6 +242,32 @@ describe("directoryiq authority routes", () => {
     });
   });
 
+  it("maps image upstream payload-contract failures to failed job error envelope", async () => {
+    generateAuthorityImage.mockRejectedValueOnce(
+      new AuthorityRouteError(502, "OPENAI_UPSTREAM", "OpenAI request failed.", "Unknown parameter: 'response_format'.")
+    );
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/image/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/image", {
+      method: "POST",
+      body: JSON.stringify({
+        focus_topic: "guide image",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("OPENAI_UPSTREAM");
+    expect(status.error?.message).toBe("OpenAI request failed.");
+    expect(status.error?.details).toContain("Unknown parameter: 'response_format'.");
+    expect(saveAuthorityImage).not.toHaveBeenCalled();
+  });
+
   it("keeps image generation on the canonical local path even when parity helper reports proxy host", async () => {
     shouldServeDirectoryIqLocally.mockReturnValueOnce(false);
 
