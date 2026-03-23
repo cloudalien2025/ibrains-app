@@ -94,6 +94,14 @@ function isListingsGroupIdPath(path: string): boolean {
   return normalized.includes("users_portfolio_group");
 }
 
+function readSourceIdSuffix(sourceId: string): string | null {
+  const trimmed = sourceId.trim();
+  if (!trimmed) return null;
+  const token = trimmed.includes(":") ? trimmed.split(":").pop() ?? "" : trimmed;
+  const normalized = token.trim();
+  return normalized || null;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -301,6 +309,7 @@ export async function POST(
       (typeof listingRow.title === "string" && listingRow.title) ||
       "";
     const localGroupId = readListingGroupIdFromRaw(listingRaw);
+    const sourceIdSuffix = readSourceIdSuffix(listingSourceId);
     const localGroupIdFastPathEligible = Boolean(localGroupId && isListingsGroupIdPath(bd.listingsSearchPath));
 
     const usedPersistedMapping = Boolean(resolvedTruePostId);
@@ -314,7 +323,7 @@ export async function POST(
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "publish",
-      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} mapping_key_attempt=${mappingKeyAttempt} local_group_id_fastpath_eligible=${localGroupIdFastPathEligible} candidates=true_post_id:${String(listingRaw.true_post_id ?? "") || "missing"}|post_id:${String(listingRaw.post_id ?? "") || "missing"}|group_id:${String(listingRaw.group_id ?? "") || "missing"}|listing_slug:${String(listingRaw.listing_slug ?? "") || "missing"}|group_filename:${String(listingRaw.group_filename ?? "") || "missing"}|group_name:${String(listingRaw.group_name ?? "") || "missing"}|listing_title:${listingTitle || "missing"}`,
+      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} mapping_key_attempt=${mappingKeyAttempt} local_group_id_fastpath_eligible=${localGroupIdFastPathEligible} candidates=true_post_id:${String(listingRaw.true_post_id ?? "") || "missing"}|post_id:${String(listingRaw.post_id ?? "") || "missing"}|group_id:${String(listingRaw.group_id ?? "") || "missing"}|listing_slug:${String(listingRaw.listing_slug ?? "") || "missing"}|group_filename:${String(listingRaw.group_filename ?? "") || "missing"}|group_name:${String(listingRaw.group_name ?? "") || "missing"}|listing_title:${listingTitle || "missing"}|source_id_suffix:${sourceIdSuffix ?? "missing"}|listing_id_input:${resolvedListingId}`,
     });
     let usedBdLookup = false;
     const mapping = usedPersistedMapping

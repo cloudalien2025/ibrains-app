@@ -253,10 +253,14 @@ export async function resolveTruePostIdForListing(params: {
 }): Promise<{ truePostId: string | null; mappingKey: "slug" | "title" | "unresolved" }> {
   const slugTarget = extractSlug(params.listingSlug ?? "");
   const titleTarget = asString(params.listingTitle).toLowerCase();
+  const listingIdTarget = asString(params.listingId);
+  const listingIdSuffixTarget = listingIdTarget.includes(":")
+    ? listingIdTarget.split(":").pop()?.trim() ?? ""
+    : listingIdTarget;
   const urlTarget = extractUrl({
     url: params.listingSlug && /^https?:\/\//i.test(params.listingSlug) ? params.listingSlug : "",
   });
-  if (!slugTarget && !titleTarget && !urlTarget) {
+  if (!slugTarget && !titleTarget && !urlTarget && !listingIdSuffixTarget) {
     return { truePostId: null, mappingKey: "unresolved" };
   }
 
@@ -383,6 +387,21 @@ export async function resolveTruePostIdForListing(params: {
         });
         if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
         return { truePostId: postId, mappingKey: "title" };
+      }
+    }
+
+    if (allowGroupId && listingIdSuffixTarget) {
+      const byListingId = canonicalRecords.filter(
+        (row) => extractCanonicalPostId(row, { allowGroupId }) === listingIdSuffixTarget
+      );
+      if (byListingId.length > 1) return { truePostId: null, mappingKey: "unresolved" };
+      if (byListingId.length === 1) {
+        const confirmed = await confirmCandidate({
+          postId: listingIdSuffixTarget,
+          allowGroupId,
+        });
+        if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
+        return { truePostId: listingIdSuffixTarget, mappingKey: "slug" };
       }
     }
   }
