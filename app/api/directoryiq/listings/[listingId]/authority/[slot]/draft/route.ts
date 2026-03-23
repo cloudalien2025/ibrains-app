@@ -139,6 +139,7 @@ export async function POST(
       });
 
       const generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+      const generatedValidation = validateDraftHtml({ html: generatedHtml, listingUrl });
       await setStage("validating");
       const html = ensureContextualListingLink({
         html: generatedHtml,
@@ -147,6 +148,16 @@ export async function POST(
         focusTopic,
       });
       const validation = validateDraftHtml({ html, listingUrl });
+      console.info("[authority-support]", {
+        reqId,
+        listingId: listingSourceId,
+        slot: slotIndex,
+        action: "draft",
+        listingUrlResolved: Boolean(listingUrl),
+        generatedHasContextualListingLink: generatedValidation.hasContextualListingLink,
+        finalHasContextualListingLink: validation.hasContextualListingLink,
+        governanceErrors: validation.errors,
+      });
 
       if (!validation.valid) {
         throw new AuthorityRouteError(

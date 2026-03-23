@@ -41,6 +41,14 @@ describe("directoryiq content governance", () => {
     expect(validateDraftHtml({ html: processed, listingUrl }).valid).toBe(true);
   });
 
+  it("accepts contextual anchors when href uses HTML-escaped URL entities", () => {
+    const listingUrl = "https://example.com/listings/acme?x=1&y=2";
+    const html = `<p>For details see <a href="https://example.com/listings/acme?x=1&amp;y=2">Acme</a>.</p>`;
+    const validation = validateDraftHtml({ html, listingUrl });
+    expect(validation.valid).toBe(true);
+    expect(validation.hasContextualListingLink).toBe(true);
+  });
+
   it("still fails governance when listing URL is unavailable", () => {
     const processed = ensureContextualListingLink({
       html: "Draft text with no resolvable listing URL.",

@@ -6,15 +6,48 @@ type GovernedPromptInput = {
   focusTopic: string;
 };
 
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/gi, "&")
+    .replace(/&#38;/gi, "&")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#34;/gi, '"')
+    .replace(/&#x22;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'");
+}
+
+function canonicalUrl(value: string): string {
+  const normalized = decodeHtmlEntities(value).trim();
+  if (!normalized) return "";
+  try {
+    return new URL(normalized).toString();
+  } catch {
+    return normalized;
+  }
+}
+
+function htmlEscape(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function hasListingAnchorLink(html: string, listingUrl: string): boolean {
-  if (!listingUrl) return false;
-  const escaped = escapeRegExp(listingUrl);
-  const hrefRegex = new RegExp(`<a\\b[^>]*href=["']${escaped}["'][^>]*>`, "i");
-  return hrefRegex.test(html);
+  const target = canonicalUrl(listingUrl);
+  if (!target) return false;
+
+  const hrefRegex = /<a\b[^>]*href=["']([^"']+)["'][^>]*>/gi;
+  let match: RegExpExecArray | null = hrefRegex.exec(html);
+  while (match) {
+    const href = match[1];
+    if (canonicalUrl(href) === target) return true;
+    match = hrefRegex.exec(html);
+  }
+  return false;
 }
 
 export function buildGovernedPrompt(input: GovernedPromptInput): string {
@@ -57,7 +90,7 @@ export function ensureContextualListingLink(input: {
 
   const listingTitle = (input.listingTitle ?? "").trim() || "this listing";
   const focusTopic = (input.focusTopic ?? "").trim() || "this topic";
-  const sentence = `For ${focusTopic}, see <a href="${listingUrl}">${listingTitle}</a>.`;
+  const sentence = `For ${htmlEscape(focusTopic)}, see <a href="${htmlEscape(listingUrl)}">${htmlEscape(listingTitle)}</a>.`;
   const normalized = html.trim();
   if (!normalized) return sentence;
 

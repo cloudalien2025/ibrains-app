@@ -295,6 +295,11 @@ describe("directoryiq authority routes", () => {
       hasContextualListingLink: false,
       errors: ["Missing contextual listing link."],
     });
+    validateDraftHtml.mockReturnValueOnce({
+      valid: false,
+      hasContextualListingLink: false,
+      errors: ["Missing contextual listing link."],
+    });
 
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
