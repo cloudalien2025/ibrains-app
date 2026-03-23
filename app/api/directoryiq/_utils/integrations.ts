@@ -29,11 +29,24 @@ function extractTitle(item: Record<string, unknown>): string {
   return asString(item.group_name ?? item.post_title ?? item.title ?? item.name).toLowerCase();
 }
 
-function extractCanonicalPostId(item: Record<string, unknown>): string {
+function extractCanonicalPostId(
+  item: Record<string, unknown>,
+  options?: { allowGroupId?: boolean }
+): string {
   const postId = item.post_id;
   if (typeof postId === "string" && postId.trim().length > 0) return postId.trim();
   if (typeof postId === "number" && Number.isFinite(postId)) return String(postId);
+  if (options?.allowGroupId) {
+    const groupId = item.group_id ?? item.groupId;
+    if (typeof groupId === "string" && groupId.trim().length > 0) return groupId.trim();
+    if (typeof groupId === "number" && Number.isFinite(groupId)) return String(groupId);
+  }
   return "";
+}
+
+function allowsGroupIdAsCanonicalId(searchPath: string): boolean {
+  const normalized = normalizePath(searchPath).toLowerCase();
+  return normalized.includes("users_portfolio_group");
 }
 
 function extractDataPostRecords(json: Record<string, unknown>): Record<string, unknown>[] {
@@ -286,6 +299,7 @@ export async function resolveTruePostIdForListing(params: {
     expectSlug?: string;
     expectTitle?: string;
     expectUrl?: string;
+    allowGroupId?: boolean;
   }): Promise<boolean> => {
     const getResponse = await bdRequestWithRetry(() =>
       bdRequestForm({
@@ -301,7 +315,7 @@ export async function resolveTruePostIdForListing(params: {
     if (totals.status && totals.status !== "success") return false;
     const record = pickDataPostFromGetResponse(payload);
     if (!record) return false;
-    const confirmedPostId = extractCanonicalPostId(record);
+    const confirmedPostId = extractCanonicalPostId(record, { allowGroupId: candidate.allowGroupId });
     if (confirmedPostId !== candidate.postId) return false;
     if (candidate.expectSlug) {
       const slug = extractSlugFromPost(record);
@@ -321,17 +335,19 @@ export async function resolveTruePostIdForListing(params: {
   for (const path of collectDataPostsSearchPaths(params.dataPostsSearchPath)) {
     const records = recordsByPath.get(path);
     if (!records || records.length === 0) continue;
-    const canonicalRecords = records.filter((row) => extractCanonicalPostId(row).length > 0);
+    const allowGroupId = allowsGroupIdAsCanonicalId(path);
+    const canonicalRecords = records.filter((row) => extractCanonicalPostId(row, { allowGroupId }).length > 0);
 
     if (slugTarget) {
       const bySlug = canonicalRecords.filter((row) => extractSlugFromPost(row) === slugTarget);
       if (bySlug.length > 1) return { truePostId: null, mappingKey: "unresolved" };
       if (bySlug.length === 1) {
-        const postId = extractCanonicalPostId(bySlug[0]);
+        const postId = extractCanonicalPostId(bySlug[0], { allowGroupId });
         if (!postId) return { truePostId: null, mappingKey: "unresolved" };
         const confirmed = await confirmCandidate({
           postId,
           expectSlug: slugTarget,
+          allowGroupId,
         });
         if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
         return { truePostId: postId, mappingKey: "slug" };
@@ -342,11 +358,12 @@ export async function resolveTruePostIdForListing(params: {
       const byTitle = canonicalRecords.filter((row) => extractTitle(row) === titleTarget);
       if (byTitle.length > 1) return { truePostId: null, mappingKey: "unresolved" };
       if (byTitle.length === 1) {
-        const postId = extractCanonicalPostId(byTitle[0]);
+        const postId = extractCanonicalPostId(byTitle[0], { allowGroupId });
         if (!postId) return { truePostId: null, mappingKey: "unresolved" };
         const confirmed = await confirmCandidate({
           postId,
           expectTitle: titleTarget,
+          allowGroupId,
         });
         if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
         return { truePostId: postId, mappingKey: "title" };
@@ -357,11 +374,12 @@ export async function resolveTruePostIdForListing(params: {
       const byUrl = canonicalRecords.filter((row) => normalizeForCompare(extractUrl(row)) === normalizeForCompare(urlTarget));
       if (byUrl.length > 1) return { truePostId: null, mappingKey: "unresolved" };
       if (byUrl.length === 1) {
-        const postId = extractCanonicalPostId(byUrl[0]);
+        const postId = extractCanonicalPostId(byUrl[0], { allowGroupId });
         if (!postId) return { truePostId: null, mappingKey: "unresolved" };
         const confirmed = await confirmCandidate({
           postId,
           expectUrl: urlTarget,
+          allowGroupId,
         });
         if (!confirmed) return { truePostId: null, mappingKey: "unresolved" };
         return { truePostId: postId, mappingKey: "title" };

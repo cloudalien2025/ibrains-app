@@ -906,7 +906,7 @@ describe("directoryiq BD ingest", () => {
             text: async () =>
               JSON.stringify({
                 status: "success",
-                message: [{ post_id: "515", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" }],
+                message: [{ group_id: "15", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" }],
               }),
             headers: new Headers(),
           });
@@ -918,14 +918,14 @@ describe("directoryiq BD ingest", () => {
           headers: new Headers(),
         });
       }
-      if (url.includes("/api/v2/data_posts/get/515")) {
+      if (url.includes("/api/v2/data_posts/get/15")) {
         return Promise.resolve({
           ok: true,
           status: 200,
           text: async () =>
             JSON.stringify({
               status: "success",
-              message: { post_id: "515", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" },
+              message: { group_id: "15", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" },
             }),
           headers: new Headers(),
         });
@@ -944,9 +944,9 @@ describe("directoryiq BD ingest", () => {
       listingTitle: "Almresi Vail",
     });
 
-    expect(resolved).toEqual({ truePostId: "515", mappingKey: "slug" });
+    expect(resolved).toEqual({ truePostId: "15", mappingKey: "slug" });
     expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/search"))).toBe(true);
-    expect(calledUrls.some((url) => url.includes("/api/v2/data_posts/get/515"))).toBe(true);
+    expect(calledUrls.some((url) => url.includes("/api/v2/data_posts/get/15"))).toBe(true);
   });
 
   it("refuses generic id as a true_post_id substitute", async () => {
