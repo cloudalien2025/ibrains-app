@@ -287,17 +287,32 @@ export async function POST(
       "";
 
     const usedPersistedMapping = Boolean(resolvedTruePostId);
+    logAuthorityInfo({
+      reqId,
+      listingId: resolvedListingId,
+      slot: slotIndex,
+      action: "publish",
+      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} candidates=true_post_id|listing_slug|group_filename|group_name|listing_title`,
+    });
     const mapping = usedPersistedMapping
       ? { truePostId: resolvedTruePostId, mappingKey: "slug" as const }
       : await resolveTruePostIdForListing({
           baseUrl: bd.baseUrl,
           apiKey: bd.apiKey,
-          dataPostsSearchPath: bd.dataPostsSearchPath,
+          dataPostsSearchPath: bd.listingsSearchPath,
           listingsDataId: bd.listingsDataId,
           listingId: resolvedListingId,
           listingSlug,
           listingTitle,
         });
+
+    logAuthorityInfo({
+      reqId,
+      listingId: resolvedListingId,
+      slot: slotIndex,
+      action: "publish",
+      message: `resolved listing true_post_id=${mapping.truePostId ?? "missing"} mapping_key=${mapping.mappingKey} via_bd_lookup=${!usedPersistedMapping}`,
+    });
 
     if (!usedPersistedMapping && mapping.truePostId && mapping.mappingKey !== "unresolved") {
       await persistListingTruePostMapping({
