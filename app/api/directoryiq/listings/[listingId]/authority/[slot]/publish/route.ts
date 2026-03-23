@@ -24,6 +24,60 @@ import {
 } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 
+function asNonEmptyString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed ? trimmed : null;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  return null;
+}
+
+function readBdUserIdFromListingRaw(raw: Record<string, unknown>): string | null {
+  const directCandidates = [
+    raw.user_id,
+    raw.userId,
+    raw.userid,
+    raw.member_id,
+    raw.memberId,
+    raw.owner_id,
+    raw.ownerId,
+    raw.author_id,
+    raw.profile_user_id,
+    raw.profileUserId,
+    raw.listing_user_id,
+    raw.listingUserId,
+  ];
+  for (const candidate of directCandidates) {
+    const value = asNonEmptyString(candidate);
+    if (value) return value;
+  }
+
+  const nestedContainers = [raw.user, raw.owner, raw.profile, raw.listing];
+  for (const container of nestedContainers) {
+    if (!container || typeof container !== "object") continue;
+    const nested = container as Record<string, unknown>;
+    const nestedCandidates = [
+      nested.id,
+      nested.user_id,
+      nested.userId,
+      nested.userid,
+      nested.member_id,
+      nested.memberId,
+      nested.owner_id,
+      nested.ownerId,
+    ];
+    for (const candidate of nestedCandidates) {
+      const value = asNonEmptyString(candidate);
+      if (value) return value;
+    }
+  }
+
+  return null;
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -71,6 +125,7 @@ export async function POST(
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
     const listingSourceId = listingRow.source_id;
+    const listingRaw = (listingRow.raw_json ?? {}) as Record<string, unknown>;
 
     const tokenResult = verifyApprovalToken(approvalToken, {
       userId,
@@ -127,12 +182,29 @@ export async function POST(
         "Brilliant Directories API not configured. Go to DirectoryIQ -> Signal Sources."
       );
     }
+    const bdUserId = readBdUserIdFromListingRaw(listingRaw);
+    if (!bdUserId) {
+      throw new AuthorityRouteError(
+        400,
+        "BAD_REQUEST",
+        "Listing owner user_id is required for BD publish.",
+        "Listing raw payload is missing BD user_id."
+      );
+    }
+    logAuthorityInfo({
+      reqId,
+      listingId: resolvedListingId,
+      slot: slotIndex,
+      action: "publish",
+      message: `resolved BD publish identity user_id=${bdUserId ? "present" : "missing"} data_type=${bd.blogPostsDataId ?? "missing"}`,
+    });
 
     const publishResult = await publishBlogPostToBd({
       baseUrl: bd.baseUrl,
       apiKey: bd.apiKey,
       dataPostsCreatePath: bd.dataPostsCreatePath,
       blogDataId: bd.blogPostsDataId,
+      bdUserId,
       title: post.title,
       html: post.draft_html,
       featuredImageUrl: post.featured_image_url,
@@ -171,7 +243,6 @@ export async function POST(
         ""
     );
 
-    const listingRaw = listingRow.raw_json ?? {};
     const resolvedTruePostId =
       typeof listingRaw.true_post_id === "string" && listingRaw.true_post_id.trim()
         ? listingRaw.true_post_id.trim()

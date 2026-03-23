@@ -350,6 +350,7 @@ export async function publishBlogPostToBd(params: {
   apiKey: string;
   dataPostsCreatePath: string;
   blogDataId: number | null;
+  bdUserId?: string | null;
   title: string;
   html: string;
   featuredImageUrl: string | null;
@@ -372,6 +373,11 @@ export async function publishBlogPostToBd(params: {
 
   if (params.blogDataId) {
     form.data_id = params.blogDataId;
+    form.data_type = params.blogDataId;
+  }
+
+  if (params.bdUserId) {
+    form.user_id = params.bdUserId;
   }
 
   if (params.featuredImageUrl) {
