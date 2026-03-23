@@ -57,6 +57,10 @@ const getListingEvaluation = vi.fn(async () => ({
 const findListingCandidates = vi.fn(async () => [
   { sourceId: "site-1:321", siteId: "site-1", siteLabel: "Site One" },
 ]);
+const getBdSite = vi.fn(async () => ({
+  id: "site-1",
+  base_url: "https://example.com",
+}));
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
 const proxyDirectoryIqRequest = vi.fn(async () => new Response(JSON.stringify({ ok: false }), { status: 502 }));
@@ -100,6 +104,9 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   findListingCandidates,
   upsertAuthorityPostDraft,
   saveAuthorityImage,
+}));
+vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
+  getBdSite,
 }));
 
 vi.mock("@/lib/openai/serverClient", () => ({
@@ -357,6 +364,52 @@ describe("directoryiq authority routes", () => {
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
   });
 
+  it("composes canonical listing URL from site base_url + listing path when listing URL fields are blank", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:15",
+        title: "Almresi Vail",
+        url: "",
+        raw_json: {
+          description: "Sample listing description",
+          group_filename: "listings/almresi-vail",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+    getBdSite.mockResolvedValueOnce({
+      id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      base_url: "https://www.vailvacay.com",
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest(
+      "http://localhost/api/directoryiq/listings/15/authority/3/draft?site_id=5c82f5c1-a45f-4b25-a0d4-1b749d962415",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          title: "Best in Vail",
+          focus_topic: "restaurants in vail village",
+          type: "local_guide",
+        }),
+        headers: { "content-type": "application/json" },
+      }
+    );
+
+    const submitRes = await POST(req, { params: { listingId: "15", slot: "3" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(validateDraftHtml).toHaveBeenCalledWith(
+      expect.objectContaining({
+        listingUrl: "https://www.vailvacay.com/listings/almresi-vail",
+      })
+    );
+  });
+
   it("uses step2 contract mission plan listing_url fallback for reciprocal slot draft generation", async () => {
     getListingEvaluation.mockResolvedValueOnce({
       listing: {
@@ -400,6 +453,51 @@ describe("directoryiq authority routes", () => {
         listingUrl: "https://example.com/listings/fixture-listing",
       })
     );
+  });
+
+  it("still fails with BAD_REQUEST when listing URL is irrecoverable after all resolver candidates", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: null,
+        raw_json: {
+          description: "Sample listing description",
+          listing_url: "",
+          profile_url: "",
+          source_url: "",
+          group_filename: "",
+          path: "",
+          slug: "",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+    getBdSite.mockResolvedValueOnce({
+      id: "site-1",
+      base_url: "https://example.com",
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "No URL draft",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("BAD_REQUEST");
+    expect(String(status.error?.message ?? "")).toContain("Listing URL is required");
   });
 
   it("deterministically enforces contextual listing link before governance validation when draft omits the URL", async () => {
