@@ -42,4 +42,21 @@ describe("directoryiq publish data_type resolver", () => {
 
     expect(resolved).toEqual({ dataType: null, source: "missing" });
   });
+
+  it("resolves publish data_type when data_categories/get returns message array", async () => {
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ status: "success", message: [{ id: 14, data_type: "4" }] }),
+    });
+
+    const { resolveBlogPostDataTypeForPublish } = await import("@/app/api/directoryiq/_utils/integrations");
+    const resolved = await resolveBlogPostDataTypeForPublish({
+      baseUrl: "https://example.com",
+      apiKey: "test-key",
+      blogDataId: 14,
+    });
+
+    expect(resolved).toEqual({ dataType: 4, source: "data_category_get" });
+  });
 });
