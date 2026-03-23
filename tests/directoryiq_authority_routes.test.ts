@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 import { AuthorityRouteError } from "@/app/api/directoryiq/_utils/authorityErrors";
+import { issueApprovalToken } from "@/app/api/directoryiq/_utils/authority";
 
 type JobAccepted = {
   jobId?: string;
@@ -49,7 +50,7 @@ const getListingEvaluation = vi.fn(async () => ({
     source_id: "site-1:321",
     title: "Fixture Listing",
     url: "https://example.com/listings/fixture-listing",
-    raw_json: { description: "Sample listing description" },
+    raw_json: { description: "Sample listing description", user_id: "98765", group_filename: "fixture-listing" },
   },
   evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
   settings: { imageStylePreference: "editorial clean" },
@@ -63,10 +64,49 @@ const getBdSite = vi.fn(async () => ({
 }));
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
+const getAuthorityPostBySlot = vi.fn(async () => ({
+  id: "authority-post-1",
+  title: "Fixture Blog Post",
+  draft_html: "<p>Draft html with contextual link.</p>",
+  featured_image_url: null,
+  blog_to_listing_link_status: "linked",
+  metadata_json: {
+    step2_contract: {
+      seo_package: {
+        primary_focus_keyword: "fixture keyword",
+        seo_title: "Fixture SEO title",
+        meta_description: "Fixture SEO description",
+        slug: "fixture-blog-post",
+        featured_image_filename: "fixture.webp",
+        featured_image_alt_text: "Fixture image alt",
+      },
+    },
+  },
+}));
+const addDirectoryIqVersion = vi.fn(async () => "version-1");
+const markPostPublished = vi.fn(async () => {});
 const proxyDirectoryIqRequest = vi.fn(async () => new Response(JSON.stringify({ ok: false }), { status: 502 }));
 const shouldServeDirectoryIqLocally = vi.fn(() => true);
 const generateAuthorityDraft = vi.fn(async () => "<p>Draft html</p>");
 const generateAuthorityImage = vi.fn(async () => "data:image/png;base64,abc123");
+const getDirectoryIqBdConnection = vi.fn(async () => ({
+  baseUrl: "https://example.com",
+  apiKey: "test-bd-key",
+  listingsSearchPath: "/api/v2/users_portfolio_groups/search",
+  dataPostsSearchPath: "/api/v2/data_posts/search",
+  dataPostsUpdatePath: "/api/v2/data_posts/update",
+  dataPostsCreatePath: "/api/v2/data_posts/create",
+  listingsDataId: 75,
+  blogPostsDataId: 14,
+}));
+const publishBlogPostToBd = vi.fn(async () => ({
+  ok: true,
+  status: 200,
+  body: { post_id: "blog-900", url: "https://example.com/blog/fixture-blog-post" },
+}));
+const pushListingUpdateToBd = vi.fn(async () => ({ ok: true, status: 200, body: {} }));
+const resolveTruePostIdForListing = vi.fn(async () => ({ truePostId: "listing-123", mappingKey: "slug" as const }));
+const persistListingTruePostMapping = vi.fn(async () => {});
 const validateDraftHtml = vi.fn((input: { html: string; listingUrl: string }) => {
   const hasContextualListingLink = Boolean(input.listingUrl) && input.html.includes(input.listingUrl);
   return {
@@ -91,6 +131,10 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
+  getDirectoryIqBdConnection,
+  publishBlogPostToBd,
+  pushListingUpdateToBd,
+  resolveTruePostIdForListing,
 }));
 vi.mock("@/app/api/directoryiq/_utils/externalReadProxy", () => ({
   proxyDirectoryIqRequest,
@@ -104,6 +148,9 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   findListingCandidates,
   upsertAuthorityPostDraft,
   saveAuthorityImage,
+  getAuthorityPostBySlot,
+  addDirectoryIqVersion,
+  markPostPublished,
 }));
 vi.mock("@/app/api/directoryiq/_utils/bdSites", () => ({
   getBdSite,
@@ -120,6 +167,10 @@ vi.mock("@/lib/directoryiq/contentGovernance", () => ({
   validateDraftHtml,
   ensureContextualListingLink,
   buildImagePrompt: vi.fn(() => "image prompt"),
+}));
+
+vi.mock("@/src/directoryiq/repositories/listingIdentityRepo", () => ({
+  persistListingTruePostMapping,
 }));
 
 describe("directoryiq authority routes", () => {
@@ -650,5 +701,72 @@ describe("directoryiq authority routes", () => {
     } finally {
       infoSpy.mockRestore();
     }
+  });
+
+  it("publishes authority draft with BD-required user_id and data_type contract fields", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const approvalToken = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      action: "blog_publish",
+      slot: 1,
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+        approval_token: approvalToken,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(publishBlogPostToBd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        blogDataId: 14,
+        bdUserId: "98765",
+      })
+    );
+  });
+
+  it("returns BAD_REQUEST when listing payload cannot resolve BD publish user_id", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: "https://example.com/listings/fixture-listing",
+        raw_json: { description: "Sample listing description", group_filename: "fixture-listing" },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const approvalToken = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      action: "blog_publish",
+      slot: 1,
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+        approval_token: approvalToken,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error?.code).toBe("BAD_REQUEST");
+    expect(String(json.error?.message ?? "")).toContain("Listing owner user_id is required");
+    expect(publishBlogPostToBd).not.toHaveBeenCalled();
   });
 });
