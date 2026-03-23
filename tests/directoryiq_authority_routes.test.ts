@@ -734,6 +734,12 @@ describe("directoryiq authority routes", () => {
         bdUserId: "98765",
       })
     );
+    expect(resolveTruePostIdForListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dataPostsSearchPath: "/api/v2/users_portfolio_groups/search",
+        listingsDataId: 75,
+      })
+    );
   });
 
   it("returns BAD_REQUEST when listing payload cannot resolve BD publish user_id", async () => {
@@ -799,5 +805,33 @@ describe("directoryiq authority routes", () => {
     expect(json.error?.code).toBe("BAD_REQUEST");
     expect(String(json.error?.message ?? "")).toContain("data_type is required");
     expect(publishBlogPostToBd).not.toHaveBeenCalled();
+  });
+
+  it("returns BD_LINK_ENFORCEMENT_FAILED when reciprocal listing true post id remains unresolved", async () => {
+    resolveTruePostIdForListing.mockResolvedValueOnce({ truePostId: null, mappingKey: "unresolved" as const });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const approvalToken = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      action: "blog_publish",
+      slot: 1,
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+        approval_token: approvalToken,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(422);
+    expect(json.error?.code).toBe("BD_LINK_ENFORCEMENT_FAILED");
+    expect(String(json.error?.details ?? "")).toContain("Unable to resolve listing true post id for reciprocal link write");
+    expect(pushListingUpdateToBd).not.toHaveBeenCalled();
   });
 });

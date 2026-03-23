@@ -890,6 +890,65 @@ describe("directoryiq BD ingest", () => {
     expect(searchBodies[0].get("data_id")).toBe("14");
   });
 
+  it("resolves true_post_id from listings search path for reciprocal publish writeback shape", async () => {
+    const calledUrls: string[] = [];
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      calledUrls.push(url);
+      if (url.includes("/api/v2/users_portfolio_groups/search")) {
+        const body =
+          init?.body instanceof URLSearchParams
+            ? init.body
+            : new URLSearchParams((init?.body as string) ?? "");
+        if (body.get("page") === "1") {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            text: async () =>
+              JSON.stringify({
+                status: "success",
+                message: [{ post_id: "515", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" }],
+              }),
+            headers: new Headers(),
+          });
+        }
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({ status: "success", message: [] }),
+          headers: new Headers(),
+        });
+      }
+      if (url.includes("/api/v2/data_posts/get/515")) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              status: "success",
+              message: { post_id: "515", group_filename: "listings/almresi-vail", group_name: "Almresi Vail" },
+            }),
+          headers: new Headers(),
+        });
+      }
+      return Promise.resolve({ ok: false, status: 500, text: async () => "unexpected", headers: new Headers() });
+    });
+
+    const { resolveTruePostIdForListing } = await import("@/app/api/directoryiq/_utils/integrations");
+    const resolved = await resolveTruePostIdForListing({
+      baseUrl: "https://example.com",
+      apiKey: "test-key",
+      dataPostsSearchPath: "/api/v2/users_portfolio_groups/search",
+      listingsDataId: 75,
+      listingId: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:15",
+      listingSlug: "listings/almresi-vail",
+      listingTitle: "Almresi Vail",
+    });
+
+    expect(resolved).toEqual({ truePostId: "515", mappingKey: "slug" });
+    expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/search"))).toBe(true);
+    expect(calledUrls.some((url) => url.includes("/api/v2/data_posts/get/515"))).toBe(true);
+  });
+
   it("refuses generic id as a true_post_id substitute", async () => {
     fetchMock.mockImplementation((url: string, init?: RequestInit) => {
       if (url.includes("/api/v2/data_posts/search")) {
