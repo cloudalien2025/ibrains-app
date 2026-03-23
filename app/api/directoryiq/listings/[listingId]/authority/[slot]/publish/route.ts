@@ -292,7 +292,7 @@ export async function POST(
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "publish",
-      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} candidates=true_post_id|listing_slug|group_filename|group_name|listing_title`,
+      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} mapping_key_attempt=slug candidates=true_post_id:${String(listingRaw.true_post_id ?? "") || "missing"}|post_id:${String(listingRaw.post_id ?? "") || "missing"}|group_id:${String(listingRaw.group_id ?? "") || "missing"}|listing_slug:${String(listingRaw.listing_slug ?? "") || "missing"}|group_filename:${String(listingRaw.group_filename ?? "") || "missing"}|group_name:${String(listingRaw.group_name ?? "") || "missing"}|listing_title:${listingTitle || "missing"}`,
     });
     const mapping = usedPersistedMapping
       ? { truePostId: resolvedTruePostId, mappingKey: "slug" as const }
