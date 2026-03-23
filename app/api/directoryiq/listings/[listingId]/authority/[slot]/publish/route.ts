@@ -79,6 +79,21 @@ function readBdUserIdFromListingRaw(raw: Record<string, unknown>): string | null
   return null;
 }
 
+function readListingGroupIdFromRaw(raw: Record<string, unknown>): string | null {
+  const direct = asNonEmptyString(raw.group_id ?? raw.groupId);
+  if (direct) return direct;
+  const nested = raw.group;
+  if (nested && typeof nested === "object") {
+    return asNonEmptyString((nested as Record<string, unknown>).id);
+  }
+  return null;
+}
+
+function isListingsGroupIdPath(path: string): boolean {
+  const normalized = path.trim().toLowerCase();
+  return normalized.includes("users_portfolio_group");
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string; slot: string }> | { listingId: string; slot: string } }
@@ -285,33 +300,46 @@ export async function POST(
       (typeof listingRaw.group_name === "string" && listingRaw.group_name) ||
       (typeof listingRow.title === "string" && listingRow.title) ||
       "";
+    const localGroupId = readListingGroupIdFromRaw(listingRaw);
+    const localGroupIdFastPathEligible = Boolean(localGroupId && isListingsGroupIdPath(bd.listingsSearchPath));
 
     const usedPersistedMapping = Boolean(resolvedTruePostId);
+    const mappingKeyAttempt = usedPersistedMapping
+      ? "persisted_true_post_id"
+      : localGroupIdFastPathEligible
+        ? "local_group_id"
+        : "slug";
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "publish",
-      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} mapping_key_attempt=slug candidates=true_post_id:${String(listingRaw.true_post_id ?? "") || "missing"}|post_id:${String(listingRaw.post_id ?? "") || "missing"}|group_id:${String(listingRaw.group_id ?? "") || "missing"}|listing_slug:${String(listingRaw.listing_slug ?? "") || "missing"}|group_filename:${String(listingRaw.group_filename ?? "") || "missing"}|group_name:${String(listingRaw.group_name ?? "") || "missing"}|listing_title:${listingTitle || "missing"}`,
+      message: `resolving listing true_post_id site_id=${resolved.siteId} persisted=${usedPersistedMapping} listing_search_path=${bd.listingsSearchPath} mapping_key_attempt=${mappingKeyAttempt} local_group_id_fastpath_eligible=${localGroupIdFastPathEligible} candidates=true_post_id:${String(listingRaw.true_post_id ?? "") || "missing"}|post_id:${String(listingRaw.post_id ?? "") || "missing"}|group_id:${String(listingRaw.group_id ?? "") || "missing"}|listing_slug:${String(listingRaw.listing_slug ?? "") || "missing"}|group_filename:${String(listingRaw.group_filename ?? "") || "missing"}|group_name:${String(listingRaw.group_name ?? "") || "missing"}|listing_title:${listingTitle || "missing"}`,
     });
+    let usedBdLookup = false;
     const mapping = usedPersistedMapping
       ? { truePostId: resolvedTruePostId, mappingKey: "slug" as const }
-      : await resolveTruePostIdForListing({
-          baseUrl: bd.baseUrl,
-          apiKey: bd.apiKey,
-          dataPostsSearchPath: bd.listingsSearchPath,
-          listingsDataId: bd.listingsDataId,
-          listingId: resolvedListingId,
-          listingSlug,
-          listingTitle,
-        });
+      : localGroupIdFastPathEligible
+        ? { truePostId: localGroupId, mappingKey: "slug" as const }
+        : await (async () => {
+            usedBdLookup = true;
+            return resolveTruePostIdForListing({
+              baseUrl: bd.baseUrl,
+              apiKey: bd.apiKey,
+              dataPostsSearchPath: bd.listingsSearchPath,
+              listingsDataId: bd.listingsDataId,
+              listingId: resolvedListingId,
+              listingSlug,
+              listingTitle,
+            });
+          })();
 
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "publish",
-      message: `resolved listing true_post_id=${mapping.truePostId ?? "missing"} mapping_key=${mapping.mappingKey} via_bd_lookup=${!usedPersistedMapping}`,
+      message: `resolved listing true_post_id=${mapping.truePostId ?? "missing"} mapping_key=${mapping.mappingKey} source=${usedPersistedMapping ? "persisted_true_post_id" : localGroupIdFastPathEligible ? "local_group_id_fastpath" : "bd_lookup"} via_bd_lookup=${usedBdLookup}`,
     });
 
     if (!usedPersistedMapping && mapping.truePostId && mapping.mappingKey !== "unresolved") {

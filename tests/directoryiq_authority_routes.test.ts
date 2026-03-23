@@ -807,6 +807,53 @@ describe("directoryiq authority routes", () => {
     expect(publishBlogPostToBd).not.toHaveBeenCalled();
   });
 
+  it("uses local group_id fast-path for reciprocal listing true post id on listings-search families", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: "https://example.com/listings/fixture-listing",
+        raw_json: {
+          description: "Sample listing description",
+          user_id: "98765",
+          group_id: "15",
+          group_filename: "listings/fixture-listing",
+          group_name: "Fixture Listing",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const approvalToken = issueApprovalToken({
+      userId: "00000000-0000-4000-8000-000000000001",
+      listingId: "site-1:321",
+      action: "blog_publish",
+      slot: 1,
+    });
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+        approval_token: approvalToken,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.ok).toBe(true);
+    expect(resolveTruePostIdForListing).not.toHaveBeenCalled();
+    expect(pushListingUpdateToBd).toHaveBeenCalledWith(
+      expect.objectContaining({
+        postId: "15",
+      })
+    );
+  });
+
   it("returns BD_LINK_ENFORCEMENT_FAILED when reciprocal listing true post id remains unresolved", async () => {
     resolveTruePostIdForListing.mockResolvedValueOnce({ truePostId: null, mappingKey: "unresolved" as const });
 
