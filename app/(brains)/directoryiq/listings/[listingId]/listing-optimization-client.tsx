@@ -1071,6 +1071,7 @@ export default function ListingOptimizationClient({
   const [listingLifecycle, setListingLifecycle] = useState<LifecycleState>("Detected");
   const [listingApprovedForPublish, setListingApprovedForPublish] = useState(false);
   const [selectedMapNodeId, setSelectedMapNodeId] = useState<string | null>(null);
+  const [selectedStep2PreviewSlotId, setSelectedStep2PreviewSlotId] = useState<string | null>(null);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [isMobileMapViewport, setIsMobileMapViewport] = useState(false);
   const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
@@ -1842,6 +1843,12 @@ export default function ListingOptimizationClient({
     support,
   ]);
   const step2MissionSlots = step2MissionPlan.selected_slots;
+  useEffect(() => {
+    if (!selectedStep2PreviewSlotId) return;
+    if (!step2MissionSlots.some((slot) => slot.slot_id === selectedStep2PreviewSlotId)) {
+      setSelectedStep2PreviewSlotId(null);
+    }
+  }, [selectedStep2PreviewSlotId, step2MissionSlots]);
 
   useEffect(() => {
     if (!step2MissionSlots.length) return;
@@ -2561,7 +2568,7 @@ export default function ListingOptimizationClient({
 
   async function openStep2PreviewPanel(item: BlogReinforcementPlanItem, slot: number, slotId: string): Promise<void> {
     if (!effectiveListingId) return;
-    setSelectedMapNodeId(slotId);
+    setSelectedStep2PreviewSlotId(slotId);
     const current = initializeContentAsset(item, slot);
     const res = await fetch(
       buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview`, siteQuery),
@@ -3749,7 +3756,7 @@ export default function ListingOptimizationClient({
                         </div>
                       ) : null}
 
-                      {step2ResearchReady && selectedMapNodeId === missionSlot.slot_id ? (
+                      {step2ResearchReady && selectedStep2PreviewSlotId === missionSlot.slot_id ? (
                         <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-200" data-testid={`step2-slot-preview-surface-${missionSlot.slot_id}`}>
                           <div className="text-sm font-semibold text-slate-100">{asset.title || normalizeText(item.title)}</div>
                           <div className="mt-2 text-slate-300">Listing: {displayName}</div>
