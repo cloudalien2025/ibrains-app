@@ -462,8 +462,10 @@ test.describe("DirectoryIQ link operations workflow", () => {
       /Draft validation failed for this article\.|Article draft is still processing\./
     );
     await expect(primaryAction).toHaveCount(0);
-    await expect(page.getByTestId(`step2-slot-actions-${slotId}`).getByRole("button", { name: "Retry Draft" })).toBeVisible();
-    await expect(page.getByTestId("step2-write-next-article")).toHaveText("Write Next Article");
+    const slotActions = page.getByTestId(`step2-slot-actions-${slotId}`);
+    await expect(slotActions).toBeVisible();
+    await expect(slotActions.getByRole("button", { name: "Write Article" })).toHaveCount(0);
+    await expect(slotActions.getByRole("button", { name: "Retry Draft" })).toHaveCount(0);
 
     expect(draftRequestBody).toBeTruthy();
     expect(draftRequestUrl).not.toContain("step2_writer=1");
