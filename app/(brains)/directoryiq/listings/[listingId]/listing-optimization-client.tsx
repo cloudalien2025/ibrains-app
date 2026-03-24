@@ -625,6 +625,19 @@ type Step2DraftContractInput = {
   researchArtifact: Step2SupportResearchArtifact;
 };
 
+type Step2ResearchStartResponse = {
+  state?: Step2ResearchState;
+  contracts?: Array<{
+    slot?: number;
+    step2_contract?: {
+      mission_plan_slot?: Step2MissionPlanSlot;
+      support_brief?: Step2SupportBrief;
+      seo_package?: Step2SeoPackage;
+      research_artifact?: Step2SupportResearchArtifact;
+    };
+  }>;
+};
+
 type Step2SlotRuntime = {
   internalState: Step2InternalState;
   userState: Step2UserState;
@@ -2495,6 +2508,39 @@ export default function ListingOptimizationClient({
     });
   }
 
+  function applyPersistedStep2ResearchContracts(contracts: Step2ResearchStartResponse["contracts"]) {
+    if (!Array.isArray(contracts) || !contracts.length) return;
+    const contractBySlot = new Map<number, NonNullable<Step2ResearchStartResponse["contracts"]>[number]>();
+    for (const entry of contracts) {
+      if (typeof entry?.slot !== "number" || !Number.isFinite(entry.slot)) continue;
+      contractBySlot.set(entry.slot, entry);
+    }
+    if (!contractBySlot.size) return;
+
+    setStep2Runtime((previous) => {
+      const next = { ...previous };
+      for (let index = 0; index < step2MissionSlots.length; index += 1) {
+        const slot = index + 1;
+        const missionSlot = step2MissionSlots[index];
+        if (!missionSlot) continue;
+        const current = next[missionSlot.slot_id];
+        if (!current) continue;
+        const persisted = contractBySlot.get(slot);
+        const contract = persisted?.step2_contract;
+        if (!contract || !hasUsableStep2ResearchArtifact(contract.research_artifact)) continue;
+        next[missionSlot.slot_id] = {
+          ...current,
+          researchArtifact: contract.research_artifact,
+          supportBrief: contract.support_brief ?? null,
+          seoPackage: contract.seo_package ?? null,
+          metadataReady: true,
+          errorMessage: null,
+        };
+      }
+      return next;
+    });
+  }
+
   async function startStep2ListingResearch() {
     if (step2ResearchState === "queued" || step2ResearchState === "researching") return;
     if (!step2MissionSlots.length) {
@@ -2508,29 +2554,52 @@ export default function ListingOptimizationClient({
     setStep2ResearchRequestedState("queued");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 120));
       setStep2ResearchRequestedState("researching");
-
-      setStep2Runtime((previous) => {
-        const next = { ...previous };
-        for (const missionSlot of step2MissionSlots) {
-          const current = next[missionSlot.slot_id];
-          if (!current) continue;
-          const contractInput = buildStep2DraftContractInput(missionSlot);
-          next[missionSlot.slot_id] = {
-            ...current,
-            researchArtifact: contractInput.researchArtifact,
-            supportBrief: contractInput.supportBrief,
-            seoPackage: contractInput.seoPackage,
-            metadataReady: true,
-            errorMessage: null,
-          };
-        }
-        return next;
+      const contracts = step2MissionSlots.map((missionSlot, index) => {
+        const contractInput = buildStep2DraftContractInput(missionSlot);
+        return {
+          slot: index + 1,
+          step2_contract: {
+            mission_plan_slot: contractInput.missionPlanSlot,
+            support_brief: contractInput.supportBrief,
+            seo_package: contractInput.seoPackage,
+            research_artifact: contractInput.researchArtifact,
+          },
+        };
       });
+      const res = await fetch(
+        buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/research`, siteQuery),
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contracts }),
+        }
+      );
+      const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      const settled = await resolveDirectoryIqJobOrInline<Step2ResearchStartResponse>(
+        res,
+        json,
+        "Failed to start listing research.",
+        effectiveListingId
+      );
+      if (!settled.ok) {
+        setStep2ResearchRequestedState("failed");
+        setError(settled.error);
+        return;
+      }
 
-      setStep2ResearchRequestedState("ready");
-      setNotice("Listing research is complete. Support article actions are now available.");
+      applyPersistedStep2ResearchContracts(settled.data.contracts);
+      const nextState = settled.data.state;
+      if (nextState === "ready" || nextState === "queued" || nextState === "researching" || nextState === "failed") {
+        setStep2ResearchRequestedState(nextState);
+      } else {
+        setStep2ResearchRequestedState("queued");
+      }
+      if (nextState === "ready") {
+        setNotice("Listing research is complete. Support article actions are now available.");
+      } else {
+        setNotice("Listing research request started. Step 2 will unlock after research is ready.");
+      }
     } catch (error) {
       setStep2ResearchRequestedState("failed");
       setError({ message: stringifyErrorMessage(error, "Failed to start listing research.") });

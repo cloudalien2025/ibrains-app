@@ -303,6 +303,49 @@ async function mockListingApisWithOptions(
   });
 }
 
+async function mockStep2ResearchStartReady(page: Page): Promise<void> {
+  await page.route(`**/api/directoryiq/listings/${listingId}/authority/research**`, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: true,
+        state: "ready",
+        contracts: [
+          {
+            slot: 1,
+            step2_contract: {
+              mission_plan_slot: {
+                slot_id: "publish_comparison_decision_post",
+                slot_label: "Publish a reinforcement blog post with reciprocal linking",
+                listing_url: "https://example.com/listings/acme-plumbing",
+                recommended_focus_keyword: "acme plumbing austin",
+              },
+              support_brief: {
+                post_type: "comparison",
+              },
+              seo_package: {
+                primary_focus_keyword: "acme plumbing austin",
+              },
+              research_artifact: {
+                focus_keyword: "acme plumbing austin",
+                top_results: [
+                  {
+                    title: "Acme Plumbing - Austin",
+                    url: "https://example.com/listings/acme-plumbing",
+                    rank: 1,
+                    content_type: "comparison",
+                  },
+                ],
+              },
+            },
+          },
+        ],
+      }),
+    });
+  });
+}
+
 test.describe("DirectoryIQ link operations workflow", () => {
   test("supports mission plan selection in Step 1 without exposing publish execution layer", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
@@ -378,6 +421,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
   test("keeps Step 2 create payload truthful and suppresses primary actions while running", async ({ page }) => {
     await mockListingApis(page);
+    await mockStep2ResearchStartReady(page);
 
     let draftRequestBody: Record<string, unknown> | null = null;
     let draftRequestUrl = "";
@@ -403,6 +447,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const primaryAction = page.getByTestId(`step2-slot-primary-action-${slotId}`);
 
     await expect(page.getByTestId("step2-research-entrypoint")).toBeVisible();
+    await expect(page.getByTestId(`step2-slot-locked-action-${slotId}`)).toBeVisible();
     await page.getByTestId("step2-research-this-listing").click();
     await expect(page.getByTestId("step2-research-entrypoint")).toHaveCount(0);
     await expect(status).toContainText("Create Ready");
@@ -429,6 +474,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
 
   test("blocks Step 2 write actions when OpenAI signal source is missing", async ({ page }) => {
     await mockListingApisWithOptions(page, { openAiConnected: false });
+    await mockStep2ResearchStartReady(page);
 
     await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();

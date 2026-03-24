@@ -79,6 +79,8 @@ export type PersistedStep2State = {
   last_link_error_message: string | null;
 };
 
+export type PersistedStep2ResearchState = "not_started" | "queued" | "researching" | "ready" | "failed";
+
 type SettingsRow = {
   vertical_override: string | null;
   risk_tier_overrides_json: Record<string, unknown> | null;
@@ -964,6 +966,52 @@ export async function markAuthorityImageFailure(
     image_last_error_code: asNullableString(input.code),
     image_last_error_message: asNullableString(input.message),
   });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function upsertAuthorityStep2ResearchContract(
+  userId: string,
+  listingId: string,
+  slot: number,
+  input: {
+    contract?: Record<string, unknown> | null;
+    state: PersistedStep2ResearchState;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  }
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+
+  const baseMetadata = mergeStep2StateMetadata(existing.metadata_json, {});
+  const previousResearch = asRecord(baseMetadata.step2_research);
+  const now = new Date().toISOString();
+  const nextResearch = {
+    ...previousResearch,
+    state: input.state,
+    updated_at: now,
+    started_at:
+      input.state === "queued" || input.state === "researching"
+        ? asNullableString(previousResearch.started_at) ?? now
+        : asNullableString(previousResearch.started_at),
+    completed_at: input.state === "ready" ? now : input.state === "failed" ? now : null,
+    error_code: input.errorCode ?? null,
+    error_message: input.errorMessage ?? null,
+  };
+
+  const mergedMetadata = {
+    ...baseMetadata,
+    step2_contract: input.contract ?? asRecord(baseMetadata.step2_contract),
+    step2_research: nextResearch,
+  };
+
   await query(
     `
     UPDATE directoryiq_authority_posts
