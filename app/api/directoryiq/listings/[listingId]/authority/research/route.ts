@@ -9,6 +9,7 @@ import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_
 import { getAuthorityPosts, upsertAuthorityStep2ResearchContract } from "@/app/api/directoryiq/_utils/selectionData";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
+import { getSerpApiKeyForUser } from "@/app/api/directoryiq/_utils/integrations";
 import {
   buildStep2SelectionResearchDossierPhase1,
   isDossierBackedResearchArtifact,
@@ -323,7 +324,7 @@ export async function POST(
       }));
 
       const generatedAtIso = new Date().toISOString();
-      const dossierBundle = buildStep2SelectionResearchDossierPhase1({
+      const dossierBundle = await buildStep2SelectionResearchDossierPhase1({
         generatedAtIso,
         listing: {
           listing_source_id: listingSourceId,
@@ -342,6 +343,7 @@ export async function POST(
           slot: entry.slot,
           missionPlanSlot: entry.mission_plan_slot,
         })),
+        serpApiKey: await getSerpApiKeyForUser(userId),
       });
 
       const usableContracts = dossierBundle.contracts.filter((entry) => isRealDossierContract(entry.step2_contract as Record<string, unknown>));

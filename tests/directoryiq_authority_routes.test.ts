@@ -46,6 +46,7 @@ async function waitForJobCompletion(statusEndpoint: string): Promise<JobStatusRe
 const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const getDirectoryIqOpenAiKey = vi.fn(async () => "test-key");
+const getSerpApiKeyForUser = vi.fn(async () => null);
 const getListingEvaluation = vi.fn(async () => ({
   listing: {
     source_id: "site-1:321",
@@ -231,6 +232,7 @@ vi.mock("@/app/api/ecomviper/_utils/user", () => ({
 
 vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
   getDirectoryIqOpenAiKey,
+  getSerpApiKeyForUser,
   getDirectoryIqBdConnection,
   publishBlogPostToBd,
   resolveBlogPostDataTypeForPublish,
@@ -323,6 +325,34 @@ describe("directoryiq authority routes", () => {
   });
 
   it("starts Step 2 listing research through a persisted request-backed job", async () => {
+    getSerpApiKeyForUser.mockResolvedValueOnce("serp-test-key");
+    const previousFetch = global.fetch;
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          organic_results: [
+            {
+              position: 1,
+              title: "Best vacation rentals in Miami for families",
+              link: "https://example.org/best-vacation-rentals-miami",
+              snippet: "Compare parking, pet policy, cancellation terms, and booking flexibility.",
+            },
+            {
+              position: 2,
+              title: "Miami stay booking guide",
+              link: "https://example.org/miami-stay-booking-guide",
+              snippet: "Questions travelers ask before booking include check-in windows and fees.",
+            },
+          ],
+          related_questions: [
+            { question: "Is parking included?" },
+            { question: "What is the pet policy?" },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as typeof fetch;
+
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
       method: "POST",
@@ -345,35 +375,43 @@ describe("directoryiq authority routes", () => {
       headers: { "content-type": "application/json" },
     });
 
-    const submitRes = await POST(req, { params: { listingId: "321" } });
-    const accepted = (await submitRes.json()) as JobAccepted;
+    try {
+      const submitRes = await POST(req, { params: { listingId: "321" } });
+      const accepted = (await submitRes.json()) as JobAccepted;
 
-    expect(submitRes.status).toBe(202);
-    expect(accepted.status).toBe("queued");
-    expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
-    expect((accepted as { runtime?: { runtime_owner?: string; release_stamp?: string } }).runtime?.runtime_owner).toBe(
-      "directoryiq-api.ibrains.ai"
-    );
+      expect(submitRes.status).toBe(202);
+      expect(accepted.status).toBe("queued");
+      expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
+      expect((accepted as { runtime?: { runtime_owner?: string; release_stamp?: string } }).runtime?.runtime_owner).toBe(
+        "directoryiq-api.ibrains.ai"
+      );
 
-    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
-    expect(status.status).toBe("succeeded");
-    expect(status.result?.state).toBe("ready");
-    expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
-    const persistedContract = upsertAuthorityStep2ResearchContract.mock.calls.find(
-      (call) => call[3]?.state === "ready"
-    )?.[3]?.contract as Record<string, unknown> | undefined;
-    expect(persistedContract).toBeTruthy();
-    const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
-    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
-    expect(topResults.length).toBeGreaterThan(0);
-    for (const row of topResults as Array<Record<string, unknown>>) {
-      expect(String(row.url ?? "")).not.toContain("research.local");
+      const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+      expect(status.status).toBe("succeeded");
+      expect(status.result?.state).toBe("ready");
+      expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
+      const persistedContract = upsertAuthorityStep2ResearchContract.mock.calls.find(
+        (call) => call[3]?.state === "ready"
+      )?.[3]?.contract as Record<string, unknown> | undefined;
+      expect(persistedContract).toBeTruthy();
+      const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
+      const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+      expect(topResults.length).toBeGreaterThan(0);
+      for (const row of topResults as Array<Record<string, unknown>>) {
+        expect(String(row.url ?? "")).not.toContain("research.local");
+      }
+      expect(String(artifact.focus_keyword ?? "").toLowerCase()).toContain("vacation rental");
+      const dossier = (persistedContract?.research_dossier ?? {}) as Record<string, unknown>;
+      expect(dossier.owner_key).toBeTruthy();
+      expect(Array.isArray((dossier.same_site_support as Record<string, unknown> | undefined)?.inbound_linked_support)).toBe(true);
+      expect(Array.isArray(dossier.evidence_gaps)).toBe(true);
+      expect(Array.isArray(dossier.serp_results)).toBe(true);
+      expect((dossier.serp_results as unknown[]).length).toBeGreaterThan(0);
+      expect(Array.isArray((dossier.serp_summary as Record<string, unknown> | undefined)?.faq_patterns)).toBe(true);
+      expect(Array.isArray((dossier.entities as Record<string, unknown> | undefined)?.amenities)).toBe(true);
+    } finally {
+      global.fetch = previousFetch;
     }
-    expect(String(artifact.focus_keyword ?? "").toLowerCase()).toContain("vacation rental");
-    const dossier = (persistedContract?.research_dossier ?? {}) as Record<string, unknown>;
-    expect(dossier.owner_key).toBeTruthy();
-    expect(Array.isArray((dossier.same_site_support as Record<string, unknown> | undefined)?.inbound_linked_support)).toBe(true);
-    expect(Array.isArray(dossier.evidence_gaps)).toBe(true);
   });
 
   it("resumes Step 2 listing research as ready when canonical artifact already exists", async () => {
