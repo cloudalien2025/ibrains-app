@@ -2,7 +2,13 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getDirectoryIqOpenAiKey } from "@/app/api/directoryiq/_utils/integrations";
-import { upsertAuthorityPostDraft } from "@/app/api/directoryiq/_utils/selectionData";
+import {
+  getAuthorityPostBySlot,
+  markAuthorityDraftFailure,
+  markAuthorityReviewReady,
+  readPersistedStep2State,
+  upsertAuthorityPostDraft,
+} from "@/app/api/directoryiq/_utils/selectionData";
 import { normalizePostType, normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
 import { AuthorityRouteError, authorityReqId } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { buildGovernedPrompt, ensureContextualListingLink, validateDraftHtml } from "@/lib/directoryiq/contentGovernance";
@@ -140,6 +146,11 @@ export async function POST(
 
       const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
       const listingSourceId = listing.source_id;
+      const failDraft = async (error: unknown) => {
+        const message = error instanceof Error ? error.message : "Failed to generate content draft.";
+        const code = error instanceof AuthorityRouteError ? error.code : "DRAFT_GENERATION_FAILED";
+        await markAuthorityDraftFailure(userId, listingSourceId, slotIndex, { code, message });
+      };
       const listingName = listing.title ?? listingSourceId;
       const canonicalFromListing = resolveCanonicalListingUrl(raw, listing.url);
       const step2ContractListingUrl = resolveStep2ContractListingUrl(body.step2_contract);
@@ -206,7 +217,13 @@ export async function POST(
         focusTopic,
       });
 
-      const generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+      let generatedHtml = "";
+      try {
+        generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+      } catch (error) {
+        await failDraft(error);
+        throw error;
+      }
       const generatedValidation = validateDraftHtml({ html: generatedHtml, listingUrl });
       await setStage("validating");
       const html = ensureContextualListingLink({
@@ -237,6 +254,10 @@ export async function POST(
       }
 
       await setStage("persisting");
+      const existing = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
+      const previousStep2 = readPersistedStep2State(existing?.metadata_json);
+      const nextDraftVersion = previousStep2.draft_version + 1;
+      const invalidateApproval = previousStep2.review_status === "approved";
       await upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
         type: postType,
         title: title || `${listingName}: ${focusTopic}`,
@@ -249,8 +270,29 @@ export async function POST(
           generated_at: new Date().toISOString(),
           governance_passed: true,
           step2_contract: body.step2_contract ?? null,
+          step2_state: {
+            ...previousStep2,
+            draft_status: "ready",
+            draft_version: nextDraftVersion,
+            draft_generated_at: new Date().toISOString(),
+            draft_last_error_code: null,
+            draft_last_error_message: null,
+            review_status: previousStep2.image_status === "ready" ? "ready" : "not_ready",
+            approved_at: invalidateApproval ? null : previousStep2.approved_at,
+            approved_snapshot_draft_version: invalidateApproval ? null : previousStep2.approved_snapshot_draft_version,
+            approved_snapshot_image_version: invalidateApproval ? null : previousStep2.approved_snapshot_image_version,
+            publish_status: "not_started",
+            publish_last_error_code: null,
+            publish_last_error_message: null,
+            publish_last_req_id: null,
+            publish_attempted_at: null,
+            publish_completed_at: null,
+            published_post_id: null,
+            published_url: null,
+          },
         },
       });
+      await markAuthorityReviewReady(userId, listingSourceId, slotIndex);
 
       return {
         ok: true,

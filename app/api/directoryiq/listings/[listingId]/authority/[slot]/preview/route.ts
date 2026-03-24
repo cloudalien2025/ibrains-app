@@ -3,7 +3,11 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { issueApprovalToken, normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
-import { getAuthorityPostBySlot } from "@/app/api/directoryiq/_utils/selectionData";
+import {
+  getAuthorityPostBySlot,
+  markAuthorityApprovedSnapshot,
+  readPersistedStep2State,
+} from "@/app/api/directoryiq/_utils/selectionData";
 import {
   AuthorityRouteError,
   authorityErrorResponse,
@@ -56,6 +60,10 @@ export async function POST(
     if (!post || !post.draft_html) {
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft not found for this slot.");
     }
+    const step2State = readPersistedStep2State(post.metadata_json);
+
+    const body = (await req.json().catch(() => ({}))) as { action?: string };
+    const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "preview";
 
     const evaluation = detail.evaluation;
     if (!evaluation) {
@@ -70,12 +78,26 @@ export async function POST(
         (post.status === "published" ? 2 : 4)
     );
 
+    const approvalToken = issueApprovalToken({
+      userId,
+      listingId: listingSourceId,
+      slot: slotIndex,
+      action: "blog_publish",
+    });
+
+    if (action === "approve") {
+      if (step2State.draft_status !== "ready" || step2State.image_status !== "ready") {
+        throw new AuthorityRouteError(400, "APPROVAL_REQUIRED", "Draft and featured image must both be ready before approval.");
+      }
+      await markAuthorityApprovedSnapshot(userId, listingSourceId, slotIndex);
+    }
+
     logAuthorityInfo({
       reqId,
       listingId: resolvedListingId,
       slot: slotIndex,
       action: "preview",
-      message: "preview generated",
+      message: action === "approve" ? "preview approved" : "preview generated",
     });
 
     return NextResponse.json({
@@ -112,12 +134,9 @@ export async function POST(
           cap_changes: evaluation.caps,
         },
       },
-      approval_token: issueApprovalToken({
-        userId,
-        listingId: listingSourceId,
-        slot: slotIndex,
-        action: "blog_publish",
-      }),
+      approval_token: approvalToken,
+      review_status: action === "approve" ? "approved" : step2State.review_status,
+      approved: action === "approve",
       guardrails: {
         never_auto_publish: true,
         requires_manual_approval: true,

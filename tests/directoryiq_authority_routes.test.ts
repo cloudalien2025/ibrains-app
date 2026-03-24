@@ -64,6 +64,34 @@ const getBdSite = vi.fn(async () => ({
 }));
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
+const patchAuthorityStep2State = vi.fn(async () => ({}));
+const markAuthorityReviewReady = vi.fn(async () => {});
+const markAuthorityDraftFailure = vi.fn(async () => {});
+const markAuthorityImageFailure = vi.fn(async () => {});
+const markAuthorityPublishAttempt = vi.fn(async () => {});
+const markAuthorityPublishFailure = vi.fn(async () => {});
+const markAuthorityApprovedSnapshot = vi.fn(async () => ({
+  draft_status: "ready",
+  image_status: "ready",
+  review_status: "approved",
+  publish_status: "not_started",
+  blog_to_listing_link_status: "not_started",
+  listing_to_blog_link_status: "not_started",
+  draft_version: 1,
+  image_version: 1,
+}));
+const readPersistedStep2State = vi.fn(() => ({
+  draft_status: "ready",
+  image_status: "ready",
+  review_status: "approved",
+  publish_status: "not_started",
+  blog_to_listing_link_status: "linked",
+  listing_to_blog_link_status: "not_started",
+  draft_version: 1,
+  image_version: 1,
+  approved_snapshot_draft_version: 1,
+  approved_snapshot_image_version: 1,
+}));
 const getAuthorityPostBySlot = vi.fn(async () => ({
   id: "authority-post-1",
   title: "Fixture Blog Post",
@@ -71,6 +99,18 @@ const getAuthorityPostBySlot = vi.fn(async () => ({
   featured_image_url: null,
   blog_to_listing_link_status: "linked",
   metadata_json: {
+    step2_state: {
+      draft_status: "ready",
+      image_status: "ready",
+      review_status: "approved",
+      publish_status: "not_started",
+      blog_to_listing_link_status: "linked",
+      listing_to_blog_link_status: "not_started",
+      draft_version: 1,
+      image_version: 1,
+      approved_snapshot_draft_version: 1,
+      approved_snapshot_image_version: 1,
+    },
     step2_contract: {
       seo_package: {
         primary_focus_keyword: "fixture keyword",
@@ -150,6 +190,14 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   findListingCandidates,
   upsertAuthorityPostDraft,
   saveAuthorityImage,
+  patchAuthorityStep2State,
+  markAuthorityReviewReady,
+  markAuthorityDraftFailure,
+  markAuthorityImageFailure,
+  markAuthorityPublishAttempt,
+  markAuthorityPublishFailure,
+  markAuthorityApprovedSnapshot,
+  readPersistedStep2State,
   getAuthorityPostBySlot,
   addDirectoryIqVersion,
   markPostPublished,
@@ -882,5 +930,53 @@ describe("directoryiq authority routes", () => {
     expect(String(json.error?.details ?? "")).toContain("\"blocked_pre_create\":true");
     expect(publishBlogPostToBd).not.toHaveBeenCalled();
     expect(pushListingUpdateToBd).not.toHaveBeenCalled();
+  });
+
+  it("allows preview approval without publish side effects", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/preview/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/preview?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({ action: "approve" }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.approved).toBe(true);
+    expect(markAuthorityApprovedSnapshot).toHaveBeenCalledTimes(1);
+    expect(publishBlogPostToBd).not.toHaveBeenCalled();
+  });
+
+  it("requires approved snapshot before publish", async () => {
+    readPersistedStep2State.mockReturnValueOnce({
+      draft_status: "ready",
+      image_status: "ready",
+      review_status: "ready",
+      publish_status: "not_started",
+      blog_to_listing_link_status: "linked",
+      listing_to_blog_link_status: "not_started",
+      draft_version: 1,
+      image_version: 1,
+      approved_snapshot_draft_version: null,
+      approved_snapshot_image_version: null,
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/publish/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/publish?site_id=site-1", {
+      method: "POST",
+      body: JSON.stringify({
+        approve_publish: true,
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(400);
+    expect(json.error?.code).toBe("APPROVAL_REQUIRED");
+    expect(publishBlogPostToBd).not.toHaveBeenCalled();
   });
 });
