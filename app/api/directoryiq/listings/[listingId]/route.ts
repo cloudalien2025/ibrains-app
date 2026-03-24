@@ -3,8 +3,10 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
-import { getListingEvaluation } from "@/app/api/directoryiq/_utils/selectionData";
+import { getListingEvaluation, readPersistedStep2State } from "@/app/api/directoryiq/_utils/selectionData";
 import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
+import { hasUsableStep2ResearchArtifact, type Step2ResearchState } from "@/lib/directoryiq/step2ResearchGateContract";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
@@ -18,10 +20,46 @@ type ListingDetailPayload = {
   evaluation: {
     totalScore: number;
   };
+  step2: {
+    research_state: Step2ResearchState;
+    slots: Array<{
+      slot: number;
+      draft_html: string | null;
+      featured_image_url: string | null;
+      draft_status: "not_started" | "generating" | "ready" | "failed";
+      image_status: "not_started" | "generating" | "ready" | "failed";
+      review_status: "not_ready" | "ready" | "approved";
+      publish_status: "not_started" | "publishing" | "published" | "failed";
+      draft_version: number;
+      image_version: number;
+      step2_contract: Record<string, unknown> | null;
+      step2_research_state: Step2ResearchState;
+      updated_at: string | null;
+    }>;
+  };
+  runtime: {
+    runtime_owner: string;
+    release_stamp: string;
+  };
 };
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function derivePersistedResearchStateFromPosts(
+  slots: Array<{ step2_contract: Record<string, unknown> | null; step2_research_state: Step2ResearchState }>
+): Step2ResearchState {
+  const hasReady = slots.some((slot) => hasUsableStep2ResearchArtifact(asRecord(slot.step2_contract).research_artifact));
+  if (hasReady) return "ready";
+  if (slots.some((slot) => slot.step2_research_state === "researching")) return "researching";
+  if (slots.some((slot) => slot.step2_research_state === "queued")) return "queued";
+  if (slots.some((slot) => slot.step2_research_state === "failed")) return "failed";
+  return "not_started";
 }
 
 function resolveDirectoryIqApiBase(): string {
@@ -135,6 +173,11 @@ function normalizeListingPayload(listingId: string, json: unknown): ListingDetai
     evaluation: {
       totalScore,
     },
+    step2: {
+      research_state: "not_started",
+      slots: [],
+    },
+    runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
   };
 }
 
@@ -148,6 +191,37 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
   const listingIdFromRaw = asString(raw.listing_id) || listingId;
   const listingName = asString(raw.group_name) || asString(listing?.title) || listingIdFromRaw;
   const listingUrl = resolveCanonicalListingUrl(raw, listing?.url);
+  const authorityPosts = Array.isArray(evaluationResult.authorityPosts) ? evaluationResult.authorityPosts : [];
+  const step2Slots = authorityPosts.map((post) => {
+    const metadata = asRecord(post.metadata_json);
+    const step2State = readPersistedStep2State(metadata);
+    const step2Contract = asRecord(metadata.step2_contract);
+    const step2Research = asRecord(metadata.step2_research);
+    const researchStateRaw = asString(step2Research.state);
+    const step2ResearchState: Step2ResearchState =
+      researchStateRaw === "queued" ||
+      researchStateRaw === "researching" ||
+      researchStateRaw === "ready" ||
+      researchStateRaw === "failed" ||
+      researchStateRaw === "stale"
+        ? researchStateRaw
+        : "not_started";
+    return {
+      slot: post.slot_index,
+      draft_html: post.draft_html,
+      featured_image_url: post.featured_image_url,
+      draft_status: step2State.draft_status,
+      image_status: step2State.image_status,
+      review_status: step2State.review_status,
+      publish_status: step2State.publish_status,
+      draft_version: step2State.draft_version,
+      image_version: step2State.image_version,
+      step2_contract: Object.keys(step2Contract).length ? step2Contract : null,
+      step2_research_state: step2ResearchState,
+      updated_at: post.updated_at,
+    };
+  });
+  const researchState = derivePersistedResearchStateFromPosts(step2Slots);
 
   return {
     listing: {
@@ -159,6 +233,11 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
     evaluation: {
       totalScore: evaluationResult.evaluation?.totalScore ?? 0,
     },
+    step2: {
+      research_state: researchState,
+      slots: step2Slots,
+    },
+    runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
   };
 }
 

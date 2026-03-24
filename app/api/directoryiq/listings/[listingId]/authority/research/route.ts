@@ -8,6 +8,7 @@ import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingRe
 import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
 import { getAuthorityPosts, upsertAuthorityStep2ResearchContract } from "@/app/api/directoryiq/_utils/selectionData";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 import {
   buildStep2SelectionResearchDossierPhase1,
   isDossierBackedResearchArtifact,
@@ -188,6 +189,7 @@ export async function POST(
           code: "BAD_REQUEST",
           reqId,
         },
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: 400 }
     );
@@ -211,6 +213,7 @@ export async function POST(
             reqId,
             details: error.details,
           },
+          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
         },
         { status: error.status }
       );
@@ -231,6 +234,7 @@ export async function POST(
           code: "NOT_FOUND",
           reqId,
         },
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: 404 }
     );
@@ -253,6 +257,7 @@ export async function POST(
         reqId,
         state: "ready",
         contracts: toResponseContracts(canonicalState.contracts),
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: 200 }
     );
@@ -383,6 +388,7 @@ export async function POST(
       acceptedAt: job.acceptedAt,
       status: job.status,
       statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     },
     { status: 202 }
   );

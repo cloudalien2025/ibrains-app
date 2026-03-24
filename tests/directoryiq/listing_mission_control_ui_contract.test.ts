@@ -104,6 +104,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("const step2HasUsableResearch = useMemo(");
     expect(source).toContain("Object.values(step2Runtime).some");
     expect(source).not.toContain("asset.draftStatus !== \"not_started\"");
+    expect(source).toContain("setServerStep2Snapshot(listingResponse.step2 ?? null);");
+    expect(source).toContain("setStep2ResearchRequestedState(normalizeResearchState(listingResponse.step2.research_state));");
   });
 
   it("keeps publish layer scoped to Step 2 with required CTA set", () => {
@@ -177,6 +179,33 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("translateStep2ErrorMessage(message, \"NETWORK_CONNECTIVITY\")");
     expect(source).toContain("draftLastErrorCode: \"NETWORK_CONNECTIVITY\"");
     expect(source).toContain("draftStatus: \"failed\"");
+    expect(source).toContain("draftHtml: \"\"");
+  });
+
+  it("keeps local storage non-authoritative for step2 content assets", () => {
+    expect(source).not.toContain("setContentAssets(parsed.contentAssets ?? {});");
+    expect(source).not.toContain("contentAssets: Record<string, ContentAssetState>;");
+  });
+
+  it("routes retry/regenerate through the same orchestrated step2 pipeline", () => {
+    expect(source).toContain("mode?: \"write_article\" | \"retry_draft\" | \"regenerate_draft\";");
+    expect(source).toContain("mode: \"retry_draft\"");
+    expect(source).toContain("mode: \"regenerate_draft\"");
+    expect(source).not.toContain("onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}");
+  });
+
+  it("loads preview surface from persisted server artifact path", () => {
+    expect(source).toContain("async function openStep2PreviewPanel(");
+    expect(source).toContain("action: \"preview\"");
+    expect(source).toContain("buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview`, siteQuery)");
+    expect(source).toContain("draft_html");
+    expect(source).toContain("featured_image_url");
+  });
+
+  it("surfaces step2 runtime parity mismatches", () => {
+    expect(source).toContain("data-testid=\"step2-runtime-parity-warning\"");
+    expect(source).toContain("console.warn(\"[directoryiq-step2-parity]\"");
+    expect(source).toContain("if (step2ParityMismatch)");
   });
 
   it("keeps draft primary action ownership in slot actions, not preview panel", () => {

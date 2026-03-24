@@ -17,6 +17,7 @@ import { generateAuthorityImage, validateOpenAiKeyPresent } from "@/lib/openai/s
 import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
@@ -47,6 +48,7 @@ export async function POST(
             reqId,
             details: error.details,
           },
+          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
         },
         { status: error.status }
       );
@@ -66,6 +68,7 @@ export async function POST(
           code: "BAD_REQUEST",
           reqId,
         },
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: 400 }
     );
@@ -169,6 +172,7 @@ export async function POST(
       acceptedAt: job.acceptedAt,
       status: job.status,
       statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     },
     { status: 202 }
   );

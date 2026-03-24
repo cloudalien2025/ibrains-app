@@ -3,9 +3,41 @@ import { NextRequest } from "next/server";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 
 const getListingEvaluationMock = vi.fn();
+const readPersistedStep2StateMock = vi.fn((metadata: Record<string, unknown> | null | undefined) => {
+  const step2 = (metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).step2_state : {}) as Record<string, unknown>;
+  return {
+    draft_status: typeof step2.draft_status === "string" ? step2.draft_status : "not_started",
+    image_status: typeof step2.image_status === "string" ? step2.image_status : "not_started",
+    review_status: typeof step2.review_status === "string" ? step2.review_status : "not_ready",
+    publish_status: typeof step2.publish_status === "string" ? step2.publish_status : "not_started",
+    blog_to_listing_link_status: "not_started",
+    listing_to_blog_link_status: "not_started",
+    draft_version: typeof step2.draft_version === "number" ? step2.draft_version : 0,
+    image_version: typeof step2.image_version === "number" ? step2.image_version : 0,
+    draft_generated_at: null,
+    image_generated_at: null,
+    draft_last_error_code: null,
+    draft_last_error_message: null,
+    image_last_error_code: null,
+    image_last_error_message: null,
+    approved_at: null,
+    approved_snapshot_draft_version: null,
+    approved_snapshot_image_version: null,
+    publish_attempted_at: null,
+    publish_completed_at: null,
+    published_post_id: null,
+    published_url: null,
+    publish_last_error_code: null,
+    publish_last_error_message: null,
+    publish_last_req_id: null,
+    last_link_error_code: null,
+    last_link_error_message: null,
+  };
+});
 
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getListingEvaluation: getListingEvaluationMock,
+  readPersistedStep2State: readPersistedStep2StateMock,
 }));
 
 describe("directoryiq listing detail route proxy", () => {
@@ -13,6 +45,38 @@ describe("directoryiq listing detail route proxy", () => {
     vi.resetModules();
     vi.unstubAllGlobals();
     getListingEvaluationMock.mockReset();
+    readPersistedStep2StateMock.mockReset();
+    readPersistedStep2StateMock.mockImplementation((metadata: Record<string, unknown> | null | undefined) => {
+      const step2 = (metadata && typeof metadata === "object" ? (metadata as Record<string, unknown>).step2_state : {}) as Record<string, unknown>;
+      return {
+        draft_status: typeof step2.draft_status === "string" ? step2.draft_status : "not_started",
+        image_status: typeof step2.image_status === "string" ? step2.image_status : "not_started",
+        review_status: typeof step2.review_status === "string" ? step2.review_status : "not_ready",
+        publish_status: typeof step2.publish_status === "string" ? step2.publish_status : "not_started",
+        blog_to_listing_link_status: "not_started",
+        listing_to_blog_link_status: "not_started",
+        draft_version: typeof step2.draft_version === "number" ? step2.draft_version : 0,
+        image_version: typeof step2.image_version === "number" ? step2.image_version : 0,
+        draft_generated_at: null,
+        image_generated_at: null,
+        draft_last_error_code: null,
+        draft_last_error_message: null,
+        image_last_error_code: null,
+        image_last_error_message: null,
+        approved_at: null,
+        approved_snapshot_draft_version: null,
+        approved_snapshot_image_version: null,
+        publish_attempted_at: null,
+        publish_completed_at: null,
+        published_post_id: null,
+        published_url: null,
+        publish_last_error_code: null,
+        publish_last_error_message: null,
+        publish_last_req_id: null,
+        last_link_error_code: null,
+        last_link_error_message: null,
+      };
+    });
     delete process.env.DIRECTORYIQ_API_BASE;
     delete process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE;
   });
@@ -148,12 +212,14 @@ describe("directoryiq listing detail route proxy", () => {
       listing: {
         title: "Tivoli Lodge",
         url: null,
+        source_id: "site-1:651",
         raw_json: {
           listing_id: "651",
           group_name: "Tivoli Lodge",
           profile_url: "https://www.vailvacay.com/listings/tivoli-lodge",
         },
       },
+      authorityPosts: [],
       evaluation: { totalScore: 77 },
     });
 
@@ -174,11 +240,13 @@ describe("directoryiq listing detail route proxy", () => {
       listing: {
         title: "No URL Listing",
         url: null,
+        source_id: "site-1:652",
         raw_json: {
           listing_id: "652",
           group_name: "No URL Listing",
         },
       },
+      authorityPosts: [],
       evaluation: { totalScore: 20 },
     });
 
@@ -259,5 +327,61 @@ describe("directoryiq listing detail route proxy", () => {
     expect(res.status).toBe(502);
     expect(json.ok).toBe(false);
     expect(String(json.error)).toContain("connect ETIMEDOUT");
+  });
+
+  it("returns persisted step2 snapshot and runtime stamp for local owner reads", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    process.env.DIRECTORYIQ_RELEASE_STAMP = "rel-test-123";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        source_id: "site-1:142",
+        title: "Cedar at Streamside",
+        url: "https://example.com/listings/cedar-at-streamside",
+        raw_json: {
+          listing_id: "142",
+          group_name: "Cedar at Streamside",
+        },
+      },
+      authorityPosts: [
+        {
+          slot_index: 1,
+          draft_html: "<p>Persisted draft</p>",
+          featured_image_url: "https://example.com/image.webp",
+          metadata_json: {
+            step2_contract: {
+              research_artifact: {
+                focus_keyword: "cedar at streamside comparison",
+                top_results: [{ title: "Listing", url: "https://example.com/listings/cedar-at-streamside", rank: 1 }],
+              },
+            },
+            step2_research: { state: "ready" },
+            step2_state: {
+              draft_status: "ready",
+              image_status: "ready",
+              review_status: "ready",
+              publish_status: "not_started",
+              draft_version: 2,
+              image_version: 1,
+            },
+          },
+          updated_at: "2026-03-24T00:00:00.000Z",
+        },
+      ],
+      evaluation: { totalScore: 80 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/142?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "142" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.step2?.research_state).toBe("ready");
+    expect(Array.isArray(json.step2?.slots)).toBe(true);
+    expect(json.step2?.slots?.[0]?.draft_html).toContain("Persisted draft");
+    expect(json.runtime?.runtime_owner).toBe("directoryiq-api.ibrains.ai");
+    expect(json.runtime?.release_stamp).toBe("rel-test-123");
   });
 });

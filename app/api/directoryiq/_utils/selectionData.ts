@@ -988,9 +988,7 @@ export async function upsertAuthorityStep2ResearchContract(
   }
 ): Promise<void> {
   const existing = await getAuthorityPostBySlot(userId, listingId, slot);
-  if (!existing) return;
-
-  const baseMetadata = mergeStep2StateMetadata(existing.metadata_json, {});
+  const baseMetadata = mergeStep2StateMetadata(existing?.metadata_json, {});
   const previousResearch = asRecord(baseMetadata.step2_research);
   const now = new Date().toISOString();
   const nextResearch = {
@@ -1014,11 +1012,24 @@ export async function upsertAuthorityStep2ResearchContract(
 
   await query(
     `
-    UPDATE directoryiq_authority_posts
-    SET metadata_json = $4::jsonb, updated_at = now()
-    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    INSERT INTO directoryiq_authority_posts
+      (user_id, listing_source_id, slot_index, post_type, focus_topic, status, metadata_json, updated_at)
+    VALUES
+      ($1, $2, $3, COALESCE($4, 'local_guide'), COALESCE($5, ''), COALESCE($6, 'not_created'), $7::jsonb, now())
+    ON CONFLICT (user_id, listing_source_id, slot_index)
+    DO UPDATE SET
+      metadata_json = EXCLUDED.metadata_json,
+      updated_at = now()
     `,
-    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+    [
+      userId,
+      listingId,
+      slot,
+      existing?.post_type ?? null,
+      existing?.focus_topic ?? null,
+      existing?.status ?? null,
+      JSON.stringify(mergedMetadata),
+    ]
   );
 }
 

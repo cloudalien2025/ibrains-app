@@ -16,6 +16,7 @@ import {
   logAuthorityInfo,
 } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 
 export async function POST(
   req: NextRequest,
@@ -137,6 +138,15 @@ export async function POST(
       approval_token: approvalToken,
       review_status: action === "approve" ? "approved" : step2State.review_status,
       approved: action === "approve",
+      artifact: {
+        source: "persisted_slot_record",
+        slot: slotIndex,
+        draft_version: step2State.draft_version,
+        image_version: step2State.image_version,
+        draft_html: post.draft_html ?? null,
+        featured_image_url: post.featured_image_url ?? null,
+      },
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       guardrails: {
         never_auto_publish: true,
         requires_manual_approval: true,

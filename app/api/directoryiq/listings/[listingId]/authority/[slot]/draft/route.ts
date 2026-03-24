@@ -18,6 +18,7 @@ import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { buildListingFaqSupportEngine } from "@/lib/directoryiq/faq/engine";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
@@ -90,6 +91,9 @@ function isFaqSupportIntent(input: {
   const slotId = asString(input.step2Contract?.mission_plan_slot?.slot_id).toLowerCase();
   const slotLabel = asString(input.step2Contract?.mission_plan_slot?.slot_label).toLowerCase();
   const supportBriefType = asString(input.step2Contract?.support_brief?.post_type).toLowerCase();
+  const deterministicFaqSlotIds = new Set(["publish_faq_support_post"]);
+
+  if (deterministicFaqSlotIds.has(slotId)) return true;
 
   if (slotId.includes("faq")) return true;
   if (slotLabel.includes("faq")) return true;
@@ -121,6 +125,7 @@ export async function POST(
             reqId,
             details: error.details,
           },
+          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
         },
         { status: error.status }
       );
@@ -420,6 +425,7 @@ export async function POST(
       acceptedAt: job.acceptedAt,
       status: job.status,
       statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     },
     { status: 202 }
   );
