@@ -13,6 +13,10 @@ function firstNonEmpty(values: string[]): string {
   return values.map((value) => value.trim()).find(Boolean) ?? "";
 }
 
+function clusterLabel(cluster: string): string {
+  return cluster.replace(/\s*\/\s*/g, " or ");
+}
+
 function clusterFacts(cluster: string, context: ListingFaqContext): { values: string[]; confidence: FactConfidence } {
   const map: Record<string, string[]> = {
     location: [context.neighborhood, context.city, context.region],
@@ -51,22 +55,33 @@ function clusterFacts(cluster: string, context: ListingFaqContext): { values: st
 }
 
 function buildAnswer(cluster: string, facts: string[], confidence: FactConfidence, context: ListingFaqContext): string {
+  const topic = clusterLabel(cluster).toLowerCase();
   if (confidence === "unknown") {
-    return "Some details are not confirmed yet, so guests should verify this directly before booking. " +
-      "The listing page includes the latest owner-provided information for " + context.listing_name + ".";
+    return (
+      "Verified " +
+      topic +
+      " details are not currently listed for " +
+      context.listing_name +
+      ". Check the listing page and confirm this with the host before booking."
+    );
   }
 
   const direct = firstNonEmpty(facts) || context.listing_name;
   const local = firstNonEmpty([context.neighborhood, context.city, context.region]);
 
   if (confidence === "inferred") {
-    return "This appears likely based on available listing signals: " + direct + ". " +
-      "Because this is inferred rather than confirmed, guests should verify details with the host before finalizing plans.";
+    return (
+      "Available listing signals indicate " +
+      direct +
+      " for " +
+      topic +
+      ". Because this detail is inferred rather than explicitly confirmed, verify it with the host before finalizing plans."
+    );
   }
 
-  const sentence1 = "Yes. " + direct + ".";
+  const sentence1 = "For " + topic + ", the listing currently states " + direct + ".";
   const sentence2 = local
-    ? "For local context, this is most relevant around " + local + "."
+    ? "This is specifically relevant for travelers planning around " + local + "."
     : "This is based on details currently listed for this property.";
   const sentence3 = ["cancellation / booking rules", "check-in logistics", "parking / transit"].includes(cluster)
     ? "Guests should still reconfirm operational details close to arrival."
@@ -84,6 +99,9 @@ export function composeFaqAnswers(input: {
 
   for (const question of input.selectedQuestions) {
     const { values, confidence } = clusterFacts(question.cluster, input.context);
+    if (confidence === "unknown") {
+      continue;
+    }
     const answerPlain = buildAnswer(question.cluster, values, confidence, input.context);
     const answerHtml = "<p>" + htmlEscape(answerPlain) + "</p>";
 

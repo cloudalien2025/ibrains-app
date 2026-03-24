@@ -7,7 +7,14 @@ const GENERIC_LANGUAGE_PATTERNS = [
   /this can help travelers decide/i,
   /answering these questions will help/i,
   /informed decision/i,
+  /some details are not confirmed yet/i,
 ];
+
+const TITLE_JARGON_PATTERN = /(pre[\s_-]*selection|friction|slot|publish_|mission control)/i;
+
+function normalizeAnswer(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
 
 function avg(values: number[]): number {
   if (values.length === 0) return 0;
@@ -23,9 +30,37 @@ export function evaluateFaqQuality(input: {
   faqEntries: FaqEntry[];
   selectedClusters: string[];
 }): FaqValidationResult {
+  const answers = input.faqEntries.map((entry) => entry.answer_plaintext.trim()).filter(Boolean);
+  const normalizedAnswers = answers.map((entry) => normalizeAnswer(entry));
+  const duplicateRatio =
+    normalizedAnswers.length <= 1
+      ? 0
+      : (normalizedAnswers.length - new Set(normalizedAnswers).size) / normalizedAnswers.length;
+  const fallbackRatio =
+    input.faqEntries.length === 0
+      ? 1
+      : input.faqEntries.filter((entry) => {
+          const plain = entry.answer_plaintext.toLowerCase();
+          return (
+            entry.fact_confidence === "unknown" ||
+            plain.includes("verify") ||
+            plain.includes("confirm this with the host") ||
+            plain.includes("not currently listed")
+          );
+        }).length / input.faqEntries.length;
+  const distinctGroundedFacts = new Set(
+    input.faqEntries
+      .flatMap((entry) => entry.source_facts)
+      .map((fact) => fact.trim().toLowerCase())
+      .filter(Boolean)
+  ).size;
+
   const directnessScores = input.faqEntries.map((entry) => {
     const firstSentence = entry.answer_plaintext.split(".")[0] ?? "";
-    return /^(yes|no|some|this|guests|the listing|it)/i.test(firstSentence.trim()) ? 100 : 55;
+    const trimmed = firstSentence.trim();
+    if (/^for\s+[a-z]/i.test(trimmed) || /^available listing signals/i.test(trimmed)) return 92;
+    if (/^(yes|no|some|this|guests|the listing|it)/i.test(trimmed)) return 55;
+    return 70;
   });
 
   const genericHits = input.faqEntries.reduce((count, entry) => {
@@ -79,6 +114,10 @@ export function evaluateFaqQuality(input: {
   if (genericLanguagePenalty > 35) blockedReasons.push("generic language penalty too high");
   if (hallucinationRisk > 50) blockedReasons.push("hallucination risk too high");
   if (selectionIntentCoverage < 55) blockedReasons.push("question diversity too low");
+  if (input.faqEntries.length >= 5 && duplicateRatio > 0.8) blockedReasons.push("answer repetition too high");
+  if (fallbackRatio > 0.9) blockedReasons.push("fallback answer ratio too high");
+  if (fallbackRatio > 0.9 && distinctGroundedFacts < 2) blockedReasons.push("grounded fact diversity too low");
+  if (TITLE_JARGON_PATTERN.test(input.context.title)) blockedReasons.push("title contains internal jargon");
 
   return { quality, blockedReasons };
 }

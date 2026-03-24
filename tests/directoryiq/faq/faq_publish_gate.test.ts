@@ -66,7 +66,7 @@ describe("faq publish gate", () => {
     const result = applyFaqPublishGate({
       context: baseContext,
       validation: qualityPass,
-      selectedQuestionCount: 7,
+      finalFaqEntryCount: 7,
     });
 
     expect(result.allowPublish).toBe(true);
@@ -86,7 +86,7 @@ describe("faq publish gate", () => {
           generic_language_penalty: 50,
         },
       },
-      selectedQuestionCount: 3,
+      finalFaqEntryCount: 3,
     });
 
     expect(result.allowPublish).toBe(false);
