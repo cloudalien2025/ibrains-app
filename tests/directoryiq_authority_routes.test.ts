@@ -255,6 +255,69 @@ describe("directoryiq authority routes", () => {
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
   });
 
+  it("uses listing-intelligence FAQ engine for FAQ support intents", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:321",
+        title: "Fixture Listing",
+        url: "https://example.com/listings/fixture-listing",
+        raw_json: {
+          description: "Sample listing description",
+          listing_type: "vacation rental",
+          category: "Vacation Rentals",
+          city: "Vail",
+          region: "Colorado",
+          amenities: ["wifi", "kitchen", "hot tub"],
+          occupancy: "8",
+          bedrooms: "3",
+          bathrooms: "2",
+          parking: "Onsite",
+          checkin_info: "4pm",
+          checkout_info: "10am",
+          cancellation_policy: "Moderate",
+          booking_rules: ["No parties"],
+          nearby_landmarks: ["Vail Village"],
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Booking FAQ for Fixture Listing",
+        focus_topic: "faq booking questions",
+        type: "contextual_guide",
+        step2_contract: {
+          mission_plan_slot: {
+            slot_id: "publish_faq_support_post",
+          },
+        },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(generateAuthorityDraft).not.toHaveBeenCalled();
+    expect(upsertAuthorityPostDraft).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "site-1:321",
+      1,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          faq_generation: expect.any(Object),
+        }),
+      })
+    );
+  });
+
   it("accepts slot 5 for draft generation and persistence", async () => {
     const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
     const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/5/draft", {
