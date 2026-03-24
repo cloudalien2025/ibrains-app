@@ -1,6 +1,7 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
 
 export type DirectoryIqJobKind =
+  | "step2.research"
   | "step2.draft"
   | "step2.image"
   | "step3.generate"

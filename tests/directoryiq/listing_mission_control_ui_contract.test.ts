@@ -94,6 +94,9 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("Preview Ready");
     expect(source).toContain("Approved");
     expect(source).toContain("Needs Attention");
+    expect(source).toContain("/authority/research");
+    expect(source).toContain("resolveDirectoryIqJobOrInline<Step2ResearchStartResponse>");
+    expect(source).not.toContain("setStep2ResearchRequestedState(\"ready\")");
   });
 
   it("keeps Step 2 research gating parity across hydration", () => {

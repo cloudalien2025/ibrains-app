@@ -64,6 +64,7 @@ const getBdSite = vi.fn(async () => ({
   base_url: "https://example.com",
 }));
 const upsertAuthorityPostDraft = vi.fn(async () => {});
+const upsertAuthorityStep2ResearchContract = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
 const patchAuthorityStep2State = vi.fn(async () => ({}));
 const markAuthorityReviewReady = vi.fn(async () => {});
@@ -128,6 +129,7 @@ const getAuthorityPostBySlot = vi.fn(async () => ({
     },
   },
 }));
+const getAuthorityPosts = vi.fn(async () => []);
 const addDirectoryIqVersion = vi.fn(async () => "version-1");
 const markPostPublished = vi.fn(async () => {});
 const proxyDirectoryIqRequest = vi.fn(async () => new Response(JSON.stringify({ ok: false }), { status: 502 }));
@@ -194,6 +196,7 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getListingEvaluation,
   findListingCandidates,
   upsertAuthorityPostDraft,
+  upsertAuthorityStep2ResearchContract,
   saveAuthorityImage,
   patchAuthorityStep2State,
   markAuthorityReviewReady,
@@ -204,6 +207,7 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   markAuthorityApprovedSnapshot,
   readPersistedStep2State,
   getAuthorityPostBySlot,
+  getAuthorityPosts,
   addDirectoryIqVersion,
   markPostPublished,
 }));
@@ -258,6 +262,84 @@ describe("directoryiq authority routes", () => {
     expect(status.result?.ok).toBe(true);
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("starts Step 2 listing research through a persisted request-backed job", async () => {
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
+      method: "POST",
+      body: JSON.stringify({
+        contracts: [
+          {
+            slot: 1,
+            step2_contract: {
+              mission_plan_slot: { slot_id: "publish_comparison_decision_post", listing_url: "https://example.com/listings/fixture-listing" },
+              support_brief: { post_type: "comparison" },
+              seo_package: { primary_focus_keyword: "fixture keyword" },
+              research_artifact: {
+                focus_keyword: "fixture keyword",
+                top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+              },
+            },
+          },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    expect(accepted.status).toBe("queued");
+    expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
+
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.state).toBe("ready");
+    expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
+  });
+
+  it("resumes Step 2 listing research as ready when canonical artifact already exists", async () => {
+    getAuthorityPosts.mockResolvedValueOnce([
+      {
+        metadata_json: {
+          step2_contract: {
+            research_artifact: {
+              focus_keyword: "fixture keyword",
+              top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1 }],
+            },
+          },
+        },
+      },
+    ]);
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
+      method: "POST",
+      body: JSON.stringify({
+        contracts: [
+          {
+            slot: 1,
+            step2_contract: {
+              mission_plan_slot: { slot_id: "publish_comparison_decision_post", listing_url: "https://example.com/listings/fixture-listing" },
+              support_brief: { post_type: "comparison" },
+              seo_package: { primary_focus_keyword: "fixture keyword" },
+              research_artifact: {
+                focus_keyword: "fixture keyword",
+                top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+              },
+            },
+          },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const res = await POST(req, { params: { listingId: "321" } });
+    const body = (await res.json()) as { state?: string };
+    expect(res.status).toBe(200);
+    expect(body.state).toBe("ready");
+    expect(upsertAuthorityStep2ResearchContract).not.toHaveBeenCalled();
   });
 
   it("rejects step2 draft generation when listing research is not ready", async () => {
