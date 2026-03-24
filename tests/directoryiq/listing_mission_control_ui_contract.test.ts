@@ -121,12 +121,14 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2AggregateState");
+    expect(source).toContain("deriveStep2DraftAction");
     expect(source).toContain("deriveStep2PreviewPanelGate");
     expect(source).toContain("derivePublishDisabledReason");
     expect(source).toContain("deriveStep2SlotHelperMessage");
     expect(source).toContain("step2SummaryCopy");
     expect(source).toContain("aggregate_state: aggregateState");
     expect(source).toContain("const previewPanelGate = deriveStep2PreviewPanelGate({");
+    expect(source).toContain("const draftAction = deriveStep2DraftAction({");
     expect(source).toContain("draft_status: asset.draftStatus,");
     expect(source).toContain("image_status: asset.imageStatus,");
     expect(source).toContain("previewPanelGate.approveVisible ? (");
@@ -139,6 +141,9 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("reviewStatus: existingAsset.draftStatus === \"ready\" ? \"ready\" : \"not_ready\",");
     expect(source).not.toContain("publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
+    expect(source).toContain("draftAction.kind === \"retry_draft\"");
+    expect(source).toContain("draftAction.kind === \"regenerate_draft\"");
+    expect(source).not.toContain("asset.draftStatus === \"failed\" ? <button");
     expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });

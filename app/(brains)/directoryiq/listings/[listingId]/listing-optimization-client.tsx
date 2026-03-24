@@ -41,6 +41,7 @@ import {
   isStep2SetupBlockerMessage,
 } from "@/lib/directoryiq/step2CardActionContract";
 import {
+  deriveStep2DraftAction,
   derivePublishDisabledReason,
   deriveStep2PreviewPanelGate,
   deriveStep2SlotHelperMessage,
@@ -1855,6 +1856,12 @@ export default function ListingOptimizationClient({
           draft_status: asset.draftStatus,
           image_status: asset.imageStatus,
         });
+        const draftAction = deriveStep2DraftAction({
+          aggregate_state: aggregateState,
+          draft_status: asset.draftStatus,
+          draft_version: asset.draftVersion,
+          draft_html: asset.draftHtml,
+        });
         return {
           missionSlot,
           item,
@@ -1868,6 +1875,7 @@ export default function ListingOptimizationClient({
           previewPanelGate,
           publishDisabledReason,
           setupBlocked,
+          draftAction,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
@@ -3128,7 +3136,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, previewPanelGate, publishDisabledReason, setupBlocked, asset }) => (
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, previewPanelGate, publishDisabledReason, setupBlocked, asset, draftAction }) => (
                     <div
                       key={item.id}
                       className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
@@ -3165,14 +3173,14 @@ export default function ListingOptimizationClient({
                             Connect OpenAI
                           </Link>
                         ) : null}
-                        {!setupBlocked && aggregateState === "create_ready" ? (
+                        {!setupBlocked && draftAction.kind === "write_article" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
                             onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
                             data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}
                           >
-                            Write Article
+                            {draftAction.label}
                           </button>
                         ) : null}
                         {!setupBlocked && aggregateState === "draft_ready" ? (
@@ -3184,13 +3192,15 @@ export default function ListingOptimizationClient({
                             >
                               Preview
                             </button>
-                            <button
-                              type="button"
-                              className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100"
-                              onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}
-                            >
-                              Regenerate Draft
-                            </button>
+                            {draftAction.kind === "regenerate_draft" ? (
+                              <button
+                                type="button"
+                                className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100"
+                                onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}
+                              >
+                                {draftAction.label}
+                              </button>
+                            ) : null}
                           </>
                         ) : null}
                         {!setupBlocked && aggregateState === "image_ready" ? (
@@ -3220,7 +3230,9 @@ export default function ListingOptimizationClient({
                             >
                               Preview & Approve
                             </button>
-                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            {draftAction.kind === "regenerate_draft" ? (
+                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                            ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
@@ -3236,7 +3248,9 @@ export default function ListingOptimizationClient({
                             </button>
                             <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button>
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setContentAssets((previous) => ({ ...previous, [item.id]: { ...asset, reviewStatus: "ready", approvedAt: null, approvalToken: null } }))}>Unapprove</button>
-                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            {draftAction.kind === "regenerate_draft" ? (
+                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                            ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
@@ -3258,7 +3272,7 @@ export default function ListingOptimizationClient({
                         ) : null}
                         {!setupBlocked && aggregateState === "needs_attention" ? (
                           <>
-                            {asset.draftStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Retry Draft</button> : null}
+                            {draftAction.kind === "retry_draft" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button> : null}
                             {asset.imageStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentImage(item, slot)}>Retry Image</button> : null}
                             {asset.publishStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void publishContentAsset(item, slot)}>Retry Publish</button> : null}
                             {(asset.draftHtml || asset.featuredImageUrl) ? <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button> : null}
@@ -3292,7 +3306,12 @@ export default function ListingOptimizationClient({
                             {previewPanelGate.approveVisible ? (
                               <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)}>Approve</button>
                             ) : null}
-                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            {draftAction.kind === "retry_draft" ? (
+                              <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                            ) : null}
+                            {draftAction.kind === "regenerate_draft" ? (
+                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                            ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                             {asset.reviewStatus === "approved" ? (
                               <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-60" onClick={() => void publishContentAsset(item, slot)} disabled={Boolean(publishDisabledReason)}>Publish</button>
