@@ -3306,12 +3306,6 @@ export default function ListingOptimizationClient({
                             {previewPanelGate.approveVisible ? (
                               <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)}>Approve</button>
                             ) : null}
-                            {draftAction.kind === "retry_draft" ? (
-                              <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
-                            ) : null}
-                            {draftAction.kind === "regenerate_draft" ? (
-                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
-                            ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                             {asset.reviewStatus === "approved" ? (
                               <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-60" onClick={() => void publishContentAsset(item, slot)} disabled={Boolean(publishDisabledReason)}>Publish</button>

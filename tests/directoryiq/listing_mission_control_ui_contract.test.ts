@@ -148,6 +148,14 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
   });
 
+  it("keeps draft primary action ownership in slot actions, not preview panel", () => {
+    const previewSurfaceStart = source.indexOf("data-testid={`step2-slot-preview-surface-${missionSlot.slot_id}`}");
+    expect(previewSurfaceStart).toBeGreaterThan(-1);
+    const previewSurfaceWindow = source.slice(previewSurfaceStart, previewSurfaceStart + 1800);
+    expect(previewSurfaceWindow).not.toContain("draftAction.kind === \"retry_draft\"");
+    expect(previewSurfaceWindow).not.toContain("draftAction.kind === \"regenerate_draft\"");
+  });
+
   it("keeps slot presentation deterministic with numbered titles and five-slot ceiling", () => {
     expect(source).toContain("(reinforcementPlan?.items ?? []).slice(0, 5).map((item, index) => {");
     expect(source).not.toContain("(reinforcementPlan?.items ?? []).slice(0, 4)");
