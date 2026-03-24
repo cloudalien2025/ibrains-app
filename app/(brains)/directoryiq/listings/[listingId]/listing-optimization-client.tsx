@@ -58,6 +58,7 @@ import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
   deriveStep2ResearchState,
+  hasUsableStep2ResearchArtifact,
   isStep2ResearchReady,
   type Step2ResearchState,
 } from "@/lib/directoryiq/step2ResearchGateContract";
@@ -1911,21 +1912,10 @@ export default function ListingOptimizationClient({
       } as Record<Step2AggregateState, number>
     );
   }, [step2SlotViewModels]);
-  const step2HasUsableResearch = useMemo(() => {
-    if (Object.values(step2Runtime).some((runtime) => Boolean(runtime.researchArtifact))) return true;
-    return step2MissionSlots.some((missionSlot, index) => {
-      const item = (reinforcementPlan?.items ?? []).find((candidate) => candidate.id === missionSlot.slot_id);
-      if (!item) return false;
-      const slot = index + 1;
-      const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
-      return (
-        asset.draftStatus !== "not_started" ||
-        asset.imageStatus !== "not_started" ||
-        asset.reviewStatus !== "not_ready" ||
-        asset.publishStatus !== "not_started"
-      );
-    });
-  }, [contentAssets, reinforcementPlan?.items, step2MissionSlots, step2Runtime]);
+  const step2HasUsableResearch = useMemo(
+    () => Object.values(step2Runtime).some((runtime) => hasUsableStep2ResearchArtifact(runtime.researchArtifact)),
+    [step2Runtime]
+  );
   const step2ResearchState = useMemo(
     () =>
       deriveStep2ResearchState({
