@@ -18,6 +18,7 @@ import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { buildListingFaqSupportEngine } from "@/lib/directoryiq/faq/engine";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
@@ -121,6 +122,7 @@ export async function POST(
             reqId,
             details: error.details,
           },
+          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
         },
         { status: error.status }
       );
@@ -261,12 +263,16 @@ export async function POST(
 
       let generatedHtml = "";
       let faqMetadata: Record<string, unknown> | null = null;
-      const useFaqEngine = isFaqSupportIntent({
-        postType,
-        focusTopic,
-        title,
-        step2Contract: body.step2_contract,
-      });
+      const slotId = asString(body.step2_contract?.mission_plan_slot?.slot_id).toLowerCase();
+      const useFaqEngine =
+        slotId === "publish_faq_support_post"
+          ? true
+          : isFaqSupportIntent({
+              postType,
+              focusTopic,
+              title,
+              step2Contract: body.step2_contract,
+            });
 
       if (useFaqEngine) {
         const listingType = asString(raw.listing_type) || asString(raw.category) || postType;
@@ -420,6 +426,7 @@ export async function POST(
       acceptedAt: job.acceptedAt,
       status: job.status,
       statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     },
     { status: 202 }
   );

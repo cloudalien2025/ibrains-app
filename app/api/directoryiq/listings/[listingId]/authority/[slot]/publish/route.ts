@@ -27,6 +27,7 @@ import {
   logAuthorityInfo,
 } from "@/app/api/directoryiq/_utils/authorityErrors";
 import { ListingSiteRequiredError, resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
+import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 
 function asNonEmptyString(value: unknown): string | null {
   if (typeof value === "string") {
@@ -522,6 +523,7 @@ export async function POST(
       version_id: versionId,
       requires_manual_approval: true,
       auto_publish: false,
+      runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     });
   } catch (error) {
     logAuthorityError({

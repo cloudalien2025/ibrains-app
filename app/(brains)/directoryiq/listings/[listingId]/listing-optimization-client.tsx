@@ -77,6 +77,31 @@ type ListingDetailResponse = {
   evaluation: {
     totalScore: number;
   };
+  step2?: {
+    research_state?: Step2ResearchState;
+    slots?: Array<{
+      slot?: number;
+      draft_html?: string | null;
+      featured_image_url?: string | null;
+      draft_status?: Step2DraftStatus;
+      image_status?: Step2ImageStatus;
+      review_status?: Step2ReviewStatus;
+      publish_status?: Step2PublishStatus;
+      draft_version?: number;
+      image_version?: number;
+      step2_contract?: {
+        support_brief?: Step2SupportBrief;
+        seo_package?: Step2SeoPackage;
+        research_artifact?: Step2SupportResearchArtifact;
+      } | null;
+      step2_research_state?: Step2ResearchState;
+      updated_at?: string | null;
+    }>;
+  };
+  runtime?: {
+    runtime_owner?: string;
+    release_stamp?: string;
+  };
 };
 
 type ListingDetailPayload = ListingDetailResponse | { data?: Partial<ListingDetailResponse> };
@@ -636,7 +661,16 @@ type Step2ResearchStartResponse = {
       research_artifact?: Step2SupportResearchArtifact;
     };
   }>;
+  runtime?: {
+    runtime_owner?: string;
+    release_stamp?: string;
+  };
 };
+
+type Step2ParityRuntime = {
+  runtimeOwner: string;
+  releaseStamp: string;
+} | null;
 
 type Step2SlotRuntime = {
   internalState: Step2InternalState;
@@ -661,7 +695,6 @@ type PersistedMissionState = {
   listingLifecycle: LifecycleState;
   listingApprovedForPublish: boolean;
   linkStates: Record<string, LinkOperationStatus>;
-  contentAssets: Record<string, ContentAssetState>;
   selectedMapNodeId: string | null;
 };
 
@@ -698,6 +731,21 @@ function parseError(json: ApiErrorShape, fallback: string, status?: number, list
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asRuntime(value: unknown): Step2ParityRuntime {
+  const record = asRecord(value);
+  const runtimeOwner = normalizeText(typeof record.runtime_owner === "string" ? record.runtime_owner : "");
+  const releaseStamp = normalizeText(typeof record.release_stamp === "string" ? record.release_stamp : "");
+  if (!runtimeOwner || !releaseStamp) return null;
+  return { runtimeOwner, releaseStamp };
+}
+
+function normalizeResearchState(value: unknown, fallback: Step2ResearchState = "not_started"): Step2ResearchState {
+  if (value === "not_started" || value === "queued" || value === "researching" || value === "ready" || value === "failed" || value === "stale") {
+    return value;
+  }
+  return fallback;
 }
 
 async function waitForDirectoryIqJobResult<T extends Record<string, unknown>>(
@@ -1029,6 +1077,9 @@ export default function ListingOptimizationClient({
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
   const [step2Runtime, setStep2Runtime] = useState<Record<string, Step2SlotRuntime>>({});
   const [step2ResearchRequestedState, setStep2ResearchRequestedState] = useState<Step2ResearchState>("not_started");
+  const [serverStep2Snapshot, setServerStep2Snapshot] = useState<ListingDetailResponse["step2"] | null>(null);
+  const [step2ReadRuntime, setStep2ReadRuntime] = useState<Step2ParityRuntime>(null);
+  const [step2WriteRuntime, setStep2WriteRuntime] = useState<Step2ParityRuntime>(null);
 
   useEffect(() => {
     const queryStep = normalizeMissionStepQuery(stepParam);
@@ -1060,7 +1111,6 @@ export default function ListingOptimizationClient({
       setListingLifecycle(parsed.listingLifecycle ?? "Detected");
       setListingApprovedForPublish(Boolean(parsed.listingApprovedForPublish));
       setSelectedMapNodeId(parsed.selectedMapNodeId ?? null);
-      setContentAssets(parsed.contentAssets ?? {});
       const persistedLinkStates = parsed.linkStates ?? {};
       setLinkOperations((previous) =>
         previous.map((item) => ({ ...item, status: persistedLinkStates[item.key] ?? item.status }))
@@ -1081,11 +1131,15 @@ export default function ListingOptimizationClient({
       listingLifecycle,
       listingApprovedForPublish,
       linkStates,
-      contentAssets,
       selectedMapNodeId,
     };
     window.localStorage.setItem(storageKey, JSON.stringify(persisted));
-  }, [activeStepId, listingLifecycle, listingApprovedForPublish, linkOperations, contentAssets, selectedMapNodeId, storageKey]);
+  }, [activeStepId, listingLifecycle, listingApprovedForPublish, linkOperations, selectedMapNodeId, storageKey]);
+
+  function registerStep2WriteRuntime(payload: unknown) {
+    const runtime = asRuntime(asRecord(payload).runtime);
+    if (runtime) setStep2WriteRuntime(runtime);
+  }
 
   async function loadListingAndIntegrations() {
     if (!effectiveListingId) return;
@@ -1112,16 +1166,25 @@ export default function ListingOptimizationClient({
         if (!listingRes.ok || !listingPayload) {
           setError(parseError(listingJson, "Failed to load listing details.", listingRes.status, effectiveListingId));
           setListing(null);
+          setServerStep2Snapshot(null);
           return;
         }
 
+        const listingResponse = listingJson as ListingDetailResponse;
+        const runtime = asRuntime(listingResponse.runtime);
+        if (runtime) setStep2ReadRuntime(runtime);
         setListing({
           listing: listingPayload,
           evaluation: evaluationPayload ?? { totalScore: 0 },
         });
+        setServerStep2Snapshot(listingResponse.step2 ?? null);
+        if (listingResponse.step2?.research_state) {
+          setStep2ResearchRequestedState(normalizeResearchState(listingResponse.step2.research_state));
+        }
       } catch (err) {
         setError({ message: stringifyErrorMessage(err, "Failed to load listing details."), status: 0, listingId: effectiveListingId });
         setListing(null);
+        setServerStep2Snapshot(null);
       }
     })();
 
@@ -1809,6 +1872,64 @@ export default function ListingOptimizationClient({
     });
   }, [step2MissionSlots]);
 
+  useEffect(() => {
+    if (!serverStep2Snapshot || !step2MissionSlots.length) return;
+    const slotByIndex = new Map<number, NonNullable<NonNullable<ListingDetailResponse["step2"]>["slots"]>[number]>();
+    for (const slot of serverStep2Snapshot.slots ?? []) {
+      if (typeof slot?.slot !== "number" || !Number.isFinite(slot.slot)) continue;
+      slotByIndex.set(slot.slot, slot);
+    }
+    if (!slotByIndex.size) return;
+
+    setContentAssets((previous) => {
+      const next = { ...previous };
+      for (let index = 0; index < step2MissionSlots.length; index += 1) {
+        const missionSlot = step2MissionSlots[index];
+        const item = (reinforcementPlan?.items ?? [])[index];
+        if (!missionSlot || !item) continue;
+        const persisted = slotByIndex.get(index + 1);
+        if (!persisted) continue;
+        const current = next[item.id] ?? initializeContentAsset(item, index + 1);
+        next[item.id] = {
+          ...current,
+          draftStatus: persisted.draft_status ?? current.draftStatus,
+          imageStatus: persisted.image_status ?? current.imageStatus,
+          reviewStatus: persisted.review_status ?? current.reviewStatus,
+          publishStatus: persisted.publish_status ?? current.publishStatus,
+          draftVersion: typeof persisted.draft_version === "number" ? persisted.draft_version : current.draftVersion,
+          imageVersion: typeof persisted.image_version === "number" ? persisted.image_version : current.imageVersion,
+          draftHtml: typeof persisted.draft_html === "string" ? persisted.draft_html : "",
+          featuredImageUrl: typeof persisted.featured_image_url === "string" ? persisted.featured_image_url : "",
+        };
+      }
+      return next;
+    });
+
+    setStep2Runtime((previous) => {
+      const next = { ...previous };
+      for (let index = 0; index < step2MissionSlots.length; index += 1) {
+        const missionSlot = step2MissionSlots[index];
+        const persisted = slotByIndex.get(index + 1);
+        if (!missionSlot || !persisted) continue;
+        const current = next[missionSlot.slot_id];
+        if (!current) continue;
+        const contract = asRecord(persisted.step2_contract);
+        const researchArtifact = hasUsableStep2ResearchArtifact(contract.research_artifact)
+          ? (contract.research_artifact as Step2SupportResearchArtifact)
+          : null;
+        next[missionSlot.slot_id] = {
+          ...current,
+          researchArtifact,
+          supportBrief: (asRecord(contract.support_brief) as Step2SupportBrief) ?? current.supportBrief,
+          seoPackage: (asRecord(contract.seo_package) as Step2SeoPackage) ?? current.seoPackage,
+          metadataReady: Boolean(researchArtifact),
+          errorMessage: null,
+        };
+      }
+      return next;
+    });
+  }, [serverStep2Snapshot, step2MissionSlots, reinforcementPlan?.items]);
+
   const openAiBlockerFromSupportMeta = useMemo(() => {
     const supportMetaRecord = supportMeta as Record<string, unknown> | null;
     const metaCodeCandidates = [
@@ -1938,6 +2059,20 @@ export default function ListingOptimizationClient({
     [step2HasUsableResearch, step2ResearchRequestedState]
   );
   const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
+  const step2ParityMismatch = useMemo(() => {
+    if (!step2ReadRuntime || !step2WriteRuntime) return false;
+    return (
+      step2ReadRuntime.runtimeOwner !== step2WriteRuntime.runtimeOwner ||
+      step2ReadRuntime.releaseStamp !== step2WriteRuntime.releaseStamp
+    );
+  }, [step2ReadRuntime, step2WriteRuntime]);
+  useEffect(() => {
+    if (!step2ParityMismatch || !step2ReadRuntime || !step2WriteRuntime) return;
+    console.warn("[directoryiq-step2-parity]", {
+      read_runtime: step2ReadRuntime,
+      write_runtime: step2WriteRuntime,
+    });
+  }, [step2ParityMismatch, step2ReadRuntime, step2WriteRuntime]);
   const step2SectionCta = useMemo(() => {
     const candidate = step2SlotViewModels.find((entry) => entry.aggregateState === "create_ready" || entry.aggregateState === "needs_attention");
     return { candidate };
@@ -2206,6 +2341,7 @@ export default function ListingOptimizationClient({
         }),
       });
       const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      registerStep2WriteRuntime(json);
       const settled = await resolveDirectoryIqJobOrInline<{ draft_html?: string }>(
         res,
         json,
@@ -2230,6 +2366,7 @@ export default function ListingOptimizationClient({
               draftStatus: "failed",
               draftLastErrorCode: code || null,
               draftLastErrorMessage: translatedMessage,
+              draftHtml: "",
             },
           };
         });
@@ -2269,14 +2406,15 @@ export default function ListingOptimizationClient({
         const existingAsset = previous[item.id] ?? current;
         return {
           ...previous,
-          [item.id]: {
-            ...existingAsset,
-            draftStatus: "failed",
-            draftLastErrorCode: "NETWORK_CONNECTIVITY",
-            draftLastErrorMessage: translatedMessage,
-          },
-        };
-      });
+            [item.id]: {
+              ...existingAsset,
+              draftStatus: "failed",
+              draftLastErrorCode: "NETWORK_CONNECTIVITY",
+              draftLastErrorMessage: translatedMessage,
+              draftHtml: "",
+            },
+          };
+        });
       return { ok: false, errorMessage: translatedMessage };
     }
   }
@@ -2305,10 +2443,11 @@ export default function ListingOptimizationClient({
       body: JSON.stringify({ focus_topic: current.focusTopic }),
       }
     );
-    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
-    const settled = await resolveDirectoryIqJobOrInline<{ featured_image_url?: string }>(
-      res,
-      json,
+      const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      registerStep2WriteRuntime(json);
+      const settled = await resolveDirectoryIqJobOrInline<{ featured_image_url?: string }>(
+        res,
+        json,
       "Failed to generate featured image.",
       effectiveListingId
     );
@@ -2378,8 +2517,16 @@ export default function ListingOptimizationClient({
     const json = (await res.json().catch(() => ({}))) as {
       approval_token?: string;
       preview?: { score_delta?: { after?: number } };
+      artifact?: {
+        draft_html?: string | null;
+        featured_image_url?: string | null;
+        draft_version?: number;
+        image_version?: number;
+      };
+      runtime?: { runtime_owner?: string; release_stamp?: string };
       error?: { message?: string; code?: string } | string;
     };
+    registerStep2WriteRuntime(json);
 
     if (!res.ok) {
       setError({
@@ -2395,6 +2542,11 @@ export default function ListingOptimizationClient({
       ...previous,
       [item.id]: {
         ...current,
+        draftHtml: typeof json.artifact?.draft_html === "string" ? json.artifact.draft_html : current.draftHtml,
+        featuredImageUrl:
+          typeof json.artifact?.featured_image_url === "string" ? json.artifact.featured_image_url : current.featuredImageUrl,
+        draftVersion: typeof json.artifact?.draft_version === "number" ? json.artifact.draft_version : current.draftVersion,
+        imageVersion: typeof json.artifact?.image_version === "number" ? json.artifact.image_version : current.imageVersion,
         reviewStatus: "approved",
         approvalToken: json.approval_token ?? null,
         approvedAt: new Date().toISOString(),
@@ -2405,6 +2557,52 @@ export default function ListingOptimizationClient({
     }));
     setNotice(`${current.title} approved for publish.`);
     return true;
+  }
+
+  async function openStep2PreviewPanel(item: BlogReinforcementPlanItem, slot: number, slotId: string): Promise<void> {
+    if (!effectiveListingId) return;
+    setSelectedMapNodeId(slotId);
+    const current = initializeContentAsset(item, slot);
+    const res = await fetch(
+      buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview`, siteQuery),
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "preview" }),
+      }
+    );
+    const json = (await res.json().catch(() => ({}))) as {
+      artifact?: {
+        draft_html?: string | null;
+        featured_image_url?: string | null;
+        draft_version?: number;
+        image_version?: number;
+      };
+      runtime?: { runtime_owner?: string; release_stamp?: string };
+      error?: { message?: string; code?: string } | string;
+    };
+    registerStep2WriteRuntime(json);
+    if (!res.ok) {
+      setError({
+        message: translateStep2ErrorMessage(
+          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to load preview.",
+          typeof json.error === "string" ? "" : json.error?.code
+        ),
+      });
+      return;
+    }
+
+    setContentAssets((previous) => ({
+      ...previous,
+      [item.id]: {
+        ...current,
+        draftHtml: typeof json.artifact?.draft_html === "string" ? json.artifact.draft_html : current.draftHtml,
+        featuredImageUrl:
+          typeof json.artifact?.featured_image_url === "string" ? json.artifact.featured_image_url : current.featuredImageUrl,
+        draftVersion: typeof json.artifact?.draft_version === "number" ? json.artifact.draft_version : current.draftVersion,
+        imageVersion: typeof json.artifact?.image_version === "number" ? json.artifact.image_version : current.imageVersion,
+      },
+    }));
   }
 
   async function publishContentAsset(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
@@ -2440,8 +2638,10 @@ export default function ListingOptimizationClient({
 
     const json = (await res.json().catch(() => ({}))) as {
       published_url?: string;
+      runtime?: { runtime_owner?: string; release_stamp?: string };
       error?: { message?: string; code?: string; reqId?: string } | string;
     };
+    registerStep2WriteRuntime(json);
     if (!res.ok) {
       const message = translateStep2ErrorMessage(
         typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.",
@@ -2543,6 +2743,11 @@ export default function ListingOptimizationClient({
 
   async function startStep2ListingResearch() {
     if (step2ResearchState === "queued" || step2ResearchState === "researching") return;
+    if (step2ParityMismatch) {
+      setStep2ResearchRequestedState("failed");
+      setError({ message: "Step 2 runtime parity mismatch detected. Refresh and retry after app/API releases align." });
+      return;
+    }
     if (!step2MissionSlots.length) {
       setStep2ResearchRequestedState("failed");
       setError({ message: "Listing research is unavailable until Step 2 mission slots are loaded." });
@@ -2613,6 +2818,7 @@ export default function ListingOptimizationClient({
         }
       );
       const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      registerStep2WriteRuntime(json);
       const settled = await resolveDirectoryIqJobOrInline<Step2ResearchStartResponse>(
         res,
         json,
@@ -2647,12 +2853,17 @@ export default function ListingOptimizationClient({
     missionSlot: Step2MissionPlanSlot;
     item: BlogReinforcementPlanItem;
     slot: number;
+    mode?: "write_article" | "retry_draft" | "regenerate_draft";
   }) {
     const slotId = input.missionSlot.slot_id;
     const runtime = step2Runtime[slotId];
     if (!runtime) return;
 
     const actionInput = step2ActionInput(input.missionSlot, runtime);
+    if (step2ParityMismatch) {
+      setError({ message: "Step 2 runtime parity mismatch detected. Refresh and retry after app/API releases align." });
+      return;
+    }
     if (!step2ResearchReady) {
       setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });
       return;
@@ -2690,6 +2901,11 @@ export default function ListingOptimizationClient({
     const generated = await generateContentDraft(input.item, input.slot, contractInput);
     if (!generated.ok) {
       patchStep2Runtime(slotId, { internalState: "failed", errorMessage: generated.errorMessage });
+      return;
+    }
+
+    if (input.mode === "retry_draft" || input.mode === "regenerate_draft") {
+      patchStep2Runtime(slotId, { internalState: "needs_review", errorMessage: null });
       return;
     }
 
@@ -2851,6 +3067,11 @@ export default function ListingOptimizationClient({
 
       {notice ? (
         <div className="mt-3 rounded-xl border border-emerald-300/30 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">{notice}</div>
+      ) : null}
+      {step2ParityMismatch ? (
+        <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-400/10 px-4 py-3 text-sm text-amber-100" data-testid="step2-runtime-parity-warning">
+          Step 2 runtime parity mismatch detected between read and write paths. Refresh after app/API releases align before continuing.
+        </div>
       ) : null}
 
       <div className="mt-4 grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr),320px]">
@@ -3423,7 +3644,7 @@ export default function ListingOptimizationClient({
                             <button
                               type="button"
                               className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                              onClick={() => void openStep2PreviewPanel(item, slot, missionSlot.slot_id)}
                             >
                               Preview
                             </button>
@@ -3431,7 +3652,7 @@ export default function ListingOptimizationClient({
                               <button
                                 type="button"
                                 className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100"
-                                onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}
+                                onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot, mode: "regenerate_draft" })}
                               >
                                 {draftAction.label}
                               </button>
@@ -3443,7 +3664,7 @@ export default function ListingOptimizationClient({
                             <button
                               type="button"
                               className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                              onClick={() => void openStep2PreviewPanel(item, slot, missionSlot.slot_id)}
                             >
                               Preview
                             </button>
@@ -3461,12 +3682,12 @@ export default function ListingOptimizationClient({
                             <button
                               type="button"
                               className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
-                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                              onClick={() => void openStep2PreviewPanel(item, slot, missionSlot.slot_id)}
                             >
                               Preview & Approve
                             </button>
                             {draftAction.kind === "regenerate_draft" ? (
-                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot, mode: "regenerate_draft" })}>{draftAction.label}</button>
                             ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
@@ -3481,10 +3702,10 @@ export default function ListingOptimizationClient({
                             >
                               Publish
                             </button>
-                            <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button>
+                            <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void openStep2PreviewPanel(item, slot, missionSlot.slot_id)}>Preview</button>
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setContentAssets((previous) => ({ ...previous, [item.id]: { ...asset, reviewStatus: "ready", approvedAt: null, approvalToken: null } }))}>Unapprove</button>
                             {draftAction.kind === "regenerate_draft" ? (
-                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button>
+                              <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot, mode: "regenerate_draft" })}>{draftAction.label}</button>
                             ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
@@ -3507,10 +3728,10 @@ export default function ListingOptimizationClient({
                         ) : null}
                         {step2ResearchReady && !setupBlocked && aggregateState === "needs_attention" ? (
                           <>
-                            {draftAction.kind === "retry_draft" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button> : null}
+                            {draftAction.kind === "retry_draft" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot, mode: "retry_draft" })}>{draftAction.label}</button> : null}
                             {asset.imageStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentImage(item, slot)}>Retry Image</button> : null}
                             {asset.publishStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void publishContentAsset(item, slot)}>Retry Publish</button> : null}
-                            {(asset.draftHtml || asset.featuredImageUrl) ? <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button> : null}
+                            {(asset.draftHtml || asset.featuredImageUrl) ? <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void openStep2PreviewPanel(item, slot, missionSlot.slot_id)}>Preview</button> : null}
                           </>
                         ) : null}
                       </div>

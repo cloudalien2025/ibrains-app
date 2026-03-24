@@ -311,6 +311,9 @@ describe("directoryiq authority routes", () => {
     expect(accepted.status).toBe("queued");
     expect(accepted.jobId).toBeTruthy();
     expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
+    expect((accepted as { runtime?: { runtime_owner?: string; release_stamp?: string } }).runtime?.runtime_owner).toBe(
+      "directoryiq-api.ibrains.ai"
+    );
 
     const status = await waitForJobCompletion(String(accepted.statusEndpoint));
     expect(status.status).toBe("succeeded");
@@ -348,6 +351,9 @@ describe("directoryiq authority routes", () => {
     expect(submitRes.status).toBe(202);
     expect(accepted.status).toBe("queued");
     expect(accepted.statusEndpoint).toContain("/api/directoryiq/jobs/");
+    expect((accepted as { runtime?: { runtime_owner?: string; release_stamp?: string } }).runtime?.runtime_owner).toBe(
+      "directoryiq-api.ibrains.ai"
+    );
 
     const status = await waitForJobCompletion(String(accepted.statusEndpoint));
     expect(status.status).toBe("succeeded");
@@ -1366,6 +1372,8 @@ describe("directoryiq authority routes", () => {
 
     expect(res.status).toBe(200);
     expect(json.approved).toBe(true);
+    expect(json.runtime?.runtime_owner).toBe("directoryiq-api.ibrains.ai");
+    expect(json.artifact?.source).toBe("persisted_slot_record");
     expect(markAuthorityApprovedSnapshot).toHaveBeenCalledTimes(1);
     expect(publishBlogPostToBd).not.toHaveBeenCalled();
   });
