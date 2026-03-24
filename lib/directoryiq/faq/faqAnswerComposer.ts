@@ -17,6 +17,25 @@ function clusterLabel(cluster: string): string {
   return cluster.replace(/\s*\/\s*/g, " or ");
 }
 
+type SerpSummaryInput = {
+  faq_patterns?: string[];
+  common_topics?: string[];
+  common_phrases?: string[];
+};
+
+type SerpEntitiesInput = {
+  amenities?: string[];
+  location?: string[];
+  intent?: string[];
+};
+
+type SerpResultInput = {
+  title?: string;
+  link?: string;
+  snippet?: string;
+  position?: number;
+};
+
 function clusterFacts(cluster: string, context: ListingFaqContext): { values: string[]; confidence: FactConfidence } {
   const map: Record<string, string[]> = {
     location: [context.neighborhood, context.city, context.region],
@@ -54,63 +73,181 @@ function clusterFacts(cluster: string, context: ListingFaqContext): { values: st
   return { values, confidence: "confirmed" };
 }
 
-function buildAnswer(cluster: string, facts: string[], confidence: FactConfidence, context: ListingFaqContext): string {
-  const topic = clusterLabel(cluster).toLowerCase();
-  if (confidence === "unknown") {
+function normalizeText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function pickEntity(input: {
+  entities?: SerpEntitiesInput;
+  serpSummary?: SerpSummaryInput;
+  index: number;
+}): string {
+  const pool = [
+    ...(input.entities?.amenities ?? []),
+    ...(input.entities?.location ?? []),
+    ...(input.entities?.intent ?? []),
+    ...(input.serpSummary?.common_topics ?? []),
+  ].filter(Boolean);
+  if (pool.length === 0) return "";
+  return pool[input.index % pool.length] ?? "";
+}
+
+function findSerpEvidence(question: string, cluster: string, serpResults: SerpResultInput[]): SerpResultInput | null {
+  const questionTokens = question
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length > 2);
+  const clusterTokens = cluster.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+
+  let best: { row: SerpResultInput; score: number } | null = null;
+  for (const row of serpResults) {
+    const body = `${row.title ?? ""} ${row.snippet ?? ""}`.toLowerCase();
+    if (!body.trim()) continue;
+    const overlap = [...questionTokens, ...clusterTokens].reduce((count, token) => count + (body.includes(token) ? 1 : 0), 0);
+    const score = overlap + (typeof row.position === "number" ? Math.max(0, 10 - row.position) / 10 : 0);
+    if (!best || score > best.score) best = { row, score };
+  }
+  return best?.score ? best.row : null;
+}
+
+function buildFactAnswer(input: {
+  cluster: string;
+  facts: string[];
+  confidence: FactConfidence;
+  context: ListingFaqContext;
+  entity: string;
+  index: number;
+}): string {
+  const topic = clusterLabel(input.cluster).toLowerCase();
+  const direct = firstNonEmpty(input.facts) || input.context.listing_name;
+  const local = firstNonEmpty([input.context.neighborhood, input.context.city, input.context.region]);
+  const leadIn = ["For", "On", "Regarding"][input.index % 3];
+  const entitySuffix = input.entity ? ` Travelers often compare this with ${input.entity}.` : "";
+
+  if (input.confidence === "inferred") {
     return (
-      "Verified " +
-      topic +
-      " details are not currently listed for " +
-      context.listing_name +
-      ". Check the listing page and confirm this with the host before booking."
+      `${leadIn} ${topic}, current listing signals point to ${direct}. ` +
+      "This detail is inferred, so verify it directly with the host before booking." +
+      entitySuffix
     );
   }
 
-  const direct = firstNonEmpty(facts) || context.listing_name;
-  const local = firstNonEmpty([context.neighborhood, context.city, context.region]);
+  const localSentence = local
+    ? `That context matters for trips planned around ${local}.`
+    : "This comes directly from the current listing details.";
+  return `${leadIn} ${topic}, the listing specifies ${direct}. ${localSentence}${entitySuffix}`;
+}
 
-  if (confidence === "inferred") {
-    return (
-      "Available listing signals indicate " +
-      direct +
-      " for " +
-      topic +
-      ". Because this detail is inferred rather than explicitly confirmed, verify it with the host before finalizing plans."
-    );
-  }
+function buildSerpAnswer(input: {
+  cluster: string;
+  context: ListingFaqContext;
+  evidence: SerpResultInput;
+  entity: string;
+  index: number;
+}): string {
+  const topic = clusterLabel(input.cluster).toLowerCase();
+  const snippet = (input.evidence.snippet ?? "").trim();
+  const title = (input.evidence.title ?? "").trim();
+  const anchor = snippet || title || "nearby traveler discussions";
+  const sourceLabel = title ? ` SERP sources such as "${title}" mention this.` : " SERP evidence supports this summary.";
+  const varied = ["External search evidence indicates", "Search snippets suggest", "Recent SERP coverage highlights"][input.index % 3];
+  const entitySuffix = input.entity ? ` This aligns with mentions of ${input.entity}.` : "";
+  return `${varied} ${anchor} for ${input.context.listing_name} on ${topic}.${sourceLabel}${entitySuffix}`;
+}
 
-  const sentence1 = "For " + topic + ", the listing currently states " + direct + ".";
-  const sentence2 = local
-    ? "This is specifically relevant for travelers planning around " + local + "."
-    : "This is based on details currently listed for this property.";
-  const sentence3 = ["cancellation / booking rules", "check-in logistics", "parking / transit"].includes(cluster)
-    ? "Guests should still reconfirm operational details close to arrival."
-    : "This helps travelers compare fit before they book.";
-
-  return sentence1 + " " + sentence2 + " " + sentence3;
+function buildFallbackAnswer(input: {
+  cluster: string;
+  context: ListingFaqContext;
+  evidenceGaps: string[];
+  entity: string;
+  index: number;
+}): string {
+  const topic = clusterLabel(input.cluster).toLowerCase();
+  const gap = input.evidenceGaps[input.index % Math.max(1, input.evidenceGaps.length)] ?? `the latest ${topic} details`;
+  const verifyLead = ["Please verify", "Confirm with the host", "Check directly with the property for"][input.index % 3];
+  const entitySuffix = input.entity ? ` and ask specifically about ${input.entity}` : "";
+  return `${verifyLead} ${gap} for ${input.context.listing_name}${entitySuffix}. The listing does not currently provide a reliable public answer yet.`;
 }
 
 export function composeFaqAnswers(input: {
   context: ListingFaqContext;
   selectedQuestions: FaqQuestionCandidate[];
+  serpSummary?: SerpSummaryInput;
+  entities?: SerpEntitiesInput;
+  evidenceGaps?: string[];
+  serpResults?: SerpResultInput[];
 }): FaqEntry[] {
   const entries: FaqEntry[] = [];
   const internalLinks = [input.context.canonical_url, ...input.context.support_links].filter(Boolean).slice(0, 3);
+  const seenAnswers = new Set<string>();
+  const serpResults = input.serpResults ?? [];
+  const evidenceGaps = input.evidenceGaps ?? [];
+  const hasSerpSignals =
+    serpResults.length > 0 ||
+    evidenceGaps.length > 0 ||
+    (input.serpSummary?.faq_patterns?.length ?? 0) > 0 ||
+    (input.entities?.amenities?.length ?? 0) > 0 ||
+    (input.entities?.location?.length ?? 0) > 0 ||
+    (input.entities?.intent?.length ?? 0) > 0;
 
-  for (const question of input.selectedQuestions) {
+  for (const [index, question] of input.selectedQuestions.entries()) {
     const { values, confidence } = clusterFacts(question.cluster, input.context);
-    if (confidence === "unknown") {
+    const entity = pickEntity({ entities: input.entities, serpSummary: input.serpSummary, index });
+
+    let answerPlain = "";
+    let factConfidence: FactConfidence = confidence;
+    let sourceFacts: string[] = values;
+
+    if (confidence !== "unknown") {
+      answerPlain = buildFactAnswer({
+        cluster: question.cluster,
+        facts: values,
+        confidence,
+        context: input.context,
+        entity,
+        index,
+      });
+    } else {
+      const serpEvidence = findSerpEvidence(question.question_text, question.cluster, serpResults);
+      if (serpEvidence) {
+        answerPlain = buildSerpAnswer({
+          cluster: question.cluster,
+          context: input.context,
+          evidence: serpEvidence,
+          entity,
+          index,
+        });
+        sourceFacts = [serpEvidence.title ?? "", serpEvidence.snippet ?? "", serpEvidence.link ?? ""].filter(Boolean);
+        factConfidence = "inferred";
+      } else {
+        if (!hasSerpSignals) {
+          continue;
+        }
+        answerPlain = buildFallbackAnswer({
+          cluster: question.cluster,
+          context: input.context,
+          evidenceGaps,
+          entity,
+          index,
+        });
+        sourceFacts = evidenceGaps.length > 0 ? [evidenceGaps[index % evidenceGaps.length] ?? ""] : [];
+        factConfidence = "unknown";
+      }
+    }
+
+    const normalizedAnswer = normalizeText(answerPlain);
+    if (seenAnswers.has(normalizedAnswer)) {
       continue;
     }
-    const answerPlain = buildAnswer(question.cluster, values, confidence, input.context);
+    seenAnswers.add(normalizedAnswer);
     const answerHtml = "<p>" + htmlEscape(answerPlain) + "</p>";
 
     entries.push({
       question: question.question_text,
       answer_html: answerHtml,
       answer_plaintext: answerPlain,
-      source_facts: values,
-      fact_confidence: confidence,
+      source_facts: sourceFacts,
+      fact_confidence: factConfidence,
       intent_cluster: question.cluster,
       listing_anchor_terms: [input.context.listing_name, input.context.category].filter(Boolean),
       local_anchor_terms: [input.context.neighborhood, input.context.city, input.context.region].filter(Boolean),
