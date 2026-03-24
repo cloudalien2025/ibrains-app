@@ -113,6 +113,10 @@ const getAuthorityPostBySlot = vi.fn(async () => ({
       approved_snapshot_image_version: 1,
     },
     step2_contract: {
+      research_artifact: {
+        focus_keyword: "fixture keyword",
+        top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+      },
       seo_package: {
         primary_focus_keyword: "fixture keyword",
         seo_title: "Fixture SEO title",
@@ -254,6 +258,33 @@ describe("directoryiq authority routes", () => {
     expect(status.result?.ok).toBe(true);
     expect(generateAuthorityDraft).toHaveBeenCalledTimes(1);
     expect(upsertAuthorityPostDraft).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects step2 draft generation when listing research is not ready", async () => {
+    getAuthorityPostBySlot.mockResolvedValueOnce({
+      id: "authority-post-2",
+      metadata_json: { step2_contract: {} },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/1/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Best in Miami",
+        focus_topic: "best service area guide",
+        type: "comparison",
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321", slot: "1" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("STEP2_RESEARCH_REQUIRED");
+    expect(status.error?.message).toBe("Complete listing research before creating support articles.");
   });
 
   it("uses listing-intelligence FAQ engine for FAQ support intents", async () => {

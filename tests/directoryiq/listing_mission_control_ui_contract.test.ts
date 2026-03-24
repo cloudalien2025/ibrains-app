@@ -64,8 +64,16 @@ describe("listing mission control rebuild contract", () => {
   it("shows Step 2 generated content assets tied back to listing support", () => {
     expect(source).toContain("data-testid=\"step2-slot-list\"");
     expect(source).toContain("data-testid=\"step2-progress-summary\"");
+    expect(source).toContain("data-testid=\"step2-research-entrypoint\"");
+    expect(source).toContain("data-testid=\"step2-research-this-listing\"");
+    expect(source).toContain("Research This Listing");
+    expect(source).toContain("Start here");
+    expect(source).toContain("Build the intelligence layer that makes this listing more likely to be selected by AI.");
+    expect(source).toContain("STEP2_RESEARCH_REQUIRED_MESSAGE");
     expect(source).toContain("data-testid=\"step2-next-article-cta\"");
     expect(source).toContain("data-testid=\"step2-write-next-article\"");
+    expect(source).toContain("data-testid={`step2-slot-locked-action-${missionSlot.slot_id}`}");
+    expect(source).toContain("data-testid={`step2-slot-research-locked-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-status-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-actions-${missionSlot.slot_id}`}");
     expect(source).toContain("data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}");
@@ -120,6 +128,9 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("setError({ message: STEP2_LISTING_URL_BLOCKER });");
     expect(source).toContain("const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));");
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
+    expect(source).toContain("if (!step2ResearchReady) {");
+    expect(source).toContain("setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });");
+    expect(source).toContain("const step2ResearchReady = isStep2ResearchReady(step2ResearchState);");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2AggregateState");
     expect(source).toContain("deriveStep2DraftAction");

@@ -17,6 +17,15 @@ import { generateAuthorityImage, validateOpenAiKeyPresent } from "@/lib/openai/s
 import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingResolve";
 import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
+import {
+  STEP2_RESEARCH_REQUIRED_CODE,
+  STEP2_RESEARCH_REQUIRED_MESSAGE,
+  hasUsableStep2ResearchArtifact,
+} from "@/lib/directoryiq/step2ResearchGateContract";
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
 
 export async function POST(
   req: NextRequest,
@@ -94,6 +103,11 @@ export async function POST(
       }
 
       const listingSourceId = listing.source_id;
+      const existingPost = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
+      const persistedResearchArtifact = asRecord(asRecord(existingPost?.metadata_json).step2_contract).research_artifact;
+      if (!hasUsableStep2ResearchArtifact(persistedResearchArtifact)) {
+        throw new AuthorityRouteError(409, STEP2_RESEARCH_REQUIRED_CODE, STEP2_RESEARCH_REQUIRED_MESSAGE);
+      }
       const prompt = buildImagePrompt({
         focusTopic,
         imageStylePreference: detail.settings.imageStylePreference,
@@ -110,8 +124,7 @@ export async function POST(
       }
 
       await setStage("persisting");
-      const existing = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
-      const previousStep2 = readPersistedStep2State(existing?.metadata_json);
+      const previousStep2 = readPersistedStep2State(existingPost?.metadata_json);
       const nextImageVersion = previousStep2.image_version + 1;
       const invalidateApproval = previousStep2.review_status === "approved";
       await saveAuthorityImage(userId, listingSourceId, slotIndex, {

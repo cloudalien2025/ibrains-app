@@ -18,9 +18,18 @@ import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { buildListingFaqSupportEngine } from "@/lib/directoryiq/faq/engine";
+import {
+  STEP2_RESEARCH_REQUIRED_CODE,
+  STEP2_RESEARCH_REQUIRED_MESSAGE,
+  hasUsableStep2ResearchArtifact,
+} from "@/lib/directoryiq/step2ResearchGateContract";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
 function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string {
@@ -129,6 +138,7 @@ export async function POST(
       mission_plan_slot?: Record<string, unknown>;
       support_brief?: Record<string, unknown>;
       seo_package?: Record<string, unknown>;
+      research_artifact?: Record<string, unknown>;
     };
   };
 
@@ -171,6 +181,15 @@ export async function POST(
 
       const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
       const listingSourceId = listing.source_id;
+      const existingPost = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
+      const persistedResearchArtifact = asRecord(asRecord(existingPost?.metadata_json).step2_contract).research_artifact;
+      const requestResearchArtifact = body.step2_contract?.research_artifact;
+      const hasUsableResearch =
+        hasUsableStep2ResearchArtifact(requestResearchArtifact) ||
+        hasUsableStep2ResearchArtifact(persistedResearchArtifact);
+      if (!hasUsableResearch) {
+        throw new AuthorityRouteError(409, STEP2_RESEARCH_REQUIRED_CODE, STEP2_RESEARCH_REQUIRED_MESSAGE);
+      }
       const failDraft = async (error: unknown) => {
         const message = error instanceof Error ? error.message : "Failed to generate content draft.";
         const code = error instanceof AuthorityRouteError ? error.code : "DRAFT_GENERATION_FAILED";
@@ -343,8 +362,7 @@ export async function POST(
       }
 
       await setStage("persisting");
-      const existing = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
-      const previousStep2 = readPersistedStep2State(existing?.metadata_json);
+      const previousStep2 = readPersistedStep2State(existingPost?.metadata_json);
       const nextDraftVersion = previousStep2.draft_version + 1;
       const invalidateApproval = previousStep2.review_status === "approved";
       await upsertAuthorityPostDraft(userId, listingSourceId, slotIndex, {
