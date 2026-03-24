@@ -47,4 +47,48 @@ describe("listing fact resolver", () => {
     expect(context.fact_confidence_map.family_friendly).toBe("inferred");
     expect(context.inferred_facts.length).toBeGreaterThan(0);
   });
+
+  it("resolves hotel-shaped BD aliases into grounded facts", () => {
+    const context = resolveListingFacts({
+      listingId: "listing-142",
+      siteId: "site-1",
+      listingName: "Cedar at Streamside",
+      listingType: "Hotels",
+      listingArchetype: "hotel",
+      canonicalUrl: "https://example.com/listings/cedar-at-streamside",
+      title: "Cedar at Streamside",
+      description: "",
+      raw: {
+        group_category: "Hotels",
+        city: "2244 S Frontage Rd W Cedar Building Vail, CO 81657",
+        state_sn: "CO",
+        country_sn: "US",
+        post_tags: "hotel, mountain, streamside",
+      },
+    });
+
+    expect(context.fact_confidence_map.location_city).toBe("confirmed");
+    expect(context.fact_confidence_map.location_region).toBe("confirmed");
+    expect(context.fact_confidence_map.location_country).toBe("confirmed");
+    expect(context.fact_confidence_map.category).toBe("confirmed");
+    expect(context.amenities).toContain("hotel");
+    expect(context.known_facts.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("keeps truly sparse hotel payloads under-grounded", () => {
+    const context = resolveListingFacts({
+      listingId: "listing-sparse",
+      siteId: "site-1",
+      listingName: "Sparse Hotel",
+      listingType: "Hotels",
+      listingArchetype: "hotel",
+      canonicalUrl: "https://example.com/listings/sparse-hotel",
+      title: "Sparse Hotel",
+      description: "",
+      raw: {},
+    });
+
+    expect(context.known_facts.length).toBe(0);
+    expect(context.unknown_facts.length).toBeGreaterThan(0);
+  });
 });
