@@ -156,7 +156,8 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("draft_status: asset.draftStatus,");
     expect(source).toContain("image_status: asset.imageStatus,");
     expect(source).toContain("previewPanelGate.approveVisible ? (");
-    expect(source).toContain("previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : \"Draft is not ready yet.\"");
+    expect(source).toContain("dangerouslySetInnerHTML={{ __html: asset.draftHtml }}");
+    expect(source).not.toContain("previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : \"Draft is not ready yet.\"");
     expect(source).toContain("previewPanelGate.imageReady && asset.featuredImageUrl ? (");
     expect(source).toContain("const existingAsset = previous[item.id] ?? current;");
     expect(source).toContain("draftVersion: existingAsset.draftVersion + 1,");
