@@ -93,6 +93,7 @@ type ListingDetailResponse = {
         support_brief?: Step2SupportBrief;
         seo_package?: Step2SeoPackage;
         research_artifact?: Step2SupportResearchArtifact;
+        research_dossier?: Record<string, unknown>;
       } | null;
       step2_research_state?: Step2ResearchState;
       updated_at?: string | null;
@@ -648,6 +649,7 @@ type Step2DraftContractInput = {
   supportBrief: Step2SupportBrief;
   seoPackage: Step2SeoPackage;
   researchArtifact: Step2SupportResearchArtifact;
+  researchDossier: Record<string, unknown> | null;
 };
 
 type Step2ResearchStartResponse = {
@@ -659,6 +661,7 @@ type Step2ResearchStartResponse = {
       support_brief?: Step2SupportBrief;
       seo_package?: Step2SeoPackage;
       research_artifact?: Step2SupportResearchArtifact;
+      research_dossier?: Record<string, unknown>;
     };
   }>;
   runtime?: {
@@ -687,6 +690,7 @@ type Step2SlotRuntime = {
   researchArtifact: Step2SupportResearchArtifact | null;
   supportBrief: Step2SupportBrief | null;
   seoPackage: Step2SeoPackage | null;
+  researchDossier: Record<string, unknown> | null;
   errorMessage: string | null;
 };
 
@@ -1872,6 +1876,7 @@ export default function ListingOptimizationClient({
           researchArtifact: null,
           supportBrief: null,
           seoPackage: null,
+          researchDossier: null,
           errorMessage: null,
         };
       }
@@ -1924,11 +1929,13 @@ export default function ListingOptimizationClient({
         const researchArtifact = hasUsableStep2ResearchArtifact(contract.research_artifact)
           ? (contract.research_artifact as Step2SupportResearchArtifact)
           : null;
+        const researchDossier = asRecord(contract.research_dossier);
         next[missionSlot.slot_id] = {
           ...current,
           researchArtifact,
           supportBrief: (asRecord(contract.support_brief) as Step2SupportBrief) ?? current.supportBrief,
           seoPackage: (asRecord(contract.seo_package) as Step2SeoPackage) ?? current.seoPackage,
+          researchDossier: Object.keys(researchDossier).length > 0 ? researchDossier : current.researchDossier,
           metadataReady: Boolean(researchArtifact),
           errorMessage: null,
         };
@@ -2343,6 +2350,7 @@ export default function ListingOptimizationClient({
                 support_brief: contractInput.supportBrief,
                 seo_package: contractInput.seoPackage,
                 research_artifact: contractInput.researchArtifact,
+                research_dossier: contractInput.researchDossier ?? undefined,
               }
             : undefined,
         }),
@@ -2735,11 +2743,13 @@ export default function ListingOptimizationClient({
         const persisted = contractBySlot.get(slot);
         const contract = persisted?.step2_contract;
         if (!contract || !hasUsableStep2ResearchArtifact(contract.research_artifact)) continue;
+        const researchDossier = asRecord(contract.research_dossier);
         next[missionSlot.slot_id] = {
           ...current,
           researchArtifact: contract.research_artifact,
           supportBrief: contract.support_brief ?? null,
           seoPackage: contract.seo_package ?? null,
+          researchDossier: Object.keys(researchDossier).length > 0 ? researchDossier : current.researchDossier,
           metadataReady: true,
           errorMessage: null,
         };
@@ -2900,6 +2910,7 @@ export default function ListingOptimizationClient({
       researchArtifact: contractInput.researchArtifact,
       supportBrief: contractInput.supportBrief,
       seoPackage: contractInput.seoPackage,
+      researchDossier: contractInput.researchDossier,
       metadataReady: true,
       recommendedAction: action,
     });
@@ -2937,6 +2948,24 @@ export default function ListingOptimizationClient({
         displayUrl
       ),
     };
+    const runtimeContract = step2Runtime[missionSlot.slot_id];
+    const runtimeDossier = asRecord(runtimeContract?.researchDossier);
+
+    if (
+      runtimeContract &&
+      hasUsableStep2ResearchArtifact(runtimeContract.researchArtifact) &&
+      runtimeContract.supportBrief &&
+      runtimeContract.seoPackage
+    ) {
+      return {
+        missionPlanSlot,
+        supportBrief: runtimeContract.supportBrief,
+        seoPackage: runtimeContract.seoPackage,
+        researchArtifact: runtimeContract.researchArtifact,
+        researchDossier: Object.keys(runtimeDossier).length > 0 ? runtimeDossier : null,
+      };
+    }
+
     const relatedResultUrl = firstNonEmptyValue(missionPlanSlot.existing_candidate_url, missionPlanSlot.listing_url);
     const relatedResultTitle =
       normalizeText(contentStructure?.items?.[0]?.recommendedTitlePattern || contentStructure?.items?.[0]?.suggestedH1 || contentStructure?.items?.[0]?.title) ||
@@ -2972,6 +3001,7 @@ export default function ListingOptimizationClient({
       supportBrief,
       seoPackage,
       researchArtifact,
+      researchDossier: null,
     };
   }
 
