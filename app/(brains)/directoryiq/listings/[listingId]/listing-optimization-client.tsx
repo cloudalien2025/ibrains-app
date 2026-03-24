@@ -2095,15 +2095,18 @@ export default function ListingOptimizationClient({
     if (!effectiveListingId) return { ok: false, errorMessage: "Listing context is missing." };
     const current = initializeContentAsset(item, slot);
 
-    setContentAssets((previous) => ({
-      ...previous,
-      [item.id]: {
-        ...current,
-        draftStatus: "generating",
-        draftLastErrorCode: null,
-        draftLastErrorMessage: null,
-      },
-    }));
+    setContentAssets((previous) => {
+      const existingAsset = previous[item.id] ?? current;
+      return {
+        ...previous,
+        [item.id]: {
+          ...existingAsset,
+          draftStatus: "generating",
+          draftLastErrorCode: null,
+          draftLastErrorMessage: null,
+        },
+      };
+    });
 
     const resolvedListingUrlForDraft = firstNonEmptyValue(
       contractInput?.missionPlanSlot.listing_url,
@@ -2114,15 +2117,18 @@ export default function ListingOptimizationClient({
     );
     if (!resolvedListingUrlForDraft) {
       setError({ message: STEP2_LISTING_URL_BLOCKER });
-      setContentAssets((previous) => ({
-        ...previous,
-        [item.id]: {
-          ...current,
-          draftStatus: "failed",
-          draftLastErrorCode: "BAD_REQUEST",
-          draftLastErrorMessage: STEP2_LISTING_URL_BLOCKER,
-        },
-      }));
+      setContentAssets((previous) => {
+        const existingAsset = previous[item.id] ?? current;
+        return {
+          ...previous,
+          [item.id]: {
+            ...existingAsset,
+            draftStatus: "failed",
+            draftLastErrorCode: "BAD_REQUEST",
+            draftLastErrorMessage: STEP2_LISTING_URL_BLOCKER,
+          },
+        };
+      });
       return { ok: false, errorMessage: STEP2_LISTING_URL_BLOCKER };
     }
 
@@ -2161,26 +2167,31 @@ export default function ListingOptimizationClient({
       } else {
         setError({ message: translatedMessage });
       }
-      setContentAssets((previous) => ({
-        ...previous,
-        [item.id]: {
-          ...current,
-          draftStatus: "failed",
-          draftLastErrorCode: code || null,
-          draftLastErrorMessage: translatedMessage,
-        },
-      }));
+      setContentAssets((previous) => {
+        const existingAsset = previous[item.id] ?? current;
+        return {
+          ...previous,
+          [item.id]: {
+            ...existingAsset,
+            draftStatus: "failed",
+            draftLastErrorCode: code || null,
+            draftLastErrorMessage: translatedMessage,
+          },
+        };
+      });
       return { ok: false, errorMessage: translatedMessage };
     }
 
-    setContentAssets((previous) => ({
-      ...previous,
+    setContentAssets((previous) => {
+      const existingAsset = previous[item.id] ?? current;
+      return {
+        ...previous,
         [item.id]: {
-          ...current,
+          ...existingAsset,
           draftStatus: "ready",
-          draftVersion: current.draftVersion + 1,
+          draftVersion: existingAsset.draftVersion + 1,
           draftGeneratedAt: new Date().toISOString(),
-          reviewStatus: current.imageStatus === "ready" ? "ready" : "not_ready",
+          reviewStatus: existingAsset.imageStatus === "ready" ? "ready" : "not_ready",
           approvedAt: null,
           approvedSnapshotDraftVersion: null,
           approvedSnapshotImageVersion: null,
@@ -2192,7 +2203,8 @@ export default function ListingOptimizationClient({
           publishCompletedAt: null,
           draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
         },
-      }));
+      };
+    });
     setNotice(`Generated draft for ${current.title}.`);
     return { ok: true };
   }
@@ -2200,15 +2212,18 @@ export default function ListingOptimizationClient({
   async function generateContentImage(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
-    setContentAssets((previous) => ({
-      ...previous,
-      [item.id]: {
-        ...current,
-        imageStatus: "generating",
-        imageLastErrorCode: null,
-        imageLastErrorMessage: null,
-      },
-    }));
+    setContentAssets((previous) => {
+      const existingAsset = previous[item.id] ?? current;
+      return {
+        ...previous,
+        [item.id]: {
+          ...existingAsset,
+          imageStatus: "generating",
+          imageLastErrorCode: null,
+          imageLastErrorMessage: null,
+        },
+      };
+    });
 
     const res = await fetch(
       buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/image`, siteQuery),
@@ -2230,38 +2245,44 @@ export default function ListingOptimizationClient({
       setError({
         message: translateStep2ErrorMessage(settled.error.message, settled.error.code),
       });
-      setContentAssets((previous) => ({
-        ...previous,
-        [item.id]: {
-          ...current,
-          imageStatus: "failed",
-          imageLastErrorCode: settled.error.code ?? null,
-          imageLastErrorMessage: translateStep2ErrorMessage(settled.error.message, settled.error.code),
-        },
-      }));
+      setContentAssets((previous) => {
+        const existingAsset = previous[item.id] ?? current;
+        return {
+          ...previous,
+          [item.id]: {
+            ...existingAsset,
+            imageStatus: "failed",
+            imageLastErrorCode: settled.error.code ?? null,
+            imageLastErrorMessage: translateStep2ErrorMessage(settled.error.message, settled.error.code),
+          },
+        };
+      });
       return false;
     }
 
-    setContentAssets((previous) => ({
-      ...previous,
-      [item.id]: {
-        ...current,
-        imageStatus: "ready",
-        imageVersion: current.imageVersion + 1,
-        imageGeneratedAt: new Date().toISOString(),
-        reviewStatus: current.draftStatus === "ready" ? "ready" : "not_ready",
-        approvedAt: null,
-        approvedSnapshotDraftVersion: null,
-        approvedSnapshotImageVersion: null,
-        publishStatus: "not_started",
-        publishLastErrorCode: null,
-        publishLastErrorMessage: null,
-        publishLastReqId: null,
-        publishAttemptedAt: null,
-        publishCompletedAt: null,
-        featuredImageUrl: typeof settled.data.featured_image_url === "string" ? settled.data.featured_image_url : "",
-      },
-    }));
+    setContentAssets((previous) => {
+      const existingAsset = previous[item.id] ?? current;
+      return {
+        ...previous,
+        [item.id]: {
+          ...existingAsset,
+          imageStatus: "ready",
+          imageVersion: existingAsset.imageVersion + 1,
+          imageGeneratedAt: new Date().toISOString(),
+          reviewStatus: existingAsset.draftStatus === "ready" ? "ready" : "not_ready",
+          approvedAt: null,
+          approvedSnapshotDraftVersion: null,
+          approvedSnapshotImageVersion: null,
+          publishStatus: "not_started",
+          publishLastErrorCode: null,
+          publishLastErrorMessage: null,
+          publishLastReqId: null,
+          publishAttemptedAt: null,
+          publishCompletedAt: null,
+          featuredImageUrl: typeof settled.data.featured_image_url === "string" ? settled.data.featured_image_url : "",
+        },
+      };
+    });
     setNotice(`Generated featured image for ${current.title}.`);
     return true;
   }
@@ -3115,7 +3136,7 @@ export default function ListingOptimizationClient({
                     >
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <div>
-                          <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
+                          <div className="text-sm font-semibold text-slate-100">{`${slot}. ${normalizeText(item.title)}`}</div>
                           <div className="mt-1 text-xs text-slate-300">
                             {step2CardDescription({
                               summary,

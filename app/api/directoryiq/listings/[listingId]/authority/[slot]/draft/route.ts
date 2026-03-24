@@ -176,6 +176,10 @@ export async function POST(
         const code = error instanceof AuthorityRouteError ? error.code : "DRAFT_GENERATION_FAILED";
         await markAuthorityDraftFailure(userId, listingSourceId, slotIndex, { code, message });
       };
+      const failAndThrowDraft = async (error: AuthorityRouteError): Promise<never> => {
+        await failDraft(error);
+        throw error;
+      };
       const listingName = listing.title ?? listingSourceId;
       const canonicalFromListing = resolveCanonicalListingUrl(raw, listing.url);
       const step2ContractListingUrl = resolveStep2ContractListingUrl(body.step2_contract);
@@ -223,10 +227,12 @@ export async function POST(
       });
 
       if (!listingUrl) {
-        throw new AuthorityRouteError(
-          400,
-          "BAD_REQUEST",
-          "Listing URL is required to enforce contextual blog-to-listing links."
+        await failAndThrowDraft(
+          new AuthorityRouteError(
+            400,
+            "BAD_REQUEST",
+            "Listing URL is required to enforce contextual blog-to-listing links."
+          )
         );
       }
       const listingDescription =
@@ -257,11 +263,13 @@ export async function POST(
         });
 
         if (!faqResult.publish_gate_result.allowPublish) {
-          throw new AuthorityRouteError(
-            422,
-            "FAQ_PUBLISH_GATE_BLOCKED",
-            "FAQ draft blocked by quality gate.",
-            faqResult.publish_gate_result.reasons.join("; ")
+          await failAndThrowDraft(
+            new AuthorityRouteError(
+              422,
+              "FAQ_PUBLISH_GATE_BLOCKED",
+              "FAQ draft blocked by quality gate.",
+              faqResult.publish_gate_result.reasons.join("; ")
+            )
           );
         }
 
@@ -324,11 +332,13 @@ export async function POST(
       });
 
       if (!validation.valid) {
-        throw new AuthorityRouteError(
-          422,
-          "DRAFT_VALIDATION_FAILED",
-          "Draft failed governance validation.",
-          validation.errors.join(" ")
+        await failAndThrowDraft(
+          new AuthorityRouteError(
+            422,
+            "DRAFT_VALIDATION_FAILED",
+            "Draft failed governance validation.",
+            validation.errors.join(" ")
+          )
         );
       }
 
