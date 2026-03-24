@@ -879,6 +879,8 @@ describe("directoryiq authority routes", () => {
     expect(res.status).toBe(422);
     expect(json.error?.code).toBe("BD_LINK_ENFORCEMENT_FAILED");
     expect(String(json.error?.details ?? "")).toContain("Unable to resolve listing true post id for reciprocal link write");
+    expect(String(json.error?.details ?? "")).toContain("\"blocked_pre_create\":true");
+    expect(publishBlogPostToBd).not.toHaveBeenCalled();
     expect(pushListingUpdateToBd).not.toHaveBeenCalled();
   });
 });

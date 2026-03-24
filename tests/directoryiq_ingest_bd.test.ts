@@ -918,7 +918,7 @@ describe("directoryiq BD ingest", () => {
           headers: new Headers(),
         });
       }
-      if (url.includes("/api/v2/data_posts/get/15")) {
+      if (url.includes("/api/v2/users_portfolio_groups/get/15")) {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -946,7 +946,7 @@ describe("directoryiq BD ingest", () => {
 
     expect(resolved).toEqual({ truePostId: "15", mappingKey: "slug" });
     expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/search"))).toBe(true);
-    expect(calledUrls.some((url) => url.includes("/api/v2/data_posts/get/15"))).toBe(true);
+    expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/get/15"))).toBe(true);
   });
 
   it("resolves true_post_id from listingId token for listings-search families when slug/title do not match", async () => {
@@ -977,7 +977,7 @@ describe("directoryiq BD ingest", () => {
           headers: new Headers(),
         });
       }
-      if (url.includes("/api/v2/data_posts/get/15")) {
+      if (url.includes("/api/v2/users_portfolio_groups/get/15")) {
         return Promise.resolve({
           ok: true,
           status: 200,
@@ -1005,7 +1005,7 @@ describe("directoryiq BD ingest", () => {
 
     expect(resolved).toEqual({ truePostId: "15", mappingKey: "slug" });
     expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/search"))).toBe(true);
-    expect(calledUrls.some((url) => url.includes("/api/v2/data_posts/get/15"))).toBe(true);
+    expect(calledUrls.some((url) => url.includes("/api/v2/users_portfolio_groups/get/15"))).toBe(true);
   });
 
   it("refuses generic id as a true_post_id substitute", async () => {

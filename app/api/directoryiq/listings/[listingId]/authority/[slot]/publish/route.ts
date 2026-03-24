@@ -251,51 +251,6 @@ export async function POST(
       message: `resolved BD publish identity user_id=${bdUserId ? "present" : "missing"} data_type=${publishTarget.dataType} data_type_source=${publishTarget.source}`,
     });
 
-    const publishResult = await publishBlogPostToBd({
-      baseUrl: bd.baseUrl,
-      apiKey: bd.apiKey,
-      dataPostsCreatePath: bd.dataPostsCreatePath,
-      blogDataId: bd.blogPostsDataId,
-      blogDataType: publishTarget.dataType,
-      bdUserId,
-      title: post.title,
-      html: post.draft_html,
-      featuredImageUrl: post.featured_image_url,
-      seoPackage: {
-        primaryFocusKeyword: seoPackage?.primary_focus_keyword,
-        seoTitle: seoPackage?.seo_title,
-        metaDescription: seoPackage?.meta_description,
-        slug: seoPackage?.slug,
-        featuredImageFilename: seoPackage?.featured_image_filename,
-        featuredImageAltText: seoPackage?.featured_image_alt_text,
-      },
-    });
-
-    if (!publishResult.ok) {
-      throw new AuthorityRouteError(
-        502,
-        "BD_PUBLISH_FAILED",
-        "BD publish failed.",
-        JSON.stringify({
-          status: publishResult.status,
-          detail: publishResult.body,
-        })
-      );
-    }
-
-    const publishedPostId = String(
-      publishResult.body?.post_id ??
-        (publishResult.body?.data as Record<string, unknown> | undefined)?.post_id ??
-        publishResult.body?.id ??
-        ""
-    );
-    const publishedUrl = String(
-      publishResult.body?.url ??
-        publishResult.body?.link ??
-        (publishResult.body?.data as Record<string, unknown> | undefined)?.url ??
-        ""
-    );
-
     const resolvedTruePostId =
       typeof listingRaw.true_post_id === "string" && listingRaw.true_post_id.trim()
         ? listingRaw.true_post_id.trim()
@@ -351,6 +306,36 @@ export async function POST(
       message: `resolved listing true_post_id=${mapping.truePostId ?? "missing"} mapping_key=${mapping.mappingKey} source=${usedPersistedMapping ? "persisted_true_post_id" : localGroupIdFastPathEligible ? "local_group_id_fastpath" : "bd_lookup"} via_bd_lookup=${usedBdLookup}`,
     });
 
+    const existingExternalCandidateFound = Boolean(
+      (typeof post.published_post_id === "string" && post.published_post_id.trim()) ||
+        (typeof post.published_url === "string" && post.published_url.trim())
+    );
+    if (!mapping.truePostId) {
+      logAuthorityInfo({
+        reqId,
+        listingId: resolvedListingId,
+        slot: slotIndex,
+        action: "publish",
+        message: `containment_block_pre_create site_id=${resolved.siteId} reciprocal_identity_resolved=false existing_external_candidate_found=${existingExternalCandidateFound} existing_external_candidate_checked=false external_create_skipped=true`,
+      });
+      throw new AuthorityRouteError(
+        422,
+        "BD_LINK_ENFORCEMENT_FAILED",
+        "Unable to enforce Listing→Blog reciprocal link. Publish blocked before external create.",
+        JSON.stringify({
+          status: 422,
+          detail: {
+            error: "Unable to resolve listing true post id for reciprocal link write.",
+            blocked_pre_create: true,
+            external_create_skipped: true,
+            reciprocal_identity_resolved: false,
+            existing_external_candidate_found: existingExternalCandidateFound,
+            existing_external_candidate_checked: false,
+          },
+        })
+      );
+    }
+
     if (!usedPersistedMapping && mapping.truePostId && mapping.mappingKey !== "unresolved") {
       await persistListingTruePostMapping({
         userId,
@@ -359,6 +344,58 @@ export async function POST(
         mappingKey: mapping.mappingKey,
       });
     }
+
+    logAuthorityInfo({
+      reqId,
+      listingId: resolvedListingId,
+      slot: slotIndex,
+      action: "publish",
+      message: `containment_pre_create_pass site_id=${resolved.siteId} reciprocal_identity_resolved=true existing_external_candidate_found=${existingExternalCandidateFound} existing_external_candidate_checked=false external_create_skipped=false`,
+    });
+    const publishResult = await publishBlogPostToBd({
+      baseUrl: bd.baseUrl,
+      apiKey: bd.apiKey,
+      dataPostsCreatePath: bd.dataPostsCreatePath,
+      blogDataId: bd.blogPostsDataId,
+      blogDataType: publishTarget.dataType,
+      bdUserId,
+      title: post.title,
+      html: post.draft_html,
+      featuredImageUrl: post.featured_image_url,
+      seoPackage: {
+        primaryFocusKeyword: seoPackage?.primary_focus_keyword,
+        seoTitle: seoPackage?.seo_title,
+        metaDescription: seoPackage?.meta_description,
+        slug: seoPackage?.slug,
+        featuredImageFilename: seoPackage?.featured_image_filename,
+        featuredImageAltText: seoPackage?.featured_image_alt_text,
+      },
+    });
+
+    if (!publishResult.ok) {
+      throw new AuthorityRouteError(
+        502,
+        "BD_PUBLISH_FAILED",
+        "BD publish failed.",
+        JSON.stringify({
+          status: publishResult.status,
+          detail: publishResult.body,
+        })
+      );
+    }
+
+    const publishedPostId = String(
+      publishResult.body?.post_id ??
+        (publishResult.body?.data as Record<string, unknown> | undefined)?.post_id ??
+        publishResult.body?.id ??
+        ""
+    );
+    const publishedUrl = String(
+      publishResult.body?.url ??
+        publishResult.body?.link ??
+        (publishResult.body?.data as Record<string, unknown> | undefined)?.url ??
+        ""
+    );
 
     const relatedGuidesHtml = `<h3>Related Guides</h3><ul><li><a href=\"${publishedUrl}\">${post.title}</a></li></ul>`;
 
