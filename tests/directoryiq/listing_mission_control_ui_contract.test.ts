@@ -79,8 +79,13 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("Run Slot Pipeline");
     expect(source).not.toContain("Confirm Valid Slot");
     expect(source).not.toContain("Generate Draft");
-    expect(source).not.toContain(">Approve<");
-    expect(source).not.toContain("onClick={() => void publishContentAsset(item, slot)}");
+    expect(source).toContain("Preview & Approve");
+    expect(source).toContain("Approve");
+    expect(source).toContain("Publish");
+    expect(source).toContain("Create Ready");
+    expect(source).toContain("Preview Ready");
+    expect(source).toContain("Approved");
+    expect(source).toContain("Needs Attention");
   });
 
   it("keeps publish layer scoped to Step 2 with required CTA set", () => {
@@ -115,14 +120,18 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));");
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
-    expect(source).toContain("deriveStep2PrimaryAction(actionInput)");
-    expect(source).toContain("deriveStep2StatusLabel(actionInput)");
-    expect(source).toContain("deriveStep2SectionCta");
-    expect(source).toContain("shouldAllowStep2PipelineRun(actionInput)");
-    expect(source).toContain("summarizeStep2StatusBuckets");
+    expect(source).toContain("deriveStep2AggregateState");
+    expect(source).toContain("derivePublishDisabledReason");
+    expect(source).toContain("step2SummaryCopy");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
+  });
+
+  it("keeps Write Article staged without automatic publish side effects", () => {
+    expect(source).toContain("async function executeStep2SlotPipeline");
+    expect(source).not.toContain("await approveContentAsset(input.item, input.slot)");
+    expect(source).not.toContain("await publishContentAsset(input.item, input.slot)");
   });
 
   it("avoids sticky overlap and vertical nav bloat regressions", () => {

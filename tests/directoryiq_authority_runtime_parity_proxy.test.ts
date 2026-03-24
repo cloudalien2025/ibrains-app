@@ -10,6 +10,26 @@ const proxyDirectoryIqRequest = vi.fn(async (_req: NextRequest, upstreamPath: st
 const getDirectoryIqOpenAiKey = vi.fn(async () => "sk-test");
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
+const getAuthorityPostBySlot = vi.fn(async () => ({
+  metadata_json: null,
+}));
+const readPersistedStep2State = vi.fn(() => ({
+  draft_status: "not_started",
+  image_status: "not_started",
+  review_status: "not_ready",
+  publish_status: "not_started",
+  blog_to_listing_link_status: "not_started",
+  listing_to_blog_link_status: "not_started",
+  draft_version: 0,
+  image_version: 0,
+  approved_at: null,
+  approved_snapshot_draft_version: null,
+  approved_snapshot_image_version: null,
+}));
+const markAuthorityReviewReady = vi.fn(async () => {});
+const markAuthorityDraftFailure = vi.fn(async () => {});
+const markAuthorityImageFailure = vi.fn(async () => {});
+const patchAuthorityStep2State = vi.fn(async () => ({}));
 const normalizePostType = vi.fn(() => "local_guide");
 const normalizeSlot = vi.fn(() => 1);
 const buildGovernedPrompt = vi.fn(() => "prompt");
@@ -75,6 +95,12 @@ vi.mock("@/app/api/directoryiq/_utils/integrations", () => ({
 vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   upsertAuthorityPostDraft,
   saveAuthorityImage,
+  getAuthorityPostBySlot,
+  readPersistedStep2State,
+  markAuthorityReviewReady,
+  markAuthorityDraftFailure,
+  markAuthorityImageFailure,
+  patchAuthorityStep2State,
 }));
 
 vi.mock("@/app/api/directoryiq/_utils/authority", () => ({

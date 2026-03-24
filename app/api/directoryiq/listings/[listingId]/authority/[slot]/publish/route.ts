@@ -6,7 +6,10 @@ import { makeVersionLabel, normalizeSlot, verifyApprovalToken } from "@/app/api/
 import {
   addDirectoryIqVersion,
   getAuthorityPostBySlot,
+  markAuthorityPublishAttempt,
+  markAuthorityPublishFailure,
   markPostPublished,
+  readPersistedStep2State,
 } from "@/app/api/directoryiq/_utils/selectionData";
 import {
   getDirectoryIqBdConnection,
@@ -108,9 +111,12 @@ export async function POST(
 ) {
   let resolvedListingId = "unknown";
   let slotIndex = 0;
+  let listingSourceIdForFailure: string | null = null;
+  let userIdForFailure: string | null = null;
   const reqId = authorityReqId();
   try {
     const userId = resolveUserId(req);
+    userIdForFailure = userId;
     await ensureUser(userId);
 
     const { listingId, slot } = await Promise.resolve(params);
@@ -149,22 +155,38 @@ export async function POST(
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
     }
     const listingSourceId = listingRow.source_id;
+    listingSourceIdForFailure = listingSourceId;
     const listingRaw = (listingRow.raw_json ?? {}) as Record<string, unknown>;
-
-    const tokenResult = verifyApprovalToken(approvalToken, {
-      userId,
-      listingId: listingSourceId,
-      slot: slotIndex,
-      action: "blog_publish",
-    });
-    if (!tokenResult.ok) {
-      throw new AuthorityRouteError(400, "TOKEN_INVALID", tokenResult.reason);
-    }
 
     const post = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
     if (!post || !post.draft_html || !post.title) {
       throw new AuthorityRouteError(400, "BAD_REQUEST", "Draft content is required before publish.");
     }
+    const step2State = readPersistedStep2State(post.metadata_json);
+    if (step2State.review_status !== "approved") {
+      throw new AuthorityRouteError(400, "APPROVAL_REQUIRED", "Approve this draft before publishing.");
+    }
+    if (step2State.approved_snapshot_draft_version == null || step2State.approved_snapshot_image_version == null) {
+      throw new AuthorityRouteError(400, "APPROVAL_REQUIRED", "Approved snapshot is missing. Re-approve before publishing.");
+    }
+    if (
+      step2State.draft_version !== step2State.approved_snapshot_draft_version ||
+      step2State.image_version !== step2State.approved_snapshot_image_version
+    ) {
+      throw new AuthorityRouteError(400, "APPROVAL_REQUIRED", "Approved snapshot is stale. Re-approve before publishing.");
+    }
+    if (approvalToken) {
+      const tokenResult = verifyApprovalToken(approvalToken, {
+        userId,
+        listingId: listingSourceId,
+        slot: slotIndex,
+        action: "blog_publish",
+      });
+      if (!tokenResult.ok) {
+        throw new AuthorityRouteError(400, "TOKEN_INVALID", tokenResult.reason);
+      }
+    }
+    await markAuthorityPublishAttempt(userId, listingSourceId, slotIndex);
     const postMetadata = (post.metadata_json ?? {}) as Record<string, unknown>;
     const step2Contract = (postMetadata.step2_contract ?? null) as
       | {
@@ -431,6 +453,20 @@ export async function POST(
         published_at: new Date().toISOString(),
         reciprocal_link_inserted: listingPush.ok,
         listing_true_post_id: mapping.truePostId,
+        step2_state: {
+          ...step2State,
+          publish_status: "published",
+          publish_completed_at: new Date().toISOString(),
+          published_post_id: publishedPostId,
+          published_url: publishedUrl,
+          publish_last_error_code: null,
+          publish_last_error_message: null,
+          publish_last_req_id: null,
+          blog_to_listing_link_status: "linked",
+          listing_to_blog_link_status: listingToBlogStatus === "linked" ? "linked" : "failed",
+          last_link_error_code: null,
+          last_link_error_message: null,
+        },
         step2_publish_truth: {
           published: true,
           linked: true,
@@ -495,6 +531,15 @@ export async function POST(
       action: "publish",
       error,
     });
+    if (userIdForFailure && listingSourceIdForFailure && slotIndex) {
+      const code = error instanceof AuthorityRouteError ? error.code : "INTERNAL_ERROR";
+      const message = error instanceof Error ? error.message : "Unknown publish error";
+      await markAuthorityPublishFailure(userIdForFailure, listingSourceIdForFailure, slotIndex, {
+        code,
+        message,
+        reqId,
+      });
+    }
     if (error instanceof ListingSiteRequiredError) {
       return authorityErrorResponse({
         reqId,

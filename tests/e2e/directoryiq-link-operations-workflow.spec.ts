@@ -363,7 +363,9 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("publish-execution-layer")).toBeVisible();
     await expect(page.getByTestId("step2-progress-summary")).toBeVisible();
     await expect(page.getByTestId("step2-slot-list")).toBeVisible();
-    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(/Live|Ready to Write|Needs Improvement|Working…|Needs Attention/);
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(
+      /Create Ready|Working|Draft Ready|Featured Image Ready|Preview Ready|Approved|Publishing|Published|Needs Attention/
+    );
     await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toBeVisible();
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
@@ -397,19 +399,20 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const status = page.getByTestId(`step2-slot-status-${slotId}`);
     const primaryAction = page.getByTestId(`step2-slot-primary-action-${slotId}`);
 
-    await expect(status).toContainText("Ready to Write");
+    await expect(status).toContainText("Create Ready");
     await expect(primaryAction).toHaveText("Write Article");
     await primaryAction.click();
 
-    await expect(status).toContainText("Working…");
+    await expect(status).toContainText("Working");
     await expect(primaryAction).toHaveCount(0);
 
     await expect(status).toContainText("Needs Attention");
     await expect(page.getByTestId(`step2-slot-needs-review-${slotId}`)).toContainText(
-      "Draft validation failed for this article."
+      /Draft validation failed for this article\.|Article draft is still processing\./
     );
-    await expect(primaryAction).toHaveText("Try Again");
-    await expect(page.getByTestId("step2-write-next-article")).toHaveText("Try Again");
+    await expect(primaryAction).toHaveCount(0);
+    await expect(page.getByTestId(`step2-slot-actions-${slotId}`).getByRole("button", { name: "Retry Draft" })).toBeVisible();
+    await expect(page.getByTestId("step2-write-next-article")).toHaveText("Write Next Article");
 
     expect(draftRequestBody).toBeTruthy();
     expect(draftRequestUrl).not.toContain("step2_writer=1");
@@ -430,7 +433,7 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("step2-slot-openai-setup-cta-publish_comparison_decision_post")).toBeVisible();
     await expect(page.getByTestId("step2-write-next-article")).toHaveCount(0);
     await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toHaveCount(0);
-    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText("Needs Attention");
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText("Create Ready");
   });
 
   test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {

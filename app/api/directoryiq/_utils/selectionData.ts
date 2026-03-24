@@ -13,6 +13,13 @@ import {
   type RiskTier,
 } from "@/lib/directoryiq/selectionEngine";
 import { AUTHORITY_SLOT_COUNT, AUTHORITY_SLOT_MIN } from "@/lib/directoryiq/authoritySlotContract";
+import type {
+  Step2DraftStatus,
+  Step2ImageStatus,
+  Step2LinkStatus,
+  Step2PublishStatus,
+  Step2ReviewStatus,
+} from "@/lib/directoryiq/step2SlotWorkflowContract";
 
 type ListingRow = {
   source_id: string;
@@ -41,6 +48,35 @@ type AuthorityPostRow = {
   listing_to_blog_link_status: "linked" | "missing";
   metadata_json: Record<string, unknown> | null;
   updated_at: string;
+};
+
+export type PersistedStep2State = {
+  draft_status: Step2DraftStatus;
+  image_status: Step2ImageStatus;
+  review_status: Step2ReviewStatus;
+  publish_status: Step2PublishStatus;
+  blog_to_listing_link_status: Step2LinkStatus;
+  listing_to_blog_link_status: Step2LinkStatus;
+  draft_version: number;
+  image_version: number;
+  draft_generated_at: string | null;
+  image_generated_at: string | null;
+  draft_last_error_code: string | null;
+  draft_last_error_message: string | null;
+  image_last_error_code: string | null;
+  image_last_error_message: string | null;
+  approved_at: string | null;
+  approved_snapshot_draft_version: number | null;
+  approved_snapshot_image_version: number | null;
+  publish_attempted_at: string | null;
+  publish_completed_at: string | null;
+  published_post_id: string | null;
+  published_url: string | null;
+  publish_last_error_code: string | null;
+  publish_last_error_message: string | null;
+  publish_last_req_id: string | null;
+  last_link_error_code: string | null;
+  last_link_error_message: string | null;
 };
 
 type SettingsRow = {
@@ -137,6 +173,77 @@ function asArray(value: unknown): string[] {
 
 function hashText(value: string): string {
   return crypto.createHash("sha256").update(value).digest("hex");
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+function asNullableString(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function asNonNegativeInteger(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return Math.floor(value);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) return Math.floor(parsed);
+  }
+  return fallback;
+}
+
+function coerceStep2Status<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  if (typeof value !== "string") return fallback;
+  return (allowed as readonly string[]).includes(value) ? (value as T) : fallback;
+}
+
+export function readPersistedStep2State(metadata: Record<string, unknown> | null | undefined): PersistedStep2State {
+  const step2 = asRecord(asRecord(metadata).step2_state);
+  return {
+    draft_status: coerceStep2Status(step2.draft_status, ["not_started", "generating", "ready", "failed"], "not_started"),
+    image_status: coerceStep2Status(step2.image_status, ["not_started", "generating", "ready", "failed"], "not_started"),
+    review_status: coerceStep2Status(step2.review_status, ["not_ready", "ready", "approved"], "not_ready"),
+    publish_status: coerceStep2Status(step2.publish_status, ["not_started", "publishing", "published", "failed"], "not_started"),
+    blog_to_listing_link_status: coerceStep2Status(step2.blog_to_listing_link_status, ["not_started", "linked", "failed"], "not_started"),
+    listing_to_blog_link_status: coerceStep2Status(step2.listing_to_blog_link_status, ["not_started", "linked", "failed"], "not_started"),
+    draft_version: asNonNegativeInteger(step2.draft_version, 0),
+    image_version: asNonNegativeInteger(step2.image_version, 0),
+    draft_generated_at: asNullableString(step2.draft_generated_at),
+    image_generated_at: asNullableString(step2.image_generated_at),
+    draft_last_error_code: asNullableString(step2.draft_last_error_code),
+    draft_last_error_message: asNullableString(step2.draft_last_error_message),
+    image_last_error_code: asNullableString(step2.image_last_error_code),
+    image_last_error_message: asNullableString(step2.image_last_error_message),
+    approved_at: asNullableString(step2.approved_at),
+    approved_snapshot_draft_version: step2.approved_snapshot_draft_version == null ? null : asNonNegativeInteger(step2.approved_snapshot_draft_version, 0),
+    approved_snapshot_image_version: step2.approved_snapshot_image_version == null ? null : asNonNegativeInteger(step2.approved_snapshot_image_version, 0),
+    publish_attempted_at: asNullableString(step2.publish_attempted_at),
+    publish_completed_at: asNullableString(step2.publish_completed_at),
+    published_post_id: asNullableString(step2.published_post_id),
+    published_url: asNullableString(step2.published_url),
+    publish_last_error_code: asNullableString(step2.publish_last_error_code),
+    publish_last_error_message: asNullableString(step2.publish_last_error_message),
+    publish_last_req_id: asNullableString(step2.publish_last_req_id),
+    last_link_error_code: asNullableString(step2.last_link_error_code),
+    last_link_error_message: asNullableString(step2.last_link_error_message),
+  };
+}
+
+function mergeStep2StateMetadata(
+  metadata: Record<string, unknown> | null | undefined,
+  patch: Partial<PersistedStep2State>
+): Record<string, unknown> {
+  const baseMetadata = asRecord(metadata);
+  const current = readPersistedStep2State(baseMetadata);
+  return {
+    ...baseMetadata,
+    step2_state: {
+      ...current,
+      ...patch,
+    },
+  };
 }
 
 export function extractListingDescription(raw: Record<string, unknown>): string {
@@ -636,6 +743,22 @@ export async function upsertAuthorityPostDraft(
     metadata: Record<string, unknown>;
   }
 ): Promise<void> {
+  const mergedMetadata = mergeStep2StateMetadata(input.metadata, {
+    draft_status: "ready",
+    draft_generated_at: new Date().toISOString(),
+    draft_last_error_code: null,
+    draft_last_error_message: null,
+    publish_status: "not_started",
+    publish_attempted_at: null,
+    publish_completed_at: null,
+    publish_last_error_code: null,
+    publish_last_error_message: null,
+    publish_last_req_id: null,
+    published_post_id: null,
+    published_url: null,
+    listing_to_blog_link_status: "not_started",
+  });
+
   await query(
     `
     INSERT INTO directoryiq_authority_posts
@@ -663,7 +786,7 @@ export async function upsertAuthorityPostDraft(
       input.draftMarkdown,
       input.draftHtml,
       input.blogToListingStatus,
-      JSON.stringify(input.metadata),
+      JSON.stringify(mergedMetadata),
     ]
   );
 }
@@ -677,17 +800,198 @@ export async function saveAuthorityImage(
     imageUrl: string;
   }
 ): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  const mergedMetadata = mergeStep2StateMetadata(existing?.metadata_json, {
+    image_status: "ready",
+    image_generated_at: new Date().toISOString(),
+    image_last_error_code: null,
+    image_last_error_message: null,
+    publish_status: "not_started",
+    publish_attempted_at: null,
+    publish_completed_at: null,
+    publish_last_error_code: null,
+    publish_last_error_message: null,
+    publish_last_req_id: null,
+    published_post_id: null,
+    published_url: null,
+    listing_to_blog_link_status: "not_started",
+  });
   await query(
     `
     UPDATE directoryiq_authority_posts
     SET
       featured_image_prompt = $4,
       featured_image_url = $5,
+      metadata_json = $6::jsonb,
       updated_at = now()
     WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
     `,
-    [userId, listingId, slot, input.imagePrompt, input.imageUrl]
+    [userId, listingId, slot, input.imagePrompt, input.imageUrl, JSON.stringify(mergedMetadata)]
   );
+}
+
+export async function markAuthorityReviewReady(
+  userId: string,
+  listingId: string,
+  slot: number
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+  const current = readPersistedStep2State(existing.metadata_json);
+  const reviewStatus = current.draft_status === "ready" && current.image_status === "ready" ? "ready" : "not_ready";
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    review_status: reviewStatus,
+    approved_at: null,
+    approved_snapshot_draft_version: null,
+    approved_snapshot_image_version: null,
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function markAuthorityPublishAttempt(
+  userId: string,
+  listingId: string,
+  slot: number
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    publish_status: "publishing",
+    publish_attempted_at: new Date().toISOString(),
+    publish_last_error_code: null,
+    publish_last_error_message: null,
+    publish_last_req_id: null,
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function markAuthorityPublishFailure(
+  userId: string,
+  listingId: string,
+  slot: number,
+  input: { code?: string | null; message?: string | null; reqId?: string | null }
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    publish_status: "failed",
+    publish_last_error_code: asNullableString(input.code),
+    publish_last_error_message: asNullableString(input.message),
+    publish_last_req_id: asNullableString(input.reqId),
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function markAuthorityApprovedSnapshot(
+  userId: string,
+  listingId: string,
+  slot: number
+): Promise<PersistedStep2State | null> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return null;
+  const current = readPersistedStep2State(existing.metadata_json);
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    review_status: "approved",
+    approved_at: new Date().toISOString(),
+    approved_snapshot_draft_version: current.draft_version,
+    approved_snapshot_image_version: current.image_version,
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+  return readPersistedStep2State(mergedMetadata);
+}
+
+export async function markAuthorityDraftFailure(
+  userId: string,
+  listingId: string,
+  slot: number,
+  input: { code?: string | null; message?: string | null }
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    draft_status: "failed",
+    draft_last_error_code: asNullableString(input.code),
+    draft_last_error_message: asNullableString(input.message),
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function markAuthorityImageFailure(
+  userId: string,
+  listingId: string,
+  slot: number,
+  input: { code?: string | null; message?: string | null }
+): Promise<void> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return;
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, {
+    image_status: "failed",
+    image_last_error_code: asNullableString(input.code),
+    image_last_error_message: asNullableString(input.message),
+  });
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+}
+
+export async function patchAuthorityStep2State(
+  userId: string,
+  listingId: string,
+  slot: number,
+  patch: Partial<PersistedStep2State>
+): Promise<PersistedStep2State | null> {
+  const existing = await getAuthorityPostBySlot(userId, listingId, slot);
+  if (!existing) return null;
+  const mergedMetadata = mergeStep2StateMetadata(existing.metadata_json, patch);
+  await query(
+    `
+    UPDATE directoryiq_authority_posts
+    SET metadata_json = $4::jsonb, updated_at = now()
+    WHERE user_id = $1 AND listing_source_id = $2 AND slot_index = $3
+    `,
+    [userId, listingId, slot, JSON.stringify(mergedMetadata)]
+  );
+  return readPersistedStep2State(mergedMetadata);
 }
 
 export async function markPostPublished(
@@ -702,6 +1006,20 @@ export async function markPostPublished(
     metadata: Record<string, unknown>;
   }
 ): Promise<void> {
+  const mergedMetadata = mergeStep2StateMetadata(input.metadata, {
+    publish_status: "published",
+    publish_completed_at: new Date().toISOString(),
+    publish_last_error_code: null,
+    publish_last_error_message: null,
+    publish_last_req_id: null,
+    published_post_id: input.publishedPostId,
+    published_url: input.publishedUrl,
+    blog_to_listing_link_status: input.blogToListingStatus === "linked" ? "linked" : "failed",
+    listing_to_blog_link_status: input.listingToBlogStatus === "linked" ? "linked" : "failed",
+    last_link_error_code: null,
+    last_link_error_message: null,
+  });
+
   await query(
     `
     UPDATE directoryiq_authority_posts
@@ -723,7 +1041,7 @@ export async function markPostPublished(
       input.publishedUrl,
       input.blogToListingStatus,
       input.listingToBlogStatus,
-      JSON.stringify(input.metadata),
+      JSON.stringify(mergedMetadata),
     ]
   );
 }

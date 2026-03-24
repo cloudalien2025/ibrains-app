@@ -38,15 +38,19 @@ import {
 } from "@/lib/directoryiq/step2SupportEngineContract";
 import {
   deriveSafeStep2BlockerMessage,
-  deriveStep2PrimaryAction,
-  deriveStep2SectionCta,
-  deriveStep2SecondaryAction,
-  deriveStep2StatusLabel,
   isStep2SetupBlockerMessage,
-  shouldAllowStep2PipelineRun,
-  summarizeStep2StatusBuckets,
-  type Step2CardStatusLabel,
 } from "@/lib/directoryiq/step2CardActionContract";
+import {
+  derivePublishDisabledReason,
+  deriveStep2AggregateState,
+  step2SummaryCopy,
+  type Step2AggregateState,
+  type Step2DraftStatus,
+  type Step2ImageStatus,
+  type Step2LinkStatus,
+  type Step2PublishStatus,
+  type Step2ReviewStatus,
+} from "@/lib/directoryiq/step2SlotWorkflowContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -572,14 +576,35 @@ type ContentAssetState = {
   slot: number;
   title: string;
   focusTopic: string;
-  status: LifecycleState;
-  imageStatus: LifecycleState;
-  flywheelStatus: LifecycleState;
+  draftStatus: Step2DraftStatus;
+  imageStatus: Step2ImageStatus;
+  reviewStatus: Step2ReviewStatus;
+  publishStatus: Step2PublishStatus;
+  blogToListingLinkStatus: Step2LinkStatus;
+  listingToBlogLinkStatus: Step2LinkStatus;
+  draftVersion: number;
+  imageVersion: number;
+  approvedSnapshotDraftVersion: number | null;
+  approvedSnapshotImageVersion: number | null;
   draftHtml: string;
   featuredImageUrl: string;
-  approvalToken: string;
+  approvalToken: string | null;
   publishedUrl: string;
   scoreAfter: number | null;
+  draftGeneratedAt: string | null;
+  imageGeneratedAt: string | null;
+  approvedAt: string | null;
+  publishAttemptedAt: string | null;
+  publishCompletedAt: string | null;
+  draftLastErrorCode: string | null;
+  draftLastErrorMessage: string | null;
+  imageLastErrorCode: string | null;
+  imageLastErrorMessage: string | null;
+  publishLastErrorCode: string | null;
+  publishLastErrorMessage: string | null;
+  publishLastReqId: string | null;
+  lastLinkErrorCode: string | null;
+  lastLinkErrorMessage: string | null;
 };
 
 type Step2DraftContractInput = {
@@ -809,22 +834,42 @@ function step2ActionInput(missionSlot: Step2MissionPlanSlot, runtime: Step2SlotR
   };
 }
 
-function step2StatusClassName(status: Step2CardStatusLabel): string {
-  if (status === "Live") return "border-emerald-300/40 bg-emerald-400/15 text-emerald-100";
-  if (status === "Ready to Write") return "border-cyan-300/40 bg-cyan-400/15 text-cyan-100";
-  if (status === "Needs Improvement") return "border-amber-300/40 bg-amber-400/15 text-amber-100";
-  if (status === "Working…") return "border-indigo-300/40 bg-indigo-400/15 text-indigo-100";
+function step2StateLabel(status: Step2AggregateState): string {
+  if (status === "create_ready") return "Create Ready";
+  if (status === "generating") return "Working";
+  if (status === "draft_ready") return "Draft Ready";
+  if (status === "image_ready") return "Featured Image Ready";
+  if (status === "preview_ready") return "Preview Ready";
+  if (status === "approved") return "Approved";
+  if (status === "publishing") return "Publishing";
+  if (status === "published") return "Published";
+  return "Needs Attention";
+}
+
+function step2StatusClassName(status: Step2AggregateState): string {
+  if (status === "published") return "border-emerald-300/40 bg-emerald-400/15 text-emerald-100";
+  if (status === "approved" || status === "preview_ready") return "border-cyan-300/40 bg-cyan-400/15 text-cyan-100";
+  if (status === "create_ready" || status === "draft_ready" || status === "image_ready") return "border-amber-300/40 bg-amber-400/15 text-amber-100";
+  if (status === "generating" || status === "publishing") return "border-indigo-300/40 bg-indigo-400/15 text-indigo-100";
   return "border-rose-300/40 bg-rose-400/15 text-rose-100";
 }
 
-function step2CardDescription(input: { status: Step2CardStatusLabel; purpose: string; title: string; listingName: string }): string {
+function step2CardDescription(input: {
+  summary: string;
+  purpose: string;
+  title: string;
+  listingName: string;
+  asset: ContentAssetState;
+}): string {
+  if (input.asset.publishStatus === "failed") {
+    if (input.asset.publishLastErrorMessage) return `Publish failed: ${input.asset.publishLastErrorMessage}`;
+    if (input.asset.lastLinkErrorMessage) return `Publish failed: ${input.asset.lastLinkErrorMessage}`;
+  }
+  if (input.asset.draftStatus === "failed" && input.asset.draftLastErrorMessage) return `Draft failed: ${input.asset.draftLastErrorMessage}`;
+  if (input.asset.imageStatus === "failed" && input.asset.imageLastErrorMessage) return `Featured image failed: ${input.asset.imageLastErrorMessage}`;
   const purpose = normalizeText(input.purpose);
-  if (input.status === "Working…") return "DirectoryIQ is building this article now.";
-  if (input.status === "Live") return "This article is live and helping support this listing.";
-  if (input.status === "Needs Improvement") return "This article exists but needs stronger support for this listing.";
-  if (input.status === "Needs Attention") return "We hit a problem while building this article.";
-  if (purpose) return purpose;
-  return `Helps AI engines understand why ${input.listingName} is a strong choice for ${normalizeText(input.title)}.`;
+  if (purpose && input.summary === "This support article has not been generated yet.") return purpose;
+  return input.summary || `Helps AI engines understand why ${input.listingName} is a strong choice for ${normalizeText(input.title)}.`;
 }
 
 const OPENAI_SETUP_BLOCKER_TITLE = "OpenAI is not configured for this site.";
@@ -1778,13 +1823,26 @@ export default function ListingOptimizationClient({
         const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
         const blueprint = contentStructure?.items[index] ?? null;
         const runtime = step2Runtime[missionSlot.slot_id];
-        const publishedUrl = runtime?.publishedUrl || asset.publishedUrl || missionSlot.existing_candidate_url;
-        const actionInput = step2ActionInput(missionSlot, runtime);
-        const status = deriveStep2StatusLabel(actionInput);
-        const setupBlocked = step2OpenAiSetupBlocked && (status === "Ready to Write" || status === "Needs Improvement");
-        const primaryAction = setupBlocked ? ({ kind: "none" } as const) : deriveStep2PrimaryAction(actionInput);
-        const effectiveStatus = setupBlocked ? ("Needs Attention" as const) : status;
-        const secondaryAction = deriveStep2SecondaryAction({ publishedUrl });
+        const aggregateState = deriveStep2AggregateState({
+          draft_status: asset.draftStatus,
+          image_status: asset.imageStatus,
+          review_status: asset.reviewStatus,
+          publish_status: asset.publishStatus,
+          blog_to_listing_link_status: asset.blogToListingLinkStatus,
+          listing_to_blog_link_status: asset.listingToBlogLinkStatus,
+          published_url: asset.publishedUrl || null,
+        });
+        const publishDisabledReason = derivePublishDisabledReason({
+          draftReady: asset.draftStatus === "ready",
+          imageReady: asset.imageStatus === "ready",
+          approved: asset.reviewStatus === "approved",
+          publishing: asset.publishStatus === "publishing",
+          published: asset.publishStatus === "published",
+          integrationsReady: integrations.bdConfigured === true,
+          listingIdentityResolved: Boolean(effectiveListingId),
+        });
+        const setupBlocked = step2OpenAiSetupBlocked && aggregateState === "create_ready";
+        const summary = step2SummaryCopy(aggregateState);
         return {
           missionSlot,
           item,
@@ -1792,34 +1850,37 @@ export default function ListingOptimizationClient({
           asset,
           blueprint,
           runtime,
-          actionInput,
-          status: effectiveStatus,
-          primaryAction,
-          secondaryAction,
+          aggregateState,
+          summary,
+          publishDisabledReason,
           setupBlocked,
         };
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
-  }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime, step2OpenAiSetupBlocked]);
-  const step2StatusBuckets = useMemo(
-    () => summarizeStep2StatusBuckets(step2SlotViewModels.map((entry) => entry.status)),
-    [step2SlotViewModels]
-  );
+  }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime, step2OpenAiSetupBlocked, integrations.bdConfigured, effectiveListingId]);
+  const step2StatusBuckets = useMemo(() => {
+    return step2SlotViewModels.reduce(
+      (acc, entry) => {
+        acc[entry.aggregateState] += 1;
+        return acc;
+      },
+      {
+        create_ready: 0,
+        generating: 0,
+        draft_ready: 0,
+        image_ready: 0,
+        preview_ready: 0,
+        approved: 0,
+        publishing: 0,
+        published: 0,
+        needs_attention: 0,
+      } as Record<Step2AggregateState, number>
+    );
+  }, [step2SlotViewModels]);
   const step2SectionCta = useMemo(() => {
-    const selected = deriveStep2SectionCta({
-      globalSetupBlocked: step2OpenAiSetupBlocked,
-      items: step2SlotViewModels.map((entry) => ({
-        slotId: entry.missionSlot.slot_id,
-        primaryAction: entry.primaryAction,
-        blockerMessage: entry.runtime?.errorMessage ?? null,
-      })),
-    });
-    if (selected.kind !== "run_pipeline") return { action: selected, candidate: null as (typeof step2SlotViewModels)[number] | null };
-    return {
-      action: selected,
-      candidate: step2SlotViewModels.find((entry) => entry.missionSlot.slot_id === selected.slotId) ?? null,
-    };
-  }, [step2SlotViewModels, step2OpenAiSetupBlocked]);
+    const candidate = step2SlotViewModels.find((entry) => entry.aggregateState === "create_ready" || entry.aggregateState === "needs_attention");
+    return { candidate };
+  }, [step2SlotViewModels]);
 
   const largestGap = gaps?.items[0] ?? null;
   const fastestWinLink = linkOperations.find((item) => item.status === "Recommended") ?? null;
@@ -1836,7 +1897,9 @@ export default function ListingOptimizationClient({
   const missionProgress = useMemo(() => {
     const connectionsDone = linkOperations.some((item) => item.status === "Approved" || item.status === "Published");
     const listingDone = listingLifecycle === "Generated" || listingLifecycle === "Approved" || listingLifecycle === "Published";
-    const contentDone = Object.values(contentAssets).some((item) => item.status === "Generated" || item.status === "Approved" || item.status === "Published");
+    const contentDone = Object.values(contentAssets).some(
+      (item) => item.draftStatus === "ready" || item.reviewStatus === "approved" || item.publishStatus === "published"
+    );
     const completed = [connectionsDone, listingDone, contentDone].filter(Boolean).length;
     return Math.round((completed / 3) * 100);
   }, [linkOperations, listingLifecycle, contentAssets]);
@@ -1844,9 +1907,9 @@ export default function ListingOptimizationClient({
   const publishedLinkCount = linkOperations.filter((item) => item.status === "Published").length;
   const approvedLinkCount = linkOperations.filter((item) => item.status === "Approved").length;
 
-  const approvedContent = Object.values(contentAssets).filter((item) => item.status === "Approved");
-  const publishedContent = Object.values(contentAssets).filter((item) => item.status === "Published");
-  const approvedImages = Object.values(contentAssets).filter((item) => item.imageStatus === "Approved" || item.imageStatus === "Generated");
+  const approvedContent = Object.values(contentAssets).filter((item) => item.reviewStatus === "approved");
+  const publishedContent = Object.values(contentAssets).filter((item) => item.publishStatus === "published");
+  const approvedImages = Object.values(contentAssets).filter((item) => item.imageStatus === "ready");
 
   const listingIsReady = listingLifecycle === "Approved" || uiState === "ready_to_push";
   const publishReadyCount = (listingIsReady ? 1 : 0) + approvedContent.length + approvedLinkCount;
@@ -1978,14 +2041,35 @@ export default function ListingOptimizationClient({
       slot,
       title: normalizeText(item.title),
       focusTopic: normalizeText(item.suggestedAngle) || normalizeText(item.title),
-      status: "Recommended",
-      imageStatus: "Detected",
-      flywheelStatus: "Recommended",
+      draftStatus: "not_started",
+      imageStatus: "not_started",
+      reviewStatus: "not_ready",
+      publishStatus: "not_started",
+      blogToListingLinkStatus: "not_started",
+      listingToBlogLinkStatus: "not_started",
+      draftVersion: 0,
+      imageVersion: 0,
+      approvedSnapshotDraftVersion: null,
+      approvedSnapshotImageVersion: null,
       draftHtml: "",
       featuredImageUrl: "",
-      approvalToken: "",
+      approvalToken: null,
       publishedUrl: "",
       scoreAfter: null,
+      draftGeneratedAt: null,
+      imageGeneratedAt: null,
+      approvedAt: null,
+      publishAttemptedAt: null,
+      publishCompletedAt: null,
+      draftLastErrorCode: null,
+      draftLastErrorMessage: null,
+      imageLastErrorCode: null,
+      imageLastErrorMessage: null,
+      publishLastErrorCode: null,
+      publishLastErrorMessage: null,
+      publishLastReqId: null,
+      lastLinkErrorCode: null,
+      lastLinkErrorMessage: null,
     };
   }
 
@@ -1999,7 +2083,12 @@ export default function ListingOptimizationClient({
 
     setContentAssets((previous) => ({
       ...previous,
-      [item.id]: { ...current, status: "Generated" },
+      [item.id]: {
+        ...current,
+        draftStatus: "generating",
+        draftLastErrorCode: null,
+        draftLastErrorMessage: null,
+      },
     }));
 
     const resolvedListingUrlForDraft = firstNonEmptyValue(
@@ -2013,7 +2102,12 @@ export default function ListingOptimizationClient({
       setError({ message: STEP2_LISTING_URL_BLOCKER });
       setContentAssets((previous) => ({
         ...previous,
-        [item.id]: { ...current, status: "Recommended" },
+        [item.id]: {
+          ...current,
+          draftStatus: "failed",
+          draftLastErrorCode: "BAD_REQUEST",
+          draftLastErrorMessage: STEP2_LISTING_URL_BLOCKER,
+        },
       }));
       return { ok: false, errorMessage: STEP2_LISTING_URL_BLOCKER };
     }
@@ -2055,7 +2149,12 @@ export default function ListingOptimizationClient({
       }
       setContentAssets((previous) => ({
         ...previous,
-        [item.id]: { ...current, status: "Recommended" },
+        [item.id]: {
+          ...current,
+          draftStatus: "failed",
+          draftLastErrorCode: code || null,
+          draftLastErrorMessage: translatedMessage,
+        },
       }));
       return { ok: false, errorMessage: translatedMessage };
     }
@@ -2064,7 +2163,19 @@ export default function ListingOptimizationClient({
       ...previous,
         [item.id]: {
           ...current,
-          status: "Generated",
+          draftStatus: "ready",
+          draftVersion: current.draftVersion + 1,
+          draftGeneratedAt: new Date().toISOString(),
+          reviewStatus: current.imageStatus === "ready" ? "ready" : "not_ready",
+          approvedAt: null,
+          approvedSnapshotDraftVersion: null,
+          approvedSnapshotImageVersion: null,
+          publishStatus: "not_started",
+          publishLastErrorCode: null,
+          publishLastErrorMessage: null,
+          publishLastReqId: null,
+          publishAttemptedAt: null,
+          publishCompletedAt: null,
           draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
         },
       }));
@@ -2075,6 +2186,15 @@ export default function ListingOptimizationClient({
   async function generateContentImage(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
+    setContentAssets((previous) => ({
+      ...previous,
+      [item.id]: {
+        ...current,
+        imageStatus: "generating",
+        imageLastErrorCode: null,
+        imageLastErrorMessage: null,
+      },
+    }));
 
     const res = await fetch(
       buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/image`, siteQuery),
@@ -2096,6 +2216,15 @@ export default function ListingOptimizationClient({
       setError({
         message: translateStep2ErrorMessage(settled.error.message, settled.error.code),
       });
+      setContentAssets((previous) => ({
+        ...previous,
+        [item.id]: {
+          ...current,
+          imageStatus: "failed",
+          imageLastErrorCode: settled.error.code ?? null,
+          imageLastErrorMessage: translateStep2ErrorMessage(settled.error.message, settled.error.code),
+        },
+      }));
       return false;
     }
 
@@ -2103,7 +2232,19 @@ export default function ListingOptimizationClient({
       ...previous,
       [item.id]: {
         ...current,
-        imageStatus: "Generated",
+        imageStatus: "ready",
+        imageVersion: current.imageVersion + 1,
+        imageGeneratedAt: new Date().toISOString(),
+        reviewStatus: current.draftStatus === "ready" ? "ready" : "not_ready",
+        approvedAt: null,
+        approvedSnapshotDraftVersion: null,
+        approvedSnapshotImageVersion: null,
+        publishStatus: "not_started",
+        publishLastErrorCode: null,
+        publishLastErrorMessage: null,
+        publishLastReqId: null,
+        publishAttemptedAt: null,
+        publishCompletedAt: null,
         featuredImageUrl: typeof settled.data.featured_image_url === "string" ? settled.data.featured_image_url : "",
       },
     }));
@@ -2114,13 +2255,17 @@ export default function ListingOptimizationClient({
   async function approveContentAsset(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
+    if (current.draftStatus !== "ready" || current.imageStatus !== "ready") {
+      setError({ message: "Draft and featured image must both be ready before approval." });
+      return false;
+    }
 
     const res = await fetch(
       buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/preview`, siteQuery),
       {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ action: "approve" }),
       }
     );
     const json = (await res.json().catch(() => ({}))) as {
@@ -2143,10 +2288,11 @@ export default function ListingOptimizationClient({
       ...previous,
       [item.id]: {
         ...current,
-        status: "Approved",
-        imageStatus: current.imageStatus === "Detected" ? "Recommended" : current.imageStatus,
-        flywheelStatus: "Approved",
-        approvalToken: json.approval_token ?? "",
+        reviewStatus: "approved",
+        approvalToken: json.approval_token ?? null,
+        approvedAt: new Date().toISOString(),
+        approvedSnapshotDraftVersion: current.draftVersion,
+        approvedSnapshotImageVersion: current.imageVersion,
         scoreAfter: json.preview?.score_delta?.after ?? null,
       },
     }));
@@ -2157,7 +2303,21 @@ export default function ListingOptimizationClient({
   async function publishContentAsset(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
     if (!effectiveListingId) return false;
     const current = initializeContentAsset(item, slot);
-    if (!current.approvalToken) return false;
+    if (current.reviewStatus !== "approved") {
+      setError({ message: "Approve this draft before publishing." });
+      return false;
+    }
+    setContentAssets((previous) => ({
+      ...previous,
+      [item.id]: {
+        ...current,
+        publishStatus: "publishing",
+        publishAttemptedAt: new Date().toISOString(),
+        publishLastErrorCode: null,
+        publishLastErrorMessage: null,
+        publishLastReqId: null,
+      },
+    }));
 
     const res = await fetch(
       buildDirectoryIqWriteApiUrl(`/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/${slot}/publish`, siteQuery),
@@ -2166,22 +2326,33 @@ export default function ListingOptimizationClient({
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         approve_publish: true,
-        approval_token: current.approvalToken,
+        approval_token: current.approvalToken ?? undefined,
       }),
       }
     );
 
     const json = (await res.json().catch(() => ({}))) as {
       published_url?: string;
-      error?: { message?: string; code?: string } | string;
+      error?: { message?: string; code?: string; reqId?: string } | string;
     };
     if (!res.ok) {
+      const message = translateStep2ErrorMessage(
+        typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.",
+        typeof json.error === "string" ? "" : json.error?.code
+      );
       setError({
-        message: translateStep2ErrorMessage(
-          typeof json.error === "string" ? json.error : json.error?.message ?? "Failed to publish content asset.",
-          typeof json.error === "string" ? "" : json.error?.code
-        ),
+        message,
       });
+      setContentAssets((previous) => ({
+        ...previous,
+        [item.id]: {
+          ...current,
+          publishStatus: "failed",
+          publishLastErrorCode: typeof json.error === "string" ? null : json.error?.code ?? null,
+          publishLastErrorMessage: message,
+          publishLastReqId: typeof json.error === "string" ? null : json.error?.reqId ?? null,
+        },
+      }));
       return false;
     }
 
@@ -2189,9 +2360,13 @@ export default function ListingOptimizationClient({
       ...previous,
       [item.id]: {
         ...current,
-        status: "Published",
-        imageStatus: current.imageStatus === "Detected" ? "Recommended" : current.imageStatus,
-        flywheelStatus: "Published",
+        publishStatus: "published",
+        publishCompletedAt: new Date().toISOString(),
+        publishLastErrorCode: null,
+        publishLastErrorMessage: null,
+        publishLastReqId: null,
+        blogToListingLinkStatus: "linked",
+        listingToBlogLinkStatus: "linked",
         publishedUrl: json.published_url ?? "",
       },
     }));
@@ -2242,8 +2417,8 @@ export default function ListingOptimizationClient({
       patchStep2Runtime(slotId, { internalState: "failed", errorMessage: blockerMessage });
       return;
     }
-    if (!shouldAllowStep2PipelineRun(actionInput)) {
-      setNotice("This article is already live or currently working. Choose another article.");
+    if (runtime.internalState === "researching" || runtime.internalState === "brief_ready" || runtime.internalState === "generating") {
+      setNotice("This article is currently generating.");
       return;
     }
 
@@ -2276,41 +2451,11 @@ export default function ListingOptimizationClient({
     if (imageGenerated) {
       patchStep2Runtime(slotId, { internalState: "image_ready" });
     }
-
-    patchStep2Runtime(slotId, { internalState: "publishing" });
-    const approved = await approveContentAsset(input.item, input.slot);
-    if (!approved) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: translateStep2ErrorMessage("Approval preview failed.") });
+    if (!imageGenerated) {
+      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: translateStep2ErrorMessage("Featured image generation failed.") });
       return;
     }
-    const published = await publishContentAsset(input.item, input.slot);
-    if (!published) {
-      patchStep2Runtime(slotId, { internalState: "failed", errorMessage: translateStep2ErrorMessage("Publish failed.") });
-      return;
-    }
-
-    const validity = normalizeSlotValidity({
-      published: true,
-      linked: true,
-      metadata_ready: true,
-      relevant: true,
-      slot_strong: true,
-      quality_pass: imageGenerated,
-      non_duplicate: true,
-      step3_consumable: true,
-    });
-    patchStep2Runtime(slotId, {
-      internalState: validity.final_state,
-      published: true,
-      linked: true,
-      metadataReady: true,
-      qualityPass: imageGenerated,
-      nonDuplicate: true,
-      step3Consumable: true,
-      countsTowardRequiredFive: validity.counts_toward_required_five,
-      publishedUrl: contentAssets[input.item.id]?.publishedUrl || null,
-      errorMessage: validity.final_state === "needs_review" ? "Published but missing one or more validity checks." : null,
-    });
+    patchStep2Runtime(slotId, { internalState: "image_ready", errorMessage: null });
   }
 
   function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput {
@@ -2378,7 +2523,7 @@ export default function ListingOptimizationClient({
     for (const item of reinforcementPlan?.items.slice(0, 5) ?? []) {
       const slot = (reinforcementPlan?.items.findIndex((candidate) => candidate.id === item.id) ?? 0) + 1;
       const current = contentAssets[item.id] ?? initializeContentAsset(item, slot);
-      if (current.status === "Approved" && current.approvalToken) {
+      if (current.reviewStatus === "approved") {
         await publishContentAsset(item, slot);
       }
     }
@@ -2902,14 +3047,15 @@ export default function ListingOptimizationClient({
                     {step2Progress.valid_count} of {step2Progress.required_count} live
                   </div>
                   <div className="mt-3 flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-2 py-1 text-emerald-100">Live: {step2StatusBuckets.live}</span>
-                    <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Ready to Write: {step2StatusBuckets.readyToWrite}</span>
-                    <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-rose-100">Needs Attention: {step2StatusBuckets.needsAttention}</span>
+                    <span className="rounded-full border border-amber-300/30 bg-amber-400/10 px-2 py-1 text-amber-100">Create Ready: {step2StatusBuckets.create_ready}</span>
+                    <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Preview Ready: {step2StatusBuckets.preview_ready}</span>
+                    <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Approved: {step2StatusBuckets.approved}</span>
+                    <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-rose-100">Needs Attention: {step2StatusBuckets.needs_attention}</span>
                   </div>
                 </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
-                  {step2SectionCta.action.kind === "setup" ? (
+                  {step2OpenAiSetupBlocked ? (
                     <>
                       <Link
                         href="/directoryiq/signal-sources?connector=openai"
@@ -2922,7 +3068,7 @@ export default function ListingOptimizationClient({
                         {OPENAI_SETUP_BLOCKER_TITLE} {OPENAI_SETUP_BLOCKER_BODY}
                       </span>
                     </>
-                  ) : step2SectionCta.action.kind === "run_pipeline" ? (
+                  ) : step2SectionCta.candidate ? (
                     <>
                       <NeonButton
                         onClick={() => {
@@ -2936,21 +3082,18 @@ export default function ListingOptimizationClient({
                         disabled={!step2SectionCta.candidate}
                         data-testid="step2-write-next-article"
                       >
-                        {step2SectionCta.action.label}
+                        Write Next Article
                       </NeonButton>
-                      {step2SectionCta.action.blockerMessage ? (
-                        <span className="text-xs text-rose-100/90">{translateStep2ErrorMessage(step2SectionCta.action.blockerMessage)}</span>
-                      ) : null}
                     </>
                   ) : (
                     <>
-                      <span className="text-xs text-slate-400">All articles are currently live or working.</span>
+                      <span className="text-xs text-slate-400">All articles are currently in review, approved, or published.</span>
                     </>
                   )}
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, status, primaryAction, secondaryAction, setupBlocked }) => (
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, aggregateState, summary, publishDisabledReason, setupBlocked, asset }) => (
                     <div
                       key={item.id}
                       className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
@@ -2961,18 +3104,19 @@ export default function ListingOptimizationClient({
                           <div className="text-sm font-semibold text-slate-100">{normalizeText(item.title)}</div>
                           <div className="mt-1 text-xs text-slate-300">
                             {step2CardDescription({
-                              status,
+                              summary,
                               purpose: normalizeText(item.suggestedContentPurpose) || normalizeText(blueprint?.suggestedH1),
                               title: item.title,
                               listingName: displayName,
+                              asset,
                             })}
                           </div>
                         </div>
                         <span
-                          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${step2StatusClassName(status)}`}
+                          className={`rounded-full border px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] ${step2StatusClassName(aggregateState)}`}
                           data-testid={`step2-slot-status-${missionSlot.slot_id}`}
                         >
-                          {status}
+                          {step2StateLabel(aggregateState)}
                         </span>
                       </div>
 
@@ -2986,36 +3130,131 @@ export default function ListingOptimizationClient({
                             Connect OpenAI
                           </Link>
                         ) : null}
-                        {!setupBlocked && primaryAction.kind === "run_pipeline" ? (
+                        {!setupBlocked && aggregateState === "create_ready" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
                             onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}
                             data-testid={`step2-slot-primary-action-${missionSlot.slot_id}`}
                           >
-                            {primaryAction.label}
+                            Write Article
                           </button>
                         ) : null}
-                        {secondaryAction.kind === "view_post" ? (
+                        {!setupBlocked && aggregateState === "draft_ready" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100"
+                              onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}
+                            >
+                              Regenerate Draft
+                            </button>
+                          </>
+                        ) : null}
+                        {!setupBlocked && aggregateState === "image_ready" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                            >
+                              Preview
+                            </button>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100"
+                              onClick={() => void generateContentImage(item, slot)}
+                            >
+                              Regenerate Image
+                            </button>
+                          </>
+                        ) : null}
+                        {!setupBlocked && aggregateState === "preview_ready" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
+                              onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}
+                            >
+                              Preview & Approve
+                            </button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
+                          </>
+                        ) : null}
+                        {!setupBlocked && aggregateState === "approved" ? (
+                          <>
+                            <button
+                              type="button"
+                              className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-60"
+                              onClick={() => void publishContentAsset(item, slot)}
+                              disabled={Boolean(publishDisabledReason)}
+                            >
+                              Publish
+                            </button>
+                            <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setContentAssets((previous) => ({ ...previous, [item.id]: { ...asset, reviewStatus: "ready", approvedAt: null, approvalToken: null } }))}>Unapprove</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
+                          </>
+                        ) : null}
+                        {!setupBlocked && aggregateState === "publishing" ? (
+                          <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" disabled>Publishing…</button>
+                        ) : null}
+                        {!setupBlocked && aggregateState === "published" && asset.publishedUrl ? (
                           <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
                             <a
-                              href={secondaryAction.href}
+                              href={asset.publishedUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-cyan-200 underline"
                               data-testid={`step2-view-post-${missionSlot.slot_id}`}
                             >
-                              {secondaryAction.label}
+                              View Live Post
                             </a>
                           </div>
                         ) : null}
+                        {!setupBlocked && aggregateState === "needs_attention" ? (
+                          <>
+                            {asset.draftStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Retry Draft</button> : null}
+                            {asset.imageStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentImage(item, slot)}>Retry Image</button> : null}
+                            {asset.publishStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void publishContentAsset(item, slot)}>Retry Publish</button> : null}
+                            {(asset.draftHtml || asset.featuredImageUrl) ? <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => setSelectedMapNodeId(missionSlot.slot_id)}>Preview</button> : null}
+                          </>
+                        ) : null}
                       </div>
 
-                      {runtime?.errorMessage || setupBlocked ? (
+                      {runtime?.errorMessage || setupBlocked || publishDisabledReason ? (
                         <div className="mt-2 text-xs text-rose-200" data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>
                           {setupBlocked
                             ? `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`
-                            : translateStep2ErrorMessage(runtime.errorMessage)}
+                            : publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)}
+                        </div>
+                      ) : null}
+
+                      {selectedMapNodeId === missionSlot.slot_id ? (
+                        <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-200" data-testid={`step2-slot-preview-surface-${missionSlot.slot_id}`}>
+                          <div className="text-sm font-semibold text-slate-100">{asset.title || normalizeText(item.title)}</div>
+                          <div className="mt-2 text-slate-300">Listing: {displayName}</div>
+                          <div className="text-slate-300">Listing URL: {displayUrl || "Unavailable"}</div>
+                          <div className="mt-2 text-slate-300">This article should include reciprocal links between the blog post and listing.</div>
+                          {asset.featuredImageUrl ? <img src={asset.featuredImageUrl} alt={asset.title || "Featured image"} className="mt-3 max-h-44 rounded border border-white/10 object-cover" /> : <div className="mt-3 text-slate-400">Featured image is not ready yet.</div>}
+                          <div className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-white/10 bg-slate-900/60 p-2">{asset.draftHtml || "Draft is not ready yet."}</div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)} disabled={asset.draftStatus !== "ready" || asset.imageStatus !== "ready"}>Approve</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
+                            <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
+                            {asset.reviewStatus === "approved" ? (
+                              <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-60" onClick={() => void publishContentAsset(item, slot)} disabled={Boolean(publishDisabledReason)}>Publish</button>
+                            ) : null}
+                          </div>
                         </div>
                       ) : null}
                     </div>
