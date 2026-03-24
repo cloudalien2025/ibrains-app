@@ -12,6 +12,7 @@ import {
   shouldAllowStep2PipelineRun,
   summarizeStep2StatusBuckets,
 } from "@/lib/directoryiq/step2CardActionContract";
+import { deriveStep2DraftAction } from "@/lib/directoryiq/step2SlotWorkflowContract";
 
 describe("step2 card action contract", () => {
   it("hides execution actions for already valid slots", () => {
@@ -313,5 +314,43 @@ describe("step2 card action contract", () => {
       "Article generation requires a listing URL for contextual links. Reconnect or fix listing URL source, then refresh support data."
     );
     expect(isStep2SetupBlockerMessage("authorization failed")).toBe(true);
+  });
+
+  it("uses state-specific draft action semantics for Step 2 slots", () => {
+    expect(
+      deriveStep2DraftAction({
+        aggregate_state: "create_ready",
+        draft_status: "not_started",
+        draft_version: 0,
+        draft_html: "",
+      })
+    ).toEqual({ kind: "write_article", label: "Write Article" });
+
+    expect(
+      deriveStep2DraftAction({
+        aggregate_state: "generating",
+        draft_status: "generating",
+        draft_version: 0,
+        draft_html: "",
+      })
+    ).toEqual({ kind: "none" });
+
+    expect(
+      deriveStep2DraftAction({
+        aggregate_state: "needs_attention",
+        draft_status: "failed",
+        draft_version: 1,
+        draft_html: "<p>stale</p>",
+      })
+    ).toEqual({ kind: "retry_draft", label: "Retry Draft" });
+
+    expect(
+      deriveStep2DraftAction({
+        aggregate_state: "preview_ready",
+        draft_status: "ready",
+        draft_version: 2,
+        draft_html: "<p>ready</p>",
+      })
+    ).toEqual({ kind: "regenerate_draft", label: "Regenerate Draft" });
   });
 });

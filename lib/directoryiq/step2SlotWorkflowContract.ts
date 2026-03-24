@@ -67,6 +67,39 @@ export function step2SummaryCopy(state: Step2AggregateState): string {
   return "Needs attention before this article can be completed.";
 }
 
+export type Step2DraftAction =
+  | { kind: "none" }
+  | { kind: "write_article"; label: "Write Article" }
+  | { kind: "retry_draft"; label: "Retry Draft" }
+  | { kind: "regenerate_draft"; label: "Regenerate Draft" };
+
+export function deriveStep2DraftAction(input: {
+  aggregate_state: Step2AggregateState;
+  draft_status: Step2DraftStatus;
+  draft_version: number;
+  draft_html?: string | null;
+}): Step2DraftAction {
+  const hasUsableDraftArtifact =
+    input.draft_status === "ready" &&
+    (input.draft_version > 0 || (typeof input.draft_html === "string" && input.draft_html.trim().length > 0));
+
+  if (input.aggregate_state === "create_ready") return { kind: "write_article", label: "Write Article" };
+  if (input.aggregate_state === "generating" || input.draft_status === "generating") return { kind: "none" };
+  if (input.draft_status === "failed") return { kind: "retry_draft", label: "Retry Draft" };
+
+  if (
+    hasUsableDraftArtifact &&
+    (input.aggregate_state === "draft_ready" ||
+      input.aggregate_state === "image_ready" ||
+      input.aggregate_state === "preview_ready" ||
+      input.aggregate_state === "approved")
+  ) {
+    return { kind: "regenerate_draft", label: "Regenerate Draft" };
+  }
+
+  return { kind: "none" };
+}
+
 export function derivePublishDisabledReason(input: {
   draftReady: boolean;
   imageReady: boolean;
