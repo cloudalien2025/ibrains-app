@@ -68,4 +68,32 @@ describe("faq html formatter", () => {
     expect(html).toContain("faq-item");
     expect(html).toContain("Related links");
   });
+
+  it("replaces internal-jargon titles with listing-grounded traveler title", () => {
+    const entries: FaqEntry[] = [
+      {
+        question: "Is parking available?",
+        answer_html: "<p>Parking details are listed on the property page.</p>",
+        answer_plaintext: "Parking details are listed on the property page.",
+        source_facts: ["parking"],
+        fact_confidence: "confirmed",
+        intent_cluster: "parking / transit",
+        listing_anchor_terms: ["Alpine Cabin"],
+        local_anchor_terms: ["Vail"],
+        internal_links: ["https://example.com/listings/alpine-cabin"],
+        quality_score: 90,
+      },
+    ];
+
+    const html = formatFaqHtml({
+      context: {
+        ...context,
+        title: "pre selection friction FAQ",
+      },
+      faqEntries: entries,
+    });
+
+    expect(html).toContain("<h1>Alpine Cabin in Vail Traveler FAQ</h1>");
+    expect(html).not.toContain("pre selection friction");
+  });
 });

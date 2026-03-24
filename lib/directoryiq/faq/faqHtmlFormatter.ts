@@ -9,11 +9,23 @@ function htmlEscape(value: string): string {
     .replace(/'/g, "&#39;");
 }
 
+function hasInternalJargonTitle(title: string): boolean {
+  return /(pre[\s_-]*selection|friction|slot|mission control|publish_)/i.test(title);
+}
+
+function buildFaqTitle(context: ListingFaqContext): string {
+  const listingName = context.listing_name.trim() || "Listing";
+  if (context.city.trim()) return `${listingName} in ${context.city.trim()} Traveler FAQ`;
+  if (context.region.trim()) return `${listingName} ${context.region.trim()} Traveler FAQ`;
+  return `${listingName} Traveler FAQ`;
+}
+
 export function formatFaqHtml(input: {
   context: ListingFaqContext;
   faqEntries: FaqEntry[];
 }): string {
-  const title = input.context.title || input.context.listing_name;
+  const rawTitle = (input.context.title || "").trim();
+  const title = rawTitle && !hasInternalJargonTitle(rawTitle) ? rawTitle : buildFaqTitle(input.context);
   const intro =
     "Direct answers to common traveler questions about " +
     input.context.listing_name +
@@ -44,7 +56,7 @@ export function formatFaqHtml(input: {
 
   return [
     "<article class=\"listing-faq-support\">",
-    "  <h1>" + htmlEscape(title) + " FAQ</h1>",
+    "  <h1>" + htmlEscape(title) + "</h1>",
     "  <p>" + htmlEscape(intro) + "</p>",
     ...faqBlocks,
     "  <p>Review policy, logistics, and amenity details with the listing before booking.</p>",

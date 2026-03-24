@@ -49,7 +49,7 @@ function context(): ListingFaqContext {
 }
 
 describe("faq answer composer", () => {
-  it("starts with direct answer and qualifies unknown facts", () => {
+  it("omits FAQ entries when supporting facts are unknown", () => {
     const entries = composeFaqAnswers({
       context: context(),
       selectedQuestions: [
@@ -65,8 +65,27 @@ describe("faq answer composer", () => {
       ],
     });
 
+    expect(entries).toHaveLength(0);
+  });
+
+  it("avoids repetitive yes-style template lead-ins for confirmed facts", () => {
+    const entries = composeFaqAnswers({
+      context: context(),
+      selectedQuestions: [
+        {
+          question_text: "How many guests can stay here?",
+          cluster: "occupancy",
+          listing_specificity_score: 0.8,
+          fact_coverage_score: 0.9,
+          selection_intent_score: 0.9,
+          hallucination_risk_score: 0.1,
+          drop_reason: null,
+        },
+      ],
+    });
+
     expect(entries).toHaveLength(1);
-    expect(entries[0]?.answer_plaintext.toLowerCase()).toContain("verify");
-    expect(entries[0]?.fact_confidence).toBe("unknown");
+    expect(entries[0]?.answer_plaintext.startsWith("Yes.")).toBe(false);
+    expect(entries[0]?.answer_plaintext.toLowerCase()).toContain("for occupancy");
   });
 });

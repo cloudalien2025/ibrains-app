@@ -56,7 +56,7 @@ export function buildListingFaqSupportEngine(input: {
   const publishGate = applyFaqPublishGate({
     context,
     validation,
-    selectedQuestionCount: ranked.selected.length,
+    finalFaqEntryCount: faqEntries.length,
   });
 
   const renderedHtml = formatFaqHtml({
