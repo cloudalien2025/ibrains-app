@@ -366,7 +366,10 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText(
       /Create Ready|Working|Draft Ready|Featured Image Ready|Preview Ready|Approved|Publishing|Published|Needs Attention/
     );
-    await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toBeVisible();
+    await expect(page.getByTestId("step2-research-entrypoint")).toBeVisible();
+    await expect(page.getByTestId("step2-research-this-listing")).toHaveText("Research This Listing");
+    await expect(page.getByText("Start here")).toBeVisible();
+    await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toHaveCount(0);
 
     await page.getByTestId("listing-step-nav-desktop-optimize-listing").click();
     await expect(page.getByRole("heading", { name: "Step 3: Optimize Listing" })).toBeVisible();
@@ -399,6 +402,9 @@ test.describe("DirectoryIQ link operations workflow", () => {
     const status = page.getByTestId(`step2-slot-status-${slotId}`);
     const primaryAction = page.getByTestId(`step2-slot-primary-action-${slotId}`);
 
+    await expect(page.getByTestId("step2-research-entrypoint")).toBeVisible();
+    await page.getByTestId("step2-research-this-listing").click();
+    await expect(page.getByTestId("step2-research-entrypoint")).toHaveCount(0);
     await expect(status).toContainText("Create Ready");
     await expect(primaryAction).toHaveText("Write Article");
     await primaryAction.click();
@@ -427,13 +433,18 @@ test.describe("DirectoryIQ link operations workflow", () => {
     await page.goto(`/directoryiq/listings/${listingId}?step=generate-content`, { waitUntil: "domcontentloaded" });
     await page.getByTestId("listing-step-nav-desktop-generate-content").click();
 
+    await expect(page.getByTestId("step2-research-entrypoint")).toBeVisible();
+    await expect(page.getByTestId("step2-research-this-listing")).toHaveText("Research This Listing");
+    await expect(page.getByTestId("step2-write-next-article")).toHaveCount(0);
+    await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toHaveCount(0);
+    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText("Create Ready");
+
+    await page.getByTestId("step2-research-this-listing").click();
     await expect(page.getByText("OpenAI is not configured for this site.").first()).toBeVisible();
     await expect(page.getByText("Connect it in DirectoryIQ > Signal Sources to generate support articles.").first()).toBeVisible();
     await expect(page.getByTestId("step2-openai-setup-cta")).toBeVisible();
     await expect(page.getByTestId("step2-slot-openai-setup-cta-publish_comparison_decision_post")).toBeVisible();
-    await expect(page.getByTestId("step2-write-next-article")).toHaveCount(0);
     await expect(page.getByTestId("step2-slot-primary-action-publish_comparison_decision_post")).toHaveCount(0);
-    await expect(page.getByTestId("step2-slot-status-publish_comparison_decision_post")).toContainText("Create Ready");
   });
 
   test("keeps Step 1 recommendation cards mobile-safe for long Source/Target text", async ({ page }) => {
