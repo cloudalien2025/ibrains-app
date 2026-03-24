@@ -2557,13 +2557,50 @@ export default function ListingOptimizationClient({
       setStep2ResearchRequestedState("researching");
       const contracts = step2MissionSlots.map((missionSlot, index) => {
         const contractInput = buildStep2DraftContractInput(missionSlot);
+        const listingUrl = firstNonEmptyValue(
+          contractInput.missionPlanSlot.listing_url,
+          step2MissionPlan.listing_url,
+          support?.listing.canonicalUrl,
+          listing?.listing.listing_url,
+          displayUrl
+        );
+        const fallbackFocusKeyword =
+          firstNonEmptyValue(
+            contractInput.researchArtifact.focus_keyword,
+            contractInput.supportBrief.focus_keyword,
+            missionSlot.recommended_focus_keyword,
+            `${missionSlot.slot_label} ${step2MissionPlan.listing_title}`,
+            step2MissionPlan.listing_title
+          ) ?? "listing support guide";
+        const minimalResearchArtifact: Step2SupportResearchArtifact = {
+          ...contractInput.researchArtifact,
+          focus_keyword: fallbackFocusKeyword,
+          top_results:
+            Array.isArray(contractInput.researchArtifact.top_results) && contractInput.researchArtifact.top_results.length > 0
+              ? contractInput.researchArtifact.top_results
+              : [
+                  {
+                    title: `${step2MissionPlan.listing_title} ${missionSlot.slot_label}`.trim(),
+                    url:
+                      listingUrl ??
+                      `https://research.local/${slugify(fallbackFocusKeyword)}/${index + 1}`,
+                    rank: 1,
+                    content_type: "informational_guide",
+                  },
+                ],
+        };
         return {
           slot: index + 1,
           step2_contract: {
-            mission_plan_slot: contractInput.missionPlanSlot,
+            mission_plan_slot: {
+              ...contractInput.missionPlanSlot,
+              listing_url: listingUrl,
+            },
             support_brief: contractInput.supportBrief,
             seo_package: contractInput.seoPackage,
-            research_artifact: contractInput.researchArtifact,
+            research_artifact: hasUsableStep2ResearchArtifact(contractInput.researchArtifact)
+              ? contractInput.researchArtifact
+              : minimalResearchArtifact,
           },
         };
       });
