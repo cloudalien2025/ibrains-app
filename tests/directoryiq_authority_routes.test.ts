@@ -362,6 +362,14 @@ describe("directoryiq authority routes", () => {
     expect(status.error?.message).toBe("FAQ draft blocked by quality gate.");
     expect(status.error?.details).toContain("not enough grounded facts");
     expect(status.error?.codeFamily).toBe("internal");
+    expect(markAuthorityDraftFailure).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "site-1:321",
+      1,
+      expect.objectContaining({
+        code: "FAQ_PUBLISH_GATE_BLOCKED",
+      })
+    );
   });
 
   it("accepts slot 5 for draft generation and persistence", async () => {
@@ -537,6 +545,14 @@ describe("directoryiq authority routes", () => {
     expect(status.status).toBe("failed");
     expect(status.error?.code).toBe("DRAFT_VALIDATION_FAILED");
     expect(String(status.error?.message ?? "")).toContain("Draft failed governance validation");
+    expect(markAuthorityDraftFailure).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "site-1:321",
+      1,
+      expect.objectContaining({
+        code: "DRAFT_VALIDATION_FAILED",
+      })
+    );
   });
 
   it("uses listing URL fallback fields from listing raw_json for draft generation", async () => {
@@ -708,6 +724,14 @@ describe("directoryiq authority routes", () => {
     expect(status.status).toBe("failed");
     expect(status.error?.code).toBe("BAD_REQUEST");
     expect(String(status.error?.message ?? "")).toContain("Listing URL is required");
+    expect(markAuthorityDraftFailure).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "site-1:321",
+      1,
+      expect.objectContaining({
+        code: "BAD_REQUEST",
+      })
+    );
   });
 
   it("deterministically enforces contextual listing link before governance validation when draft omits the URL", async () => {

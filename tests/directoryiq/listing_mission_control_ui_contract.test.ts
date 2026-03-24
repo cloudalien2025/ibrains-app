@@ -132,10 +132,21 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("previewPanelGate.approveVisible ? (");
     expect(source).toContain("previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : \"Draft is not ready yet.\"");
     expect(source).toContain("previewPanelGate.imageReady && asset.featuredImageUrl ? (");
+    expect(source).toContain("const existingAsset = previous[item.id] ?? current;");
+    expect(source).toContain("draftVersion: existingAsset.draftVersion + 1,");
+    expect(source).toContain("reviewStatus: existingAsset.imageStatus === \"ready\" ? \"ready\" : \"not_ready\",");
+    expect(source).toContain("imageVersion: existingAsset.imageVersion + 1,");
+    expect(source).toContain("reviewStatus: existingAsset.draftStatus === \"ready\" ? \"ready\" : \"not_ready\",");
     expect(source).not.toContain("publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
+  });
+
+  it("keeps slot presentation deterministic with numbered titles and five-slot ceiling", () => {
+    expect(source).toContain("(reinforcementPlan?.items ?? []).slice(0, 5).map((item, index) => {");
+    expect(source).not.toContain("(reinforcementPlan?.items ?? []).slice(0, 4)");
+    expect(source).toContain("{`${slot}. ${normalizeText(item.title)}`}");
   });
 
   it("keeps Write Article staged without automatic publish side effects", () => {
