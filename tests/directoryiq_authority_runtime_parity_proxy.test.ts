@@ -10,8 +10,16 @@ const proxyDirectoryIqRequest = vi.fn(async (_req: NextRequest, upstreamPath: st
 const getDirectoryIqOpenAiKey = vi.fn(async () => "sk-test");
 const upsertAuthorityPostDraft = vi.fn(async () => {});
 const saveAuthorityImage = vi.fn(async () => {});
+const researchReadyMetadata = {
+  step2_contract: {
+    research_artifact: {
+      focus_keyword: "fixture keyword",
+      top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+    },
+  },
+};
 const getAuthorityPostBySlot = vi.fn(async () => ({
-  metadata_json: null,
+  metadata_json: researchReadyMetadata,
 }));
 const readPersistedStep2State = vi.fn(() => ({
   draft_status: "not_started",

@@ -54,6 +54,13 @@ import {
   type Step2PublishStatus,
   type Step2ReviewStatus,
 } from "@/lib/directoryiq/step2SlotWorkflowContract";
+import {
+  STEP2_RESEARCH_REQUIRED_CODE,
+  STEP2_RESEARCH_REQUIRED_MESSAGE,
+  deriveStep2ResearchState,
+  isStep2ResearchReady,
+  type Step2ResearchState,
+} from "@/lib/directoryiq/step2ResearchGateContract";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -879,8 +886,12 @@ const OPENAI_SETUP_BLOCKER_TITLE = "OpenAI is not configured for this site.";
 const OPENAI_SETUP_BLOCKER_BODY = "Connect it in DirectoryIQ > Signal Sources to generate support articles.";
 const STEP2_LISTING_URL_BLOCKER =
   "Article generation requires a listing URL for contextual links. Reconnect or fix listing URL source, then refresh support data.";
+const STEP2_RESEARCH_EXPLAINER = "Build the intelligence layer that makes this listing more likely to be selected by AI.";
 
 function translateStep2ErrorMessage(raw: string | null | undefined, code?: string | null | undefined): string {
+  if (normalizeText(code).toUpperCase() === STEP2_RESEARCH_REQUIRED_CODE) {
+    return STEP2_RESEARCH_REQUIRED_MESSAGE;
+  }
   return deriveSafeStep2BlockerMessage({ message: raw, code });
 }
 
@@ -1003,6 +1014,7 @@ export default function ListingOptimizationClient({
   const [linkOperations, setLinkOperations] = useState<LinkOperation[]>([]);
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
   const [step2Runtime, setStep2Runtime] = useState<Record<string, Step2SlotRuntime>>({});
+  const [step2ResearchRequestedState, setStep2ResearchRequestedState] = useState<Step2ResearchState>("not_started");
 
   useEffect(() => {
     const queryStep = normalizeMissionStepQuery(stepParam);
@@ -1899,6 +1911,30 @@ export default function ListingOptimizationClient({
       } as Record<Step2AggregateState, number>
     );
   }, [step2SlotViewModels]);
+  const step2HasUsableResearch = useMemo(() => {
+    if (Object.values(step2Runtime).some((runtime) => Boolean(runtime.researchArtifact))) return true;
+    return step2MissionSlots.some((missionSlot, index) => {
+      const item = (reinforcementPlan?.items ?? []).find((candidate) => candidate.id === missionSlot.slot_id);
+      if (!item) return false;
+      const slot = index + 1;
+      const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
+      return (
+        asset.draftStatus !== "not_started" ||
+        asset.imageStatus !== "not_started" ||
+        asset.reviewStatus !== "not_ready" ||
+        asset.publishStatus !== "not_started"
+      );
+    });
+  }, [contentAssets, reinforcementPlan?.items, step2MissionSlots, step2Runtime]);
+  const step2ResearchState = useMemo(
+    () =>
+      deriveStep2ResearchState({
+        requestedState: step2ResearchRequestedState,
+        hasUsableResearchArtifact: step2HasUsableResearch,
+      }),
+    [step2HasUsableResearch, step2ResearchRequestedState]
+  );
+  const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
   const step2SectionCta = useMemo(() => {
     const candidate = step2SlotViewModels.find((entry) => entry.aggregateState === "create_ready" || entry.aggregateState === "needs_attention");
     return { candidate };
@@ -2469,6 +2505,48 @@ export default function ListingOptimizationClient({
     });
   }
 
+  async function startStep2ListingResearch() {
+    if (step2ResearchState === "queued" || step2ResearchState === "researching") return;
+    if (!step2MissionSlots.length) {
+      setStep2ResearchRequestedState("failed");
+      setError({ message: "Listing research is unavailable until Step 2 mission slots are loaded." });
+      return;
+    }
+
+    setError(null);
+    setNotice(null);
+    setStep2ResearchRequestedState("queued");
+
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      setStep2ResearchRequestedState("researching");
+
+      setStep2Runtime((previous) => {
+        const next = { ...previous };
+        for (const missionSlot of step2MissionSlots) {
+          const current = next[missionSlot.slot_id];
+          if (!current) continue;
+          const contractInput = buildStep2DraftContractInput(missionSlot);
+          next[missionSlot.slot_id] = {
+            ...current,
+            researchArtifact: contractInput.researchArtifact,
+            supportBrief: contractInput.supportBrief,
+            seoPackage: contractInput.seoPackage,
+            metadataReady: true,
+            errorMessage: null,
+          };
+        }
+        return next;
+      });
+
+      setStep2ResearchRequestedState("ready");
+      setNotice("Listing research is complete. Support article actions are now available.");
+    } catch (error) {
+      setStep2ResearchRequestedState("failed");
+      setError({ message: stringifyErrorMessage(error, "Failed to start listing research.") });
+    }
+  }
+
   async function executeStep2SlotPipeline(input: {
     missionSlot: Step2MissionPlanSlot;
     item: BlogReinforcementPlanItem;
@@ -2479,6 +2557,10 @@ export default function ListingOptimizationClient({
     if (!runtime) return;
 
     const actionInput = step2ActionInput(input.missionSlot, runtime);
+    if (!step2ResearchReady) {
+      setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });
+      return;
+    }
     if (step2OpenAiSetupBlocked) {
       const blockerMessage = `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`;
       setError({ message: blockerMessage });
@@ -3122,22 +3204,42 @@ export default function ListingOptimizationClient({
                   </div>
                 </div>
 
-                <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
-                  {step2OpenAiSetupBlocked ? (
-                    <>
-                      <Link
-                        href="/directoryiq/signal-sources?connector=openai"
-                        className="inline-flex rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-medium text-amber-100"
-                        data-testid="step2-openai-setup-cta"
+                {!step2ResearchReady ? (
+                  <div className="mt-3 rounded-xl border border-cyan-300/35 bg-cyan-400/10 p-4" data-testid="step2-research-entrypoint">
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100">Start here</div>
+                    <div className="mt-1 text-sm text-slate-200">{STEP2_RESEARCH_EXPLAINER}</div>
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                      <NeonButton
+                        onClick={() => void startStep2ListingResearch()}
+                        disabled={step2ResearchState === "queued" || step2ResearchState === "researching"}
+                        data-testid="step2-research-this-listing"
                       >
-                        Connect OpenAI in Signal Sources
-                      </Link>
-                      <span className="text-xs text-amber-100/90">
-                        {OPENAI_SETUP_BLOCKER_TITLE} {OPENAI_SETUP_BLOCKER_BODY}
-                      </span>
-                    </>
-                  ) : step2SectionCta.candidate ? (
-                    <>
+                        Research This Listing
+                      </NeonButton>
+                      {step2ResearchState === "queued" || step2ResearchState === "researching" ? (
+                        <span className="text-xs text-cyan-100">Research in progress…</span>
+                      ) : null}
+                      {step2ResearchState === "failed" ? (
+                        <span className="text-xs text-rose-200">{STEP2_RESEARCH_REQUIRED_MESSAGE}</span>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap items-center gap-2" data-testid="step2-next-article-cta">
+                    {step2OpenAiSetupBlocked ? (
+                      <>
+                        <Link
+                          href="/directoryiq/signal-sources?connector=openai"
+                          className="inline-flex rounded-xl border border-amber-300/40 bg-amber-400/15 px-4 py-2 text-sm font-medium text-amber-100"
+                          data-testid="step2-openai-setup-cta"
+                        >
+                          Connect OpenAI in Signal Sources
+                        </Link>
+                        <span className="text-xs text-amber-100/90">
+                          {OPENAI_SETUP_BLOCKER_TITLE} {OPENAI_SETUP_BLOCKER_BODY}
+                        </span>
+                      </>
+                    ) : step2SectionCta.candidate ? (
                       <NeonButton
                         onClick={() => {
                           if (!step2SectionCta.candidate) return;
@@ -3152,13 +3254,11 @@ export default function ListingOptimizationClient({
                       >
                         Write Next Article
                       </NeonButton>
-                    </>
-                  ) : (
-                    <>
+                    ) : (
                       <span className="text-xs text-slate-400">All articles are currently in review, approved, or published.</span>
-                    </>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
                   {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, previewPanelGate, publishDisabledReason, setupBlocked, asset, draftAction }) => (
@@ -3189,7 +3289,17 @@ export default function ListingOptimizationClient({
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
-                        {setupBlocked ? (
+                        {!step2ResearchReady ? (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-slate-300/25 bg-slate-500/10 px-3 py-1.5 text-xs font-medium text-slate-300"
+                            disabled
+                            data-testid={`step2-slot-locked-action-${missionSlot.slot_id}`}
+                          >
+                            Research required
+                          </button>
+                        ) : null}
+                        {step2ResearchReady && setupBlocked ? (
                           <Link
                             href="/directoryiq/signal-sources?connector=openai"
                             className="inline-flex rounded-lg border border-amber-300/35 bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-100"
@@ -3198,7 +3308,7 @@ export default function ListingOptimizationClient({
                             Connect OpenAI
                           </Link>
                         ) : null}
-                        {!setupBlocked && draftAction.kind === "write_article" ? (
+                        {step2ResearchReady && !setupBlocked && draftAction.kind === "write_article" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
@@ -3208,7 +3318,7 @@ export default function ListingOptimizationClient({
                             {draftAction.label}
                           </button>
                         ) : null}
-                        {!setupBlocked && aggregateState === "draft_ready" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "draft_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3228,7 +3338,7 @@ export default function ListingOptimizationClient({
                             ) : null}
                           </>
                         ) : null}
-                        {!setupBlocked && aggregateState === "image_ready" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "image_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3246,7 +3356,7 @@ export default function ListingOptimizationClient({
                             </button>
                           </>
                         ) : null}
-                        {!setupBlocked && aggregateState === "preview_ready" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "preview_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3261,7 +3371,7 @@ export default function ListingOptimizationClient({
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
-                        {!setupBlocked && aggregateState === "approved" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "approved" ? (
                           <>
                             <button
                               type="button"
@@ -3279,10 +3389,10 @@ export default function ListingOptimizationClient({
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
-                        {!setupBlocked && aggregateState === "publishing" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "publishing" ? (
                           <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" disabled>Publishing…</button>
                         ) : null}
-                        {!setupBlocked && aggregateState === "published" && asset.publishedUrl ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "published" && asset.publishedUrl ? (
                           <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
                             <a
                               href={asset.publishedUrl}
@@ -3295,7 +3405,7 @@ export default function ListingOptimizationClient({
                             </a>
                           </div>
                         ) : null}
-                        {!setupBlocked && aggregateState === "needs_attention" ? (
+                        {step2ResearchReady && !setupBlocked && aggregateState === "needs_attention" ? (
                           <>
                             {draftAction.kind === "retry_draft" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>{draftAction.label}</button> : null}
                             {asset.imageStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentImage(item, slot)}>Retry Image</button> : null}
@@ -3312,8 +3422,13 @@ export default function ListingOptimizationClient({
                             : helperMessage}
                         </div>
                       ) : null}
+                      {!step2ResearchReady ? (
+                        <div className="mt-2 text-xs text-slate-300" data-testid={`step2-slot-research-locked-${missionSlot.slot_id}`}>
+                          {STEP2_RESEARCH_REQUIRED_MESSAGE}
+                        </div>
+                      ) : null}
 
-                      {selectedMapNodeId === missionSlot.slot_id ? (
+                      {step2ResearchReady && selectedMapNodeId === missionSlot.slot_id ? (
                         <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-200" data-testid={`step2-slot-preview-surface-${missionSlot.slot_id}`}>
                           <div className="text-sm font-semibold text-slate-100">{asset.title || normalizeText(item.title)}</div>
                           <div className="mt-2 text-slate-300">Listing: {displayName}</div>
