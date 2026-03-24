@@ -5,10 +5,20 @@ function asString(value: unknown): string {
 }
 
 function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/[,\n|]/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
   return value
-    .map((item) => (typeof item === "string" ? item.trim() : ""))
-    .filter(Boolean);
+    ? [String(value).trim()].filter(Boolean)
+    : [];
 }
 
 function pickFirstString(record: Record<string, unknown>, keys: string[]): string {
@@ -32,6 +42,49 @@ function normalizeUrl(value: string): string {
   }
 }
 
+function archetypeFactKeys(archetype: ListingArchetype): string[] {
+  const common = ["location_city", "location_region", "location_country", "category"];
+  if (archetype === "vacation_rental") {
+    return [
+      ...common,
+      "occupancy",
+      "bedrooms",
+      "bathrooms",
+      "pet_policy",
+      "parking",
+      "wifi",
+      "kitchen",
+      "pool",
+      "hot_tub",
+      "fireplace",
+      "checkin_info",
+      "checkout_info",
+      "cancellation_policy",
+      "family_friendly",
+    ];
+  }
+  if (archetype === "hotel") {
+    return [
+      ...common,
+      "amenities",
+      "parking",
+      "checkin_info",
+      "checkout_info",
+      "cancellation_policy",
+      "occupancy",
+      "bedrooms",
+      "bathrooms",
+    ];
+  }
+  if (archetype === "restaurant") {
+    return [...common, "amenities", "parking", "checkin_info"];
+  }
+  if (archetype === "local_service" || archetype === "other_business") {
+    return [...common, "cancellation_policy", "checkin_info"];
+  }
+  return [...common, "amenities", "checkin_info", "cancellation_policy"];
+}
+
 export function resolveListingFacts(input: {
   listingId: string;
   siteId: string | null;
@@ -48,9 +101,9 @@ export function resolveListingFacts(input: {
   const category = pickFirstString(raw, ["group_category", "category", "category_name", "listing_category"]);
   const subcategory = pickFirstString(raw, ["subcategory", "listing_subcategory", "sub_category"]);
   const city = pickFirstString(raw, ["city", "post_location_city", "location_city", "post_location"]);
-  const region = pickFirstString(raw, ["state", "region", "location_region", "province"]);
+  const region = pickFirstString(raw, ["state", "state_sn", "state_code", "region", "location_region", "province"]);
   const neighborhood = pickFirstString(raw, ["neighborhood", "district", "area"]);
-  const country = pickFirstString(raw, ["country", "country_code"]);
+  const country = pickFirstString(raw, ["country", "country_sn", "country_code"]);
 
   const amenities = Array.from(
     new Set([
@@ -58,12 +111,13 @@ export function resolveListingFacts(input: {
       ...asStringArray(raw.features),
       ...asStringArray(raw.tags),
       ...asStringArray(raw.property_amenities),
+      ...asStringArray(raw.post_tags),
     ])
   );
 
-  const occupancy = pickFirstString(raw, ["occupancy", "max_guests", "guest_capacity"]);
-  const bedrooms = pickFirstString(raw, ["bedrooms", "beds"]);
-  const bathrooms = pickFirstString(raw, ["bathrooms", "baths"]);
+  const occupancy = pickFirstString(raw, ["occupancy", "max_guests", "guest_capacity", "sleeps", "guests"]);
+  const bedrooms = pickFirstString(raw, ["bedrooms", "beds", "property_beds"]);
+  const bathrooms = pickFirstString(raw, ["bathrooms", "baths", "property_baths"]);
   const petPolicy = pickFirstString(raw, ["pet_policy", "pets", "pet_friendly"]);
   const parking = pickFirstString(raw, ["parking", "parking_info"]);
   const wifi = pickFirstString(raw, ["wifi", "internet"]);
@@ -110,7 +164,12 @@ export function resolveListingFacts(input: {
     ])
   ).filter(Boolean);
 
-  const factConfidenceMap: Record<string, FactConfidence> = {
+  const rawFactConfidenceMap: Record<string, FactConfidence> = {
+    location_city: factValue(city),
+    location_region: factValue(region),
+    location_country: factValue(country),
+    category: factValue(category),
+    amenities: amenities.length > 0 ? "confirmed" : "unknown",
     occupancy: factValue(occupancy),
     bedrooms: factValue(bedrooms),
     bathrooms: factValue(bathrooms),
@@ -130,8 +189,15 @@ export function resolveListingFacts(input: {
   const inferredFacts: string[] = [];
   if (!familyFriendly && (Number(bedrooms) >= 2 || childFriendlySignals.length > 0)) {
     inferredFacts.push("Likely suitable for families based on bedroom count or child-friendly signals.");
-    factConfidenceMap.family_friendly = "inferred";
+    rawFactConfidenceMap.family_friendly = "inferred";
   }
+
+  const factKeys = archetypeFactKeys(input.listingArchetype);
+  const factConfidenceMap = factKeys.reduce<Record<string, FactConfidence>>((acc, key) => {
+    const confidence = rawFactConfidenceMap[key];
+    acc[key] = confidence ?? "unknown";
+    return acc;
+  }, {});
 
   const knownFacts = Object.entries(factConfidenceMap)
     .filter(([, confidence]) => confidence === "confirmed")

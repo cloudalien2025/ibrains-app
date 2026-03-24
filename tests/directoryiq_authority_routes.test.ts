@@ -319,6 +319,64 @@ describe("directoryiq authority routes", () => {
     );
   });
 
+  it("persists FAQ draft for hotel-shaped BD listing aliases", async () => {
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
+        title: "Cedar at Streamside",
+        url: "https://example.com/listings/cedar-at-streamside",
+        raw_json: {
+          group_category: "Hotels",
+          city: "2244 S Frontage Rd W Cedar Building Vail, CO 81657",
+          state_sn: "CO",
+          country_sn: "US",
+          post_tags: "hotel, mountain, streamside",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/142/authority/2/draft", {
+      method: "POST",
+      body: JSON.stringify({
+        title: "Booking FAQ for Cedar at Streamside",
+        focus_topic: "faq booking questions",
+        type: "contextual_guide",
+        step2_contract: {
+          mission_plan_slot: {
+            slot_id: "publish_faq_support_post",
+          },
+        },
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "142", slot: "2" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(markAuthorityDraftFailure).not.toHaveBeenCalledWith(
+      expect.any(String),
+      "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
+      2,
+      expect.objectContaining({ code: "FAQ_PUBLISH_GATE_BLOCKED" })
+    );
+    expect(upsertAuthorityPostDraft).toHaveBeenCalledWith(
+      "00000000-0000-4000-8000-000000000001",
+      "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
+      2,
+      expect.objectContaining({
+        metadata: expect.objectContaining({
+          faq_generation: expect.any(Object),
+        }),
+      })
+    );
+  });
+
   it("returns FAQ_PUBLISH_GATE_BLOCKED when FAQ quality gate blocks draft", async () => {
     getListingEvaluation.mockResolvedValueOnce({
       listing: {

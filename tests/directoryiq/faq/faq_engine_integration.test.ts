@@ -53,4 +53,45 @@ describe("faq engine integration", () => {
     expect(result.context.listing_archetype === "local_service" || result.context.listing_archetype === "other_business").toBe(true);
     expect(result.selected_questions.length).toBeGreaterThanOrEqual(6);
   });
+
+  it("passes publish gate for hotel-shaped BD fixture using grounded aliases", () => {
+    const result = buildListingFaqSupportEngine({
+      listingId: "site-1:142",
+      siteId: "site-1",
+      listingName: "Cedar at Streamside",
+      listingType: "Hotels",
+      canonicalUrl: "https://example.com/listings/cedar-at-streamside",
+      title: "Cedar at Streamside",
+      description: "",
+      raw: {
+        group_category: "Hotels",
+        city: "2244 S Frontage Rd W Cedar Building Vail, CO 81657",
+        state_sn: "CO",
+        country_sn: "US",
+        post_tags: "hotel, mountain, streamside",
+      },
+    });
+
+    expect(result.context.listing_archetype).toBe("hotel");
+    expect(result.publish_gate_result.allowPublish).toBe(true);
+    expect(result.selected_questions.every((item) => item.cluster !== "occupancy")).toBe(true);
+  });
+
+  it("keeps truly sparse listing payloads blocked by publish gate", () => {
+    const result = buildListingFaqSupportEngine({
+      listingId: "site-1:sparse",
+      siteId: "site-1",
+      listingName: "Sparse Listing",
+      listingType: "Hotels",
+      canonicalUrl: "https://example.com/listings/sparse",
+      title: "Sparse Listing",
+      description: "",
+      raw: {
+        group_category: "Hotels",
+      },
+    });
+
+    expect(result.publish_gate_result.allowPublish).toBe(false);
+    expect(result.publish_gate_result.reasons).toContain("not enough grounded facts");
+  });
 });
