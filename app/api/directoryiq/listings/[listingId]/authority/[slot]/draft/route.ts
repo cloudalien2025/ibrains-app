@@ -33,6 +33,95 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function asStringArray(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((entry) => asString(entry)).filter(Boolean);
+  }
+  return [];
+}
+
+function normalizeFaqSerpPosition(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value) && value > 0) return Math.floor(value);
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed > 0) return Math.floor(parsed);
+  }
+  return fallback;
+}
+
+function buildFaqSerpDossierFromArtifact(artifact: Record<string, unknown>): Record<string, unknown> {
+  const topResultsRaw = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+  const serpResults = topResultsRaw
+    .map((entry, index) => {
+      const row = asRecord(entry);
+      const title = asString(row.title);
+      const link = asString(row.url);
+      if (!title && !link) return null;
+      return {
+        title,
+        link,
+        snippet: "",
+        position: normalizeFaqSerpPosition(row.rank, index + 1),
+      };
+    })
+    .filter((entry): entry is { title: string; link: string; snippet: string; position: number } => entry !== null);
+
+  return {
+    serp_summary: {
+      common_topics: asStringArray(artifact.common_headings),
+      common_phrases: asStringArray(artifact.common_title_patterns),
+      faq_patterns: asStringArray(artifact.common_user_questions),
+    },
+    entities: {
+      amenities: asStringArray(artifact.common_entities),
+      location: asStringArray(artifact.common_locations),
+      intent: asStringArray(artifact.common_decision_factors),
+    },
+    evidence_gaps: asStringArray(artifact.content_gaps_opportunities),
+    serp_results: serpResults,
+  };
+}
+
+function resolveFaqEngineRawInput(input: {
+  listingRaw: Record<string, unknown>;
+  requestStep2Contract: Record<string, unknown>;
+  persistedStep2Contract: Record<string, unknown>;
+}): Record<string, unknown> {
+  const requestDossier = asRecord(input.requestStep2Contract.research_dossier);
+  if (Object.keys(requestDossier).length > 0) {
+    return {
+      ...input.listingRaw,
+      research_dossier: requestDossier,
+    };
+  }
+
+  const persistedDossier = asRecord(input.persistedStep2Contract.research_dossier);
+  if (Object.keys(persistedDossier).length > 0) {
+    return {
+      ...input.listingRaw,
+      research_dossier: persistedDossier,
+    };
+  }
+
+  const requestArtifact = asRecord(input.requestStep2Contract.research_artifact);
+  if (Object.keys(requestArtifact).length > 0) {
+    return {
+      ...input.listingRaw,
+      research_dossier: buildFaqSerpDossierFromArtifact(requestArtifact),
+    };
+  }
+
+  const persistedArtifact = asRecord(input.persistedStep2Contract.research_artifact);
+  if (Object.keys(persistedArtifact).length > 0) {
+    return {
+      ...input.listingRaw,
+      research_dossier: buildFaqSerpDossierFromArtifact(persistedArtifact),
+    };
+  }
+
+  return input.listingRaw;
+}
+
 function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string {
   return (
     asString(raw.url) ||
@@ -184,7 +273,9 @@ export async function POST(
       const raw = (listing.raw_json ?? {}) as Record<string, unknown>;
       const listingSourceId = listing.source_id;
       const existingPost = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
-      const persistedResearchArtifact = asRecord(asRecord(existingPost?.metadata_json).step2_contract).research_artifact;
+      const persistedStep2Contract = asRecord(asRecord(existingPost?.metadata_json).step2_contract);
+      const requestStep2Contract = asRecord(body.step2_contract);
+      const persistedResearchArtifact = persistedStep2Contract.research_artifact;
       const requestResearchArtifact = body.step2_contract?.research_artifact;
       const hasUsableResearch =
         hasUsableStep2ResearchArtifact(requestResearchArtifact) ||
@@ -276,6 +367,11 @@ export async function POST(
 
       if (useFaqEngine) {
         const listingType = asString(raw.listing_type) || asString(raw.category) || postType;
+        const faqRaw = resolveFaqEngineRawInput({
+          listingRaw: raw,
+          requestStep2Contract,
+          persistedStep2Contract,
+        });
         const faqResult = buildListingFaqSupportEngine({
           listingId: listingSourceId,
           siteId: resolved.siteId ?? null,
@@ -284,7 +380,7 @@ export async function POST(
           canonicalUrl: listingUrl,
           title: title || listingName,
           description: listingDescription,
-          raw,
+          raw: faqRaw,
         });
 
         if (!faqResult.publish_gate_result.allowPublish) {

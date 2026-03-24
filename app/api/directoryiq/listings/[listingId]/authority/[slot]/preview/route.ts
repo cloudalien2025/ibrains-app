@@ -66,6 +66,10 @@ export async function POST(
     const body = (await req.json().catch(() => ({}))) as { action?: string };
     const action = typeof body.action === "string" ? body.action.trim().toLowerCase() : "preview";
 
+    if (action === "preview" && step2State.draft_status !== "ready") {
+      throw new AuthorityRouteError(409, "DRAFT_NOT_READY", "Draft is not ready. Regenerate the draft before preview.");
+    }
+
     const evaluation = detail.evaluation;
     if (!evaluation) {
       throw new AuthorityRouteError(404, "NOT_FOUND", "Listing not found.");
