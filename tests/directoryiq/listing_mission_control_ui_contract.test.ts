@@ -96,6 +96,13 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("Needs Attention");
   });
 
+  it("keeps Step 2 research gating parity across hydration", () => {
+    expect(source).toContain("hasUsableStep2ResearchArtifact(runtime.researchArtifact)");
+    expect(source).toContain("const step2HasUsableResearch = useMemo(");
+    expect(source).toContain("Object.values(step2Runtime).some");
+    expect(source).not.toContain("asset.draftStatus !== \"not_started\"");
+  });
+
   it("keeps publish layer scoped to Step 2 with required CTA set", () => {
     expect(source).toContain("{activeStepId === \"create-support\" ? (");
     expect(source).toContain("data-testid=\"publish-execution-layer\"");
