@@ -42,6 +42,7 @@ import {
 } from "@/lib/directoryiq/step2CardActionContract";
 import {
   derivePublishDisabledReason,
+  deriveStep2SlotHelperMessage,
   deriveStep2AggregateState,
   step2SummaryCopy,
   type Step2AggregateState,
@@ -1843,6 +1844,11 @@ export default function ListingOptimizationClient({
         });
         const setupBlocked = step2OpenAiSetupBlocked && aggregateState === "create_ready";
         const summary = step2SummaryCopy(aggregateState);
+        const helperMessage = deriveStep2SlotHelperMessage({
+          aggregate_state: aggregateState,
+          runtime_error_message: runtime?.errorMessage ?? null,
+          publish_disabled_reason: publishDisabledReason,
+        });
         return {
           missionSlot,
           item,
@@ -1852,6 +1858,7 @@ export default function ListingOptimizationClient({
           runtime,
           aggregateState,
           summary,
+          helperMessage,
           publishDisabledReason,
           setupBlocked,
         };
@@ -3093,7 +3100,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, runtime, aggregateState, summary, publishDisabledReason, setupBlocked, asset }) => (
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, publishDisabledReason, setupBlocked, asset }) => (
                     <div
                       key={item.id}
                       className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
@@ -3231,11 +3238,11 @@ export default function ListingOptimizationClient({
                         ) : null}
                       </div>
 
-                      {runtime?.errorMessage || setupBlocked || publishDisabledReason ? (
+                      {setupBlocked || helperMessage ? (
                         <div className="mt-2 text-xs text-rose-200" data-testid={`step2-slot-needs-review-${missionSlot.slot_id}`}>
                           {setupBlocked
                             ? `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}`
-                            : publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)}
+                            : helperMessage}
                         </div>
                       ) : null}
 

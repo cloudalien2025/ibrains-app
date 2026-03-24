@@ -122,7 +122,10 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2AggregateState");
     expect(source).toContain("derivePublishDisabledReason");
+    expect(source).toContain("deriveStep2SlotHelperMessage");
     expect(source).toContain("step2SummaryCopy");
+    expect(source).toContain("aggregate_state: aggregateState");
+    expect(source).not.toContain("publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
