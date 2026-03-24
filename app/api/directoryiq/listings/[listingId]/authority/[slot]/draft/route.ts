@@ -91,9 +91,6 @@ function isFaqSupportIntent(input: {
   const slotId = asString(input.step2Contract?.mission_plan_slot?.slot_id).toLowerCase();
   const slotLabel = asString(input.step2Contract?.mission_plan_slot?.slot_label).toLowerCase();
   const supportBriefType = asString(input.step2Contract?.support_brief?.post_type).toLowerCase();
-  const deterministicFaqSlotIds = new Set(["publish_faq_support_post"]);
-
-  if (deterministicFaqSlotIds.has(slotId)) return true;
 
   if (slotId.includes("faq")) return true;
   if (slotLabel.includes("faq")) return true;
@@ -266,12 +263,16 @@ export async function POST(
 
       let generatedHtml = "";
       let faqMetadata: Record<string, unknown> | null = null;
-      const useFaqEngine = isFaqSupportIntent({
-        postType,
-        focusTopic,
-        title,
-        step2Contract: body.step2_contract,
-      });
+      const slotId = asString(body.step2_contract?.mission_plan_slot?.slot_id).toLowerCase();
+      const useFaqEngine =
+        slotId === "publish_faq_support_post"
+          ? true
+          : isFaqSupportIntent({
+              postType,
+              focusTopic,
+              title,
+              step2Contract: body.step2_contract,
+            });
 
       if (useFaqEngine) {
         const listingType = asString(raw.listing_type) || asString(raw.category) || postType;
