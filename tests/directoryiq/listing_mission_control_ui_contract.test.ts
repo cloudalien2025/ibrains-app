@@ -117,6 +117,7 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("Article generation requires a listing URL for contextual links.");
     expect(source).toContain("const resolvedListingUrlForDraft = firstNonEmptyValue(");
     expect(source).toContain("if (!resolvedListingUrlForDraft) {");
+    expect(source).toContain("setError({ message: STEP2_LISTING_URL_BLOCKER });");
     expect(source).toContain("const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));");
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
@@ -146,6 +147,15 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("asset.draftStatus === \"failed\" ? <button");
     expect(source).not.toContain("step2_writer=1");
     expect(source).not.toContain("data-testid={`step2-slot-generate-draft-${missionSlot.slot_id}`}");
+  });
+
+  it("ensures Retry Draft path has observable failure feedback for thrown request errors", () => {
+    expect(source).toContain("async function generateContentDraft(");
+    expect(source).toContain("try {");
+    expect(source).toContain("} catch (error) {");
+    expect(source).toContain("translateStep2ErrorMessage(message, \"NETWORK_CONNECTIVITY\")");
+    expect(source).toContain("draftLastErrorCode: \"NETWORK_CONNECTIVITY\"");
+    expect(source).toContain("draftStatus: \"failed\"");
   });
 
   it("keeps draft primary action ownership in slot actions, not preview panel", () => {

@@ -2100,9 +2100,15 @@ export default function ListingOptimizationClient({
     slot: number,
     contractInput?: Step2DraftContractInput
   ): Promise<{ ok: true } | { ok: false; errorMessage: string }> {
-    if (!effectiveListingId) return { ok: false, errorMessage: "Listing context is missing." };
+    if (!effectiveListingId) {
+      const message = "Listing context is missing.";
+      setError({ message });
+      return { ok: false, errorMessage: message };
+    }
     const current = initializeContentAsset(item, slot);
 
+    setError(null);
+    setNotice(null);
     setContentAssets((previous) => {
       const existingAsset = previous[item.id] ?? current;
       return {
@@ -2140,41 +2146,86 @@ export default function ListingOptimizationClient({
       return { ok: false, errorMessage: STEP2_LISTING_URL_BLOCKER };
     }
 
-    const draftQuery = siteQuery;
-    const draftUrl = buildStep2DraftApiUrl(effectiveListingId, slot, draftQuery);
-    const res = await fetch(draftUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        type: "local_guide",
-        focus_topic: current.focusTopic,
-        title: current.title,
-        step2_contract: contractInput
-          ? {
-              mission_plan_slot: contractInput.missionPlanSlot,
-              support_brief: contractInput.supportBrief,
-              seo_package: contractInput.seoPackage,
-              research_artifact: contractInput.researchArtifact,
-            }
-          : undefined,
-      }),
-    });
-    const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
-    const settled = await resolveDirectoryIqJobOrInline<{ draft_html?: string }>(
-      res,
-      json,
-      "Failed to generate content draft.",
-      effectiveListingId
-    );
-    if (!settled.ok) {
-      const message = settled.error.message ?? "Failed to generate content draft.";
-      const code = normalizeText(settled.error.code).toUpperCase();
-      const translatedMessage = translateStep2ErrorMessage(message, code);
-      if (code === "OPENAI_KEY_MISSING" || isStep2SetupBlockerMessage(message)) {
-        setError({ message: `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}` });
-      } else {
-        setError({ message: translatedMessage });
+    try {
+      const draftQuery = siteQuery;
+      const draftUrl = buildStep2DraftApiUrl(effectiveListingId, slot, draftQuery);
+      const res = await fetch(draftUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "local_guide",
+          focus_topic: current.focusTopic,
+          title: current.title,
+          step2_contract: contractInput
+            ? {
+                mission_plan_slot: contractInput.missionPlanSlot,
+                support_brief: contractInput.supportBrief,
+                seo_package: contractInput.seoPackage,
+                research_artifact: contractInput.researchArtifact,
+              }
+            : undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      const settled = await resolveDirectoryIqJobOrInline<{ draft_html?: string }>(
+        res,
+        json,
+        "Failed to generate content draft.",
+        effectiveListingId
+      );
+      if (!settled.ok) {
+        const message = settled.error.message ?? "Failed to generate content draft.";
+        const code = normalizeText(settled.error.code).toUpperCase();
+        const translatedMessage = translateStep2ErrorMessage(message, code);
+        if (code === "OPENAI_KEY_MISSING" || isStep2SetupBlockerMessage(message)) {
+          setError({ message: `${OPENAI_SETUP_BLOCKER_TITLE} ${OPENAI_SETUP_BLOCKER_BODY}` });
+        } else {
+          setError({ message: translatedMessage });
+        }
+        setContentAssets((previous) => {
+          const existingAsset = previous[item.id] ?? current;
+          return {
+            ...previous,
+            [item.id]: {
+              ...existingAsset,
+              draftStatus: "failed",
+              draftLastErrorCode: code || null,
+              draftLastErrorMessage: translatedMessage,
+            },
+          };
+        });
+        return { ok: false, errorMessage: translatedMessage };
       }
+
+      setContentAssets((previous) => {
+        const existingAsset = previous[item.id] ?? current;
+        return {
+          ...previous,
+          [item.id]: {
+            ...existingAsset,
+            draftStatus: "ready",
+            draftVersion: existingAsset.draftVersion + 1,
+            draftGeneratedAt: new Date().toISOString(),
+            reviewStatus: existingAsset.imageStatus === "ready" ? "ready" : "not_ready",
+            approvedAt: null,
+            approvedSnapshotDraftVersion: null,
+            approvedSnapshotImageVersion: null,
+            publishStatus: "not_started",
+            publishLastErrorCode: null,
+            publishLastErrorMessage: null,
+            publishLastReqId: null,
+            publishAttemptedAt: null,
+            publishCompletedAt: null,
+            draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
+          },
+        };
+      });
+      setNotice(`Generated draft for ${current.title}.`);
+      return { ok: true };
+    } catch (error) {
+      const message = stringifyErrorMessage(error, "Failed to generate content draft.");
+      const translatedMessage = translateStep2ErrorMessage(message, "NETWORK_CONNECTIVITY");
+      setError({ message: translatedMessage });
       setContentAssets((previous) => {
         const existingAsset = previous[item.id] ?? current;
         return {
@@ -2182,39 +2233,13 @@ export default function ListingOptimizationClient({
           [item.id]: {
             ...existingAsset,
             draftStatus: "failed",
-            draftLastErrorCode: code || null,
+            draftLastErrorCode: "NETWORK_CONNECTIVITY",
             draftLastErrorMessage: translatedMessage,
           },
         };
       });
       return { ok: false, errorMessage: translatedMessage };
     }
-
-    setContentAssets((previous) => {
-      const existingAsset = previous[item.id] ?? current;
-      return {
-        ...previous,
-        [item.id]: {
-          ...existingAsset,
-          draftStatus: "ready",
-          draftVersion: existingAsset.draftVersion + 1,
-          draftGeneratedAt: new Date().toISOString(),
-          reviewStatus: existingAsset.imageStatus === "ready" ? "ready" : "not_ready",
-          approvedAt: null,
-          approvedSnapshotDraftVersion: null,
-          approvedSnapshotImageVersion: null,
-          publishStatus: "not_started",
-          publishLastErrorCode: null,
-          publishLastErrorMessage: null,
-          publishLastReqId: null,
-          publishAttemptedAt: null,
-          publishCompletedAt: null,
-          draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
-        },
-      };
-    });
-    setNotice(`Generated draft for ${current.title}.`);
-    return { ok: true };
   }
 
   async function generateContentImage(item: BlogReinforcementPlanItem, slot: number): Promise<boolean> {
