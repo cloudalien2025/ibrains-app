@@ -3797,8 +3797,15 @@ export default function ListingOptimizationClient({
                           ) : (
                             <div className="mt-3 text-slate-400">Featured image is not ready yet.</div>
                           )}
-                          <div className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-white/10 bg-slate-900/60 p-2">
-                            {previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : "Draft is not ready yet."}
+                          <div className="mt-3 max-h-56 overflow-auto rounded border border-white/10 bg-slate-900/60 p-2">
+                            {previewPanelGate.draftReady && asset.draftHtml ? (
+                              <div
+                                className="directoryiq-step2-draft-preview prose prose-invert max-w-none text-sm"
+                                dangerouslySetInnerHTML={{ __html: asset.draftHtml }}
+                              />
+                            ) : (
+                              "Draft is not ready yet."
+                            )}
                           </div>
                           <div className="mt-3 flex flex-wrap gap-2">
                             {previewPanelGate.approveVisible ? (
