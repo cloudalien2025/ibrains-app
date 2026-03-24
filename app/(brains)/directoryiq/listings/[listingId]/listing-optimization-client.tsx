@@ -42,6 +42,7 @@ import {
 } from "@/lib/directoryiq/step2CardActionContract";
 import {
   derivePublishDisabledReason,
+  deriveStep2PreviewPanelGate,
   deriveStep2SlotHelperMessage,
   deriveStep2AggregateState,
   step2SummaryCopy,
@@ -1849,6 +1850,11 @@ export default function ListingOptimizationClient({
           runtime_error_message: runtime?.errorMessage ?? null,
           publish_disabled_reason: publishDisabledReason,
         });
+        const previewPanelGate = deriveStep2PreviewPanelGate({
+          aggregate_state: aggregateState,
+          draft_status: asset.draftStatus,
+          image_status: asset.imageStatus,
+        });
         return {
           missionSlot,
           item,
@@ -1859,6 +1865,7 @@ export default function ListingOptimizationClient({
           aggregateState,
           summary,
           helperMessage,
+          previewPanelGate,
           publishDisabledReason,
           setupBlocked,
         };
@@ -3100,7 +3107,7 @@ export default function ListingOptimizationClient({
                 </div>
 
                 <div className="mt-4 space-y-2" data-testid="step2-slot-list">
-                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, publishDisabledReason, setupBlocked, asset }) => (
+                  {step2SlotViewModels.map(({ missionSlot, item, slot, blueprint, aggregateState, summary, helperMessage, previewPanelGate, publishDisabledReason, setupBlocked, asset }) => (
                     <div
                       key={item.id}
                       className="rounded-xl border border-white/10 bg-white/[0.03] p-3"
@@ -3252,10 +3259,18 @@ export default function ListingOptimizationClient({
                           <div className="mt-2 text-slate-300">Listing: {displayName}</div>
                           <div className="text-slate-300">Listing URL: {displayUrl || "Unavailable"}</div>
                           <div className="mt-2 text-slate-300">This article should include reciprocal links between the blog post and listing.</div>
-                          {asset.featuredImageUrl ? <img src={asset.featuredImageUrl} alt={asset.title || "Featured image"} className="mt-3 max-h-44 rounded border border-white/10 object-cover" /> : <div className="mt-3 text-slate-400">Featured image is not ready yet.</div>}
-                          <div className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-white/10 bg-slate-900/60 p-2">{asset.draftHtml || "Draft is not ready yet."}</div>
+                          {previewPanelGate.imageReady && asset.featuredImageUrl ? (
+                            <img src={asset.featuredImageUrl} alt={asset.title || "Featured image"} className="mt-3 max-h-44 rounded border border-white/10 object-cover" />
+                          ) : (
+                            <div className="mt-3 text-slate-400">Featured image is not ready yet.</div>
+                          )}
+                          <div className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap rounded border border-white/10 bg-slate-900/60 p-2">
+                            {previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : "Draft is not ready yet."}
+                          </div>
                           <div className="mt-3 flex flex-wrap gap-2">
-                            <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)} disabled={asset.draftStatus !== "ready" || asset.imageStatus !== "ready"}>Approve</button>
+                            {previewPanelGate.approveVisible ? (
+                              <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)}>Approve</button>
+                            ) : null}
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentDraft(item, slot, buildStep2DraftContractInput(missionSlot))}>Regenerate Draft</button>
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                             {asset.reviewStatus === "approved" ? (

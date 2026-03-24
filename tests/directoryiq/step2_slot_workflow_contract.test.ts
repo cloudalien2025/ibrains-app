@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   derivePublishDisabledReason,
+  deriveStep2PreviewPanelGate,
   deriveStep2SlotHelperMessage,
   deriveStep2AggregateState,
   step2SummaryCopy,
@@ -164,5 +165,42 @@ describe("step2 slot workflow contract", () => {
         publish_disabled_reason: "Article draft is still processing.",
       })
     ).toBeNull();
+  });
+
+  it("keeps image-only preview truthful with hidden approve", () => {
+    const gate = deriveStep2PreviewPanelGate({
+      aggregate_state: "image_ready",
+      draft_status: "not_started",
+      image_status: "ready",
+    });
+
+    expect(gate.imageReady).toBe(true);
+    expect(gate.draftReady).toBe(false);
+    expect(gate.approveVisible).toBe(false);
+    expect(gate.draftMissingHelperVisible).toBe(true);
+  });
+
+  it("enables approve only in canonical preview_ready lane", () => {
+    const gate = deriveStep2PreviewPanelGate({
+      aggregate_state: "preview_ready",
+      draft_status: "ready",
+      image_status: "ready",
+    });
+
+    expect(gate.draftReady).toBe(true);
+    expect(gate.imageReady).toBe(true);
+    expect(gate.approveVisible).toBe(true);
+    expect(gate.draftMissingHelperVisible).toBe(false);
+  });
+
+  it("prevents approve visibility when draft helper must be shown", () => {
+    const gate = deriveStep2PreviewPanelGate({
+      aggregate_state: "image_ready",
+      draft_status: "not_started",
+      image_status: "ready",
+    });
+
+    expect(gate.draftMissingHelperVisible).toBe(true);
+    expect(gate.approveVisible).toBe(false);
   });
 });

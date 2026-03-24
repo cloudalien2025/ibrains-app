@@ -121,10 +121,17 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2AggregateState");
+    expect(source).toContain("deriveStep2PreviewPanelGate");
     expect(source).toContain("derivePublishDisabledReason");
     expect(source).toContain("deriveStep2SlotHelperMessage");
     expect(source).toContain("step2SummaryCopy");
     expect(source).toContain("aggregate_state: aggregateState");
+    expect(source).toContain("const previewPanelGate = deriveStep2PreviewPanelGate({");
+    expect(source).toContain("draft_status: asset.draftStatus,");
+    expect(source).toContain("image_status: asset.imageStatus,");
+    expect(source).toContain("previewPanelGate.approveVisible ? (");
+    expect(source).toContain("previewPanelGate.draftReady && asset.draftHtml ? asset.draftHtml : \"Draft is not ready yet.\"");
+    expect(source).toContain("previewPanelGate.imageReady && asset.featuredImageUrl ? (");
     expect(source).not.toContain("publishDisabledReason || translateStep2ErrorMessage(runtime?.errorMessage)");
     expect(source).toContain("onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot })}");
     expect(source).not.toContain("step2_writer=1");
