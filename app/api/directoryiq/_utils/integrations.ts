@@ -82,6 +82,9 @@ function normalizePath(path: string): string {
 
 function dataPostsGetPath(path: string, postId: string): string {
   const normalized = normalizePath(path).toLowerCase();
+  if (normalized.includes("/users_portfolio_group")) {
+    return `/api/v2/users_portfolio_groups/get/${encodeURIComponent(postId)}`;
+  }
   if (normalized.includes("/data_posts/")) {
     return `/api/v2/data_posts/get/${encodeURIComponent(postId)}`;
   }
