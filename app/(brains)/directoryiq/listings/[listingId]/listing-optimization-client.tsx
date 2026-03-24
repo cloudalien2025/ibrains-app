@@ -2578,16 +2578,16 @@ export default function ListingOptimizationClient({
           top_results:
             Array.isArray(contractInput.researchArtifact.top_results) && contractInput.researchArtifact.top_results.length > 0
               ? contractInput.researchArtifact.top_results
-              : [
-                  {
-                    title: `${step2MissionPlan.listing_title} ${missionSlot.slot_label}`.trim(),
-                    url:
-                      listingUrl ??
-                      `https://research.local/${slugify(fallbackFocusKeyword)}/${index + 1}`,
-                    rank: 1,
-                    content_type: "informational_guide",
-                  },
-                ],
+              : listingUrl
+                ? [
+                    {
+                      title: `${step2MissionPlan.listing_title} ${missionSlot.slot_label}`.trim(),
+                      url: listingUrl,
+                      rank: 1,
+                      content_type: "informational_guide",
+                    },
+                  ]
+                : [],
         };
         return {
           slot: index + 1,
@@ -2714,15 +2714,19 @@ export default function ListingOptimizationClient({
         displayUrl
       ),
     };
-    const relatedResults = (contentStructure?.items ?? [])
-      .slice(0, 5)
-      .map((entry, index) => ({
-        title:
-          normalizeText(entry.recommendedTitlePattern || entry.suggestedH1 || entry.title) ||
-          `Result ${index + 1}`,
-        url: `https://research.local/${slugify(missionPlanSlot.recommended_focus_keyword)}/${index + 1}`,
-        rank: index + 1,
-      }));
+    const relatedResultUrl = firstNonEmptyValue(missionPlanSlot.existing_candidate_url, missionPlanSlot.listing_url);
+    const relatedResultTitle =
+      normalizeText(contentStructure?.items?.[0]?.recommendedTitlePattern || contentStructure?.items?.[0]?.suggestedH1 || contentStructure?.items?.[0]?.title) ||
+      `${step2MissionPlan.listing_title} ${missionPlanSlot.slot_label}`.trim();
+    const relatedResults = relatedResultUrl
+      ? [
+          {
+            title: relatedResultTitle,
+            url: relatedResultUrl,
+            rank: 1,
+          },
+        ]
+      : [];
     const researchArtifact = buildSupportResearchArtifact({
       slot: missionPlanSlot,
       listingTitle: step2MissionPlan.listing_title,
