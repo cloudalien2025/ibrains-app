@@ -99,3 +99,26 @@ export function deriveStep2SlotHelperMessage(input: {
   const publishReason = typeof input.publish_disabled_reason === "string" ? input.publish_disabled_reason.trim() : "";
   return publishReason || null;
 }
+
+export function deriveStep2PreviewPanelGate(input: {
+  aggregate_state: Step2AggregateState;
+  draft_status: Step2DraftStatus;
+  image_status: Step2ImageStatus;
+}): {
+  draftReady: boolean;
+  imageReady: boolean;
+  approveVisible: boolean;
+  draftMissingHelperVisible: boolean;
+  imageMissingHelperVisible: boolean;
+} {
+  const draftReady = input.draft_status === "ready";
+  const imageReady = input.image_status === "ready";
+  const approveVisible = input.aggregate_state === "preview_ready";
+  return {
+    draftReady,
+    imageReady,
+    approveVisible,
+    draftMissingHelperVisible: !draftReady,
+    imageMissingHelperVisible: !imageReady,
+  };
+}
