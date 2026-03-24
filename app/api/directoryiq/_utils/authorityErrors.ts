@@ -19,6 +19,7 @@ export type AuthorityErrorCode =
   | "BD_PUBLISH_FAILED"
   | "BD_LINK_ENFORCEMENT_FAILED"
   | "DRAFT_VALIDATION_FAILED"
+  | "FAQ_PUBLISH_GATE_BLOCKED"
   | "INTERNAL_ERROR";
 
 export type AuthorityErrorShape = {

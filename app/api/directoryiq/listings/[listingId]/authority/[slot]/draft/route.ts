@@ -17,6 +17,7 @@ import { resolveListingEvaluation } from "@/app/api/directoryiq/_utils/listingRe
 import { createDirectoryIqJob, runDirectoryIqJob } from "@/app/api/directoryiq/_utils/jobs";
 import { requireDirectoryIqWriteUser } from "@/app/api/directoryiq/_utils/writeAuth";
 import { getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
+import { buildListingFaqSupportEngine } from "@/lib/directoryiq/faq/engine";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -64,6 +65,31 @@ function composeListingUrlFromSite(raw: Record<string, unknown>, siteBaseUrl: st
   }
 
   return "";
+}
+
+function isFaqSupportIntent(input: {
+  postType: string;
+  focusTopic: string;
+  title: string;
+  step2Contract?: {
+    mission_plan_slot?: Record<string, unknown>;
+    support_brief?: Record<string, unknown>;
+    seo_package?: Record<string, unknown>;
+  };
+}): boolean {
+  const topic = `${input.focusTopic} ${input.title}`.toLowerCase();
+  const slotId = asString(input.step2Contract?.mission_plan_slot?.slot_id).toLowerCase();
+  const slotLabel = asString(input.step2Contract?.mission_plan_slot?.slot_label).toLowerCase();
+  const supportBriefType = asString(input.step2Contract?.support_brief?.post_type).toLowerCase();
+
+  if (slotId.includes("faq")) return true;
+  if (slotLabel.includes("faq")) return true;
+  if (supportBriefType.includes("faq")) return true;
+  if (/(faq|questions|before booking|booking questions|support page|selection guide)/.test(topic)) return true;
+  if ((input.postType === "contextual_guide" || input.postType === "persona_intent") && /(booking|fit|policy|check-in|check in)/.test(topic)) {
+    return true;
+  }
+  return false;
 }
 
 export async function POST(
@@ -128,7 +154,6 @@ export async function POST(
         throw new AuthorityRouteError(400, "BAD_REQUEST", "Focus topic is required.");
       }
 
-      const apiKey = validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId));
       const resolved = await resolveListingEvaluation({
         userId,
         listingId: resolvedListingId,
@@ -209,20 +234,74 @@ export async function POST(
         (typeof raw.content === "string" && raw.content) ||
         "";
 
-      const prompt = buildGovernedPrompt({
+      let generatedHtml = "";
+      let faqMetadata: Record<string, unknown> | null = null;
+      const useFaqEngine = isFaqSupportIntent({
         postType,
-        listingTitle: listingName,
-        listingUrl,
-        listingDescription,
         focusTopic,
+        title,
+        step2Contract: body.step2_contract,
       });
 
-      let generatedHtml = "";
-      try {
-        generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
-      } catch (error) {
-        await failDraft(error);
-        throw error;
+      if (useFaqEngine) {
+        const listingType = asString(raw.listing_type) || asString(raw.category) || postType;
+        const faqResult = buildListingFaqSupportEngine({
+          listingId: listingSourceId,
+          siteId: resolved.siteId ?? null,
+          listingName,
+          listingType,
+          canonicalUrl: listingUrl,
+          title: title || listingName,
+          description: listingDescription,
+          raw,
+        });
+
+        if (!faqResult.publish_gate_result.allowPublish) {
+          throw new AuthorityRouteError(
+            422,
+            "FAQ_PUBLISH_GATE_BLOCKED",
+            "FAQ draft blocked by quality gate.",
+            faqResult.publish_gate_result.reasons.join("; ")
+          );
+        }
+
+        generatedHtml = faqResult.rendered_html;
+        faqMetadata = {
+          faq_context_json: faqResult.context,
+          resolved_intent_clusters_json: faqResult.resolved_intent_clusters,
+          candidate_questions_json: faqResult.candidate_questions,
+          selected_questions_json: faqResult.selected_questions,
+          source_facts_json: faqResult.source_facts,
+          fact_confidence_map_json: faqResult.fact_confidence_map,
+          quality_score: Math.round(
+            (faqResult.quality.listing_specificity +
+              faqResult.quality.local_relevance +
+              faqResult.quality.directness +
+              faqResult.quality.factual_grounding +
+              faqResult.quality.selection_intent_coverage +
+              faqResult.quality.answer_completeness +
+              faqResult.quality.internal_link_quality) /
+              7
+          ),
+          generic_language_penalty_score: faqResult.quality.generic_language_penalty,
+          publish_gate_result: faqResult.publish_gate_result,
+          rendered_html: faqResult.rendered_html,
+        };
+      } else {
+        const apiKey = validateOpenAiKeyPresent(await getDirectoryIqOpenAiKey(userId));
+        const prompt = buildGovernedPrompt({
+          postType,
+          listingTitle: listingName,
+          listingUrl,
+          listingDescription,
+          focusTopic,
+        });
+        try {
+          generatedHtml = await generateAuthorityDraft({ apiKey, prompt });
+        } catch (error) {
+          await failDraft(error);
+          throw error;
+        }
       }
       const generatedValidation = validateDraftHtml({ html: generatedHtml, listingUrl });
       await setStage("validating");
@@ -266,10 +345,11 @@ export async function POST(
         draftHtml: html,
         blogToListingStatus: validation.hasContextualListingLink ? "linked" : "missing",
         metadata: {
-          quality_score: 72,
+          quality_score: typeof faqMetadata?.quality_score === "number" ? faqMetadata.quality_score : 72,
           generated_at: new Date().toISOString(),
           governance_passed: true,
           step2_contract: body.step2_contract ?? null,
+          faq_generation: faqMetadata,
           step2_state: {
             ...previousStep2,
             draft_status: "ready",
