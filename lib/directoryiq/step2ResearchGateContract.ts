@@ -9,11 +9,24 @@ function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
 }
 
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function isSyntheticResearchUrl(value: string): boolean {
+  return /research\.local/i.test(value);
+}
+
 export function hasUsableStep2ResearchArtifact(value: unknown): value is Step2SupportResearchArtifact {
   const record = asRecord(value);
-  const focusKeyword = typeof record.focus_keyword === "string" ? record.focus_keyword.trim() : "";
+  const focusKeyword = asString(record.focus_keyword);
   const topResults = Array.isArray(record.top_results) ? record.top_results : [];
-  return Boolean(focusKeyword) && topResults.length > 0;
+  if (!focusKeyword || topResults.length === 0) return false;
+  return topResults.every((entry) => {
+    const row = asRecord(entry);
+    const url = asString(row.url);
+    return Boolean(url) && !isSyntheticResearchUrl(url);
+  });
 }
 
 export function isStep2ResearchReady(state: Step2ResearchState): boolean {
