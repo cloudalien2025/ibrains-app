@@ -51,7 +51,15 @@ const getListingEvaluation = vi.fn(async () => ({
     source_id: "site-1:321",
     title: "Fixture Listing",
     url: "https://example.com/listings/fixture-listing",
-    raw_json: { description: "Sample listing description", user_id: "98765", group_filename: "fixture-listing" },
+    raw_json: {
+      description: "Sample listing description",
+      user_id: "98765",
+      group_filename: "fixture-listing",
+      listing_id: "321",
+      group_category: "Vacation Rental",
+      city: "Miami",
+      location_region: "Florida",
+    },
   },
   evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
   settings: { imageStylePreference: "editorial clean" },
@@ -155,6 +163,50 @@ const resolveBlogPostDataTypeForPublish = vi.fn(async () => ({ dataType: 4, sour
 const pushListingUpdateToBd = vi.fn(async () => ({ ok: true, status: 200, body: {} }));
 const resolveTruePostIdForListing = vi.fn(async () => ({ truePostId: "listing-123", mappingKey: "slug" as const }));
 const persistListingTruePostMapping = vi.fn(async () => {});
+const getListingCurrentSupport = vi.fn(async () => ({
+  listing: {
+    id: "321",
+    title: "Fixture Listing",
+    canonicalUrl: "https://example.com/listings/fixture-listing",
+    siteId: "site-1",
+  },
+  summary: {
+    inboundLinkedSupportCount: 1,
+    mentionWithoutLinkCount: 1,
+    outboundSupportLinkCount: 0,
+    connectedSupportPageCount: 1,
+    lastGraphRunAt: "2026-03-24T00:00:00.000Z",
+  },
+  inboundLinkedSupport: [
+    {
+      sourceId: "blog-1",
+      sourceType: "blog_post",
+      title: "How to choose a vacation rental",
+      url: "https://example.com/blog/choose-vacation-rental",
+      anchors: ["vacation rental fit"],
+      relationshipType: "links_to_listing",
+    },
+  ],
+  mentionsWithoutLinks: [
+    {
+      sourceId: "blog-2",
+      sourceType: "blog_post",
+      title: "Miami neighborhood guide",
+      url: "https://example.com/blog/miami-neighborhood-guide",
+      mentionSnippet: "Fixture Listing appears in local recommendations.",
+      relationshipType: "mentions_without_link",
+    },
+  ],
+  outboundSupportLinks: [],
+  connectedSupportPages: [
+    {
+      id: "hub-1",
+      type: "hub",
+      title: "Miami Vacation Rentals",
+      url: "https://example.com/hubs/miami-vacation-rentals",
+    },
+  ],
+}));
 const validateDraftHtml = vi.fn((input: { html: string; listingUrl: string }) => {
   const hasContextualListingLink = Boolean(input.listingUrl) && input.html.includes(input.listingUrl);
   return {
@@ -231,6 +283,9 @@ vi.mock("@/lib/directoryiq/contentGovernance", () => ({
 vi.mock("@/src/directoryiq/repositories/listingIdentityRepo", () => ({
   persistListingTruePostMapping,
 }));
+vi.mock("@/src/directoryiq/services/listingSupportService", () => ({
+  getListingCurrentSupport,
+}));
 
 describe("directoryiq authority routes", () => {
   beforeEach(() => {
@@ -278,7 +333,7 @@ describe("directoryiq authority routes", () => {
               seo_package: { primary_focus_keyword: "fixture keyword" },
               research_artifact: {
                 focus_keyword: "fixture keyword",
-                top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+                top_results: [{ title: "Synthetic Result", url: "https://research.local/fixture/1", rank: 1, content_type: "comparison" }],
               },
             },
           },
@@ -298,16 +353,37 @@ describe("directoryiq authority routes", () => {
     expect(status.status).toBe("succeeded");
     expect(status.result?.state).toBe("ready");
     expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
+    const persistedContract = upsertAuthorityStep2ResearchContract.mock.calls.find(
+      (call) => call[3]?.state === "ready"
+    )?.[3]?.contract as Record<string, unknown> | undefined;
+    expect(persistedContract).toBeTruthy();
+    const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
+    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+    expect(topResults.length).toBeGreaterThan(0);
+    for (const row of topResults as Array<Record<string, unknown>>) {
+      expect(String(row.url ?? "")).not.toContain("research.local");
+    }
+    expect(String(artifact.focus_keyword ?? "").toLowerCase()).toContain("vacation rental");
+    const dossier = (persistedContract?.research_dossier ?? {}) as Record<string, unknown>;
+    expect(dossier.owner_key).toBeTruthy();
+    expect(Array.isArray((dossier.same_site_support as Record<string, unknown> | undefined)?.inbound_linked_support)).toBe(true);
+    expect(Array.isArray(dossier.evidence_gaps)).toBe(true);
   });
 
   it("resumes Step 2 listing research as ready when canonical artifact already exists", async () => {
     getAuthorityPosts.mockResolvedValueOnce([
       {
+        slot_index: 1,
         metadata_json: {
           step2_contract: {
             research_artifact: {
               focus_keyword: "fixture keyword",
-              top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1 }],
+              top_results: [{ title: "Result 1", url: "https://example.com/r1", rank: 1, content_type: "comparison" }],
+            },
+            research_dossier: {
+              owner_key: "site-1:321:phase1.v1",
+              listing_identity: { listing_source_id: "site-1:321" },
+              step2_slot_research: [{ slot: 1, slot_id: "publish_comparison_decision_post", focus_keyword: "fixture keyword" }],
             },
           },
         },
@@ -340,6 +416,47 @@ describe("directoryiq authority routes", () => {
     expect(res.status).toBe(200);
     expect(body.state).toBe("ready");
     expect(upsertAuthorityStep2ResearchContract).not.toHaveBeenCalled();
+  });
+
+  it("does not treat synthetic persisted artifacts as dossier-ready", async () => {
+    getAuthorityPosts.mockResolvedValueOnce([
+      {
+        slot_index: 1,
+        metadata_json: {
+          step2_contract: {
+            research_artifact: {
+              focus_keyword: "fixture keyword",
+              top_results: [{ title: "Synthetic", url: "https://research.local/fixture/1", rank: 1 }],
+            },
+          },
+          step2_research: { state: "ready" },
+        },
+      },
+    ]);
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
+      method: "POST",
+      body: JSON.stringify({
+        contracts: [
+          {
+            slot: 1,
+            step2_contract: {
+              mission_plan_slot: { slot_id: "publish_comparison_decision_post", listing_url: "https://example.com/listings/fixture-listing" },
+            },
+          },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "321" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+    expect(submitRes.status).toBe(202);
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.state).toBe("ready");
+    expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
   });
 
   it("rejects step2 draft generation when listing research is not ready", async () => {
