@@ -84,3 +84,18 @@ export function derivePublishDisabledReason(input: {
   if (input.publishing || input.published) return "";
   return null;
 }
+
+export function deriveStep2SlotHelperMessage(input: {
+  aggregate_state: Step2AggregateState;
+  runtime_error_message?: string | null;
+  publish_disabled_reason?: string | null;
+}): string | null {
+  const runtimeMessage = typeof input.runtime_error_message === "string" ? input.runtime_error_message.trim() : "";
+  if (runtimeMessage) return runtimeMessage;
+
+  // Publish gating copy is only valid in the approved lane where Publish is the primary action.
+  if (input.aggregate_state !== "approved") return null;
+
+  const publishReason = typeof input.publish_disabled_reason === "string" ? input.publish_disabled_reason.trim() : "";
+  return publishReason || null;
+}
