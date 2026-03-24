@@ -450,4 +450,141 @@ describe("faq regenerate persistence and preview current-artifact behavior", () 
     expect(Array.isArray(entities.intent) ? entities.intent : []).toContain("cancellation");
     expect(Array.isArray(dossier.serp_results) ? dossier.serp_results.length : 0).toBeGreaterThan(0);
   });
+
+  it("prefers request research artifact over stale persisted dossier for FAQ engine input", async () => {
+    persistedPost = {
+      ...persistedPost,
+      metadata_json: {
+        ...persistedPost.metadata_json,
+        step2_contract: {
+          ...(asRecord(persistedPost.metadata_json.step2_contract) as Record<string, unknown>),
+          research_dossier: {
+            serp_summary: {
+              faq_patterns: ["OLD persisted question?"],
+            },
+          },
+        },
+      },
+    };
+    buildListingFaqSupportEngine.mockReturnValueOnce({
+      publish_gate_result: { allowPublish: true, reasons: [] },
+      rendered_html: "<h2>FAQ</h2><p>Uses request artifact.</p>",
+      context: {},
+      resolved_intent_clusters: [],
+      candidate_questions: [],
+      selected_questions: [],
+      source_facts: ["source A"],
+      fact_confidence_map: {},
+      quality: {
+        listing_specificity: 90,
+        local_relevance: 90,
+        directness: 90,
+        factual_grounding: 90,
+        selection_intent_coverage: 90,
+        answer_completeness: 90,
+        internal_link_quality: 90,
+        generic_language_penalty: 0,
+      },
+    });
+
+    const { POST: draftPost } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const draftReq = new NextRequest("http://localhost/api/directoryiq/listings/142/authority/2/draft?site_id=site-1", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Booking FAQ for Cedar at Streamside",
+        focus_topic: "faq booking questions",
+        type: "contextual_guide",
+        step2_contract: {
+          mission_plan_slot: { slot_id: "publish_faq_support_post" },
+          research_artifact: {
+            focus_keyword: "cedar at streamside booking faq",
+            top_results: [{ title: "Result A", url: "https://example.com/r-a", rank: 1, content_type: "comparison" }],
+            common_user_questions: ["NEW request question?"],
+            common_locations: ["Vail"],
+            common_decision_factors: ["cancellation"],
+          },
+        },
+      }),
+    });
+
+    const draftRes = await draftPost(draftReq, { params: { listingId: "142", slot: "2" } });
+    expect(draftRes.status).toBe(202);
+    const accepted = (await draftRes.json()) as JobAccepted;
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+
+    const engineInput = buildListingFaqSupportEngine.mock.calls[0]?.[0] as { raw?: Record<string, unknown> };
+    const dossier = asRecord(engineInput.raw?.research_dossier);
+    const serpSummary = asRecord(dossier.serp_summary);
+    const faqPatterns = Array.isArray(serpSummary.faq_patterns) ? serpSummary.faq_patterns : [];
+    expect(faqPatterns).toContain("NEW request question?");
+    expect(faqPatterns).not.toContain("OLD persisted question?");
+  });
+
+  it("preserves persisted research_dossier metadata when draft request omits it", async () => {
+    const persistedDossier = {
+      owner_key: "site-1:142:phase1.v2",
+      serp_summary: { faq_patterns: ["Persisted dossier question?"] },
+    };
+    persistedPost = {
+      ...persistedPost,
+      metadata_json: {
+        ...persistedPost.metadata_json,
+        step2_contract: {
+          ...(asRecord(persistedPost.metadata_json.step2_contract) as Record<string, unknown>),
+          research_dossier: persistedDossier,
+        },
+      },
+    };
+    buildListingFaqSupportEngine.mockReturnValueOnce({
+      publish_gate_result: { allowPublish: true, reasons: [] },
+      rendered_html: "<h2>FAQ</h2><p>Preserve dossier.</p>",
+      context: {},
+      resolved_intent_clusters: [],
+      candidate_questions: [],
+      selected_questions: [],
+      source_facts: ["source A"],
+      fact_confidence_map: {},
+      quality: {
+        listing_specificity: 90,
+        local_relevance: 90,
+        directness: 90,
+        factual_grounding: 90,
+        selection_intent_coverage: 90,
+        answer_completeness: 90,
+        internal_link_quality: 90,
+        generic_language_penalty: 0,
+      },
+    });
+
+    const { POST: draftPost } = await import("@/app/api/directoryiq/listings/[listingId]/authority/[slot]/draft/route");
+    const draftReq = new NextRequest("http://localhost/api/directoryiq/listings/142/authority/2/draft?site_id=site-1", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        title: "Booking FAQ for Cedar at Streamside",
+        focus_topic: "faq booking questions",
+        type: "contextual_guide",
+        step2_contract: {
+          mission_plan_slot: { slot_id: "publish_faq_support_post" },
+          research_artifact: {
+            focus_keyword: "cedar at streamside booking faq",
+            top_results: [{ title: "Result A", url: "https://example.com/r-a", rank: 1, content_type: "comparison" }],
+          },
+        },
+      }),
+    });
+
+    const draftRes = await draftPost(draftReq, { params: { listingId: "142", slot: "2" } });
+    expect(draftRes.status).toBe(202);
+    const accepted = (await draftRes.json()) as JobAccepted;
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+
+    const savedContract = asRecord(asRecord(persistedPost.metadata_json).step2_contract);
+    const savedDossier = asRecord(savedContract.research_dossier);
+    expect(savedDossier.owner_key).toBe("site-1:142:phase1.v2");
+    expect(asRecord(savedDossier.serp_summary).faq_patterns).toEqual(["Persisted dossier question?"]);
+  });
 });

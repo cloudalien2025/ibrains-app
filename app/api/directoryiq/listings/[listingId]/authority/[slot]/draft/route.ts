@@ -95,19 +95,19 @@ function resolveFaqEngineRawInput(input: {
     };
   }
 
-  const persistedDossier = asRecord(input.persistedStep2Contract.research_dossier);
-  if (Object.keys(persistedDossier).length > 0) {
-    return {
-      ...input.listingRaw,
-      research_dossier: persistedDossier,
-    };
-  }
-
   const requestArtifact = asRecord(input.requestStep2Contract.research_artifact);
   if (Object.keys(requestArtifact).length > 0) {
     return {
       ...input.listingRaw,
       research_dossier: buildFaqSerpDossierFromArtifact(requestArtifact),
+    };
+  }
+
+  const persistedDossier = asRecord(input.persistedStep2Contract.research_dossier);
+  if (Object.keys(persistedDossier).length > 0) {
+    return {
+      ...input.listingRaw,
+      research_dossier: persistedDossier,
     };
   }
 
@@ -120,6 +120,49 @@ function resolveFaqEngineRawInput(input: {
   }
 
   return input.listingRaw;
+}
+
+function mergeStep2ContractsForDraft(input: {
+  requestStep2Contract: Record<string, unknown>;
+  persistedStep2Contract: Record<string, unknown>;
+}): Record<string, unknown> | null {
+  const requestContract = asRecord(input.requestStep2Contract);
+  const persistedContract = asRecord(input.persistedStep2Contract);
+  if (Object.keys(requestContract).length === 0 && Object.keys(persistedContract).length === 0) {
+    return null;
+  }
+
+  const merged: Record<string, unknown> = {
+    ...persistedContract,
+    ...requestContract,
+  };
+
+  const requestMissionPlan = asRecord(requestContract.mission_plan_slot);
+  const persistedMissionPlan = asRecord(persistedContract.mission_plan_slot);
+  if (Object.keys(requestMissionPlan).length > 0) merged.mission_plan_slot = requestMissionPlan;
+  else if (Object.keys(persistedMissionPlan).length > 0) merged.mission_plan_slot = persistedMissionPlan;
+
+  const requestSupportBrief = asRecord(requestContract.support_brief);
+  const persistedSupportBrief = asRecord(persistedContract.support_brief);
+  if (Object.keys(requestSupportBrief).length > 0) merged.support_brief = requestSupportBrief;
+  else if (Object.keys(persistedSupportBrief).length > 0) merged.support_brief = persistedSupportBrief;
+
+  const requestSeoPackage = asRecord(requestContract.seo_package);
+  const persistedSeoPackage = asRecord(persistedContract.seo_package);
+  if (Object.keys(requestSeoPackage).length > 0) merged.seo_package = requestSeoPackage;
+  else if (Object.keys(persistedSeoPackage).length > 0) merged.seo_package = persistedSeoPackage;
+
+  const requestArtifact = asRecord(requestContract.research_artifact);
+  const persistedArtifact = asRecord(persistedContract.research_artifact);
+  if (Object.keys(requestArtifact).length > 0) merged.research_artifact = requestArtifact;
+  else if (Object.keys(persistedArtifact).length > 0) merged.research_artifact = persistedArtifact;
+
+  const requestDossier = asRecord(requestContract.research_dossier);
+  const persistedDossier = asRecord(persistedContract.research_dossier);
+  if (Object.keys(requestDossier).length > 0) merged.research_dossier = requestDossier;
+  else if (Object.keys(persistedDossier).length > 0) merged.research_dossier = persistedDossier;
+
+  return merged;
 }
 
 function resolveCanonicalListingUrl(raw: Record<string, unknown>, fallback: unknown): string {
@@ -230,6 +273,7 @@ export async function POST(
       support_brief?: Record<string, unknown>;
       seo_package?: Record<string, unknown>;
       research_artifact?: Record<string, unknown>;
+      research_dossier?: Record<string, unknown>;
     };
   };
 
@@ -275,6 +319,10 @@ export async function POST(
       const existingPost = await getAuthorityPostBySlot(userId, listingSourceId, slotIndex);
       const persistedStep2Contract = asRecord(asRecord(existingPost?.metadata_json).step2_contract);
       const requestStep2Contract = asRecord(body.step2_contract);
+      const mergedStep2Contract = mergeStep2ContractsForDraft({
+        requestStep2Contract,
+        persistedStep2Contract,
+      });
       const persistedResearchArtifact = persistedStep2Contract.research_artifact;
       const requestResearchArtifact = body.step2_contract?.research_artifact;
       const hasUsableResearch =
@@ -478,7 +526,7 @@ export async function POST(
           quality_score: typeof faqMetadata?.quality_score === "number" ? faqMetadata.quality_score : 72,
           generated_at: new Date().toISOString(),
           governance_passed: true,
-          step2_contract: body.step2_contract ?? null,
+          step2_contract: mergedStep2Contract,
           faq_generation: faqMetadata,
           step2_state: {
             ...previousStep2,
