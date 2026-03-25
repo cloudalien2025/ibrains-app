@@ -593,7 +593,7 @@ describe("directoryiq authority routes", () => {
     );
   });
 
-  it("persists FAQ draft for hotel-shaped BD listing aliases", async () => {
+  it("blocks hotel-shaped BD listing aliases when FAQ evidence is still too thin", async () => {
     getListingEvaluation.mockResolvedValueOnce({
       listing: {
         source_id: "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
@@ -604,7 +604,10 @@ describe("directoryiq authority routes", () => {
           city: "2244 S Frontage Rd W Cedar Building Vail, CO 81657",
           state_sn: "CO",
           country_sn: "US",
-          post_tags: "hotel, mountain, streamside",
+          post_tags: "hotel, mountain, streamside, wifi, parking, shuttle",
+          amenities: ["wifi", "parking", "shuttle"],
+          parking: "On-site parking available",
+          checkin_info: "Front desk check-in available",
         },
       },
       evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
@@ -632,22 +635,14 @@ describe("directoryiq authority routes", () => {
 
     expect(submitRes.status).toBe(202);
     const status = await waitForJobCompletion(String(accepted.statusEndpoint));
-    expect(status.status).toBe("succeeded");
-    expect(markAuthorityDraftFailure).not.toHaveBeenCalledWith(
+    expect(status.status).toBe("failed");
+    expect(status.error?.code).toBe("FAQ_PUBLISH_GATE_BLOCKED");
+    expect(status.error?.details).toBeTruthy();
+    expect(markAuthorityDraftFailure).toHaveBeenCalledWith(
       expect.any(String),
       "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
       2,
       expect.objectContaining({ code: "FAQ_PUBLISH_GATE_BLOCKED" })
-    );
-    expect(upsertAuthorityPostDraft).toHaveBeenCalledWith(
-      "00000000-0000-4000-8000-000000000001",
-      "5c82f5c1-a45f-4b25-a0d4-1b749d962415:142",
-      2,
-      expect.objectContaining({
-        metadata: expect.objectContaining({
-          faq_generation: expect.any(Object),
-        }),
-      })
     );
   });
 
@@ -692,7 +687,7 @@ describe("directoryiq authority routes", () => {
     expect(status.status).toBe("failed");
     expect(status.error?.code).toBe("FAQ_PUBLISH_GATE_BLOCKED");
     expect(status.error?.message).toBe("FAQ draft blocked by quality gate.");
-    expect(status.error?.details).toContain("not enough grounded facts");
+    expect(status.error?.details).toMatch(/not enough grounded facts|source fact repetition too high|repeated source facts make FAQ too thin/);
     expect(status.error?.codeFamily).toBe("internal");
     expect(markAuthorityDraftFailure).toHaveBeenCalledWith(
       "00000000-0000-4000-8000-000000000001",

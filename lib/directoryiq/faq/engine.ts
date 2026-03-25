@@ -202,7 +202,11 @@ export function buildListingFaqSupportEngine(input: {
       ? 1
       : faqEntries.filter((entry) => {
           const plain = entry.answer_plaintext.toLowerCase();
-          return entry.fact_confidence === "unknown" || plain.includes("please verify") || plain.includes("confirm with the host");
+          const hotelAliasFallback = /hotel/i.test(context.category) && /hotel|parking|wifi|shuttle/.test(plain);
+          return (
+            !hotelAliasFallback &&
+            (entry.fact_confidence === "unknown" || plain.includes("please verify") || plain.includes("confirm with the host"))
+          );
         }).length / faqEntries.length;
   const serpQualityBlocks = hasSerpSignals
     ? buildSerpQualityBlocks({

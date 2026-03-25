@@ -199,9 +199,18 @@ export function resolveListingFacts(input: {
     return acc;
   }, {});
 
-  const knownFacts = Object.entries(factConfidenceMap)
-    .filter(([, confidence]) => confidence === "confirmed")
-    .map(([key]) => key);
+  const knownFacts = Array.from(
+    new Set(
+      Object.entries(factConfidenceMap)
+        .filter(([, confidence]) => confidence === "confirmed")
+        .map(([key]) => key)
+        .concat(
+          category ? [category.toLowerCase()] : [],
+          amenities.map((item) => item.toLowerCase()).filter(Boolean),
+          [city, region, country].map((item) => item.toLowerCase()).filter(Boolean)
+        )
+    )
+  );
 
   const unknownFacts = Object.entries(factConfidenceMap)
     .filter(([, confidence]) => confidence === "unknown")

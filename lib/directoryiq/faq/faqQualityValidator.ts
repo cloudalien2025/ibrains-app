@@ -75,10 +75,20 @@ export function evaluateFaqQuality(input: {
   const unsupportedQuestionCount = input.faqEntries.filter((entry) => {
     const plain = entry.answer_plaintext.toLowerCase();
     const looksAddressLike = ADDRESS_LIKE_PATTERN.test(entry.answer_plaintext);
-    if (/amenit/i.test(entry.question) && /\bhotel(s)?\b/i.test(plain) && !/wifi|pool|parking|kitchen|pet|spa|gym|shuttle|breakfast/.test(plain)) {
+      if (
+      /amenit/i.test(entry.question) &&
+      /\bhotel(s)?\b/i.test(plain) &&
+      !/wifi|pool|parking|kitchen|pet|spa|gym|shuttle|breakfast/.test(plain) &&
+      !/hotel/i.test(input.context.category)
+    ) {
       return true;
     }
-    if (/trip goals?|arrival without a car|local transit|parking/i.test(entry.question) && looksAddressLike && entry.source_facts.length <= 1) {
+    if (
+      /trip goals?|arrival without a car|local transit|parking/i.test(entry.question) &&
+      looksAddressLike &&
+      entry.source_facts.length <= 1 &&
+      !/hotel/i.test(input.context.category)
+    ) {
       return true;
     }
     return false;
