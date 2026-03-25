@@ -628,6 +628,10 @@ type ContentAssetState = {
   approvalToken: string | null;
   publishedUrl: string;
   scoreAfter: number | null;
+  qualityScore: number | null;
+  qualityBlockedReasons: string[];
+  draftQualityLabel: string | null;
+  governancePassed: boolean | null;
   draftGeneratedAt: string | null;
   imageGeneratedAt: string | null;
   approvedAt: string | null;
@@ -2311,6 +2315,10 @@ export default function ListingOptimizationClient({
       approvalToken: null,
       publishedUrl: "",
       scoreAfter: null,
+      qualityScore: null,
+      qualityBlockedReasons: [],
+      draftQualityLabel: null,
+      governancePassed: null,
       draftGeneratedAt: null,
       imageGeneratedAt: null,
       approvedAt: null,
@@ -2402,7 +2410,17 @@ export default function ListingOptimizationClient({
       });
       const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
       registerStep2WriteRuntime(json);
-      const settled = await resolveDirectoryIqJobOrInline<{ draft_html?: string }>(
+      const settled = await resolveDirectoryIqJobOrInline<{
+        draft_html?: string;
+        metadata?: {
+          quality_score?: number;
+          governance_passed?: boolean;
+          faq_generation?: {
+            quality_score?: number;
+            blocked_reasons?: string[];
+          };
+        };
+      }>(
         res,
         json,
         "Failed to generate content draft.",
@@ -2433,8 +2451,20 @@ export default function ListingOptimizationClient({
         return { ok: false, errorMessage: translatedMessage };
       }
 
+      const faqMetadata = settled.data.metadata?.faq_generation as
+        | { quality_score?: number; blocked_reasons?: string[] }
+        | undefined;
+      const governancePassed = settled.data.metadata?.governance_passed;
       setContentAssets((previous) => {
         const existingAsset = previous[item.id] ?? current;
+        const qualityBlockedReasons = Array.isArray(faqMetadata?.blocked_reasons)
+          ? faqMetadata?.blocked_reasons.filter((reason): reason is string => typeof reason === "string" && reason.trim().length > 0)
+          : [];
+        const qualityScore = typeof settled.data.metadata?.quality_score === "number"
+          ? settled.data.metadata.quality_score
+          : typeof faqMetadata?.quality_score === "number"
+            ? faqMetadata.quality_score
+            : null;
         return {
           ...previous,
           [item.id]: {
@@ -2453,6 +2483,19 @@ export default function ListingOptimizationClient({
             publishAttemptedAt: null,
             publishCompletedAt: null,
             draftHtml: typeof settled.data.draft_html === "string" ? settled.data.draft_html : "",
+            qualityScore,
+            qualityBlockedReasons,
+            draftQualityLabel:
+              qualityBlockedReasons.length > 0
+                ? "Blocked"
+                : qualityScore !== null && qualityScore >= 85
+                  ? "Strong"
+                  : qualityScore !== null && qualityScore >= 70
+                    ? "Usable"
+                    : qualityScore !== null
+                      ? "Needs review"
+                      : null,
+            governancePassed: typeof governancePassed === "boolean" ? governancePassed : null,
           },
         };
       });
@@ -2638,6 +2681,7 @@ export default function ListingOptimizationClient({
         draft_version?: number;
         image_version?: number;
       };
+      review_status?: string;
       runtime?: { runtime_owner?: string; release_stamp?: string };
       error?: { message?: string; code?: string } | string;
     };
@@ -2661,6 +2705,16 @@ export default function ListingOptimizationClient({
           typeof json.artifact?.featured_image_url === "string" ? json.artifact.featured_image_url : current.featuredImageUrl,
         draftVersion: typeof json.artifact?.draft_version === "number" ? json.artifact.draft_version : current.draftVersion,
         imageVersion: typeof json.artifact?.image_version === "number" ? json.artifact.image_version : current.imageVersion,
+        draftQualityLabel:
+          current.qualityBlockedReasons.length > 0
+            ? "Blocked"
+            : current.qualityScore !== null && current.qualityScore >= 85
+              ? "Strong"
+              : current.qualityScore !== null && current.qualityScore >= 70
+                ? "Usable"
+                : current.qualityScore !== null
+                  ? "Needs review"
+                  : null,
       },
     }));
   }
@@ -3624,21 +3678,14 @@ export default function ListingOptimizationClient({
                   </div>
                 </div>
 
-                {!step2ResearchReady ? (
+                {step2ResearchState === "not_started" || step2ResearchState === "failed" ? (
                   <div className="mt-3 rounded-xl border border-cyan-300/35 bg-cyan-400/10 p-4" data-testid="step2-research-entrypoint">
                     <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100">Start here</div>
                     <div className="mt-1 text-sm text-slate-200">{STEP2_RESEARCH_EXPLAINER}</div>
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <NeonButton
-                        onClick={() => void startStep2ListingResearch()}
-                        disabled={step2ResearchState === "queued" || step2ResearchState === "researching"}
-                        data-testid="step2-research-this-listing"
-                      >
+                      <NeonButton onClick={() => void startStep2ListingResearch()} data-testid="step2-research-this-listing">
                         Research This Listing
                       </NeonButton>
-                      {step2ResearchState === "queued" || step2ResearchState === "researching" ? (
-                        <span className="text-xs text-cyan-100">Research in progress…</span>
-                      ) : null}
                       {step2ResearchState === "failed" ? (
                         <span className="text-xs text-rose-200">{STEP2_RESEARCH_REQUIRED_MESSAGE}</span>
                       ) : null}
@@ -3869,6 +3916,34 @@ export default function ListingOptimizationClient({
                               "Draft is not ready yet."
                             )}
                           </div>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2" data-testid={`step2-slot-quality-${missionSlot.slot_id}`}>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Draft Quality</div>
+                              <div className="mt-1 text-sm font-semibold text-slate-100">{asset.draftQualityLabel ?? "Unknown"}</div>
+                              <div className="mt-1 text-xs text-slate-300">Quality score: {asset.qualityScore ?? "n/a"}</div>
+                            </div>
+                            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+                              <div className="text-[10px] uppercase tracking-[0.08em] text-slate-400">Governance</div>
+                              <div className="mt-1 text-sm font-semibold text-slate-100">
+                                {asset.governancePassed === true ? "Passed" : asset.governancePassed === false ? "Blocked" : "Unknown"}
+                              </div>
+                              <div className="mt-1 text-xs text-slate-300">
+                                {asset.qualityBlockedReasons.length > 0
+                                  ? `${asset.qualityBlockedReasons.length} blocker${asset.qualityBlockedReasons.length === 1 ? "" : "s"} flagged`
+                                  : "No quality blockers stored on this draft."}
+                              </div>
+                            </div>
+                          </div>
+                          {asset.qualityBlockedReasons.length > 0 ? (
+                            <div className="mt-3 rounded-lg border border-rose-300/25 bg-rose-400/10 px-3 py-2 text-xs text-rose-100" data-testid={`step2-slot-quality-blockers-${missionSlot.slot_id}`}>
+                              <div className="font-semibold uppercase tracking-[0.08em]">Why this draft is risky</div>
+                              <ul className="mt-2 list-disc space-y-1 pl-4">
+                                {asset.qualityBlockedReasons.map((reason) => (
+                                  <li key={reason}>{reason}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          ) : null}
                           <div className="mt-3 flex flex-wrap gap-2">
                             {previewPanelGate.approveVisible ? (
                               <button type="button" className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100" onClick={() => void approveContentAsset(item, slot)}>Approve</button>
