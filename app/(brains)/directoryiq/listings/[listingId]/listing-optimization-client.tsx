@@ -2018,7 +2018,9 @@ export default function ListingOptimizationClient({
           integrationsReady: integrations.bdConfigured === true,
           listingIdentityResolved: Boolean(effectiveListingId),
         });
-        const setupBlocked = step2OpenAiSetupBlocked && aggregateState === "create_ready";
+        const setupBlocked =
+          step2OpenAiSetupBlocked &&
+          (aggregateState === "create_ready" || aggregateState === "draft_ready" || aggregateState === "image_ready" || aggregateState === "preview_ready" || aggregateState === "needs_attention");
         const summary = step2SummaryCopy(aggregateState);
         const helperMessage = deriveStep2SlotHelperMessage({
           aggregate_state: aggregateState,
@@ -3952,6 +3954,19 @@ export default function ListingOptimizationClient({
                             {asset.reviewStatus === "approved" ? (
                               <button type="button" className="rounded-lg border border-emerald-300/35 bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-100 disabled:opacity-60" onClick={() => void publishContentAsset(item, slot)} disabled={Boolean(publishDisabledReason)}>Publish</button>
                             ) : null}
+                          </div>
+                          <div className="mt-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-slate-300" data-testid={`step2-slot-publish-guardrails-${missionSlot.slot_id}`}>
+                            <div className="font-semibold uppercase tracking-[0.08em] text-slate-100">Publish Guardrails</div>
+                            <div className="mt-1">Manual approval is always required before publishing.</div>
+                            {publishDisabledReason ? (
+                              <div className="mt-2 rounded border border-amber-300/25 bg-amber-400/10 px-2 py-1 text-amber-100" data-testid={`step2-slot-publish-blocker-${missionSlot.slot_id}`}>
+                                Publish blocked: {publishDisabledReason}
+                              </div>
+                            ) : asset.reviewStatus === "approved" ? (
+                              <div className="mt-2 text-emerald-100">Publish is enabled once you are satisfied with this approved draft.</div>
+                            ) : (
+                              <div className="mt-2">Approve this draft and featured image snapshot before publish becomes available.</div>
+                            )}
                           </div>
                         </div>
                       ) : null}
