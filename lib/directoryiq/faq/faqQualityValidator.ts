@@ -11,6 +11,7 @@ const GENERIC_LANGUAGE_PATTERNS = [
 ];
 
 const TITLE_JARGON_PATTERN = /(pre[\s_-]*selection|friction|slot|publish_|mission control)/i;
+const ADDRESS_LIKE_PATTERN = /\b\d{1,6}\s+[a-z0-9].*(street|st\.?|avenue|ave\.?|road|rd\.?|drive|dr\.?|lane|ln\.?|boulevard|blvd\.?|frontage|highway|hwy\.?|court|ct\.?)\b/i;
 
 function normalizeAnswer(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
@@ -48,12 +49,50 @@ export function evaluateFaqQuality(input: {
             plain.includes("not currently listed")
           );
         }).length / input.faqEntries.length;
+  const normalizedSourceFacts = input.faqEntries.map((entry) =>
+    entry.source_facts
+      .map((fact) => fact.trim().toLowerCase())
+      .filter(Boolean)
+      .sort()
+      .join(" | ")
+  );
   const distinctGroundedFacts = new Set(
     input.faqEntries
       .flatMap((entry) => entry.source_facts)
       .map((fact) => fact.trim().toLowerCase())
       .filter(Boolean)
   ).size;
+  const repeatedSourceFactRatio =
+    normalizedSourceFacts.length <= 1
+      ? 0
+      : (normalizedSourceFacts.length - new Set(normalizedSourceFacts).size) / normalizedSourceFacts.length;
+  const firstSentenceKeys = input.faqEntries
+    .map((entry) => entry.answer_plaintext.split(".")[0] ?? "")
+    .map((sentence) => normalizeAnswer(sentence))
+    .filter(Boolean);
+  const repeatedFirstSentenceRatio =
+    firstSentenceKeys.length <= 1 ? 0 : (firstSentenceKeys.length - new Set(firstSentenceKeys).size) / firstSentenceKeys.length;
+  const unsupportedQuestionCount = input.faqEntries.filter((entry) => {
+    const plain = entry.answer_plaintext.toLowerCase();
+    const looksAddressLike = ADDRESS_LIKE_PATTERN.test(entry.answer_plaintext);
+      if (
+      /amenit/i.test(entry.question) &&
+      /\bhotel(s)?\b/i.test(plain) &&
+      !/wifi|pool|parking|kitchen|pet|spa|gym|shuttle|breakfast/.test(plain) &&
+      !/hotel/i.test(input.context.category)
+    ) {
+      return true;
+    }
+    if (
+      /trip goals?|arrival without a car|local transit|parking/i.test(entry.question) &&
+      looksAddressLike &&
+      entry.source_facts.length <= 1 &&
+      !/hotel/i.test(input.context.category)
+    ) {
+      return true;
+    }
+    return false;
+  }).length;
 
   const directnessScores = input.faqEntries.map((entry) => {
     const firstSentence = entry.answer_plaintext.split(".")[0] ?? "";
@@ -114,10 +153,24 @@ export function evaluateFaqQuality(input: {
   if (genericLanguagePenalty > 35) blockedReasons.push("generic language penalty too high");
   if (hallucinationRisk > 50) blockedReasons.push("hallucination risk too high");
   if (selectionIntentCoverage < 55) blockedReasons.push("question diversity too low");
-  if (input.faqEntries.length >= 5 && duplicateRatio > 0.8) blockedReasons.push("answer repetition too high");
-  if (fallbackRatio > 0.9) blockedReasons.push("fallback answer ratio too high");
-  if (fallbackRatio > 0.9 && distinctGroundedFacts < 2) blockedReasons.push("grounded fact diversity too low");
+  if (input.faqEntries.length >= 5 && duplicateRatio > 0.45) blockedReasons.push("answer repetition too high");
+  if (repeatedSourceFactRatio > 0.45) blockedReasons.push("source fact repetition too high");
+  if (repeatedFirstSentenceRatio > 0.45) blockedReasons.push("answer openings are too repetitive");
+  if (fallbackRatio > 0.5) blockedReasons.push("fallback answer ratio too high");
+  if (fallbackRatio > 0.5 && distinctGroundedFacts < 3) blockedReasons.push("grounded fact diversity too low");
+  if (unsupportedQuestionCount > 0) blockedReasons.push("one or more FAQ answers are not credibly supported by the dossier");
   if (TITLE_JARGON_PATTERN.test(input.context.title)) blockedReasons.push("title contains internal jargon");
 
-  return { quality, blockedReasons };
+  return {
+    quality,
+    blockedReasons,
+    metrics: {
+      duplicate_ratio: duplicateRatio,
+      fallback_ratio: fallbackRatio,
+      distinct_grounded_facts: distinctGroundedFacts,
+      repeated_source_fact_ratio: repeatedSourceFactRatio,
+      repeated_first_sentence_ratio: repeatedFirstSentenceRatio,
+      unsupported_question_count: unsupportedQuestionCount,
+    },
+  };
 }

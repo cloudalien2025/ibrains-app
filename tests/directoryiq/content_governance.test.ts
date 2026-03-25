@@ -60,4 +60,25 @@ describe("directoryiq content governance", () => {
     expect(validation.valid).toBe(false);
     expect(validation.errors).toContain("Draft must include a contextual in-body link to the listing URL.");
   });
+
+  it("fails governance for internal jargon titles and repeated filler", () => {
+    const listingUrl = "https://example.com/listings/acme";
+    const html = [
+      '<article>',
+      '<h1>pre selection friction FAQ</h1>',
+      '<h2>What should guests know?</h2>',
+      '<p>Some details are not confirmed yet, so guests should verify this directly before booking. This helps travelers compare fit before they book.</p>',
+      '<h2>What should guests know next?</h2>',
+      '<p>Some details are not confirmed yet, so guests should verify this directly before booking. This helps travelers compare fit before they book.</p>',
+      `<p>For details see <a href="${listingUrl}">Acme Listing</a>.</p>`,
+      '</article>',
+    ].join('');
+
+    const validation = validateDraftHtml({ html, listingUrl });
+    expect(validation.valid).toBe(false);
+    expect(validation.errors).toContain("Draft title contains internal workflow jargon and is not publishable.");
+    expect(validation.errors).toContain("Draft contains too much generic filler language.");
+    expect(validation.errors).toContain("Draft relies on repeated uncertainty filler instead of grounded answers.");
+    expect(validation.errors).toContain("Draft repeats templated traveler-fit filler.");
+  });
 });

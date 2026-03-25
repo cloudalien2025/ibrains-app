@@ -54,7 +54,7 @@ describe("faq engine integration", () => {
     expect(result.selected_questions.length).toBeGreaterThanOrEqual(6);
   });
 
-  it("passes publish gate for hotel-shaped BD fixture using grounded aliases", () => {
+  it("blocks hotel-shaped BD fixture when aliases are still too thin for publish", () => {
     const result = buildListingFaqSupportEngine({
       listingId: "site-1:142",
       siteId: "site-1",
@@ -73,7 +73,8 @@ describe("faq engine integration", () => {
     });
 
     expect(result.context.listing_archetype).toBe("hotel");
-    expect(result.publish_gate_result.allowPublish).toBe(true);
+    expect(result.publish_gate_result.allowPublish).toBe(false);
+    expect(result.publish_gate_result.reasons.length).toBeGreaterThan(0);
     expect(result.selected_questions.every((item) => item.cluster !== "occupancy")).toBe(true);
   });
 

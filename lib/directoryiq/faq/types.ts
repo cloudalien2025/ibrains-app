@@ -107,6 +107,14 @@ export type FaqQualityScores = {
 export type FaqValidationResult = {
   quality: FaqQualityScores;
   blockedReasons: string[];
+  metrics?: {
+    duplicate_ratio: number;
+    fallback_ratio: number;
+    distinct_grounded_facts: number;
+    repeated_source_fact_ratio: number;
+    repeated_first_sentence_ratio: number;
+    unsupported_question_count: number;
+  };
 };
 
 export type FaqPublishGateResult = {

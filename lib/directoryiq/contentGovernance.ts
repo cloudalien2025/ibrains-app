@@ -6,6 +6,15 @@ type GovernedPromptInput = {
   focusTopic: string;
 };
 
+const TITLE_JARGON_PATTERN = /(pre[\s_-]*selection|friction|slot|publish_|mission control)/i;
+const GENERIC_DRAFT_PATTERNS = [
+  /some details are not confirmed yet/i,
+  /this helps travelers compare fit before they book/i,
+  /guests should verify this directly before booking/i,
+  /it is important to/i,
+  /informed decision/i,
+];
+
 function decodeHtmlEntities(value: string): string {
   return value
     .replace(/&amp;/gi, "&")
@@ -70,8 +79,39 @@ export function validateDraftHtml(input: {
   const hasContextualListingLink = hasListingAnchorLink(html, listingUrl);
   const errors = hasContextualListingLink ? [] : ["Draft must include a contextual in-body link to the listing URL."];
 
+  const plain = html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const lower = plain.toLowerCase();
+  const genericHits = GENERIC_DRAFT_PATTERNS.filter((pattern) => pattern.test(plain)).length;
+  const titleMatch = html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i);
+  const title = titleMatch ? titleMatch[1].replace(/<[^>]+>/g, " ").trim() : "";
+  const faqQuestions = [...html.matchAll(/<h2[^>]*>([\s\S]*?)<\/h2>/gi)].map((match) => match[1].replace(/<[^>]+>/g, " ").trim());
+  const normalizedQuestions = faqQuestions.map((question) => question.toLowerCase()).filter(Boolean);
+  const duplicateQuestionRatio =
+    normalizedQuestions.length <= 1
+      ? 0
+      : (normalizedQuestions.length - new Set(normalizedQuestions).size) / normalizedQuestions.length;
+
+  if (title && TITLE_JARGON_PATTERN.test(title)) {
+    errors.push("Draft title contains internal workflow jargon and is not publishable.");
+  }
+  if (genericHits >= 3) {
+    errors.push("Draft contains too much generic filler language.");
+  }
+  if (duplicateQuestionRatio > 0.2) {
+    errors.push("Draft repeats FAQ questions too often.");
+  }
+  if ((lower.match(/some details are not confirmed yet/g) ?? []).length >= 2) {
+    errors.push("Draft relies on repeated uncertainty filler instead of grounded answers.");
+  }
+  if ((lower.match(/this helps travelers compare fit before they book/g) ?? []).length >= 2) {
+    errors.push("Draft repeats templated traveler-fit filler.");
+  }
+
   return {
-    valid: hasContextualListingLink,
+    valid: errors.length === 0,
     errors,
     hasContextualListingLink,
   };

@@ -421,6 +421,14 @@ export async function POST(
     );
 
     const relatedGuidesHtml = `<h3>Related Guides</h3><ul><li><a href=\"${publishedUrl}\">${post.title}</a></li></ul>`;
+    const existingListingDesc = typeof listingRaw.group_desc === "string" ? listingRaw.group_desc.trim() : "";
+    const hasExistingRelatedGuides = /<h3[^>]*>\s*Related Guides\s*<\/h3>/i.test(existingListingDesc);
+    const alreadyLinksPublishedUrl = publishedUrl ? existingListingDesc.includes(publishedUrl) : false;
+    const mergedListingDesc = alreadyLinksPublishedUrl
+      ? existingListingDesc
+      : hasExistingRelatedGuides
+        ? existingListingDesc.replace(/(<\/ul>)/i, `<li><a href=\"${publishedUrl}\">${post.title}</a></li>$1`)
+        : [existingListingDesc, relatedGuidesHtml].filter(Boolean).join("\n\n");
 
     const listingPush = mapping.truePostId
       ? await pushListingUpdateToBd({
@@ -429,7 +437,7 @@ export async function POST(
           dataPostsUpdatePath: bd.dataPostsUpdatePath,
           postId: mapping.truePostId,
           changes: {
-            group_desc: relatedGuidesHtml,
+            group_desc: mergedListingDesc || relatedGuidesHtml,
           },
         })
       : { ok: false, status: 422, body: { error: "Unable to resolve listing true post id for reciprocal link write." } };

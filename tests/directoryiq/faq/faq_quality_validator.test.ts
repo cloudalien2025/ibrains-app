@@ -107,6 +107,29 @@ describe("faq quality validator", () => {
 
     expect(result.blockedReasons).toContain("fallback answer ratio too high");
     expect(result.blockedReasons).toContain("grounded fact diversity too low");
+    expect(result.blockedReasons).toContain("source fact repetition too high");
+    expect(result.blockedReasons).toContain("answer openings are too repetitive");
     expect(result.blockedReasons).toContain("title contains internal jargon");
+  });
+
+  it("blocks unsupported amenity-style answers that are not grounded in the dossier", () => {
+    const faqEntries: FaqEntry[] = [
+      {
+        question: "What amenities are available at this property?",
+        answer_html: "<p>Yes. Hotels.</p>",
+        answer_plaintext: "Yes. Hotels.",
+        source_facts: ["Hotels"],
+        fact_confidence: "inferred",
+        intent_cluster: "amenities",
+        listing_anchor_terms: [],
+        local_anchor_terms: [],
+        internal_links: [],
+        quality_score: 20,
+      },
+    ];
+
+    const result = evaluateFaqQuality({ context, faqEntries, selectedClusters: ["amenities"] });
+    expect(result.blockedReasons).toContain("one or more FAQ answers are not credibly supported by the dossier");
+    expect(result.metrics?.unsupported_question_count).toBeGreaterThan(0);
   });
 });

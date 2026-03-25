@@ -17,7 +17,7 @@ const baseContext: ListingFaqContext = {
   canonical_url: "https://example.com/listings/alpine-cabin",
   title: "Alpine Cabin",
   description: "",
-  amenities: [],
+  amenities: ["wifi", "parking"],
   occupancy: "",
   bedrooms: "",
   bathrooms: "",
@@ -64,8 +64,23 @@ const qualityPass: FaqValidationResult = {
 describe("faq publish gate", () => {
   it("allows publish for grounded output", () => {
     const result = applyFaqPublishGate({
-      context: baseContext,
-      validation: qualityPass,
+      context: {
+        ...baseContext,
+        known_facts: ["parking", "wifi", "checkin_info", "amenities", "location"],
+        unknown_facts: ["pet_policy"],
+      },
+      validation: {
+        ...qualityPass,
+        metrics: {
+          duplicate_ratio: 0,
+          fallback_ratio: 0,
+          distinct_grounded_facts: 5,
+          repeated_source_fact_ratio: 0,
+          repeated_first_sentence_ratio: 0,
+          unsupported_question_count: 0,
+        },
+        blockedReasons: [],
+      },
       finalFaqEntryCount: 7,
     });
 
@@ -84,6 +99,14 @@ describe("faq publish gate", () => {
         quality: {
           ...qualityPass.quality,
           generic_language_penalty: 50,
+        },
+        metrics: {
+          duplicate_ratio: 0.6,
+          fallback_ratio: 0.75,
+          distinct_grounded_facts: 1,
+          repeated_source_fact_ratio: 0.75,
+          repeated_first_sentence_ratio: 0.75,
+          unsupported_question_count: 1,
         },
       },
       finalFaqEntryCount: 3,
