@@ -421,7 +421,7 @@ export async function POST(
     );
 
     const relatedGuidesHtml = `<h3>Related Guides</h3><ul><li><a href=\"${publishedUrl}\">${post.title}</a></li></ul>`;
-    const existingListingDesc = typeof listing?.raw_json?.group_desc === "string" ? listing.raw_json.group_desc.trim() : "";
+    const existingListingDesc = typeof listingRaw.group_desc === "string" ? listingRaw.group_desc.trim() : "";
     const hasExistingRelatedGuides = /<h3[^>]*>\s*Related Guides\s*<\/h3>/i.test(existingListingDesc);
     const alreadyLinksPublishedUrl = publishedUrl ? existingListingDesc.includes(publishedUrl) : false;
     const mergedListingDesc = alreadyLinksPublishedUrl
