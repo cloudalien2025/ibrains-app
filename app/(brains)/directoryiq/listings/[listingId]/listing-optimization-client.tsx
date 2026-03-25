@@ -746,7 +746,16 @@ function asRuntime(value: unknown): Step2ParityRuntime {
 }
 
 function normalizeResearchState(value: unknown, fallback: Step2ResearchState = "not_started"): Step2ResearchState {
-  if (value === "not_started" || value === "queued" || value === "researching" || value === "ready" || value === "failed" || value === "stale") {
+  if (
+    value === "not_started" ||
+    value === "queued" ||
+    value === "researching" ||
+    value === "ready_thin" ||
+    value === "ready_grounded" ||
+    value === "ready" ||
+    value === "failed" ||
+    value === "stale"
+  ) {
     return value;
   }
   return fallback;
@@ -2069,10 +2078,46 @@ export default function ListingOptimizationClient({
       deriveStep2ResearchState({
         requestedState: step2ResearchRequestedState,
         hasUsableResearchArtifact: step2HasUsableResearch,
+        researchArtifact: Object.values(step2Runtime).find((runtime) => hasUsableStep2ResearchArtifact(runtime.researchArtifact))?.researchArtifact,
       }),
     [step2HasUsableResearch, step2ResearchRequestedState]
   );
   const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
+  const step2ResearchDiagnostic = useMemo(() => {
+    if (step2ResearchState === "ready_grounded" || step2ResearchState === "ready") {
+      return {
+        tone: "emerald" as const,
+        label: "Research grounded",
+        message: "This listing has a grounded Step 2 dossier and can generate support content.",
+      };
+    }
+    if (step2ResearchState === "ready_thin") {
+      return {
+        tone: "amber" as const,
+        label: "Research thin",
+        message: "Research exists, but the dossier is still thin. Generate carefully and expect stricter quality blocking.",
+      };
+    }
+    if (step2ResearchState === "researching" || step2ResearchState === "queued") {
+      return {
+        tone: "cyan" as const,
+        label: "Research running",
+        message: "DirectoryIQ is still building the listing dossier.",
+      };
+    }
+    if (step2ResearchState === "failed") {
+      return {
+        tone: "rose" as const,
+        label: "Research failed",
+        message: STEP2_RESEARCH_REQUIRED_MESSAGE,
+      };
+    }
+    return {
+      tone: "slate" as const,
+      label: "Research not started",
+      message: STEP2_RESEARCH_EXPLAINER,
+    };
+  }, [step2ResearchState]);
   const step2ParityMismatch = useMemo(() => {
     if (!step2ReadRuntime || !step2WriteRuntime) return false;
     return (
@@ -3559,6 +3604,23 @@ export default function ListingOptimizationClient({
                     <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Preview Ready: {step2StatusBuckets.preview_ready}</span>
                     <span className="rounded-full border border-cyan-300/30 bg-cyan-400/10 px-2 py-1 text-cyan-100">Approved: {step2StatusBuckets.approved}</span>
                     <span className="rounded-full border border-rose-300/30 bg-rose-400/10 px-2 py-1 text-rose-100">Needs Attention: {step2StatusBuckets.needs_attention}</span>
+                  </div>
+                  <div
+                    className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
+                      step2ResearchDiagnostic.tone === "emerald"
+                        ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
+                        : step2ResearchDiagnostic.tone === "amber"
+                          ? "border-amber-300/30 bg-amber-400/10 text-amber-100"
+                          : step2ResearchDiagnostic.tone === "rose"
+                            ? "border-rose-300/30 bg-rose-400/10 text-rose-100"
+                            : step2ResearchDiagnostic.tone === "cyan"
+                              ? "border-cyan-300/30 bg-cyan-400/10 text-cyan-100"
+                              : "border-white/10 bg-white/[0.03] text-slate-300"
+                    }`}
+                    data-testid="step2-research-diagnostic"
+                  >
+                    <div className="font-semibold uppercase tracking-[0.08em]">{step2ResearchDiagnostic.label}</div>
+                    <div className="mt-1">{step2ResearchDiagnostic.message}</div>
                   </div>
                 </div>
 
