@@ -3768,7 +3768,7 @@ export default function ListingOptimizationClient({
                             Research required
                           </button>
                         ) : null}
-                        {step2ResearchReady && setupBlocked ? (
+                        {(step2ResearchReady || step2ResearchState === "ready_thin") && setupBlocked ? (
                           <Link
                             href="/directoryiq/signal-sources?connector=openai"
                             className="inline-flex rounded-lg border border-amber-300/35 bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-100"
@@ -3777,7 +3777,7 @@ export default function ListingOptimizationClient({
                             Connect OpenAI
                           </Link>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && draftAction.kind === "write_article" ? (
+                        {(step2ResearchReady || step2ResearchState === "ready_thin") && !setupBlocked && draftAction.kind === "write_article" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
