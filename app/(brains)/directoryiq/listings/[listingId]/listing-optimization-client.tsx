@@ -2094,6 +2094,7 @@ export default function ListingOptimizationClient({
     [step2HasUsableResearch, step2ResearchRequestedState]
   );
   const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
+  const step2ResearchActionReady = step2ResearchReady || step2ResearchState === "ready_thin";
   const step2ResearchDiagnostic = useMemo(() => {
     if (step2ResearchState === "ready_grounded" || step2ResearchState === "ready") {
       return {
@@ -2987,7 +2988,7 @@ export default function ListingOptimizationClient({
       setError({ message: "Step 2 runtime parity mismatch detected. Refresh and retry after app/API releases align." });
       return;
     }
-    if (!step2ResearchReady) {
+    if (!step2ResearchActionReady) {
       setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });
       return;
     }
@@ -3003,6 +3004,18 @@ export default function ListingOptimizationClient({
     }
 
     const action = actionInput.recommendedAction;
+    setContentAssets((previous) => {
+      const currentAsset = previous[input.item.id] ?? initializeContentAsset(input.item, input.slot);
+      return {
+        ...previous,
+        [input.item.id]: {
+          ...currentAsset,
+          draftStatus: "generating",
+          draftLastErrorCode: null,
+          draftLastErrorMessage: null,
+        },
+      };
+    });
     patchStep2Runtime(slotId, { internalState: "researching", errorMessage: null });
     const contractInput = buildStep2DraftContractInput(input.missionSlot);
     const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));
@@ -3763,7 +3776,7 @@ export default function ListingOptimizationClient({
                       </div>
 
                       <div className="mt-3 flex flex-wrap gap-2" data-testid={`step2-slot-actions-${missionSlot.slot_id}`}>
-                        {!step2ResearchReady ? (
+                        {!step2ResearchActionReady ? (
                           <button
                             type="button"
                             className="rounded-lg border border-slate-300/25 bg-slate-500/10 px-3 py-1.5 text-xs font-medium text-slate-300"
@@ -3773,7 +3786,7 @@ export default function ListingOptimizationClient({
                             Research required
                           </button>
                         ) : null}
-                        {(step2ResearchReady || step2ResearchState === "ready_thin") && setupBlocked ? (
+                        {step2ResearchActionReady && setupBlocked ? (
                           <Link
                             href="/directoryiq/signal-sources?connector=openai"
                             className="inline-flex rounded-lg border border-amber-300/35 bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-100"
@@ -3782,7 +3795,7 @@ export default function ListingOptimizationClient({
                             Connect OpenAI
                           </Link>
                         ) : null}
-                        {(step2ResearchReady || step2ResearchState === "ready_thin") && !setupBlocked && draftAction.kind === "write_article" ? (
+                        {step2ResearchActionReady && !setupBlocked && draftAction.kind === "write_article" ? (
                           <button
                             type="button"
                             className="rounded-lg border border-cyan-300/35 bg-cyan-400/15 px-3 py-1.5 text-xs font-medium text-cyan-100"
@@ -3792,7 +3805,7 @@ export default function ListingOptimizationClient({
                             {draftAction.label}
                           </button>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "draft_ready" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "draft_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3812,7 +3825,7 @@ export default function ListingOptimizationClient({
                             ) : null}
                           </>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "image_ready" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "image_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3830,7 +3843,7 @@ export default function ListingOptimizationClient({
                             </button>
                           </>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "preview_ready" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "preview_ready" ? (
                           <>
                             <button
                               type="button"
@@ -3845,7 +3858,7 @@ export default function ListingOptimizationClient({
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "approved" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "approved" ? (
                           <>
                             <button
                               type="button"
@@ -3863,10 +3876,10 @@ export default function ListingOptimizationClient({
                             <button type="button" className="rounded-lg border border-white/20 bg-black/25 px-3 py-1.5 text-xs font-medium text-slate-100" onClick={() => void generateContentImage(item, slot)}>Regenerate Image</button>
                           </>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "publishing" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "publishing" ? (
                           <button type="button" className="rounded-lg border border-indigo-300/35 bg-indigo-400/15 px-3 py-1.5 text-xs font-medium text-indigo-100" disabled>Publishing…</button>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "published" && asset.publishedUrl ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "published" && asset.publishedUrl ? (
                           <div data-testid={`step2-slot-secondary-action-${missionSlot.slot_id}`}>
                             <a
                               href={asset.publishedUrl}
@@ -3879,7 +3892,7 @@ export default function ListingOptimizationClient({
                             </a>
                           </div>
                         ) : null}
-                        {step2ResearchReady && !setupBlocked && aggregateState === "needs_attention" ? (
+                        {step2ResearchActionReady && !setupBlocked && aggregateState === "needs_attention" ? (
                           <>
                             {draftAction.kind === "retry_draft" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void executeStep2SlotPipeline({ missionSlot, item, slot, mode: "retry_draft" })}>{draftAction.label}</button> : null}
                             {asset.imageStatus === "failed" ? <button type="button" className="rounded-lg border border-rose-300/35 bg-rose-400/15 px-3 py-1.5 text-xs font-medium text-rose-100" onClick={() => void generateContentImage(item, slot)}>Retry Image</button> : null}
@@ -3896,7 +3909,7 @@ export default function ListingOptimizationClient({
                             : helperMessage}
                         </div>
                       ) : null}
-                      {!step2ResearchReady ? (
+                      {!step2ResearchActionReady ? (
                         <div className="mt-2 text-xs text-slate-300" data-testid={`step2-slot-research-locked-${missionSlot.slot_id}`}>
                           {STEP2_RESEARCH_REQUIRED_MESSAGE}
                         </div>

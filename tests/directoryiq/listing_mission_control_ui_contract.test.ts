@@ -140,9 +140,10 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("setError({ message: STEP2_LISTING_URL_BLOCKER });");
     expect(source).toContain("const hasListingUrlPrerequisite = Boolean(firstNonEmptyValue(contractInput.missionPlanSlot.listing_url));");
     expect(source).toContain("if (!hasListingUrlPrerequisite) {");
-    expect(source).toContain("if (!step2ResearchReady) {");
+    expect(source).toContain("if (!step2ResearchActionReady) {");
     expect(source).toContain("setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });");
     expect(source).toContain("const step2ResearchReady = isStep2ResearchReady(step2ResearchState);");
+    expect(source).toContain("const step2ResearchActionReady = step2ResearchReady || step2ResearchState === \"ready_thin\";");
     expect(source).toContain("research_artifact: contractInput.researchArtifact");
     expect(source).toContain("deriveStep2AggregateState");
     expect(source).toContain("deriveStep2DraftAction");
