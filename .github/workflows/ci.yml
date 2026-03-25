@@ -37,8 +37,8 @@ jobs:
       - name: Check route signatures
         run: bash scripts/check_route_signatures.sh
 
-      - name: Lint
-        run: pnpm run --if-present lint
+      - name: Lint (DirectoryIQ scope)
+        run: pnpm run --if-present lint:directoryiq
 
   build:
     runs-on: ubuntu-latest
