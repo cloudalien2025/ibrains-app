@@ -2000,15 +2000,20 @@ export default function ListingOptimizationClient({
         const asset = contentAssets[item.id] ?? initializeContentAsset(item, slot);
         const blueprint = contentStructure?.items[index] ?? null;
         const runtime = step2Runtime[missionSlot.slot_id];
-        const aggregateState = deriveStep2AggregateState({
-          draft_status: asset.draftStatus,
-          image_status: asset.imageStatus,
-          review_status: asset.reviewStatus,
-          publish_status: asset.publishStatus,
-          blog_to_listing_link_status: asset.blogToListingLinkStatus,
-          listing_to_blog_link_status: asset.listingToBlogLinkStatus,
-          published_url: asset.publishedUrl || null,
-        });
+        const aggregateState =
+          runtime?.internalState === "generating"
+            ? "generating"
+            : runtime?.internalState === "publishing"
+              ? "publishing"
+              : deriveStep2AggregateState({
+                  draft_status: asset.draftStatus,
+                  image_status: asset.imageStatus,
+                  review_status: asset.reviewStatus,
+                  publish_status: asset.publishStatus,
+                  blog_to_listing_link_status: asset.blogToListingLinkStatus,
+                  listing_to_blog_link_status: asset.listingToBlogLinkStatus,
+                  published_url: asset.publishedUrl || null,
+                });
         const publishDisabledReason = derivePublishDisabledReason({
           draftReady: asset.draftStatus === "ready",
           imageReady: asset.imageStatus === "ready",
