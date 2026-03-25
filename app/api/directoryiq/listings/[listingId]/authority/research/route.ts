@@ -15,7 +15,11 @@ import {
   isDossierBackedResearchArtifact,
   type DossierBackedStep2Contract,
 } from "@/lib/directoryiq/step2ResearchDossierEngine";
-import { hasUsableStep2ResearchArtifact, type Step2ResearchState } from "@/lib/directoryiq/step2ResearchGateContract";
+import {
+  classifyStep2ResearchReadiness,
+  hasUsableStep2ResearchArtifact,
+  type Step2ResearchState,
+} from "@/lib/directoryiq/step2ResearchGateContract";
 import { getListingCurrentSupport } from "@/src/directoryiq/services/listingSupportService";
 
 type Step2ResearchContractPayload = {
@@ -147,11 +151,15 @@ function deriveCanonicalResearchState(input: {
   }
 
   if (readyContracts.length > 0) {
+    const contracts = readyContracts
+      .filter((entry) => entry.slot > 0)
+      .sort((left, right) => left.slot - right.slot);
+    const readiness = contracts.every((entry) => classifyStep2ResearchReadiness(entry.step2_contract.research_artifact) === "grounded")
+      ? "ready_grounded"
+      : "ready_thin";
     return {
-      state: "ready",
-      contracts: readyContracts
-        .filter((entry) => entry.slot > 0)
-        .sort((left, right) => left.slot - right.slot),
+      state: readiness,
+      contracts,
     };
   }
   if (hasResearching) return { state: "researching", contracts: [] };
@@ -251,16 +259,16 @@ export async function POST(
 
   const existingPosts = (await getAuthorityPosts(userId, listingSourceId)) as AuthorityPostResearchRow[];
   const canonicalState = deriveCanonicalResearchState({ posts: existingPosts });
-  if (canonicalState.state === "ready") {
+  if (canonicalState.state === "ready" || canonicalState.state === "ready_grounded" || canonicalState.state === "ready_thin") {
     return NextResponse.json(
       {
         ok: true,
         reqId,
-        state: "ready",
+        state: canonicalState.state,
         contracts: toResponseContracts(canonicalState.contracts),
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
-      { status: 200 }
+      { status: canonicalState.state === "ready_grounded" || canonicalState.state === "ready" ? 200 : 202 }
     );
   }
 
