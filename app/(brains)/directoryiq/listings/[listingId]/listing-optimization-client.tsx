@@ -2096,7 +2096,7 @@ export default function ListingOptimizationClient({
   const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
   const step2ResearchActionReady = step2ResearchReady || step2ResearchState === "ready_thin";
   const step2ResearchDiagnostic = useMemo(() => {
-    if (step2ResearchState === "ready_grounded" || step2ResearchState === "ready") {
+    if (step2ResearchState === "ready_grounded") {
       return {
         tone: "emerald" as const,
         label: "Research grounded",

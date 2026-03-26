@@ -30,7 +30,7 @@ export function hasUsableStep2ResearchArtifact(value: unknown): value is Step2Su
 }
 
 export function isStep2ResearchReady(state: Step2ResearchState): boolean {
-  return state === "ready" || state === "ready_grounded";
+  return state === "ready_grounded";
 }
 
 export function classifyStep2ResearchReadiness(value: unknown): "missing" | "thin" | "grounded" {
