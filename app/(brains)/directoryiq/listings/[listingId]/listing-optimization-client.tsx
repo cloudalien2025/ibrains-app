@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import TopBar from "@/components/ecomviper/TopBar";
@@ -1106,6 +1106,12 @@ export default function ListingOptimizationClient({
   const [step2ResearchRequestedState, setStep2ResearchRequestedState] = useState<Step2ResearchState>("not_started");
   const [step2ResearchFailureCode, setStep2ResearchFailureCode] = useState<string | null>(null);
   const [step2ResearchFailureMessage, setStep2ResearchFailureMessage] = useState<string | null>(null);
+  /**
+   * Tracks whether a research job was initiated in this browser session.
+   * When true, the session is already polling via waitForDirectoryIqJobResult and we
+   * should NOT add a second background poll to avoid duplicate requests.
+   */
+  const step2ResearchInFlightRef = useRef(false);
   const [serverStep2Snapshot, setServerStep2Snapshot] = useState<ListingDetailResponse["step2"] | null>(null);
   const [step2ReadRuntime, setStep2ReadRuntime] = useState<Step2ParityRuntime>(null);
   const [step2WriteRuntime, setStep2WriteRuntime] = useState<Step2ParityRuntime>(null);
@@ -1300,6 +1306,48 @@ export default function ListingOptimizationClient({
     void loadListingAndIntegrations();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveListingId, siteQuery]);
+
+  /**
+   * Background research status poller.
+   *
+   * When research_state comes back as "queued" or "researching" on page load
+   * (i.e. a job was started in a prior session), the session has no in-flight
+   * waitForDirectoryIqJobResult call to auto-resolve. This effect fires a
+   * lightweight GET against the listing detail endpoint every 5 s until the
+   * state transitions to a terminal value (ready_* or failed), then stops.
+   *
+   * Guard: skip polling whenever the current session already has an active
+   * research request in-flight (step2ResearchInFlightRef.current === true) to
+   * avoid duplicate concurrent polling.
+   */
+  const RESEARCH_POLL_INTERVAL_MS = 5_000;
+  const RESEARCH_POLL_MAX_MS = 180_000;
+  useEffect(() => {
+    const isInProgress = step2ResearchRequestedState === "queued" || step2ResearchRequestedState === "researching";
+    if (!isInProgress || !effectiveListingId) return;
+    // An in-flight request from this session already handles resolution.
+    if (step2ResearchInFlightRef.current) return;
+
+    let stopped = false;
+    let elapsed = 0;
+
+    const intervalId = setInterval(() => {
+      if (stopped) return;
+      elapsed += RESEARCH_POLL_INTERVAL_MS;
+      if (elapsed >= RESEARCH_POLL_MAX_MS) {
+        clearInterval(intervalId);
+        stopped = true;
+        return;
+      }
+      void loadListingAndIntegrations();
+    }, RESEARCH_POLL_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step2ResearchRequestedState, effectiveListingId]);
 
   useEffect(() => {
     if (!effectiveListingId) return;
@@ -2898,6 +2946,7 @@ export default function ListingOptimizationClient({
 
     setError(null);
     setNotice(null);
+    step2ResearchInFlightRef.current = true;
     setStep2ResearchRequestedState("queued");
 
     try {
@@ -2990,6 +3039,8 @@ export default function ListingOptimizationClient({
     } catch (error) {
       setStep2ResearchRequestedState("failed");
       setError({ message: stringifyErrorMessage(error, "Failed to start listing research.") });
+    } finally {
+      step2ResearchInFlightRef.current = false;
     }
   }
 
@@ -2999,6 +3050,7 @@ export default function ListingOptimizationClient({
 
     setError(null);
     setNotice(null);
+    step2ResearchInFlightRef.current = true;
     setStep2ResearchRequestedState("queued");
     setStep2ResearchFailureCode(null);
     setStep2ResearchFailureMessage(null);
@@ -3053,6 +3105,8 @@ export default function ListingOptimizationClient({
     } catch (error) {
       setStep2ResearchRequestedState("failed");
       setError({ message: stringifyErrorMessage(error, "Failed to retry listing research.") });
+    } finally {
+      step2ResearchInFlightRef.current = false;
     }
   }
 
