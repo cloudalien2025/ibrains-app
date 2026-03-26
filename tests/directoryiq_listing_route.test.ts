@@ -378,10 +378,74 @@ describe("directoryiq listing detail route proxy", () => {
     const json = await res.json();
 
     expect(res.status).toBe(200);
-    expect(json.step2?.research_state).toBe("ready");
+    expect(json.step2?.research_state).toBe("ready_thin");
     expect(Array.isArray(json.step2?.slots)).toBe(true);
+    expect(json.step2?.slots?.[0]?.step2_research_state).toBe("ready_thin");
     expect(json.step2?.slots?.[0]?.draft_html).toContain("Persisted draft");
     expect(json.runtime?.runtime_owner).toBe("directoryiq-api.ibrains.ai");
     expect(json.runtime?.release_stamp).toBe("rel-test-123");
+  });
+
+  it("preserves grounded persisted Step 2 research readiness tiers for local owner reads", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        source_id: "site-1:142",
+        title: "Cedar at Streamside",
+        url: "https://example.com/listings/cedar-at-streamside",
+        raw_json: {
+          listing_id: "142",
+          group_name: "Cedar at Streamside",
+        },
+      },
+      authorityPosts: [
+        {
+          slot_index: 1,
+          draft_html: "<p>Persisted draft</p>",
+          featured_image_url: "https://example.com/image.webp",
+          metadata_json: {
+            step2_contract: {
+              research_artifact: {
+                focus_keyword: "cedar at streamside comparison",
+                top_results: [
+                  { title: "Listing", url: "https://example.com/listings/cedar-at-streamside", rank: 1 },
+                  { title: "Local guide", url: "https://example.com/blog/things-to-do-near-cedar", rank: 2 },
+                  { title: "Travel roundup", url: "https://travel.example.com/cedar-at-streamside", rank: 3 },
+                ],
+                faq_patterns: ["Is Cedar at Streamside walkable?", "What is nearby?"],
+                entities: {
+                  amenities: ["pool"],
+                  location: ["Vail"],
+                  intent: ["family travel"],
+                },
+                same_site_evidence: [{ url: "https://example.com/blog/things-to-do-near-cedar" }],
+              },
+            },
+            step2_research: { state: "ready" },
+            step2_state: {
+              draft_status: "ready",
+              image_status: "ready",
+              review_status: "ready",
+              publish_status: "not_started",
+              draft_version: 2,
+              image_version: 1,
+            },
+          },
+          updated_at: "2026-03-24T00:00:00.000Z",
+        },
+      ],
+      evaluation: { totalScore: 80 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/142?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "142" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.step2?.research_state).toBe("ready_grounded");
+    expect(json.step2?.slots?.[0]?.step2_research_state).toBe("ready_grounded");
   });
 });

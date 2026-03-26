@@ -6,7 +6,12 @@ import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { getListingEvaluation, readPersistedStep2State } from "@/app/api/directoryiq/_utils/selectionData";
 import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
 import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
-import { hasUsableStep2ResearchArtifact, type Step2ResearchState } from "@/lib/directoryiq/step2ResearchGateContract";
+import {
+  classifyStep2ResearchReadiness,
+  deriveStep2ResearchState,
+  hasUsableStep2ResearchArtifact,
+  type Step2ResearchState,
+} from "@/lib/directoryiq/step2ResearchGateContract";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 
@@ -54,8 +59,13 @@ function asRecord(value: unknown): Record<string, unknown> {
 function derivePersistedResearchStateFromPosts(
   slots: Array<{ step2_contract: Record<string, unknown> | null; step2_research_state: Step2ResearchState }>
 ): Step2ResearchState {
-  const hasReady = slots.some((slot) => hasUsableStep2ResearchArtifact(asRecord(slot.step2_contract).research_artifact));
-  if (hasReady) return "ready";
+  const readinessLevels = slots.map((slot) => classifyStep2ResearchReadiness(asRecord(slot.step2_contract).research_artifact));
+  const hasGrounded = readinessLevels.includes("grounded");
+  const hasThin = readinessLevels.includes("thin");
+
+  if (hasGrounded) return "ready_grounded";
+  if (hasThin) return "ready_thin";
+  if (slots.some((slot) => slot.step2_research_state === "stale")) return "stale";
   if (slots.some((slot) => slot.step2_research_state === "researching")) return "researching";
   if (slots.some((slot) => slot.step2_research_state === "queued")) return "queued";
   if (slots.some((slot) => slot.step2_research_state === "failed")) return "failed";
@@ -198,14 +208,21 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
     const step2Contract = asRecord(metadata.step2_contract);
     const step2Research = asRecord(metadata.step2_research);
     const researchStateRaw = asString(step2Research.state);
-    const step2ResearchState: Step2ResearchState =
+    const requestedResearchState: Step2ResearchState =
       researchStateRaw === "queued" ||
       researchStateRaw === "researching" ||
       researchStateRaw === "ready" ||
+      researchStateRaw === "ready_grounded" ||
+      researchStateRaw === "ready_thin" ||
       researchStateRaw === "failed" ||
       researchStateRaw === "stale"
         ? researchStateRaw
         : "not_started";
+    const step2ResearchState = deriveStep2ResearchState({
+      requestedState: requestedResearchState,
+      hasUsableResearchArtifact: hasUsableStep2ResearchArtifact(step2Contract.research_artifact),
+      researchArtifact: step2Contract.research_artifact,
+    });
     return {
       slot: post.slot_index,
       draft_html: post.draft_html,
