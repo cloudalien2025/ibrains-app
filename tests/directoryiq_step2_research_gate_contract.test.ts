@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canRetryStep2Research,
   deriveStep2ResearchState,
+  isStep2ResearchInProgress,
   isStep2ResearchReady,
 } from "@/lib/directoryiq/step2ResearchGateContract";
 
@@ -120,6 +122,34 @@ describe("DirectoryIQ Step 2 research gate contract", () => {
       expect(isStep2ResearchReady("queued")).toBe(false);
       expect(isStep2ResearchReady("researching")).toBe(false);
       expect(isStep2ResearchReady("failed")).toBe(false);
+    });
+  });
+
+  describe("isStep2ResearchInProgress", () => {
+    it("returns true only for queued and researching", () => {
+      expect(isStep2ResearchInProgress("queued")).toBe(true);
+      expect(isStep2ResearchInProgress("researching")).toBe(true);
+    });
+
+    it("returns false for all other states", () => {
+      expect(isStep2ResearchInProgress("not_started")).toBe(false);
+      expect(isStep2ResearchInProgress("failed")).toBe(false);
+      expect(isStep2ResearchInProgress("ready_thin")).toBe(false);
+      expect(isStep2ResearchInProgress("ready_grounded")).toBe(false);
+    });
+  });
+
+  describe("canRetryStep2Research", () => {
+    it("permits retry only from not_started and failed", () => {
+      expect(canRetryStep2Research("not_started")).toBe(true);
+      expect(canRetryStep2Research("failed")).toBe(true);
+    });
+
+    it("blocks retry from all in-progress and ready states", () => {
+      expect(canRetryStep2Research("queued")).toBe(false);
+      expect(canRetryStep2Research("researching")).toBe(false);
+      expect(canRetryStep2Research("ready_thin")).toBe(false);
+      expect(canRetryStep2Research("ready_grounded")).toBe(false);
     });
   });
 });

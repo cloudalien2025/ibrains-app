@@ -18,6 +18,7 @@ import {
 import {
   classifyStep2ResearchReadiness,
   hasUsableStep2ResearchArtifact,
+  isStep2ResearchInProgress,
   type Step2ResearchState,
 } from "@/lib/directoryiq/step2ResearchGateContract";
 import { getListingCurrentSupport } from "@/src/directoryiq/services/listingSupportService";
@@ -273,6 +274,19 @@ export async function POST(
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: canonicalState.state === "ready_grounded" ? 200 : 202 }
+    );
+  }
+
+  if (isStep2ResearchInProgress(canonicalState.state)) {
+    return NextResponse.json(
+      {
+        ok: true,
+        reqId,
+        state: canonicalState.state,
+        contracts: [],
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
+      },
+      { status: 202 }
     );
   }
 
