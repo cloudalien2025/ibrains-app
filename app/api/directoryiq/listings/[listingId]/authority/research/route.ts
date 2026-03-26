@@ -178,6 +178,10 @@ function toResponseContracts(contracts: DossierBackedStep2Contract[]): Array<{
   }));
 }
 
+function derivePersistedReadyState(contract: Record<string, unknown>): Extract<Step2ResearchState, "ready_thin" | "ready_grounded"> {
+  return classifyStep2ResearchReadiness(contract.research_artifact) === "grounded" ? "ready_grounded" : "ready_thin";
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ listingId: string }> | { listingId: string } }
@@ -374,18 +378,25 @@ export async function POST(
 
       await setStage("persisting");
       for (const entry of dossierBundle.contracts) {
+        const readyState = derivePersistedReadyState(entry.step2_contract as Record<string, unknown>);
         await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
           contract: entry.step2_contract as unknown as Record<string, unknown>,
-          state: "ready",
+          state: readyState,
           errorCode: null,
           errorMessage: null,
         });
       }
 
+      const resultState: Step2ResearchState = usableContracts.every(
+        (entry) => derivePersistedReadyState(entry.step2_contract as Record<string, unknown>) === "ready_grounded"
+      )
+        ? "ready_grounded"
+        : "ready_thin";
+
       return {
         ok: true,
         reqId,
-        state: "ready",
+        state: resultState,
         contracts: toResponseContracts(dossierBundle.contracts),
       };
     },
