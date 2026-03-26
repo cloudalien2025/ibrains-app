@@ -756,8 +756,7 @@ function normalizeResearchState(value: unknown, fallback: Step2ResearchState = "
     value === "researching" ||
     value === "ready_thin" ||
     value === "ready_grounded" ||
-    value === "failed" ||
-    value === "stale"
+    value === "failed"
   ) {
     return value;
   }

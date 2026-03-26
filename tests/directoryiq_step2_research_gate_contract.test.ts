@@ -26,39 +26,100 @@ const groundedArtifact = {
 };
 
 describe("DirectoryIQ Step 2 research gate contract", () => {
-  it("normalizes legacy ready + thin artifacts into ready_thin", () => {
-    expect(
-      deriveStep2ResearchState({
-        requestedState: "ready",
-        hasUsableResearchArtifact: true,
-        researchArtifact: thinArtifact,
-      })
-    ).toBe("ready_thin");
+  describe("deriveStep2ResearchState — thin artifacts", () => {
+    it("classifies thin artifact as ready_thin when requested state is not_started", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "not_started",
+          hasUsableResearchArtifact: true,
+          researchArtifact: thinArtifact,
+        })
+      ).toBe("ready_thin");
+    });
+
+    it("classifies thin artifact as ready_thin when requested state is queued", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "queued",
+          hasUsableResearchArtifact: true,
+          researchArtifact: thinArtifact,
+        })
+      ).toBe("ready_thin");
+    });
   });
 
-  it("normalizes legacy ready + grounded artifacts into ready_grounded", () => {
-    expect(
-      deriveStep2ResearchState({
-        requestedState: "ready",
-        hasUsableResearchArtifact: true,
-        researchArtifact: groundedArtifact,
-      })
-    ).toBe("ready_grounded");
+  describe("deriveStep2ResearchState — grounded artifacts", () => {
+    it("classifies grounded artifact as ready_grounded when requested state is not_started", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "not_started",
+          hasUsableResearchArtifact: true,
+          researchArtifact: groundedArtifact,
+        })
+      ).toBe("ready_grounded");
+    });
+
+    it("classifies grounded artifact as ready_grounded when requested state is queued", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "queued",
+          hasUsableResearchArtifact: true,
+          researchArtifact: groundedArtifact,
+        })
+      ).toBe("ready_grounded");
+    });
   });
 
-  it("keeps legacy ready without usable research artifacts as ready until input normalization reclassifies it", () => {
-    expect(
-      deriveStep2ResearchState({
-        requestedState: "ready",
-        hasUsableResearchArtifact: false,
-        researchArtifact: { focus_keyword: "fixture keyword", top_results: [] },
-      })
-    ).toBe("ready");
+  describe("deriveStep2ResearchState — missing/unusable artifacts", () => {
+    it("preserves in-flight state (researching) when artifact is absent", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "researching",
+          hasUsableResearchArtifact: false,
+          researchArtifact: undefined,
+        })
+      ).toBe("researching");
+    });
+
+    it("preserves in-flight state (queued) when artifact is empty", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "queued",
+          hasUsableResearchArtifact: false,
+          researchArtifact: { focus_keyword: "keyword", top_results: [] },
+        })
+      ).toBe("queued");
+    });
+
+    it("resets ready_thin to not_started when artifact is missing", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "ready_thin",
+          hasUsableResearchArtifact: false,
+          researchArtifact: { focus_keyword: "", top_results: [] },
+        })
+      ).toBe("not_started");
+    });
+
+    it("resets ready_grounded to not_started when artifact is missing", () => {
+      expect(
+        deriveStep2ResearchState({
+          requestedState: "ready_grounded",
+          hasUsableResearchArtifact: false,
+          researchArtifact: { focus_keyword: "", top_results: [] },
+        })
+      ).toBe("not_started");
+    });
   });
 
-  it("treats only ready_grounded as grounded-ready downstream", () => {
-    expect(isStep2ResearchReady("ready")).toBe(false);
-    expect(isStep2ResearchReady("ready_thin")).toBe(false);
-    expect(isStep2ResearchReady("ready_grounded")).toBe(true);
+  describe("isStep2ResearchReady", () => {
+    it("treats only ready_grounded as grounded-ready", () => {
+      expect(isStep2ResearchReady("ready_thin")).toBe(false);
+      expect(isStep2ResearchReady("ready_grounded")).toBe(true);
+      expect(isStep2ResearchReady("not_started")).toBe(false);
+      expect(isStep2ResearchReady("queued")).toBe(false);
+      expect(isStep2ResearchReady("researching")).toBe(false);
+      expect(isStep2ResearchReady("failed")).toBe(false);
+    });
   });
 });

@@ -60,7 +60,6 @@ function derivePersistedResearchStateFromPosts(
 ): Step2ResearchState {
   if (slots.some((slot) => slot.step2_research_state === "ready_grounded")) return "ready_grounded";
   if (slots.some((slot) => slot.step2_research_state === "ready_thin")) return "ready_thin";
-  if (slots.some((slot) => slot.step2_research_state === "stale")) return "stale";
   if (slots.some((slot) => slot.step2_research_state === "researching")) return "researching";
   if (slots.some((slot) => slot.step2_research_state === "queued")) return "queued";
   if (slots.some((slot) => slot.step2_research_state === "failed")) return "failed";
@@ -218,15 +217,15 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
     const step2Contract = asRecord(metadata.step2_contract);
     const step2Research = asRecord(metadata.step2_research);
     const researchStateRaw = asString(step2Research.state);
-    // Normalize legacy coarse "ready" from DB to "not_started" so the artifact is
-    // reclassified into "ready_thin" or "ready_grounded" by normalizePersistedResearchState.
+    // Normalize legacy coarse "ready" (and any unknown value) from DB to "not_started"
+    // so the artifact is reclassified into "ready_thin" or "ready_grounded" by
+    // normalizePersistedResearchState.
     const requestedResearchState: Step2ResearchState =
       researchStateRaw === "queued" ||
       researchStateRaw === "researching" ||
       researchStateRaw === "ready_grounded" ||
       researchStateRaw === "ready_thin" ||
-      researchStateRaw === "failed" ||
-      researchStateRaw === "stale"
+      researchStateRaw === "failed"
         ? researchStateRaw
         : "not_started";
     const step2ResearchState = normalizePersistedResearchState({
