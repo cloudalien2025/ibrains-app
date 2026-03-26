@@ -46,10 +46,10 @@ class MemorySscStore {
 function createMemoryStorage() {
   return {
     adapter: {
-      async putBytes(_key: string, _value: Uint8Array) {
+      async putBytes(_: string, __: Uint8Array) {
         return;
       },
-      async getBytes(_key: string) {
+      async getBytes(_: string) {
         return new Uint8Array();
       },
     },

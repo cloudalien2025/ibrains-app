@@ -218,7 +218,6 @@ async function run(): Promise<void> {
 }
 
 run().catch((error) => {
-  // eslint-disable-next-line no-console
   console.error("[directoryiq-ui-audit]", error);
   process.exit(1);
 });

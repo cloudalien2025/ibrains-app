@@ -6,13 +6,44 @@ on:
   push:
     branches: ["main", "fix/**", "feat/**", "chore/**", "hotfix/**", "codex/**"]
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  static:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check route signatures
+        run: bash scripts/check_route_signatures.sh
+
+      - name: Lint (DirectoryIQ scope)
+        run: pnpm run --if-present lint:directoryiq
+
   build:
     runs-on: ubuntu-latest
-
-    env:
-      HOME: /home/runner
-      PNPM_HOME: /home/runner/.pnpm
+    timeout-minutes: 20
+    needs: static
 
     steps:
       - name: Checkout repo
@@ -36,13 +67,61 @@ jobs:
       - name: Build
         run: pnpm run --if-present build
 
+  unit-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: static
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
       - name: Test
         run: pnpm run --if-present test
+
+  e2e-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: build
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Browsers
         run: npx playwright install chromium
 
-      - name: Test (Playwright)
+      - name: Test (Playwright smoke)
         env:
           CI: "1"
           TMPDIR: ${{ github.workspace }}/artifacts/playwright/.tmp
