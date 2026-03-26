@@ -1,6 +1,6 @@
 import type { Step2SupportResearchArtifact } from "@/lib/directoryiq/step2SupportEngineContract";
 
-export type Step2ResearchState = "not_started" | "queued" | "researching" | "ready_thin" | "ready_grounded" | "ready" | "failed" | "stale";
+export type Step2ResearchState = "not_started" | "queued" | "researching" | "ready_thin" | "ready_grounded" | "failed" | "stale";
 
 export const STEP2_RESEARCH_REQUIRED_CODE = "STEP2_RESEARCH_REQUIRED";
 export const STEP2_RESEARCH_REQUIRED_MESSAGE = "Complete listing research before creating support articles.";
@@ -58,7 +58,7 @@ export function deriveStep2ResearchState(input: {
   const readiness = classifyStep2ResearchReadiness(input.researchArtifact);
   if (readiness === "grounded") return "ready_grounded";
   if (readiness === "thin") return "ready_thin";
-  return input.requestedState === "ready" || input.requestedState === "ready_grounded" || input.requestedState === "ready_thin"
+  return input.requestedState === "ready_grounded" || input.requestedState === "ready_thin"
     ? "not_started"
     : input.requestedState;
 }

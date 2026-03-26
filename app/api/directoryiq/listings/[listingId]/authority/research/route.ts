@@ -263,7 +263,7 @@ export async function POST(
 
   const existingPosts = (await getAuthorityPosts(userId, listingSourceId)) as AuthorityPostResearchRow[];
   const canonicalState = deriveCanonicalResearchState({ posts: existingPosts });
-  if (canonicalState.state === "ready" || canonicalState.state === "ready_grounded" || canonicalState.state === "ready_thin") {
+  if (canonicalState.state === "ready_grounded" || canonicalState.state === "ready_thin") {
     return NextResponse.json(
       {
         ok: true,
@@ -272,7 +272,7 @@ export async function POST(
         contracts: toResponseContracts(canonicalState.contracts),
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
-      { status: canonicalState.state === "ready_grounded" || canonicalState.state === "ready" ? 200 : 202 }
+      { status: canonicalState.state === "ready_grounded" ? 200 : 202 }
     );
   }
 

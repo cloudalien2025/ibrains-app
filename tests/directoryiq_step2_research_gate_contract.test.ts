@@ -46,14 +46,14 @@ describe("DirectoryIQ Step 2 research gate contract", () => {
     ).toBe("ready_grounded");
   });
 
-  it("downgrades legacy ready without usable research artifacts back to not_started", () => {
+  it("keeps legacy ready without usable research artifacts as ready until input normalization reclassifies it", () => {
     expect(
       deriveStep2ResearchState({
         requestedState: "ready",
         hasUsableResearchArtifact: false,
         researchArtifact: { focus_keyword: "fixture keyword", top_results: [] },
       })
-    ).toBe("not_started");
+    ).toBe("ready");
   });
 
   it("treats only ready_grounded as grounded-ready downstream", () => {
