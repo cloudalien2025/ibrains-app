@@ -991,12 +991,24 @@ export async function upsertAuthorityStep2ResearchContract(
     state: PersistedStep2ResearchState;
     errorCode?: string | null;
     errorMessage?: string | null;
+    /** Persist the mission plan slot so a future retry can re-queue without client data. */
+    missionPlanSlot?: Record<string, unknown> | null;
   }
 ): Promise<void> {
   const existing = await getAuthorityPostBySlot(userId, listingId, slot);
   const baseMetadata = mergeStep2StateMetadata(existing?.metadata_json, {});
   const previousResearch = asRecord(baseMetadata.step2_research);
   const now = new Date().toISOString();
+
+  // When a new run is queued, persist the mission plan slot so a retry can
+  // re-use it without requiring the client to re-supply the contracts.
+  const missionPlanSlotToStore: Record<string, unknown> | null =
+    input.missionPlanSlot != null
+      ? input.missionPlanSlot
+      : input.state === "queued"
+        ? asRecord(previousResearch.mission_plan_slot) || null
+        : asRecord(previousResearch.mission_plan_slot) || null;
+
   const nextResearch = {
     ...previousResearch,
     state: input.state,
@@ -1011,6 +1023,9 @@ export async function upsertAuthorityStep2ResearchContract(
         : null,
     error_code: input.errorCode ?? null,
     error_message: input.errorMessage ?? null,
+    ...(missionPlanSlotToStore != null && Object.keys(missionPlanSlotToStore).length > 0
+      ? { mission_plan_slot: missionPlanSlotToStore }
+      : {}),
   };
 
   const mergedMetadata = {
