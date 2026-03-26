@@ -510,7 +510,7 @@ describe("directoryiq authority routes", () => {
     expect(submitRes.status).toBe(202);
     const status = await waitForJobCompletion(String(accepted.statusEndpoint));
     expect(status.status).toBe("succeeded");
-    expect(status.result?.state).toBe("ready");
+    expect(status.result?.state).toBe("ready_thin");
     expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
   });
 
