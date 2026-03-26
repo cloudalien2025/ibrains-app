@@ -57,6 +57,7 @@ import {
 import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
+  canRetryStep2Research,
   deriveStep2ResearchState,
   hasUsableStep2ResearchArtifact,
   isStep2ResearchReady,
@@ -2866,7 +2867,7 @@ export default function ListingOptimizationClient({
   }
 
   async function startStep2ListingResearch() {
-    if (step2ResearchState === "queued" || step2ResearchState === "researching") return;
+    if (!canRetryStep2Research(step2ResearchState)) return;
     if (step2ParityMismatch) {
       setStep2ResearchRequestedState("failed");
       setError({ message: "Step 2 runtime parity mismatch detected. Refresh and retry after app/API releases align." });

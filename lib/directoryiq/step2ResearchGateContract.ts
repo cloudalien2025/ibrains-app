@@ -33,6 +33,22 @@ export function isStep2ResearchReady(state: Step2ResearchState): boolean {
   return state === "ready_grounded";
 }
 
+/**
+ * Returns true when research is currently queued or actively running.
+ * Use to guard against launching a duplicate research job.
+ */
+export function isStep2ResearchInProgress(state: Step2ResearchState): boolean {
+  return state === "queued" || state === "researching";
+}
+
+/**
+ * Returns true when a fresh or retry research run is permitted from this state.
+ * Only `not_started` and `failed` are valid entry points for a new run.
+ */
+export function canRetryStep2Research(state: Step2ResearchState): boolean {
+  return state === "not_started" || state === "failed";
+}
+
 export function classifyStep2ResearchReadiness(value: unknown): "missing" | "thin" | "grounded" {
   const record = asRecord(value);
   const topResults = Array.isArray(record.top_results) ? record.top_results : [];
