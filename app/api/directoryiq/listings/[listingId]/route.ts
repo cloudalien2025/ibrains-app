@@ -26,6 +26,10 @@ type ListingDetailPayload = {
   };
   step2: {
     research_state: Step2ResearchState;
+    /** Set when research_state === "failed". Populated from the persisted step2_research row. */
+    research_failure_code: string | null;
+    /** Human-readable failure detail. Populated when research_state === "failed". */
+    research_failure_message: string | null;
     slots: Array<{
       slot: number;
       draft_html: string | null;
@@ -194,6 +198,8 @@ function normalizeListingPayload(listingId: string, json: unknown): ListingDetai
     },
     step2: {
       research_state: "not_started",
+      research_failure_code: null,
+      research_failure_message: null,
       slots: [],
     },
     runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
@@ -245,9 +251,18 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
       step2_contract: Object.keys(step2Contract).length ? step2Contract : null,
       step2_research_state: step2ResearchState,
       updated_at: post.updated_at,
+      // Expose failure detail so the UI can surface a contextual retry message.
+      step2_research_error_code: step2ResearchState === "failed" ? asString(step2Research.error_code) || null : null,
+      step2_research_error_message: step2ResearchState === "failed" ? asString(step2Research.error_message) || null : null,
     };
   });
   const researchState = derivePersistedResearchStateFromPosts(step2Slots);
+
+  // Bubble the first available failure detail to the aggregate step2 level for
+  // quick consumption by the UI without iterating slots.
+  const firstFailedSlot = step2Slots.find((slot) => slot.step2_research_state === "failed");
+  const researchFailureCode = researchState === "failed" ? (firstFailedSlot?.step2_research_error_code ?? null) : null;
+  const researchFailureMessage = researchState === "failed" ? (firstFailedSlot?.step2_research_error_message ?? null) : null;
 
   return {
     listing: {
@@ -261,6 +276,8 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
     },
     step2: {
       research_state: researchState,
+      research_failure_code: researchFailureCode,
+      research_failure_message: researchFailureMessage,
       slots: step2Slots,
     },
     runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),

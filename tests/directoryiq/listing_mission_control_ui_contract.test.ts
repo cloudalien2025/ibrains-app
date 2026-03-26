@@ -241,4 +241,45 @@ describe("listing mission control rebuild contract", () => {
     expect(source).not.toContain("z-40");
     expect(source).toContain("grid gap-2 sm:grid-cols-3");
   });
+
+  it("wires the failed Step 2 research retry loop into the UI", () => {
+    // Retry function must exist and call the retry endpoint
+    expect(source).toContain("async function retryStep2ListingResearch()");
+    expect(source).toContain("/authority/research/retry");
+    expect(source).toContain("data-testid=\"step2-research-retry\"");
+    expect(source).toContain("Retry Research");
+
+    // Fresh-research fallback still accessible when state is failed
+    expect(source).toContain("data-testid=\"step2-research-this-listing\"");
+    expect(source).toContain("Start Fresh Research");
+
+    // Failure detail state is hydrated from the listing detail response
+    expect(source).toContain("step2ResearchFailureCode");
+    expect(source).toContain("step2ResearchFailureMessage");
+    expect(source).toContain("research_failure_code");
+    expect(source).toContain("research_failure_message");
+
+    // Failure code should be surfaced in the UI
+    expect(source).toContain("data-testid=\"step2-research-failure-code\"");
+
+    // UI reflects failed state with rose styling
+    expect(source).toContain("Research failed");
+    expect(source).toContain("border-rose-300/35 bg-rose-400/10");
+  });
+
+  it("retryStep2ListingResearch maps server error codes to coherent state transitions", () => {
+    // RESEARCH_IN_PROGRESS and RESEARCH_ALREADY_READY should not dead-end the UI
+    expect(source).toContain("RESEARCH_IN_PROGRESS");
+    expect(source).toContain("RESEARCH_ALREADY_READY");
+    expect(source).toContain("NO_FAILED_RESEARCH");
+    // State is reset coherently on these codes
+    expect(source).toContain("errorCode === \"RESEARCH_IN_PROGRESS\"");
+    expect(source).toContain("errorCode === \"RESEARCH_ALREADY_READY\"");
+  });
+
+  it("clears failure detail state on successful research hydration", () => {
+    // When research state is not failed, failure detail should be cleared
+    expect(source).toContain("setStep2ResearchFailureCode(null)");
+    expect(source).toContain("setStep2ResearchFailureMessage(null)");
+  });
 });

@@ -80,6 +80,10 @@ type ListingDetailResponse = {
   };
   step2?: {
     research_state?: Step2ResearchState;
+    /** Populated when research_state === "failed". Allows the UI to explain why retry is available. */
+    research_failure_code?: string | null;
+    /** Human-readable detail for why research failed. */
+    research_failure_message?: string | null;
     slots?: Array<{
       slot?: number;
       draft_html?: string | null;
@@ -548,6 +552,10 @@ type DirectoryIqJobAccepted = {
     code?: string;
     reqId?: string;
   };
+};
+
+type Step2ResearchRetryAccepted = DirectoryIqJobAccepted & {
+  retrying?: number[];
 };
 
 type DirectoryIqJobStatus = {
@@ -1096,6 +1104,8 @@ export default function ListingOptimizationClient({
   const [contentAssets, setContentAssets] = useState<Record<string, ContentAssetState>>({});
   const [step2Runtime, setStep2Runtime] = useState<Record<string, Step2SlotRuntime>>({});
   const [step2ResearchRequestedState, setStep2ResearchRequestedState] = useState<Step2ResearchState>("not_started");
+  const [step2ResearchFailureCode, setStep2ResearchFailureCode] = useState<string | null>(null);
+  const [step2ResearchFailureMessage, setStep2ResearchFailureMessage] = useState<string | null>(null);
   const [serverStep2Snapshot, setServerStep2Snapshot] = useState<ListingDetailResponse["step2"] | null>(null);
   const [step2ReadRuntime, setStep2ReadRuntime] = useState<Step2ParityRuntime>(null);
   const [step2WriteRuntime, setStep2WriteRuntime] = useState<Step2ParityRuntime>(null);
@@ -1199,6 +1209,13 @@ export default function ListingOptimizationClient({
         setServerStep2Snapshot(listingResponse.step2 ?? null);
         if (listingResponse.step2?.research_state) {
           setStep2ResearchRequestedState(normalizeResearchState(listingResponse.step2.research_state));
+          if (normalizeResearchState(listingResponse.step2.research_state) === "failed") {
+            setStep2ResearchFailureCode(listingResponse.step2.research_failure_code ?? null);
+            setStep2ResearchFailureMessage(listingResponse.step2.research_failure_message ?? null);
+          } else {
+            setStep2ResearchFailureCode(null);
+            setStep2ResearchFailureMessage(null);
+          }
         }
       } catch (err) {
         setError({ message: stringifyErrorMessage(err, "Failed to load listing details."), status: 0, listingId: effectiveListingId });
@@ -2976,6 +2993,69 @@ export default function ListingOptimizationClient({
     }
   }
 
+  async function retryStep2ListingResearch() {
+    if (!canRetryStep2Research(step2ResearchState)) return;
+    if (!effectiveListingId) return;
+
+    setError(null);
+    setNotice(null);
+    setStep2ResearchRequestedState("queued");
+    setStep2ResearchFailureCode(null);
+    setStep2ResearchFailureMessage(null);
+
+    try {
+      setStep2ResearchRequestedState("researching");
+      const res = await fetch(
+        buildDirectoryIqWriteApiUrl(
+          `/api/directoryiq/listings/${encodeURIComponent(effectiveListingId)}/authority/research/retry`,
+          siteQuery
+        ),
+        { method: "POST" }
+      );
+      const json = (await res.json().catch(() => ({}))) as ApiErrorShape & Record<string, unknown>;
+      registerStep2WriteRuntime(json);
+      const settled = await resolveDirectoryIqJobOrInline<Step2ResearchStartResponse & { retrying?: number[] }>(
+        res,
+        json,
+        "Failed to retry listing research.",
+        effectiveListingId
+      );
+      if (!settled.ok) {
+        const errorCode = settled.error.code ?? null;
+        // If research isn't actually failed (e.g. MISSING_MISSION_PLAN), fall back
+        // to starting a fresh research run rather than blocking the user.
+        if (errorCode === "NO_FAILED_RESEARCH" || errorCode === "RESEARCH_IN_PROGRESS" || errorCode === "RESEARCH_ALREADY_READY") {
+          setStep2ResearchRequestedState(
+            errorCode === "RESEARCH_IN_PROGRESS" ? "researching" :
+            errorCode === "RESEARCH_ALREADY_READY" ? "ready_thin" :
+            "not_started"
+          );
+        } else {
+          setStep2ResearchRequestedState("failed");
+        }
+        setError(settled.error);
+        return;
+      }
+
+      applyPersistedStep2ResearchContracts(settled.data.contracts);
+      const nextState = normalizeResearchState(settled.data.state, "queued");
+      setStep2ResearchRequestedState(
+        nextState === "queued" || nextState === "researching" || nextState === "failed" ||
+        nextState === "ready_thin" || nextState === "ready_grounded"
+          ? nextState
+          : "queued"
+      );
+      if (nextState === "ready_thin" || nextState === "ready_grounded") {
+        setNotice("Listing research retry complete. Support article actions are now available.");
+      } else {
+        setNotice("Listing research retry accepted. Step 2 will unlock after research finishes.");
+      }
+    } catch (error) {
+      setStep2ResearchRequestedState("failed");
+      setError({ message: stringifyErrorMessage(error, "Failed to retry listing research.") });
+    }
+  }
+
   async function executeStep2SlotPipeline(input: {
     missionSlot: Step2MissionPlanSlot;
     item: BlogReinforcementPlanItem;
@@ -3702,16 +3782,53 @@ export default function ListingOptimizationClient({
                 </div>
 
                 {step2ResearchState === "not_started" || step2ResearchState === "failed" ? (
-                  <div className="mt-3 rounded-xl border border-cyan-300/35 bg-cyan-400/10 p-4" data-testid="step2-research-entrypoint">
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-cyan-100">Start here</div>
-                    <div className="mt-1 text-sm text-slate-200">{STEP2_RESEARCH_EXPLAINER}</div>
+                  <div
+                    className={`mt-3 rounded-xl border p-4 ${
+                      step2ResearchState === "failed"
+                        ? "border-rose-300/35 bg-rose-400/10"
+                        : "border-cyan-300/35 bg-cyan-400/10"
+                    }`}
+                    data-testid="step2-research-entrypoint"
+                  >
+                    <div
+                      className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${
+                        step2ResearchState === "failed" ? "text-rose-100" : "text-cyan-100"
+                      }`}
+                    >
+                      {step2ResearchState === "failed" ? "Research failed" : "Start here"}
+                    </div>
+                    <div className="mt-1 text-sm text-slate-200">
+                      {step2ResearchState === "failed"
+                        ? (step2ResearchFailureMessage || STEP2_RESEARCH_REQUIRED_MESSAGE)
+                        : STEP2_RESEARCH_EXPLAINER}
+                    </div>
+                    {step2ResearchFailureCode ? (
+                      <div className="mt-1 text-xs text-rose-200/70" data-testid="step2-research-failure-code">
+                        Error: {step2ResearchFailureCode}
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap items-center gap-2">
-                      <NeonButton onClick={() => void startStep2ListingResearch()} data-testid="step2-research-this-listing">
-                        Research This Listing
-                      </NeonButton>
                       {step2ResearchState === "failed" ? (
-                        <span className="text-xs text-rose-200">{STEP2_RESEARCH_REQUIRED_MESSAGE}</span>
-                      ) : null}
+                        <>
+                          <NeonButton
+                            onClick={() => void retryStep2ListingResearch()}
+                            data-testid="step2-research-retry"
+                          >
+                            Retry Research
+                          </NeonButton>
+                          <NeonButton
+                            variant="secondary"
+                            onClick={() => void startStep2ListingResearch()}
+                            data-testid="step2-research-this-listing"
+                          >
+                            Start Fresh Research
+                          </NeonButton>
+                        </>
+                      ) : (
+                        <NeonButton onClick={() => void startStep2ListingResearch()} data-testid="step2-research-this-listing">
+                          Research This Listing
+                        </NeonButton>
+                      )}
                     </div>
                   </div>
                 ) : (

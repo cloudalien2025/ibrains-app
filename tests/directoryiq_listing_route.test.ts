@@ -500,4 +500,104 @@ describe("directoryiq listing detail route proxy", () => {
     expect(json.step2?.research_state).toBe("ready_grounded");
     expect(json.step2?.slots?.[0]?.step2_research_state).toBe("ready_grounded");
   });
+
+  it("surfaces research failure detail in step2 aggregate when research state is failed", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        source_id: "site-1:142",
+        title: "Cedar at Streamside",
+        url: "https://example.com/listings/cedar-at-streamside",
+        raw_json: {
+          listing_id: "142",
+          group_name: "Cedar at Streamside",
+        },
+      },
+      authorityPosts: [
+        {
+          slot_index: 1,
+          draft_html: null,
+          featured_image_url: null,
+          metadata_json: {
+            step2_research: {
+              state: "failed",
+              error_code: "DOSSIER_EMPTY",
+              error_message: "Research dossier could not produce a usable listing-backed artifact.",
+              mission_plan_slot: { slot_id: "publish_comparison_decision_post" },
+            },
+            step2_state: {
+              draft_status: "not_started",
+              image_status: "not_started",
+              review_status: "not_ready",
+              publish_status: "not_started",
+              draft_version: 0,
+              image_version: 0,
+            },
+          },
+          updated_at: "2026-03-25T10:00:00.000Z",
+        },
+      ],
+      evaluation: { totalScore: 40 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/142?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "142" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.step2?.research_state).toBe("failed");
+    expect(json.step2?.research_failure_code).toBe("DOSSIER_EMPTY");
+    expect(json.step2?.research_failure_message).toBe(
+      "Research dossier could not produce a usable listing-backed artifact."
+    );
+    expect(json.step2?.slots?.[0]?.step2_research_state).toBe("failed");
+    expect(json.step2?.slots?.[0]?.step2_research_error_code).toBe("DOSSIER_EMPTY");
+  });
+
+  it("leaves research_failure_code and research_failure_message null when research is not failed", async () => {
+    process.env.DIRECTORYIQ_API_BASE = "http://localhost";
+    getListingEvaluationMock.mockResolvedValue({
+      listing: {
+        source_id: "site-1:142",
+        title: "Cedar at Streamside",
+        url: "https://example.com/listings/cedar-at-streamside",
+        raw_json: { listing_id: "142", group_name: "Cedar at Streamside" },
+      },
+      authorityPosts: [
+        {
+          slot_index: 1,
+          draft_html: null,
+          featured_image_url: null,
+          metadata_json: {
+            step2_research: { state: "not_started" },
+            step2_state: {
+              draft_status: "not_started",
+              image_status: "not_started",
+              review_status: "not_ready",
+              publish_status: "not_started",
+              draft_version: 0,
+              image_version: 0,
+            },
+          },
+          updated_at: null,
+        },
+      ],
+      evaluation: { totalScore: 40 },
+    });
+
+    const { GET } = await import("@/app/api/directoryiq/listings/[listingId]/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/142?site_id=site-1", {
+      headers: { "x-user-id": "00000000-0000-4000-8000-000000000001" },
+    });
+    const res = await GET(req, { params: { listingId: "142" } });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.step2?.research_state).toBe("not_started");
+    expect(json.step2?.research_failure_code).toBeNull();
+    expect(json.step2?.research_failure_message).toBeNull();
+  });
 });
