@@ -1357,56 +1357,6 @@ export default function ListingOptimizationClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step2ResearchRequestedState, effectiveListingId]);
 
-  /**
-   * Background draft-status poller for slot-level generating states.
-   *
-   * When a persisted slot has draft_status === "generating" on page load (i.e.
-   * generation was started in a prior session and the user navigated away), the
-   * current session has no active generateContentDraft promise to resolve it.
-   * This effect detects those "orphaned" generating slots and polls
-   * loadListingAndIntegrations() every 5 s until every generating slot reaches
-   * a terminal draft_status (ready | failed | not_started).
-   *
-   * Guard: skip any slot that is registered in step2DraftInFlightSlotsRef — an
-   * active pipeline in this session is already resolving it.
-   */
-  const DRAFT_POLL_INTERVAL_MS = 5_000;
-  const DRAFT_POLL_MAX_MS = 180_000;
-  const hasOrphanedGeneratingDraft = useMemo(() => {
-    const inFlightIds = step2DraftInFlightSlotsRef.current;
-    return step2SlotViewModels.some(
-      ({ missionSlot, asset }) =>
-        asset.draftStatus === "generating" && !inFlightIds.has(missionSlot.slot_id)
-    );
-  // step2SlotViewModels and step2DraftInFlightSlotsRef.current are stable enough
-  // for this derived boolean; the ref value is read at render time.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step2SlotViewModels]);
-
-  useEffect(() => {
-    if (!hasOrphanedGeneratingDraft || !effectiveListingId) return;
-
-    let stopped = false;
-    let elapsed = 0;
-
-    const intervalId = setInterval(() => {
-      if (stopped) return;
-      elapsed += DRAFT_POLL_INTERVAL_MS;
-      if (elapsed >= DRAFT_POLL_MAX_MS) {
-        clearInterval(intervalId);
-        stopped = true;
-        return;
-      }
-      void loadListingAndIntegrations();
-    }, DRAFT_POLL_INTERVAL_MS);
-
-    return () => {
-      stopped = true;
-      clearInterval(intervalId);
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasOrphanedGeneratingDraft, effectiveListingId]);
-
   useEffect(() => {
     if (!effectiveListingId) return;
     const supportReady = Boolean(support) && supportMeta?.dataStatus !== "no_support_data";
@@ -2185,6 +2135,56 @@ export default function ListingOptimizationClient({
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime, step2OpenAiSetupBlocked, integrations.bdConfigured, effectiveListingId]);
+  /**
+   * Background draft-status poller for slot-level generating states.
+   *
+   * When a persisted slot has draft_status === "generating" on page load (i.e.
+   * generation was started in a prior session and the user navigated away), the
+   * current session has no active generateContentDraft promise to resolve it.
+   * This effect detects those "orphaned" generating slots and polls
+   * loadListingAndIntegrations() every 5 s until every generating slot reaches
+   * a terminal draft_status (ready | failed | not_started).
+   *
+   * Guard: skip any slot that is registered in step2DraftInFlightSlotsRef — an
+   * active pipeline in this session is already resolving it.
+   */
+  const DRAFT_POLL_INTERVAL_MS = 5_000;
+  const DRAFT_POLL_MAX_MS = 180_000;
+  const hasOrphanedGeneratingDraft = useMemo(() => {
+    const inFlightIds = step2DraftInFlightSlotsRef.current;
+    return step2SlotViewModels.some(
+      ({ missionSlot, asset }) =>
+        asset.draftStatus === "generating" && !inFlightIds.has(missionSlot.slot_id)
+    );
+  // step2SlotViewModels and step2DraftInFlightSlotsRef.current are stable enough
+  // for this derived boolean; the ref value is read at render time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step2SlotViewModels]);
+
+  useEffect(() => {
+    if (!hasOrphanedGeneratingDraft || !effectiveListingId) return;
+
+    let stopped = false;
+    let elapsed = 0;
+
+    const intervalId = setInterval(() => {
+      if (stopped) return;
+      elapsed += DRAFT_POLL_INTERVAL_MS;
+      if (elapsed >= DRAFT_POLL_MAX_MS) {
+        clearInterval(intervalId);
+        stopped = true;
+        return;
+      }
+      void loadListingAndIntegrations();
+    }, DRAFT_POLL_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOrphanedGeneratingDraft, effectiveListingId]);
+
   const step2StatusBuckets = useMemo(() => {
     return step2SlotViewModels.reduce(
       (acc, entry) => {
