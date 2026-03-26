@@ -282,4 +282,24 @@ describe("listing mission control rebuild contract", () => {
     expect(source).toContain("setStep2ResearchFailureCode(null)");
     expect(source).toContain("setStep2ResearchFailureMessage(null)");
   });
+
+  it("auto-polls listing detail when research_state is queued or researching on page load", () => {
+    // Background polling effect must exist and guard against in-flight session requests
+    expect(source).toContain("step2ResearchInFlightRef");
+    expect(source).toContain("useRef(false)");
+    expect(source).toContain("RESEARCH_POLL_INTERVAL_MS");
+    expect(source).toContain("RESEARCH_POLL_MAX_MS");
+    // Polling fires only when not already in-flight from this session
+    expect(source).toContain("step2ResearchInFlightRef.current");
+    expect(source).toContain("step2ResearchInFlightRef.current = true");
+    expect(source).toContain("step2ResearchInFlightRef.current = false");
+    // Polling loads listing state to pick up server transitions
+    expect(source).toContain("void loadListingAndIntegrations()");
+    // Polling interval guard uses correct states
+    expect(source).toContain("step2ResearchRequestedState === \"queued\" || step2ResearchRequestedState === \"researching\"");
+    // Polling cleans up on unmount or when state changes
+    expect(source).toContain("clearInterval(intervalId)");
+    // Polling has a max elapsed guard to avoid infinite polling
+    expect(source).toContain("elapsed >= RESEARCH_POLL_MAX_MS");
+  });
 });
