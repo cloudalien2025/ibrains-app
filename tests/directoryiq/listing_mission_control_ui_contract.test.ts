@@ -302,4 +302,34 @@ describe("listing mission control rebuild contract", () => {
     // Polling has a max elapsed guard to avoid infinite polling
     expect(source).toContain("elapsed >= RESEARCH_POLL_MAX_MS");
   });
+
+  it("auto-polls listing detail when a persisted slot draft_status is generating on page load", () => {
+    // Draft polling constants must be present
+    expect(source).toContain("DRAFT_POLL_INTERVAL_MS");
+    expect(source).toContain("DRAFT_POLL_MAX_MS");
+
+    // Derived boolean detects orphaned generating slots
+    expect(source).toContain("hasOrphanedGeneratingDraft");
+    expect(source).toContain("asset.draftStatus === \"generating\"");
+
+    // In-flight set guards against duplicate polling
+    expect(source).toContain("step2DraftInFlightSlotsRef");
+    expect(source).toContain("useRef<Set<string>>(new Set())");
+    expect(source).toContain("step2DraftInFlightSlotsRef.current.add(slotId)");
+    expect(source).toContain("step2DraftInFlightSlotsRef.current.delete(slotId)");
+    expect(source).toContain("step2DraftInFlightSlotsRef.current");
+
+    // Polling fires loadListingAndIntegrations to pick up server transitions
+    expect(source).toContain("void loadListingAndIntegrations()");
+
+    // Polling cleans up on unmount or when condition changes
+    expect(source).toContain("clearInterval(intervalId)");
+
+    // Polling has a max elapsed guard to avoid infinite polling
+    expect(source).toContain("elapsed >= DRAFT_POLL_MAX_MS");
+
+    // try/finally ensures in-flight registration is always cleaned up
+    expect(source).toContain("} finally {");
+    expect(source).toContain("step2DraftInFlightSlotsRef.current.delete(slotId)");
+  });
 });
