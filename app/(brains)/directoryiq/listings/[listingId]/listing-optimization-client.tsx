@@ -756,12 +756,13 @@ function normalizeResearchState(value: unknown, fallback: Step2ResearchState = "
     value === "researching" ||
     value === "ready_thin" ||
     value === "ready_grounded" ||
-    value === "ready" ||
     value === "failed" ||
     value === "stale"
   ) {
     return value;
   }
+  // Normalize legacy coarse "ready" from older persisted API responses to "ready_thin".
+  if (value === "ready") return "ready_thin";
   return fallback;
 }
 
@@ -2956,13 +2957,15 @@ export default function ListingOptimizationClient({
       }
 
       applyPersistedStep2ResearchContracts(settled.data.contracts);
-      const nextState = settled.data.state;
-      if (nextState === "ready" || nextState === "queued" || nextState === "researching" || nextState === "failed") {
+      const nextState = normalizeResearchState(settled.data.state, "queued");
+      if (nextState === "queued" || nextState === "researching" || nextState === "failed") {
+        setStep2ResearchRequestedState(nextState);
+      } else if (nextState === "ready_thin" || nextState === "ready_grounded") {
         setStep2ResearchRequestedState(nextState);
       } else {
         setStep2ResearchRequestedState("queued");
       }
-      if (nextState === "ready") {
+      if (nextState === "ready_thin" || nextState === "ready_grounded") {
         setNotice("Listing research is complete. Support article actions are now available.");
       } else {
         setNotice("Listing research request started. Step 2 will unlock after research is ready.");

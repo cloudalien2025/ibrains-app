@@ -83,7 +83,6 @@ export type PersistedStep2ResearchState =
   | "not_started"
   | "queued"
   | "researching"
-  | "ready"
   | "ready_thin"
   | "ready_grounded"
   | "failed";
@@ -1007,11 +1006,9 @@ export async function upsertAuthorityStep2ResearchContract(
         ? asNullableString(previousResearch.started_at) ?? now
         : asNullableString(previousResearch.started_at),
     completed_at:
-      input.state === "ready" || input.state === "ready_thin" || input.state === "ready_grounded"
+      input.state === "ready_thin" || input.state === "ready_grounded" || input.state === "failed"
         ? now
-        : input.state === "failed"
-          ? now
-          : null,
+        : null,
     error_code: input.errorCode ?? null,
     error_message: input.errorMessage ?? null,
   };
