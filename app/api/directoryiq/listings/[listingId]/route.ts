@@ -7,7 +7,6 @@ import { getListingEvaluation, readPersistedStep2State } from "@/app/api/directo
 import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
 import { getDirectoryIqRuntimeStamp } from "@/app/api/directoryiq/_utils/runtimeStamp";
 import {
-  classifyStep2ResearchReadiness,
   deriveStep2ResearchState,
   hasUsableStep2ResearchArtifact,
   type Step2ResearchState,
@@ -59,17 +58,28 @@ function asRecord(value: unknown): Record<string, unknown> {
 function derivePersistedResearchStateFromPosts(
   slots: Array<{ step2_contract: Record<string, unknown> | null; step2_research_state: Step2ResearchState }>
 ): Step2ResearchState {
-  const readinessLevels = slots.map((slot) => classifyStep2ResearchReadiness(asRecord(slot.step2_contract).research_artifact));
-  const hasGrounded = readinessLevels.includes("grounded");
-  const hasThin = readinessLevels.includes("thin");
-
-  if (hasGrounded) return "ready_grounded";
-  if (hasThin) return "ready_thin";
+  if (slots.some((slot) => slot.step2_research_state === "ready_grounded")) return "ready_grounded";
+  if (slots.some((slot) => slot.step2_research_state === "ready_thin" || slot.step2_research_state === "ready")) return "ready_thin";
   if (slots.some((slot) => slot.step2_research_state === "stale")) return "stale";
   if (slots.some((slot) => slot.step2_research_state === "researching")) return "researching";
   if (slots.some((slot) => slot.step2_research_state === "queued")) return "queued";
   if (slots.some((slot) => slot.step2_research_state === "failed")) return "failed";
   return "not_started";
+}
+
+function normalizePersistedResearchState(input: {
+  requestedState: Step2ResearchState;
+  step2Contract: Record<string, unknown>;
+}): Step2ResearchState {
+  if (input.requestedState === "ready_thin" || input.requestedState === "ready_grounded") {
+    return input.requestedState;
+  }
+
+  return deriveStep2ResearchState({
+    requestedState: input.requestedState,
+    hasUsableResearchArtifact: hasUsableStep2ResearchArtifact(input.step2Contract.research_artifact),
+    researchArtifact: input.step2Contract.research_artifact,
+  });
 }
 
 function resolveDirectoryIqApiBase(): string {
@@ -218,10 +228,9 @@ async function resolveLocalListingDetail(req: NextRequest, listingId: string): P
       researchStateRaw === "stale"
         ? researchStateRaw
         : "not_started";
-    const step2ResearchState = deriveStep2ResearchState({
+    const step2ResearchState = normalizePersistedResearchState({
       requestedState: requestedResearchState,
-      hasUsableResearchArtifact: hasUsableStep2ResearchArtifact(step2Contract.research_artifact),
-      researchArtifact: step2Contract.research_artifact,
+      step2Contract,
     });
     return {
       slot: post.slot_index,

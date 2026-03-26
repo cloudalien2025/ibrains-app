@@ -79,7 +79,14 @@ export type PersistedStep2State = {
   last_link_error_message: string | null;
 };
 
-export type PersistedStep2ResearchState = "not_started" | "queued" | "researching" | "ready" | "failed";
+export type PersistedStep2ResearchState =
+  | "not_started"
+  | "queued"
+  | "researching"
+  | "ready"
+  | "ready_thin"
+  | "ready_grounded"
+  | "failed";
 
 type SettingsRow = {
   vertical_override: string | null;
@@ -999,7 +1006,12 @@ export async function upsertAuthorityStep2ResearchContract(
       input.state === "queued" || input.state === "researching"
         ? asNullableString(previousResearch.started_at) ?? now
         : asNullableString(previousResearch.started_at),
-    completed_at: input.state === "ready" ? now : input.state === "failed" ? now : null,
+    completed_at:
+      input.state === "ready" || input.state === "ready_thin" || input.state === "ready_grounded"
+        ? now
+        : input.state === "failed"
+          ? now
+          : null,
     error_code: input.errorCode ?? null,
     error_message: input.errorMessage ?? null,
   };

@@ -388,10 +388,10 @@ describe("directoryiq authority routes", () => {
 
       const status = await waitForJobCompletion(String(accepted.statusEndpoint));
       expect(status.status).toBe("succeeded");
-      expect(status.result?.state).toBe("ready");
+      expect(status.result?.state).toBe("ready_thin");
       expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
       const persistedContract = upsertAuthorityStep2ResearchContract.mock.calls.find(
-        (call) => call[3]?.state === "ready"
+        (call) => call[3]?.state === "ready_thin"
       )?.[3]?.contract as Record<string, unknown> | undefined;
       expect(persistedContract).toBeTruthy();
       const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
