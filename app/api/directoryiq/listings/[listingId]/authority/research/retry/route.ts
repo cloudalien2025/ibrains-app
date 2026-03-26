@@ -1,5 +1,22 @@
 export const runtime = "nodejs";
 
+/**
+ * POST /api/directoryiq/listings/[listingId]/authority/research/retry
+ *
+ * Re-queues failed Step 2 research for a listing using the mission_plan_slot
+ * that was persisted during the original research job.  No request body is
+ * required — all inputs are read from the DB.
+ *
+ * Response shape mirrors the parent research POST 202 (jobId / acceptedAt).
+ *
+ * Error codes:
+ *   NO_FAILED_RESEARCH   – none of the listing's slots are in a failed state
+ *   MISSING_MISSION_PLAN – failed slots found but none have a persisted
+ *                          mission_plan_slot (run the original research POST first)
+ *   RESEARCH_IN_PROGRESS – research is already queued / running; cannot retry
+ *   RESEARCH_ALREADY_READY – research is already in a ready state
+ */
+
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeSlot } from "@/app/api/directoryiq/_utils/authority";
 import { AuthorityRouteError, authorityReqId } from "@/app/api/directoryiq/_utils/authorityErrors";
@@ -18,12 +35,11 @@ import {
 import {
   classifyStep2ResearchReadiness,
   hasUsableStep2ResearchArtifact,
-  isStep2ResearchInProgress,
   type Step2ResearchState,
 } from "@/lib/directoryiq/step2ResearchGateContract";
 import { getListingCurrentSupport } from "@/src/directoryiq/services/listingSupportService";
 
-type Step2ResearchContractPayload = {
+type RetryableSlot = {
   slot: number;
   mission_plan_slot: Record<string, unknown>;
 };
@@ -94,93 +110,69 @@ function stripSitePrefix(input: string): string {
   return tail?.trim() || value;
 }
 
-function parseContracts(value: unknown): Step2ResearchContractPayload[] {
-  if (!Array.isArray(value)) return [];
-  const parsed: Step2ResearchContractPayload[] = [];
-  for (const entry of value) {
-    const record = asRecord(entry);
-    const slotRaw = record.slot;
-    const slot = typeof slotRaw === "number" ? slotRaw : Number(slotRaw);
-    const step2Contract = asRecord(record.step2_contract);
-    const missionPlanSlot = asRecord(step2Contract.mission_plan_slot);
-    if (!Number.isFinite(slot)) continue;
-    parsed.push({
-      slot,
-      mission_plan_slot: missionPlanSlot,
-    });
-  }
-  return parsed;
-}
-
 function isRealDossierContract(contract: Record<string, unknown>): boolean {
   const dossier = asRecord(contract.research_dossier);
   const listingIdentity = asRecord(dossier.listing_identity);
   const ownerKey = asString(dossier.owner_key);
   const slotResearch = Array.isArray(dossier.step2_slot_research) ? dossier.step2_slot_research : [];
   if (!ownerKey || !asString(listingIdentity.listing_source_id) || slotResearch.length === 0) return false;
-
   const researchArtifact = asRecord(contract.research_artifact);
   return hasUsableStep2ResearchArtifact(researchArtifact) && isDossierBackedResearchArtifact(researchArtifact);
 }
 
-function deriveCanonicalResearchState(input: {
-  posts: AuthorityPostResearchRow[];
-}): {
-  state: Step2ResearchState;
-  contracts: DossierBackedStep2Contract[];
-} {
-  let hasQueued = false;
-  let hasResearching = false;
-  let hasFailed = false;
-  const readyContracts: DossierBackedStep2Contract[] = [];
+function derivePersistedReadyState(contract: Record<string, unknown>): Extract<Step2ResearchState, "ready_thin" | "ready_grounded"> {
+  return classifyStep2ResearchReadiness(contract.research_artifact) === "grounded" ? "ready_grounded" : "ready_thin";
+}
 
-  for (const post of input.posts) {
+/**
+ * Reads persisted authority posts and extracts slots that are in a `failed`
+ * research state AND have a persisted `mission_plan_slot`.
+ *
+ * Returns:
+ *   - `retryable`  – slots that can be re-queued
+ *   - `hasInProgress` – true if any slot is queued/researching (blocks retry)
+ *   - `hasReady`      – true if any slot already has a usable dossier contract
+ *   - `hasFailed`     – true if there are failed slots (even without mission plan)
+ */
+function classifyPostsForRetry(posts: AuthorityPostResearchRow[]): {
+  retryable: RetryableSlot[];
+  hasInProgress: boolean;
+  hasReady: boolean;
+  hasFailed: boolean;
+} {
+  let hasInProgress = false;
+  let hasReady = false;
+  let hasFailed = false;
+  const retryable: RetryableSlot[] = [];
+
+  for (const post of posts) {
     const metadata = asRecord(post.metadata_json);
     const contract = asRecord(metadata.step2_contract);
+
     if (isRealDossierContract(contract)) {
-      readyContracts.push({
-        slot: typeof post.slot_index === "number" ? post.slot_index : 0,
-        step2_contract: contract as DossierBackedStep2Contract["step2_contract"],
-      });
+      hasReady = true;
       continue;
     }
 
-    const researchState = asString(asRecord(metadata.step2_research).state);
-    if (researchState === "researching") hasResearching = true;
-    if (researchState === "queued") hasQueued = true;
-    if (researchState === "failed") hasFailed = true;
+    const research = asRecord(metadata.step2_research);
+    const state = asString(research.state);
+
+    if (state === "queued" || state === "researching") {
+      hasInProgress = true;
+      continue;
+    }
+
+    if (state === "failed") {
+      hasFailed = true;
+      const missionPlanSlot = asRecord(research.mission_plan_slot);
+      if (Object.keys(missionPlanSlot).length > 0) {
+        const slotIndex = typeof post.slot_index === "number" ? post.slot_index : 0;
+        retryable.push({ slot: slotIndex, mission_plan_slot: missionPlanSlot });
+      }
+    }
   }
 
-  if (readyContracts.length > 0) {
-    const contracts = readyContracts
-      .filter((entry) => entry.slot > 0)
-      .sort((left, right) => left.slot - right.slot);
-    const readiness = contracts.every((entry) => classifyStep2ResearchReadiness(entry.step2_contract.research_artifact) === "grounded")
-      ? "ready_grounded"
-      : "ready_thin";
-    return {
-      state: readiness,
-      contracts,
-    };
-  }
-  if (hasResearching) return { state: "researching", contracts: [] };
-  if (hasQueued) return { state: "queued", contracts: [] };
-  if (hasFailed) return { state: "failed", contracts: [] };
-  return { state: "not_started", contracts: [] };
-}
-
-function toResponseContracts(contracts: DossierBackedStep2Contract[]): Array<{
-  slot: number;
-  step2_contract: DossierBackedStep2Contract["step2_contract"];
-}> {
-  return contracts.map((entry) => ({
-    slot: entry.slot,
-    step2_contract: entry.step2_contract,
-  }));
-}
-
-function derivePersistedReadyState(contract: Record<string, unknown>): Extract<Step2ResearchState, "ready_thin" | "ready_grounded"> {
-  return classifyStep2ResearchReadiness(contract.research_artifact) === "grounded" ? "ready_grounded" : "ready_thin";
+  return { retryable, hasInProgress, hasReady, hasFailed };
 }
 
 export async function POST(
@@ -193,48 +185,6 @@ export async function POST(
   const resolvedListingId = decodeURIComponent(listingId);
   const siteId = req.nextUrl.searchParams.get("site_id")?.trim() || null;
 
-  const body = (await req.json().catch(() => ({}))) as { contracts?: unknown };
-  const contracts = parseContracts(body.contracts);
-  if (!contracts.length) {
-    return NextResponse.json(
-      {
-        error: {
-          message: "Step 2 research contracts are required.",
-          code: "BAD_REQUEST",
-          reqId,
-        },
-        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
-      },
-      { status: 400 }
-    );
-  }
-
-  const normalizedContracts: Step2ResearchContractPayload[] = [];
-  try {
-    for (const entry of contracts) {
-      normalizedContracts.push({
-        slot: normalizeSlot(String(entry.slot)),
-        mission_plan_slot: entry.mission_plan_slot,
-      });
-    }
-  } catch (error) {
-    if (error instanceof AuthorityRouteError) {
-      return NextResponse.json(
-        {
-          error: {
-            message: error.message,
-            code: error.code,
-            reqId,
-            details: error.details,
-          },
-          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
-        },
-        { status: error.status }
-      );
-    }
-    throw error;
-  }
-
   const resolved = await resolveListingEvaluation({
     userId,
     listingId: resolvedListingId,
@@ -243,11 +193,7 @@ export async function POST(
   if (!resolved || !resolved.listingEval.listing) {
     return NextResponse.json(
       {
-        error: {
-          message: "Listing not found.",
-          code: "NOT_FOUND",
-          reqId,
-        },
+        error: { message: "Listing not found.", code: "NOT_FOUND", reqId },
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
       { status: 404 }
@@ -263,31 +209,84 @@ export async function POST(
   const { city, region } = asLocation(raw);
 
   const existingPosts = (await getAuthorityPosts(userId, listingSourceId)) as AuthorityPostResearchRow[];
-  const canonicalState = deriveCanonicalResearchState({ posts: existingPosts });
-  if (canonicalState.state === "ready_grounded" || canonicalState.state === "ready_thin") {
+  const { retryable, hasInProgress, hasReady, hasFailed } = classifyPostsForRetry(existingPosts);
+
+  if (hasInProgress) {
     return NextResponse.json(
       {
-        ok: true,
-        reqId,
-        state: canonicalState.state,
-        contracts: toResponseContracts(canonicalState.contracts),
+        error: {
+          message: "Research is already in progress. Wait for the current job to complete before retrying.",
+          code: "RESEARCH_IN_PROGRESS",
+          reqId,
+        },
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
-      { status: canonicalState.state === "ready_grounded" ? 200 : 202 }
+      { status: 409 }
     );
   }
 
-  if (isStep2ResearchInProgress(canonicalState.state)) {
+  if (hasReady && !hasFailed) {
     return NextResponse.json(
       {
-        ok: true,
-        reqId,
-        state: canonicalState.state,
-        contracts: [],
+        error: {
+          message: "Research is already complete for this listing.",
+          code: "RESEARCH_ALREADY_READY",
+          reqId,
+        },
         runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
       },
-      { status: 202 }
+      { status: 409 }
     );
+  }
+
+  if (!hasFailed) {
+    return NextResponse.json(
+      {
+        error: {
+          message: "No failed research slots found for this listing.",
+          code: "NO_FAILED_RESEARCH",
+          reqId,
+        },
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
+      },
+      { status: 422 }
+    );
+  }
+
+  if (retryable.length === 0) {
+    return NextResponse.json(
+      {
+        error: {
+          message:
+            "Failed research slots were found but none have a persisted mission plan. " +
+            "Trigger a fresh research run via POST /authority/research with slot contracts.",
+          code: "MISSING_MISSION_PLAN",
+          reqId,
+        },
+        runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
+      },
+      { status: 422 }
+    );
+  }
+
+  // Normalize slot indices through the same validator as the original POST.
+  let normalizedSlots: RetryableSlot[];
+  try {
+    normalizedSlots = retryable.map((entry) => ({
+      slot: normalizeSlot(String(entry.slot)),
+      mission_plan_slot: entry.mission_plan_slot,
+    }));
+  } catch (error) {
+    if (error instanceof AuthorityRouteError) {
+      return NextResponse.json(
+        {
+          error: { message: error.message, code: error.code, reqId, details: error.details },
+          runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
+        },
+        { status: error.status }
+      );
+    }
+    throw error;
   }
 
   const job = await createDirectoryIqJob({
@@ -300,17 +299,17 @@ export async function POST(
   });
 
   runDirectoryIqJob(job, {
-    routeOrigin: "directoryiq.authority.step2.research",
+    routeOrigin: "directoryiq.authority.step2.research.retry",
     runtimeOwner: "directoryiq-api.ibrains.ai",
     startedStage: "researching",
     processor: async ({ setStage }) => {
-      for (const entry of normalizedContracts) {
+      for (const entry of normalizedSlots) {
         await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
           contract: null,
           state: "queued",
           errorCode: null,
           errorMessage: null,
-          missionPlanSlot: Object.keys(entry.mission_plan_slot).length > 0 ? entry.mission_plan_slot : null,
+          missionPlanSlot: entry.mission_plan_slot,
         });
       }
 
@@ -320,12 +319,14 @@ export async function POST(
         tenantId: userId,
         listingId: listingCanonicalId,
         listingLookupIds: Array.from(
-          new Set([
-            listingCanonicalId,
-            resolvedListingId,
-            listingSourceId,
-            resolved.siteId ? `${resolved.siteId}:${listingCanonicalId}` : null,
-          ].filter((value): value is string => typeof value === "string" && value.trim().length > 0))
+          new Set(
+            [
+              listingCanonicalId,
+              resolvedListingId,
+              listingSourceId,
+              resolved.siteId ? `${resolved.siteId}:${listingCanonicalId}` : null,
+            ].filter((value): value is string => typeof value === "string" && value.trim().length > 0)
+          )
         ),
         listingTitle,
         listingUrl: canonicalListingUrl,
@@ -366,29 +367,27 @@ export async function POST(
           listing_type: toNullableString(raw.listing_type),
         },
         sameSiteSupport: supportModel,
-        slots: normalizedContracts.map((entry) => ({
+        slots: normalizedSlots.map((entry) => ({
           slot: entry.slot,
           missionPlanSlot: entry.mission_plan_slot,
         })),
         serpApiKey: await getSerpApiKeyForUser(userId),
       });
 
-      const usableContracts = dossierBundle.contracts.filter((entry) => isRealDossierContract(entry.step2_contract as Record<string, unknown>));
+      const usableContracts = dossierBundle.contracts.filter((entry) =>
+        isRealDossierContract(entry.step2_contract as Record<string, unknown>)
+      );
       if (!usableContracts.length) {
-        for (const entry of normalizedContracts) {
+        for (const entry of normalizedSlots) {
           await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
             contract: null,
             state: "failed",
             errorCode: "DOSSIER_EMPTY",
             errorMessage: "Research dossier could not produce a usable listing-backed artifact.",
+            missionPlanSlot: entry.mission_plan_slot,
           });
         }
-        return {
-          ok: false,
-          reqId,
-          state: "failed",
-          contracts: [],
-        };
+        return { ok: false, reqId, state: "failed", contracts: [] };
       }
 
       await setStage("persisting");
@@ -412,7 +411,10 @@ export async function POST(
         ok: true,
         reqId,
         state: resultState,
-        contracts: toResponseContracts(dossierBundle.contracts),
+        contracts: dossierBundle.contracts.map((entry) => ({
+          slot: entry.slot,
+          step2_contract: entry.step2_contract,
+        })),
       };
     },
   });
@@ -424,6 +426,7 @@ export async function POST(
       acceptedAt: job.acceptedAt,
       status: job.status,
       statusEndpoint: `/api/directoryiq/jobs/${encodeURIComponent(job.id)}`,
+      retrying: retryable.map((entry) => entry.slot),
       runtime: getDirectoryIqRuntimeStamp("directoryiq-api.ibrains.ai"),
     },
     { status: 202 }
