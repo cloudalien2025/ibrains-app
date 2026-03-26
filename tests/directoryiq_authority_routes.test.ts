@@ -469,7 +469,7 @@ describe("directoryiq authority routes", () => {
     const res = await POST(req, { params: { listingId: "321" } });
     const body = (await res.json()) as { state?: string };
     expect(res.status === 200 || res.status === 202).toBe(true);
-    expect(body.state === "ready_thin" || body.state === "ready_grounded" || body.state === "ready").toBe(true);
+    expect(body.state === "ready_thin" || body.state === "ready_grounded").toBe(true);
     expect(upsertAuthorityStep2ResearchContract).not.toHaveBeenCalled();
   });
 
