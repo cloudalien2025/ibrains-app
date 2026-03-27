@@ -704,7 +704,20 @@ export async function getListingEvaluation(
           source_id = ANY($2::text[])
           OR (bd_site_id = $3 AND raw_json->>'listing_id' = $4)
         )
-      ORDER BY updated_at DESC
+      ORDER BY
+        CASE
+          WHEN COALESCE(
+            NULLIF(BTRIM(url), ''),
+            NULLIF(BTRIM(raw_json->>'url'), ''),
+            NULLIF(BTRIM(raw_json->>'listing_url'), ''),
+            NULLIF(BTRIM(raw_json->>'profile_url'), ''),
+            NULLIF(BTRIM(raw_json->>'link'), ''),
+            NULLIF(BTRIM(raw_json->>'permalink'), ''),
+            NULLIF(BTRIM(raw_json->>'source_url'), '')
+          ) IS NULL THEN 1
+          ELSE 0
+        END ASC,
+        updated_at DESC
       LIMIT 1
       `,
       [userId, sourceIdCandidates, siteId, normalizedListingId]
@@ -715,6 +728,21 @@ export async function getListingEvaluation(
       SELECT source_id, bd_site_id, title, url, updated_at, raw_json
       FROM directoryiq_nodes
       WHERE user_id = $1 AND source_type = 'listing' AND raw_json->>'listing_id' = $2
+      ORDER BY
+        CASE
+          WHEN COALESCE(
+            NULLIF(BTRIM(url), ''),
+            NULLIF(BTRIM(raw_json->>'url'), ''),
+            NULLIF(BTRIM(raw_json->>'listing_url'), ''),
+            NULLIF(BTRIM(raw_json->>'profile_url'), ''),
+            NULLIF(BTRIM(raw_json->>'link'), ''),
+            NULLIF(BTRIM(raw_json->>'permalink'), ''),
+            NULLIF(BTRIM(raw_json->>'source_url'), '')
+          ) IS NULL THEN 1
+          ELSE 0
+        END ASC,
+        updated_at DESC
+      LIMIT 1
       `,
       [userId, listingId]
     );
@@ -991,6 +1019,8 @@ export async function upsertAuthorityStep2ResearchContract(
     state: PersistedStep2ResearchState;
     errorCode?: string | null;
     errorMessage?: string | null;
+    /** Optional structured diagnostics to persist for failed/ready investigations. */
+    diagnostics?: Record<string, unknown> | null;
     /** Persist the mission plan slot so a future retry can re-queue without client data. */
     missionPlanSlot?: Record<string, unknown> | null;
   }
@@ -1023,6 +1053,7 @@ export async function upsertAuthorityStep2ResearchContract(
         : null,
     error_code: input.errorCode ?? null,
     error_message: input.errorMessage ?? null,
+    ...(input.diagnostics != null ? { diagnostics: input.diagnostics } : {}),
     ...(missionPlanSlotToStore != null && Object.keys(missionPlanSlotToStore).length > 0
       ? { mission_plan_slot: missionPlanSlotToStore }
       : {}),
@@ -1030,7 +1061,8 @@ export async function upsertAuthorityStep2ResearchContract(
 
   const mergedMetadata = {
     ...baseMetadata,
-    step2_contract: input.contract ?? asRecord(baseMetadata.step2_contract),
+    // Explicit null clears stale contracts (e.g. when re-queueing or failing research).
+    step2_contract: input.contract === null ? {} : input.contract ?? asRecord(baseMetadata.step2_contract),
     step2_research: nextResearch,
   };
 
