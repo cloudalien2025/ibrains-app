@@ -23,5 +23,22 @@ describe("directoryiq write api host", () => {
       "http://127.0.0.1:3001/api/directoryiq/jobs/djq_abc?site_id=site-1"
     );
   });
-});
 
+  it("uses same-origin relative write urls in browser context", () => {
+    process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+    const originalWindow = (globalThis as { window?: unknown }).window;
+    (globalThis as { window?: unknown }).window = {};
+
+    try {
+      expect(buildDirectoryIqWriteApiUrl("/api/directoryiq/jobs/djq_abc", "?site_id=site-1")).toBe(
+        "/api/directoryiq/jobs/djq_abc?site_id=site-1"
+      );
+    } finally {
+      if (typeof originalWindow === "undefined") {
+        delete (globalThis as { window?: unknown }).window;
+      } else {
+        (globalThis as { window?: unknown }).window = originalWindow;
+      }
+    }
+  });
+});

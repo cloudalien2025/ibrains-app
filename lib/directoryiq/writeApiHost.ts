@@ -21,9 +21,16 @@ export function resolveDirectoryIqWriteApiBase(): string {
 
 export function buildDirectoryIqWriteApiUrl(pathname: string, search = ""): string {
   const normalizedPath = pathname.startsWith("/") ? pathname : `/${pathname}`;
+  const normalizedSearch = search.trim().replace(/^\?/, "");
+
+  // Browser writes should remain same-origin to avoid cross-origin/CORS failures
+  // when NEXT_PUBLIC_DIRECTORYIQ_API_BASE points at an external runtime host.
+  if (typeof window !== "undefined") {
+    return normalizedSearch ? `${normalizedPath}?${normalizedSearch}` : normalizedPath;
+  }
+
   const target = new URL(normalizedPath, `${resolveDirectoryIqWriteApiBase()}/`);
 
-  const normalizedSearch = search.trim().replace(/^\?/, "");
   if (normalizedSearch) {
     target.search = normalizedSearch;
   }
