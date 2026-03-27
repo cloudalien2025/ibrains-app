@@ -124,6 +124,57 @@ function derivePersistedReadyState(contract: Record<string, unknown>): Extract<S
   return classifyStep2ResearchReadiness(contract.research_artifact) === "grounded" ? "ready_grounded" : "ready_thin";
 }
 
+function firstUsableHttpUrl(...values: Array<unknown>): string | null {
+  for (const value of values) {
+    const candidate = asString(value);
+    if (!candidate) continue;
+    try {
+      const parsed = new URL(candidate);
+      if (parsed.protocol !== "http:" && parsed.protocol !== "https:") continue;
+      return parsed.toString();
+    } catch {
+      continue;
+    }
+  }
+  return null;
+}
+
+function diagnosticsFromDossier(input: {
+  listingUrl: string | null;
+  slotsRequested: number;
+  usableContractsCount: number;
+  dossier: {
+    serp_results?: unknown[];
+    same_site_support?: {
+      summary?: {
+        inbound_count?: number;
+        mention_count?: number;
+        connected_count?: number;
+      };
+    };
+    research_metadata?: {
+      enrichment_provider?: string;
+      enrichment_status?: string;
+      serp_error?: string | null;
+    };
+  };
+}): Record<string, unknown> {
+  const summary = input.dossier.same_site_support?.summary;
+  const inboundCount = Number(summary?.inbound_count ?? 0) || 0;
+  const mentionCount = Number(summary?.mention_count ?? 0) || 0;
+  const connectedCount = Number(summary?.connected_count ?? 0) || 0;
+  return {
+    listing_url_present: Boolean(input.listingUrl),
+    slots_requested: input.slotsRequested,
+    usable_contracts_count: input.usableContractsCount,
+    same_site_evidence_count: inboundCount + mentionCount + connectedCount,
+    serp_results_count: Array.isArray(input.dossier.serp_results) ? input.dossier.serp_results.length : 0,
+    serp_enrichment_provider: input.dossier.research_metadata?.enrichment_provider ?? "unknown",
+    serp_enrichment_status: input.dossier.research_metadata?.enrichment_status ?? "unknown",
+    serp_error: input.dossier.research_metadata?.serp_error ?? null,
+  };
+}
+
 /**
  * Reads persisted authority posts and extracts slots that are in a `failed`
  * research state AND have a persisted `mission_plan_slot`.
@@ -288,6 +339,10 @@ export async function POST(
     }
     throw error;
   }
+  const missionPlanListingUrl = firstUsableHttpUrl(
+    ...normalizedSlots.map((entry) => asRecord(entry.mission_plan_slot).listing_url)
+  );
+  const listingUrlForResearch = firstUsableHttpUrl(canonicalListingUrl, missionPlanListingUrl);
 
   const job = await createDirectoryIqJob({
     reqId,
@@ -329,13 +384,13 @@ export async function POST(
           )
         ),
         listingTitle,
-        listingUrl: canonicalListingUrl,
+        listingUrl: listingUrlForResearch,
         siteId: resolved.siteId,
       }).catch(() => ({
         listing: {
           id: listingCanonicalId,
           title: listingTitle,
-          canonicalUrl: canonicalListingUrl,
+          canonicalUrl: listingUrlForResearch,
           siteId: resolved.siteId,
         },
         summary: {
@@ -358,7 +413,7 @@ export async function POST(
           listing_source_id: listingSourceId,
           listing_id: listingCanonicalId,
           listing_title: listingTitle,
-          listing_url: canonicalListingUrl,
+          listing_url: listingUrlForResearch,
           site_id: resolved.siteId,
           category: readCategory(raw),
           location_city: city,
@@ -377,6 +432,12 @@ export async function POST(
       const usableContracts = dossierBundle.contracts.filter((entry) =>
         isRealDossierContract(entry.step2_contract as Record<string, unknown>)
       );
+      const diagnostics = diagnosticsFromDossier({
+        listingUrl: listingUrlForResearch,
+        slotsRequested: normalizedSlots.length,
+        usableContractsCount: usableContracts.length,
+        dossier: dossierBundle.dossier,
+      });
       if (!usableContracts.length) {
         for (const entry of normalizedSlots) {
           await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
@@ -384,10 +445,11 @@ export async function POST(
             state: "failed",
             errorCode: "DOSSIER_EMPTY",
             errorMessage: "Research dossier could not produce a usable listing-backed artifact.",
+            diagnostics,
             missionPlanSlot: entry.mission_plan_slot,
           });
         }
-        return { ok: false, reqId, state: "failed", contracts: [] };
+        return { ok: false, reqId, state: "failed", contracts: [], diagnostics };
       }
 
       await setStage("persisting");
@@ -398,6 +460,7 @@ export async function POST(
           state: readyState,
           errorCode: null,
           errorMessage: null,
+          diagnostics,
         });
       }
 
@@ -415,6 +478,7 @@ export async function POST(
           slot: entry.slot,
           step2_contract: entry.step2_contract,
         })),
+        diagnostics,
       };
     },
   });

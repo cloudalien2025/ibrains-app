@@ -27,4 +27,16 @@ describe("canonical listing URL resolver", () => {
 
     expect(url).toBeNull();
   });
+
+  it("composes canonical URL from site base and listing path fields", () => {
+    const url = resolveCanonicalListingUrl(
+      {
+        group_filename: "listings/cedar-at-streamside",
+      },
+      null,
+      "www.vailvacay.com"
+    );
+
+    expect(url).toBe("https://www.vailvacay.com/listings/cedar-at-streamside");
+  });
 });

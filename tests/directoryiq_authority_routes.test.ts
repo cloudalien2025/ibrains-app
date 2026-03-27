@@ -414,6 +414,88 @@ describe("directoryiq authority routes", () => {
     }
   });
 
+  it("uses mission plan listing_url fallback when canonical listing URL is missing", async () => {
+    getSerpApiKeyForUser.mockResolvedValueOnce(null);
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: "site-1:999",
+        title: "Fallback Listing",
+        url: "",
+        raw_json: {
+          listing_id: "999",
+          group_name: "Fallback Listing",
+          group_category: "Vacation Rental",
+          city: "Vail",
+          location_region: "Colorado",
+          group_filename: "listings/fallback-listing",
+        },
+      },
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+    getListingCurrentSupport.mockResolvedValueOnce({
+      listing: {
+        id: "999",
+        title: "Fallback Listing",
+        canonicalUrl: null,
+        siteId: "site-1",
+      },
+      summary: {
+        inboundLinkedSupportCount: 0,
+        mentionWithoutLinkCount: 0,
+        outboundSupportLinkCount: 0,
+        connectedSupportPageCount: 0,
+        lastGraphRunAt: null,
+      },
+      inboundLinkedSupport: [],
+      mentionsWithoutLinks: [],
+      outboundSupportLinks: [],
+      connectedSupportPages: [],
+    });
+
+    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/listings/999/authority/research", {
+      method: "POST",
+      body: JSON.stringify({
+        contracts: [
+          {
+            slot: 1,
+            step2_contract: {
+              mission_plan_slot: {
+                slot_id: "publish_comparison_decision_post",
+                listing_url: "https://example.com/listings/fallback-listing",
+              },
+            },
+          },
+        ],
+      }),
+      headers: { "content-type": "application/json" },
+    });
+
+    const submitRes = await POST(req, { params: { listingId: "999" } });
+    const accepted = (await submitRes.json()) as JobAccepted;
+    expect(submitRes.status).toBe(202);
+
+    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(status.status).toBe("succeeded");
+    expect(status.result?.state).toBe("ready_thin");
+
+    const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
+      (call) => call[3]?.state === "ready_thin"
+    );
+    expect(readyCall).toBeTruthy();
+    const persistedContract = readyCall?.[3]?.contract as Record<string, unknown> | undefined;
+    const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
+    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+    expect(topResults.length).toBeGreaterThan(0);
+    expect((topResults[0] as { url?: string }).url).toBe("https://example.com/listings/fallback-listing");
+
+    const supportCall = getListingCurrentSupport.mock.calls.find(
+      (call) => String(call?.[0]?.listingId ?? "") === "999"
+    );
+    expect(supportCall?.[0]?.listingUrl).toBe("https://example.com/listings/fallback-listing");
+  });
+
   it("resumes Step 2 listing research as ready when canonical artifact already exists", async () => {
     getAuthorityPosts.mockResolvedValueOnce([
       {

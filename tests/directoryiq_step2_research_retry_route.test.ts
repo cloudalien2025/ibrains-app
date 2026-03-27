@@ -94,6 +94,24 @@ const ensureUser = vi.fn(async () => {});
 const resolveUserId = vi.fn(() => "00000000-0000-4000-8000-000000000001");
 const getSerpApiKeyForUser = vi.fn(async () => "serp-test-key");
 const getAuthorityPosts = vi.fn(async (): Promise<Array<{ slot_index?: number; metadata_json?: Record<string, unknown> | null }>> => []);
+const getListingEvaluation = vi.fn(async () => ({
+  listing: {
+    source_id: FIXTURE_LISTING_SOURCE_ID,
+    title: "Fixture Listing",
+    url: "https://example.com/listings/fixture-listing",
+    raw_json: {
+      listing_id: FIXTURE_LISTING_ID,
+      group_name: "Fixture Listing",
+      group_category: "Vacation Rental",
+      city: "Miami",
+      location_region: "Florida",
+      description: "Spacious beachfront rental.",
+    },
+  },
+  authorityPosts: [],
+  evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+  settings: { imageStylePreference: "editorial clean" },
+}));
 const upsertAuthorityStep2ResearchContract = vi.fn(
   async (_userId: string, _listingId: string, _slot: number, _input: Record<string, unknown>) => {}
 );
@@ -123,24 +141,7 @@ vi.mock("@/app/api/directoryiq/_utils/selectionData", () => ({
   getAuthorityPosts,
   upsertAuthorityStep2ResearchContract,
   getAuthorityPostBySlot: vi.fn(async () => null),
-  getListingEvaluation: vi.fn(async () => ({
-    listing: {
-      source_id: FIXTURE_LISTING_SOURCE_ID,
-      title: "Fixture Listing",
-      url: "https://example.com/listings/fixture-listing",
-      raw_json: {
-        listing_id: FIXTURE_LISTING_ID,
-        group_name: "Fixture Listing",
-        group_category: "Vacation Rental",
-        city: "Miami",
-        location_region: "Florida",
-        description: "Spacious beachfront rental.",
-      },
-    },
-    authorityPosts: [],
-    evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
-    settings: { imageStylePreference: "editorial clean" },
-  })),
+  getListingEvaluation,
   findListingCandidates: vi.fn(async () => [
     { sourceId: FIXTURE_LISTING_SOURCE_ID, siteId: "site-1", siteLabel: "Site One" },
   ]),
@@ -156,6 +157,24 @@ describe("POST /authority/research/retry", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getSerpApiKeyForUser.mockResolvedValue("serp-test-key");
+    getListingEvaluation.mockResolvedValue({
+      listing: {
+        source_id: FIXTURE_LISTING_SOURCE_ID,
+        title: "Fixture Listing",
+        url: "https://example.com/listings/fixture-listing",
+        raw_json: {
+          listing_id: FIXTURE_LISTING_ID,
+          group_name: "Fixture Listing",
+          group_category: "Vacation Rental",
+          city: "Miami",
+          location_region: "Florida",
+          description: "Spacious beachfront rental.",
+        },
+      },
+      authorityPosts: [],
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
   });
 
   function retryRequest(listingId: string = FIXTURE_LISTING_ID): NextRequest {
@@ -397,5 +416,80 @@ describe("POST /authority/research/retry", () => {
     } finally {
       global.fetch = previousFetch;
     }
+  });
+
+  it("uses persisted mission plan listing_url when canonical listing URL is missing", async () => {
+    getSerpApiKeyForUser.mockResolvedValueOnce(null);
+    getListingEvaluation.mockResolvedValueOnce({
+      listing: {
+        source_id: FIXTURE_LISTING_SOURCE_ID,
+        title: "Fixture Listing",
+        url: "",
+        raw_json: {
+          listing_id: FIXTURE_LISTING_ID,
+          group_name: "Fixture Listing",
+          group_category: "Vacation Rental",
+          city: "Miami",
+          location_region: "Florida",
+          group_filename: "listings/fixture-listing",
+        },
+      },
+      authorityPosts: [],
+      evaluation: { totalScore: 50, scores: {}, caps: [], flags: {} },
+      settings: { imageStylePreference: "editorial clean" },
+    });
+    getAuthorityPosts.mockResolvedValueOnce([
+      {
+        slot_index: 1,
+        metadata_json: {
+          step2_research: {
+            state: "failed",
+            error_code: "DOSSIER_EMPTY",
+            mission_plan_slot: FIXTURE_MISSION_PLAN_SLOT,
+          },
+        },
+      },
+    ]);
+    getListingCurrentSupport.mockResolvedValueOnce({
+      listing: {
+        id: FIXTURE_LISTING_ID,
+        title: "Fixture Listing",
+        canonicalUrl: null,
+        siteId: "site-1",
+      },
+      summary: {
+        inboundLinkedSupportCount: 0,
+        mentionWithoutLinkCount: 0,
+        outboundSupportLinkCount: 0,
+        connectedSupportPageCount: 0,
+        lastGraphRunAt: null,
+      },
+      inboundLinkedSupport: [],
+      mentionsWithoutLinks: [],
+      outboundSupportLinks: [],
+      connectedSupportPages: [],
+    });
+
+    const { POST } = await import(
+      "@/app/api/directoryiq/listings/[listingId]/authority/research/retry/route"
+    );
+    const res = await POST(retryRequest(), { params: { listingId: FIXTURE_LISTING_ID } });
+    const accepted = (await res.json()) as JobAccepted;
+    expect(res.status).toBe(202);
+
+    const jobResult = await waitForJobCompletion(String(accepted.statusEndpoint));
+    expect(jobResult.status).toBe("succeeded");
+    expect(jobResult.result?.state).toBe("ready_thin");
+
+    const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
+      (call) => (call[3] as Record<string, unknown>)?.state === "ready_thin"
+    );
+    expect(readyCall).toBeTruthy();
+    const readyInput = readyCall?.[3] as Record<string, unknown> | undefined;
+    const contract = (readyInput?.contract ?? {}) as Record<string, unknown>;
+    const artifact = (contract.research_artifact ?? {}) as Record<string, unknown>;
+    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+    expect(topResults.length).toBeGreaterThan(0);
+    expect((topResults[0] as { url?: string }).url).toBe(FIXTURE_MISSION_PLAN_SLOT.listing_url);
   });
 });
