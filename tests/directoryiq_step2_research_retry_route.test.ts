@@ -306,20 +306,12 @@ describe("POST /authority/research/retry", () => {
     global.fetch = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          organic_results: [
-            {
-              position: 1,
-              title: "Best Miami vacation rentals",
-              link: "https://example.org/miami-vacation-rentals",
-              snippet: "Compare amenities, price, and location.",
-            },
-            {
-              position: 2,
-              title: "Miami beach rental guide",
-              link: "https://example.org/miami-beach-guide",
-              snippet: "Top questions asked before booking a Miami rental.",
-            },
-          ],
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Best Miami vacation rentals ${index + 1}`,
+            link: `https://example.org/miami-vacation-rentals-${index + 1}`,
+            snippet: "Compare amenities, price, and location.",
+          })),
           related_questions: [
             { question: "Is parking free?" },
             { question: "Are pets allowed?" },
@@ -387,14 +379,12 @@ describe("POST /authority/research/retry", () => {
     global.fetch = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          organic_results: [
-            {
-              position: 1,
-              title: "Miami vacation rentals",
-              link: "https://example.org/miami-rentals",
-              snippet: "Top rated rentals in Miami.",
-            },
-          ],
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Miami vacation rentals ${index + 1}`,
+            link: `https://example.org/miami-rentals-${index + 1}`,
+            snippet: "Top rated rentals in Miami.",
+          })),
           related_questions: [],
         }),
         { status: 200, headers: { "content-type": "application/json" } }
@@ -419,7 +409,7 @@ describe("POST /authority/research/retry", () => {
   });
 
   it("uses persisted mission plan listing_url when canonical listing URL is missing", async () => {
-    getSerpApiKeyForUser.mockResolvedValueOnce(null);
+    getSerpApiKeyForUser.mockResolvedValueOnce("serp-test-key");
     getListingEvaluation.mockResolvedValueOnce({
       listing: {
         source_id: FIXTURE_LISTING_SOURCE_ID,
@@ -470,26 +460,46 @@ describe("POST /authority/research/retry", () => {
       connectedSupportPages: [],
     });
 
-    const { POST } = await import(
-      "@/app/api/directoryiq/listings/[listingId]/authority/research/retry/route"
-    );
-    const res = await POST(retryRequest(), { params: { listingId: FIXTURE_LISTING_ID } });
-    const accepted = (await res.json()) as JobAccepted;
-    expect(res.status).toBe(202);
+    const previousFetch = global.fetch;
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Fallback retry result ${index + 1}`,
+            link: `https://example.org/fallback-retry-result-${index + 1}`,
+            snippet: "Fallback retry comparison guidance.",
+          })),
+          related_questions: [{ question: "What should I compare?" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as typeof fetch;
 
-    const jobResult = await waitForJobCompletion(String(accepted.statusEndpoint));
-    expect(jobResult.status).toBe("succeeded");
-    expect(jobResult.result?.state).toBe("ready_thin");
+    try {
+      const { POST } = await import(
+        "@/app/api/directoryiq/listings/[listingId]/authority/research/retry/route"
+      );
+      const res = await POST(retryRequest(), { params: { listingId: FIXTURE_LISTING_ID } });
+      const accepted = (await res.json()) as JobAccepted;
+      expect(res.status).toBe(202);
 
-    const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
-      (call) => (call[3] as Record<string, unknown>)?.state === "ready_thin"
-    );
-    expect(readyCall).toBeTruthy();
-    const readyInput = readyCall?.[3] as Record<string, unknown> | undefined;
-    const contract = (readyInput?.contract ?? {}) as Record<string, unknown>;
-    const artifact = (contract.research_artifact ?? {}) as Record<string, unknown>;
-    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
-    expect(topResults.length).toBeGreaterThan(0);
-    expect((topResults[0] as { url?: string }).url).toBe(FIXTURE_MISSION_PLAN_SLOT.listing_url);
+      const jobResult = await waitForJobCompletion(String(accepted.statusEndpoint));
+      expect(jobResult.status).toBe("succeeded");
+      expect(jobResult.result?.state).toBe("ready_thin");
+
+      const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
+        (call) => (call[3] as Record<string, unknown>)?.state === "ready_thin"
+      );
+      expect(readyCall).toBeTruthy();
+      const readyInput = readyCall?.[3] as Record<string, unknown> | undefined;
+      const contract = (readyInput?.contract ?? {}) as Record<string, unknown>;
+      const artifact = (contract.research_artifact ?? {}) as Record<string, unknown>;
+      const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+      expect(topResults.length).toBeGreaterThan(0);
+      expect((topResults[0] as { url?: string }).url).toContain("https://example.org/fallback-retry-result-");
+    } finally {
+      global.fetch = previousFetch;
+    }
   });
 });

@@ -62,17 +62,31 @@ function toNullableString(value: unknown): string | null {
   return parsed || null;
 }
 
+function looksAddressLike(value: string): boolean {
+  const text = value.trim();
+  if (!text) return false;
+  const hasStreetToken = /\b(st|street|rd|road|ave|avenue|blvd|boulevard|ln|lane|dr|drive|suite|ste|unit|building)\b/i.test(text);
+  return /\d/.test(text) && hasStreetToken;
+}
+
+function normalizeGeoValue(value: unknown): string | null {
+  const text = toNullableString(value);
+  if (!text) return null;
+  if (looksAddressLike(text)) return null;
+  return text.length > 80 ? text.slice(0, 80).trim() : text;
+}
+
 function asLocation(raw: Record<string, unknown>): { city: string | null; region: string | null } {
   const city =
-    toNullableString(raw.post_location) ??
-    toNullableString(raw.city) ??
-    toNullableString(raw.locality) ??
-    toNullableString(raw.location_city);
+    normalizeGeoValue(raw.city) ??
+    normalizeGeoValue(raw.locality) ??
+    normalizeGeoValue(raw.location_city) ??
+    normalizeGeoValue(raw.post_location);
   const region =
-    toNullableString(raw.location_region) ??
-    toNullableString(raw.region) ??
-    toNullableString(raw.state) ??
-    toNullableString(raw.location_state);
+    normalizeGeoValue(raw.location_region) ??
+    normalizeGeoValue(raw.region) ??
+    normalizeGeoValue(raw.state) ??
+    normalizeGeoValue(raw.location_state);
   return { city, region };
 }
 
@@ -173,6 +187,14 @@ function diagnosticsFromDossier(input: {
     serp_enrichment_status: input.dossier.research_metadata?.enrichment_status ?? "unknown",
     serp_error: input.dossier.research_metadata?.serp_error ?? null,
   };
+}
+
+function hasGroundedSerpTop10(dossier: {
+  serp_results?: unknown[];
+  research_metadata?: { enrichment_status?: string };
+}): boolean {
+  const serpResultsCount = Array.isArray(dossier.serp_results) ? dossier.serp_results.length : 0;
+  return dossier.research_metadata?.enrichment_status === "ready" && serpResultsCount >= 10;
 }
 
 /**
@@ -438,6 +460,19 @@ export async function POST(
         usableContractsCount: usableContracts.length,
         dossier: dossierBundle.dossier,
       });
+      if (!hasGroundedSerpTop10(dossierBundle.dossier)) {
+        for (const entry of normalizedSlots) {
+          await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
+            contract: null,
+            state: "failed",
+            errorCode: "SERP_GROUNDED_RESEARCH_REQUIRED",
+            errorMessage: "SerpAPI did not return a usable top-10 result set for this listing.",
+            diagnostics,
+            missionPlanSlot: entry.mission_plan_slot,
+          });
+        }
+        return { ok: false, reqId, state: "failed", contracts: [], diagnostics };
+      }
       if (!usableContracts.length) {
         for (const entry of normalizedSlots) {
           await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {

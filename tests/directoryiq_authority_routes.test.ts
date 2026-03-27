@@ -330,20 +330,12 @@ describe("directoryiq authority routes", () => {
     global.fetch = vi.fn(async () =>
       new Response(
         JSON.stringify({
-          organic_results: [
-            {
-              position: 1,
-              title: "Best vacation rentals in Miami for families",
-              link: "https://example.org/best-vacation-rentals-miami",
-              snippet: "Compare parking, pet policy, cancellation terms, and booking flexibility.",
-            },
-            {
-              position: 2,
-              title: "Miami stay booking guide",
-              link: "https://example.org/miami-stay-booking-guide",
-              snippet: "Questions travelers ask before booking include check-in windows and fees.",
-            },
-          ],
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Best vacation rentals in Miami result ${index + 1}`,
+            link: `https://example.org/best-vacation-rentals-miami-${index + 1}`,
+            snippet: "Compare parking, pet policy, cancellation terms, and booking flexibility.",
+          })),
           related_questions: [
             { question: "Is parking included?" },
             { question: "What is the pet policy?" },
@@ -415,7 +407,7 @@ describe("directoryiq authority routes", () => {
   });
 
   it("uses mission plan listing_url fallback when canonical listing URL is missing", async () => {
-    getSerpApiKeyForUser.mockResolvedValueOnce(null);
+    getSerpApiKeyForUser.mockResolvedValueOnce("serp-test-key");
     getListingEvaluation.mockResolvedValueOnce({
       listing: {
         source_id: "site-1:999",
@@ -453,47 +445,67 @@ describe("directoryiq authority routes", () => {
       connectedSupportPages: [],
     });
 
-    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
-    const req = new NextRequest("http://localhost/api/directoryiq/listings/999/authority/research", {
-      method: "POST",
-      body: JSON.stringify({
-        contracts: [
-          {
-            slot: 1,
-            step2_contract: {
-              mission_plan_slot: {
-                slot_id: "publish_comparison_decision_post",
-                listing_url: "https://example.com/listings/fallback-listing",
+    const previousFetch = global.fetch;
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Fallback listing result ${index + 1}`,
+            link: `https://example.org/fallback-listing-result-${index + 1}`,
+            snippet: "Fallback listing comparison guidance.",
+          })),
+          related_questions: [{ question: "What should I compare first?" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as typeof fetch;
+
+    try {
+      const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+      const req = new NextRequest("http://localhost/api/directoryiq/listings/999/authority/research", {
+        method: "POST",
+        body: JSON.stringify({
+          contracts: [
+            {
+              slot: 1,
+              step2_contract: {
+                mission_plan_slot: {
+                  slot_id: "publish_comparison_decision_post",
+                  listing_url: "https://example.com/listings/fallback-listing",
+                },
               },
             },
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-    });
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+      });
 
-    const submitRes = await POST(req, { params: { listingId: "999" } });
-    const accepted = (await submitRes.json()) as JobAccepted;
-    expect(submitRes.status).toBe(202);
+      const submitRes = await POST(req, { params: { listingId: "999" } });
+      const accepted = (await submitRes.json()) as JobAccepted;
+      expect(submitRes.status).toBe(202);
 
-    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
-    expect(status.status).toBe("succeeded");
-    expect(status.result?.state).toBe("ready_thin");
+      const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+      expect(status.status).toBe("succeeded");
+      expect(status.result?.state).toBe("ready_thin");
 
-    const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
-      (call) => call[3]?.state === "ready_thin"
-    );
-    expect(readyCall).toBeTruthy();
-    const persistedContract = readyCall?.[3]?.contract as Record<string, unknown> | undefined;
-    const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
-    const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
-    expect(topResults.length).toBeGreaterThan(0);
-    expect((topResults[0] as { url?: string }).url).toBe("https://example.com/listings/fallback-listing");
+      const readyCall = upsertAuthorityStep2ResearchContract.mock.calls.find(
+        (call) => call[3]?.state === "ready_thin"
+      );
+      expect(readyCall).toBeTruthy();
+      const persistedContract = readyCall?.[3]?.contract as Record<string, unknown> | undefined;
+      const artifact = (persistedContract?.research_artifact ?? {}) as Record<string, unknown>;
+      const topResults = Array.isArray(artifact.top_results) ? artifact.top_results : [];
+      expect(topResults.length).toBeGreaterThan(0);
+      expect((topResults[0] as { url?: string }).url).toContain("https://example.org/fallback-listing-result-");
 
-    const supportCall = getListingCurrentSupport.mock.calls.find(
-      (call) => String(call?.[0]?.listingId ?? "") === "999"
-    );
-    expect(supportCall?.[0]?.listingUrl).toBe("https://example.com/listings/fallback-listing");
+      const supportCall = getListingCurrentSupport.mock.calls.find(
+        (call) => String(call?.[0]?.listingId ?? "") === "999"
+      );
+      expect(supportCall?.[0]?.listingUrl).toBe("https://example.com/listings/fallback-listing");
+    } finally {
+      global.fetch = previousFetch;
+    }
   });
 
   it("resumes Step 2 listing research as ready when canonical artifact already exists", async () => {
@@ -556,6 +568,7 @@ describe("directoryiq authority routes", () => {
   });
 
   it("does not treat synthetic persisted artifacts as dossier-ready", async () => {
+    getSerpApiKeyForUser.mockResolvedValueOnce("serp-test-key");
     getAuthorityPosts.mockResolvedValueOnce([
       {
         slot_index: 1,
@@ -571,29 +584,49 @@ describe("directoryiq authority routes", () => {
       },
     ]);
 
-    const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
-    const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
-      method: "POST",
-      body: JSON.stringify({
-        contracts: [
-          {
-            slot: 1,
-            step2_contract: {
-              mission_plan_slot: { slot_id: "publish_comparison_decision_post", listing_url: "https://example.com/listings/fixture-listing" },
-            },
-          },
-        ],
-      }),
-      headers: { "content-type": "application/json" },
-    });
+    const previousFetch = global.fetch;
+    global.fetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          organic_results: Array.from({ length: 10 }, (_, index) => ({
+            position: index + 1,
+            title: `Fixture result ${index + 1}`,
+            link: `https://example.org/fixture-result-${index + 1}`,
+            snippet: "Fixture listing research result.",
+          })),
+          related_questions: [{ question: "How does this compare?" }],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } }
+      )
+    ) as typeof fetch;
 
-    const submitRes = await POST(req, { params: { listingId: "321" } });
-    const accepted = (await submitRes.json()) as JobAccepted;
-    expect(submitRes.status).toBe(202);
-    const status = await waitForJobCompletion(String(accepted.statusEndpoint));
-    expect(status.status).toBe("succeeded");
-    expect(status.result?.state).toBe("ready_thin");
-    expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
+    try {
+      const { POST } = await import("@/app/api/directoryiq/listings/[listingId]/authority/research/route");
+      const req = new NextRequest("http://localhost/api/directoryiq/listings/321/authority/research", {
+        method: "POST",
+        body: JSON.stringify({
+          contracts: [
+            {
+              slot: 1,
+              step2_contract: {
+                mission_plan_slot: { slot_id: "publish_comparison_decision_post", listing_url: "https://example.com/listings/fixture-listing" },
+              },
+            },
+          ],
+        }),
+        headers: { "content-type": "application/json" },
+      });
+
+      const submitRes = await POST(req, { params: { listingId: "321" } });
+      const accepted = (await submitRes.json()) as JobAccepted;
+      expect(submitRes.status).toBe(202);
+      const status = await waitForJobCompletion(String(accepted.statusEndpoint));
+      expect(status.status).toBe("succeeded");
+      expect(status.result?.state).toBe("ready_thin");
+      expect(upsertAuthorityStep2ResearchContract).toHaveBeenCalled();
+    } finally {
+      global.fetch = previousFetch;
+    }
   });
 
   it("rejects step2 draft generation when listing research is not ready", async () => {

@@ -209,7 +209,16 @@ async function fetchSerpapi(input: { query: string; location: string; apiKey: st
       signal: controller.signal,
     });
     if (!response.ok) {
-      throw new Error(`SERPAPI_HTTP_${response.status}`);
+      let errorDetail = "";
+      try {
+        const payload = (await response.json()) as { error?: unknown; message?: unknown };
+        if (typeof payload.error === "string" && payload.error.trim()) errorDetail = payload.error.trim();
+        else if (typeof payload.message === "string" && payload.message.trim()) errorDetail = payload.message.trim();
+      } catch {
+        // Ignore parse failures and keep a status-only error.
+      }
+      const compactDetail = errorDetail.replace(/\s+/g, " ").slice(0, 180);
+      throw new Error(compactDetail ? `SERPAPI_HTTP_${response.status}:${compactDetail}` : `SERPAPI_HTTP_${response.status}`);
     }
     const json = (await response.json()) as {
       organic_results?: Array<{ title?: unknown; link?: unknown; snippet?: unknown; position?: unknown }>;
