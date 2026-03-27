@@ -42,3 +42,4 @@ app/_meta/release.json
 next-env.d.ts
 _artifacts/
 artifacts/
+/build.tar.gz
