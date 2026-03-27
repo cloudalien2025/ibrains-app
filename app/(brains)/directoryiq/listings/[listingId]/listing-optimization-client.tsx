@@ -1112,6 +1112,14 @@ export default function ListingOptimizationClient({
    * should NOT add a second background poll to avoid duplicate requests.
    */
   const step2ResearchInFlightRef = useRef(false);
+  /**
+   * Tracks which slot IDs have an active draft generation pipeline running in this
+   * browser session. When a slot appears in this set, the session's
+   * generateContentDraft/executeStep2SlotPipeline call is responsible for
+   * resolving the draft; the background draft-status poller must skip it to
+   * avoid duplicate concurrent requests.
+   */
+  const step2DraftInFlightSlotsRef = useRef<Set<string>>(new Set());
   const [serverStep2Snapshot, setServerStep2Snapshot] = useState<ListingDetailResponse["step2"] | null>(null);
   const [step2ReadRuntime, setStep2ReadRuntime] = useState<Step2ParityRuntime>(null);
   const [step2WriteRuntime, setStep2WriteRuntime] = useState<Step2ParityRuntime>(null);
@@ -2127,6 +2135,56 @@ export default function ListingOptimizationClient({
       })
       .filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
   }, [contentAssets, contentStructure, reinforcementPlan?.items, step2MissionSlots, step2Runtime, step2OpenAiSetupBlocked, integrations.bdConfigured, effectiveListingId]);
+  /**
+   * Background draft-status poller for slot-level generating states.
+   *
+   * When a persisted slot has draft_status === "generating" on page load (i.e.
+   * generation was started in a prior session and the user navigated away), the
+   * current session has no active generateContentDraft promise to resolve it.
+   * This effect detects those "orphaned" generating slots and polls
+   * loadListingAndIntegrations() every 5 s until every generating slot reaches
+   * a terminal draft_status (ready | failed | not_started).
+   *
+   * Guard: skip any slot that is registered in step2DraftInFlightSlotsRef — an
+   * active pipeline in this session is already resolving it.
+   */
+  const DRAFT_POLL_INTERVAL_MS = 5_000;
+  const DRAFT_POLL_MAX_MS = 180_000;
+  const hasOrphanedGeneratingDraft = useMemo(() => {
+    const inFlightIds = step2DraftInFlightSlotsRef.current;
+    return step2SlotViewModels.some(
+      ({ missionSlot, asset }) =>
+        asset.draftStatus === "generating" && !inFlightIds.has(missionSlot.slot_id)
+    );
+  // step2SlotViewModels and step2DraftInFlightSlotsRef.current are stable enough
+  // for this derived boolean; the ref value is read at render time.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step2SlotViewModels]);
+
+  useEffect(() => {
+    if (!hasOrphanedGeneratingDraft || !effectiveListingId) return;
+
+    let stopped = false;
+    let elapsed = 0;
+
+    const intervalId = setInterval(() => {
+      if (stopped) return;
+      elapsed += DRAFT_POLL_INTERVAL_MS;
+      if (elapsed >= DRAFT_POLL_MAX_MS) {
+        clearInterval(intervalId);
+        stopped = true;
+        return;
+      }
+      void loadListingAndIntegrations();
+    }, DRAFT_POLL_INTERVAL_MS);
+
+    return () => {
+      stopped = true;
+      clearInterval(intervalId);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasOrphanedGeneratingDraft, effectiveListingId]);
+
   const step2StatusBuckets = useMemo(() => {
     return step2SlotViewModels.reduce(
       (acc, entry) => {
@@ -3140,6 +3198,9 @@ export default function ListingOptimizationClient({
       return;
     }
 
+    // Register this slot as in-flight so the background draft-status poller skips it.
+    step2DraftInFlightSlotsRef.current.add(slotId);
+    try {
     const action = actionInput.recommendedAction;
     setContentAssets((previous) => {
       const currentAsset = previous[input.item.id] ?? initializeContentAsset(input.item, input.slot);
@@ -3192,6 +3253,10 @@ export default function ListingOptimizationClient({
       return;
     }
     patchStep2Runtime(slotId, { internalState: "image_ready", errorMessage: null });
+    } finally {
+      // Unregister this slot so the background poller can resume if needed.
+      step2DraftInFlightSlotsRef.current.delete(slotId);
+    }
   }
 
   function buildStep2DraftContractInput(missionSlot: Step2MissionPlanSlot): Step2DraftContractInput {
