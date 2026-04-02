@@ -23,7 +23,7 @@ export const SNAPSHOT_REFRESH_THRESHOLD_MS = 6 * 60 * 60 * 1000;
 export const SNAPSHOT_LOCK_TTL_MS = 10 * 60 * 1000;
 
 export const DIRECTORYIQ_METRIC_DEFS = [
-  { key: "travel_selection_readiness", label: "Travel Selection Readiness" },
+  { key: "travel_selection_readiness", label: "Directory Selection Readiness" },
   { key: "listings_optimized_total", label: "Listings Optimized / Total" },
   { key: "authority_gaps", label: "Authority Gaps" },
   { key: "monetization_opportunities", label: "Monetization Opportunities" },

@@ -30,16 +30,27 @@ function formatPayload(payload: unknown): string {
 }
 
 function resolveMessage(payload: unknown, status: number): string {
+  const serviceDownMessage =
+    "The brain service is unavailable right now. Try again in a moment.";
   if (payload && typeof payload === "object") {
     const candidate = payload as {
       message?: string;
       error?: { message?: string };
     };
     const nested = candidate.error?.message || candidate.message;
-    if (nested) return nested;
+    if (nested) {
+      const normalized = nested.toLowerCase();
+      if (normalized.includes("x-api-key") || normalized.includes("api authorization")) {
+        return serviceDownMessage;
+      }
+      return nested;
+    }
   }
   if (status === 401) {
-    return "This action requires API authorization. Check BRAINS_MASTER_KEY configuration for browser-triggered operations.";
+    return serviceDownMessage;
+  }
+  if (status >= 500) {
+    return serviceDownMessage;
   }
   return `Request failed with HTTP ${status}.`;
 }
@@ -218,7 +229,7 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
                 type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="e.g. Best family-friendly hotels in Austin"
+                placeholder="e.g. How should I improve my Brilliant Directories listing schema?"
                 className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
               />
             </label>

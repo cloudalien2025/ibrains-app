@@ -6,6 +6,16 @@ import CreateBrainDialog from "../_components/CreateBrainDialog";
 import { brainCatalogById, isBrainId } from "@/lib/brains/brainCatalog";
 
 type BrainRecord = Record<string, unknown>;
+type BrainStatsRecord = Record<string, unknown>;
+
+function toNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace(/[^\d.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
 
 function resolveBrains(payload: unknown): BrainRecord[] {
   if (Array.isArray(payload)) return payload as BrainRecord[];
@@ -52,6 +62,8 @@ function normalizeBrain(brain: BrainRecord): BrainView {
     name,
     entitled,
     lastUpdated,
+    readinessPct: null,
+    totalItems: null,
   };
 }
 
@@ -77,7 +89,40 @@ async function loadBrains(): Promise<{
     const uniqueBrains = Array.from(
       new Map(normalized.map((brain) => [brain.id, brain])).values()
     );
-    return { brains: uniqueBrains };
+
+    const statEntries = await Promise.all(
+      uniqueBrains.map(async (brain) => {
+        try {
+          const statsRes = await fetch(`${baseUrl}/api/brains/${brain.id}/stats`, {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          });
+          if (!statsRes.ok) return [brain.id, null] as const;
+          const stats = (await statsRes.json().catch(() => null)) as BrainStatsRecord | null;
+          return [brain.id, stats] as const;
+        } catch {
+          return [brain.id, null] as const;
+        }
+      })
+    );
+
+    const statsByBrain = new Map(statEntries);
+    const withReadiness = uniqueBrains.map((brain) => {
+      const stats = statsByBrain.get(brain.id);
+      const readinessRaw = toNumber(stats?.fill_pct ?? stats?.readiness_pct ?? stats?.readiness);
+      const readinessPct =
+        readinessRaw == null ? null : Math.max(0, Math.min(100, readinessRaw));
+      const totalItems = toNumber(
+        stats?.total_items ?? stats?.items_total ?? stats?.source_count ?? stats?.sources_total
+      );
+      return {
+        ...brain,
+        readinessPct,
+        totalItems,
+      };
+    });
+
+    return { brains: withReadiness };
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown fetch error";
     return { brains: [], error: message };
