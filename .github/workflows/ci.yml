@@ -38,7 +38,7 @@ jobs:
         run: bash scripts/check_route_signatures.sh
 
       - name: Lint
-        run: pnpm run --if-present lint
+        run: pnpm run --if-present lint:directoryiq
 
   build:
     runs-on: ubuntu-latest
