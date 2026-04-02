@@ -39,15 +39,11 @@ function resolveMessage(payload: unknown, status: number): string {
     };
     const nested = candidate.error?.message || candidate.message;
     if (nested) {
-      const normalized = nested.toLowerCase();
-      if (normalized.includes("x-api-key") || normalized.includes("api authorization")) {
-        return serviceDownMessage;
-      }
       return nested;
     }
   }
   if (status === 401) {
-    return serviceDownMessage;
+    return "Please sign in to run this operation.";
   }
   if (status >= 500) {
     return serviceDownMessage;

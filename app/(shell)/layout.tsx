@@ -1,8 +1,16 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { UserButton } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
+import { redirect } from "next/navigation";
 import SideNav from "./_components/SideNav";
 
-export default function ShellLayout({ children }: { children: ReactNode }) {
+export default async function ShellLayout({ children }: { children: ReactNode }) {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect("/sign-in");
+  }
+
   return (
     <div className="ecomviper-hud min-h-screen text-slate-100">
       <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
@@ -48,6 +56,7 @@ export default function ShellLayout({ children }: { children: ReactNode }) {
               >
                 Home
               </Link>
+              <UserButton />
             </div>
           </header>
 

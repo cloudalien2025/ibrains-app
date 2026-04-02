@@ -1,6 +1,13 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import {
+  SignInButton,
+  SignUpButton,
+  UserButton,
+  useAuth,
+} from "@clerk/nextjs";
 
 type HealthPayload = {
   ok: boolean;
@@ -33,6 +40,7 @@ function safeJsonStringify(obj: unknown, spaces = 2): string {
 }
 
 export default function Home() {
+  const { isSignedIn } = useAuth();
   const workerUrl =
     (process.env.NEXT_PUBLIC_WORKER_URL || "").trim() || DEFAULT_WORKER_URL;
 
@@ -148,11 +156,39 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-[#070a12] text-zinc-100">
       <div className="mx-auto max-w-5xl px-6 py-16">
-        <div className="mb-10 inline-flex items-center gap-3">
-          <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-200 ring-1 ring-inset ring-indigo-500/25">
-            Platform Intelligence Engine
-          </span>
-          {badge}
+        <div className="mb-10 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex items-center gap-3">
+            <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-200 ring-1 ring-inset ring-indigo-500/25">
+              Platform Intelligence Engine
+            </span>
+            {badge}
+          </div>
+          <div className="flex items-center gap-2">
+            {!isSignedIn ? (
+              <>
+              <SignInButton mode="modal">
+                <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10">
+                  Sign in
+                </button>
+              </SignInButton>
+              <SignUpButton mode="modal">
+                <button className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/25">
+                  Create account
+                </button>
+              </SignUpButton>
+              </>
+            ) : (
+              <>
+              <Link
+                href="/brains"
+                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+              >
+                Open console
+              </Link>
+              <UserButton />
+              </>
+            )}
+          </div>
         </div>
 
         <div className="rounded-3xl border border-white/10 bg-white/5 p-10 shadow-2xl shadow-black/40">
