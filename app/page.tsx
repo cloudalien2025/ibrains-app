@@ -3,8 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
-  SignInButton,
-  SignUpButton,
   UserButton,
   useAuth,
 } from "@clerk/nextjs";
@@ -166,16 +164,18 @@ export default function Home() {
           <div className="flex items-center gap-2">
             {!isSignedIn ? (
               <>
-              <SignInButton mode="modal">
-                <button className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10">
+                <Link
+                  href="/sign-in"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                >
                   Sign in
-                </button>
-              </SignInButton>
-              <SignUpButton mode="modal">
-                <button className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/25">
+                </Link>
+                <Link
+                  href="/sign-up"
+                  className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/25"
+                >
                   Create account
-                </button>
-              </SignUpButton>
+                </Link>
               </>
             ) : (
               <>
