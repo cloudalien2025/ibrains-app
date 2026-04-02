@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server.js";
+import crypto from "crypto";
 
 import { pathToFileURL } from "url";
 import path from "path";
@@ -31,7 +32,7 @@ const { GET: runsDiagGET } = getRouteModule(runsDiagModule).userland;
 const BASE = process.env.BRAINS_API_BASE || "http://mock.local";
 process.env.BRAINS_API_BASE = BASE;
 process.env.BRAINS_WORKER_API_KEY = process.env.BRAINS_WORKER_API_KEY || "worker_test";
-process.env.BRAINS_USER_ID = process.env.BRAINS_USER_ID || "user_test";
+process.env.BRAINS_USER_ID = process.env.BRAINS_USER_ID || crypto.randomUUID();
 
 const calls = [];
 
