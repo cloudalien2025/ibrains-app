@@ -180,3 +180,34 @@ Not implemented in this lane:
 - final end-user co-brain conversational UX
 - LLM answer generation/runtime
 - adaptive reinforcement from user feedback
+
+## Co-Brain Answer Orchestration (This Lane)
+
+This lane adds deterministic answer orchestration over `co_brain_context_packet_v1`.
+
+- endpoint: `POST /api/brains/{id}/answer-orchestrate`
+- service: `runCoBrainAnswerOrchestration` (`lib/brain-learning/answerOrchestration.ts`)
+- input: `query` (required), optional retrieval filters, optional `context_packet` override
+
+Output contract:
+
+- `advisor_response_v1` with:
+  - direct natural answer draft (`answer`, `answer_summary`)
+  - practical `recommendations`
+  - `cautions` and `uncertainty_notes` when evidence is mixed
+  - `next_steps`
+  - grounding metadata (`supporting_context_item_ids`, freshness/conflict summary)
+  - generation metadata (`deterministic_context_compose_v1`, guardrails applied)
+
+Orchestration behavior:
+
+- builds a context packet (or validates a provided packet) for the same `brain_id` + `query`
+- prioritizes strongest current guidance and evidence-backed themes
+- carries forward stale/duplicate suppression signals from context assembly
+- preserves traceability by returning supporting chunk IDs in the response object
+
+Not implemented in this lane:
+
+- final end-user chat UX
+- model-based freeform generation
+- downstream app-specific rendering/integration logic
