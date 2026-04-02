@@ -109,3 +109,44 @@ Not implemented in this lane:
 - final co-brain answer UX
 - embedding/vector retrieval ranking
 - broad taxonomy management UI
+
+## Retrieval Readiness (This Lane)
+
+This lane adds grounded retrieval over `brain_chunks` for one brain/query via:
+
+- `POST /api/brains/{id}/retrieve`
+- service: `runBrainRetrieval` (`lib/brain-learning/retrieval.ts`)
+
+Request shape:
+
+- `query` (required)
+- `limit` (optional, default `10`, max `50`)
+- `taxonomy_node_ids` (optional filter/preference list)
+- `taxonomy_node_keys` (optional filter/preference list)
+
+Ranking strategy (`deterministic_lexical_taxonomy_freshness_v1`):
+
+- lexical relevance from deterministic token + phrase matching against chunk text/title
+- taxonomy-aware weighting (strong boost when preferred taxonomy nodes match)
+- freshness/currentness weighting from `brain_documents.freshness_score` + `is_current`
+- deterministic tie-breakers: currentness -> version -> document recency -> chunk id
+
+Freshness + duplication controls:
+
+- current/fresher documents naturally outrank stale/non-current equivalents
+- result diversity cap prevents flooding from one source/document (`max 2` chunks per source and per document)
+- taxonomy filters (ids/keys) are applied at query time when provided
+
+Grounded response contract includes:
+
+- chunk/document/source/run/brain IDs
+- chunk text + relevance score + score breakdown
+- freshness indicators (`is_current`, `version_no`, supersede lineage)
+- taxonomy matches
+- provenance payload (`source_kind`, external ID, title/url/publisher, source payload, chunk metadata)
+
+Still not in scope:
+
+- end-user conversational co-brain UX
+- embedding/vector retrieval rollout
+- adaptive/learning-to-rank feedback loops
