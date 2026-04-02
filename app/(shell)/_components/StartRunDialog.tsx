@@ -17,14 +17,15 @@ type ToastState = {
 export default function StartRunDialog({ brainId, brainName }: StartRunDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
-  const [limit, setLimit] = useState(50);
+  const [limit, setLimit] = useState(20);
+  const [keyword, setKeyword] = useState(brainName);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<ToastState | null>(null);
 
   const apiSnippet = useMemo(() => {
-    return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/runs -H "Content-Type: application/json" -d '{"limit":${limit}}'`;
-  }, [brainId, limit]);
+    return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -H "Content-Type: application/json" -d '{"keyword":"${keyword.replace(/"/g, '\\"')}","selected_new":${limit},"n_new_videos":${limit},"max_candidates":50,"mode":"audio_first"}'`;
+  }, [brainId, keyword, limit]);
 
   function clampLimit(value: number) {
     if (Number.isNaN(value)) return 50;
@@ -48,10 +49,24 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
         return;
       }
 
-      const res = await fetch(`/api/brains/${brainId}/runs`, {
+      const trimmedKeyword = keyword.trim();
+      if (!trimmedKeyword) {
+        const message = "Keyword is required.";
+        setError(message);
+        showToast({ message, tone: "error" });
+        return;
+      }
+
+      const res = await fetch(`/api/brains/${brainId}/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ limit }),
+        body: JSON.stringify({
+          keyword: trimmedKeyword,
+          selected_new: limit,
+          n_new_videos: limit,
+          max_candidates: 50,
+          mode: "audio_first",
+        }),
       });
 
       const raw = await res.text();
@@ -132,7 +147,19 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
-                  Run limit
+                  Keyword
+                </div>
+                <input
+                  type="text"
+                  value={keyword}
+                  onChange={(event) => setKeyword(event.target.value)}
+                  className="mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
+                  Selected new
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <input
@@ -146,7 +173,7 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
                     className="w-28 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
                   />
                   <span className="text-xs text-slate-400">
-                    1–200 documents per run.
+                    1-200 items per ingest run.
                   </span>
                 </div>
               </div>

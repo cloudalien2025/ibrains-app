@@ -15,8 +15,8 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const id = await getId(params);
-    return proxyToBrains(req, `/v1/brains/${id}/runs`, { requireAuth: true });
+    // Legacy compatibility shim. Canonical contract should use /api/runs*.
+    return proxyToBrains(req, "/v1/runs", { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }
@@ -28,7 +28,8 @@ export async function POST(
 ) {
   try {
     const id = await getId(params);
-    return proxyToBrains(req, `/v1/brains/${id}/runs`, { requireAuth: true });
+    // Legacy compatibility shim. Canonical contract should use /api/brains/{id}/ingest.
+    return proxyToBrains(req, `/v1/brains/${id}/ingest`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }

@@ -25,7 +25,7 @@ const CHECKS: CheckItem[] = [
   {
     key: "proxy",
     title: "Proxy deterministic ok",
-    description: "Validates POST /api/brains/.../runs returns 202 + run_id.",
+    description: "Validates POST /api/brains/.../ingest returns 202 + run_id.",
   },
   {
     key: "start-run",

@@ -11,8 +11,8 @@ trap cleanup EXIT
 
 curl -sS -D "$response_headers" -o "$response_body" -X POST \
   -H "Content-Type: application/json" \
-  -d '{"limit":1}' \
-  http://127.0.0.1:3001/api/brains/brilliant_directories/runs
+  -d '{"keyword":"brilliant directories","selected_new":1,"n_new_videos":1,"max_candidates":50,"mode":"audio_first"}' \
+  http://127.0.0.1:3001/api/brains/brilliant_directories/ingest
 
 status_code=$(sed -n 's/^HTTP\/[^ ]* \([0-9][0-9][0-9]\).*/\1/p' "$response_headers" | tail -n 1)
 

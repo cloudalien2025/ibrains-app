@@ -44,7 +44,9 @@ function buildHeaders(
   if (requireAuth) {
     let apiKey: string | undefined;
     const isWorkerPath =
-      targetPath.startsWith("/v1/brains/") || targetPath.startsWith("/v1/runs/");
+      targetPath.startsWith("/v1/brains/") ||
+      targetPath.startsWith("/v1/runs/") ||
+      targetPath.startsWith("/v1/brain-packs/");
 
     if (isWorkerPath) {
       apiKey = process.env.BRAINS_WORKER_API_KEY;

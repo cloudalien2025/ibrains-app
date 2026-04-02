@@ -2,6 +2,7 @@ import Link from "next/link";
 import CopyButton from "../../_components/CopyButton";
 import RunStatusBadge from "../_components/RunStatusBadge";
 import RunDetailClient from "./run-detail-client";
+import RunArtifactsClient from "./run-artifacts-client";
 
 type RunDetailProps = {
   params: Promise<{ runId: string }>;
@@ -138,6 +139,8 @@ export default async function RunDetailPage({ params }: RunDetailProps) {
                 </Link>
               </div>
             </div>
+
+            <RunArtifactsClient runId={runId} />
           </div>
         )}
       </RunDetailClient>
