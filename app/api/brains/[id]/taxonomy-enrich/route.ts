@@ -2,28 +2,14 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { runBrainTaxonomyEnrichment } from "@/lib/brain-learning/taxonomyEnrichment";
-
-function unauthorized() {
-  return NextResponse.json(
-    {
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Missing or invalid x-api-key",
-      },
-    },
-    { status: 401 }
-  );
-}
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
-  const expectedKey = (process.env.BRAINS_MASTER_KEY || process.env.BRAINS_X_API_KEY || "").trim();
-  const providedKey = (req.headers.get("x-api-key") || "").trim();
-  if (!expectedKey || providedKey !== expectedKey) {
-    return unauthorized();
-  }
+  const { unauthorizedResponse } = await requireSignedInUser();
+  if (unauthorizedResponse) return unauthorizedResponse;
 
   try {
     const body = (await req.json().catch(() => ({}))) as {

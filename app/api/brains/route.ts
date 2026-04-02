@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { proxyToBrains, unexpectedErrorResponse } from "../_utils/proxy";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 
 function isMissingBrainsAuthEnv(error: unknown): boolean {
   if (!(error instanceof Error)) return false;
@@ -27,6 +28,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
+    const { unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) return unauthorizedResponse;
+
     return await proxyToBrains(req, "/v1/brains", { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
