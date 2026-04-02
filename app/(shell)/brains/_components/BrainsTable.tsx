@@ -4,6 +4,8 @@ import { brainsDockCopy, type BrainCatalogEntry } from "@/lib/brains/brainCatalo
 type BrainDockState = {
   entitled: boolean;
   lastUpdated?: string | null;
+  readinessPct?: number | null;
+  totalItems?: number | null;
 };
 
 export type BrainDockView = BrainCatalogEntry & BrainDockState;
@@ -26,7 +28,14 @@ export default function BrainsTable({ brains }: BrainsTableProps) {
 
       <section className="grid gap-4 lg:grid-cols-3">
         {brains.map((brain) => (
-          <BrainDockCard key={brain.id} brain={brain} entitled={brain.entitled} lastUpdated={brain.lastUpdated} />
+          <BrainDockCard
+            key={brain.id}
+            brain={brain}
+            entitled={brain.entitled}
+            lastUpdated={brain.lastUpdated}
+            readinessPct={brain.readinessPct}
+            totalItems={brain.totalItems}
+          />
         ))}
       </section>
     </div>

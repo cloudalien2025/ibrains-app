@@ -20,8 +20,8 @@ export const brainCatalog: BrainCatalogEntry[] = [
     id: "directoryiq",
     name: "DirectoryIQ",
     shortDescription:
-      "Travel intelligence brain for local entity readiness, authority coverage, and operational discovery cycles.",
-    tags: ["Travel Entities", "Knowledge Readiness", "Authority Blueprint"],
+      "Brilliant Directories intelligence brain for listing readiness, authority coverage, and operational discovery cycles.",
+    tags: ["Directory Intelligence", "Knowledge Readiness", "Authority Blueprint"],
     primaryCtaText: "Open Console",
     upsellTitle: "Unlock DirectoryIQ",
     upsellMessage:

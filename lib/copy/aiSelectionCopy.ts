@@ -6,13 +6,13 @@ export const aiSelectionCopy = {
       "Operate each specialized brain from an internal console. Run discovery and ingest cycles, then validate retrieval and answer quality without leaving iBrains.",
   },
   directoryiq: {
-    shellSubtitle: "Travel intelligence brain for entity readiness and authority coverage.",
+    shellSubtitle: "Brilliant Directories intelligence brain for directory readiness and authority coverage.",
     pageTitle: "DirectoryIQ Brain Console",
     pageSubtitle:
-      "Track entity readiness, retrieval confidence, and authority blueprint coverage across hotels, restaurants, and shops.",
+      "Track directory readiness, retrieval confidence, and authority blueprint coverage for Brilliant Directories workflows.",
     nav: {
-      dashboard: "Entity Readiness",
-      surfaces: "Entity Surfaces",
+      dashboard: "Directory Readiness",
+      surfaces: "Directory Surfaces",
       coverage: "Authority Coverage",
       signalSources: "Signal Sources",
     },
