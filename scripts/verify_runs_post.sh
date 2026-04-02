@@ -6,8 +6,8 @@ mkdir -p "${ARTIFACT_DIR}"
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 
-LOCAL_URL="http://127.0.0.1:3001/api/brains/brilliant_directories/runs"
-PUBLIC_URL="https://app.ibrains.ai/api/brains/brilliant_directories/runs"
+LOCAL_URL="http://127.0.0.1:3001/api/brains/brilliant_directories/ingest"
+PUBLIC_URL="https://app.ibrains.ai/api/brains/brilliant_directories/ingest"
 
 note() { printf '%s\n' "$*"; }
 
@@ -22,7 +22,7 @@ run_check() {
 
   if ! curl -sS -i --max-redirs 0 -X POST "$url" \
     -H "Content-Type: application/json" \
-    -d '{"limit":1}' \
+    -d '{"keyword":"brilliant directories","selected_new":1,"n_new_videos":1,"max_candidates":50,"mode":"audio_first"}' \
     -D "$tmp_headers" \
     -o "$tmp_body"; then
     note "${name}: curl failed (see ${tmp_headers} / ${tmp_body})"

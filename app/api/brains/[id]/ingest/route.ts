@@ -1,15 +1,15 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { proxyToBrains, unexpectedErrorResponse } from "../../_utils/proxy";
+import { proxyToBrains, unexpectedErrorResponse } from "../../../_utils/proxy";
 
-export async function GET(
+export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
     const { id } = await Promise.resolve(params);
-    return proxyToBrains(req, `/v1/brains/${id}`, { requireAuth: true });
+    return proxyToBrains(req, `/v1/brains/${id}/ingest`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }

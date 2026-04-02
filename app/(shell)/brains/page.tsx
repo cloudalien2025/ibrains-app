@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import BrainsTable, { type BrainView } from "./_components/BrainsTable";
 import EmptyState from "../_components/EmptyState";
+import CreateBrainDialog from "../_components/CreateBrainDialog";
 import { brainCatalogById, isBrainId } from "@/lib/brains/brainCatalog";
 
 type BrainRecord = Record<string, unknown>;
@@ -106,6 +107,7 @@ export default async function BrainsPage() {
           >
             View latest runs
           </Link>
+          <CreateBrainDialog />
         </div>
       </section>
 

@@ -10,9 +10,9 @@ OUT_FILE="/tmp/verify_worker_key_routing.out"
 
   run_http_code=$(curl -sS -o /tmp/verify_worker_key_routing.run.body \
     -w "%{http_code}" \
-    -X POST "${BASE_URL}/api/brains/brilliant_directories/runs" \
+    -X POST "${BASE_URL}/api/brains/brilliant_directories/ingest" \
     -H "Content-Type: application/json" \
-    -d '{"limit":1}')
+    -d '{"keyword":"brilliant directories","selected_new":1,"n_new_videos":1,"max_candidates":50,"mode":"audio_first"}')
 
   run_response=$(cat /tmp/verify_worker_key_routing.run.body)
   run_id=$(python3 -c 'import json,sys;d=sys.stdin.read();j=json.loads(d);print(j.get("run_id") or j.get("runId") or j.get("id") or "")' <<<"$run_response" 2>/dev/null || true)

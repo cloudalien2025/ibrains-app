@@ -4,7 +4,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://127.0.0.1:3001}"
 BRAIN_ID="${BRAIN_ID:-brilliant_directories}"
 
-URL="${BASE_URL}/api/brains/${BRAIN_ID}/runs"
+URL="${BASE_URL}/api/brains/${BRAIN_ID}/ingest"
 
 tmp_headers=$(mktemp)
 tmp_body=$(mktemp)
@@ -12,7 +12,7 @@ trap 'rm -f "$tmp_headers" "$tmp_body"' EXIT
 
 if ! curl -sS -D "$tmp_headers" -o "$tmp_body" --max-redirs 0 -X POST "$URL" \
   -H "Content-Type: application/json" \
-  -d '{"limit":1}'; then
+  -d '{"keyword":"brilliant directories","selected_new":1,"n_new_videos":1,"max_candidates":50,"mode":"audio_first"}'; then
   printf 'FAIL: curl failed for %s\n' "$URL"
   exit 1
 fi

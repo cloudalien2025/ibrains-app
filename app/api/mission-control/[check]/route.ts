@@ -15,10 +15,16 @@ function sleep(ms: number) {
 }
 
 async function startRun(origin: string): Promise<{ runId: string; raw: string }> {
-  const res = await fetch(`${origin}/api/brains/brilliant_directories/runs`, {
+  const res = await fetch(`${origin}/api/brains/brilliant_directories/ingest`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ limit: 1 }),
+    body: JSON.stringify({
+      keyword: "brilliant directories",
+      selected_new: 1,
+      n_new_videos: 1,
+      max_candidates: 50,
+      mode: "audio_first",
+    }),
     cache: "no-store",
   });
   const raw = await res.text();

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import EmptyState from "../../_components/EmptyState";
 import StartRunDialog from "../../_components/StartRunDialog";
 
@@ -8,6 +9,23 @@ type BrainDetailProps = {
 
 export default async function BrainDetailPage({ params }: BrainDetailProps) {
   const { id } = await params;
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const baseUrl = host ? `http://${host}` : "http://127.0.0.1:3001";
+
+  let stats: Record<string, unknown> | null = null;
+  try {
+    const res = await fetch(`${baseUrl}/api/brains/${id}/stats`, {
+      cache: "no-store",
+      headers: { Accept: "application/json" },
+    });
+    if (res.ok) {
+      stats = await res.json().catch(() => null);
+    }
+  } catch {
+    stats = null;
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-[28px] border border-white/10 bg-white/5 p-8 shadow-[0_30px_70px_rgba(2,6,23,0.5)]">
@@ -49,13 +67,31 @@ export default async function BrainDetailPage({ params }: BrainDetailProps) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-[24px] border border-white/10 bg-white/4 p-6">
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
-            Summary
-          </div>
-          <p className="mt-3 text-sm text-slate-300">
-            Run telemetry and health status will populate this card once the
-            brain data stream is connected.
-          </p>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Fill stats</div>
+          {stats ? (
+            <div className="mt-3 grid gap-2 text-sm text-slate-200">
+              <div className="flex items-center justify-between">
+                <span>Total items</span>
+                <span className="font-mono text-xs text-slate-300">{String(stats.total_items ?? "—")}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>YouTube items</span>
+                <span className="font-mono text-xs text-slate-300">{String(stats.youtube_items ?? "—")}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>WebDocs items</span>
+                <span className="font-mono text-xs text-slate-300">{String(stats.webdocs_items ?? "—")}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span>Fill %</span>
+                <span className="font-mono text-xs text-slate-300">{String(stats.fill_pct ?? "—")}</span>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-sm text-slate-300">
+              Fill stats are unavailable from `/api/brains/{id}/stats`.
+            </p>
+          )}
         </div>
         <div className="rounded-[24px] border border-white/10 bg-white/4 p-6">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">

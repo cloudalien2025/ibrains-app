@@ -5,8 +5,15 @@ import { proxyToBrains, unexpectedErrorResponse } from "../_utils/proxy";
 
 export async function GET(req: NextRequest) {
   try {
-    // Public brain registry
-    return proxyToBrains(req, "/v1/brains/public", { requireAuth: false });
+    return proxyToBrains(req, "/v1/brains", { requireAuth: true });
+  } catch {
+    return unexpectedErrorResponse();
+  }
+}
+
+export async function POST(req: NextRequest) {
+  try {
+    return proxyToBrains(req, "/v1/brains", { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }

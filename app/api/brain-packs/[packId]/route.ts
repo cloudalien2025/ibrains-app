@@ -5,11 +5,11 @@ import { proxyToBrains, unexpectedErrorResponse } from "../../_utils/proxy";
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  { params }: { params: Promise<{ packId: string }> | { packId: string } }
 ) {
   try {
-    const { id } = await Promise.resolve(params);
-    return proxyToBrains(req, `/v1/brains/${id}`, { requireAuth: true });
+    const { packId } = await Promise.resolve(params);
+    return proxyToBrains(req, `/v1/brain-packs/${packId}`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }
