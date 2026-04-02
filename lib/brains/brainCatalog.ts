@@ -20,9 +20,9 @@ export const brainCatalog: BrainCatalogEntry[] = [
     id: "directoryiq",
     name: "DirectoryIQ",
     shortDescription:
-      "AI Travel Selection Engine for entity readiness, selection confidence, and authority blueprint control.",
-    tags: ["Travel Entities", "Selection Index", "Authority Blueprint"],
-    primaryCtaText: "Open",
+      "Travel intelligence brain for local entity readiness, authority coverage, and operational discovery cycles.",
+    tags: ["Travel Entities", "Knowledge Readiness", "Authority Blueprint"],
+    primaryCtaText: "Open Console",
     upsellTitle: "Unlock DirectoryIQ",
     upsellMessage:
       "Activate DirectoryIQ to map listing health, discover category gaps, and improve local ranking signals.",
@@ -32,9 +32,9 @@ export const brainCatalog: BrainCatalogEntry[] = [
     id: "ecomviper",
     name: "EcomViper",
     shortDescription:
-      "AI Product Selection Engine for agent readiness, evidence density, and mention optimization.",
-    tags: ["Product Entities", "Agent Readiness", "Selection Lab"],
-    primaryCtaText: "Open",
+      "Product intelligence brain focused on ingestion quality, evidence density, and retrieval confidence.",
+    tags: ["Product Entities", "Evidence Density", "Retrieval Confidence"],
+    primaryCtaText: "Open Console",
     upsellTitle: "Unlock EcomViper",
     upsellMessage:
       "Get Shopify ingestion controls and reasoning hubs to improve product-topic authority.",
@@ -44,8 +44,8 @@ export const brainCatalog: BrainCatalogEntry[] = [
     id: "studio",
     name: "Studio",
     shortDescription:
-      "AI Narrative Selection Engine for mention probability, legibility, and consistency.",
-    tags: ["Studio", "Media", "Narrative"],
+      "Narrative intelligence brain for legibility, consistency, and answer quality across channels.",
+    tags: ["Narrative", "Media", "Answer Quality"],
     primaryCtaText: "Unlock",
     upsellTitle: "Unlock Studio",
     upsellMessage:
@@ -66,6 +66,6 @@ export function isBrainId(value: string): value is BrainId {
   return (brainIds as readonly string[]).includes(value);
 }
 
-export function brainRoute(id: BrainId): `/${BrainId}` {
-  return `/${id}`;
+export function brainRoute(id: BrainId): `/brains/${BrainId}` {
+  return `/brains/${id}`;
 }
