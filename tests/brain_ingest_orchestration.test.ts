@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const queryMock = vi.fn();
 const fetchSourceTextMock = vi.fn();
+const runTaxonomyEnrichmentMock = vi.fn();
 
 vi.mock("@/lib/brain-learning/db", () => ({
   getBrainLearningPool: () => ({
@@ -13,10 +14,20 @@ vi.mock("@/lib/brain-learning/youtubeIngestSource", () => ({
   fetchYoutubeSourceText: (...args: unknown[]) => fetchSourceTextMock(...args),
 }));
 
+vi.mock("@/lib/brain-learning/taxonomyEnrichment", () => ({
+  runBrainTaxonomyEnrichment: (...args: unknown[]) => runTaxonomyEnrichmentMock(...args),
+}));
+
 describe("runBrainIngestOrchestration", () => {
   beforeEach(() => {
     queryMock.mockReset();
     fetchSourceTextMock.mockReset();
+    runTaxonomyEnrichmentMock.mockReset();
+    runTaxonomyEnrichmentMock.mockResolvedValue({
+      chunksClassified: 2,
+      assignmentsCreated: 3,
+      assignmentsUpdated: 0,
+    });
   });
 
   it("processes discovered items into completed runs with documents and chunks", async () => {
@@ -74,6 +85,8 @@ describe("runBrainIngestOrchestration", () => {
     expect(summary.runsStarted).toBe(1);
     expect(summary.documentsCreated).toBe(1);
     expect(summary.chunksCreated).toBeGreaterThan(0);
+    expect(summary.taxonomyChunksClassified).toBe(2);
+    expect(summary.taxonomyAssignmentsCreated).toBe(3);
     expect(summary.itemsSkipped).toBe(0);
     expect(summary.failures).toEqual([]);
 
@@ -81,6 +94,7 @@ describe("runBrainIngestOrchestration", () => {
     expect(runStatusUpdates).toContain("queued");
     expect(runStatusUpdates).toContain("processing");
     expect(runStatusUpdates).toContain("completed");
+    expect(runTaxonomyEnrichmentMock).toHaveBeenCalledTimes(1);
   });
 
   it("skips duplicate when a current document already exists and reingest is not requested", async () => {

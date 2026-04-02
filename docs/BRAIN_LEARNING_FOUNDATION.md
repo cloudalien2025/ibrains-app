@@ -66,6 +66,7 @@ Lifecycle behavior:
   - falls back to YouTube snippet text (title + description)
 - writes one `brain_documents` current transcript record per successful run
 - writes `brain_chunks` linked to document/source/run/brain
+- runs deterministic taxonomy enrichment for new source chunks (best effort, non-blocking)
 - updates `brain_source_items.latest_ingest_run_id` and `transcript_hash`
 
 Duplicate/reingest semantics:
@@ -85,3 +86,26 @@ Duplicate/reingest semantics:
 ## Future Co-Brain Consumption
 
 The foundation is designed so co-brains can consume normalized, taxonomy-labeled chunks with strong provenance and freshness controls. This supports expert-advisor style reasoning while keeping source traceability internal to the platform layer (instead of exposing raw robotic transcript citation behavior to end users).
+
+## Taxonomy Enrichment (This Lane)
+
+This lane adds deterministic chunk classification into brain taxonomy nodes.
+
+- execution path: `POST /api/brains/{id}/taxonomy-enrich` or `scripts/run_brain_taxonomy_enrichment.sh`
+- bootstrapping: taxonomy nodes are seeded/upserted per brain from a template (`foundational`, optional `directoryiq_foundational`, `ecomviper_foundational`)
+- strategy: `deterministic_keyword_v1` matching taxonomy key/label/description/keywords against chunk text
+- assignment write target: `brain_chunk_taxonomy_assignments`
+  - `assigned_by='rule'`
+  - `assignment_method='deterministic_keyword_v1'`
+  - `confidence` score recorded
+  - `rationale` records classifier details and provenance (`brain_id`, `source_item_id`, `ingest_run_id`, `document_id`, `chunk_id`)
+- rerun behavior:
+  - default run classifies only chunks without assignments
+  - `force_reclassify=true` refreshes classifier-owned assignments via upsert and removes stale `rule` edges for the chunk
+  - uniqueness `(chunk_id, taxonomy_node_id)` prevents duplicate assignment rows
+
+Not implemented in this lane:
+
+- final co-brain answer UX
+- embedding/vector retrieval ranking
+- broad taxonomy management UI

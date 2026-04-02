@@ -170,6 +170,8 @@ export type BrainChunkTaxonomyAssignmentRecord = {
   ingestRunId: string | null;
   confidence: number | null;
   assignedBy: BrainTaxonomyAssignmentOrigin;
+  assignmentMethod: string;
   rationale: Record<string, unknown>;
   createdAt: string;
+  updatedAt: string;
 };

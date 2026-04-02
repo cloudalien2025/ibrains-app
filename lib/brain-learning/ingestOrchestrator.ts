@@ -1,4 +1,5 @@
 import { getBrainLearningPool } from "@/lib/brain-learning/db";
+import { runBrainTaxonomyEnrichment } from "@/lib/brain-learning/taxonomyEnrichment";
 import { fetchYoutubeSourceText } from "@/lib/brain-learning/youtubeIngestSource";
 
 type PendingRunRow = {
@@ -36,6 +37,9 @@ export type BrainIngestOrchestrationSummary = {
   runsStarted: number;
   documentsCreated: number;
   chunksCreated: number;
+  taxonomyChunksClassified: number;
+  taxonomyAssignmentsCreated: number;
+  taxonomyAssignmentsUpdated: number;
   itemsSkipped: number;
   failures: Array<{ runId: string; sourceItemId: string; reason: string }>;
 };
@@ -186,6 +190,9 @@ export async function runBrainIngestOrchestration(input: {
     runsStarted: 0,
     documentsCreated: 0,
     chunksCreated: 0,
+    taxonomyChunksClassified: 0,
+    taxonomyAssignmentsCreated: 0,
+    taxonomyAssignmentsUpdated: 0,
     itemsSkipped: 0,
     failures: [],
   };
@@ -411,6 +418,34 @@ export async function runBrainIngestOrchestration(input: {
       }
       summary.chunksCreated += chunks.length;
 
+      let taxonomySummary: {
+        chunksClassified: number;
+        assignmentsCreated: number;
+        assignmentsUpdated: number;
+      } = {
+        chunksClassified: 0,
+        assignmentsCreated: 0,
+        assignmentsUpdated: 0,
+      };
+      try {
+        const enrichment = await runBrainTaxonomyEnrichment({
+          brainId: input.brainId,
+          sourceItemId: row.source_item_id,
+          forceReclassify: false,
+          limit: 500,
+        });
+        taxonomySummary = {
+          chunksClassified: enrichment.chunksClassified,
+          assignmentsCreated: enrichment.assignmentsCreated,
+          assignmentsUpdated: enrichment.assignmentsUpdated,
+        };
+      } catch {
+        // Taxonomy enrichment should not fail core ingest persistence.
+      }
+      summary.taxonomyChunksClassified += taxonomySummary.chunksClassified;
+      summary.taxonomyAssignmentsCreated += taxonomySummary.assignmentsCreated;
+      summary.taxonomyAssignmentsUpdated += taxonomySummary.assignmentsUpdated;
+
       await pool.query(
         `
           UPDATE brain_source_items
@@ -427,6 +462,9 @@ export async function runBrainIngestOrchestration(input: {
         metadata: {
           document_id: documentId,
           chunks_created: chunks.length,
+          taxonomy_chunks_classified: taxonomySummary.chunksClassified,
+          taxonomy_assignments_created: taxonomySummary.assignmentsCreated,
+          taxonomy_assignments_updated: taxonomySummary.assignmentsUpdated,
           source_mode: sourceText.source,
           content_sha256: sourceText.contentSha256,
         },
