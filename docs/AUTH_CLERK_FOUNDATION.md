@@ -8,3 +8,12 @@ iBrains now uses Clerk as the browser user authentication layer.
 - Internal service credentials (`BRAINS_WORKER_API_KEY`, `BRAINS_MASTER_KEY`/`BRAINS_X_API_KEY`) remain server-side only and are not browser auth.
 
 This is the foundation for future per-brain authorization and entitlement checks.
+
+## Environment contract for dedicated auth pages
+
+Set these public Clerk URL vars so path-based auth pages render and redirect consistently:
+
+- `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in`
+- `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
+- `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/`
+- `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/`
