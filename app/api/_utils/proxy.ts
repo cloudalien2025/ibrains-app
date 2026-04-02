@@ -59,9 +59,12 @@ function buildHeaders(
         );
       }
     }
-    const userId = process.env.BRAINS_USER_ID ?? "user_1";
+    const userId =
+      req.headers.get("x-user-id")?.trim() ||
+      process.env.BRAINS_USER_ID?.trim() ||
+      "";
     headers.set("X-Api-Key", apiKey);
-    headers.set("X-User-Id", userId);
+    if (userId) headers.set("X-User-Id", userId);
   }
 
   return headers;
