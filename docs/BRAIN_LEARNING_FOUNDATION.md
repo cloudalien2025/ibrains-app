@@ -22,6 +22,30 @@ Duplicate ingestion prevention is based on:
 
 Canonical identities should use provider-native stable IDs where possible (for example YouTube video ID).
 
+## YouTube Watch Discovery (This Lane)
+
+This lane adds automatic discovery + ledger population for active YouTube watches:
+
+- supported watch kinds: `youtube_channel`, `youtube_playlist`, `youtube_keyword`
+- execution path: `POST /api/brains/{id}/discover` or `scripts/run_youtube_watch_discovery.sh`
+- required env: `DATABASE_URL`, `YOUTUBE_API_KEY`, and `BRAINS_MASTER_KEY` (or `BRAINS_X_API_KEY`) for route auth
+
+Discovery behavior:
+
+- reads active watches for the target brain
+- fetches candidate YouTube videos from the watch mode
+- normalizes canonical identity to YouTube `video_id`
+- upserts into `brain_source_items` with watch provenance + provider payload
+- dedupes by `(brain_id, source_kind='youtube_video', canonical_identity=video_id)`
+- inserts `brain_ingest_runs` rows with status `discovered` only for genuinely new items
+- refreshes metadata safely for rediscovered existing items
+
+Out of scope in this lane:
+
+- transcript/audio ingestion
+- scheduling/orchestration workers
+- retrieval/ranking UX
+
 ## Freshness + Versioning Contract
 
 - `brain_documents.version_no` increments per `(source_item_id, document_kind)`.
