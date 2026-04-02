@@ -31,7 +31,7 @@ pnpm build
 
 ## 3) CI Build Gate
 
-Workflow: `.github/workflows/ci_directoryiq.yml`
+Workflow: `.github/workflows/ci.yml`
 
 Triggers:
 - Pull requests to `main`
