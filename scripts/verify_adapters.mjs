@@ -1,5 +1,6 @@
 import { NextRequest } from "next/server.js";
 import crypto from "crypto";
+import fs from "fs";
 
 import { pathToFileURL } from "url";
 import path from "path";
@@ -11,17 +12,36 @@ async function loadHandler(modulePath) {
   return import(url);
 }
 
-const brainsModule = await loadHandler(".next/server/app/api/brains/route.js");
-const brainModule = await loadHandler(".next/server/app/api/brains/[id]/route.js");
-const brainIngestModule = await loadHandler(".next/server/app/api/brains/[id]/ingest/route.js");
-const runsModule = await loadHandler(".next/server/app/api/runs/[runId]/route.js");
-const runsDiagModule = await loadHandler(
-  ".next/server/app/api/runs/[runId]/diagnostics/route.js"
-);
-const runsReportModule = await loadHandler(".next/server/app/api/runs/[runId]/report/route.js");
-const runsFilesModule = await loadHandler(".next/server/app/api/runs/[runId]/files/route.js");
-const runsBrainPackModule = await loadHandler(".next/server/app/api/runs/[runId]/brain-pack/route.js");
-const brainPackModule = await loadHandler(".next/server/app/api/brain-packs/[packId]/route.js");
+function resolveManifestPath() {
+  const candidate = path.join(rootDir, ".next/server/app-paths-manifest.json");
+  if (fs.existsSync(candidate)) return candidate;
+  throw new Error("Missing .next/server/app-paths-manifest.json. Run `npm run build` first.");
+}
+
+const manifestPath = resolveManifestPath();
+const appPathsManifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+
+async function loadRouteModule(routeKey) {
+  const compiledPath =
+    appPathsManifest[routeKey] ??
+    appPathsManifest[routeKey.replace(/\/route$/, "")];
+  if (!compiledPath) {
+    throw new Error(`Missing route in app-paths-manifest: ${routeKey}`);
+  }
+  // Manifest values are relative to `.next/server`.
+  const serverRoot = path.join(rootDir, ".next/server");
+  return loadHandler(path.relative(rootDir, path.join(serverRoot, compiledPath)));
+}
+
+const brainsModule = await loadRouteModule("/api/brains/route");
+const brainModule = await loadRouteModule("/api/brains/[id]/route");
+const brainIngestModule = await loadRouteModule("/api/brains/[id]/ingest/route");
+const runsModule = await loadRouteModule("/api/runs/[runId]/route");
+const runsDiagModule = await loadRouteModule("/api/runs/[runId]/diagnostics/route");
+const runsReportModule = await loadRouteModule("/api/runs/[runId]/report/route");
+const runsFilesModule = await loadRouteModule("/api/runs/[runId]/files/route");
+const runsBrainPackModule = await loadRouteModule("/api/runs/[runId]/brain-pack/route");
+const brainPackModule = await loadRouteModule("/api/brain-packs/[packId]/route");
 
 function getRouteModule(mod) {
   return mod.routeModule || mod.default?.routeModule;
@@ -40,6 +60,7 @@ const { GET: brainPackGET } = getRouteModule(brainPackModule).userland;
 const BASE = process.env.BRAINS_API_BASE || "http://mock.local";
 process.env.BRAINS_API_BASE = BASE;
 process.env.BRAINS_WORKER_API_KEY = process.env.BRAINS_WORKER_API_KEY || "worker_test";
+process.env.BRAINS_MASTER_KEY = process.env.BRAINS_MASTER_KEY || "master_test";
 process.env.BRAINS_USER_ID = process.env.BRAINS_USER_ID || crypto.randomUUID();
 
 const calls = [];
