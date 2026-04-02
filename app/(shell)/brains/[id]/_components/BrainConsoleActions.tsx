@@ -2,13 +2,16 @@
 
 import { useMemo, useState } from "react";
 import { Radar, Search, Sparkles } from "lucide-react";
-import StartRunDialog from "@/app/(shell)/_components/StartRunDialog";
 
-type ConsoleAction = "discovery" | "retrieval" | "answer";
+type ConsoleAction = "retrieval" | "answer";
+type SourceMode = "web_search" | "website_url" | "document_upload" | "youtube";
 
 type BrainConsoleActionsProps = {
   brainId: string;
   brainName: string;
+  totalItems: number;
+  hasRuns: boolean;
+  latestRunStatus?: string | null;
   initialAction?: string;
 };
 
@@ -16,6 +19,7 @@ type ActionResult = {
   status: "success" | "error";
   title: string;
   message: string;
+  runId?: string;
   payload?: unknown;
 };
 
@@ -51,29 +55,74 @@ function resolveMessage(payload: unknown, status: number): string {
   return `Request failed with HTTP ${status}.`;
 }
 
-export default function BrainConsoleActions({ brainId, brainName, initialAction }: BrainConsoleActionsProps) {
+function clampIngestLimit(value: number): number {
+  if (!Number.isFinite(value)) return 20;
+  return Math.min(200, Math.max(1, Math.floor(value)));
+}
+
+export default function BrainConsoleActions({
+  brainId,
+  brainName,
+  totalItems,
+  hasRuns,
+  latestRunStatus,
+  initialAction,
+}: BrainConsoleActionsProps) {
+  const [sourceMode, setSourceMode] = useState<SourceMode>("web_search");
+  const [discoveryTopic, setDiscoveryTopic] = useState(brainName);
+  const [discoveryLimit, setDiscoveryLimit] = useState(20);
+  const [isRunningDiscovery, setIsRunningDiscovery] = useState(false);
+
   const [query, setQuery] = useState("");
-  const [limit, setLimit] = useState(8);
-  const [isRunning, setIsRunning] = useState<ConsoleAction | null>(null);
+  const [testLimit, setTestLimit] = useState(8);
+  const [isRunning, setIsRunning] = useState<ConsoleAction | null>(
+    initialAction === "answer" ? "answer" : "retrieval"
+  );
   const [result, setResult] = useState<ActionResult | null>(null);
+  const [activeAction, setActiveAction] = useState<ConsoleAction>(
+    initialAction === "answer" ? "answer" : "retrieval"
+  );
 
-  const selectedAction = useMemo<ConsoleAction>(() => {
-    if (initialAction === "answer") return "answer";
-    if (initialAction === "retrieval") return "retrieval";
-    return "discovery";
-  }, [initialAction]);
+  const guidance = useMemo(() => {
+    if (totalItems <= 0) {
+      return "Start by running discovery. Keyword-based web discovery is currently the supported source for this brain.";
+    }
+    if (hasRuns && (!latestRunStatus || latestRunStatus.toLowerCase() !== "completed")) {
+      return "A prior run is still in progress or recently interrupted. Monitor activity, then continue discovery.";
+    }
+    return "Knowledge reservoir is building. Continue discovery to expand source coverage.";
+  }, [hasRuns, latestRunStatus, totalItems]);
 
-  const [activeAction, setActiveAction] = useState<ConsoleAction>(selectedAction);
+  const apiSnippet = useMemo(() => {
+    return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -H "Content-Type: application/json" -d '{"keyword":"${discoveryTopic.replace(/"/g, '\\"')}","selected_new":${discoveryLimit},"n_new_videos":${discoveryLimit},"max_candidates":50,"mode":"audio_first"}'`;
+  }, [brainId, discoveryLimit, discoveryTopic]);
 
   async function runDiscovery() {
-    setIsRunning("discovery");
+    const trimmedTopic = discoveryTopic.trim();
+    if (!trimmedTopic) {
+      setResult({
+        status: "error",
+        title: "Topic required",
+        message: "Enter a topic to search before running discovery.",
+      });
+      return;
+    }
+
+    setIsRunningDiscovery(true);
     setResult(null);
     try {
-      const res = await fetch(`/api/brains/${brainId}/discover`, {
+      const res = await fetch(`/api/brains/${brainId}/ingest`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ dry_run: false }),
+        body: JSON.stringify({
+          keyword: trimmedTopic,
+          selected_new: discoveryLimit,
+          n_new_videos: discoveryLimit,
+          max_candidates: 50,
+          mode: "audio_first",
+        }),
       });
+
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
         setResult({
@@ -84,10 +133,14 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
         });
         return;
       }
+
+      const runId: string | undefined = payload?.run_id || payload?.id;
       setResult({
         status: "success",
         title: "Discovery run started",
-        message: "Discovery completed and new source signals were returned by the platform.",
+        message:
+          "The brain is now searching keyword-based sources and importing new findings into knowledge.",
+        runId,
         payload,
       });
     } catch (error) {
@@ -97,7 +150,7 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
         message: error instanceof Error ? error.message : "Unknown discovery error.",
       });
     } finally {
-      setIsRunning(null);
+      setIsRunningDiscovery(false);
     }
   }
 
@@ -119,7 +172,7 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
       const res = await fetch(`/api/brains/${brainId}/${endpoint}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, limit }),
+        body: JSON.stringify({ query: trimmed, limit: testLimit }),
       });
       const payload = await res.json().catch(() => null);
 
@@ -136,9 +189,10 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
       setResult({
         status: "success",
         title: mode === "retrieval" ? "Retrieval test complete" : "Answer test complete",
-        message: mode === "retrieval"
-          ? "The brain returned retrieval evidence for the query."
-          : "The brain returned an orchestrated answer response.",
+        message:
+          mode === "retrieval"
+            ? "The brain returned retrieval evidence for the query."
+            : "The brain returned an orchestrated answer response.",
         payload,
       });
     } catch (error) {
@@ -152,115 +206,194 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
     }
   }
 
+  function copySnippet() {
+    void navigator.clipboard?.writeText(apiSnippet);
+  }
+
   return (
-    <section className="rounded-[24px] border border-white/10 bg-white/5 p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <section className="space-y-4 rounded-[20px] border border-cyan-300/20 bg-slate-950/65 p-5 shadow-[inset_0_1px_0_rgba(148,163,184,0.12),0_18px_40px_rgba(2,6,23,0.65)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Operations</div>
-          <h3 className="mt-2 text-xl font-semibold text-white">{brainName} Action Console</h3>
-          <p className="mt-2 max-w-2xl text-sm text-slate-300">
-            Trigger core brain operations directly from iBrains.
+          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-200/70">Primary Workflow</div>
+          <h3 className="mt-1 text-lg font-semibold text-white">Add Knowledge</h3>
+          <p className="mt-1 text-sm text-slate-300">
+            Run discovery to search sources and pull new knowledge into this brain.
           </p>
         </div>
-        <StartRunDialog brainId={brainId} brainName={brainName} />
+        <div className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">
+          Discovery -&gt; Select -&gt; Build Knowledge
+        </div>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => setActiveAction("discovery")}
-          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-            activeAction === "discovery"
-              ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
-              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
-          }`}
-        >
-          Run Discovery
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveAction("retrieval")}
-          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-            activeAction === "retrieval"
-              ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
-              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
-          }`}
-        >
-          Test Retrieval
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveAction("answer")}
-          className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
-            activeAction === "answer"
-              ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
-              : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
-          }`}
-        >
-          Test Answering
-        </button>
+      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-300/80">Next step</div>
+        <p className="mt-2 text-sm text-slate-100">{guidance}</p>
       </div>
 
-      <div className="mt-4 rounded-2xl border border-white/10 bg-black/30 p-4">
-        {activeAction === "discovery" ? (
-          <div className="space-y-3">
-            <div className="flex items-center gap-2 text-sm text-slate-200">
-              <Radar className="h-4 w-4 text-cyan-200" />
-              Discovery scans fresh knowledge sources for this brain.
+      <div className="grid gap-3 xl:grid-cols-[1fr_140px]">
+        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+          Topic to search for
+          <input
+            type="text"
+            value={discoveryTopic}
+            onChange={(event) => setDiscoveryTopic(event.target.value)}
+            placeholder="e.g. brilliant directories SEO optimization"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+          Max results
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={discoveryLimit}
+            onChange={(event) => setDiscoveryLimit(clampIngestLimit(Number(event.target.value)))}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+          />
+        </label>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Source</div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setSourceMode("web_search")}
+            className={`rounded-full border px-3 py-1 text-xs transition ${
+              sourceMode === "web_search"
+                ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
+                : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+            }`}
+          >
+            Web Search
+          </button>
+          <button
+            type="button"
+            disabled
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+          >
+            Website URL (coming soon)
+          </button>
+          <button
+            type="button"
+            disabled
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+          >
+            Document Upload (coming soon)
+          </button>
+          <button
+            type="button"
+            disabled
+            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+          >
+            YouTube (coming soon)
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-slate-300">
+            Current backend support: keyword-based discovery runs against web search and imports new matches.
+          </p>
+          <button
+            type="button"
+            onClick={runDiscovery}
+            disabled={isRunningDiscovery}
+            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-400/15 px-4 py-1.5 text-xs font-medium text-emerald-100 transition hover:bg-emerald-400/25 disabled:opacity-60"
+          >
+            <Radar className="h-3.5 w-3.5" />
+            {isRunningDiscovery ? "Running discovery..." : "Run Discovery"}
+          </button>
+        </div>
+      </div>
+
+      <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
+        <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-slate-300/85">
+          Advanced
+        </summary>
+        <div className="mt-4 space-y-3">
+          <div className="rounded-xl border border-white/10 bg-black/35 p-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Request payload</div>
+              <button
+                type="button"
+                onClick={copySnippet}
+                className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white transition hover:bg-white/10"
+              >
+                Copy request
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={runDiscovery}
-              disabled={isRunning === "discovery"}
-              className="rounded-full border border-cyan-300/40 bg-cyan-400/15 px-4 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-60"
-            >
-              {isRunning === "discovery" ? "Running discovery..." : "Run Discovery"}
-            </button>
+            <pre className="mt-2 overflow-x-auto text-xs text-slate-200">{apiSnippet}</pre>
           </div>
-        ) : (
-          <div className="space-y-4">
-            <label className="block text-xs uppercase tracking-[0.16em] text-slate-400/80">
-              Query
+
+          <div className="rounded-xl border border-white/10 bg-black/35 p-3">
+            <div className="text-xs uppercase tracking-[0.16em] text-slate-400">Quality checks</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setActiveAction("retrieval")}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  activeAction === "retrieval"
+                    ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
+                    : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                }`}
+              >
+                Test Retrieval
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveAction("answer")}
+                className={`rounded-full border px-3 py-1 text-xs transition ${
+                  activeAction === "answer"
+                    ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
+                    : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+                }`}
+              >
+                Test Answering
+              </button>
+            </div>
+
+            <div className="mt-3 grid gap-3 xl:grid-cols-[1fr_130px_auto]">
               <input
                 type="text"
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="e.g. How should I improve my Brilliant Directories listing schema?"
-                className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                placeholder="Enter query for retrieval/answer checks"
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
               />
-            </label>
-            <label className="block text-xs uppercase tracking-[0.16em] text-slate-400/80">
-              Result limit
               <input
                 type="number"
                 min={1}
                 max={20}
-                value={limit}
-                onChange={(event) => setLimit(Math.min(20, Math.max(1, Number(event.target.value) || 1)))}
-                className="mt-2 w-24 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                value={testLimit}
+                onChange={(event) =>
+                  setTestLimit(Math.min(20, Math.max(1, Number(event.target.value) || 1)))
+                }
+                className="w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
               />
-            </label>
-
-            <button
-              type="button"
-              onClick={() => runKnowledgeTest(activeAction)}
-              disabled={isRunning === activeAction}
-              className="inline-flex items-center gap-2 rounded-full border border-cyan-300/40 bg-cyan-400/15 px-4 py-1.5 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-60"
-            >
-              {activeAction === "retrieval" ? <Search className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {isRunning === activeAction
-                ? "Running..."
-                : activeAction === "retrieval"
-                  ? "Test Retrieval"
-                  : "Test Answering"}
-            </button>
+              <button
+                type="button"
+                onClick={() => runKnowledgeTest(activeAction)}
+                disabled={isRunning === activeAction}
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-cyan-300/40 bg-cyan-400/15 px-4 py-2 text-xs font-medium text-cyan-100 transition hover:bg-cyan-400/25 disabled:opacity-60"
+              >
+                {activeAction === "retrieval" ? (
+                  <Search className="h-3.5 w-3.5" />
+                ) : (
+                  <Sparkles className="h-3.5 w-3.5" />
+                )}
+                {isRunning === activeAction ? "Running..." : "Run Test"}
+              </button>
+            </div>
           </div>
-        )}
-      </div>
+        </div>
+      </details>
 
       {result ? (
         <div
-          className={`mt-4 rounded-2xl border p-4 ${
+          className={`rounded-2xl border p-4 ${
             result.status === "success"
               ? "border-emerald-400/30 bg-emerald-400/10"
               : "border-rose-400/30 bg-rose-400/10"
@@ -268,6 +401,14 @@ export default function BrainConsoleActions({ brainId, brainName, initialAction 
         >
           <h4 className="text-sm font-semibold text-white">{result.title}</h4>
           <p className="mt-1 text-sm text-slate-200">{result.message}</p>
+          {result.runId ? (
+            <a
+              href={`/runs/${result.runId}`}
+              className="mt-3 inline-flex rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-white transition hover:bg-white/10"
+            >
+              Open run {result.runId}
+            </a>
+          ) : null}
           {result.payload != null ? (
             <details className="mt-3 rounded-xl border border-white/10 bg-black/25 p-3">
               <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-slate-300/80">

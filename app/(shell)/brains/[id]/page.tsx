@@ -118,114 +118,131 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const webdocsItems = toNumber(stats?.webdocs_items) ?? 0;
   const fillPctRaw = toNumber(stats?.fill_pct);
   const readinessPct = Math.max(0, Math.min(100, fillPctRaw ?? 0));
-  const readinessHeight = `${readinessPct}%`;
 
   const latestRun = runs[0];
-  const recentDiscovery = latestRun
-    ? `Last discovery-linked operation recorded ${formatDate(latestRun.startedAt)}.`
-    : "No discovery activity recorded yet.";
-  const recentIngest = latestRun
-    ? `Latest ingest lifecycle status: ${latestRun.status || "unknown"}.`
-    : "No ingest activity recorded yet.";
+  const recentDiscovery = latestRun ? formatDate(latestRun.startedAt) : "No discovery activity yet.";
+  const recentIngest = latestRun?.status || "No ingest activity yet.";
+  const missionStatus = totalItems > 0 ? "Reservoir active" : "Cold start";
+  const readinessTag =
+    readinessPct >= 70 ? "Operational" : readinessPct >= 30 ? "Building" : "Needs knowledge";
 
   const initialAction = (await searchParams)?.action;
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-8 shadow-[0_30px_70px_rgba(2,6,23,0.5)]">
-        <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="space-y-4">
+      <section className="rounded-[20px] border border-white/10 bg-slate-950/60 p-5 shadow-[0_18px_40px_rgba(2,6,23,0.6)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
-              Brain Console
+            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-300/70">
+              DirectoryIQ Mission Control
             </div>
-            <h2 className="mt-2 text-3xl font-semibold text-white">{brain.name}</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">{brain.shortDescription}</p>
+            <h2 className="mt-1 text-2xl font-semibold text-white">{brain.name}</h2>
+            <p className="mt-1 max-w-2xl text-sm text-slate-300">
+              Operate discovery, knowledge intake, and run-state monitoring from one command surface.
+            </p>
           </div>
-          <Link
-            href="/brains"
-            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
-          >
-            Back to brain operations
-          </Link>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-cyan-300/35 bg-cyan-300/15 px-3 py-1 text-xs text-cyan-100">
+              {Math.round(readinessPct)}% Ready
+            </span>
+            <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-200">
+              {readinessTag}
+            </span>
+            <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-200">
+              {missionStatus}
+            </span>
+            <Link
+              href="/brains"
+              className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white transition hover:bg-white/10"
+            >
+              Back
+            </Link>
+          </div>
         </div>
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1.15fr_1fr]">
-        <section className="relative overflow-hidden rounded-[24px] border border-cyan-300/25 bg-slate-950/70 p-6 shadow-[inset_0_1px_0_rgba(148,163,184,0.14),0_24px_50px_rgba(2,6,23,0.7),0_0_34px_rgba(34,211,238,0.14)]">
-          <div className="pointer-events-none absolute inset-x-6 top-5 h-20 rounded-full bg-cyan-300/10 blur-3xl" />
-          <div className="relative flex items-start justify-between gap-4">
-            <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-cyan-200/80">Knowledge readiness</div>
-              <h3 className="mt-2 text-xl font-semibold text-white">Signal Reservoir</h3>
-              <p className="mt-2 text-sm text-slate-300">
-                Readiness is based on current fill metrics reported by the brain stats endpoint.
-              </p>
-            </div>
-            <div className="text-right">
+      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+        <section className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400/80">System state</div>
+            <div className="mt-2 flex items-end justify-between">
               <div className="text-3xl font-semibold text-cyan-100">{Math.round(readinessPct)}%</div>
-              <div className="text-xs uppercase tracking-[0.16em] text-cyan-200/70">Ready</div>
+              <div className="text-xs text-slate-300">Readiness</div>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-slate-900">
+              <div
+                className="h-2 rounded-full bg-cyan-300/80 transition-all"
+                style={{ width: `${Math.round(readinessPct)}%` }}
+              />
             </div>
           </div>
 
-          <div className="mt-6 flex items-end justify-between gap-6">
-            <div className="relative h-56 w-36 overflow-hidden rounded-[999px] border border-cyan-200/35 bg-slate-900/80 p-3 shadow-[inset_0_0_28px_rgba(34,211,238,0.22),0_0_24px_rgba(6,182,212,0.2)]">
-              <div className="absolute inset-x-2 top-2 h-3 rounded-full bg-cyan-100/35 blur-sm" />
-              <div className="absolute bottom-3 left-3 right-3 rounded-[999px] border border-cyan-200/30 bg-cyan-300/15 shadow-[0_0_18px_rgba(34,211,238,0.35)]" style={{ height: readinessHeight }} />
-              <div className="absolute inset-x-4 bottom-4 h-2 rounded-full bg-cyan-100/50 blur-[2px]" />
+          <div className="grid gap-2">
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Total items</div>
+              <div className="mt-1 text-lg font-semibold text-white">{totalItems.toLocaleString()}</div>
             </div>
-
-            <div className="grid flex-1 gap-3 sm:grid-cols-2">
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-slate-400/80">Total items</div>
-                <div className="mt-2 text-xl font-semibold text-white">{totalItems.toLocaleString()}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-slate-400/80">YouTube items</div>
-                <div className="mt-2 text-xl font-semibold text-white">{youtubeItems.toLocaleString()}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-slate-400/80">Webdocs items</div>
-                <div className="mt-2 text-xl font-semibold text-white">{webdocsItems.toLocaleString()}</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/35 p-3">
-                <div className="text-xs uppercase tracking-[0.16em] text-slate-400/80">Last operation</div>
-                <div className="mt-2 text-sm font-medium text-white">{formatDate(latestRun?.startedAt)}</div>
-              </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Web sources</div>
+              <div className="mt-1 text-lg font-semibold text-white">{webdocsItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">YouTube sources</div>
+              <div className="mt-1 text-lg font-semibold text-white">{youtubeItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
+              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Last operation</div>
+              <div className="mt-1 text-xs text-slate-100">{formatDate(latestRun?.startedAt)}</div>
             </div>
           </div>
         </section>
 
-        <section className="space-y-4 rounded-[24px] border border-white/10 bg-white/5 p-6">
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Recent discovery</div>
-            <p className="mt-2 text-sm text-slate-200">{recentDiscovery}</p>
+        <BrainConsoleActions
+          brainId={brainId}
+          brainName={brain.name}
+          totalItems={totalItems}
+          hasRuns={runs.length > 0}
+          latestRunStatus={latestRun?.status}
+          initialAction={initialAction}
+        />
+
+        <section className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4">
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Recent discovery</div>
+            <p className="mt-1 text-xs text-slate-100">{recentDiscovery}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Recent ingest</div>
-            <p className="mt-2 text-sm text-slate-200">{recentIngest}</p>
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Recent ingest</div>
+            <p className="mt-1 text-xs text-slate-100">{recentIngest}</p>
           </div>
-          <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">Recent run IDs</div>
+
+          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
+            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Run timeline</div>
             {runs.length === 0 ? (
-              <p className="mt-2 text-sm text-slate-300">No runs available for this brain yet.</p>
+              <p className="mt-2 text-xs text-slate-300">No runs available for this brain yet.</p>
             ) : (
-              <div className="mt-2 flex flex-wrap gap-2">
-                {runs.slice(0, 3).map((run) => (
-                  <Link
-                    key={run.id}
-                    href={`/runs/${run.id}`}
-                    className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-100 transition hover:bg-white/10"
-                  >
-                    {run.id}
-                  </Link>
+              <div className="mt-2 space-y-2">
+                {runs.slice(0, 6).map((run) => (
+                  <div key={run.id} className="rounded-lg border border-white/10 bg-black/25 p-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <Link
+                        href={`/runs/${run.id}`}
+                        className="truncate text-xs font-medium text-cyan-100 transition hover:text-cyan-50"
+                      >
+                        {run.id}
+                      </Link>
+                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-200">
+                        {run.status || "unknown"}
+                      </span>
+                    </div>
+                    <div className="mt-1 text-[11px] text-slate-400">{formatDate(run.startedAt)}</div>
+                  </div>
                 ))}
               </div>
             )}
           </div>
         </section>
       </div>
-
-      <BrainConsoleActions brainId={brainId} brainName={brain.name} initialAction={initialAction} />
     </div>
   );
 }
