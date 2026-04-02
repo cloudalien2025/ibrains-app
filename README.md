@@ -1,89 +1,99 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# DirectoryIQ
 
-## Getting Started
+DirectoryIQ is a Next.js application for managing and improving directory listing quality, with workflows for listing intelligence, authority/content support, integrations, and run tracking.
 
-First, run the development server:
+## Who This Is For
+
+- Teams operating directory-style sites (including Brilliant Directories setups) that want operational tooling around listing quality and publishing workflows.
+- Developers contributing to DirectoryIQ as a standalone public project.
+
+## High-Level Capabilities
+
+- DirectoryIQ listing and authority workflows under `app/(brains)/directoryiq`.
+- API routes for listing, authority, integrations, and ingestion workflows under `app/api/directoryiq`.
+- Integration/key handling paths for external providers (for example OpenAI/SerpAPI adapters).
+- Automated test coverage with unit/integration tests (Vitest) and browser flows (Playwright).
+
+## Local Development
+
+### Prerequisites
+
+- Node.js 20+ (`package.json` engines)
+- npm (lockfile included)
+
+### Install
+
+```bash
+npm install
+```
+
+### Run
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open `http://localhost:3000`.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
-
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
-
-## Operational Scripts
-
-- `scripts/prod_smoke.sh`: quick production health checks.
-- `scripts/api_smoke.sh`: minimal guard against `308`/`405` on `POST /api/brains/:id/runs`.
-- `scripts/verify_runs_post.sh`: capture local + public POST verification logs to `_artifacts/phase3/`.
-- `scripts/verify_diagnostics_auth.sh`: start a run, fetch diagnostics, and report PASS/FAIL.
-- `scripts/verify_worker_key_routing.sh`: verify worker vs master key routing for runs + diagnostics.
-
-## DirectoryIQ Bootstrap Read Path
-
-- `DIRECTORYIQ_API_BASE`: optional server-side base URL for DirectoryIQ read-route proxying.
-- For bootstrap mode, set this to the droplet API origin (example: `https://directoryiq-api.ibrains.ai`) so Vercel-hosted DirectoryIQ read routes do not require direct Postgres access.
-
-## Non-Negotiable Route Signatures
-
-- Next.js route handlers must use inline `{ params }: { params: { ... } }` for the second argument.
-- Do not use `RouteContext` or any custom `ctx` type aliases.
-- Run `scripts/check_route_signatures.sh` before building.
-
-## Release Metadata
-
-Use `GET /api/meta/release` (or legacy alias `GET /api/_meta/release`) to see the exact build running in an environment.
-
-Fields:
-- `service`: app/service name (`ibrains`).
-- `environment`: `production`, `staging`, `development`, or `local`.
-- `git_sha`: full commit SHA (if available).
-- `git_sha_short`: short SHA (first 7 chars).
-- `build_timestamp`: UTC build time (`YYYY-MM-DDTHH:mm:ssZ`) or `null` if unknown.
-- `build_id`: CI/build identifier (if available).
-- `local`: boolean indicating local/dev fallback.
-- `sources`: where each value came from (`env`, `file`, `default`, or `missing`).
-
-Compare deployments:
-- Fetch `/api/meta/release` locally and in production, then compare `git_sha` and `build_timestamp`.
-- A stale deployment is obvious if production `git_sha` does not match the expected commit or the `build_timestamp` is older than the intended release.
-
-Local/dev fallback:
-- If CI metadata is absent, the endpoint returns `environment: "local"` and `git_sha`/`build_timestamp` may be `null`.
-- For deterministic local testing, set `RELEASE_GIT_SHA`, `RELEASE_BUILD_TIMESTAMP`, and `APP_ENV` or provide `app/_meta/release.json`.
-
-## Droplet Rebuild + Restart
+Create a local env file (for example `.env.local`) and use placeholder values.
+Do not commit real credentials.
 
 ```bash
-rm -rf .next && npm run build && sudo systemctl restart ibrains-next
+# Required for DB-backed routes
+DATABASE_URL=postgres://user:password@localhost:5432/directoryiq
+
+# Used by API proxy helpers and runtime metadata
+APP_ENV=local
+APP_BASE_URL=http://127.0.0.1:3001
+BRAINS_API_BASE=https://api.example.com
+BRAINS_MASTER_KEY=replace_me
+BRAINS_X_API_KEY=replace_me
+BRAINS_WORKER_API_KEY=replace_me
+
+# DirectoryIQ optional proxy/read-path settings
+DIRECTORYIQ_API_BASE=https://directoryiq-api.example.com
+NEXT_PUBLIC_DIRECTORYIQ_API_BASE=https://directoryiq-api.example.com
+
+# Optional third-party integrations
+OPENAI_API_KEY=replace_me
+SERPAPI_API_KEY=replace_me
+
+# Optional release metadata
+RELEASE_GIT_SHA=replace_me
+RELEASE_BUILD_TIMESTAMP=2026-01-01T00:00:00Z
 ```
 
-Check env loaded:
+Some features require external services and valid credentials/configuration (database, upstream APIs, provider keys).
+
+## Validation Commands
+
+Run the narrow checks you need while developing:
 
 ```bash
-sudo systemctl show ibrains-next --property=Environment | tr ' ' '\n' | egrep 'BRAINS_(MASTER_KEY|X_API_KEY)='
+npm run lint
+npm run test
+npm run test:e2e:list
 ```
+
+Additional project scripts are available in `scripts/` (for example `check_route_signatures.sh`).
+
+## Repository Structure
+
+- `app/`: Next.js App Router pages and API routes.
+- `components/`: shared UI components.
+- `lib/` and `src/`: shared runtime/services/utilities.
+- `tests/`: Vitest and Playwright tests.
+- `scripts/`: operational and verification scripts.
+- `docs/`: deployment and internal process docs (some are environment-specific).
+
+## Security
+
+- Never commit secrets, tokens, private keys, or real customer data.
+- Keep local env files out of version control (`.env*` is ignored).
+- Use placeholder/example values in docs and test fixtures.
+
+## Brilliant Directories Note
+
+Parts of DirectoryIQ are designed for Brilliant Directories-oriented listing workflows. If you are not using that ecosystem, some routes and flows may not be applicable without adaptation.

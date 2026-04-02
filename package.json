@@ -1,6 +1,7 @@
 {
-  "name": "temp-app",
+  "name": "directoryiq",
   "version": "0.1.0",
+  "description": "DirectoryIQ standalone public repository",
   "private": true,
   "scripts": {
     "dev": "next dev",
