@@ -46,6 +46,34 @@ Out of scope in this lane:
 - scheduling/orchestration workers
 - retrieval/ranking UX
 
+## Ingest Orchestration (This Lane)
+
+This lane adds a minimal orchestration path that turns discovered YouTube source items into durable knowledge artifacts.
+
+- execution path: `POST /api/brains/{id}/ingest-orchestrate` or `scripts/run_brain_ingest_orchestration.sh`
+- required env:
+  - `DATABASE_URL`
+  - `BRAINS_MASTER_KEY` (or `BRAINS_X_API_KEY`) for route auth
+  - `YOUTUBE_API_KEY` (fallback metadata path; transcript-first retrieval can still work for publicly available captions without it)
+  - optional `BRAIN_INGEST_TRANSCRIPT_LANGS` (default `en,en-US`)
+
+Lifecycle behavior:
+
+- selects pending `brain_ingest_runs` in `discovered` / `reingest_requested`
+- transitions run state: `queued` -> `processing` -> terminal (`completed` / `failed` / `skipped_duplicate`)
+- fetches source-derived text from YouTube:
+  - first tries timedtext transcript
+  - falls back to YouTube snippet text (title + description)
+- writes one `brain_documents` current transcript record per successful run
+- writes `brain_chunks` linked to document/source/run/brain
+- updates `brain_source_items.latest_ingest_run_id` and `transcript_hash`
+
+Duplicate/reingest semantics:
+
+- if a current transcript document already exists and run is not reingest-requested, run is marked `skipped_duplicate`
+- if reingesting and content hash is unchanged, run is marked `skipped_duplicate` (`content_unchanged`)
+- if reingesting and content changes, a new versioned document is created, old current doc is superseded, and lineage fields are updated
+
 ## Freshness + Versioning Contract
 
 - `brain_documents.version_no` increments per `(source_item_id, document_kind)`.
