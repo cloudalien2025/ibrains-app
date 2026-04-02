@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Clapperboard, ExternalLink, Lock, Map, Zap } from "lucide-react";
+import { Clapperboard, Lock, Map, Sparkles, Zap } from "lucide-react";
 import StartRunDialog from "@/app/(shell)/_components/StartRunDialog";
 import { type BrainCatalogEntry, brainRoute } from "@/lib/brains/brainCatalog";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
@@ -32,7 +32,7 @@ export default function BrainDockCard({ brain, entitled, lastUpdated }: BrainDoc
 
       <header className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Selection Engine</div>
+          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Brain</div>
           <h3 className="mt-2 flex items-center gap-2 text-xl font-semibold text-slate-100">
             <Icon className="h-5 w-5 text-cyan-200" />
             {brain.name}
@@ -68,16 +68,25 @@ export default function BrainDockCard({ brain, entitled, lastUpdated }: BrainDoc
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
         <Link href={href} className={brainTheme.glowButton}>
-          {entitled ? "Open" : "Unlock"}
+          {entitled ? "Open Console" : "Unlock"}
         </Link>
-
-        <Link href={href} target="_blank" rel="noopener" className={brainTheme.secondaryButton}>
-          Open in new tab
-          <ExternalLink className="h-3.5 w-3.5" />
-        </Link>
-
-        {entitled ? <StartRunDialog brainId={brain.id} brainName={brain.name} /> : null}
       </div>
+
+      {entitled ? (
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Link href={`${href}?action=discovery`} className={brainTheme.secondaryButton}>
+            Run Discovery
+          </Link>
+          <StartRunDialog brainId={brain.id} brainName={brain.name} />
+          <Link href={`${href}?action=retrieval`} className={brainTheme.secondaryButton}>
+            Test Retrieval
+          </Link>
+          <Link href={`${href}?action=answer`} className={brainTheme.secondaryButton}>
+            <Sparkles className="h-3.5 w-3.5" />
+            Test Answering
+          </Link>
+        </div>
+      ) : null}
     </article>
   );
 }

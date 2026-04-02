@@ -93,12 +93,12 @@ export default async function BrainsPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
-              Brains catalog
+              Brain Operations
             </div>
-            <h2 className="mt-2 text-3xl font-semibold text-white">Brains</h2>
+            <h2 className="mt-2 text-3xl font-semibold text-white">Manage Brains</h2>
             <p className="mt-2 max-w-2xl text-sm text-slate-300">
-              Track every configured brain, monitor readiness, and launch runs
-              directly from the console.
+              Open each brain console, monitor knowledge readiness, and run discovery,
+              ingest, retrieval, and answering workflows from one operational surface.
             </p>
           </div>
           <Link
@@ -127,7 +127,7 @@ export default async function BrainsPage() {
       ) : brains.length === 0 ? (
         <EmptyState
           title="Awaiting first brain sync"
-          description="Once the worker connection returns brains, they will appear here with quick actions for run launches and diagnostics."
+          description="Once the worker connection returns brains, they will appear here with operational console actions for discovery, ingest, retrieval, and answering."
           action={
             <Link
               href="/"

@@ -51,7 +51,7 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
 
       const trimmedKeyword = keyword.trim();
       if (!trimmedKeyword) {
-        const message = "Keyword is required.";
+        const message = "Discovery keyword is required.";
         setError(message);
         showToast({ message, tone: "error" });
         return;
@@ -78,10 +78,10 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
       }
 
       if (!res.ok) {
-        const message =
-          payload?.error?.message ||
-          payload?.message ||
-          `Run rejected with HTTP ${res.status}`;
+        const reason = payload?.error?.message || payload?.message;
+        const message = reason
+          ? `Unable to start ingest: ${reason}`
+          : `Unable to start ingest (HTTP ${res.status}).`;
         setError(message);
         showToast({ message, tone: "error" });
         return;
@@ -89,20 +89,19 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
 
       const runId = payload?.run_id || payload?.id;
       if (!runId) {
-        const message = "Run accepted but no run_id was returned.";
+        const message = "Ingest started, but no run ID was returned.";
         setError(message);
         showToast({ message, tone: "error" });
         return;
       }
 
-      showToast({ message: `Run accepted: ${runId}`, tone: "success" });
+      showToast({ message: `Ingest started: ${runId}`, tone: "success" });
       setTimeout(() => {
         router.push(`/runs/${runId}`);
       }, 600);
       setOpen(false);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Unable to start the run";
+      const message = e instanceof Error ? `Unable to start ingest: ${e.message}` : "Unable to start ingest.";
       setError(message);
       showToast({ message, tone: "error" });
     } finally {
@@ -122,9 +121,9 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
         <Dialog.Trigger asChild>
           <button
             type="button"
-            className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-400/20"
+            className="inline-flex items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20"
           >
-            Start run
+            Run Ingest
           </button>
         </Dialog.Trigger>
         <Dialog.Portal>
@@ -133,10 +132,10 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
             <div className="flex items-start justify-between gap-4">
               <div>
                 <Dialog.Title className="text-xl font-semibold text-white">
-                  Launch run
+                  Run Ingest
                 </Dialog.Title>
                 <Dialog.Description className="mt-2 text-sm text-slate-300">
-                  Prepare a run for <span className="font-medium text-white">{brainName}</span>.
+                  Start a new ingest for <span className="font-medium text-white">{brainName} Brain</span>.
                 </Dialog.Description>
               </div>
               <Dialog.Close className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200 transition hover:bg-white/10">
@@ -147,7 +146,7 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
-                  Keyword
+                  Discovery keyword
                 </div>
                 <input
                   type="text"
@@ -159,7 +158,7 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
                 <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
-                  Selected new
+                  New items to process
                 </div>
                 <div className="mt-3 flex items-center gap-3">
                   <input
@@ -173,19 +172,21 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
                     className="w-28 rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
                   />
                   <span className="text-xs text-slate-400">
-                    1-200 items per ingest run.
+                    1-200 items for this ingest cycle.
                   </span>
                 </div>
               </div>
 
               <div className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
-                  API request
-                </div>
-                <pre className="mt-3 overflow-x-auto rounded-xl bg-black/50 p-3 text-xs text-slate-200">
-                  {apiSnippet}
-                </pre>
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={startRun}
+                    disabled={isSubmitting}
+                    className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-400/20 disabled:opacity-60"
+                  >
+                    {isSubmitting ? "Starting..." : "Start ingest"}
+                  </button>
                   <button
                     type="button"
                     onClick={copySnippet}
@@ -193,15 +194,17 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
                   >
                     Copy request
                   </button>
-                  <button
-                    type="button"
-                    onClick={startRun}
-                    disabled={isSubmitting}
-                    className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-4 py-1 text-xs font-medium text-emerald-100 transition hover:bg-emerald-400/20 disabled:opacity-60"
-                  >
-                    {isSubmitting ? "Starting..." : "Start"}
-                  </button>
                 </div>
+
+                <details className="mt-3 rounded-xl border border-white/10 bg-black/30 p-3">
+                  <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-slate-400/80">
+                    Developer details
+                  </summary>
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-black/50 p-3 text-xs text-slate-200">
+                    {apiSnippet}
+                  </pre>
+                </details>
+
                 {error ? (
                   <div className="mt-3 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-100">
                     {error}
@@ -216,7 +219,7 @@ export default function StartRunDialog({ brainId, brainName }: StartRunDialogPro
       {toast ? (
         <div className="fixed right-6 top-6 z-50 rounded-2xl border border-white/10 bg-[#0b1222] px-4 py-3 text-sm text-white shadow-[0_20px_50px_rgba(2,6,23,0.6)]">
           <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">
-            {toast.tone === "success" ? "Run update" : "Action needed"}
+            {toast.tone === "success" ? "Ingest update" : "Action needed"}
           </div>
           <div className="mt-1 text-sm text-slate-100">{toast.message}</div>
         </div>
