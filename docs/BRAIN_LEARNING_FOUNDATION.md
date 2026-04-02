@@ -150,3 +150,33 @@ Still not in scope:
 - end-user conversational co-brain UX
 - embedding/vector retrieval rollout
 - adaptive/learning-to-rank feedback loops
+
+## Co-Brain Context Assembly (This Lane)
+
+This lane adds deterministic context assembly between retrieval and future answer generation.
+
+- endpoint: `POST /api/brains/{id}/context-assemble`
+- service: `runCoBrainContextAssembly` (`lib/brain-learning/contextAssembly.ts`)
+- input: `query` (required), optional `limit`, `taxonomy_node_ids`, `taxonomy_node_keys`
+
+Output is a structured internal packet (`co_brain_context_packet_v1`) for downstream co-brains:
+
+- query interpretation (`query_terms`, inferred intent, taxonomy preferences)
+- selected top evidence set with grounding metadata
+- theme synthesis from taxonomy matches
+- strongest current guidance excerpts
+- conflict/ambiguity signals (for example supersession tension)
+- practical answering notes/guardrails for expert-style grounded responses
+
+Assembly behavior is deterministic and freshness-aware:
+
+- retrieval first, then context selection over ranked candidates
+- suppresses duplicate text evidence and stale superseded guidance
+- drops low-relevance tail evidence relative to top-scored candidates
+- preserves provenance (`source_item_id`, `document_id`, `ingest_run_id`, source metadata)
+
+Not implemented in this lane:
+
+- final end-user co-brain conversational UX
+- LLM answer generation/runtime
+- adaptive reinforcement from user feedback
