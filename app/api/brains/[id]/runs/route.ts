@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { proxyToBrains, unexpectedErrorResponse } from "../../../_utils/proxy";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { resolveBrainId } from "@/lib/brains/resolveBrainId";
 
 async function getId(params: Promise<{ id: string }> | { id: string }): Promise<string> {
   const resolved = await Promise.resolve(params);
@@ -12,8 +13,7 @@ async function getId(params: Promise<{ id: string }> | { id: string }): Promise<
 }
 
 export async function GET(
-  req: NextRequest,
-  { params }: { params: Promise<{ id: string }> | { id: string } }
+  req: NextRequest
 ) {
   try {
     // Legacy compatibility shim. Canonical contract should use /api/runs*.
@@ -31,7 +31,7 @@ export async function POST(
     const { unauthorizedResponse } = await requireSignedInUser();
     if (unauthorizedResponse) return unauthorizedResponse;
 
-    const id = await getId(params);
+    const id = resolveBrainId(await getId(params));
     // Legacy compatibility shim. Canonical contract should use /api/brains/{id}/ingest.
     return proxyToBrains(req, `/v1/brains/${id}/ingest`, { requireAuth: true });
   } catch {

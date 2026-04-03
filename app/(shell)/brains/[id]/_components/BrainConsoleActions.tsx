@@ -123,10 +123,11 @@ export default function BrainConsoleActions({
 
       const payload = await res.json().catch(() => null);
       if (!res.ok) {
+        const errorMessage = resolveMessage(payload, res.status);
         setResult({
           status: "error",
-          title: "Unable to run discovery",
-          message: resolveMessage(payload, res.status),
+          title: errorMessage,
+          message: errorMessage,
           payload,
         });
         return;
@@ -142,10 +143,11 @@ export default function BrainConsoleActions({
         payload,
       });
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "Unknown discovery error.";
       setResult({
         status: "error",
-        title: "Unable to run discovery",
-        message: error instanceof Error ? error.message : "Unknown discovery error.",
+        title: errorMessage,
+        message: errorMessage,
       });
     } finally {
       setIsRunningDiscovery(false);

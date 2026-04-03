@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { proxyToBrains, unexpectedErrorResponse } from "../../../_utils/proxy";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { resolveBrainId } from "@/lib/brains/resolveBrainId";
 
 export async function POST(
   req: NextRequest,
@@ -13,7 +14,8 @@ export async function POST(
     if (unauthorizedResponse) return unauthorizedResponse;
 
     const { id } = await Promise.resolve(params);
-    return proxyToBrains(req, `/v1/brains/${id}/discover`, { requireAuth: true });
+    const resolvedId = resolveBrainId(id);
+    return proxyToBrains(req, `/v1/brains/${resolvedId}/discover`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }
