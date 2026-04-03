@@ -2,6 +2,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { brainCatalogById, isBrainId, type BrainId } from "@/lib/brains/brainCatalog";
+import { summarizePostIngestProcessing } from "@/lib/brains/postIngestProcessingContract";
 import BrainConsoleActions from "./_components/BrainConsoleActions";
 
 type BrainDetailProps = {
@@ -69,6 +70,11 @@ function formatDate(value: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+function formatCount(value: number | null): string {
+  if (value == null) return "Not reported";
+  return value.toLocaleString();
+}
+
 export default async function BrainDetailPage({ params, searchParams }: BrainDetailProps) {
   const { id } = await params;
   if (!isBrainId(id)) {
@@ -84,6 +90,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
 
   let stats: Record<string, unknown> | null = null;
   let runs: RunView[] = [];
+  let latestRunPayload: unknown = null;
 
   try {
     const [statsRes, runsRes] = await Promise.all([
@@ -107,25 +114,51 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
         .map(normalizeRun)
         .filter((run) => run.brainId === brainId)
         .slice(0, 6);
+
+      const newestRunId = runs[0]?.id;
+      if (newestRunId) {
+        const runDetailRes = await fetch(`${baseUrl}/api/runs/${newestRunId}`, {
+          cache: "no-store",
+          headers: { Accept: "application/json" },
+        });
+        if (runDetailRes.ok) {
+          latestRunPayload = await runDetailRes.json().catch(() => null);
+        }
+      }
     }
   } catch {
     stats = null;
     runs = [];
+    latestRunPayload = null;
   }
 
   const totalItems = toNumber(stats?.total_items) ?? 0;
   const youtubeItems = toNumber(stats?.youtube_items) ?? 0;
   const webdocsItems = toNumber(stats?.webdocs_items) ?? 0;
   const fillPctRaw = toNumber(stats?.fill_pct);
-  const readinessPct = Math.max(0, Math.min(100, fillPctRaw ?? 0));
+  const processingSummary = summarizePostIngestProcessing({
+    runPayload: latestRunPayload,
+    fallbackReadinessPct: fillPctRaw,
+  });
+  const readinessPct = Math.max(0, Math.min(100, processingSummary.readinessPct ?? 0));
 
   const latestRun = runs[0];
   const recentDiscovery = latestRun ? formatDate(latestRun.startedAt) : "No discovery activity yet.";
   const recentIngest = latestRun?.status || "No ingest activity yet.";
-  const missionStatus = totalItems > 0 ? "Reservoir Active" : "Needs Knowledge";
+  const missionStatus =
+    (processingSummary.counts.activated ?? 0) > 0
+      ? "Reservoir Active"
+      : (processingSummary.counts.collected ?? 0) > 0
+        ? "Processing Knowledge"
+        : "Needs Knowledge";
   const readinessTag = readinessPct >= 70 ? "Operational" : readinessPct >= 30 ? "Building" : "Needs Knowledge";
   const missionTitle = brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
-  const nextAction = totalItems > 0 ? "Next: Run Discovery" : "Next: Add Knowledge";
+  const nextAction =
+    (processingSummary.counts.collected ?? 0) > 0 && (processingSummary.counts.activated ?? 0) <= 0
+      ? "Next: Process Knowledge"
+      : totalItems > 0
+        ? "Next: Run Discovery"
+        : "Next: Add Knowledge";
   const readinessPctRounded = Math.round(readinessPct);
   const cylinderFillHeight = Math.max(6, Math.round(readinessPct * 0.82));
   const cylinderGlowOpacity = 0.22 + (readinessPct / 100) * 0.35;
@@ -206,6 +239,11 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Readiness</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{readinessPctRounded}%</div>
+              <div className="mt-1 text-[10px] text-slate-400">
+                {processingSummary.readinessSource === "stage_based"
+                  ? "Based on post-ingest stage progress."
+                  : "Using current upstream readiness signal."}
+              </div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total knowledge items</div>
@@ -222,6 +260,42 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
             <div className="rounded-lg border border-white/10 bg-black/30 p-2 sm:col-span-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Last operation</div>
               <div className="mt-0.5 text-xs text-slate-100">{formatDate(latestRun?.startedAt)}</div>
+            </div>
+            <div className="rounded-lg border border-cyan-200/25 bg-cyan-300/5 p-2 sm:col-span-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/80">Post-ingest processing</div>
+              <div className="mt-1 grid gap-1 text-[11px] text-slate-200">
+                <div className="flex items-center justify-between">
+                  <span>Processing status</span>
+                  <span className="font-medium text-cyan-100">{processingSummary.processingStatus}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Current stage</span>
+                  <span className="font-medium text-cyan-100">{processingSummary.currentStage}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Collected</span>
+                  <span>{formatCount(processingSummary.counts.collected)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Normalized</span>
+                  <span>{formatCount(processingSummary.counts.normalized)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Classified</span>
+                  <span>{formatCount(processingSummary.counts.classified)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Summarized</span>
+                  <span>{formatCount(processingSummary.counts.summarized)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Activated</span>
+                  <span>{formatCount(processingSummary.counts.activated)}</span>
+                </div>
+              </div>
+              <div className="mt-2 border-t border-white/10 pt-2 text-[11px] text-slate-300">
+                Next: {processingSummary.nextStep}
+              </div>
             </div>
           </div>
         </section>

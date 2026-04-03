@@ -257,7 +257,8 @@ export default function BrainConsoleActions({
         message:
           `Discovery run started with a max of ${discoverySummary.requestedMaxResults.toLocaleString()} candidates. ` +
           `Added this run: ${addedThisRunLabel}. ` +
-          `Total knowledge items now: ${totalItemsLabel}.`,
+          `Total knowledge items now: ${totalItemsLabel}. ` +
+          "Post-ingest processing now advances items through normalization, classification, and activation.",
         runId,
         payload,
         discoverySummary,
