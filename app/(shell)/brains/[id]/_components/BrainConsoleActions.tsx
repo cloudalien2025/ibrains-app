@@ -21,13 +21,15 @@ type ActionResult = {
   message: string;
   runId?: string;
   payload?: unknown;
-  discoverySummary?: {
-    requestedMaxResults: number;
-    addedThisRun: number | null;
-    totalItems: number | null;
-    totalWebItems: number | null;
-    totalYoutubeItems: number | null;
-  };
+  discoverySummary?: DiscoverySummary;
+};
+
+type DiscoverySummary = {
+  requestedMaxResults: number;
+  addedThisRun: number | null;
+  totalItems: number | null;
+  totalWebItems: number | null;
+  totalYoutubeItems: number | null;
 };
 
 function formatPayload(payload: unknown): string {
@@ -92,7 +94,7 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 function normalizeDiscoverySummary(
   payload: unknown,
   requestedMaxResults: number
-): ActionResult["discoverySummary"] {
+): DiscoverySummary {
   const root = asRecord(payload) ?? {};
   const counters = asRecord(root.counters) ?? {};
   const stats = asRecord(root.stats) ?? {};
