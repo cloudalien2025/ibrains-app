@@ -75,9 +75,7 @@ export default function BrainConsoleActions({
 
   const [query, setQuery] = useState("");
   const [testLimit, setTestLimit] = useState(8);
-  const [isRunning, setIsRunning] = useState<ConsoleAction | null>(
-    initialAction === "answer" ? "answer" : "retrieval"
-  );
+  const [isRunning, setIsRunning] = useState<ConsoleAction | null>(null);
   const [result, setResult] = useState<ActionResult | null>(null);
   const [activeAction, setActiveAction] = useState<ConsoleAction>(
     initialAction === "answer" ? "answer" : "retrieval"
@@ -211,51 +209,26 @@ export default function BrainConsoleActions({
   }
 
   return (
-    <section className="space-y-4 rounded-[20px] border border-cyan-300/20 bg-slate-950/65 p-5 shadow-[inset_0_1px_0_rgba(148,163,184,0.12),0_18px_40px_rgba(2,6,23,0.65)]">
+    <section className="space-y-3 rounded-[18px] border border-cyan-300/25 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.12),0_18px_36px_rgba(2,6,23,0.6)]">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-200/70">Primary Workflow</div>
+          <div className="text-[10px] uppercase tracking-[0.2em] text-cyan-200/70">Primary workflow</div>
           <h3 className="mt-1 text-lg font-semibold text-white">Add Knowledge</h3>
-          <p className="mt-1 text-sm text-slate-300">
-            Run discovery to search sources and pull new knowledge into this brain.
+          <p className="mt-1 max-w-2xl text-sm text-slate-300">
+            Run discovery to find and pull new knowledge into this brain.
           </p>
         </div>
         <div className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-3 py-1 text-[11px] text-cyan-100">
-          Discovery -&gt; Select -&gt; Build Knowledge
+          Inline workflow
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-300/80">Next step</div>
-        <p className="mt-2 text-sm text-slate-100">{guidance}</p>
-      </div>
-
-      <div className="grid gap-3 xl:grid-cols-[1fr_140px]">
-        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
-          Topic to search for
-          <input
-            type="text"
-            value={discoveryTopic}
-            onChange={(event) => setDiscoveryTopic(event.target.value)}
-            placeholder="e.g. brilliant directories SEO optimization"
-            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-          />
-        </label>
-        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
-          Max results
-          <input
-            type="number"
-            min={1}
-            max={200}
-            value={discoveryLimit}
-            onChange={(event) => setDiscoveryLimit(clampIngestLimit(Number(event.target.value)))}
-            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-          />
-        </label>
+      <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+        <p className="text-xs text-slate-200">{guidance}</p>
       </div>
 
       <div className="space-y-2">
-        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Source</div>
+        <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Source selector</div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
@@ -292,24 +265,48 @@ export default function BrainConsoleActions({
         </div>
       </div>
 
-      <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="text-xs text-slate-300">
-            Current backend support: keyword-based discovery runs against web search and imports new matches.
-          </p>
+      <div className="grid gap-3 md:grid-cols-[1fr_140px_auto]">
+        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+          Topic to search for
+          <input
+            type="text"
+            value={discoveryTopic}
+            onChange={(event) => setDiscoveryTopic(event.target.value)}
+            placeholder="e.g. brilliant directories SEO optimization"
+            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+          Max results
+          <input
+            type="number"
+            min={1}
+            max={200}
+            value={discoveryLimit}
+            onChange={(event) => setDiscoveryLimit(clampIngestLimit(Number(event.target.value)))}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+          />
+        </label>
+        <div className="flex items-end">
           <button
             type="button"
             onClick={runDiscovery}
             disabled={isRunningDiscovery}
-            className="inline-flex items-center gap-2 rounded-full border border-emerald-400/35 bg-emerald-400/15 px-4 py-1.5 text-xs font-medium text-emerald-100 transition hover:bg-emerald-400/25 disabled:opacity-60"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/45 bg-emerald-400/20 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-60"
           >
-            <Radar className="h-3.5 w-3.5" />
+            <Radar className="h-4 w-4" />
             {isRunningDiscovery ? "Running discovery..." : "Run Discovery"}
           </button>
         </div>
       </div>
 
-      <details className="rounded-2xl border border-white/10 bg-black/30 p-4">
+      <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+        <p className="text-xs text-slate-300">
+          Supported today: keyword-based web search discovery and ingest through the existing brain contract.
+        </p>
+      </div>
+
+      <details className="rounded-xl border border-white/10 bg-black/25 p-3">
         <summary className="cursor-pointer text-xs uppercase tracking-[0.16em] text-slate-300/85">
           Advanced
         </summary>
