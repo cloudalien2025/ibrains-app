@@ -355,6 +355,7 @@ export default function BrainConsoleActions({
           <button
             type="button"
             onClick={() => setSourceMode("web_search")}
+            aria-pressed={sourceMode === "web_search"}
             className={`rounded-full border px-3 py-1 text-xs transition ${
               sourceMode === "web_search"
                 ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
@@ -366,24 +367,34 @@ export default function BrainConsoleActions({
           <button
             type="button"
             disabled
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+            aria-disabled="true"
+            title="Coming soon"
+            className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500 opacity-70"
           >
             Website URL (coming soon)
           </button>
           <button
             type="button"
             disabled
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+            aria-disabled="true"
+            title="Coming soon"
+            className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500 opacity-70"
           >
             Document Upload (coming soon)
           </button>
           <button
             type="button"
             disabled
-            className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500"
+            aria-disabled="true"
+            title="Coming soon"
+            className="cursor-not-allowed rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-500 opacity-70"
           >
             YouTube (coming soon)
           </button>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
+          <p className="text-xs text-slate-300">Currently supported: keyword-based web discovery.</p>
+          <p className="mt-1 text-xs text-slate-400">More source types are coming soon.</p>
         </div>
       </div>
 
@@ -427,7 +438,7 @@ export default function BrainConsoleActions({
 
       <div className="rounded-xl border border-white/10 bg-black/25 px-3 py-2">
         <p className="text-xs text-slate-300">
-          Supported today: keyword-based web search discovery and ingest through the existing brain contract.
+          Discovery runs currently use Web Search only.
         </p>
       </div>
 
