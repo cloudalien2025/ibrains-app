@@ -21,6 +21,13 @@ type ActionResult = {
   message: string;
   runId?: string;
   payload?: unknown;
+  discoverySummary?: {
+    requestedMaxResults: number;
+    addedThisRun: number | null;
+    totalItems: number | null;
+    totalWebItems: number | null;
+    totalYoutubeItems: number | null;
+  };
 };
 
 function formatPayload(payload: unknown): string {
@@ -58,6 +65,83 @@ function resolveMessage(payload: unknown, status: number): string {
 function clampIngestLimit(value: number): number {
   if (!Number.isFinite(value)) return 20;
   return Math.min(200, Math.max(1, Math.floor(value)));
+}
+
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
+    const parsed = Number.parseFloat(value.replace(/[^\d.-]/g, ""));
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function pickNumber(candidate: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    const parsed = toFiniteNumber(candidate[key]);
+    if (parsed != null) return parsed;
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  return value as Record<string, unknown>;
+}
+
+function normalizeDiscoverySummary(
+  payload: unknown,
+  requestedMaxResults: number
+): ActionResult["discoverySummary"] {
+  const root = asRecord(payload) ?? {};
+  const counters = asRecord(root.counters) ?? {};
+  const stats = asRecord(root.stats) ?? {};
+  const summary = asRecord(root.summary) ?? {};
+  const meta = asRecord(root.meta) ?? {};
+  const data = asRecord(root.data) ?? {};
+
+  const combined = {
+    ...root,
+    ...counters,
+    ...stats,
+    ...summary,
+    ...meta,
+    ...data,
+  };
+
+  return {
+    requestedMaxResults,
+    addedThisRun: pickNumber(combined, [
+      "added_this_run",
+      "addedThisRun",
+      "new_items",
+      "newItems",
+      "items_added",
+      "itemsAdded",
+      "ingested",
+      "ingested_count",
+      "total_ingested",
+    ]),
+    totalItems: pickNumber(combined, [
+      "total_items",
+      "totalItems",
+      "items_total",
+      "source_count",
+      "sources_total",
+    ]),
+    totalWebItems: pickNumber(combined, [
+      "webdocs_items",
+      "web_items",
+      "total_web_items",
+      "webItems",
+    ]),
+    totalYoutubeItems: pickNumber(combined, [
+      "youtube_items",
+      "youtube_count",
+      "total_youtube_items",
+      "youtubeItems",
+    ]),
+  };
 }
 
 export default function BrainConsoleActions({
@@ -134,13 +218,47 @@ export default function BrainConsoleActions({
       }
 
       const runId: string | undefined = payload?.run_id || payload?.id;
+      let discoverySummary = normalizeDiscoverySummary(payload, discoveryLimit);
+      if (
+        discoverySummary.totalItems == null ||
+        discoverySummary.totalWebItems == null ||
+        discoverySummary.totalYoutubeItems == null
+      ) {
+        const statsRes = await fetch(`/api/brains/${brainId}/stats`, {
+          headers: { Accept: "application/json" },
+        }).catch(() => null);
+        if (statsRes?.ok) {
+          const statsPayload = await statsRes.json().catch(() => null);
+          const totals = normalizeDiscoverySummary(statsPayload, discoveryLimit);
+          discoverySummary = {
+            ...discoverySummary,
+            totalItems: discoverySummary.totalItems ?? totals.totalItems,
+            totalWebItems: discoverySummary.totalWebItems ?? totals.totalWebItems,
+            totalYoutubeItems:
+              discoverySummary.totalYoutubeItems ?? totals.totalYoutubeItems,
+          };
+        }
+      }
+
+      const addedThisRunLabel =
+        discoverySummary.addedThisRun != null
+          ? discoverySummary.addedThisRun.toLocaleString()
+          : "Not reported";
+      const totalItemsLabel =
+        discoverySummary.totalItems != null
+          ? discoverySummary.totalItems.toLocaleString()
+          : "Not reported";
+
       setResult({
         status: "success",
         title: "Discovery run started",
         message:
-          "The brain is now searching keyword-based sources and importing new findings into knowledge.",
+          `Discovery run started with a max of ${discoverySummary.requestedMaxResults.toLocaleString()} candidates. ` +
+          `Added this run: ${addedThisRunLabel}. ` +
+          `Total knowledge items now: ${totalItemsLabel}.`,
         runId,
         payload,
+        discoverySummary,
       });
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : "Unknown discovery error.";
@@ -279,7 +397,7 @@ export default function BrainConsoleActions({
           />
         </label>
         <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
-          Max results
+          Max candidates this run
           <input
             type="number"
             min={1}
@@ -288,6 +406,9 @@ export default function BrainConsoleActions({
             onChange={(event) => setDiscoveryLimit(clampIngestLimit(Number(event.target.value)))}
             className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
           />
+          <div className="mt-1 text-[11px] normal-case tracking-normal text-slate-500">
+            Maximum candidate results requested for this discovery run.
+          </div>
         </label>
         <div className="flex items-end">
           <button
@@ -415,6 +536,47 @@ export default function BrainConsoleActions({
               </summary>
               <pre className="mt-2 overflow-x-auto text-xs text-slate-200">{formatPayload(result.payload)}</pre>
             </details>
+          ) : null}
+          {result.status === "success" && result.discoverySummary ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Requested max</div>
+                <div className="mt-0.5 text-xs text-slate-100">
+                  {result.discoverySummary.requestedMaxResults.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Added this run</div>
+                <div className="mt-0.5 text-xs text-slate-100">
+                  {result.discoverySummary.addedThisRun != null
+                    ? result.discoverySummary.addedThisRun.toLocaleString()
+                    : "Not reported"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total knowledge items</div>
+                <div className="mt-0.5 text-xs text-slate-100">
+                  {result.discoverySummary.totalItems != null
+                    ? result.discoverySummary.totalItems.toLocaleString()
+                    : "Not reported"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">
+                  Source totals
+                </div>
+                <div className="mt-0.5 text-xs text-slate-100">
+                  Web:{" "}
+                  {result.discoverySummary.totalWebItems != null
+                    ? result.discoverySummary.totalWebItems.toLocaleString()
+                    : "Not reported"}
+                  {" · "}YouTube:{" "}
+                  {result.discoverySummary.totalYoutubeItems != null
+                    ? result.discoverySummary.totalYoutubeItems.toLocaleString()
+                    : "Not reported"}
+                </div>
+              </div>
+            </div>
           ) : null}
         </div>
       ) : null}

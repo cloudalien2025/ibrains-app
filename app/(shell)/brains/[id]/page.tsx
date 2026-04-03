@@ -211,15 +211,15 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               <div className="mt-0.5 text-sm font-semibold text-white">{readinessPctRounded}%</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total items</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total knowledge items</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{totalItems.toLocaleString()}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web sources</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web items</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{webdocsItems.toLocaleString()}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">YouTube sources</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">YouTube items</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{youtubeItems.toLocaleString()}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2 sm:col-span-2">
