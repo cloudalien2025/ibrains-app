@@ -32,6 +32,8 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# clerk keyless local config (contains secrets)
+/.clerk/
 app/_meta/release.json
 
 # vercel
