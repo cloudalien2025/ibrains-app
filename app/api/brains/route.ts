@@ -4,24 +4,31 @@ import { NextRequest } from "next/server";
 import { proxyToBrains, unexpectedErrorResponse } from "../_utils/proxy";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 
-function isMissingBrainsAuthEnv(error: unknown): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message.includes(
-    "Missing required env var: BRAINS_MASTER_KEY or BRAINS_X_API_KEY"
+async function shouldFallbackToPublic(response: Response): Promise<boolean> {
+  if (response.status !== 500) return false;
+
+  const payload = (await response.clone().json().catch(() => null)) as
+    | { error?: { message?: string } }
+    | null;
+
+  const message = payload?.error?.message ?? "";
+
+  return (
+    message.includes("Missing BRAINS_MASTER_KEY or BRAINS_X_API_KEY") ||
+    message.includes("Missing required env var: BRAINS_MASTER_KEY or BRAINS_X_API_KEY")
   );
 }
 
 export async function GET(req: NextRequest) {
   try {
-    return await proxyToBrains(req, "/v1/brains", { requireAuth: true });
-  } catch (error) {
-    if (isMissingBrainsAuthEnv(error)) {
-      try {
-        return await proxyToBrains(req, "/v1/brains/public", { requireAuth: false });
-      } catch {
-        return unexpectedErrorResponse();
-      }
+    const primary = await proxyToBrains(req, "/v1/brains", { requireAuth: true });
+
+    if (await shouldFallbackToPublic(primary)) {
+      return await proxyToBrains(req, "/v1/brains/public", { requireAuth: false });
     }
+
+    return primary;
+  } catch {
     return unexpectedErrorResponse();
   }
 }
