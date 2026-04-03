@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
 import { proxyToBrains, unexpectedErrorResponse } from "../../_utils/proxy";
+import { resolveBrainId } from "@/lib/brains/resolveBrainId";
 
 export async function GET(
   req: NextRequest,
@@ -9,7 +10,8 @@ export async function GET(
 ) {
   try {
     const { id } = await Promise.resolve(params);
-    return proxyToBrains(req, `/v1/brains/${id}`, { requireAuth: true });
+    const resolvedId = resolveBrainId(id);
+    return proxyToBrains(req, `/v1/brains/${resolvedId}`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();
   }

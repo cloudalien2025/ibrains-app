@@ -100,6 +100,37 @@ export function jsonError(
   return NextResponse.json(buildError(code, message, details), { status });
 }
 
+function authConfigErrorResponse(error: unknown): NextResponse {
+  const message = error instanceof Error ? error.message : "";
+  if (message.includes("BRAINS_WORKER_API_KEY")) {
+    return jsonError(
+      "BAD_PROXY_AUTH_CONFIG",
+      "Missing BRAINS_WORKER_API_KEY",
+      500
+    );
+  }
+  if (message.includes("BRAINS_MASTER_KEY") || message.includes("BRAINS_X_API_KEY")) {
+    return jsonError(
+      "BAD_PROXY_AUTH_CONFIG",
+      "Missing BRAINS_MASTER_KEY or BRAINS_X_API_KEY",
+      500
+    );
+  }
+  return jsonError(
+    "BAD_PROXY_AUTH_CONFIG",
+    "Invalid proxy auth configuration",
+    500
+  );
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  return error instanceof Error && error.message ? error.message : fallback;
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === "AbortError";
+}
+
 function withTimeout(ms: number): { signal: AbortSignal; cancel: () => void } {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort("timeout"), ms);
@@ -118,6 +149,22 @@ async function readUpstreamBody(upstream: Response): Promise<unknown> {
   return text ? text.slice(0, 2000) : "";
 }
 
+function extractUpstreamMessage(payload: unknown, status: number): string {
+  if (payload && typeof payload === "object") {
+    const candidate = payload as {
+      message?: string;
+      error?: { message?: string };
+      detail?: string;
+    };
+    const message = candidate.error?.message || candidate.message || candidate.detail;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  if (typeof payload === "string" && payload.trim()) return payload.trim();
+  if (status === 401) return "Authentication failed for upstream request";
+  if (status === 404) return "Brain not found";
+  return `Upstream responded with ${status}`;
+}
+
 export async function proxyToBrains(
   req: NextRequest,
   targetPath: string,
@@ -128,15 +175,20 @@ export async function proxyToBrains(
   let targetUrl: string;
   try {
     targetUrl = buildTargetUrl(req, targetPath);
-  } catch (e: any) {
+  } catch (e: unknown) {
     return jsonError(
       "BAD_PROXY_CONFIG",
-      e?.message ?? "Bad proxy config",
+      getErrorMessage(e, "Bad proxy config"),
       500
     );
   }
 
-  const headers = buildHeaders(req, requireAuth, targetPath);
+  let headers: Headers;
+  try {
+    headers = buildHeaders(req, requireAuth, targetPath);
+  } catch (error: unknown) {
+    return authConfigErrorResponse(error);
+  }
 
   let body: BodyInit | undefined;
   try {
@@ -169,9 +221,20 @@ export async function proxyToBrains(
 
     if (!upstream.ok) {
       const bodyPayload = await readUpstreamBody(upstream);
+      const message = extractUpstreamMessage(bodyPayload, status);
+      if (status === 401) {
+        return jsonError("UPSTREAM_AUTH_ERROR", message, 401, {
+          requestId: upstream.headers.get("x-request-id") ?? undefined,
+        });
+      }
+      if (status === 404) {
+        return jsonError("BRAIN_NOT_FOUND", message, 404, {
+          requestId: upstream.headers.get("x-request-id") ?? undefined,
+        });
+      }
       return jsonError(
         "UPSTREAM_ERROR",
-        `Upstream responded with ${status}`,
+        message,
         status,
         {
           status,
@@ -201,8 +264,8 @@ export async function proxyToBrains(
         "content-type": upstreamContentType || "text/plain; charset=utf-8",
       },
     });
-  } catch (e: any) {
-    if (e?.name === "AbortError") {
+  } catch (e: unknown) {
+    if (isAbortError(e)) {
       return jsonError(
         "UPSTREAM_TIMEOUT",
         "Upstream request timed out",
@@ -211,7 +274,7 @@ export async function proxyToBrains(
     }
     return jsonError(
       "UPSTREAM_FETCH_FAILED",
-      e?.message ?? "Upstream fetch failed",
+      getErrorMessage(e, "Upstream fetch failed"),
       502
     );
   }
@@ -227,11 +290,23 @@ export async function probeBrains(
   let targetUrl: string;
   try {
     targetUrl = buildTargetUrl(req, targetPath);
-  } catch (e: any) {
-    return { upstreamOk: false, upstreamError: e?.message ?? "Bad proxy config" };
+  } catch (e: unknown) {
+    return { upstreamOk: false, upstreamError: getErrorMessage(e, "Bad proxy config") };
   }
 
-  const headers = buildHeaders(req, requireAuth, targetPath);
+  let headers: Headers;
+  try {
+    headers = buildHeaders(req, requireAuth, targetPath);
+  } catch (error: unknown) {
+    const res = authConfigErrorResponse(error);
+    const payload = await res.json().catch(() => null);
+    return {
+      upstreamOk: false,
+      upstreamError:
+        (payload as { error?: { message?: string } } | null)?.error?.message ??
+        "Invalid proxy auth configuration",
+    };
+  }
 
   try {
     const { signal, cancel } = withTimeout(DEFAULT_TIMEOUT_MS);
@@ -265,13 +340,13 @@ export async function probeBrains(
         : `HTTP ${upstream.status}`,
       requestId: upstream.headers.get("x-request-id") ?? undefined,
     };
-  } catch (e: any) {
-    if (e?.name === "AbortError") {
+  } catch (e: unknown) {
+    if (isAbortError(e)) {
       return { upstreamOk: false, upstreamError: "Upstream request timed out" };
     }
     return {
       upstreamOk: false,
-      upstreamError: e?.message ?? "Upstream fetch failed",
+      upstreamError: getErrorMessage(e, "Upstream fetch failed"),
     };
   }
 }
