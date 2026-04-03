@@ -122,127 +122,155 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const latestRun = runs[0];
   const recentDiscovery = latestRun ? formatDate(latestRun.startedAt) : "No discovery activity yet.";
   const recentIngest = latestRun?.status || "No ingest activity yet.";
-  const missionStatus = totalItems > 0 ? "Reservoir active" : "Cold start";
-  const readinessTag =
-    readinessPct >= 70 ? "Operational" : readinessPct >= 30 ? "Building" : "Needs knowledge";
+  const missionStatus = totalItems > 0 ? "Reservoir Active" : "Needs Knowledge";
+  const readinessTag = readinessPct >= 70 ? "Operational" : readinessPct >= 30 ? "Building" : "Needs Knowledge";
+  const missionTitle = brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
+  const nextAction = totalItems > 0 ? "Next: Run Discovery" : "Next: Add Knowledge";
+  const readinessPctRounded = Math.round(readinessPct);
+  const cylinderFillHeight = Math.max(6, Math.round(readinessPct * 0.82));
 
   const initialAction = (await searchParams)?.action;
 
   return (
-    <div className="space-y-4">
-      <section className="rounded-[20px] border border-white/10 bg-slate-950/60 p-5 shadow-[0_18px_40px_rgba(2,6,23,0.6)]">
+    <div className="space-y-3">
+      <section className="rounded-[18px] border border-white/10 bg-slate-950/65 px-4 py-3 shadow-[0_16px_32px_rgba(2,6,23,0.55)]">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-[10px] uppercase tracking-[0.2em] text-slate-300/70">
-              DirectoryIQ Mission Control
-            </div>
-            <h2 className="mt-1 text-2xl font-semibold text-white">{brain.name}</h2>
-            <p className="mt-1 max-w-2xl text-sm text-slate-300">
-              Operate discovery, knowledge intake, and run-state monitoring from one command surface.
+          <div className="min-w-0">
+            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-300/65">iBrains</div>
+            <h1 className="mt-0.5 truncate text-2xl font-semibold text-white">{missionTitle}</h1>
+            <p className="mt-0.5 text-xs text-slate-300">
+              Operational cockpit for discovery, knowledge intake, and run-state monitoring.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-full border border-emerald-300/30 bg-emerald-300/10 px-3 py-1 text-xs text-emerald-100">
+              Live System
+            </span>
             <span className="rounded-full border border-cyan-300/35 bg-cyan-300/15 px-3 py-1 text-xs text-cyan-100">
-              {Math.round(readinessPct)}% Ready
+              {readinessPctRounded}% Ready
             </span>
             <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-200">
               {readinessTag}
             </span>
             <span className="rounded-full border border-white/15 bg-white/5 px-3 py-1 text-xs text-slate-200">
-              {missionStatus}
+              {nextAction}
             </span>
             <Link
               href="/brains"
               className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-white transition hover:bg-white/10"
             >
-              Back
+              Back to Brains
             </Link>
           </div>
         </div>
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-        <section className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-            <div className="text-[10px] uppercase tracking-[0.18em] text-slate-400/80">System state</div>
-            <div className="mt-2 flex items-end justify-between">
-              <div className="text-3xl font-semibold text-cyan-100">{Math.round(readinessPct)}%</div>
-              <div className="text-xs text-slate-300">Readiness</div>
+      <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0">
+          <BrainConsoleActions
+            brainId={brainId}
+            brainName={brain.name}
+            totalItems={totalItems}
+            hasRuns={runs.length > 0}
+            latestRunStatus={latestRun?.status}
+            initialAction={initialAction}
+          />
+        </div>
+
+        <section className="rounded-[18px] border border-cyan-300/25 bg-slate-950/70 p-4 shadow-[inset_0_1px_0_rgba(148,163,184,0.1),0_18px_36px_rgba(2,6,23,0.6)]">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/70">Signal Reservoir</div>
+              <p className="mt-1 text-xs text-slate-300">System-state anchor</p>
             </div>
-            <div className="mt-2 h-2 rounded-full bg-slate-900">
-              <div
-                className="h-2 rounded-full bg-cyan-300/80 transition-all"
-                style={{ width: `${Math.round(readinessPct)}%` }}
-              />
+            <div className="text-right">
+              <div className="text-lg font-semibold text-cyan-100">{readinessPctRounded}%</div>
+              <div className="text-[11px] text-slate-400">{missionStatus}</div>
             </div>
           </div>
 
-          <div className="grid gap-2">
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Total items</div>
-              <div className="mt-1 text-lg font-semibold text-white">{totalItems.toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Web sources</div>
-              <div className="mt-1 text-lg font-semibold text-white">{webdocsItems.toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">YouTube sources</div>
-              <div className="mt-1 text-lg font-semibold text-white">{youtubeItems.toLocaleString()}</div>
-            </div>
-            <div className="rounded-xl border border-white/10 bg-black/25 p-3">
-              <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Last operation</div>
-              <div className="mt-1 text-xs text-slate-100">{formatDate(latestRun?.startedAt)}</div>
-            </div>
-          </div>
-        </section>
-
-        <BrainConsoleActions
-          brainId={brainId}
-          brainName={brain.name}
-          totalItems={totalItems}
-          hasRuns={runs.length > 0}
-          latestRunStatus={latestRun?.status}
-          initialAction={initialAction}
-        />
-
-        <section className="space-y-3 rounded-[20px] border border-white/10 bg-white/5 p-4">
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Recent discovery</div>
-            <p className="mt-1 text-xs text-slate-100">{recentDiscovery}</p>
-          </div>
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Recent ingest</div>
-            <p className="mt-1 text-xs text-slate-100">{recentIngest}</p>
-          </div>
-
-          <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-            <div className="text-[10px] uppercase tracking-[0.16em] text-slate-400">Run timeline</div>
-            {runs.length === 0 ? (
-              <p className="mt-2 text-xs text-slate-300">No runs available for this brain yet.</p>
-            ) : (
-              <div className="mt-2 space-y-2">
-                {runs.slice(0, 6).map((run) => (
-                  <div key={run.id} className="rounded-lg border border-white/10 bg-black/25 p-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <Link
-                        href={`/runs/${run.id}`}
-                        className="truncate text-xs font-medium text-cyan-100 transition hover:text-cyan-50"
-                      >
-                        {run.id}
-                      </Link>
-                      <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-200">
-                        {run.status || "unknown"}
-                      </span>
-                    </div>
-                    <div className="mt-1 text-[11px] text-slate-400">{formatDate(run.startedAt)}</div>
-                  </div>
-                ))}
+          <div className="relative mt-3 flex justify-center">
+            <div className="relative h-56 w-32">
+              <div className="absolute inset-x-3 top-0 h-6 rounded-full border border-cyan-200/35 bg-cyan-200/20 blur-[0.2px]" />
+              <div className="absolute bottom-0 left-2 right-2 top-3 rounded-[999px] border border-cyan-200/35 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(34,211,238,0.22),0_0_20px_rgba(34,211,238,0.14)]" />
+              <div className="absolute bottom-3 left-4 right-4 top-5 overflow-hidden rounded-[999px] border border-cyan-200/15">
+                <div className="absolute inset-0 bg-gradient-to-b from-cyan-100/8 via-cyan-100/2 to-transparent" />
+                <div
+                  className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-cyan-200/30 bg-gradient-to-t from-cyan-300/45 via-cyan-300/25 to-cyan-100/25 shadow-[0_0_28px_rgba(34,211,238,0.45)]"
+                  style={{ height: `${cylinderFillHeight}%` }}
+                />
+                <div className="absolute inset-x-0 top-4 h-16 bg-gradient-to-b from-cyan-200/15 to-transparent" />
               </div>
-            )}
+              <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-cyan-300/20 blur-md" />
+            </div>
+          </div>
+
+          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Readiness</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">{readinessPctRounded}%</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total items</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">{totalItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web sources</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">{webdocsItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">YouTube sources</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">{youtubeItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2 sm:col-span-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Last operation</div>
+              <div className="mt-0.5 text-xs text-slate-100">{formatDate(latestRun?.startedAt)}</div>
+            </div>
           </div>
         </section>
       </div>
+
+      <section className="rounded-[16px] border border-white/10 bg-black/25 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">Recent activity</div>
+          <div className="text-xs text-slate-400">Secondary telemetry</div>
+        </div>
+        <div className="mt-2 grid gap-2 lg:grid-cols-[1fr_1fr]">
+          <div className="rounded-lg border border-white/10 bg-black/25 p-2">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Recent discovery</div>
+            <p className="mt-1 text-xs text-slate-100">{recentDiscovery}</p>
+          </div>
+          <div className="rounded-lg border border-white/10 bg-black/25 p-2">
+            <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Recent ingest</div>
+            <p className="mt-1 text-xs text-slate-100">{recentIngest}</p>
+          </div>
+        </div>
+
+        <div className="mt-2">
+          {runs.length === 0 ? (
+            <p className="text-xs text-slate-300">No runs available for this brain yet.</p>
+          ) : (
+            <div className="grid gap-2 lg:grid-cols-3">
+              {runs.slice(0, 6).map((run) => (
+                <div key={run.id} className="rounded-lg border border-white/10 bg-black/20 p-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <Link
+                      href={`/runs/${run.id}`}
+                      className="truncate text-xs font-medium text-cyan-100 transition hover:text-cyan-50"
+                    >
+                      {run.id}
+                    </Link>
+                    <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-200">
+                      {run.status || "unknown"}
+                    </span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-400">{formatDate(run.startedAt)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </section>
     </div>
   );
 }
