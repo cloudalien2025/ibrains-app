@@ -162,6 +162,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const readinessPctRounded = Math.round(readinessPct);
   const cylinderFillHeight = Math.max(6, Math.round(readinessPct * 0.82));
   const cylinderGlowOpacity = 0.22 + (readinessPct / 100) * 0.35;
+  const cylinderSignalStrength = 0.55 + (readinessPct / 100) * 0.45;
 
   const initialAction = (await searchParams)?.action;
 
@@ -225,31 +226,43 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                 <div className="absolute bottom-0 left-2 right-2 top-2 rounded-[999px] border border-emerald-200/30 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(80,255,170,0.2),0_0_20px_rgba(80,255,170,0.12)]" />
                 <div className="absolute bottom-3 left-4 right-4 top-4 overflow-hidden rounded-[999px] border border-emerald-200/15">
                   <div
-                    className="absolute inset-0"
+                    className="cylinder-signal-inner absolute inset-0"
                     style={{
                       background:
                         "linear-gradient(to bottom, rgba(108,255,178,0.12) 0%, rgba(108,255,178,0.04) 42%, rgba(108,255,178,0) 100%)",
                     }}
                   />
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-emerald-200/30"
+                    className="cylinder-signal-fill absolute bottom-0 left-0 right-0 overflow-hidden rounded-[999px] border border-emerald-200/30"
                     style={{
                       height: `${cylinderFillHeight}%`,
                       opacity: cylinderGlowOpacity,
+                      ["--signal-strength" as string]: cylinderSignalStrength,
                       background:
                         "linear-gradient(to top, rgba(50,213,131,0.35) 0%, rgba(74,236,154,0.24) 54%, rgba(108,255,178,0.15) 100%)",
                       boxShadow: "0 0 40px rgba(80,255,170,0.35)",
                     }}
-                  />
+                  >
+                    <div
+                      className="cylinder-signal-surface absolute inset-x-0 top-0 h-4"
+                      style={{
+                        background:
+                          "linear-gradient(to right, rgba(176,255,215,0), rgba(176,255,215,0.35), rgba(176,255,215,0))",
+                      }}
+                    />
+                  </div>
                   <div
-                    className="absolute inset-x-0 top-4 h-16"
+                    className="cylinder-signal-inner absolute inset-x-0 top-4 h-16"
                     style={{
                       background:
                         "linear-gradient(to bottom, rgba(176,255,215,0.18) 0%, rgba(176,255,215,0) 100%)",
                     }}
                   />
                 </div>
-                <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-[rgba(80,255,170,0.24)] blur-md" />
+                <div
+                  className="cylinder-signal-glow absolute inset-x-4 bottom-2 h-5 rounded-full bg-[rgba(80,255,170,0.24)] blur-md"
+                  style={{ ["--signal-strength" as string]: cylinderSignalStrength }}
+                />
               </div>
             </div>
           </div>
