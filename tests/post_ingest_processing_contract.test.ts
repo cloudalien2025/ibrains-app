@@ -30,8 +30,10 @@ describe("summarizePostIngestProcessing", () => {
       deduped: 2,
     });
     expect(summary.readinessSource).toBe("stage_based");
-    expect(summary.readinessPct).toBe(15);
+    expect(summary.readinessPct).toBe(36);
     expect(summary.blockingState).toBe("Ready for Use");
+    expect(summary.processedCount).toBe(5);
+    expect(summary.telemetryCompleteness).toBe("complete");
   });
 
   it("falls back to upstream readiness when stage counters are absent", () => {
@@ -48,6 +50,7 @@ describe("summarizePostIngestProcessing", () => {
     expect(summary.currentStage).toBe("COLLECTED");
     expect(summary.processingStatus).toBe("completed");
     expect(summary.blockingState).toBe("Awaiting Processing Signal");
+    expect(summary.telemetryCompleteness).toBe("partial");
   });
 
   it("uses fallback collected count to avoid misleading no-knowledge state", () => {
@@ -60,6 +63,7 @@ describe("summarizePostIngestProcessing", () => {
     expect(summary.counts.collected).toBe(66);
     expect(summary.blockingState).toBe("Awaiting Processing Signal");
     expect(summary.blockingReason).toContain("telemetry");
+    expect(summary.readinessPct).toBe(20);
   });
 
   it("marks collected-but-unprocessed brains as needing processing", () => {
@@ -79,5 +83,30 @@ describe("summarizePostIngestProcessing", () => {
 
     expect(summary.blockingState).toBe("Needs Processing");
     expect(summary.nextStep).toContain("normalize");
+    expect(summary.readinessPct).toBe(20);
+  });
+
+  it("prioritizes report/run truth over fallback readiness", () => {
+    const summary = summarizePostIngestProcessing({
+      runPayload: {
+        status: "completed",
+        counters: {
+          candidates_found: 9,
+          completed: 2,
+        },
+      },
+      reportPayload: {
+        selected_new: 4,
+        ingested_new: 2,
+      },
+      fallbackReadinessPct: 0,
+      fallbackCollectedCount: 0,
+    });
+
+    expect(summary.counts.collected).toBe(9);
+    expect(summary.processedCount).toBe(2);
+    expect(summary.readinessSource).toBe("stage_based");
+    expect(summary.readinessPct).toBeGreaterThan(0);
+    expect(summary.blockingState).toBe("Ready for Use");
   });
 });

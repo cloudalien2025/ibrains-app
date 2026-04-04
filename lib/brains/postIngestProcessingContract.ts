@@ -34,6 +34,8 @@ export type PostIngestProcessingSummary = {
   blockingReason: string;
   nextStep: string;
   counts: PostIngestProcessingCounts;
+  processedCount: number | null;
+  telemetryCompleteness: "complete" | "partial";
   readinessPct: number | null;
   readinessSource: "stage_based" | "upstream_fill_pct";
 };
@@ -101,6 +103,21 @@ function activateItem(metrics: Record<string, unknown>): number | null {
     "retrieval_ready",
     "ready_items",
     "usable_items",
+    "ingested_new",
+    "items_succeeded_total",
+    "completed",
+  ]);
+}
+
+function processItem(metrics: Record<string, unknown>): number | null {
+  return pickCount(metrics, [
+    "processed",
+    "processed_count",
+    "items_processed",
+    "items_succeeded_total",
+    "completed",
+    "transcripts_succeeded",
+    "ingested_new",
   ]);
 }
 
@@ -113,36 +130,36 @@ function mapCurrentStage(rawStage: string | null): DirectoryIQPostIngestStage {
   return "COLLECTED";
 }
 
-function computeStageBasedReadiness(counts: PostIngestProcessingCounts): number | null {
+function computeStageBasedReadiness(
+  counts: PostIngestProcessingCounts,
+  processedCount: number | null
+): number | null {
   const collected = counts.collected;
   if (collected == null || collected <= 0) return null;
 
-  if (counts.activated != null && counts.activated > 0) {
-    return Math.max(0, Math.min(100, Math.round((counts.activated / collected) * 100)));
-  }
-  if (counts.summarized != null && counts.summarized > 0) {
-    return Math.max(0, Math.min(75, Math.round((counts.summarized / collected) * 75)));
-  }
-  if (counts.classified != null && counts.classified > 0) {
-    return Math.max(0, Math.min(55, Math.round((counts.classified / collected) * 55)));
-  }
-  if (counts.normalized != null && counts.normalized > 0) {
-    return Math.max(0, Math.min(35, Math.round((counts.normalized / collected) * 35)));
-  }
-  return 10;
+  // Weighted readiness that advances conservatively with real stage evidence.
+  // Collected alone contributes baseline progress; processed and activated increase confidence.
+  const normalizedProcessed = Math.max(
+    0,
+    Math.min(1, (processedCount ?? 0) / collected)
+  );
+  const normalizedActivated = Math.max(
+    0,
+    Math.min(1, (counts.activated ?? 0) / collected)
+  );
+
+  const readiness = Math.round(20 + normalizedProcessed * 40 + normalizedActivated * 40);
+  return Math.max(0, Math.min(100, readiness));
 }
 
 function inferBlockingState(summary: {
   processingStatus: "idle" | "processing" | "completed" | "failed";
   counts: PostIngestProcessingCounts;
+  processedCount: number | null;
 }): PostIngestProcessingSummary["blockingState"] {
   const collected = summary.counts.collected;
   const activated = summary.counts.activated;
-  const processedCount = Math.max(
-    summary.counts.normalized ?? 0,
-    summary.counts.classified ?? 0,
-    summary.counts.summarized ?? 0
-  );
+  const processedCount = summary.processedCount ?? 0;
   const hasProcessingTelemetry =
     summary.counts.normalized != null ||
     summary.counts.classified != null ||
@@ -161,6 +178,7 @@ function inferBlockingState(summary: {
 function inferBlockingReason(summary: {
   processingStatus: "idle" | "processing" | "completed" | "failed";
   counts: PostIngestProcessingCounts;
+  processedCount: number | null;
   blockingState: PostIngestProcessingSummary["blockingState"];
 }): string {
   if (summary.processingStatus === "failed") {
@@ -209,14 +227,18 @@ function inferNextStep(summary: {
 
 export function summarizePostIngestProcessing(input: {
   runPayload: unknown;
+  reportPayload?: unknown;
+  statsPayload?: unknown;
   fallbackReadinessPct: number | null;
   fallbackCollectedCount?: number | null;
 }): PostIngestProcessingSummary {
+  const stats = asRecord(input.statsPayload);
   const run = asRecord(input.runPayload);
+  const report = asRecord(input.reportPayload);
   const counters = asRecord(run.counters);
   const metrics = asRecord(run.metrics);
   const metadata = asRecord(run.metadata);
-  const combined = { ...run, ...counters, ...metrics, ...metadata };
+  const combined = { ...stats, ...run, ...counters, ...metrics, ...metadata, ...report };
 
   const statusText = String(
     run.status ?? run.state ?? run.phase ?? "idle"
@@ -237,6 +259,8 @@ export function summarizePostIngestProcessing(input: {
       "ingested",
       "ingested_count",
       "total_ingested",
+      "candidates_found",
+      "selected_new",
     ]) ?? (input.fallbackCollectedCount == null ? null : Math.max(0, Math.round(input.fallbackCollectedCount))),
     normalized: normalizeItem(combined),
     classified: classifyItem(combined),
@@ -244,6 +268,11 @@ export function summarizePostIngestProcessing(input: {
     activated: activateItem(combined),
     deduped: dedupeItem(combined),
   };
+  const processedCount =
+    processItem(combined) ??
+    counts.summarized ??
+    counts.classified ??
+    counts.normalized;
 
   const processingStatus: PostIngestProcessingSummary["processingStatus"] = statusText.includes("fail")
     ? "failed"
@@ -253,9 +282,18 @@ export function summarizePostIngestProcessing(input: {
         ? "completed"
         : "idle";
 
-  const stageBasedReadiness = computeStageBasedReadiness(counts);
-  const blockingState = inferBlockingState({ processingStatus, counts });
-  const blockingReason = inferBlockingReason({ processingStatus, counts, blockingState });
+  const stageBasedReadiness = computeStageBasedReadiness(counts, processedCount);
+  const blockingState = inferBlockingState({ processingStatus, counts, processedCount });
+  const blockingReason = inferBlockingReason({
+    processingStatus,
+    counts,
+    processedCount,
+    blockingState,
+  });
+  const telemetryCompleteness: PostIngestProcessingSummary["telemetryCompleteness"] =
+    counts.collected != null && processedCount != null && counts.activated != null
+      ? "complete"
+      : "partial";
 
   const summary: PostIngestProcessingSummary = {
     currentStage,
@@ -263,6 +301,8 @@ export function summarizePostIngestProcessing(input: {
     blockingState,
     blockingReason,
     counts,
+    processedCount,
+    telemetryCompleteness,
     readinessPct:
       stageBasedReadiness ?? (input.fallbackReadinessPct == null ? null : Math.round(input.fallbackReadinessPct)),
     readinessSource: stageBasedReadiness == null ? "upstream_fill_pct" : "stage_based",

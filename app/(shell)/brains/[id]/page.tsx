@@ -91,6 +91,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   let stats: Record<string, unknown> | null = null;
   let runs: RunView[] = [];
   let latestRunPayload: unknown = null;
+  let latestRunReportPayload: unknown = null;
 
   try {
     const [statsRes, runsRes] = await Promise.all([
@@ -117,19 +118,25 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
 
       const newestRunId = runs[0]?.id;
       if (newestRunId) {
-        const runDetailRes = await fetch(`${baseUrl}/api/runs/${newestRunId}`, {
-          cache: "no-store",
-          headers: { Accept: "application/json" },
-        });
-        if (runDetailRes.ok) {
-          latestRunPayload = await runDetailRes.json().catch(() => null);
-        }
+        const [runDetailRes, runReportRes] = await Promise.all([
+          fetch(`${baseUrl}/api/runs/${newestRunId}`, {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
+          fetch(`${baseUrl}/api/runs/${newestRunId}/report`, {
+            cache: "no-store",
+            headers: { Accept: "application/json" },
+          }),
+        ]);
+        if (runDetailRes.ok) latestRunPayload = await runDetailRes.json().catch(() => null);
+        if (runReportRes.ok) latestRunReportPayload = await runReportRes.json().catch(() => null);
       }
     }
   } catch {
     stats = null;
     runs = [];
     latestRunPayload = null;
+    latestRunReportPayload = null;
   }
 
   const totalItems = toNumber(stats?.total_items) ?? 0;
@@ -138,6 +145,8 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const fillPctRaw = toNumber(stats?.fill_pct);
   const processingSummary = summarizePostIngestProcessing({
     runPayload: latestRunPayload,
+    reportPayload: latestRunReportPayload,
+    statsPayload: stats,
     fallbackReadinessPct: fillPctRaw,
     fallbackCollectedCount: totalItems,
   });
@@ -244,6 +253,18 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               </div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Items processed</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">
+                {formatCount(processingSummary.processedCount)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Items activated</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">
+                {formatCount(processingSummary.counts.activated)}
+              </div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web items collected</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{webdocsItems.toLocaleString()}</div>
             </div>
@@ -263,6 +284,10 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
             <div className="rounded-lg border border-cyan-200/25 bg-cyan-300/5 p-2 sm:col-span-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-cyan-100/80">Post-ingest processing</div>
               <div className="mt-1 grid gap-1 text-[11px] text-slate-200">
+                <div className="flex items-center justify-between">
+                  <span>Telemetry</span>
+                  <span className="font-medium text-cyan-100">{processingSummary.telemetryCompleteness}</span>
+                </div>
                 <div className="flex items-center justify-between">
                   <span>Processing status</span>
                   <span className="font-medium text-cyan-100">{processingSummary.processingStatus}</span>
@@ -290,6 +315,10 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                 <div className="flex items-center justify-between">
                   <span>Items Activated</span>
                   <span>{formatCount(processingSummary.counts.activated)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span>Items Processed</span>
+                  <span>{formatCount(processingSummary.processedCount)}</span>
                 </div>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 text-[11px] text-slate-300">
