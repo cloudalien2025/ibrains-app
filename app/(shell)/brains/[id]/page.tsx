@@ -222,16 +222,16 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
 
             <div className="relative mt-3 flex justify-center">
               <div className="relative h-52 w-32">
-                <div className="absolute bottom-0 left-2 right-2 top-2 rounded-[999px] border border-cyan-200/35 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(34,211,238,0.22),0_0_20px_rgba(34,211,238,0.14)]" />
-                <div className="absolute bottom-3 left-4 right-4 top-4 overflow-hidden rounded-[999px] border border-cyan-200/15">
-                  <div className="absolute inset-0 bg-gradient-to-b from-cyan-100/10 via-cyan-100/3 to-transparent" />
+                <div className="absolute bottom-0 left-2 right-2 top-2 rounded-[999px] border border-emerald-200/30 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(80,255,170,0.2),0_0_20px_rgba(80,255,170,0.12)]" />
+                <div className="absolute bottom-3 left-4 right-4 top-4 overflow-hidden rounded-[999px] border border-emerald-200/15">
+                  <div className="absolute inset-0 bg-gradient-to-b from-emerald-100/10 via-emerald-100/3 to-transparent" />
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-cyan-200/30 bg-gradient-to-t from-cyan-300/45 via-cyan-300/25 to-cyan-100/25 shadow-[0_0_28px_rgba(34,211,238,0.45)]"
+                    className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-emerald-200/30 bg-gradient-to-t from-[#32D583]/46 via-[#32D583]/28 to-[#6CFFB2]/24 shadow-[0_0_28px_rgba(80,255,170,0.35)]"
                     style={{ height: `${cylinderFillHeight}%`, opacity: cylinderGlowOpacity }}
                   />
-                  <div className="absolute inset-x-0 top-4 h-16 bg-gradient-to-b from-cyan-200/15 to-transparent" />
+                  <div className="absolute inset-x-0 top-4 h-16 bg-gradient-to-b from-emerald-200/14 to-transparent" />
                 </div>
-                <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-cyan-300/20 blur-md" />
+                <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-[#32D583]/22 blur-md" />
               </div>
             </div>
           </div>
