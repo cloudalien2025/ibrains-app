@@ -54,3 +54,83 @@ body {
   mask-image: radial-gradient(circle at 50% 30%, rgba(0, 0, 0, 0.9), transparent 70%);
   opacity: 0.5;
 }
+
+/* Signal reservoir fluid animation */
+@keyframes cylinder-fluid-drift {
+  0%,
+  100% {
+    background-position: 50% 100%;
+  }
+  50% {
+    background-position: 50% 0%;
+  }
+}
+
+@keyframes cylinder-fluid-breathe {
+  0%,
+  100% {
+    transform: translateY(0) scaleY(1);
+  }
+  50% {
+    transform: translateY(-1px) scaleY(1.015);
+  }
+}
+
+@keyframes cylinder-surface-sway {
+  0%,
+  100% {
+    transform: translateX(-8%);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateX(8%);
+    opacity: 0.8;
+  }
+}
+
+@keyframes cylinder-inner-shimmer {
+  0%,
+  100% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 0.92;
+  }
+}
+
+@keyframes cylinder-glow-breathe {
+  0%,
+  100% {
+    opacity: calc(0.52 + var(--signal-strength, 0.75) * 0.18);
+    transform: scale(1);
+  }
+  50% {
+    opacity: calc(0.62 + var(--signal-strength, 0.75) * 0.22);
+    transform: scale(1.035);
+  }
+}
+
+.cylinder-signal-fill {
+  background-size: 100% 180%;
+  transform-origin: bottom center;
+  will-change: transform, background-position;
+  animation:
+    cylinder-fluid-drift 18s ease-in-out infinite,
+    cylinder-fluid-breathe 7.5s ease-in-out infinite;
+}
+
+.cylinder-signal-surface {
+  will-change: transform, opacity;
+  animation: cylinder-surface-sway 8.5s ease-in-out infinite;
+}
+
+.cylinder-signal-inner {
+  will-change: opacity;
+  animation: cylinder-inner-shimmer 12s ease-in-out infinite;
+}
+
+.cylinder-signal-glow {
+  transform-origin: center;
+  will-change: opacity, transform;
+  animation: cylinder-glow-breathe 6.8s ease-in-out infinite;
+}

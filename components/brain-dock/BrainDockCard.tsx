@@ -29,6 +29,7 @@ export default function BrainDockCard({
   const hasReadiness = typeof readinessPct === "number" && Number.isFinite(readinessPct);
   const clampedReadiness = hasReadiness ? Math.max(0, Math.min(100, readinessPct)) : 0;
   const readinessHeight = `${clampedReadiness}%`;
+  const signalStrength = 0.55 + (clampedReadiness / 100) * 0.45;
   const displayReadiness = hasReadiness ? `${Math.round(clampedReadiness)}%` : "N/A";
   const totalItemsLabel =
     typeof totalItems === "number" && Number.isFinite(totalItems)
@@ -84,10 +85,41 @@ export default function BrainDockCard({
         </div>
         <div className="mt-3 flex items-end gap-3">
           <div className="relative h-16 w-10 overflow-hidden rounded-[999px] border border-cyan-200/30 bg-slate-900/80 p-1.5 shadow-[inset_0_0_16px_rgba(34,211,238,0.2)]">
-            <div className="absolute inset-x-1.5 top-1.5 h-1.5 rounded-full bg-cyan-100/35 blur-[1px]" />
             <div
-              className="absolute bottom-1.5 left-1.5 right-1.5 rounded-[999px] border border-cyan-200/25 bg-cyan-300/20 shadow-[0_0_10px_rgba(34,211,238,0.28)]"
-              style={{ height: readinessHeight }}
+              className="absolute inset-x-1.5 top-1.5 h-1.5 rounded-full blur-[1px]"
+              style={{
+                background:
+                  "linear-gradient(to right, rgba(176,255,215,0.15), rgba(176,255,215,0.35), rgba(176,255,215,0.15))",
+              }}
+            />
+            <div
+              className="cylinder-signal-inner absolute inset-x-1.5 bottom-1.5 top-1.5 rounded-[999px]"
+              style={{
+                background:
+                  "linear-gradient(to bottom, rgba(108,255,178,0.12) 0%, rgba(108,255,178,0.04) 42%, rgba(108,255,178,0) 100%)",
+              }}
+            />
+            <div
+              className="cylinder-signal-fill absolute bottom-1.5 left-1.5 right-1.5 overflow-hidden rounded-[999px] border border-emerald-200/25"
+              style={{
+                height: readinessHeight,
+                ["--signal-strength" as string]: signalStrength,
+                background:
+                  "linear-gradient(to top, rgba(50,213,131,0.35) 0%, rgba(74,236,154,0.24) 54%, rgba(108,255,178,0.15) 100%)",
+                boxShadow: "0 0 40px rgba(80,255,170,0.35)",
+              }}
+            >
+              <div
+                className="cylinder-signal-surface absolute inset-x-0 top-0 h-2"
+                style={{
+                  background:
+                    "linear-gradient(to right, rgba(176,255,215,0), rgba(176,255,215,0.35), rgba(176,255,215,0))",
+                }}
+              />
+            </div>
+            <div
+              className="cylinder-signal-glow absolute inset-x-2 bottom-1.5 h-2.5 rounded-full bg-[rgba(80,255,170,0.24)] blur-sm"
+              style={{ ["--signal-strength" as string]: signalStrength }}
             />
           </div>
           <div className="space-y-1 text-xs">
