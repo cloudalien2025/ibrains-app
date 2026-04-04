@@ -224,14 +224,32 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               <div className="relative h-52 w-32">
                 <div className="absolute bottom-0 left-2 right-2 top-2 rounded-[999px] border border-emerald-200/30 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(80,255,170,0.2),0_0_20px_rgba(80,255,170,0.12)]" />
                 <div className="absolute bottom-3 left-4 right-4 top-4 overflow-hidden rounded-[999px] border border-emerald-200/15">
-                  <div className="absolute inset-0 bg-gradient-to-b from-emerald-100/10 via-emerald-100/3 to-transparent" />
                   <div
-                    className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-emerald-200/30 bg-gradient-to-t from-[#32D583]/46 via-[#32D583]/28 to-[#6CFFB2]/24 shadow-[0_0_28px_rgba(80,255,170,0.35)]"
-                    style={{ height: `${cylinderFillHeight}%`, opacity: cylinderGlowOpacity }}
+                    className="absolute inset-0"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom, rgba(108,255,178,0.12) 0%, rgba(108,255,178,0.04) 42%, rgba(108,255,178,0) 100%)",
+                    }}
                   />
-                  <div className="absolute inset-x-0 top-4 h-16 bg-gradient-to-b from-emerald-200/14 to-transparent" />
+                  <div
+                    className="absolute bottom-0 left-0 right-0 rounded-[999px] border border-emerald-200/30"
+                    style={{
+                      height: `${cylinderFillHeight}%`,
+                      opacity: cylinderGlowOpacity,
+                      background:
+                        "linear-gradient(to top, rgba(50,213,131,0.35) 0%, rgba(74,236,154,0.24) 54%, rgba(108,255,178,0.15) 100%)",
+                      boxShadow: "0 0 40px rgba(80,255,170,0.35)",
+                    }}
+                  />
+                  <div
+                    className="absolute inset-x-0 top-4 h-16"
+                    style={{
+                      background:
+                        "linear-gradient(to bottom, rgba(176,255,215,0.18) 0%, rgba(176,255,215,0) 100%)",
+                    }}
+                  />
                 </div>
-                <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-[#32D583]/22 blur-md" />
+                <div className="absolute inset-x-4 bottom-2 h-5 rounded-full bg-[rgba(80,255,170,0.24)] blur-md" />
               </div>
             </div>
           </div>
