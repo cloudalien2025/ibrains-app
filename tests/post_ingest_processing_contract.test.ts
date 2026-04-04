@@ -109,4 +109,56 @@ describe("summarizePostIngestProcessing", () => {
     expect(summary.readinessPct).toBeGreaterThan(0);
     expect(summary.blockingState).toBe("Ready for Use");
   });
+
+  it("uses nested report summary telemetry before falling back to awaiting state", () => {
+    const summary = summarizePostIngestProcessing({
+      runPayload: {
+        status: "completed",
+      },
+      reportPayload: {
+        summary: {
+          processing_status: "processing",
+          current_stage: "activation",
+          candidates_found: 10,
+          items_processed: 7,
+          items_activated: 2,
+        },
+      },
+      fallbackReadinessPct: 0,
+      fallbackCollectedCount: 0,
+    });
+
+    expect(summary.processingStatus).toBe("processing");
+    expect(summary.currentStage).toBe("ACTIVATED");
+    expect(summary.counts.collected).toBe(10);
+    expect(summary.processedCount).toBe(7);
+    expect(summary.counts.activated).toBe(2);
+    expect(summary.readinessSource).toBe("stage_based");
+    expect(summary.blockingState).toBe("Ready for Use");
+    expect(summary.readinessPct).toBeGreaterThan(20);
+  });
+
+  it("uses nested report counters for processed/activated progress", () => {
+    const summary = summarizePostIngestProcessing({
+      runPayload: {
+        status: "completed",
+      },
+      reportPayload: {
+        counters: {
+          candidates_found: 12,
+          items_processed: 9,
+          items_activated: 0,
+        },
+      },
+      fallbackReadinessPct: 3,
+      fallbackCollectedCount: 0,
+    });
+
+    expect(summary.counts.collected).toBe(12);
+    expect(summary.processedCount).toBe(9);
+    expect(summary.counts.activated).toBe(0);
+    expect(summary.blockingState).toBe("Needs Activation");
+    expect(summary.readinessSource).toBe("stage_based");
+    expect(summary.readinessPct).toBeGreaterThan(20);
+  });
 });
