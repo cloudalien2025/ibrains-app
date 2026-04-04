@@ -115,22 +115,66 @@ body {
   transform-origin: bottom center;
   will-change: transform, background-position;
   animation:
-    cylinder-fluid-drift 18s ease-in-out infinite,
-    cylinder-fluid-breathe 7.5s ease-in-out infinite;
+    cylinder-fluid-drift var(--cyl-drift-duration, 18s) ease-in-out infinite,
+    cylinder-fluid-breathe var(--cyl-breathe-duration, 7.5s) ease-in-out infinite;
 }
 
 .cylinder-signal-surface {
   will-change: transform, opacity;
   animation: cylinder-surface-sway 8.5s ease-in-out infinite;
+  opacity: calc(0.78 * var(--cyl-surface-boost, 1));
 }
 
 .cylinder-signal-inner {
   will-change: opacity;
   animation: cylinder-inner-shimmer 12s ease-in-out infinite;
+  opacity: calc(0.88 * var(--cyl-shimmer-boost, 1));
 }
 
 .cylinder-signal-glow {
   transform-origin: center;
   will-change: opacity, transform;
   animation: cylinder-glow-breathe 6.8s ease-in-out infinite;
+  opacity: calc(0.84 * var(--cyl-pool-boost, 1));
+}
+
+@keyframes cylinder-meniscus-flow {
+  0%,
+  100% {
+    transform: translateX(-10%);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateX(10%);
+    opacity: 0.72;
+  }
+}
+
+.cylinder-signal-meniscus {
+  border-top: 1px solid rgba(176, 255, 215, 0.42);
+  background: linear-gradient(
+    to bottom,
+    rgba(176, 255, 215, 0.22) 0%,
+    rgba(176, 255, 215, 0.08) 45%,
+    rgba(176, 255, 215, 0) 100%
+  );
+  animation: cylinder-meniscus-flow calc(var(--cyl-drift-duration, 18s) * 0.78) ease-in-out infinite;
+}
+
+.cylinder-state-telemetry_absent .cylinder-signal-meniscus {
+  opacity: 0.52;
+}
+
+.cylinder-state-collected_only .cylinder-signal-meniscus {
+  opacity: 0.68;
+}
+
+.cylinder-state-processed_not_activated .cylinder-signal-meniscus {
+  opacity: 0.88;
+  border-top-color: rgba(200, 255, 228, 0.56);
+}
+
+.cylinder-state-activated .cylinder-signal-meniscus {
+  opacity: 1;
+  border-top-color: rgba(212, 255, 235, 0.72);
 }

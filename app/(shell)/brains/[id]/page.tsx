@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import type { CSSProperties } from "react";
 import { brainCatalogById, isBrainId, type BrainId } from "@/lib/brains/brainCatalog";
+import { deriveCylinderVisualState } from "@/lib/brains/cylinderVisualState";
 import {
   type MissionControlRunView as RunView,
   selectRunsForBrain,
@@ -117,9 +119,21 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const missionTitle = brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
   const nextAction = `Next: ${processingSummary.nextStep}`;
   const readinessPctRounded = Math.round(readinessPct);
-  const cylinderFillHeight = Math.max(6, Math.round(readinessPct * 0.82));
-  const cylinderGlowOpacity = 0.22 + (readinessPct / 100) * 0.35;
-  const cylinderSignalStrength = 0.55 + (readinessPct / 100) * 0.45;
+  const cylinderVisualState = deriveCylinderVisualState({
+    collected: processingSummary.counts.collected,
+    normalized: processingSummary.counts.normalized,
+    classified: processingSummary.counts.classified,
+    summarized: processingSummary.counts.summarized,
+    processedCount: processingSummary.processedCount,
+    activated: processingSummary.counts.activated,
+  });
+  const baseFillHeight = Math.round(readinessPct * 0.82 * cylinderVisualState.fillMultiplier);
+  const cylinderFillHeight = Math.max(cylinderVisualState.minFillPct, baseFillHeight);
+  const cylinderGlowOpacity = (0.22 + (readinessPct / 100) * 0.35) * cylinderVisualState.glowBoost;
+  const cylinderSignalStrength = (0.55 + (readinessPct / 100) * 0.45) * cylinderVisualState.signalBoost;
+  const cylinderFillShadow = `0 0 ${Math.round(34 * cylinderVisualState.glowBoost)}px rgba(80,255,170,${(
+    0.22 + cylinderVisualState.glowBoost * 0.13
+  ).toFixed(2)})`;
 
   const initialAction = (await searchParams)?.action;
 
@@ -179,7 +193,18 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
             </div>
 
             <div className="relative mt-3 flex justify-center">
-              <div className="relative h-52 w-32">
+              <div
+                className={`relative h-52 w-32 cylinder-state-${cylinderVisualState.stage}`}
+                style={
+                  {
+                    ["--cyl-drift-duration" as string]: `${cylinderVisualState.driftDurationSec}s`,
+                    ["--cyl-breathe-duration" as string]: `${cylinderVisualState.breatheDurationSec}s`,
+                    ["--cyl-surface-boost" as string]: cylinderVisualState.surfaceBoost,
+                    ["--cyl-shimmer-boost" as string]: cylinderVisualState.shimmerBoost,
+                    ["--cyl-pool-boost" as string]: cylinderVisualState.poolBoost,
+                  } as CSSProperties
+                }
+              >
                 <div className="absolute bottom-0 left-2 right-2 top-2 rounded-[999px] border border-emerald-200/30 bg-slate-950/70 shadow-[inset_0_0_22px_rgba(80,255,170,0.2),0_0_20px_rgba(80,255,170,0.12)]" />
                 <div className="absolute bottom-3 left-4 right-4 top-4 overflow-hidden rounded-[999px] border border-emerald-200/15">
                   <div
@@ -197,7 +222,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                       ["--signal-strength" as string]: cylinderSignalStrength,
                       background:
                         "linear-gradient(to top, rgba(50,213,131,0.35) 0%, rgba(74,236,154,0.24) 54%, rgba(108,255,178,0.15) 100%)",
-                      boxShadow: "0 0 40px rgba(80,255,170,0.35)",
+                      boxShadow: cylinderFillShadow,
                     }}
                   >
                     <div
@@ -207,6 +232,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                           "linear-gradient(to right, rgba(176,255,215,0), rgba(176,255,215,0.35), rgba(176,255,215,0))",
                       }}
                     />
+                    <div className="cylinder-signal-meniscus absolute inset-x-0 top-0 h-5" />
                   </div>
                   <div
                     className="cylinder-signal-inner absolute inset-x-0 top-4 h-16"
