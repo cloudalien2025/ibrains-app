@@ -25,6 +25,13 @@ export type PostIngestProcessingCounts = {
 export type PostIngestProcessingSummary = {
   currentStage: DirectoryIQPostIngestStage;
   processingStatus: "idle" | "processing" | "completed" | "failed";
+  blockingState:
+    | "Needs Collection"
+    | "Needs Processing"
+    | "Needs Activation"
+    | "Ready for Use"
+    | "Awaiting Processing Signal";
+  blockingReason: string;
   nextStep: string;
   counts: PostIngestProcessingCounts;
   readinessPct: number | null;
@@ -125,28 +132,85 @@ function computeStageBasedReadiness(counts: PostIngestProcessingCounts): number 
   return 10;
 }
 
-function inferNextStep(summary: {
+function inferBlockingState(summary: {
   processingStatus: "idle" | "processing" | "completed" | "failed";
   counts: PostIngestProcessingCounts;
+}): PostIngestProcessingSummary["blockingState"] {
+  const collected = summary.counts.collected;
+  const activated = summary.counts.activated;
+  const processedCount = Math.max(
+    summary.counts.normalized ?? 0,
+    summary.counts.classified ?? 0,
+    summary.counts.summarized ?? 0
+  );
+  const hasProcessingTelemetry =
+    summary.counts.normalized != null ||
+    summary.counts.classified != null ||
+    summary.counts.summarized != null ||
+    summary.counts.activated != null;
+
+  if (collected == null) return "Awaiting Processing Signal";
+  if (collected <= 0) return "Needs Collection";
+  if ((activated ?? 0) > 0) return "Ready for Use";
+  if (processedCount > 0) return "Needs Activation";
+  if (summary.processingStatus === "processing") return "Needs Processing";
+  if (!hasProcessingTelemetry) return "Awaiting Processing Signal";
+  return "Needs Processing";
+}
+
+function inferBlockingReason(summary: {
+  processingStatus: "idle" | "processing" | "completed" | "failed";
+  counts: PostIngestProcessingCounts;
+  blockingState: PostIngestProcessingSummary["blockingState"];
+}): string {
+  if (summary.processingStatus === "failed") {
+    return "Recent processing failed, so readiness cannot advance.";
+  }
+
+  switch (summary.blockingState) {
+    case "Needs Collection":
+      return "No collected items are available yet.";
+    case "Needs Processing":
+      return "Items are collected but not yet processed into usable knowledge.";
+    case "Needs Activation":
+      return "Items are processed, but activation for retrieval is not complete.";
+    case "Ready for Use":
+      return "Activated knowledge is available for retrieval and answer workflows.";
+    case "Awaiting Processing Signal":
+      return "Readiness is waiting for upstream processing telemetry.";
+    default:
+      return "Readiness is waiting for updated processing state.";
+  }
+}
+
+function inferNextStep(summary: {
+  processingStatus: "idle" | "processing" | "completed" | "failed";
+  blockingState: PostIngestProcessingSummary["blockingState"];
 }): string {
   if (summary.processingStatus === "failed") {
     return "Review failed runs and retry processing.";
   }
-  if (summary.processingStatus === "processing") {
-    return "Continue processing to move items toward activation.";
+
+  switch (summary.blockingState) {
+    case "Needs Collection":
+      return "Run discovery to collect new knowledge.";
+    case "Needs Processing":
+      return "Run processing to normalize and classify collected items.";
+    case "Needs Activation":
+      return "Complete activation so processed items become usable.";
+    case "Ready for Use":
+      return "Run retrieval or answer tests on activated knowledge.";
+    case "Awaiting Processing Signal":
+      return "Run a fresh ingest or processing cycle to refresh readiness telemetry.";
+    default:
+      return "Continue the next ingest cycle.";
   }
-  if ((summary.counts.activated ?? 0) > 0) {
-    return "Run retrieval or answer tests on activated knowledge.";
-  }
-  if ((summary.counts.collected ?? 0) > 0) {
-    return "Advance normalized/classified items to activation.";
-  }
-  return "Run discovery to collect new knowledge.";
 }
 
 export function summarizePostIngestProcessing(input: {
   runPayload: unknown;
   fallbackReadinessPct: number | null;
+  fallbackCollectedCount?: number | null;
 }): PostIngestProcessingSummary {
   const run = asRecord(input.runPayload);
   const counters = asRecord(run.counters);
@@ -173,7 +237,7 @@ export function summarizePostIngestProcessing(input: {
       "ingested",
       "ingested_count",
       "total_ingested",
-    ]),
+    ]) ?? (input.fallbackCollectedCount == null ? null : Math.max(0, Math.round(input.fallbackCollectedCount))),
     normalized: normalizeItem(combined),
     classified: classifyItem(combined),
     summarized: summarizeItem(combined),
@@ -190,10 +254,14 @@ export function summarizePostIngestProcessing(input: {
         : "idle";
 
   const stageBasedReadiness = computeStageBasedReadiness(counts);
+  const blockingState = inferBlockingState({ processingStatus, counts });
+  const blockingReason = inferBlockingReason({ processingStatus, counts, blockingState });
 
   const summary: PostIngestProcessingSummary = {
     currentStage,
     processingStatus,
+    blockingState,
+    blockingReason,
     counts,
     readinessPct:
       stageBasedReadiness ?? (input.fallbackReadinessPct == null ? null : Math.round(input.fallbackReadinessPct)),
