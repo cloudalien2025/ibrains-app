@@ -161,4 +161,35 @@ describe("summarizePostIngestProcessing", () => {
     expect(summary.readinessSource).toBe("stage_based");
     expect(summary.readinessPct).toBeGreaterThan(20);
   });
+
+  it("derives numeric processed and activated values from live-equivalent top-level run/report payload", () => {
+    const summary = summarizePostIngestProcessing({
+      runPayload: {
+        run_id: "run_20260404_042817_brilliant_directories",
+        status: "completed",
+        step: "completed",
+        candidates_found: 14,
+        selected_new: 7,
+        completed: 1,
+        failed: 6,
+      },
+      reportPayload: {
+        run_id: "run_20260404_042817_brilliant_directories",
+        status: "completed",
+        candidates_found: 14,
+        selected_new: 7,
+        ingested_new: 0,
+        transcripts_succeeded: 0,
+        transcripts_failed: 0,
+      },
+      fallbackReadinessPct: 14,
+      fallbackCollectedCount: 70,
+    });
+
+    expect(summary.counts.collected).toBe(14);
+    expect(summary.processedCount).toBe(1);
+    expect(summary.counts.activated).toBe(0);
+    expect(summary.blockingState).toBe("Needs Activation");
+    expect(summary.readinessSource).toBe("stage_based");
+  });
 });

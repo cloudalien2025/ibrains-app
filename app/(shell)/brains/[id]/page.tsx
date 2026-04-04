@@ -2,19 +2,16 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { brainCatalogById, isBrainId, type BrainId } from "@/lib/brains/brainCatalog";
+import {
+  type MissionControlRunView as RunView,
+  selectRunsForBrain,
+} from "@/lib/brains/missionControlRunSelection";
 import { summarizePostIngestProcessing } from "@/lib/brains/postIngestProcessingContract";
 import BrainConsoleActions from "./_components/BrainConsoleActions";
 
 type BrainDetailProps = {
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ action?: string }>;
-};
-
-type RunView = {
-  id: string;
-  brainId?: string | null;
-  status?: string | null;
-  startedAt?: string | null;
 };
 
 function toNumber(value: unknown): number | null {
@@ -24,43 +21,6 @@ function toNumber(value: unknown): number | null {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
-}
-
-function resolveRuns(payload: unknown): Record<string, unknown>[] {
-  if (Array.isArray(payload)) return payload as Record<string, unknown>[];
-  if (payload && typeof payload === "object") {
-    const candidate = payload as Record<string, unknown>;
-    const list =
-      (candidate.runs as unknown[]) ||
-      (candidate.items as unknown[]) ||
-      (candidate.data as unknown[]) ||
-      [];
-    if (Array.isArray(list)) return list as Record<string, unknown>[];
-  }
-  return [];
-}
-
-function normalizeRun(run: Record<string, unknown>): RunView {
-  const id =
-    String(
-      run.run_id ?? run.id ?? run.runId ?? run.job_id ?? run.jobId ?? "unknown_run"
-    ) || "unknown_run";
-  const brainId =
-    (run.brain_id as string | undefined) ??
-    (run.brainId as string | undefined) ??
-    (run.brain as string | undefined) ??
-    null;
-  const status =
-    (run.status as string | undefined) ??
-    (run.state as string | undefined) ??
-    (run.phase as string | undefined) ??
-    null;
-  const startedAt =
-    (run.started_at as string | undefined) ??
-    (run.created_at as string | undefined) ??
-    (run.startedAt as string | undefined) ??
-    null;
-  return { id, brainId, status, startedAt };
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -111,10 +71,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
 
     if (runsRes.ok) {
       const payload = await runsRes.json().catch(() => null);
-      runs = resolveRuns(payload)
-        .map(normalizeRun)
-        .filter((run) => run.brainId === brainId)
-        .slice(0, 6);
+      runs = selectRunsForBrain(payload, brainId, 6);
 
       const newestRunId = runs[0]?.id;
       if (newestRunId) {
