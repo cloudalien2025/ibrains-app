@@ -2,6 +2,11 @@
 
 import { useMemo, useState } from "react";
 import { FileUp, Globe, Radar, Search, Sparkles, Video } from "lucide-react";
+import {
+  buildYoutubeIngestRequest,
+  clampYoutubeRequestedVideos,
+  type YoutubeIngestMode,
+} from "@/lib/directoryiq/ingestion/youtubeContracts";
 
 type ConsoleAction = "retrieval" | "answer";
 type SourceMode = "web_search" | "website_url" | "document_upload" | "youtube";
@@ -26,6 +31,7 @@ type IngestSummary = {
   sourceType: SourceMode;
   requestedMaxResults: number | null;
   candidatesFound: number | null;
+  selectedForIngest: number | null;
   newItemsAdded: number | null;
   duplicatesSkipped: number | null;
   updatedItems: number | null;
@@ -129,15 +135,35 @@ function normalizeIngestSummary(
     ...counters,
   };
 
+  const candidatesFound = pickNumber(combined, ["candidates_found", "candidatesFound"]);
+  const selectedForIngest = pickNumber(combined, ["selected_new", "selectedNew"]);
+  const duplicatesReported = pickNumber(combined, ["duplicates_skipped", "duplicatesSkipped", "already_known"]);
+  const derivedDuplicates =
+    duplicatesReported == null && candidatesFound != null && selectedForIngest != null
+      ? Math.max(0, candidatesFound - selectedForIngest)
+      : duplicatesReported;
+
   return {
     sourceType,
     requestedMaxResults,
-    candidatesFound: pickNumber(combined, ["candidates_found", "candidatesFound"]),
-    newItemsAdded: pickNumber(combined, ["new_items_added", "newItemsAdded", "added_this_run"]),
-    duplicatesSkipped: pickNumber(combined, ["duplicates_skipped", "duplicatesSkipped", "already_known"]),
+    candidatesFound,
+    selectedForIngest,
+    newItemsAdded: pickNumber(combined, [
+      "new_items_added",
+      "newItemsAdded",
+      "added_this_run",
+      "items_succeeded_total",
+      "completed",
+    ]),
+    duplicatesSkipped: derivedDuplicates,
     updatedItems: pickNumber(combined, ["updated_items", "updatedItems"]),
     versionedItems: pickNumber(combined, ["versioned_items", "versionedItems"]),
-    eligibleForProcessing: pickNumber(combined, ["eligible_for_processing", "eligibleForProcessing"]),
+    eligibleForProcessing: pickNumber(combined, [
+      "eligible_for_processing",
+      "eligibleForProcessing",
+      "eligible_count",
+      "items_succeeded_total",
+    ]),
     failedItems: pickNumber(combined, ["failed_items", "failedItems"]),
     sourceTotals: pickTotals(payload),
   };
@@ -166,6 +192,9 @@ export default function BrainConsoleActions({
   const [websiteUrl, setWebsiteUrl] = useState("");
   const [websiteMaxPages, setWebsiteMaxPages] = useState(5);
   const [websiteCrawlDepth, setWebsiteCrawlDepth] = useState(0);
+  const [youtubeMode, setYoutubeMode] = useState<YoutubeIngestMode>("keyword");
+  const [youtubeKeyword, setYoutubeKeyword] = useState(brainName);
+  const [youtubeRequestedVideos, setYoutubeRequestedVideos] = useState(10);
   const [youtubeUrl, setYoutubeUrl] = useState("");
   const [documentTitle, setDocumentTitle] = useState("");
   const [documentFile, setDocumentFile] = useState<File | null>(null);
@@ -197,6 +226,10 @@ export default function BrainConsoleActions({
       return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -H "Content-Type: application/json" -d '{"source_type":"website_url","url":"${websiteUrl.replace(/"/g, '\\"')}","max_pages":${websiteMaxPages},"crawl_depth":${websiteCrawlDepth}}'`;
     }
     if (sourceMode === "youtube") {
+      if (youtubeMode === "keyword") {
+        const requested = clampYoutubeRequestedVideos(youtubeRequestedVideos);
+        return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -H "Content-Type: application/json" -d '{"keyword":"${youtubeKeyword.replace(/"/g, '\\"')}","selected_new":${requested},"n_new_videos":${requested},"youtube_requested_new":${requested},"max_candidates":${requested},"youtube_max_candidates":${requested},"mode":"audio_first"}'`;
+      }
       return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -H "Content-Type: application/json" -d '{"source_type":"youtube","url":"${youtubeUrl.replace(/"/g, '\\"')}"}'`;
     }
     return `curl -X POST http://127.0.0.1:3001/api/brains/${brainId}/ingest -F 'source_type=document_upload' -F 'title=${documentTitle.replace(/'/g, "")}' -F 'file=@/path/to/file.txt'`;
@@ -209,6 +242,9 @@ export default function BrainConsoleActions({
     websiteCrawlDepth,
     websiteMaxPages,
     websiteUrl,
+    youtubeKeyword,
+    youtubeMode,
+    youtubeRequestedVideos,
     youtubeUrl,
   ]);
 
@@ -264,24 +300,40 @@ export default function BrainConsoleActions({
           }),
         });
       } else if (sourceMode === "youtube") {
-        const trimmedUrl = youtubeUrl.trim();
-        if (!trimmedUrl) {
-          setResult({
-            status: "error",
-            title: "YouTube URL required",
-            message: "Enter a YouTube URL before running ingest.",
-          });
-          return;
+        if (youtubeMode === "keyword") {
+          const keyword = youtubeKeyword.trim();
+          if (!keyword) {
+            setResult({
+              status: "error",
+              title: "Keyword required",
+              message: "Enter a keyword before running YouTube discovery ingest.",
+            });
+            return;
+          }
+          requestedMaxResults = clampYoutubeRequestedVideos(youtubeRequestedVideos);
+        } else {
+          const trimmedUrl = youtubeUrl.trim();
+          if (!trimmedUrl) {
+            setResult({
+              status: "error",
+              title: "YouTube URL required",
+              message: "Enter a YouTube URL before running ingest.",
+            });
+            return;
+          }
+          requestedMaxResults = 1;
         }
-
-        requestedMaxResults = 1;
         res = await fetch(`/api/brains/${brainId}/ingest`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            source_type: "youtube",
-            url: trimmedUrl,
-          }),
+          body: JSON.stringify(
+            buildYoutubeIngestRequest({
+              mode: youtubeMode,
+              keyword: youtubeKeyword,
+              requestedVideos: youtubeRequestedVideos,
+              url: youtubeUrl,
+            })
+          ),
         });
       } else {
         if (!documentFile) {
@@ -326,6 +378,7 @@ export default function BrainConsoleActions({
         title: "Ingest run complete",
         message:
           `${ingestSummary.candidatesFound ?? 0} candidates found. ` +
+          `${ingestSummary.selectedForIngest ?? 0} selected for ingest. ` +
           `${ingestSummary.newItemsAdded ?? 0} new items added. ` +
           `${ingestSummary.duplicatesSkipped ?? 0} unchanged skipped. ` +
           `${ingestSummary.updatedItems ?? 0} updated. ` +
@@ -592,28 +645,100 @@ export default function BrainConsoleActions({
       ) : null}
 
       {sourceMode === "youtube" ? (
-        <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-          <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
-            YouTube URL
-            <input
-              type="url"
-              value={youtubeUrl}
-              onChange={(event) => setYoutubeUrl(event.target.value)}
-              placeholder="https://www.youtube.com/watch?v=..."
-              className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
-            />
-          </label>
-          <div className="flex items-end">
+        <div className="space-y-3">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={runDiscovery}
-              disabled={isRunningDiscovery}
-              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/45 bg-emerald-400/20 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-60"
+              onClick={() => setYoutubeMode("keyword")}
+              aria-pressed={youtubeMode === "keyword"}
+              className={`rounded-full border px-3 py-1 text-xs transition ${
+                youtubeMode === "keyword"
+                  ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
+                  : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+              }`}
             >
-              <Video className="h-4 w-4" />
-              {isRunningDiscovery ? "Running ingest..." : "Run Ingest"}
+              Keyword discovery
+            </button>
+            <button
+              type="button"
+              onClick={() => setYoutubeMode("direct_url")}
+              aria-pressed={youtubeMode === "direct_url"}
+              className={`rounded-full border px-3 py-1 text-xs transition ${
+                youtubeMode === "direct_url"
+                  ? "border-cyan-300/45 bg-cyan-400/20 text-cyan-100"
+                  : "border-white/10 bg-white/5 text-slate-200 hover:bg-white/10"
+              }`}
+            >
+              Direct video URL
             </button>
           </div>
+
+          {youtubeMode === "keyword" ? (
+            <div className="grid gap-3 md:grid-cols-[1fr_160px_auto]">
+              <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                YouTube keyword
+                <input
+                  type="text"
+                  value={youtubeKeyword}
+                  onChange={(event) => setYoutubeKeyword(event.target.value)}
+                  placeholder="e.g. brilliant directories SEO"
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+                <span className="mt-1 block text-[11px] normal-case tracking-normal text-slate-400">
+                  Discovers and ingests multiple YouTube videos using the worker discovery path.
+                </span>
+              </label>
+              <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                Videos to ingest
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={youtubeRequestedVideos}
+                  onChange={(event) => setYoutubeRequestedVideos(clampYoutubeRequestedVideos(Number(event.target.value)))}
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={runDiscovery}
+                  disabled={isRunningDiscovery}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/45 bg-emerald-400/20 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-60"
+                >
+                  <Video className="h-4 w-4" />
+                  {isRunningDiscovery ? "Running ingest..." : "Run Ingest"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+              <label className="block text-[11px] uppercase tracking-[0.16em] text-slate-400">
+                YouTube URL
+                <input
+                  type="url"
+                  value={youtubeUrl}
+                  onChange={(event) => setYoutubeUrl(event.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  className="mt-2 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
+                />
+                <span className="mt-1 block text-[11px] normal-case tracking-normal text-slate-400">
+                  Ingests one specific YouTube video URL.
+                </span>
+              </label>
+              <div className="flex items-end">
+                <button
+                  type="button"
+                  onClick={runDiscovery}
+                  disabled={isRunningDiscovery}
+                  className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-300/45 bg-emerald-400/20 px-4 py-2.5 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-400/30 disabled:opacity-60"
+                >
+                  <Video className="h-4 w-4" />
+                  {isRunningDiscovery ? "Running ingest..." : "Run Ingest"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
 
@@ -730,6 +855,10 @@ export default function BrainConsoleActions({
               <div className="rounded-xl border border-white/10 bg-black/25 p-2">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Candidates found</div>
                 <div className="mt-0.5 text-xs text-slate-100">{formatMaybe(result.ingestSummary.candidatesFound)}</div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/25 p-2">
+                <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Selected for ingest</div>
+                <div className="mt-0.5 text-xs text-slate-100">{formatMaybe(result.ingestSummary.selectedForIngest)}</div>
               </div>
               <div className="rounded-xl border border-white/10 bg-black/25 p-2">
                 <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">New items added</div>
