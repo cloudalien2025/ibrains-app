@@ -139,26 +139,17 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const processingSummary = summarizePostIngestProcessing({
     runPayload: latestRunPayload,
     fallbackReadinessPct: fillPctRaw,
+    fallbackCollectedCount: totalItems,
   });
   const readinessPct = Math.max(0, Math.min(100, processingSummary.readinessPct ?? 0));
 
   const latestRun = runs[0];
   const recentDiscovery = latestRun ? formatDate(latestRun.startedAt) : "No discovery activity yet.";
   const recentIngest = latestRun?.status || "No ingest activity yet.";
-  const missionStatus =
-    (processingSummary.counts.activated ?? 0) > 0
-      ? "Reservoir Active"
-      : (processingSummary.counts.collected ?? 0) > 0
-        ? "Processing Knowledge"
-        : "Needs Knowledge";
-  const readinessTag = readinessPct >= 70 ? "Operational" : readinessPct >= 30 ? "Building" : "Needs Knowledge";
+  const missionStatus = processingSummary.blockingState;
+  const readinessTag = processingSummary.blockingState;
   const missionTitle = brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
-  const nextAction =
-    (processingSummary.counts.collected ?? 0) > 0 && (processingSummary.counts.activated ?? 0) <= 0
-      ? "Next: Process Knowledge"
-      : totalItems > 0
-        ? "Next: Run Discovery"
-        : "Next: Add Knowledge";
+  const nextAction = `Next: ${processingSummary.nextStep}`;
   const readinessPctRounded = Math.round(readinessPct);
   const cylinderFillHeight = Math.max(6, Math.round(readinessPct * 0.82));
   const cylinderGlowOpacity = 0.22 + (readinessPct / 100) * 0.35;
@@ -217,6 +208,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/75">Signal Reservoir</div>
               <div className="mt-1 text-xl font-semibold text-cyan-100">{readinessPctRounded}% Ready</div>
               <p className="mt-0.5 text-[11px] text-slate-300">{missionStatus}</p>
+              <p className="mt-1 text-[11px] text-slate-400">{processingSummary.blockingReason}</p>
             </div>
 
             <div className="relative mt-3 flex justify-center">
@@ -242,20 +234,27 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               <div className="mt-1 text-[10px] text-slate-400">
                 {processingSummary.readinessSource === "stage_based"
                   ? "Based on post-ingest stage progress."
-                  : "Using current upstream readiness signal."}
+                  : "Using upstream readiness signal until processing telemetry is complete."}
               </div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Total knowledge items</div>
-              <div className="mt-0.5 text-sm font-semibold text-white">{totalItems.toLocaleString()}</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Items collected</div>
+              <div className="mt-0.5 text-sm font-semibold text-white">
+                {formatCount(processingSummary.counts.collected)}
+              </div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web items</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Web items collected</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{webdocsItems.toLocaleString()}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2">
-              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">YouTube items</div>
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">YouTube items collected</div>
               <div className="mt-0.5 text-sm font-semibold text-white">{youtubeItems.toLocaleString()}</div>
+            </div>
+            <div className="rounded-lg border border-white/10 bg-black/30 p-2 sm:col-span-2">
+              <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Current blocker</div>
+              <div className="mt-0.5 text-xs font-medium text-slate-100">{processingSummary.blockingState}</div>
+              <div className="mt-1 text-[11px] text-slate-300">{processingSummary.blockingReason}</div>
             </div>
             <div className="rounded-lg border border-white/10 bg-black/30 p-2 sm:col-span-2">
               <div className="text-[10px] uppercase tracking-[0.14em] text-slate-400">Last operation</div>
@@ -294,7 +293,7 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                 </div>
               </div>
               <div className="mt-2 border-t border-white/10 pt-2 text-[11px] text-slate-300">
-                Next: {processingSummary.nextStep}
+                Next blocking step: {processingSummary.nextStep}
               </div>
             </div>
           </div>
