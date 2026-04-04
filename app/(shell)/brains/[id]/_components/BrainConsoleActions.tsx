@@ -7,6 +7,10 @@ import {
   clampYoutubeRequestedVideos,
   type YoutubeIngestMode,
 } from "@/lib/directoryiq/ingestion/youtubeContracts";
+import {
+  buildWorkerKeywordIngestPayload,
+  hasIngestCounters,
+} from "@/lib/directoryiq/ingestion/workerKeywordIngest";
 
 type ConsoleAction = "retrieval" | "answer";
 type SourceMode = "web_search" | "website_url" | "document_upload" | "youtube";
@@ -171,6 +175,61 @@ function normalizeIngestSummary(
 
 function formatMaybe(value: number | null): string {
   return value == null ? "Not reported" : value.toLocaleString();
+}
+
+async function fetchJson(url: string): Promise<Record<string, unknown> | null> {
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { Accept: "application/json" },
+  });
+  if (!res.ok) return null;
+  const payload = await res.json().catch(() => null);
+  if (!payload || typeof payload !== "object") return null;
+  return payload as Record<string, unknown>;
+}
+
+function isTerminalRunStatus(status: unknown): boolean {
+  if (typeof status !== "string") return false;
+  const normalized = status.toLowerCase();
+  return (
+    normalized === "completed" ||
+    normalized === "failed" ||
+    normalized === "cancelled" ||
+    normalized === "canceled" ||
+    normalized === "succeeded" ||
+    normalized === "success" ||
+    normalized === "partial_success" ||
+    normalized === "completed_with_errors"
+  );
+}
+
+async function hydrateWorkerKeywordPayload(
+  runId: string,
+  initialPayload: unknown
+): Promise<unknown> {
+  let runPayload: Record<string, unknown> | null = null;
+  for (let i = 0; i < 40; i += 1) {
+    const current = await fetchJson(`/api/runs/${runId}`);
+    if (current) runPayload = current;
+    if (runPayload && isTerminalRunStatus(runPayload.status)) break;
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  let reportPayload: Record<string, unknown> | null = null;
+  for (let i = 0; i < 20; i += 1) {
+    const current = await fetchJson(`/api/runs/${runId}/report`);
+    if (current) {
+      reportPayload = current;
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+
+  return buildWorkerKeywordIngestPayload({
+    startPayload: initialPayload,
+    runPayload: runPayload ?? undefined,
+    reportPayload: reportPayload ?? undefined,
+  });
 }
 
 function sourceButtonClass(active: boolean): string {
@@ -372,19 +431,28 @@ export default function BrainConsoleActions({
       }
 
       const runId: string | undefined = payload?.run_id || payload?.id;
-      const ingestSummary = normalizeIngestSummary(payload, sourceMode, requestedMaxResults);
+      const shouldHydrateWorkerKeyword =
+        sourceMode === "youtube" &&
+        youtubeMode === "keyword" &&
+        Boolean(runId) &&
+        !hasIngestCounters(payload);
+      const hydratedPayload =
+        shouldHydrateWorkerKeyword && runId
+          ? await hydrateWorkerKeywordPayload(runId, payload)
+          : payload;
+      const ingestSummary = normalizeIngestSummary(hydratedPayload, sourceMode, requestedMaxResults);
       setResult({
         status: "success",
         title: "Ingest run complete",
         message:
-          `${ingestSummary.candidatesFound ?? 0} candidates found. ` +
-          `${ingestSummary.selectedForIngest ?? 0} selected for ingest. ` +
-          `${ingestSummary.newItemsAdded ?? 0} new items added. ` +
-          `${ingestSummary.duplicatesSkipped ?? 0} unchanged skipped. ` +
-          `${ingestSummary.updatedItems ?? 0} updated. ` +
-          `${ingestSummary.versionedItems ?? 0} versioned.`,
+          `${formatMaybe(ingestSummary.candidatesFound)} candidates found. ` +
+          `${formatMaybe(ingestSummary.selectedForIngest)} selected for ingest. ` +
+          `${formatMaybe(ingestSummary.newItemsAdded)} new items added. ` +
+          `${formatMaybe(ingestSummary.duplicatesSkipped)} unchanged skipped. ` +
+          `${formatMaybe(ingestSummary.updatedItems)} updated. ` +
+          `${formatMaybe(ingestSummary.versionedItems)} versioned.`,
         runId,
-        payload,
+        payload: hydratedPayload,
         ingestSummary,
       });
     } catch (error) {
