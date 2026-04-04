@@ -235,16 +235,57 @@ export function summarizePostIngestProcessing(input: {
   const stats = asRecord(input.statsPayload);
   const run = asRecord(input.runPayload);
   const report = asRecord(input.reportPayload);
+  const runSummary = asRecord(run.summary);
   const counters = asRecord(run.counters);
   const metrics = asRecord(run.metrics);
   const metadata = asRecord(run.metadata);
-  const combined = { ...stats, ...run, ...counters, ...metrics, ...metadata, ...report };
+  const reportSummary = asRecord(report.summary);
+  const reportCounters = asRecord(report.counters);
+  const reportMetrics = asRecord(report.metrics);
+  const reportMetadata = asRecord(report.metadata);
+  const reportData = asRecord(report.data);
+  const combined = {
+    ...stats,
+    ...run,
+    ...runSummary,
+    ...counters,
+    ...metrics,
+    ...metadata,
+    ...report,
+    ...reportData,
+    ...reportSummary,
+    ...reportCounters,
+    ...reportMetrics,
+    ...reportMetadata,
+  };
 
   const statusText = String(
-    run.status ?? run.state ?? run.phase ?? "idle"
+    reportSummary.processing_status ??
+      report.status ??
+      report.state ??
+      report.phase ??
+      reportSummary.status ??
+      run.status ??
+      run.state ??
+      run.phase ??
+      "idle"
   ).toLowerCase();
   const currentStage = mapCurrentStage(
-    String(run.stage ?? run.current_stage ?? run.step ?? run.current_step ?? "collected")
+    String(
+      reportSummary.current_stage ??
+        reportSummary.stage ??
+        reportSummary.step ??
+        reportSummary.current_step ??
+        report.stage ??
+        report.current_stage ??
+        report.step ??
+        report.current_step ??
+        run.stage ??
+        run.current_stage ??
+        run.step ??
+        run.current_step ??
+        "collected"
+    )
   );
 
   const counts: PostIngestProcessingCounts = {
