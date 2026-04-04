@@ -14,6 +14,14 @@ type NormalizedError = {
 };
 
 const DEFAULT_TIMEOUT_MS = 8000;
+const WORKER_PATH_PREFIXES = ["/v1/brains", "/v1/runs", "/v1/brain-packs"] as const;
+
+export function isWorkerTargetPath(targetPath: string): boolean {
+  const normalized = targetPath.startsWith("/") ? targetPath : `/${targetPath}`;
+  return WORKER_PATH_PREFIXES.some(
+    (prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`)
+  );
+}
 
 function buildTargetUrl(req: NextRequest, targetPath: string): string {
   const base = (process.env.BRAINS_API_BASE ?? "https://api.ibrains.ai").replace(/\/+$/, "");
@@ -43,10 +51,7 @@ function buildHeaders(
   // Auth headers (server-side only)
   if (requireAuth) {
     let apiKey: string | undefined;
-    const isWorkerPath =
-      targetPath.startsWith("/v1/brains/") ||
-      targetPath.startsWith("/v1/runs/") ||
-      targetPath.startsWith("/v1/brain-packs/");
+    const isWorkerPath = isWorkerTargetPath(targetPath);
 
     if (isWorkerPath) {
       apiKey = process.env.BRAINS_WORKER_API_KEY;
