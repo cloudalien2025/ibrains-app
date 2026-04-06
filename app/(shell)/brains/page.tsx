@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import BrainsTable, { type BrainView } from "./_components/BrainsTable";
 import EmptyState from "../_components/EmptyState";
 import CreateBrainDialog from "../_components/CreateBrainDialog";
-import { brainCatalogById, isBrainId } from "@/lib/brains/brainCatalog";
+import { normalizeBrainRecord, resolveBrainRecordId, resolveBrains } from "@/lib/brains/brainViews";
 
 type BrainRecord = Record<string, unknown>;
 type BrainStatsRecord = Record<string, unknown>;
@@ -17,38 +17,9 @@ function toNumber(value: unknown): number | null {
   return null;
 }
 
-function resolveBrains(payload: unknown): BrainRecord[] {
-  if (Array.isArray(payload)) return payload as BrainRecord[];
-  if (payload && typeof payload === "object") {
-    const candidate = payload as Record<string, unknown>;
-    const list =
-      (candidate.brains as unknown[]) ||
-      (candidate.items as unknown[]) ||
-      (candidate.data as unknown[]) ||
-      [];
-    if (Array.isArray(list)) return list as BrainRecord[];
-  }
-  return [];
-}
-
 function normalizeBrain(brain: BrainRecord): BrainView {
-  const rawId =
-    String(
-      brain.brain_id ??
-        brain.id ??
-        brain.slug ??
-        brain.key ??
-        "unknown_brain"
-    ) || "unknown_brain";
-  const id = isBrainId(rawId) ? rawId : "directoryiq";
-  const name =
-    (brain.displayName as string | undefined) ??
-    (brain.display_name as string | undefined) ??
-    (brain.name as string | undefined) ??
-    (brain.title as string | undefined) ??
-    (brain.brain_name as string | undefined) ??
-    brainCatalogById[id].name ??
-    "Unnamed brain";
+  const view = normalizeBrainRecord(brain);
+  const id = resolveBrainRecordId(brain);
   const lastUpdated =
     (brain.last_updated as string | undefined) ??
     (brain.updated_at as string | undefined) ??
@@ -58,8 +29,8 @@ function normalizeBrain(brain: BrainRecord): BrainView {
   const entitled = Boolean(brain.entitled ?? true);
 
   return {
-    ...brainCatalogById[id],
-    name,
+    ...view,
+    id,
     entitled,
     lastUpdated,
     readinessPct: null,
@@ -146,13 +117,13 @@ export default async function BrainsPage() {
               ingest, retrieval, and answering workflows from one operational surface.
             </p>
           </div>
+          <CreateBrainDialog />
           <Link
             href="/runs"
             className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
           >
             View latest runs
           </Link>
-          <CreateBrainDialog />
         </div>
       </section>
 

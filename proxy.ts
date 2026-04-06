@@ -11,6 +11,10 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(async (auth, req) => {
+  if (process.env.E2E_MOCK_GRAPH === "1") {
+    return NextResponse.next();
+  }
+
   if (
     req.nextUrl.pathname.startsWith("/api/directoryiq") ||
     req.nextUrl.pathname.startsWith("/api/ingest/directoryiq")

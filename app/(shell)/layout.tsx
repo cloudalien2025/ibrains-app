@@ -6,7 +6,8 @@ import { redirect } from "next/navigation";
 import SideNav from "./_components/SideNav";
 
 export default async function ShellLayout({ children }: { children: ReactNode }) {
-  const { userId } = await auth();
+  const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
+  const { userId } = e2eMockGraph ? { userId: "e2e-admin" } : await auth();
   if (!userId) {
     redirect("/sign-in");
   }
@@ -56,7 +57,13 @@ export default async function ShellLayout({ children }: { children: ReactNode })
               >
                 Home
               </Link>
-              <UserButton />
+              {e2eMockGraph ? (
+                <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-slate-200">
+                  E2E Admin
+                </div>
+              ) : (
+                <UserButton />
+              )}
             </div>
           </header>
 

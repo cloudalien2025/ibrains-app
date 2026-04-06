@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Clapperboard, Lock, Map, Zap } from "lucide-react";
-import { type BrainCatalogEntry, brainRoute } from "@/lib/brains/brainCatalog";
+import { type BrainViewEntry, brainRoute } from "@/lib/brains/brainCatalog";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
 
 const icons = {
@@ -10,7 +10,7 @@ const icons = {
 };
 
 type BrainDockCardProps = {
-  brain: BrainCatalogEntry;
+  brain: BrainViewEntry;
   entitled: boolean;
   lastUpdated?: string | null;
   readinessPct?: number | null;

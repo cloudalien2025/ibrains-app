@@ -1,14 +1,13 @@
 import Link from "next/link";
 import { headers } from "next/headers";
-import { notFound } from "next/navigation";
 import type { CSSProperties } from "react";
-import { brainCatalogById, isBrainId, type BrainId } from "@/lib/brains/brainCatalog";
 import { deriveCylinderVisualState } from "@/lib/brains/cylinderVisualState";
 import {
   type MissionControlRunView as RunView,
   selectRunsForBrain,
 } from "@/lib/brains/missionControlRunSelection";
 import { summarizePostIngestProcessing } from "@/lib/brains/postIngestProcessingContract";
+import { normalizeBrainRecord } from "@/lib/brains/brainViews";
 import BrainConsoleActions from "./_components/BrainConsoleActions";
 
 type BrainDetailProps = {
@@ -39,25 +38,26 @@ function formatCount(value: number | null): string {
 
 export default async function BrainDetailPage({ params, searchParams }: BrainDetailProps) {
   const { id } = await params;
-  if (!isBrainId(id)) {
-    notFound();
-  }
-
-  const brainId = id as BrainId;
-  const brain = brainCatalogById[brainId];
+  const brainId = decodeURIComponent(id);
+  const encodedBrainId = encodeURIComponent(brainId);
 
   const headersList = await headers();
   const host = headersList.get("host");
   const baseUrl = host ? `http://${host}` : "http://127.0.0.1:3001";
 
+  let brainRecord: Record<string, unknown> = { id: brainId };
   let stats: Record<string, unknown> | null = null;
   let runs: RunView[] = [];
   let latestRunPayload: unknown = null;
   let latestRunReportPayload: unknown = null;
 
   try {
-    const [statsRes, runsRes] = await Promise.all([
-      fetch(`${baseUrl}/api/brains/${brainId}/stats`, {
+    const [brainRes, statsRes, runsRes] = await Promise.all([
+      fetch(`${baseUrl}/api/brains/${encodedBrainId}`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      }),
+      fetch(`${baseUrl}/api/brains/${encodedBrainId}/stats`, {
         cache: "no-store",
         headers: { Accept: "application/json" },
       }),
@@ -66,6 +66,13 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
         headers: { Accept: "application/json" },
       }),
     ]);
+
+    if (brainRes.ok) {
+      const payload = await brainRes.json().catch(() => null);
+      if (payload && typeof payload === "object") {
+        brainRecord = payload as Record<string, unknown>;
+      }
+    }
 
     if (statsRes.ok) {
       stats = await statsRes.json().catch(() => null);
@@ -92,11 +99,13 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
       }
     }
   } catch {
+    brainRecord = { id: brainId };
     stats = null;
     runs = [];
     latestRunPayload = null;
     latestRunReportPayload = null;
   }
+  const brain = normalizeBrainRecord(brainRecord);
 
   const totalItems = toNumber(stats?.total_items) ?? 0;
   const youtubeItems = toNumber(stats?.youtube_items) ?? 0;
@@ -116,7 +125,8 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   const recentIngest = latestRun?.status || "No ingest activity yet.";
   const missionStatus = processingSummary.blockingState;
   const readinessTag = processingSummary.blockingState;
-  const missionTitle = brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
+  const missionTitle =
+    brainId === "directoryiq" ? "DirectoryIQ Mission Control" : `${brain.name} Mission Control`;
   const nextAction = `Next: ${processingSummary.nextStep}`;
   const readinessPctRounded = Math.round(readinessPct);
   const cylinderVisualState = deriveCylinderVisualState({
