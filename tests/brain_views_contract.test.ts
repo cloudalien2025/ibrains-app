@@ -46,11 +46,18 @@ describe("brain view normalization", () => {
     expect(normalized.name).toBe("DirectoryIQ");
   });
 
-  it("limits production console visibility to canonical brains", () => {
+  it("shows canonical and created non-test brains while hiding test/smoke entries", () => {
     expect(isProductionVisibleBrain({ id: "directoryiq", name: "DirectoryIQ" })).toBe(true);
     expect(isProductionVisibleBrain({ brain_id: "brilliant_directories" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "ecomviper", name: "EcomViper" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "studio", name: "Studio" })).toBe(true);
+    expect(
+      isProductionVisibleBrain({
+        brain_id: "ipetzo",
+        brain_name: "iPetzo",
+        brain_type: "UAP",
+      })
+    ).toBe(true);
     expect(isProductionVisibleBrain({ id: "webdocs-smoke-1771960314" })).toBe(false);
     expect(isProductionVisibleBrain({ slug: "timedtext-fix-test" })).toBe(false);
   });
