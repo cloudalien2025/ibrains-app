@@ -3,6 +3,7 @@
 import * as Dialog from "@radix-ui/react-dialog";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
+import { isValidBrainSlug, normalizeBrainSlug } from "@/lib/brains/createBrain";
 
 type ToastState = {
   message: string;
@@ -24,14 +25,6 @@ const initialFormState: FormState = {
   domain: "",
   agentName: "",
 };
-
-function normalizeSlug(input: string): string {
-  return input
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
 
 function looksLikeDuplicateError(message: string): boolean {
   const lowered = message.toLowerCase();
@@ -55,20 +48,33 @@ export default function CreateBrainDialog() {
     setForm((current) => ({ ...current, [key]: value }));
   }
 
-  const normalizedSlug = useMemo(() => normalizeSlug(form.slug), [form.slug]);
+  const normalizedSlug = useMemo(() => normalizeBrainSlug(form.slug), [form.slug]);
+  const slugIsValid = normalizedSlug.length > 0 && isValidBrainSlug(normalizedSlug);
+  const slugHelperText =
+    form.slug.trim().length === 0
+      ? "Enter a lowercase slug"
+      : slugIsValid
+        ? normalizedSlug
+        : "invalid slug";
 
   async function createBrain() {
     setIsSubmitting(true);
     setError(null);
     try {
       const name = form.name.trim();
-      const slug = normalizeSlug(form.slug);
+      const slug = normalizeBrainSlug(form.slug);
       const description = form.description.trim();
       const domain = form.domain.trim();
       const agentName = form.agentName.trim();
 
       if (!name || !slug || !description || !domain || !agentName) {
         const message = "Complete all required fields before creating a brain.";
+        setError(message);
+        showToast({ message, tone: "error" });
+        return;
+      }
+      if (!isValidBrainSlug(slug)) {
+        const message = "Slug must use lowercase letters, numbers, and single hyphens.";
         setError(message);
         showToast({ message, tone: "error" });
         return;
@@ -180,17 +186,17 @@ export default function CreateBrainDialog() {
                   className="mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
                 />
                 <div className="mt-2 text-[11px] text-slate-400">
-                  Saved as <span className="text-slate-200">{normalizedSlug || "invalid slug"}</span>
+                  Saved as <span className="text-slate-200">{slugHelperText}</span>
                 </div>
               </label>
 
               <label className="rounded-2xl border border-white/10 bg-white/5 p-4">
-                <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">Domain</div>
+                <div className="text-xs uppercase tracking-[0.2em] text-slate-400/80">Topic</div>
                 <input
                   type="text"
                   value={form.domain}
                   onChange={(event) => updateField("domain", event.target.value)}
-                  placeholder="local directories"
+                  placeholder="local business listings"
                   className="mt-3 w-full rounded-xl border border-white/10 bg-black/40 px-3 py-2 text-sm text-white"
                 />
               </label>
