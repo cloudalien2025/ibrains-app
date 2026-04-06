@@ -2,7 +2,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { defineConfig } from "@playwright/test";
 
-const baseURL = process.env.UI_AUDIT_BASE_URL || "http://127.0.0.1:3002";
+const e2ePort = Number.parseInt(process.env.PLAYWRIGHT_PORT ?? "3012", 10);
+const baseURL = process.env.UI_AUDIT_BASE_URL || `http://127.0.0.1:${e2ePort}`;
 const outputDir = path.join(process.cwd(), "artifacts", "playwright");
 const tmpDir = path.join(outputDir, ".tmp");
 
@@ -58,15 +59,25 @@ export default defineConfig({
   timeout: 45_000,
   outputDir,
   webServer: {
-    command: "pnpm exec next dev -p 3002 -H 127.0.0.1",
-    url: "http://127.0.0.1:3002",
+    command:
+      `bash -lc 'lsof -ti tcp:${e2ePort} | xargs -r kill -9; rm -f .next/lock; ` +
+      `pnpm exec next build && pnpm exec next start -p ${e2ePort} -H 127.0.0.1'`,
+    // Health endpoint is stable for readiness checks in E2E mode.
+    url: `http://127.0.0.1:${e2ePort}/api/health`,
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
     env: {
       ...process.env,
       E2E_MOCK_GRAPH: "1",
       NODE_ENV: "test",
       NEXT_TELEMETRY_DISABLED: "1",
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY:
+        process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY ??
+        "pk_test_ZGVsaWNhdGUtaWJleC04Ny5jbGVyay5hY2NvdW50cy5kZXYk",
+      CLERK_PUBLISHABLE_KEY:
+        process.env.CLERK_PUBLISHABLE_KEY ??
+        "pk_test_ZGVsaWNhdGUtaWJleC04Ny5jbGVyay5hY2NvdW50cy5kZXYk",
+      CLERK_SECRET_KEY: process.env.CLERK_SECRET_KEY ?? "sk_test_codex_e2e",
       TMPDIR: "/tmp",
       TMP: "/tmp",
       TEMP: "/tmp",
