@@ -6,9 +6,9 @@ import CreateBrainDialog from "../_components/CreateBrainDialog";
 import {
   isProductionVisibleBrain,
   normalizeBrainRecord,
-  resolveBrainRecordId,
   resolveBrains,
 } from "@/lib/brains/brainViews";
+import { brainCatalogById, brainIds } from "@/lib/brains/brainCatalog";
 
 type BrainRecord = Record<string, unknown>;
 type BrainStatsRecord = Record<string, unknown>;
@@ -24,7 +24,6 @@ function toNumber(value: unknown): number | null {
 
 function normalizeBrain(brain: BrainRecord): BrainView {
   const view = normalizeBrainRecord(brain);
-  const id = resolveBrainRecordId(brain);
   const lastUpdated =
     (brain.last_updated as string | undefined) ??
     (brain.updated_at as string | undefined) ??
@@ -35,7 +34,6 @@ function normalizeBrain(brain: BrainRecord): BrainView {
 
   return {
     ...view,
-    id,
     entitled,
     lastUpdated,
     readinessPct: null,
@@ -61,7 +59,13 @@ async function loadBrains(): Promise<{
     }
     const payload = await res.json().catch(() => null);
     const list = resolveBrains(payload);
-    const normalized = list.filter(isProductionVisibleBrain).map(normalizeBrain);
+    const canonicalFallbacks = brainIds.map((id) => ({
+      id,
+      name: brainCatalogById[id].name,
+    }));
+    const normalized = [...canonicalFallbacks, ...list]
+      .filter(isProductionVisibleBrain)
+      .map(normalizeBrain);
     const uniqueBrains = Array.from(
       new Map(normalized.map((brain) => [brain.id, brain])).values()
     );

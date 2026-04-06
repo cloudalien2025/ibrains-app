@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   isProductionVisibleBrain,
   normalizeBrainList,
+  normalizeBrainRecord,
+  resolveCanonicalBrainId,
   resolveBrainRecordId,
 } from "@/lib/brains/brainViews";
 
@@ -34,8 +36,19 @@ describe("brain view normalization", () => {
     expect(resolveBrainRecordId({})).toBe("unknown_brain");
   });
 
+  it("maps known upstream aliases to canonical brain ids", () => {
+    expect(resolveCanonicalBrainId({ brain_id: "brilliant_directories" })).toBe("directoryiq");
+    const normalized = normalizeBrainRecord({
+      brain_id: "brilliant_directories",
+      brain_name: "Brilliant Directories",
+    });
+    expect(normalized.id).toBe("directoryiq");
+    expect(normalized.name).toBe("DirectoryIQ");
+  });
+
   it("limits production console visibility to canonical brains", () => {
     expect(isProductionVisibleBrain({ id: "directoryiq", name: "DirectoryIQ" })).toBe(true);
+    expect(isProductionVisibleBrain({ brain_id: "brilliant_directories" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "ecomviper", name: "EcomViper" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "studio", name: "Studio" })).toBe(true);
     expect(isProductionVisibleBrain({ id: "webdocs-smoke-1771960314" })).toBe(false);
