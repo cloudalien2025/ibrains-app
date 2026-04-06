@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { normalizeBrainList, resolveBrainRecordId } from "@/lib/brains/brainViews";
+import {
+  isProductionVisibleBrain,
+  normalizeBrainList,
+  resolveBrainRecordId,
+} from "@/lib/brains/brainViews";
 
 describe("brain view normalization", () => {
   it("keeps known and custom brains as distinct entries", () => {
@@ -28,5 +32,13 @@ describe("brain view normalization", () => {
     expect(resolveBrainRecordId({ brain_id: "brain-from-id" })).toBe("brain-from-id");
     expect(resolveBrainRecordId({ slug: "brain-from-slug" })).toBe("brain-from-slug");
     expect(resolveBrainRecordId({})).toBe("unknown_brain");
+  });
+
+  it("limits production console visibility to canonical brains", () => {
+    expect(isProductionVisibleBrain({ id: "directoryiq", name: "DirectoryIQ" })).toBe(true);
+    expect(isProductionVisibleBrain({ id: "ecomviper", name: "EcomViper" })).toBe(true);
+    expect(isProductionVisibleBrain({ id: "studio", name: "Studio" })).toBe(true);
+    expect(isProductionVisibleBrain({ id: "webdocs-smoke-1771960314" })).toBe(false);
+    expect(isProductionVisibleBrain({ slug: "timedtext-fix-test" })).toBe(false);
   });
 });

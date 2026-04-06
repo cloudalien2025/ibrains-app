@@ -19,6 +19,8 @@ function readString(payload: AnyRecord, key: string): string {
   return value.trim();
 }
 
+export type UpstreamBrainType = "BD" | "UAP";
+
 export function normalizeBrainSlug(input: string): string {
   return input
     .trim()
@@ -75,15 +77,42 @@ export function validateCreateBrainPayload(payload: unknown): CreateBrainValidat
 }
 
 export function toCreateBrainUpstreamPayload(input: CreateBrainInput): AnyRecord {
+  const normalizedDomain = input.domain.trim().toLowerCase();
+  const upstreamBrainType: UpstreamBrainType =
+    normalizedDomain === "bd" ||
+    normalizedDomain === "brilliant_directories" ||
+    normalizedDomain === "directoryiq" ||
+    normalizedDomain.includes("directory")
+      ? "BD"
+      : "UAP";
+
   return {
     name: input.name,
-    slug: input.slug,
     description: input.description,
-    domain: input.domain,
-    agent_name: input.agentName,
-    agentName: input.agentName,
-    status: input.status || "active",
-    brain_type: "custom",
+    brain_type: upstreamBrainType,
+  };
+}
+
+export function extractUpstreamValidationError(payload: unknown): {
+  field?: string;
+  message: string;
+} | null {
+  if (!payload || typeof payload !== "object") return null;
+
+  const detail = (payload as { detail?: unknown }).detail;
+  if (!Array.isArray(detail) || detail.length === 0) return null;
+
+  const first = detail[0] as { loc?: unknown; msg?: unknown } | null;
+  if (!first || typeof first !== "object") return null;
+
+  const loc = Array.isArray(first.loc) ? first.loc : [];
+  const field = typeof loc[1] === "string" ? loc[1] : undefined;
+  const msg = typeof first.msg === "string" ? first.msg.trim() : "";
+  if (!msg) return null;
+
+  return {
+    field,
+    message: field ? `${field}: ${msg}` : msg,
   };
 }
 

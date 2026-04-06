@@ -3,7 +3,12 @@ import { headers } from "next/headers";
 import BrainsTable, { type BrainView } from "./_components/BrainsTable";
 import EmptyState from "../_components/EmptyState";
 import CreateBrainDialog from "../_components/CreateBrainDialog";
-import { normalizeBrainRecord, resolveBrainRecordId, resolveBrains } from "@/lib/brains/brainViews";
+import {
+  isProductionVisibleBrain,
+  normalizeBrainRecord,
+  resolveBrainRecordId,
+  resolveBrains,
+} from "@/lib/brains/brainViews";
 
 type BrainRecord = Record<string, unknown>;
 type BrainStatsRecord = Record<string, unknown>;
@@ -56,7 +61,7 @@ async function loadBrains(): Promise<{
     }
     const payload = await res.json().catch(() => null);
     const list = resolveBrains(payload);
-    const normalized = list.map(normalizeBrain);
+    const normalized = list.filter(isProductionVisibleBrain).map(normalizeBrain);
     const uniqueBrains = Array.from(
       new Map(normalized.map((brain) => [brain.id, brain])).values()
     );

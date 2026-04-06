@@ -112,11 +112,49 @@ describe("POST /api/brains create contract", () => {
     expect(capturedBodies).toHaveLength(1);
     expect(capturedBodies[0]).toMatchObject({
       name: "Custom Sales",
-      slug: "custom-sales",
       description: "Revenue intelligence",
-      domain: "sales",
-      agent_name: "Atlas",
-      status: "active",
+      brain_type: "UAP",
     });
+  });
+
+  it("surfaces upstream validation details for 422 responses", async () => {
+    const { POST } = await import("@/app/api/brains/route");
+    mocks.proxyToBrains.mockImplementation(async (request: NextRequest, targetPath: string) => {
+      if (targetPath === "/v1/brains" && request.method === "GET") {
+        return jsonResponse(200, { brains: [] });
+      }
+      if (targetPath === "/v1/brains" && request.method === "POST") {
+        return jsonResponse(422, {
+          detail: [
+            {
+              loc: ["body", "brain_type"],
+              msg: "String should match pattern '^(BD|UAP)$'",
+              type: "string_pattern_mismatch",
+            },
+          ],
+        });
+      }
+      return jsonResponse(404, { message: "Unexpected call" });
+    });
+
+    const req = new NextRequest("http://localhost/api/brains", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        name: "Custom Sales",
+        slug: "Custom Sales",
+        description: "Revenue intelligence",
+        domain: "sales",
+        agentName: "Atlas",
+      }),
+    });
+
+    const res = await POST(req);
+    const body = (await res.json()) as { error: { code: string; message: string } };
+
+    expect(res.status).toBe(422);
+    expect(body.error.code).toBe("UPSTREAM_VALIDATION_ERROR");
+    expect(body.error.message).toContain("brain_type");
+    expect(body.error.message).toContain("^(BD|UAP)$");
   });
 });

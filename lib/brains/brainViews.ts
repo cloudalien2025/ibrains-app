@@ -86,3 +86,8 @@ export function normalizeBrainRecord(brain: BrainRecord): BrainViewEntry {
 export function normalizeBrainList(payload: unknown): BrainViewEntry[] {
   return resolveBrains(payload).map(normalizeBrainRecord);
 }
+
+export function isProductionVisibleBrain(brain: BrainRecord): boolean {
+  const view = normalizeBrainRecord(brain);
+  return isBrainId(view.id);
+}
