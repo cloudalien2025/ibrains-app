@@ -28,6 +28,17 @@ function normalizeIdentifier(value: string): string {
   return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
+function isLikelyInternalTestBrain(brain: BrainRecord): boolean {
+  const id = resolveBrainRecordId(brain);
+  const name =
+    toStringValue(brain.brain_name) ||
+    toStringValue(brain.name) ||
+    toStringValue(brain.title) ||
+    "";
+  const haystack = `${id} ${name}`.toLowerCase().replace(/[_-]+/g, " ");
+  return /\b(smoke|test|timedtext)\b/.test(haystack);
+}
+
 export function resolveBrains(payload: unknown): BrainRecord[] {
   if (Array.isArray(payload)) return payload as BrainRecord[];
   if (payload && typeof payload === "object") {
@@ -119,5 +130,7 @@ export function normalizeBrainList(payload: unknown): BrainViewEntry[] {
 }
 
 export function isProductionVisibleBrain(brain: BrainRecord): boolean {
-  return resolveCanonicalBrainId(brain) !== null;
+  if (resolveCanonicalBrainId(brain)) return true;
+  if (isLikelyInternalTestBrain(brain)) return false;
+  return true;
 }
