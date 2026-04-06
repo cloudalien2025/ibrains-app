@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { jsonError, proxyToBrains, unexpectedErrorResponse } from "../_utils/proxy";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import {
+  extractUpstreamValidationError,
   extractBrainSlug,
   toCreateBrainUpstreamPayload,
   validateCreateBrainPayload,
@@ -87,6 +88,16 @@ export async function POST(req: NextRequest) {
 
     if (!upstream.ok) {
       const payload = await upstream.clone().json().catch(() => null);
+      const upstreamValidationError =
+        upstream.status === 422 ? extractUpstreamValidationError(payload) : null;
+      if (upstreamValidationError) {
+        return jsonError(
+          "UPSTREAM_VALIDATION_ERROR",
+          upstreamValidationError.message,
+          422,
+          upstreamValidationError.field ? { field: upstreamValidationError.field } : undefined
+        );
+      }
       const message =
         (payload as { error?: { message?: string } } | null)?.error?.message ||
         "Brain creation failed.";
