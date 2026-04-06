@@ -1,4 +1,5 @@
 import {
+  brainIds,
   brainCatalogById,
   isBrainId,
   type BrainId,
@@ -8,11 +9,23 @@ import {
 type BrainRecord = Record<string, unknown>;
 
 const genericTags = ["Custom Brain", "Knowledge Readiness", "Mission Control"];
+const canonicalBrainIdSet = new Set<BrainId>(brainIds);
+
+const brainIdAliases: Record<string, BrainId> = {
+  directoryiq: "directoryiq",
+  brilliant_directories: "directoryiq",
+  ecomviper: "ecomviper",
+  studio: "studio",
+};
 
 function toStringValue(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length ? trimmed : null;
+}
+
+function normalizeIdentifier(value: string): string {
+  return value.trim().toLowerCase().replace(/[\s-]+/g, "_");
 }
 
 export function resolveBrains(payload: unknown): BrainRecord[] {
@@ -39,6 +52,25 @@ export function resolveBrainRecordId(brain: BrainRecord): string {
   );
 }
 
+export function resolveCanonicalBrainId(brain: BrainRecord): BrainId | null {
+  const candidates = [
+    toStringValue(brain.brain_id),
+    toStringValue(brain.id),
+    toStringValue(brain.slug),
+    toStringValue(brain.key),
+    toStringValue(brain.brain_slug),
+  ].filter((value): value is string => Boolean(value));
+
+  for (const candidate of candidates) {
+    const normalized = normalizeIdentifier(candidate);
+    const alias = brainIdAliases[normalized];
+    if (alias && canonicalBrainIdSet.has(alias)) return alias;
+    if (isBrainId(normalized)) return normalized;
+  }
+
+  return null;
+}
+
 function defaultNameFromId(id: string): string {
   return id
     .replace(/[_-]+/g, " ")
@@ -48,7 +80,8 @@ function defaultNameFromId(id: string): string {
 }
 
 export function normalizeBrainRecord(brain: BrainRecord): BrainViewEntry {
-  const id = resolveBrainRecordId(brain);
+  const canonicalId = resolveCanonicalBrainId(brain);
+  const id = canonicalId ?? resolveBrainRecordId(brain);
   const name =
     toStringValue(brain.displayName) ||
     toStringValue(brain.display_name) ||
@@ -57,11 +90,9 @@ export function normalizeBrainRecord(brain: BrainRecord): BrainViewEntry {
     toStringValue(brain.brain_name) ||
     defaultNameFromId(id);
 
-  if (isBrainId(id)) {
-    const knownId = id as BrainId;
+  if (canonicalId) {
     return {
-      ...brainCatalogById[knownId],
-      name,
+      ...brainCatalogById[canonicalId],
     };
   }
 
@@ -88,6 +119,5 @@ export function normalizeBrainList(payload: unknown): BrainViewEntry[] {
 }
 
 export function isProductionVisibleBrain(brain: BrainRecord): boolean {
-  const view = normalizeBrainRecord(brain);
-  return isBrainId(view.id);
+  return resolveCanonicalBrainId(brain) !== null;
 }
