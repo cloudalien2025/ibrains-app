@@ -1,5 +1,5 @@
 import BrainDockCard from "@/components/brain-dock/BrainDockCard";
-import { brainsDockCopy, type BrainCatalogEntry } from "@/lib/brains/brainCatalog";
+import { brainsDockCopy, type BrainViewEntry } from "@/lib/brains/brainCatalog";
 
 type BrainDockState = {
   entitled: boolean;
@@ -8,7 +8,7 @@ type BrainDockState = {
   totalItems?: number | null;
 };
 
-export type BrainDockView = BrainCatalogEntry & BrainDockState;
+export type BrainDockView = BrainViewEntry & BrainDockState;
 export type BrainView = BrainDockView;
 
 type BrainsTableProps = {

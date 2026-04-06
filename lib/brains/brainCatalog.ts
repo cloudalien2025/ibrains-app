@@ -15,6 +15,10 @@ export type BrainCatalogEntry = {
   iconKey: "map" | "zap" | "clapperboard";
 };
 
+export type BrainViewEntry = Omit<BrainCatalogEntry, "id"> & {
+  id: string;
+};
+
 export const brainCatalog: BrainCatalogEntry[] = [
   {
     id: "directoryiq",
@@ -66,6 +70,6 @@ export function isBrainId(value: string): value is BrainId {
   return (brainIds as readonly string[]).includes(value);
 }
 
-export function brainRoute(id: BrainId): `/brains/${BrainId}` {
-  return `/brains/${id}`;
+export function brainRoute(id: string): `/brains/${string}` {
+  return `/brains/${encodeURIComponent(id)}`;
 }

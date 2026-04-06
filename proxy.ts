@@ -10,7 +10,10 @@ const isProtectedRoute = createRouteMatcher([
   "/studio(.*)",
 ]);
 
-export default clerkMiddleware(async (auth, req) => {
+const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
+
+const clerkProxy = clerkMiddleware(async (auth, req) => {
+
   if (
     req.nextUrl.pathname.startsWith("/api/directoryiq") ||
     req.nextUrl.pathname.startsWith("/api/ingest/directoryiq")
@@ -53,6 +56,12 @@ export default clerkMiddleware(async (auth, req) => {
 
   return NextResponse.next();
 });
+
+export default e2eMockGraph
+  ? function e2eProxyBypass() {
+      return NextResponse.next();
+    }
+  : clerkProxy;
 
 export const config = {
   matcher: [
