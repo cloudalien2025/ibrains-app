@@ -31,7 +31,11 @@ export async function POST(
     }
 
     const { id } = await Promise.resolve(params);
-    const resolvedId = resolveBrainId(id);
+    const raw = id.trim().toLowerCase();
+    const resolvedId =
+      raw === "brilliant_directories" || raw === "brilliant-directories"
+        ? "brilliant_directories"
+        : resolveBrainId(id);
     return proxyToBrains(req, `/v1/brains/${resolvedId}/retrieve`, { requireAuth: true });
   } catch {
     return unexpectedErrorResponse();

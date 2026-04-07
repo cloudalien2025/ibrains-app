@@ -78,4 +78,28 @@ describe("POST /api/brains/[id]/retrieve service auth", () => {
     expect(mocks.requireSignedInUser).toHaveBeenCalledTimes(1);
     expect(mocks.proxyToBrains).not.toHaveBeenCalled();
   });
+
+  it("preserves brilliant_directories id instead of normalizing to a missing slug", async () => {
+    const { POST } = await import("@/app/api/brains/[id]/retrieve/route");
+    const proxied = Response.json({ items: [] }, { status: 200 });
+    mocks.proxyToBrains.mockResolvedValueOnce(proxied);
+
+    const req = new NextRequest("http://localhost/api/brains/brilliant_directories/retrieve", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": "worker_test_key",
+      },
+      body: JSON.stringify({ query: "directory seo" }),
+    });
+
+    const res = await POST(req, { params: { id: "brilliant_directories" } });
+
+    expect(res.status).toBe(200);
+    expect(mocks.proxyToBrains).toHaveBeenCalledWith(
+      expect.any(NextRequest),
+      "/v1/brains/brilliant_directories/retrieve",
+      { requireAuth: true }
+    );
+  });
 });
