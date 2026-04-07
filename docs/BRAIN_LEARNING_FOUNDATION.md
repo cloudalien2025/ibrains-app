@@ -2,6 +2,10 @@
 
 This repository now includes a minimal Postgres-first foundation for continuously learning brains (for example `directoryiq` and `ecomviper`) without rebuilding ingestion runtime logic in-app.
 
+## iPetzo Contract Lock v1
+
+For the iPetzo integration boundary and ownership freeze, see `docs/IPETZO_CONTRACT_LOCK_V1.md`.
+
 ## Entities
 
 - `brains`: durable brain registry + type/config.
