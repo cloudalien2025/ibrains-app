@@ -35,7 +35,7 @@ describe("proxy trusted ingest bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("keeps Clerk middleware on ingest when trusted service key is missing", async () => {
+  it("bypasses Clerk middleware on ingest route even without x-api-key", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -47,6 +47,6 @@ describe("proxy trusted ingest bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 });
