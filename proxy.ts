@@ -1,5 +1,6 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import type { NextFetchEvent, NextRequest } from "next/server";
 
 const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
 
@@ -11,6 +12,13 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
+const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
+
+function isTrustedIngestServiceRequest(req: NextRequest): boolean {
+  if (req.method !== "POST") return false;
+  if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
+  return Boolean(req.headers.get("x-api-key")?.trim());
+}
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
 
@@ -61,7 +69,10 @@ export default e2eMockGraph
   ? function e2eProxyBypass() {
       return NextResponse.next();
     }
-  : clerkProxy;
+  : function proxy(req: NextRequest, event: NextFetchEvent) {
+      if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
+      return clerkProxy(req, event);
+    };
 
 export const config = {
   matcher: [
