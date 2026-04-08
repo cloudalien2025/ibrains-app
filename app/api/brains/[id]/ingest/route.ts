@@ -8,6 +8,21 @@ import { runAdapter } from "@/lib/directoryiq/ingestion/adapters";
 import { runMultiSourceIngest } from "@/lib/directoryiq/ingestion/engine";
 import { type IngestSourceType } from "@/lib/directoryiq/ingestion/contracts";
 
+function hasValidServiceApiKey(req: NextRequest) {
+  const provided = req.headers.get("x-api-key")?.trim();
+  if (!provided) return false;
+
+  const candidates = [
+    process.env.BRAINS_WORKER_API_KEY,
+    process.env.BRAINS_MASTER_KEY,
+    process.env.BRAINS_X_API_KEY,
+  ]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value));
+
+  return candidates.some((candidate) => candidate === provided);
+}
+
 function normalizeSourceType(value: unknown): IngestSourceType | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
@@ -27,8 +42,10 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const { unauthorizedResponse } = await requireSignedInUser();
-    if (unauthorizedResponse) return unauthorizedResponse;
+    if (!hasValidServiceApiKey(req)) {
+      const { unauthorizedResponse } = await requireSignedInUser();
+      if (unauthorizedResponse) return unauthorizedResponse;
+    }
 
     const { id } = await Promise.resolve(params);
     const resolvedId = resolveBrainId(id);
