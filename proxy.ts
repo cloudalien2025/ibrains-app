@@ -13,11 +13,29 @@ const isProtectedRoute = createRouteMatcher([
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
+const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
+const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
 
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
   return true;
+}
+
+function hasServiceApiKey(req: NextRequest): boolean {
+  return Boolean(req.headers.get("x-api-key")?.trim());
+}
+
+function isTrustedRetrieveServiceRequest(req: NextRequest): boolean {
+  if (req.method !== "POST") return false;
+  if (!trustedRetrievePathRegex.test(req.nextUrl.pathname)) return false;
+  return true;
+}
+
+function isTrustedRunStatusServiceRequest(req: NextRequest): boolean {
+  if (req.method !== "GET") return false;
+  if (!trustedRunStatusPathRegex.test(req.nextUrl.pathname)) return false;
+  return hasServiceApiKey(req);
 }
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
@@ -71,6 +89,8 @@ export default e2eMockGraph
     }
   : function proxy(req: NextRequest, event: NextFetchEvent) {
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
+      if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
+      if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
       return clerkProxy(req, event);
     };
 

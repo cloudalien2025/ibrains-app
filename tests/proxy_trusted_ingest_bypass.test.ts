@@ -10,7 +10,7 @@ vi.mock("@clerk/nextjs/server", () => ({
   createRouteMatcher: vi.fn(() => () => false),
 }));
 
-describe("proxy trusted ingest bypass", () => {
+describe("proxy trusted service bypass", () => {
   beforeEach(() => {
     vi.resetModules();
     vi.clearAllMocks();
@@ -48,5 +48,47 @@ describe("proxy trusted ingest bypass", () => {
     const res = await handler(req);
     expect(res.status).toBe(200);
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware for trusted retrieve requests", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/brains/ipetzo/retrieve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ query: "pet care", limit: 8 }),
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("bypasses Clerk middleware for trusted run-status requests with service key", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/runs/run_123", {
+      method: "GET",
+      headers: { "x-api-key": "worker_test_key" },
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("keeps Clerk middleware for run-status requests without service key", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/runs/run_123", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
 });
