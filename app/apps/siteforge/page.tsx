@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
 import {
@@ -18,7 +18,7 @@ import {
   SiteForgeSnapshotView as SiteForgeSnapshot,
   SiteForgeWorkspaceView as SiteForgeWorkspace,
 } from "@/lib/siteforge/workspaceShape";
-import { shouldTriggerProjectNameHandoff } from "@/lib/siteforge/projectNameHandoff";
+import { normalizeNewProjectName } from "@/lib/siteforge/newProjectName";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -101,6 +101,7 @@ export default function SiteForgeAppPage() {
   const [snapshot, setSnapshot] = useState<SiteForgeSnapshot | null>(null);
   const [savedConnection, setSavedConnection] = useState<SiteForgeConnection | null>(null);
 
+  const [newProjectName, setNewProjectName] = useState("");
   const [projectName, setProjectName] = useState("SiteForge Project");
   const [prompt, setPrompt] = useState("");
   const [refinePrompt, setRefinePrompt] = useState("");
@@ -115,10 +116,6 @@ export default function SiteForgeAppPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingCreatedProjectId, setPendingCreatedProjectId] = useState<string | null>(null);
-
-  const projectNameSectionRef = useRef<HTMLDivElement | null>(null);
-  const projectNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentSession = useMemo(
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
@@ -136,6 +133,7 @@ export default function SiteForgeAppPage() {
     setCurrentSessionId(null);
     setSnapshot(null);
     setSavedConnection(null);
+    setNewProjectName("");
     setProjectName("SiteForge Project");
     setPrompt("");
     setRefinePrompt("");
@@ -146,7 +144,6 @@ export default function SiteForgeAppPage() {
     setHasThriveHint(false);
     setHomepageStrategy("use_existing");
     setConnectionResult(null);
-    setPendingCreatedProjectId(null);
   }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
@@ -193,7 +190,6 @@ export default function SiteForgeAppPage() {
     if (!projectId) return;
     setBusy(true);
     setError(null);
-    setPendingCreatedProjectId(null);
 
     try {
       setSelectedProjectId(projectId);
@@ -280,42 +276,17 @@ export default function SiteForgeAppPage() {
     return () => window.clearInterval(timer);
   }, [activeProject, currentSessionId, sessions]);
 
-  useEffect(() => {
-    const input = projectNameInputRef.current;
-    if (!input) return;
-
-    const shouldHandoff = shouldTriggerProjectNameHandoff({
-      pendingCreatedProjectId,
-      activeProjectId: selectedProjectId,
-      inputDisabled: input.disabled,
-    });
-
-    if (!shouldHandoff) return;
-
-    projectNameSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "center",
-    });
-
-    window.requestAnimationFrame(() => {
-      const target = projectNameInputRef.current;
-      if (!target || target.disabled) return;
-      target.focus();
-      target.select();
-      setPendingCreatedProjectId(null);
-    });
-  }, [pendingCreatedProjectId, selectedProjectId]);
-
   async function createProject() {
+    const createName = normalizeNewProjectName(newProjectName);
+    if (!createName) {
+      setError("New Project Name is required.");
+      return;
+    }
+
     setBusy(true);
     setError(null);
 
     try {
-      const nextProjectNumber = projects.length + 1;
-      const createName =
-        projectName.trim() && (!activeProject || projectName.trim() !== activeProject.name)
-          ? projectName.trim()
-          : `SiteForge Project ${nextProjectNumber}`;
       const payload = await fetchJson<unknown>("/api/siteforge/projects", {
         method: "POST",
         body: JSON.stringify({
@@ -334,10 +305,9 @@ export default function SiteForgeAppPage() {
       if (!opened) {
         throw new Error("Project was created but could not be opened.");
       }
-      setPendingCreatedProjectId(normalized.project.id);
+      setNewProjectName("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Project creation failed.");
-      setPendingCreatedProjectId(null);
     } finally {
       setBusy(false);
     }
@@ -554,7 +524,19 @@ export default function SiteForgeAppPage() {
             <div className="mt-2 text-xs text-slate-400">
               Last opened: {formatDate(activeProject?.lastOpenedAt)}
             </div>
-            <button type="button" className={`${brainTheme.secondaryButton} mt-2`} onClick={createProject} disabled={busy}>
+            <label className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">New Project Name</label>
+            <input
+              value={newProjectName}
+              onChange={(event) => setNewProjectName(event.target.value)}
+              placeholder="e.g. iPetzo"
+              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+            />
+            <button
+              type="button"
+              className={`${brainTheme.secondaryButton} mt-2`}
+              onClick={createProject}
+              disabled={busy || !normalizeNewProjectName(newProjectName)}
+            >
               Create Project
             </button>
           </div>
@@ -664,7 +646,7 @@ export default function SiteForgeAppPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div ref={projectNameSectionRef} className={`${brainTheme.glassCard} p-6`}>
+          <div className={`${brainTheme.glassCard} p-6`}>
             <div className="flex items-center justify-between gap-2">
               <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
                 Project Name
@@ -680,7 +662,6 @@ export default function SiteForgeAppPage() {
             </div>
             <input
               id="siteforge-project-name"
-              ref={projectNameInputRef}
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
               disabled={!selectedProjectId}
