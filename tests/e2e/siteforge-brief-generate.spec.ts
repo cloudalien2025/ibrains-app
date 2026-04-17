@@ -99,16 +99,19 @@ test.describe("SiteForge brief + AI generate flow", () => {
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
 
-    await page.getByLabel("OpenAI API key").fill("sk-test");
+    await page.locator("#siteforge-ai-key").fill("sk-test");
     await page.getByRole("button", { name: "Save AI Key" }).click();
 
-    await page.getByLabel("Business name").fill("Acme Labs");
-    await page.getByLabel("Business type / category").fill("SaaS");
-    await page.getByLabel("What does the business do?").fill("Sales pipeline software");
-    await page.getByLabel("Who is the target audience?").fill("B2B sales leaders");
-    await page.getByLabel("Main offer / service / product").fill("Pipeline automation suite");
+    await page.locator("#siteforge-brief-business-name").fill("Acme Labs");
+    await page.locator("#siteforge-brief-business-type").fill("SaaS");
+    await page.locator("#siteforge-brief-business-description").fill("Sales pipeline software");
+    await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
+    await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
 
-    await page.getByRole("button", { name: "Generate My Website" }).click();
+    const generateButton = page.getByRole("button", { name: "Generate My Website" });
+    await expect(generateButton).toBeEnabled({ timeout: 30000 });
+
+    await generateButton.click();
 
     await expect.poll(() => lastBuildBody).not.toBeNull();
     const websiteBrief = (lastBuildBody as Record<string, unknown>).websiteBrief as Record<string, unknown>;
