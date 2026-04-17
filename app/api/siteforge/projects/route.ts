@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { SiteForgeProject } from "@/lib/siteforge/contracts";
-import { createId, nowIso } from "@/lib/siteforge/utils";
+import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
 
 export async function GET() {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
@@ -14,8 +14,9 @@ export async function GET() {
   }
 
   const repo = await getSiteForgeRepository();
+  const lastOpenedProjectId = await repo.getLastOpenedProjectId(userId);
   const projects = await repo.listProjects(userId);
-  return NextResponse.json({ projects }, { status: 200 });
+  return NextResponse.json({ projects, lastOpenedProjectId }, { status: 200 });
 }
 
 export async function POST(req: NextRequest) {
@@ -31,12 +32,21 @@ export async function POST(req: NextRequest) {
     typeof body?.description === "string" && body.description.trim()
       ? body.description.trim()
       : "AI-generated website build project";
+  const primaryPrompt =
+    typeof body?.primaryPrompt === "string" && body.primaryPrompt.trim() ? body.primaryPrompt.trim() : null;
 
   const now = nowIso();
   const project: SiteForgeProject = {
     id: createId("sfp"),
     userId,
     name,
+    slug: toSlug(name),
+    status: "draft",
+    siteType: null,
+    primaryPrompt,
+    currentState: "workspace",
+    homepageStrategy: "use_existing",
+    lastOpenedAt: now,
     description,
     latestSessionId: null,
     createdAt: now,
@@ -45,6 +55,7 @@ export async function POST(req: NextRequest) {
 
   const repo = await getSiteForgeRepository();
   await repo.createProject(project);
+  await repo.markProjectOpened(userId, project.id);
   return NextResponse.json({ project }, { status: 201 });
 }
 

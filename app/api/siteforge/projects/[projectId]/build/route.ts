@@ -8,6 +8,7 @@ import { createInitialRunState } from "@/lib/siteforge/orchestrator";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { enqueueBuildJob } from "@/lib/siteforge/runner";
 import { createId, nowIso } from "@/lib/siteforge/utils";
+import { resolveRuntimeConnection } from "@/lib/siteforge/workspace";
 
 export async function POST(
   req: NextRequest,
@@ -29,13 +30,23 @@ export async function POST(
       return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
     }
 
-    const connection = resolveConnection(payload);
+    const initialConnection = resolveConnection(payload);
+    const resolvedConnection = await resolveRuntimeConnection({
+      repo,
+      projectId,
+      incoming: initialConnection,
+      preferConnectionId: payload.connectionId,
+    });
+    const connection = resolvedConnection.connection;
     const now = nowIso();
 
     const session: BuildSession = {
       id: createId("sfs"),
       projectId,
       userId,
+      connectionId: resolvedConnection.connectionId,
+      type: "generate",
+      triggerSource: "user",
       prompt: payload.prompt,
       connectionProfile: sanitizeConnection(connection),
       status: "queued",
@@ -46,15 +57,29 @@ export async function POST(
       qaResult: null,
       executionResult: null,
       revisionHistory: [],
+      errorSummary: null,
       startedAt: now,
+      completedAt: null,
       finishedAt: null,
       createdAt: now,
       updatedAt: now,
     };
 
     await repo.createSession(session);
-    await repo.updateProject(projectId, { latestSessionId: session.id });
-    await enqueueBuildJob({ sessionId: session.id, prompt: payload.prompt, connection });
+    await repo.updateProject(projectId, {
+      latestSessionId: session.id,
+      primaryPrompt: payload.prompt,
+      currentState: "running_build",
+      homepageStrategy: payload.homepageStrategy,
+    });
+    await repo.markProjectOpened(userId, projectId);
+    await enqueueBuildJob({
+      sessionId: session.id,
+      prompt: payload.prompt,
+      connection,
+      connectionId: session.connectionId,
+      homepageStrategy: payload.homepageStrategy ?? project.homepageStrategy,
+    });
 
     return NextResponse.json({ session }, { status: 202 });
   } catch (error: unknown) {

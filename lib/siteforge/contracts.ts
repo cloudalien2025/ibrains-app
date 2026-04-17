@@ -177,6 +177,15 @@ export type RevisionExecutionResult = {
   errors: string[];
 };
 
+export const homepageStrategyModes = [
+  "use_existing",
+  "replace_existing",
+  "create_new",
+  "draft_only",
+] as const;
+
+export type HomepageStrategyMode = (typeof homepageStrategyModes)[number];
+
 export type ConnectionProfile = {
   id: string;
   label: string;
@@ -208,11 +217,16 @@ export type BuildRunState = {
 };
 
 export type BuildSessionStatus = "queued" | "running" | "completed" | "failed";
+export type BuildSessionType = "generate" | "refine";
+export type BuildTriggerSource = "user" | "resume" | "system";
 
 export type BuildSession = {
   id: string;
   projectId: string;
   userId: string;
+  connectionId: string | null;
+  type: BuildSessionType;
+  triggerSource: BuildTriggerSource;
   prompt: string;
   connectionProfile: Omit<ConnectionProfile, "appPassword"> | null;
   status: BuildSessionStatus;
@@ -230,20 +244,90 @@ export type BuildSession = {
     qa: QAResult;
     execution: RevisionExecutionResult;
   }>;
+  errorSummary: string | null;
   startedAt: string;
+  completedAt: string | null;
   finishedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
+export type SiteForgeProjectStatus = "draft" | "active" | "archived";
+
 export type SiteForgeProject = {
   id: string;
   userId: string;
   name: string;
+  slug: string;
+  status: SiteForgeProjectStatus;
+  siteType: string | null;
+  primaryPrompt: string | null;
+  currentState: string;
+  homepageStrategy: HomepageStrategyMode;
+  lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type ConnectionValidationStatus = "not_validated" | "valid" | "invalid";
+
+export type StoredConnectionSecret = {
+  ref: string;
+  cipherText: string;
+};
+
+export type SiteForgeConnection = {
+  connectionId: string;
+  projectId: string;
+  label: string;
+  wordpressUrl: string;
+  username: string;
+  authType: "application_password";
+  secretRef: string | null;
+  hasSavedSecret: boolean;
+  thriveDetected: boolean;
+  writeAccess: boolean;
+  lastValidatedAt: string | null;
+  lastValidationStatus: ConnectionValidationStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type SiteForgeRunLog = {
+  logId: string;
+  sessionId: string;
+  stage: BuildStage;
+  message: string;
+  level: "info" | "warning" | "error";
+  timestamp: string;
+};
+
+export type SiteForgeSnapshot = {
+  snapshotId: string;
+  projectId: string;
+  connectionId: string | null;
+  currentHomepageId: number | null;
+  currentHomepageTitle: string | null;
+  currentHomepageSource: "wordpress" | "thrive" | "unknown";
+  knownPages: Array<{ id: number | null; slug: string; title: string; url: string | null }>;
+  knownMenus: Array<{ id: number | null; label: string; source: string }>;
+  thriveDetected: boolean;
+  homepageStrategy: HomepageStrategyMode;
+  lastRunSummary: string | null;
+  lastRunStatus: BuildSessionStatus | null;
+  pagesAffected: number;
+  lastSyncedAt: string;
+};
+
+export type SiteForgeWorkspace = {
+  project: SiteForgeProject;
+  activeConnection: SiteForgeConnection | null;
+  snapshot: SiteForgeSnapshot | null;
+  latestRun: BuildSession | null;
+  runHistory: BuildSession[];
+  runLogs: SiteForgeRunLog[];
 };
 
 export type RetryDirective = {

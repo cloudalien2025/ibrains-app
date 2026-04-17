@@ -1,0 +1,140 @@
+import {
+  BuildSession,
+  CapabilityCheckResult,
+  ConnectionProfile,
+  HomepageStrategyMode,
+  SiteForgeConnection,
+  SiteForgeSnapshot,
+} from "@/lib/siteforge/contracts";
+import { SiteForgeRepository } from "@/lib/siteforge/repository/types";
+import { decryptSecret, encryptSecret } from "@/lib/siteforge/secrets";
+import { createId, nowIso } from "@/lib/siteforge/utils";
+
+export async function resolveRuntimeConnection(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+  incoming: ConnectionProfile | null;
+  preferConnectionId?: string;
+}): Promise<{ connection: ConnectionProfile | null; connectionId: string | null; secretFromSaved: boolean }> {
+  if (params.incoming?.baseUrl && params.incoming.username && params.incoming.appPassword) {
+    return {
+      connection: params.incoming,
+      connectionId: params.preferConnectionId ?? params.incoming.id,
+      secretFromSaved: false,
+    };
+  }
+
+  const saved = await params.repo.getProjectConnection(params.projectId);
+  if (!saved) {
+    return {
+      connection: params.incoming,
+      connectionId: null,
+      secretFromSaved: false,
+    };
+  }
+
+  const secret = await params.repo.getConnectionSecret(saved.connectionId);
+  if (!secret) {
+    return {
+      connection: {
+        id: saved.connectionId,
+        label: saved.label,
+        baseUrl: saved.wordpressUrl,
+        username: saved.username,
+        hasThriveHint: saved.thriveDetected,
+        lastValidatedAt: saved.lastValidatedAt,
+      },
+      connectionId: saved.connectionId,
+      secretFromSaved: false,
+    };
+  }
+
+  return {
+    connection: {
+      id: saved.connectionId,
+      label: saved.label,
+      baseUrl: saved.wordpressUrl,
+      username: saved.username,
+      appPassword: decryptSecret(secret.cipherText),
+      hasThriveHint: saved.thriveDetected,
+      lastValidatedAt: saved.lastValidatedAt,
+    },
+    connectionId: saved.connectionId,
+    secretFromSaved: true,
+  };
+}
+
+export async function saveConnectionProfile(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+  connection: ConnectionProfile;
+  validation: CapabilityCheckResult;
+}): Promise<SiteForgeConnection> {
+  const encrypted = params.connection.appPassword ? encryptSecret(params.connection.appPassword) : null;
+  const now = nowIso();
+
+  return params.repo.upsertConnection({
+    projectId: params.projectId,
+    connection: {
+      connectionId: params.connection.id,
+      projectId: params.projectId,
+      label: params.connection.label,
+      wordpressUrl: params.connection.baseUrl,
+      username: params.connection.username,
+      authType: "application_password",
+      secretRef: encrypted?.ref ?? null,
+      hasSavedSecret: Boolean(encrypted),
+      thriveDetected: params.validation.thriveDetected,
+      writeAccess: params.validation.canWritePages,
+      lastValidatedAt: now,
+      lastValidationStatus: params.validation.connected ? "valid" : "invalid",
+      createdAt: now,
+      updatedAt: now,
+    },
+    secret: encrypted,
+  });
+}
+
+export async function persistSnapshotFromSession(params: {
+  repo: SiteForgeRepository;
+  session: BuildSession;
+  homepageStrategy: HomepageStrategyMode;
+  connectionId: string | null;
+  thriveDetected: boolean;
+}): Promise<SiteForgeSnapshot> {
+  const execution = params.session.executionResult;
+  const homepageSlug = params.session.buildSpec?.homepageSlug;
+  const homepagePage = params.session.buildSpec?.pages.find((page) => page.slug === homepageSlug);
+  const homepageRecord = execution?.createdPages.find((page) => page.slug === homepageSlug) ?? null;
+
+  const knownPages =
+    execution?.createdPages.map((page) => ({
+      id: page.pageId,
+      slug: page.slug,
+      title: page.title,
+      url: page.url,
+    })) ?? [];
+
+  const snapshot: SiteForgeSnapshot = {
+    snapshotId: createId("sfsnap"),
+    projectId: params.session.projectId,
+    connectionId: params.connectionId,
+    currentHomepageId: homepageRecord?.pageId ?? null,
+    currentHomepageTitle: homepagePage?.title ?? null,
+    currentHomepageSource: params.thriveDetected ? "thrive" : "wordpress",
+    knownPages,
+    knownMenus: execution?.menu?.menuId
+      ? [{ id: execution.menu.menuId, label: "Primary Navigation", source: "wordpress" }]
+      : [],
+    thriveDetected: params.thriveDetected,
+    homepageStrategy: params.homepageStrategy,
+    lastRunSummary: execution
+      ? `Pages created: ${execution.createdPages.filter((entry) => entry.status !== "failed").length}`
+      : `Build completed (${params.session.runState.currentStage})`,
+    lastRunStatus: params.session.status,
+    pagesAffected: knownPages.length,
+    lastSyncedAt: nowIso(),
+  };
+
+  return params.repo.upsertSnapshot(snapshot);
+}

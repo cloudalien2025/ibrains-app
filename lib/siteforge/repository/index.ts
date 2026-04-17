@@ -1,5 +1,14 @@
 import { getBrainLearningPool } from "@/lib/brain-learning/db";
-import { BuildSession, SiteForgeProject } from "@/lib/siteforge/contracts";
+import {
+  BuildSession,
+  HomepageStrategyMode,
+  SiteForgeConnection,
+  SiteForgeProject,
+  SiteForgeRunLog,
+  SiteForgeSnapshot,
+  SiteForgeWorkspace,
+  StoredConnectionSecret,
+} from "@/lib/siteforge/contracts";
 import { SiteForgeFailureRecord, SiteForgeRepository } from "@/lib/siteforge/repository/types";
 import { nowIso } from "@/lib/siteforge/utils";
 
@@ -7,6 +16,11 @@ type MemoryStore = {
   projects: Map<string, SiteForgeProject>;
   sessions: Map<string, BuildSession>;
   failures: Map<string, SiteForgeFailureRecord[]>;
+  connectionsByProject: Map<string, SiteForgeConnection>;
+  connectionSecrets: Map<string, StoredConnectionSecret>;
+  snapshotsByProject: Map<string, SiteForgeSnapshot>;
+  runLogsBySession: Map<string, SiteForgeRunLog[]>;
+  lastOpenedProjectByUser: Map<string, string>;
 };
 
 declare global {
@@ -19,6 +33,11 @@ function getMemoryStore(): MemoryStore {
       projects: new Map(),
       sessions: new Map(),
       failures: new Map(),
+      connectionsByProject: new Map(),
+      connectionSecrets: new Map(),
+      snapshotsByProject: new Map(),
+      runLogsBySession: new Map(),
+      lastOpenedProjectByUser: new Map(),
     };
   }
   return globalThis.__siteforge_memory_store__;
@@ -43,12 +62,8 @@ function mergeSession(session: BuildSession, patch: Partial<BuildSession>): Buil
   return {
     ...session,
     ...patch,
-    runState: patch.runState
-      ? patch.runState
-      : session.runState,
-    revisionHistory: patch.revisionHistory
-      ? patch.revisionHistory
-      : session.revisionHistory,
+    runState: patch.runState ? patch.runState : session.runState,
+    revisionHistory: patch.revisionHistory ? patch.revisionHistory : session.revisionHistory,
     updatedAt: patch.updatedAt ?? nowIso(),
   };
 }
@@ -57,8 +72,32 @@ type SiteForgeProjectRow = {
   id: string;
   user_id: string;
   name: string;
+  slug: string | null;
+  status: SiteForgeProject["status"] | null;
+  site_type: string | null;
+  primary_prompt: string | null;
+  current_state: string | null;
+  homepage_strategy: HomepageStrategyMode | null;
+  last_opened_at: string | Date | null;
   description: string;
   latest_session_id: string | null;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
+type SiteForgeConnectionRow = {
+  id: string;
+  project_id: string;
+  label: string;
+  wordpress_url: string;
+  username: string;
+  auth_type: "application_password";
+  secret_ref: string | null;
+  secret_ciphertext: string | null;
+  thrive_detected: boolean;
+  write_access: boolean;
+  last_validated_at: string | Date | null;
+  last_validation_status: SiteForgeConnection["lastValidationStatus"];
   created_at: string | Date;
   updated_at: string | Date;
 };
@@ -67,6 +106,9 @@ type SiteForgeSessionRow = {
   id: string;
   project_id: string;
   user_id: string;
+  connection_id: string | null;
+  session_type: BuildSession["type"] | null;
+  trigger_source: BuildSession["triggerSource"] | null;
   prompt: string;
   connection_profile: BuildSession["connectionProfile"] | null;
   status: BuildSession["status"];
@@ -77,7 +119,9 @@ type SiteForgeSessionRow = {
   qa_result: BuildSession["qaResult"];
   execution_result: BuildSession["executionResult"];
   revision_history: BuildSession["revisionHistory"] | null;
+  error_summary: string | null;
   started_at: string | Date;
+  completed_at: string | Date | null;
   finished_at: string | Date | null;
   created_at: string | Date;
   updated_at: string | Date;
@@ -91,13 +135,67 @@ type SiteForgeFailureRow = {
   reason: string;
 };
 
+type SiteForgeRunLogRow = {
+  id: string;
+  session_id: string;
+  stage: SiteForgeRunLog["stage"];
+  message: string;
+  level: SiteForgeRunLog["level"];
+  happened_at: string | Date;
+};
+
+type SiteForgeSnapshotRow = {
+  id: string;
+  project_id: string;
+  connection_id: string | null;
+  current_homepage_id: number | null;
+  current_homepage_title: string | null;
+  current_homepage_source: SiteForgeSnapshot["currentHomepageSource"];
+  known_pages: SiteForgeSnapshot["knownPages"];
+  known_menus: SiteForgeSnapshot["knownMenus"];
+  thrive_detected: boolean;
+  homepage_strategy: HomepageStrategyMode;
+  last_run_summary: string | null;
+  last_run_status: BuildSession["status"] | null;
+  pages_affected: number;
+  last_synced_at: string | Date;
+  created_at: string | Date;
+  updated_at: string | Date;
+};
+
 function mapProjectRow(row: SiteForgeProjectRow): SiteForgeProject {
   return {
     id: row.id,
     userId: row.user_id,
     name: row.name,
+    slug: row.slug ?? (row.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "project"),
+    status: row.status ?? "draft",
+    siteType: row.site_type,
+    primaryPrompt: row.primary_prompt,
+    currentState: row.current_state ?? "workspace",
+    homepageStrategy: row.homepage_strategy ?? "use_existing",
+    lastOpenedAt: row.last_opened_at ? new Date(row.last_opened_at).toISOString() : null,
     description: row.description,
     latestSessionId: row.latest_session_id,
+    createdAt: new Date(row.created_at).toISOString(),
+    updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function mapConnectionRow(row: SiteForgeConnectionRow): SiteForgeConnection {
+  return {
+    connectionId: row.id,
+    projectId: row.project_id,
+    label: row.label,
+    wordpressUrl: row.wordpress_url,
+    username: row.username,
+    authType: row.auth_type,
+    secretRef: row.secret_ref,
+    hasSavedSecret: Boolean(row.secret_ref && row.secret_ciphertext),
+    thriveDetected: row.thrive_detected,
+    writeAccess: row.write_access,
+    lastValidatedAt: row.last_validated_at ? new Date(row.last_validated_at).toISOString() : null,
+    lastValidationStatus: row.last_validation_status,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
   };
@@ -108,6 +206,9 @@ function mapSessionRow(row: SiteForgeSessionRow): BuildSession {
     id: row.id,
     projectId: row.project_id,
     userId: row.user_id,
+    connectionId: row.connection_id,
+    type: row.session_type ?? "generate",
+    triggerSource: row.trigger_source ?? "user",
     prompt: row.prompt,
     connectionProfile: row.connection_profile,
     status: row.status,
@@ -118,7 +219,9 @@ function mapSessionRow(row: SiteForgeSessionRow): BuildSession {
     qaResult: row.qa_result,
     executionResult: row.execution_result,
     revisionHistory: row.revision_history ?? [],
+    errorSummary: row.error_summary,
     startedAt: new Date(row.started_at).toISOString(),
+    completedAt: row.completed_at ? new Date(row.completed_at).toISOString() : null,
     finishedAt: row.finished_at ? new Date(row.finished_at).toISOString() : null,
     createdAt: new Date(row.created_at).toISOString(),
     updatedAt: new Date(row.updated_at).toISOString(),
@@ -135,6 +238,36 @@ function mapFailureRow(row: SiteForgeFailureRow): SiteForgeFailureRecord {
   };
 }
 
+function mapRunLogRow(row: SiteForgeRunLogRow): SiteForgeRunLog {
+  return {
+    logId: row.id,
+    sessionId: row.session_id,
+    stage: row.stage,
+    message: row.message,
+    level: row.level,
+    timestamp: new Date(row.happened_at).toISOString(),
+  };
+}
+
+function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
+  return {
+    snapshotId: row.id,
+    projectId: row.project_id,
+    connectionId: row.connection_id,
+    currentHomepageId: row.current_homepage_id,
+    currentHomepageTitle: row.current_homepage_title,
+    currentHomepageSource: row.current_homepage_source,
+    knownPages: Array.isArray(row.known_pages) ? row.known_pages : [],
+    knownMenus: Array.isArray(row.known_menus) ? row.known_menus : [],
+    thriveDetected: row.thrive_detected,
+    homepageStrategy: row.homepage_strategy,
+    lastRunSummary: row.last_run_summary,
+    lastRunStatus: row.last_run_status,
+    pagesAffected: row.pages_affected,
+    lastSyncedAt: new Date(row.last_synced_at).toISOString(),
+  };
+}
+
 class MemoryRepository implements SiteForgeRepository {
   private readonly store = getMemoryStore();
 
@@ -146,7 +279,7 @@ class MemoryRepository implements SiteForgeRepository {
   async listProjects(userId: string): Promise<SiteForgeProject[]> {
     return [...this.store.projects.values()]
       .filter((project) => project.userId === userId)
-      .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
+      .sort((a, b) => Date.parse((b.lastOpenedAt ?? b.updatedAt)) - Date.parse((a.lastOpenedAt ?? a.updatedAt)));
   }
 
   async getProject(projectId: string, userId: string): Promise<SiteForgeProject | null> {
@@ -159,6 +292,78 @@ class MemoryRepository implements SiteForgeRepository {
     const current = this.store.projects.get(projectId);
     if (!current) return;
     this.store.projects.set(projectId, { ...current, ...patch, updatedAt: nowIso() });
+  }
+
+  async getLastOpenedProjectId(userId: string): Promise<string | null> {
+    return this.store.lastOpenedProjectByUser.get(userId) ?? null;
+  }
+
+  async markProjectOpened(userId: string, projectId: string): Promise<void> {
+    this.store.lastOpenedProjectByUser.set(userId, projectId);
+    const project = this.store.projects.get(projectId);
+    if (!project) return;
+    this.store.projects.set(projectId, { ...project, lastOpenedAt: nowIso(), updatedAt: nowIso() });
+  }
+
+  async upsertConnection(params: {
+    projectId: string;
+    connection: SiteForgeConnection;
+    secret?: StoredConnectionSecret | null;
+  }): Promise<SiteForgeConnection> {
+    const existing = this.store.connectionsByProject.get(params.projectId);
+    const merged: SiteForgeConnection = {
+      ...(existing ?? params.connection),
+      ...params.connection,
+      projectId: params.projectId,
+      updatedAt: nowIso(),
+      createdAt: existing?.createdAt ?? params.connection.createdAt,
+      hasSavedSecret: params.secret ? true : (existing?.hasSavedSecret ?? params.connection.hasSavedSecret),
+      secretRef: params.secret?.ref ?? params.connection.secretRef ?? existing?.secretRef ?? null,
+    };
+    this.store.connectionsByProject.set(params.projectId, merged);
+
+    if (params.secret) {
+      this.store.connectionSecrets.set(merged.connectionId, params.secret);
+    }
+
+    return merged;
+  }
+
+  async getProjectConnection(projectId: string): Promise<SiteForgeConnection | null> {
+    return this.store.connectionsByProject.get(projectId) ?? null;
+  }
+
+  async getConnectionSecret(connectionId: string): Promise<StoredConnectionSecret | null> {
+    return this.store.connectionSecrets.get(connectionId) ?? null;
+  }
+
+  async updateConnectionValidation(connectionId: string, patch: {
+    status: SiteForgeConnection["lastValidationStatus"];
+    thriveDetected: boolean;
+    writeAccess: boolean;
+    lastValidatedAt: string;
+  }): Promise<void> {
+    const connection = [...this.store.connectionsByProject.values()].find((item) => item.connectionId === connectionId);
+    if (!connection) return;
+
+    this.store.connectionsByProject.set(connection.projectId, {
+      ...connection,
+      lastValidationStatus: patch.status,
+      thriveDetected: patch.thriveDetected,
+      writeAccess: patch.writeAccess,
+      lastValidatedAt: patch.lastValidatedAt,
+      updatedAt: nowIso(),
+    });
+  }
+
+  async setProjectHomepageStrategy(projectId: string, strategy: HomepageStrategyMode): Promise<void> {
+    const project = this.store.projects.get(projectId);
+    if (!project) return;
+    this.store.projects.set(projectId, {
+      ...project,
+      homepageStrategy: strategy,
+      updatedAt: nowIso(),
+    });
   }
 
   async createSession(session: BuildSession): Promise<BuildSession> {
@@ -192,6 +397,52 @@ class MemoryRepository implements SiteForgeRepository {
     });
   }
 
+  async appendRunLog(log: SiteForgeRunLog): Promise<void> {
+    const list = this.store.runLogsBySession.get(log.sessionId) ?? [];
+    this.store.runLogsBySession.set(log.sessionId, [log, ...list]);
+  }
+
+  async listRunLogs(projectId: string, userId: string): Promise<SiteForgeRunLog[]> {
+    const sessionIds = new Set(
+      [...this.store.sessions.values()]
+        .filter((session) => session.projectId === projectId && session.userId === userId)
+        .map((session) => session.id)
+    );
+
+    const logs: SiteForgeRunLog[] = [];
+    for (const [sessionId, list] of this.store.runLogsBySession.entries()) {
+      if (sessionIds.has(sessionId)) logs.push(...list);
+    }
+
+    return logs.sort((a, b) => Date.parse(b.timestamp) - Date.parse(a.timestamp));
+  }
+
+  async upsertSnapshot(snapshot: SiteForgeSnapshot): Promise<SiteForgeSnapshot> {
+    this.store.snapshotsByProject.set(snapshot.projectId, snapshot);
+    return snapshot;
+  }
+
+  async getLatestSnapshot(projectId: string): Promise<SiteForgeSnapshot | null> {
+    return this.store.snapshotsByProject.get(projectId) ?? null;
+  }
+
+  async getWorkspace(projectId: string, userId: string): Promise<SiteForgeWorkspace | null> {
+    const project = await this.getProject(projectId, userId);
+    if (!project) return null;
+
+    const runHistory = await this.listSessions(projectId, userId);
+    const runLogs = await this.listRunLogs(projectId, userId);
+
+    return {
+      project,
+      activeConnection: await this.getProjectConnection(projectId),
+      snapshot: await this.getLatestSnapshot(projectId),
+      latestRun: runHistory[0] ?? null,
+      runHistory,
+      runLogs,
+    };
+  }
+
   async appendFailure(sessionId: string, failure: SiteForgeFailureRecord): Promise<void> {
     const list = this.store.failures.get(sessionId) ?? [];
     this.store.failures.set(sessionId, [...list, failure]);
@@ -212,9 +463,7 @@ class MemoryRepository implements SiteForgeRepository {
   }> {
     const sessions = [...this.store.sessions.values()];
     const lastRunAt = sessions.length
-      ? sessions
-          .map((session) => session.updatedAt)
-          .sort((a, b) => Date.parse(b) - Date.parse(a))[0]
+      ? sessions.map((session) => session.updatedAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
       : null;
     return {
       projects: this.store.projects.size,
@@ -232,9 +481,26 @@ class PostgresRepository implements SiteForgeRepository {
   async createProject(project: SiteForgeProject): Promise<SiteForgeProject> {
     const pool = getBrainLearningPool();
     await pool.query(
-      `INSERT INTO siteforge_projects (id, user_id, name, description, latest_session_id, created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [project.id, project.userId, project.name, project.description, project.latestSessionId, project.createdAt, project.updatedAt]
+      `INSERT INTO siteforge_projects (
+        id, user_id, name, slug, status, site_type, primary_prompt, current_state,
+        homepage_strategy, last_opened_at, description, latest_session_id, created_at, updated_at
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
+      [
+        project.id,
+        project.userId,
+        project.name,
+        project.slug,
+        project.status,
+        project.siteType,
+        project.primaryPrompt,
+        project.currentState,
+        project.homepageStrategy,
+        project.lastOpenedAt,
+        project.description,
+        project.latestSessionId,
+        project.createdAt,
+        project.updatedAt,
+      ]
     );
     return project;
   }
@@ -242,8 +508,12 @@ class PostgresRepository implements SiteForgeRepository {
   async listProjects(userId: string): Promise<SiteForgeProject[]> {
     const pool = getBrainLearningPool();
     const result = await pool.query<SiteForgeProjectRow>(
-      `SELECT id, user_id, name, description, latest_session_id, created_at, updated_at
-       FROM siteforge_projects WHERE user_id = $1 ORDER BY updated_at DESC`,
+      `SELECT
+        id, user_id, name, slug, status, site_type, primary_prompt, current_state,
+        homepage_strategy, last_opened_at, description, latest_session_id, created_at, updated_at
+       FROM siteforge_projects
+       WHERE user_id = $1
+       ORDER BY COALESCE(last_opened_at, updated_at) DESC`,
       [userId]
     );
     return result.rows.map(mapProjectRow);
@@ -252,7 +522,9 @@ class PostgresRepository implements SiteForgeRepository {
   async getProject(projectId: string, userId: string): Promise<SiteForgeProject | null> {
     const pool = getBrainLearningPool();
     const result = await pool.query<SiteForgeProjectRow>(
-      `SELECT id, user_id, name, description, latest_session_id, created_at, updated_at
+      `SELECT
+        id, user_id, name, slug, status, site_type, primary_prompt, current_state,
+        homepage_strategy, last_opened_at, description, latest_session_id, created_at, updated_at
        FROM siteforge_projects WHERE id = $1 AND user_id = $2 LIMIT 1`,
       [projectId, userId]
     );
@@ -268,11 +540,164 @@ class PostgresRepository implements SiteForgeRepository {
     await pool.query(
       `UPDATE siteforge_projects SET
         name = COALESCE($2, name),
-        description = COALESCE($3, description),
-        latest_session_id = COALESCE($4, latest_session_id),
-        updated_at = $5
+        slug = COALESCE($3, slug),
+        status = COALESCE($4, status),
+        site_type = COALESCE($5, site_type),
+        primary_prompt = COALESCE($6, primary_prompt),
+        current_state = COALESCE($7, current_state),
+        homepage_strategy = COALESCE($8, homepage_strategy),
+        last_opened_at = COALESCE($9, last_opened_at),
+        description = COALESCE($10, description),
+        latest_session_id = COALESCE($11, latest_session_id),
+        updated_at = $12
       WHERE id = $1`,
-      [projectId, patch.name ?? null, patch.description ?? null, patch.latestSessionId ?? null, nowIso()]
+      [
+        projectId,
+        patch.name ?? null,
+        patch.slug ?? null,
+        patch.status ?? null,
+        patch.siteType ?? null,
+        patch.primaryPrompt ?? null,
+        patch.currentState ?? null,
+        patch.homepageStrategy ?? null,
+        patch.lastOpenedAt ?? null,
+        patch.description ?? null,
+        patch.latestSessionId ?? null,
+        nowIso(),
+      ]
+    );
+  }
+
+  async getLastOpenedProjectId(userId: string): Promise<string | null> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<{ project_id: string }>(
+      `SELECT project_id FROM siteforge_user_workspace_state WHERE user_id = $1 LIMIT 1`,
+      [userId]
+    );
+    return result.rows[0]?.project_id ?? null;
+  }
+
+  async markProjectOpened(userId: string, projectId: string): Promise<void> {
+    const pool = getBrainLearningPool();
+    const now = nowIso();
+
+    await pool.query(
+      `INSERT INTO siteforge_user_workspace_state (user_id, project_id, updated_at)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (user_id)
+       DO UPDATE SET project_id = EXCLUDED.project_id, updated_at = EXCLUDED.updated_at`,
+      [userId, projectId, now]
+    );
+
+    await pool.query(
+      `UPDATE siteforge_projects SET last_opened_at = $2, updated_at = $2 WHERE id = $1`,
+      [projectId, now]
+    );
+  }
+
+  async upsertConnection(params: {
+    projectId: string;
+    connection: SiteForgeConnection;
+    secret?: StoredConnectionSecret | null;
+  }): Promise<SiteForgeConnection> {
+    const pool = getBrainLearningPool();
+    const secretRef = params.secret?.ref ?? params.connection.secretRef;
+    const secretCipher = params.secret?.cipherText ?? null;
+
+    await pool.query(
+      `INSERT INTO siteforge_connections (
+         id, project_id, label, wordpress_url, username, auth_type, secret_ref, secret_ciphertext,
+         thrive_detected, write_access, last_validated_at, last_validation_status, created_at, updated_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
+       ON CONFLICT (project_id)
+       DO UPDATE SET
+         id = EXCLUDED.id,
+         label = EXCLUDED.label,
+         wordpress_url = EXCLUDED.wordpress_url,
+         username = EXCLUDED.username,
+         auth_type = EXCLUDED.auth_type,
+         secret_ref = COALESCE(EXCLUDED.secret_ref, siteforge_connections.secret_ref),
+         secret_ciphertext = COALESCE(EXCLUDED.secret_ciphertext, siteforge_connections.secret_ciphertext),
+         thrive_detected = EXCLUDED.thrive_detected,
+         write_access = EXCLUDED.write_access,
+         last_validated_at = EXCLUDED.last_validated_at,
+         last_validation_status = EXCLUDED.last_validation_status,
+         updated_at = EXCLUDED.updated_at`,
+      [
+        params.connection.connectionId,
+        params.projectId,
+        params.connection.label,
+        params.connection.wordpressUrl,
+        params.connection.username,
+        params.connection.authType,
+        secretRef,
+        secretCipher,
+        params.connection.thriveDetected,
+        params.connection.writeAccess,
+        params.connection.lastValidatedAt,
+        params.connection.lastValidationStatus,
+        params.connection.createdAt,
+        nowIso(),
+      ]
+    );
+
+    const saved = await this.getProjectConnection(params.projectId);
+    if (!saved) {
+      throw new Error("Connection save failed.");
+    }
+
+    return saved;
+  }
+
+  async getProjectConnection(projectId: string): Promise<SiteForgeConnection | null> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<SiteForgeConnectionRow>(
+      `SELECT * FROM siteforge_connections WHERE project_id = $1 LIMIT 1`,
+      [projectId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return mapConnectionRow(row);
+  }
+
+  async getConnectionSecret(connectionId: string): Promise<StoredConnectionSecret | null> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<{ secret_ref: string | null; secret_ciphertext: string | null }>(
+      `SELECT secret_ref, secret_ciphertext FROM siteforge_connections WHERE id = $1 LIMIT 1`,
+      [connectionId]
+    );
+    const row = result.rows[0];
+    if (!row?.secret_ref || !row?.secret_ciphertext) return null;
+    return {
+      ref: row.secret_ref,
+      cipherText: row.secret_ciphertext,
+    };
+  }
+
+  async updateConnectionValidation(connectionId: string, patch: {
+    status: SiteForgeConnection["lastValidationStatus"];
+    thriveDetected: boolean;
+    writeAccess: boolean;
+    lastValidatedAt: string;
+  }): Promise<void> {
+    const pool = getBrainLearningPool();
+    await pool.query(
+      `UPDATE siteforge_connections SET
+        last_validation_status = $2,
+        thrive_detected = $3,
+        write_access = $4,
+        last_validated_at = $5,
+        updated_at = $6
+      WHERE id = $1`,
+      [connectionId, patch.status, patch.thriveDetected, patch.writeAccess, patch.lastValidatedAt, nowIso()]
+    );
+  }
+
+  async setProjectHomepageStrategy(projectId: string, strategy: HomepageStrategyMode): Promise<void> {
+    const pool = getBrainLearningPool();
+    await pool.query(
+      `UPDATE siteforge_projects SET homepage_strategy = $2, updated_at = $3 WHERE id = $1`,
+      [projectId, strategy, nowIso()]
     );
   }
 
@@ -280,18 +705,23 @@ class PostgresRepository implements SiteForgeRepository {
     const pool = getBrainLearningPool();
     await pool.query(
       `INSERT INTO siteforge_sessions (
-        id, project_id, user_id, prompt, connection_profile, status,
-        run_state, site_plan, content_package, build_spec, qa_result,
-        execution_result, revision_history, started_at, finished_at, created_at, updated_at
+        id, project_id, user_id, connection_id, session_type, trigger_source,
+        prompt, connection_profile, status, run_state, site_plan, content_package,
+        build_spec, qa_result, execution_result, revision_history, error_summary,
+        started_at, completed_at, finished_at, created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,$11,
-        $12,$13,$14,$15,$16,$17
+        $7,$8,$9,$10,$11,$12,
+        $13,$14,$15,$16,$17,
+        $18,$19,$20,$21,$22
       )`,
       [
         session.id,
         session.projectId,
         session.userId,
+        session.connectionId,
+        session.type,
+        session.triggerSource,
         session.prompt,
         session.connectionProfile ? JSON.stringify(session.connectionProfile) : null,
         session.status,
@@ -302,7 +732,9 @@ class PostgresRepository implements SiteForgeRepository {
         session.qaResult ? JSON.stringify(session.qaResult) : null,
         session.executionResult ? JSON.stringify(session.executionResult) : null,
         JSON.stringify(session.revisionHistory),
+        session.errorSummary,
         session.startedAt,
+        session.completedAt,
         session.finishedAt,
         session.createdAt,
         session.updatedAt,
@@ -313,10 +745,9 @@ class PostgresRepository implements SiteForgeRepository {
 
   async getSession(sessionId: string): Promise<BuildSession | null> {
     const pool = getBrainLearningPool();
-    const result = await pool.query<SiteForgeSessionRow>(
-      `SELECT * FROM siteforge_sessions WHERE id = $1 LIMIT 1`,
-      [sessionId]
-    );
+    const result = await pool.query<SiteForgeSessionRow>(`SELECT * FROM siteforge_sessions WHERE id = $1 LIMIT 1`, [
+      sessionId,
+    ]);
     const row = result.rows[0];
     if (!row) return null;
 
@@ -340,20 +771,30 @@ class PostgresRepository implements SiteForgeRepository {
     const pool = getBrainLearningPool();
     await pool.query(
       `UPDATE siteforge_sessions SET
-        connection_profile = $2,
-        status = $3,
-        run_state = $4,
-        site_plan = $5,
-        content_package = $6,
-        build_spec = $7,
-        qa_result = $8,
-        execution_result = $9,
-        revision_history = $10,
-        finished_at = $11,
-        updated_at = $12
+        connection_id = $2,
+        session_type = $3,
+        trigger_source = $4,
+        prompt = $5,
+        connection_profile = $6,
+        status = $7,
+        run_state = $8,
+        site_plan = $9,
+        content_package = $10,
+        build_spec = $11,
+        qa_result = $12,
+        execution_result = $13,
+        revision_history = $14,
+        error_summary = $15,
+        completed_at = $16,
+        finished_at = $17,
+        updated_at = $18
       WHERE id = $1`,
       [
         sessionId,
+        merged.connectionId,
+        merged.type,
+        merged.triggerSource,
+        merged.prompt,
         merged.connectionProfile ? JSON.stringify(merged.connectionProfile) : null,
         merged.status,
         JSON.stringify(merged.runState),
@@ -363,6 +804,8 @@ class PostgresRepository implements SiteForgeRepository {
         merged.qaResult ? JSON.stringify(merged.qaResult) : null,
         merged.executionResult ? JSON.stringify(merged.executionResult) : null,
         JSON.stringify(merged.revisionHistory),
+        merged.errorSummary,
+        merged.completedAt,
         merged.finishedAt,
         merged.updatedAt,
       ]
@@ -375,7 +818,112 @@ class PostgresRepository implements SiteForgeRepository {
 
     await this.updateSession(sessionId, {
       revisionHistory: [...current.revisionHistory, revision],
+      type: "refine",
     });
+  }
+
+  async appendRunLog(log: SiteForgeRunLog): Promise<void> {
+    const pool = getBrainLearningPool();
+    await pool.query(
+      `INSERT INTO siteforge_run_logs (id, session_id, stage, message, level, happened_at)
+       VALUES ($1,$2,$3,$4,$5,$6)`,
+      [log.logId, log.sessionId, log.stage, log.message, log.level, log.timestamp]
+    );
+  }
+
+  async listRunLogs(projectId: string, userId: string): Promise<SiteForgeRunLog[]> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<SiteForgeRunLogRow>(
+      `SELECT logs.id, logs.session_id, logs.stage, logs.message, logs.level, logs.happened_at
+       FROM siteforge_run_logs logs
+       INNER JOIN siteforge_sessions sessions ON sessions.id = logs.session_id
+       WHERE sessions.project_id = $1 AND sessions.user_id = $2
+       ORDER BY logs.happened_at DESC`,
+      [projectId, userId]
+    );
+    return result.rows.map(mapRunLogRow);
+  }
+
+  async upsertSnapshot(snapshot: SiteForgeSnapshot): Promise<SiteForgeSnapshot> {
+    const pool = getBrainLearningPool();
+    await pool.query(
+      `INSERT INTO siteforge_snapshots (
+        id, project_id, connection_id, current_homepage_id, current_homepage_title, current_homepage_source,
+        known_pages, known_menus, thrive_detected, homepage_strategy, last_run_summary,
+        last_run_status, pages_affected, last_synced_at, created_at, updated_at
+      ) VALUES (
+        $1,$2,$3,$4,$5,$6,
+        $7,$8,$9,$10,$11,
+        $12,$13,$14,$15,$16
+      )
+      ON CONFLICT (project_id)
+      DO UPDATE SET
+        id = EXCLUDED.id,
+        connection_id = EXCLUDED.connection_id,
+        current_homepage_id = EXCLUDED.current_homepage_id,
+        current_homepage_title = EXCLUDED.current_homepage_title,
+        current_homepage_source = EXCLUDED.current_homepage_source,
+        known_pages = EXCLUDED.known_pages,
+        known_menus = EXCLUDED.known_menus,
+        thrive_detected = EXCLUDED.thrive_detected,
+        homepage_strategy = EXCLUDED.homepage_strategy,
+        last_run_summary = EXCLUDED.last_run_summary,
+        last_run_status = EXCLUDED.last_run_status,
+        pages_affected = EXCLUDED.pages_affected,
+        last_synced_at = EXCLUDED.last_synced_at,
+        updated_at = EXCLUDED.updated_at`,
+      [
+        snapshot.snapshotId,
+        snapshot.projectId,
+        snapshot.connectionId,
+        snapshot.currentHomepageId,
+        snapshot.currentHomepageTitle,
+        snapshot.currentHomepageSource,
+        JSON.stringify(snapshot.knownPages),
+        JSON.stringify(snapshot.knownMenus),
+        snapshot.thriveDetected,
+        snapshot.homepageStrategy,
+        snapshot.lastRunSummary,
+        snapshot.lastRunStatus,
+        snapshot.pagesAffected,
+        snapshot.lastSyncedAt,
+        snapshot.lastSyncedAt,
+        nowIso(),
+      ]
+    );
+    return snapshot;
+  }
+
+  async getLatestSnapshot(projectId: string): Promise<SiteForgeSnapshot | null> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<SiteForgeSnapshotRow>(
+      `SELECT * FROM siteforge_snapshots WHERE project_id = $1 LIMIT 1`,
+      [projectId]
+    );
+    const row = result.rows[0];
+    if (!row) return null;
+    return mapSnapshotRow(row);
+  }
+
+  async getWorkspace(projectId: string, userId: string): Promise<SiteForgeWorkspace | null> {
+    const project = await this.getProject(projectId, userId);
+    if (!project) return null;
+
+    const [activeConnection, snapshot, runHistory, runLogs] = await Promise.all([
+      this.getProjectConnection(projectId),
+      this.getLatestSnapshot(projectId),
+      this.listSessions(projectId, userId),
+      this.listRunLogs(projectId, userId),
+    ]);
+
+    return {
+      project,
+      activeConnection,
+      snapshot,
+      latestRun: runHistory[0] ?? null,
+      runHistory,
+      runLogs,
+    };
   }
 
   async appendFailure(sessionId: string, failure: SiteForgeFailureRecord): Promise<void> {
@@ -417,9 +965,7 @@ class PostgresRepository implements SiteForgeRepository {
           COUNT(*) FILTER (WHERE status = 'completed')::int AS completed_runs
          FROM siteforge_sessions`
       ),
-      pool.query<{ updated_at: string | Date }>(
-        `SELECT updated_at FROM siteforge_sessions ORDER BY updated_at DESC LIMIT 1`
-      ),
+      pool.query<{ updated_at: string | Date }>(`SELECT updated_at FROM siteforge_sessions ORDER BY updated_at DESC LIMIT 1`),
     ]);
 
     return {

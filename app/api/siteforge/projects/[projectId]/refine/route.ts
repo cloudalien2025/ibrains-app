@@ -5,6 +5,7 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { enqueueRevisionJob } from "@/lib/siteforge/runner";
 import { resolveConnection } from "@/lib/siteforge/api";
+import { resolveRuntimeConnection } from "@/lib/siteforge/workspace";
 
 export async function POST(
   req: NextRequest,
@@ -40,7 +41,7 @@ export async function POST(
     return NextResponse.json({ error: { code: "NOT_FOUND", message: "Session not found." } }, { status: 404 });
   }
 
-  const connection = resolveConnection({
+  const connectionFromBody = resolveConnection({
     prompt: session.prompt,
     connection:
       body?.connection && typeof body.connection === "object" && !Array.isArray(body.connection)
@@ -51,13 +52,23 @@ export async function POST(
             appPassword?: string;
             hasThriveHint?: boolean;
           })
-        : undefined,
+      : undefined,
+  });
+
+  const resolved = await resolveRuntimeConnection({
+    repo,
+    projectId,
+    incoming: connectionFromBody,
+    preferConnectionId:
+      typeof body?.connectionId === "string" ? body.connectionId : (session.connectionId ?? undefined),
   });
 
   await enqueueRevisionJob({
     sessionId,
     message,
-    connection,
+    connection: resolved.connection,
+    connectionId: resolved.connectionId,
+    homepageStrategy: project.homepageStrategy,
   });
 
   return NextResponse.json({ ok: true }, { status: 202 });
