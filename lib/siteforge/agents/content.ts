@@ -86,12 +86,12 @@ const contentSchema = {
             items: {
               type: "object",
               additionalProperties: false,
-              required: ["sectionId", "heading", "body"],
+              required: ["sectionId", "heading", "body", "cta"],
               properties: {
                 sectionId: { type: "string" },
                 heading: { type: "string" },
                 body: { type: "string" },
-                cta: { type: "string" },
+                cta: { type: ["string", "null"] },
               },
             },
           },
