@@ -137,6 +137,10 @@ export default function SiteForgeAppPage() {
     () => projects.find((entry) => entry.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
+  const selectedProjectInOptions = useMemo(
+    () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
+    [projects, selectedProjectId]
+  );
 
   function resetWorkspaceState() {
     activeProjectIntentRef.current = null;
@@ -604,6 +608,9 @@ export default function SiteForgeAppPage() {
               disabled={!projects.length || busy}
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             >
+              {selectedProjectId && !selectedProjectInOptions ? (
+                <option value={selectedProjectId}>Loading selected project...</option>
+              ) : null}
               {!projects.length ? (
                 <option value="">No project selected</option>
               ) : null}

@@ -63,4 +63,33 @@ describe("siteforge repository", () => {
     const summary = await repo.getAdminSummary();
     expect(summary.sessions).toBeGreaterThan(0);
   });
+
+  it("does not clobber project name when update patch includes undefined fields", async () => {
+    const repo = await getSiteForgeRepository();
+    const userId = `user_test_patch_${Date.now()}`;
+    const now = new Date().toISOString();
+    const projectId = `sfp_test_patch_${Date.now()}`;
+
+    await repo.createProject({
+      id: projectId,
+      userId,
+      name: "iPetzo",
+      slug: "ipetzo",
+      status: "draft",
+      siteType: null,
+      primaryPrompt: null,
+      currentState: "workspace",
+      homepageStrategy: "use_existing",
+      lastOpenedAt: now,
+      description: "patch safety test",
+      latestSessionId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    await repo.updateProject(projectId, { name: undefined, currentState: "workspace" } as unknown as Partial<SiteForgeProject>);
+
+    const loaded = await repo.getProject(projectId, userId);
+    expect(loaded?.name).toBe("iPetzo");
+  });
 });

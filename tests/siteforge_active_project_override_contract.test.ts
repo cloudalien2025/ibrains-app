@@ -16,4 +16,13 @@ describe("siteforge active project override guard contract", () => {
       true
     );
   });
+
+  it("keeps selector controlled when selected id is temporarily missing from option list", () => {
+    const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
+    const source = fs.readFileSync(sourcePath, "utf8");
+
+    expect(source.includes("const selectedProjectInOptions = useMemo(")).toBe(true);
+    expect(source.includes("{selectedProjectId && !selectedProjectInOptions ? (")).toBe(true);
+    expect(source.includes("<option value={selectedProjectId}>Loading selected project...</option>")).toBe(true);
+  });
 });

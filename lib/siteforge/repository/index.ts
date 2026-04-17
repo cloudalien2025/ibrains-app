@@ -291,7 +291,10 @@ class MemoryRepository implements SiteForgeRepository {
   async updateProject(projectId: string, patch: Partial<SiteForgeProject>): Promise<void> {
     const current = this.store.projects.get(projectId);
     if (!current) return;
-    this.store.projects.set(projectId, { ...current, ...patch, updatedAt: nowIso() });
+    const safePatch = Object.fromEntries(
+      Object.entries(patch).filter(([, value]) => value !== undefined)
+    ) as Partial<SiteForgeProject>;
+    this.store.projects.set(projectId, { ...current, ...safePatch, updatedAt: nowIso() });
   }
 
   async getLastOpenedProjectId(userId: string): Promise<string | null> {
