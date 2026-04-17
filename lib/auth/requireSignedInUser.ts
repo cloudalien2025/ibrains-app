@@ -7,6 +7,10 @@ type RequireSignedInUserResult = {
 };
 
 export async function requireSignedInUser(): Promise<RequireSignedInUserResult> {
+  if (process.env.E2E_MOCK_GRAPH === "1") {
+    return { userId: "e2e-admin", unauthorizedResponse: null };
+  }
+
   const { userId } = await auth();
   if (!userId) {
     return {

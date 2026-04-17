@@ -137,6 +137,8 @@ export default function SiteForgeAppPage() {
     () => projects.find((entry) => entry.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
+  const activeProjectId = activeProject?.id ?? null;
+  const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
@@ -440,14 +442,17 @@ export default function SiteForgeAppPage() {
   }
 
   async function saveAndValidateConnection() {
-    if (!selectedProjectId) return;
+    if (!hasValidActiveProject || !activeProjectId) {
+      setError("No active project selected.");
+      return;
+    }
 
     setBusy(true);
     setError(null);
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
-        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`,
+        `/api/siteforge/projects/${encodeURIComponent(activeProjectId)}/connection`,
         {
           method: "POST",
           body: JSON.stringify({
@@ -463,24 +468,31 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      activeProjectIntentRef.current = selectedProjectId;
-      await openProject(selectedProjectId, "workspace");
+      activeProjectIntentRef.current = activeProjectId;
+      await openProject(activeProjectId, "workspace");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Connection validation failed.");
+      if (err instanceof Error && err.message === "Project not found.") {
+        setError("Selected project could not be loaded.");
+      } else {
+        setError(err instanceof Error ? err.message : "Connection validation failed.");
+      }
     } finally {
       setBusy(false);
     }
   }
 
   async function revalidateConnection() {
-    if (!selectedProjectId) return;
+    if (!hasValidActiveProject || !activeProjectId) {
+      setError("No active project selected.");
+      return;
+    }
 
     setBusy(true);
     setError(null);
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
-        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`,
+        `/api/siteforge/projects/${encodeURIComponent(activeProjectId)}/connection`,
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -495,10 +507,14 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      activeProjectIntentRef.current = selectedProjectId;
-      await openProject(selectedProjectId, "workspace");
+      activeProjectIntentRef.current = activeProjectId;
+      await openProject(activeProjectId, "workspace");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Revalidation failed.");
+      if (err instanceof Error && err.message === "Project not found.") {
+        setError("Selected project could not be loaded.");
+      } else {
+        setError(err instanceof Error ? err.message : "Revalidation failed.");
+      }
     } finally {
       setBusy(false);
     }
@@ -699,10 +715,20 @@ export default function SiteForgeAppPage() {
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             />
             <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy}>
+              <button
+                type="button"
+                className={brainTheme.secondaryButton}
+                onClick={saveAndValidateConnection}
+                disabled={busy || !hasValidActiveProject}
+              >
                 Save + Validate
               </button>
-              <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy}>
+              <button
+                type="button"
+                className={brainTheme.secondaryButton}
+                onClick={revalidateConnection}
+                disabled={busy || !hasValidActiveProject}
+              >
                 Revalidate
               </button>
               <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
@@ -717,6 +743,9 @@ export default function SiteForgeAppPage() {
             <div className="mt-2 text-xs text-slate-400">
               Credentials: {savedConnection?.hasSavedSecret ? "saved" : "need update"}
             </div>
+            {!hasValidActiveProject ? (
+              <div className="mt-2 text-xs text-amber-200">Select a valid active project to validate this connection.</div>
+            ) : null}
           </div>
         </section>
 
