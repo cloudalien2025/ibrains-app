@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
 import {
@@ -19,6 +19,7 @@ import {
   SiteForgeWorkspaceView as SiteForgeWorkspace,
 } from "@/lib/siteforge/workspaceShape";
 import { normalizeNewProjectName } from "@/lib/siteforge/newProjectName";
+import { ProjectNameSaveState, shouldPersistProjectName } from "@/lib/siteforge/projectNameAutosave";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -103,6 +104,8 @@ export default function SiteForgeAppPage() {
 
   const [newProjectName, setNewProjectName] = useState("");
   const [projectName, setProjectName] = useState("SiteForge Project");
+  const [persistedProjectName, setPersistedProjectName] = useState("SiteForge Project");
+  const [projectNameSaveState, setProjectNameSaveState] = useState<ProjectNameSaveState>("idle");
   const [prompt, setPrompt] = useState("");
   const [refinePrompt, setRefinePrompt] = useState("");
 
@@ -116,6 +119,8 @@ export default function SiteForgeAppPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const projectNameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const projectNameSaveSeqRef = useRef(0);
 
   const currentSession = useMemo(
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
@@ -135,6 +140,8 @@ export default function SiteForgeAppPage() {
     setSavedConnection(null);
     setNewProjectName("");
     setProjectName("SiteForge Project");
+    setPersistedProjectName("SiteForge Project");
+    setProjectNameSaveState("idle");
     setPrompt("");
     setRefinePrompt("");
     setConnectionLabel("Primary WordPress Site");
@@ -158,6 +165,8 @@ export default function SiteForgeAppPage() {
     setSavedConnection(workspace.activeConnection);
 
     setProjectName(workspace.project.name);
+    setPersistedProjectName(workspace.project.name);
+    setProjectNameSaveState("idle");
     setPrompt(workspace.project.primaryPrompt ?? "");
     setHomepageStrategy(workspace.project.homepageStrategy);
 
@@ -184,6 +193,44 @@ export default function SiteForgeAppPage() {
     }
 
     setAppPassword("");
+  }
+
+  async function persistProjectNameUpdate(): Promise<void> {
+    if (
+      !shouldPersistProjectName({
+        selectedProjectId,
+        projectName,
+        persistedProjectName,
+      })
+    ) {
+      return;
+    }
+
+    const seq = projectNameSaveSeqRef.current + 1;
+    projectNameSaveSeqRef.current = seq;
+    setProjectNameSaveState("saving");
+
+    try {
+      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: projectName.trim(),
+          currentState: "workspace",
+        }),
+      });
+      const workspace = normalizeWorkspace(payload);
+      if (!workspace) {
+        throw new Error("Project rename response was invalid.");
+      }
+
+      if (projectNameSaveSeqRef.current !== seq) return;
+      await applyWorkspace(workspace);
+      setProjectNameSaveState("saved");
+    } catch (err: unknown) {
+      if (projectNameSaveSeqRef.current !== seq) return;
+      setProjectNameSaveState("error");
+      setError(err instanceof Error ? err.message : "Failed to save project name.");
+    }
   }
 
   async function openProject(projectId: string) {
@@ -276,6 +323,33 @@ export default function SiteForgeAppPage() {
     return () => window.clearInterval(timer);
   }, [activeProject, currentSessionId, sessions]);
 
+  useEffect(() => {
+    if (
+      !shouldPersistProjectName({
+        selectedProjectId,
+        projectName,
+        persistedProjectName,
+      })
+    ) {
+      return;
+    }
+
+    setProjectNameSaveState("idle");
+    if (projectNameSaveTimerRef.current) {
+      clearTimeout(projectNameSaveTimerRef.current);
+    }
+
+    projectNameSaveTimerRef.current = setTimeout(() => {
+      void persistProjectNameUpdate();
+    }, 500);
+
+    return () => {
+      if (projectNameSaveTimerRef.current) {
+        clearTimeout(projectNameSaveTimerRef.current);
+      }
+    };
+  }, [persistedProjectName, projectName, selectedProjectId]);
+
   async function createProject() {
     const createName = normalizeNewProjectName(newProjectName);
     if (!createName) {
@@ -312,40 +386,6 @@ export default function SiteForgeAppPage() {
       setBusy(false);
     }
   }
-
-  async function saveProjectDetails() {
-    if (!selectedProjectId) return;
-
-    setBusy(true);
-    setError(null);
-
-    try {
-      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          name: projectName,
-          primaryPrompt: prompt,
-          homepageStrategy,
-          currentState: "workspace",
-          markOpened: true,
-        }),
-      });
-      const workspace = normalizeWorkspace(payload);
-      if (!workspace) {
-        throw new Error("Project save response was invalid.");
-      }
-      await applyWorkspace(workspace);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save project settings.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  const projectSettingsDirty = Boolean(
-    activeProject &&
-      (projectName.trim() !== activeProject.name || prompt !== (activeProject.primaryPrompt ?? "") || homepageStrategy !== activeProject.homepageStrategy)
-  );
 
   async function saveAndValidateConnection() {
     if (!selectedProjectId) return;
@@ -651,19 +691,30 @@ export default function SiteForgeAppPage() {
               <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
                 Project Name
               </label>
-              <button
-                type="button"
-                onClick={saveProjectDetails}
-                disabled={busy || !selectedProjectId || !projectSettingsDirty}
-                className={`${brainTheme.secondaryButton} disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-                Save Project
-              </button>
+              <span className="text-xs uppercase tracking-[0.12em] text-slate-300">
+                Name: {projectNameSaveState}
+              </span>
             </div>
             <input
               id="siteforge-project-name"
               value={projectName}
-              onChange={(event) => setProjectName(event.target.value)}
+              onChange={(event) => {
+                setProjectName(event.target.value);
+                if (projectNameSaveState === "saved" || projectNameSaveState === "error") {
+                  setProjectNameSaveState("idle");
+                }
+              }}
+              onBlur={() => {
+                if (
+                  shouldPersistProjectName({
+                    selectedProjectId,
+                    projectName,
+                    persistedProjectName,
+                  })
+                ) {
+                  void persistProjectNameUpdate();
+                }
+              }}
               disabled={!selectedProjectId}
               className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
             />
