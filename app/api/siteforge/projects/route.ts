@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const name = typeof body?.name === "string" && body.name.trim() ? body.name.trim() : "Untitled SiteForge Project";
+  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  if (!name) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: "Project name is required." } },
+      { status: 400 }
+    );
+  }
   const description =
     typeof body?.description === "string" && body.description.trim()
       ? body.description.trim()

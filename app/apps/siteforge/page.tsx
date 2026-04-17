@@ -30,6 +30,8 @@ type CapabilityCheck = {
   message: string;
 };
 
+type CreateStatus = "idle" | "creating" | "created" | "error";
+
 const quickSuggestions = ["Health & Wellness", "Ecommerce", "Coaching", "SaaS"];
 const visibleSteps: BuildStage[] = ["planning", "writing", "building", "reviewing", "finalizing"];
 
@@ -116,11 +118,15 @@ export default function SiteForgeAppPage() {
   const [hasThriveHint, setHasThriveHint] = useState(false);
   const [homepageStrategy, setHomepageStrategy] = useState<HomepageStrategy>("use_existing");
   const [connectionResult, setConnectionResult] = useState<CapabilityCheck | null>(null);
+  const [createStatus, setCreateStatus] = useState<CreateStatus>("idle");
+  const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const projectNameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectNameSaveSeqRef = useRef(0);
+  const loadProjectsSeqRef = useRef(0);
+  const openProjectSeqRef = useRef(0);
 
   const currentSession = useMemo(
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
@@ -235,6 +241,8 @@ export default function SiteForgeAppPage() {
 
   async function openProject(projectId: string) {
     if (!projectId) return;
+    const openSeq = openProjectSeqRef.current + 1;
+    openProjectSeqRef.current = openSeq;
     setBusy(true);
     setError(null);
 
@@ -248,9 +256,11 @@ export default function SiteForgeAppPage() {
       if (!workspace) {
         throw new Error("Invalid SiteForge workspace payload.");
       }
+      if (openProjectSeqRef.current !== openSeq) return false;
       await applyWorkspace(workspace);
       return true;
     } catch (err: unknown) {
+      if (openProjectSeqRef.current !== openSeq) return false;
       setError(err instanceof Error ? err.message : "Failed to load workspace.");
       setSelectedProjectId("");
       setSessions([]);
@@ -260,12 +270,17 @@ export default function SiteForgeAppPage() {
       setSavedConnection(null);
       return false;
     } finally {
-      setBusy(false);
+      if (openProjectSeqRef.current === openSeq) {
+        setBusy(false);
+      }
     }
   }
 
   async function loadProjects() {
+    const loadSeq = loadProjectsSeqRef.current + 1;
+    loadProjectsSeqRef.current = loadSeq;
     const raw = await fetchJson<unknown>("/api/siteforge/projects");
+    if (loadProjectsSeqRef.current !== loadSeq) return;
     const data = normalizeProjectsPayload(raw);
     setProjects(data.projects);
 
@@ -281,11 +296,13 @@ export default function SiteForgeAppPage() {
     }
 
     const opened = await openProject(targetProjectId);
+    if (loadProjectsSeqRef.current !== loadSeq) return;
     if (opened) return;
 
     for (const candidate of data.projects) {
       if (candidate.id === targetProjectId) continue;
       if (await openProject(candidate.id)) return;
+      if (loadProjectsSeqRef.current !== loadSeq) return;
     }
 
     resetWorkspaceState();
@@ -353,12 +370,16 @@ export default function SiteForgeAppPage() {
   async function createProject() {
     const createName = normalizeNewProjectName(newProjectName);
     if (!createName) {
-      setError("New Project Name is required.");
+      setCreateStatus("error");
+      setCreateStatusMessage("New Project Name is required.");
       return;
     }
 
+    loadProjectsSeqRef.current += 1;
     setBusy(true);
     setError(null);
+    setCreateStatus("creating");
+    setCreateStatusMessage(null);
 
     try {
       const payload = await fetchJson<unknown>("/api/siteforge/projects", {
@@ -380,8 +401,12 @@ export default function SiteForgeAppPage() {
         throw new Error("Project was created but could not be opened.");
       }
       setNewProjectName("");
+      setCreateStatus("created");
+      setCreateStatusMessage(`Project created: ${normalized.project.name}`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Project creation failed.");
+      setCreateStatus("error");
+      setCreateStatusMessage(err instanceof Error ? err.message : "Project creation failed.");
     } finally {
       setBusy(false);
     }
@@ -553,7 +578,7 @@ export default function SiteForgeAppPage() {
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             >
               {!projects.length ? (
-                <option value="">No projects yet</option>
+                <option value="">No project selected</option>
               ) : null}
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
@@ -567,7 +592,13 @@ export default function SiteForgeAppPage() {
             <label className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">New Project Name</label>
             <input
               value={newProjectName}
-              onChange={(event) => setNewProjectName(event.target.value)}
+              onChange={(event) => {
+                setNewProjectName(event.target.value);
+                if (createStatus !== "creating") {
+                  setCreateStatus("idle");
+                  setCreateStatusMessage(null);
+                }
+              }}
               placeholder="e.g. iPetzo"
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             />
@@ -577,8 +608,18 @@ export default function SiteForgeAppPage() {
               onClick={createProject}
               disabled={busy || !normalizeNewProjectName(newProjectName)}
             >
-              Create Project
+              {createStatus === "creating" ? "Creating..." : "Create Project"}
             </button>
+            {createStatusMessage ? (
+              <div
+                className={`mt-2 text-xs ${createStatus === "error" ? "text-rose-200" : createStatus === "created" ? "text-emerald-200" : "text-slate-300"}`}
+              >
+                {createStatusMessage}
+              </div>
+            ) : null}
+            {!activeProject ? (
+              <div className="mt-2 text-xs text-slate-400">Create your first project to get started.</div>
+            ) : null}
           </div>
 
           <div className={`${brainTheme.glassCard} p-3`}>
