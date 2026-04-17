@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
+import type { SiteForgeProject } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { nowIso, toSlug } from "@/lib/siteforge/utils";
 import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
@@ -64,14 +65,27 @@ export async function PATCH(
     await repo.setProjectHomepageStrategy(projectId, homepageStrategy);
   }
 
-  await repo.updateProject(projectId, {
-    name: body?.name && typeof body.name === "string" ? body.name.trim() || undefined : undefined,
-    slug: body?.name && typeof body.name === "string" && body.name.trim() ? toSlug(body.name.trim()) : undefined,
+  const updatePatch: Partial<SiteForgeProject> = {
     updatedAt: nowIso(),
-    currentState: body?.currentState && typeof body.currentState === "string" ? body.currentState : undefined,
-    primaryPrompt: body?.primaryPrompt && typeof body.primaryPrompt === "string" ? body.primaryPrompt : undefined,
-    description: body?.description && typeof body.description === "string" ? body.description : undefined,
-  });
+  };
+  if (typeof body?.name === "string") {
+    const trimmedName = body.name.trim();
+    if (trimmedName) {
+      updatePatch.name = trimmedName;
+      updatePatch.slug = toSlug(trimmedName);
+    }
+  }
+  if (typeof body?.currentState === "string" && body.currentState) {
+    updatePatch.currentState = body.currentState;
+  }
+  if (typeof body?.primaryPrompt === "string") {
+    updatePatch.primaryPrompt = body.primaryPrompt;
+  }
+  if (typeof body?.description === "string") {
+    updatePatch.description = body.description;
+  }
+
+  await repo.updateProject(projectId, updatePatch);
 
   const workspace = await repo.getWorkspace(projectId, userId);
   const normalized = normalizeWorkspace(workspace);
