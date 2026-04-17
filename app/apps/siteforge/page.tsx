@@ -127,6 +127,7 @@ export default function SiteForgeAppPage() {
   const projectNameSaveSeqRef = useRef(0);
   const loadProjectsSeqRef = useRef(0);
   const openProjectSeqRef = useRef(0);
+  const activeProjectIntentRef = useRef<string | null>(null);
 
   const currentSession = useMemo(
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
@@ -138,6 +139,7 @@ export default function SiteForgeAppPage() {
   );
 
   function resetWorkspaceState() {
+    activeProjectIntentRef.current = null;
     setSelectedProjectId("");
     setSessions([]);
     setRunLogs([]);
@@ -239,8 +241,12 @@ export default function SiteForgeAppPage() {
     }
   }
 
-  async function openProject(projectId: string) {
+  async function openProject(projectId: string, source: "load" | "create" | "user" | "workspace" = "user") {
     if (!projectId) return;
+    const intentId = activeProjectIntentRef.current;
+    if (source === "load" && intentId && intentId !== projectId) {
+      return false;
+    }
     const openSeq = openProjectSeqRef.current + 1;
     openProjectSeqRef.current = openSeq;
     setBusy(true);
@@ -289,19 +295,34 @@ export default function SiteForgeAppPage() {
       return;
     }
 
-    const targetProjectId = resolveInitialProjectId(data.projects, data.lastOpenedProjectId);
+    const intendedProjectId = activeProjectIntentRef.current;
+    if (
+      intendedProjectId &&
+      data.projects.some((project) => project.id === intendedProjectId) &&
+      selectedProjectId !== intendedProjectId
+    ) {
+      setSelectedProjectId(intendedProjectId);
+    }
+
+    const targetProjectId =
+      intendedProjectId && data.projects.some((project) => project.id === intendedProjectId)
+        ? intendedProjectId
+        : resolveInitialProjectId(data.projects, data.lastOpenedProjectId);
     if (!targetProjectId) {
       resetWorkspaceState();
       return;
     }
 
-    const opened = await openProject(targetProjectId);
+    if (loadProjectsSeqRef.current !== loadSeq) return;
+    const opened = await openProject(targetProjectId, "load");
     if (loadProjectsSeqRef.current !== loadSeq) return;
     if (opened) return;
 
     for (const candidate of data.projects) {
       if (candidate.id === targetProjectId) continue;
-      if (await openProject(candidate.id)) return;
+      if (activeProjectIntentRef.current && candidate.id !== activeProjectIntentRef.current) continue;
+      if (loadProjectsSeqRef.current !== loadSeq) return;
+      if (await openProject(candidate.id, "load")) return;
       if (loadProjectsSeqRef.current !== loadSeq) return;
     }
 
@@ -396,7 +417,9 @@ export default function SiteForgeAppPage() {
       }
 
       setProjects((prev) => [normalized.project, ...prev.filter((entry) => entry.id !== normalized.project.id)]);
-      const opened = await openProject(normalized.project.id);
+      activeProjectIntentRef.current = normalized.project.id;
+      setSelectedProjectId(normalized.project.id);
+      const opened = await openProject(normalized.project.id, "create");
       if (!opened) {
         throw new Error("Project was created but could not be opened.");
       }
@@ -436,7 +459,8 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      await openProject(selectedProjectId);
+      activeProjectIntentRef.current = selectedProjectId;
+      await openProject(selectedProjectId, "workspace");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection validation failed.");
     } finally {
@@ -467,7 +491,8 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      await openProject(selectedProjectId);
+      activeProjectIntentRef.current = selectedProjectId;
+      await openProject(selectedProjectId, "workspace");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Revalidation failed.");
     } finally {
@@ -504,7 +529,8 @@ export default function SiteForgeAppPage() {
       setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
       setCurrentSessionId(data.session.id);
       setAppPassword("");
-      await openProject(selectedProjectId);
+      activeProjectIntentRef.current = selectedProjectId;
+      await openProject(selectedProjectId, "workspace");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start SiteForge build.");
     } finally {
@@ -572,7 +598,8 @@ export default function SiteForgeAppPage() {
             <select
               value={selectedProjectId}
               onChange={(event) => {
-                void openProject(event.target.value);
+                activeProjectIntentRef.current = event.target.value || null;
+                void openProject(event.target.value, "user");
               }}
               disabled={!projects.length || busy}
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
