@@ -8,6 +8,11 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
+function asOptionalString(value: unknown): string | undefined {
+  if (value === null || value === undefined) return undefined;
+  return asString(value) ?? undefined;
+}
+
 export function validateSitePlan(value: unknown): SitePlan {
   if (!isRecord(value)) {
     throw new Error("Planner returned non-object payload.");
@@ -143,7 +148,7 @@ export function validateContentPackage(value: unknown): ContentPackage {
         sectionId,
         heading,
         body,
-        cta: asString(section.cta) ?? undefined,
+        cta: asOptionalString(section.cta),
       };
     });
 
