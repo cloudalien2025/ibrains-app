@@ -1,5 +1,7 @@
-import { SitePlan, SitePlanPage, SitePlanSection } from "@/lib/siteforge/contracts";
+import { SitePlan, SitePlanPage, SitePlanSection, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { generateStructuredJson } from "@/lib/siteforge/llm/openai";
 import { createId, toSlug } from "@/lib/siteforge/utils";
+import { validateSitePlan } from "@/lib/siteforge/agents/validators";
 
 const industryRules: Array<{ match: RegExp; businessType: string; audience: string; goal: string }> = [
   { match: /health|wellness|fitness|therapy|clinic/i, businessType: "Health & Wellness", audience: "health-conscious adults", goal: "book consultations" },
@@ -47,7 +49,7 @@ function createPage(title: string, purpose: string): SitePlanPage {
   };
 }
 
-export function runPlannerAgent(prompt: string): SitePlan {
+export function runPlannerAgentDeterministic(prompt: string): SitePlan {
   const rule = industryRules.find((candidate) => candidate.match.test(prompt));
   const businessType = rule?.businessType ?? "Service Business";
   const targetAudience = rule?.audience ?? null;
@@ -73,4 +75,97 @@ export function runPlannerAgent(prompt: string): SitePlan {
     ],
     warnings: targetAudience ? [] : ["Target audience inferred with low confidence."],
   };
+}
+
+const plannerSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "businessType",
+    "businessSummary",
+    "siteGoal",
+    "primaryCTA",
+    "targetAudience",
+    "homepageSlug",
+    "navigation",
+    "pages",
+    "assumptions",
+    "warnings",
+  ],
+  properties: {
+    businessType: { type: "string" },
+    businessSummary: { type: "string" },
+    siteGoal: { type: "string" },
+    primaryCTA: { type: "string" },
+    targetAudience: { type: ["string", "null"] },
+    homepageSlug: { type: "string" },
+    navigation: { type: "array", items: { type: "string" } },
+    assumptions: { type: "array", items: { type: "string" } },
+    warnings: { type: "array", items: { type: "string" } },
+    pages: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["id", "title", "slug", "purpose", "sections"],
+        properties: {
+          id: { type: "string" },
+          title: { type: "string" },
+          slug: { type: "string" },
+          purpose: { type: "string" },
+          sections: {
+            type: "array",
+            minItems: 1,
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["id", "sectionType", "purpose"],
+              properties: {
+                id: { type: "string" },
+                sectionType: {
+                  type: "string",
+                  enum: ["hero", "problem", "solution", "features", "testimonials", "cta", "faq", "contact"],
+                },
+                purpose: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+export async function runPlannerAgent(params: {
+  brief: WebsiteBrief;
+  model: string;
+  apiKey: string;
+}): Promise<SitePlan> {
+  const prompt = [
+    `Business name: ${params.brief.businessName}`,
+    `Business type: ${params.brief.businessType}`,
+    `Business description: ${params.brief.businessDescription}`,
+    `Target audience: ${params.brief.targetAudience}`,
+    `Main offer: ${params.brief.mainOffer}`,
+    `Website goal: ${params.brief.websiteGoal}`,
+    `Brand tone: ${params.brief.brandTone}`,
+    params.brief.marketLocation ? `Market: ${params.brief.marketLocation}` : "",
+    params.brief.competitors ? `Competitors: ${params.brief.competitors}` : "",
+    params.brief.differentiators ? `Differentiators: ${params.brief.differentiators}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  const raw = await generateStructuredJson<unknown>({
+    apiKey: params.apiKey,
+    model: params.model,
+    schemaName: "siteforge_site_plan",
+    schema: plannerSchema as unknown as Record<string, unknown>,
+    system:
+      "You are SiteForge planner agent. Return only valid JSON matching schema. Build a practical conversion-oriented small business website plan.",
+    user: `${prompt}\n\nEnsure ids are stable-looking strings and homepage slug corresponds to an existing page.`,
+  });
+
+  return validateSitePlan(raw);
 }

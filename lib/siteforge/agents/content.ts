@@ -1,4 +1,6 @@
-import { ContentPackage, ContentPageContent, SitePlan } from "@/lib/siteforge/contracts";
+import { ContentPackage, ContentPageContent, SitePlan, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { validateContentPackage } from "@/lib/siteforge/agents/validators";
+import { generateStructuredJson } from "@/lib/siteforge/llm/openai";
 
 function sectionHeading(sectionType: string, title: string): string {
   switch (sectionType) {
@@ -50,10 +52,79 @@ function createPageContent(site: SitePlan, page: SitePlan["pages"][number]): Con
   };
 }
 
-export function runContentAgent(sitePlan: SitePlan): ContentPackage {
+export function runContentAgentDeterministic(sitePlan: SitePlan): ContentPackage {
   return {
     siteTitle: `${sitePlan.businessType} Growth Site`,
     brandVoice: "clear, confident, conversion-focused",
     pages: sitePlan.pages.map((page) => createPageContent(sitePlan, page)),
   };
+}
+
+const contentSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["siteTitle", "brandVoice", "pages"],
+  properties: {
+    siteTitle: { type: "string" },
+    brandVoice: { type: "string" },
+    pages: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["pageId", "title", "slug", "headline", "subheadline", "sections", "cta"],
+        properties: {
+          pageId: { type: "string" },
+          title: { type: "string" },
+          slug: { type: "string" },
+          headline: { type: "string" },
+          subheadline: { type: "string" },
+          cta: { type: "string" },
+          sections: {
+            type: "array",
+            items: {
+              type: "object",
+              additionalProperties: false,
+              required: ["sectionId", "heading", "body"],
+              properties: {
+                sectionId: { type: "string" },
+                heading: { type: "string" },
+                body: { type: "string" },
+                cta: { type: "string" },
+              },
+            },
+          },
+        },
+      },
+    },
+  },
+} as const;
+
+export async function runContentAgent(params: {
+  sitePlan: SitePlan;
+  brief: WebsiteBrief;
+  model: string;
+  apiKey: string;
+}): Promise<ContentPackage> {
+  const raw = await generateStructuredJson<unknown>({
+    apiKey: params.apiKey,
+    model: params.model,
+    schemaName: "siteforge_content_package",
+    schema: contentSchema as unknown as Record<string, unknown>,
+    system:
+      "You are SiteForge content agent. Return only valid JSON matching schema. Create concise, high-conversion, truthful website copy.",
+    user: [
+      `Business name: ${params.brief.businessName}`,
+      `Business type: ${params.brief.businessType}`,
+      `Business description: ${params.brief.businessDescription}`,
+      `Audience: ${params.brief.targetAudience}`,
+      `Website goal: ${params.brief.websiteGoal}`,
+      `Main offer: ${params.brief.mainOffer}`,
+      `Brand tone: ${params.brief.brandTone}`,
+      `Plan JSON: ${JSON.stringify(params.sitePlan)}`,
+    ].join("\n"),
+  });
+
+  return validateContentPackage(raw);
 }

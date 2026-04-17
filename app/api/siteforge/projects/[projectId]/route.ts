@@ -5,6 +5,7 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
 import type { SiteForgeProject } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
+import { parseWebsiteBrief } from "@/lib/siteforge/brief";
 import { nowIso, toSlug } from "@/lib/siteforge/utils";
 import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
 
@@ -100,6 +101,16 @@ export async function PATCH(
   }
   if (typeof body?.primaryPrompt === "string") {
     updatePatch.primaryPrompt = body.primaryPrompt;
+  }
+  if (Object.prototype.hasOwnProperty.call(body ?? {}, "websiteBrief")) {
+    const parsedBrief = parseWebsiteBrief(body?.websiteBrief);
+    if (!parsedBrief) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "Website brief payload is invalid." } },
+        { status: 400 }
+      );
+    }
+    updatePatch.websiteBrief = parsedBrief;
   }
   if (typeof body?.description === "string") {
     updatePatch.description = body.description;

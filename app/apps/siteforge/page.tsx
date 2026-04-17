@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
+import { brandToneOptions, websiteGoalOptions } from "@/lib/siteforge/contracts";
 import {
   BuildSessionView as BuildSession,
   BuildStage,
@@ -35,8 +36,20 @@ type OpenProjectResult =
   | { ok: true }
   | { ok: false; reason: "superseded" | "failed"; message?: string };
 
-const quickSuggestions = ["Health & Wellness", "Ecommerce", "Coaching", "SaaS"];
 const visibleSteps: BuildStage[] = ["planning", "writing", "building", "reviewing", "finalizing"];
+
+type WebsiteBriefForm = {
+  businessName: string;
+  businessType: string;
+  businessDescription: string;
+  targetAudience: string;
+  websiteGoal: (typeof websiteGoalOptions)[number];
+  mainOffer: string;
+  brandTone: (typeof brandToneOptions)[number];
+  marketLocation: string;
+  competitors: string;
+  differentiators: string;
+};
 
 function Stepper({ stage }: { stage: BuildStage }) {
   const activeIndex = Math.max(0, visibleSteps.findIndex((entry) => entry === stage));
@@ -111,7 +124,22 @@ export default function SiteForgeAppPage() {
   const [projectName, setProjectName] = useState("SiteForge Project");
   const [persistedProjectName, setPersistedProjectName] = useState("SiteForge Project");
   const [projectNameSaveState, setProjectNameSaveState] = useState<ProjectNameSaveState>("idle");
-  const [prompt, setPrompt] = useState("");
+  const [briefForm, setBriefForm] = useState<WebsiteBriefForm>({
+    businessName: "",
+    businessType: "",
+    businessDescription: "",
+    targetAudience: "",
+    websiteGoal: "capture_leads",
+    mainOffer: "",
+    brandTone: "expert",
+    marketLocation: "",
+    competitors: "",
+    differentiators: "",
+  });
+  const [briefSaveState, setBriefSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [aiApiKey, setAiApiKey] = useState("");
+  const [aiModel, setAiModel] = useState("gpt-4.1-mini");
+  const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
 
   const [connectionLabel, setConnectionLabel] = useState("Primary WordPress Site");
@@ -159,7 +187,22 @@ export default function SiteForgeAppPage() {
     setProjectName("SiteForge Project");
     setPersistedProjectName("SiteForge Project");
     setProjectNameSaveState("idle");
-    setPrompt("");
+    setBriefForm({
+      businessName: "",
+      businessType: "",
+      businessDescription: "",
+      targetAudience: "",
+      websiteGoal: "capture_leads",
+      mainOffer: "",
+      brandTone: "expert",
+      marketLocation: "",
+      competitors: "",
+      differentiators: "",
+    });
+    setBriefSaveState("idle");
+    setAiApiKey("");
+    setAiModel("gpt-4.1-mini");
+    setAiStatusMessage(null);
     setRefinePrompt("");
     setConnectionLabel("Primary WordPress Site");
     setBaseUrl("");
@@ -184,7 +227,21 @@ export default function SiteForgeAppPage() {
     setProjectName(workspace.project.name);
     setPersistedProjectName(workspace.project.name);
     setProjectNameSaveState("idle");
-    setPrompt(workspace.project.primaryPrompt ?? "");
+    setBriefForm({
+      businessName: workspace.project.websiteBrief?.businessName ?? "",
+      businessType: workspace.project.websiteBrief?.businessType ?? "",
+      businessDescription: workspace.project.websiteBrief?.businessDescription ?? "",
+      targetAudience: workspace.project.websiteBrief?.targetAudience ?? "",
+      websiteGoal: workspace.project.websiteBrief?.websiteGoal ?? "capture_leads",
+      mainOffer: workspace.project.websiteBrief?.mainOffer ?? "",
+      brandTone: workspace.project.websiteBrief?.brandTone ?? "expert",
+      marketLocation: workspace.project.websiteBrief?.marketLocation ?? "",
+      competitors: workspace.project.websiteBrief?.competitors ?? "",
+      differentiators: workspace.project.websiteBrief?.differentiators ?? "",
+    });
+    setAiModel(workspace.project.aiModel ?? "gpt-4.1-mini");
+    setAiApiKey("");
+    setAiStatusMessage(workspace.project.hasSavedAiSecret ? "AI key saved" : "No AI key configured");
     setHomepageStrategy(workspace.project.homepageStrategy);
 
     if (workspace.activeConnection) {
@@ -451,7 +508,6 @@ export default function SiteForgeAppPage() {
         method: "POST",
         body: JSON.stringify({
           name: createName,
-          primaryPrompt: prompt,
           description: "Persistent SiteForge workspace",
         }),
       });
@@ -560,8 +616,135 @@ export default function SiteForgeAppPage() {
     }
   }
 
+  function briefPayload() {
+    return {
+      businessName: briefForm.businessName.trim(),
+      businessType: briefForm.businessType.trim(),
+      businessDescription: briefForm.businessDescription.trim(),
+      targetAudience: briefForm.targetAudience.trim(),
+      websiteGoal: briefForm.websiteGoal,
+      mainOffer: briefForm.mainOffer.trim(),
+      brandTone: briefForm.brandTone,
+      marketLocation: briefForm.marketLocation.trim(),
+      competitors: briefForm.competitors.trim(),
+      differentiators: briefForm.differentiators.trim(),
+    };
+  }
+
+  function briefIsValid() {
+    const payload = briefPayload();
+    return Boolean(
+      payload.businessName &&
+        payload.businessType &&
+        payload.businessDescription &&
+        payload.targetAudience &&
+        payload.mainOffer
+    );
+  }
+
+  async function saveWebsiteBrief() {
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
+    if (!briefIsValid()) {
+      setError("Please complete all required Website Brief fields before saving.");
+      return;
+    }
+
+    setBusy(true);
+    setBriefSaveState("saving");
+    setError(null);
+
+    try {
+      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          websiteBrief: briefPayload(),
+          currentState: "workspace",
+        }),
+      });
+      const workspace = normalizeWorkspace(payload);
+      if (!workspace) {
+        throw new Error("Website brief save response was invalid.");
+      }
+      await applyWorkspace(workspace);
+      setBriefSaveState("saved");
+    } catch (err: unknown) {
+      setBriefSaveState("error");
+      setError(err instanceof Error ? err.message : "Failed to save Website Brief.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAiConfig(mode: "save" | "update") {
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
+    if (!aiApiKey.trim() && mode === "save") {
+      setError("OpenAI API key is required.");
+      return;
+    }
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const data = await fetchJson<{ workspace: unknown; ai: { status: string } }>(
+        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/ai`,
+        {
+          method: mode === "save" ? "POST" : "PATCH",
+          body: JSON.stringify({
+            apiKey: aiApiKey,
+            model: aiModel,
+          }),
+        }
+      );
+      const workspace = normalizeWorkspace(data.workspace);
+      if (!workspace) {
+        throw new Error("AI config response was invalid.");
+      }
+      await applyWorkspace(workspace);
+      setAiApiKey("");
+      setAiStatusMessage(data.ai.status === "saved" ? "AI key saved" : "No AI key configured");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save AI configuration.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeAiKey() {
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const data = await fetchJson<{ workspace: unknown }>(
+        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/ai`,
+        {
+          method: "DELETE",
+        }
+      );
+      const workspace = normalizeWorkspace(data.workspace);
+      if (!workspace) {
+        throw new Error("AI config removal response was invalid.");
+      }
+      await applyWorkspace(workspace);
+      setAiApiKey("");
+      setAiStatusMessage("No AI key configured");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to remove AI key.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function generateSite() {
-    if (!prompt.trim()) return;
+    if (!briefIsValid()) {
+      setError("Please complete the Website Brief before generating.");
+      return;
+    }
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
 
@@ -574,7 +757,7 @@ export default function SiteForgeAppPage() {
         {
           method: "POST",
           body: JSON.stringify({
-            prompt,
+            websiteBrief: briefPayload(),
             connectionId: savedConnection?.connectionId,
             homepageStrategy,
             connection: {
@@ -816,6 +999,17 @@ export default function SiteForgeAppPage() {
           <div className={`${brainTheme.glassCard} p-4`}>
             <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Latest Run</div>
             <div className="mt-2 text-sm text-slate-200">Status: {sessions[0]?.status ?? "No runs yet"}</div>
+            <div className="mt-1 text-sm text-slate-200">
+              Generation path:{" "}
+              {sessions[0]
+                ? sessions[0].generationSource === "user_key"
+                  ? "user-provided key"
+                  : sessions[0].generationSource === "platform_key"
+                    ? "platform key"
+                    : "deterministic fallback"
+                : "N/A"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">Model: {sessions[0]?.aiModel ?? "N/A"}</div>
             <div className="mt-1 text-sm text-slate-200">Summary: {snapshot?.lastRunSummary ?? "No summary yet"}</div>
             <div className="mt-1 text-sm text-slate-200">Pages affected: {snapshot?.pagesAffected ?? 0}</div>
             <div className="mt-1 text-sm text-slate-200">Run logs: {runLogs.length}</div>
@@ -871,40 +1065,193 @@ export default function SiteForgeAppPage() {
                 className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
               />
 
-              <label htmlFor="siteforge-prompt" className="mt-4 block text-sm font-medium text-slate-100">
-                Website Prompt
-              </label>
-              <textarea
-                id="siteforge-prompt"
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Describe the website you want…"
-                className="mt-3 h-40 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
-              />
-
-              <div className="mt-4 flex flex-wrap gap-2">
-                {quickSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() =>
-                      setPrompt(`Build a ${suggestion.toLowerCase()} website with clear offers and strong calls to action.`)
-                    }
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                  >
-                    {suggestion}
+              <div className="mt-6 rounded-2xl border border-white/15 bg-slate-950/45 p-4">
+                <h3 className="text-sm font-semibold text-slate-100">Website Strategy Brief</h3>
+                <p className="mt-1 text-xs text-slate-300">
+                  Tell SiteForge about your business, who you serve, and what you want your website to achieve.
+                </p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
+                    <input
+                      id="siteforge-brief-business-name"
+                      value={briefForm.businessName}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-business-type" className="text-xs text-slate-300">Business type / category</label>
+                    <input
+                      id="siteforge-brief-business-type"
+                      value={briefForm.businessType}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="siteforge-brief-business-description" className="text-xs text-slate-300">What does the business do?</label>
+                    <textarea
+                      id="siteforge-brief-business-description"
+                      value={briefForm.businessDescription}
+                      onChange={(event) =>
+                        setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))
+                      }
+                      className="mt-1 h-24 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="siteforge-brief-target-audience" className="text-xs text-slate-300">Who is the target audience?</label>
+                    <input
+                      id="siteforge-brief-target-audience"
+                      value={briefForm.targetAudience}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-goal" className="text-xs text-slate-300">Main goal of website</label>
+                    <select
+                      id="siteforge-brief-goal"
+                      value={briefForm.websiteGoal}
+                      onChange={(event) =>
+                        setBriefForm((prev) => ({
+                          ...prev,
+                          websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"],
+                        }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    >
+                      <option value="book_calls">Book calls</option>
+                      <option value="capture_leads">Capture leads</option>
+                      <option value="sell_products">Sell products</option>
+                      <option value="drive_demos_trials">Drive demos/trials</option>
+                      <option value="build_authority">Build authority</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-tone" className="text-xs text-slate-300">Brand tone</label>
+                    <select
+                      id="siteforge-brief-tone"
+                      value={briefForm.brandTone}
+                      onChange={(event) =>
+                        setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))
+                      }
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    >
+                      <option value="premium">Premium</option>
+                      <option value="friendly">Friendly</option>
+                      <option value="expert">Expert</option>
+                      <option value="bold">Bold</option>
+                      <option value="modern">Modern</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="siteforge-brief-main-offer" className="text-xs text-slate-300">Main offer / service / product</label>
+                    <input
+                      id="siteforge-brief-main-offer"
+                      value={briefForm.mainOffer}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-market-location" className="text-xs text-slate-300">Location / market (optional)</label>
+                    <input
+                      id="siteforge-brief-market-location"
+                      value={briefForm.marketLocation}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, marketLocation: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-competitors" className="text-xs text-slate-300">Competitors / inspiration (optional)</label>
+                    <input
+                      id="siteforge-brief-competitors"
+                      value={briefForm.competitors}
+                      onChange={(event) => setBriefForm((prev) => ({ ...prev, competitors: event.target.value }))}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="siteforge-brief-differentiators" className="text-xs text-slate-300">Notes / differentiators (optional)</label>
+                    <textarea
+                      id="siteforge-brief-differentiators"
+                      value={briefForm.differentiators}
+                      onChange={(event) =>
+                        setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))
+                      }
+                      className="mt-1 h-24 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-center gap-3">
+                  <button type="button" className={brainTheme.secondaryButton} onClick={saveWebsiteBrief} disabled={busy}>
+                    Save Website Brief
                   </button>
-                ))}
+                  <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</span>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-white/15 bg-slate-950/45 p-4">
+                <h3 className="text-sm font-semibold text-slate-100">AI Configuration (OpenAI)</h3>
+                <p className="mt-1 text-xs text-slate-300">
+                  Save your OpenAI key server-side for this project. Keys are not returned to the browser after save.
+                </p>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">Model</label>
+                    <select
+                      id="siteforge-ai-model"
+                      value={aiModel}
+                      onChange={(event) => setAiModel(event.target.value)}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    >
+                      <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                      <option value="gpt-4.1">gpt-4.1</option>
+                      <option value="gpt-5-mini">gpt-5-mini</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-ai-key" className="text-xs text-slate-300">OpenAI API key</label>
+                    <input
+                      id="siteforge-ai-key"
+                      type="password"
+                      value={aiApiKey}
+                      onChange={(event) => setAiApiKey(event.target.value)}
+                      placeholder={activeProject.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>
+                    Save AI Key
+                  </button>
+                  <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("update")} disabled={busy}>
+                    Update Model
+                  </button>
+                  <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || !activeProject.hasSavedAiSecret}>
+                    Remove Key
+                  </button>
+                </div>
+                <div className="mt-2 text-xs text-slate-300">
+                  Status: {activeProject.hasSavedAiSecret ? "AI key saved" : "No AI key configured"}
+                  {aiStatusMessage ? ` · ${aiStatusMessage}` : ""}
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={generateSite}
-                disabled={!selectedProjectId || busy || !prompt.trim()}
+                disabled={!selectedProjectId || busy || !briefIsValid()}
                 className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
               >
                 Generate My Website
               </button>
+              <div className="mt-2 text-xs text-slate-300">
+                Generation key path: {activeProject.hasSavedAiSecret ? "user-provided key" : "platform key if configured"}
+              </div>
             </div>
           ) : (
             <div className={`${brainTheme.glassCard} p-6`}>

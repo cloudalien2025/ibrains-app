@@ -5,7 +5,9 @@ import {
   HomepageStrategyMode,
   SiteForgeConnection,
   SiteForgeSnapshot,
+  StoredAiSecret,
 } from "@/lib/siteforge/contracts";
+import { normalizeOpenAiModel } from "@/lib/siteforge/ai";
 import { SiteForgeRepository } from "@/lib/siteforge/repository/types";
 import { decryptSecret, encryptSecret } from "@/lib/siteforge/secrets";
 import { createId, nowIso } from "@/lib/siteforge/utils";
@@ -137,4 +139,42 @@ export async function persistSnapshotFromSession(params: {
   };
 
   return params.repo.upsertSnapshot(snapshot);
+}
+
+export async function saveProjectAiConfig(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+  model: string;
+  apiKey?: string;
+}): Promise<void> {
+  const encrypted = params.apiKey?.trim() ? encryptSecret(params.apiKey.trim()) : null;
+  await params.repo.saveProjectAiConfig({
+    projectId: params.projectId,
+    provider: "openai",
+    model: normalizeOpenAiModel(params.model),
+    secret: encrypted as StoredAiSecret | null,
+  });
+}
+
+export async function clearProjectAiConfig(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+  model: string;
+}): Promise<void> {
+  await params.repo.saveProjectAiConfig({
+    projectId: params.projectId,
+    provider: "openai",
+    model: normalizeOpenAiModel(params.model),
+    secret: null,
+  });
+  await params.repo.clearProjectAiSecret(params.projectId);
+}
+
+export async function resolveProjectAiApiKey(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+}): Promise<string | null> {
+  const secret = await params.repo.getProjectAiSecret(params.projectId);
+  if (!secret) return null;
+  return decryptSecret(secret.cipherText);
 }
