@@ -165,6 +165,12 @@ export default function Home() {
             {!isSignedIn ? (
               <>
                 <Link
+                  href="/apps/siteforge"
+                  className="rounded-full border border-cyan-400/35 bg-cyan-400/15 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/25"
+                >
+                  Open SiteForge
+                </Link>
+                <Link
                   href="/sign-in"
                   className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
                 >
@@ -179,13 +185,19 @@ export default function Home() {
               </>
             ) : (
               <>
-              <Link
-                href="/brains"
-                className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
-              >
-                Open console
-              </Link>
-              <UserButton />
+                <Link
+                  href="/apps/siteforge"
+                  className="rounded-full border border-cyan-400/35 bg-cyan-400/15 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/25"
+                >
+                  Open SiteForge
+                </Link>
+                <Link
+                  href="/brains"
+                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                >
+                  Open console
+                </Link>
+                <UserButton />
               </>
             )}
           </div>
