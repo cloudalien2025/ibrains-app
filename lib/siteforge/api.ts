@@ -1,10 +1,12 @@
-import { ConnectionProfile, homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
+import { ConnectionProfile, homepageStrategyModes, HomepageStrategyMode, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { parseWebsiteBrief, synthesizePromptFromBrief } from "@/lib/siteforge/brief";
 import { createId, nowIso } from "@/lib/siteforge/utils";
 
 export type BuildRequestPayload = {
   projectName?: string;
   projectDescription?: string;
   prompt: string;
+  websiteBrief: WebsiteBrief;
   connectionId?: string;
   homepageStrategy?: HomepageStrategyMode;
   connection?: {
@@ -28,7 +30,7 @@ export function sanitizeConnection(connection: ConnectionProfile | null): Omit<C
   };
 }
 
-export function resolveConnection(payload: BuildRequestPayload): ConnectionProfile | null {
+export function resolveConnection(payload: { connection?: BuildRequestPayload["connection"] }): ConnectionProfile | null {
   const baseUrl = payload.connection?.baseUrl?.trim();
   const username = payload.connection?.username?.trim();
   const appPassword = payload.connection?.appPassword?.trim();
@@ -54,10 +56,11 @@ export function parseBuildPayload(body: unknown): BuildRequestPayload {
   }
 
   const record = body as Record<string, unknown>;
-  const prompt = typeof record.prompt === "string" ? record.prompt.trim() : "";
-  if (!prompt) {
-    throw new Error("Prompt is required.");
+  const websiteBrief = parseWebsiteBrief(record.websiteBrief);
+  if (!websiteBrief) {
+    throw new Error("Website brief is required.");
   }
+  const prompt = synthesizePromptFromBrief(websiteBrief);
 
   const connectionRaw =
     record.connection && typeof record.connection === "object" && !Array.isArray(record.connection)
@@ -68,6 +71,7 @@ export function parseBuildPayload(body: unknown): BuildRequestPayload {
     projectName: typeof record.projectName === "string" ? record.projectName.trim() : undefined,
     projectDescription: typeof record.projectDescription === "string" ? record.projectDescription.trim() : undefined,
     prompt,
+    websiteBrief,
     connectionId: typeof record.connectionId === "string" && record.connectionId.trim() ? record.connectionId.trim() : undefined,
     homepageStrategy:
       typeof record.homepageStrategy === "string" &&

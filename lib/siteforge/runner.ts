@@ -1,4 +1,4 @@
-import { ConnectionProfile, HomepageStrategyMode } from "@/lib/siteforge/contracts";
+import { ConnectionProfile, HomepageStrategyMode, WebsiteBrief } from "@/lib/siteforge/contracts";
 import { runBuildPipeline, runRevisionPipeline } from "@/lib/siteforge/orchestrator";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 
@@ -16,6 +16,10 @@ function runningJobs(): Set<string> {
 export async function enqueueBuildJob(params: {
   sessionId: string;
   prompt: string;
+  websiteBrief: WebsiteBrief;
+  apiKey: string;
+  aiModel: string;
+  generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   connection: ConnectionProfile | null;
   connectionId?: string | null;
   homepageStrategy?: HomepageStrategyMode;
@@ -32,6 +36,10 @@ export async function enqueueBuildJob(params: {
         repo,
         sessionId: params.sessionId,
         prompt: params.prompt,
+        websiteBrief: params.websiteBrief,
+        apiKey: params.apiKey,
+        aiModel: params.aiModel,
+        generationSource: params.generationSource,
         connection: params.connection,
         connectionId: params.connectionId,
         homepageStrategy: params.homepageStrategy,

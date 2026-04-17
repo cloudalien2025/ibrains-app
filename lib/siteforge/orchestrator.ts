@@ -6,6 +6,7 @@ import {
   HomepageStrategyMode,
   OrchestratorOutput,
   RetryDirective,
+  WebsiteBrief,
 } from "@/lib/siteforge/contracts";
 import { runPlannerAgent } from "@/lib/siteforge/agents/planner";
 import { runContentAgent } from "@/lib/siteforge/agents/content";
@@ -94,19 +95,38 @@ export async function runBuildPipeline(params: {
   repo: SiteForgeRepository;
   sessionId: string;
   prompt: string;
+  websiteBrief: WebsiteBrief;
+  apiKey: string;
+  aiModel: string;
+  generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   connection: ConnectionProfile | null;
   homepageStrategy?: HomepageStrategyMode;
   connectionId?: string | null;
 }): Promise<void> {
-  const { repo, sessionId, prompt, connection } = params;
+  const { repo, sessionId, connection } = params;
 
   try {
     await updateStage(repo, sessionId, "planning", "Planning your site structure");
-    const sitePlan = runPlannerAgent(prompt);
+    const sitePlan = await runPlannerAgent({
+      brief: params.websiteBrief,
+      model: params.aiModel,
+      apiKey: params.apiKey,
+    });
     await repo.updateSession(sessionId, { sitePlan, status: "running" });
+    await updateStage(
+      repo,
+      sessionId,
+      "planning",
+      `Generation source: ${params.generationSource === "user_key" ? "user-provided key" : "platform key"} · model: ${params.aiModel}`
+    );
 
     await updateStage(repo, sessionId, "writing", "Writing conversion-focused page content");
-    const contentPackage = runContentAgent(sitePlan);
+    const contentPackage = await runContentAgent({
+      sitePlan,
+      brief: params.websiteBrief,
+      model: params.aiModel,
+      apiKey: params.apiKey,
+    });
     await repo.updateSession(sessionId, { contentPackage });
 
     await updateStage(repo, sessionId, "building", "Building technical page specification");

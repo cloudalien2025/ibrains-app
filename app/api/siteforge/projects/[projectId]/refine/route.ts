@@ -42,7 +42,6 @@ export async function POST(
   }
 
   const connectionFromBody = resolveConnection({
-    prompt: session.prompt,
     connection:
       body?.connection && typeof body.connection === "object" && !Array.isArray(body.connection)
         ? (body.connection as {

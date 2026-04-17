@@ -53,6 +53,18 @@ describe("siteforge project workspace flow", () => {
       name: "Renamed Workspace Project",
       slug: "renamed-workspace-project",
       primaryPrompt: "build a strong conversion-focused homepage",
+      websiteBrief: {
+        businessName: "Acme",
+        businessType: "Consulting",
+        businessDescription: "Growth consulting",
+        targetAudience: "Founders",
+        websiteGoal: "book_calls",
+        mainOffer: "Strategy sessions",
+        brandTone: "expert",
+        marketLocation: null,
+        competitors: null,
+        differentiators: "Faster execution",
+      },
       currentState: "workspace",
     });
 
@@ -60,8 +72,10 @@ describe("siteforge project workspace flow", () => {
     expect(loaded?.name).toBe("Renamed Workspace Project");
     expect(loaded?.slug).toBe("renamed-workspace-project");
     expect(loaded?.primaryPrompt).toBe("build a strong conversion-focused homepage");
+    expect(loaded?.websiteBrief?.businessName).toBe("Acme");
 
     const workspace = await repo.getWorkspace(project.id, userId);
     expect(workspace?.project.name).toBe("Renamed Workspace Project");
+    expect(workspace?.project.websiteBrief?.mainOffer).toBe("Strategy sessions");
   });
 });

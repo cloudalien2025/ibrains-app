@@ -7,6 +7,7 @@ import {
   SiteForgeRunLog,
   SiteForgeSnapshot,
   SiteForgeWorkspace,
+  StoredAiSecret,
   StoredConnectionSecret,
 } from "@/lib/siteforge/contracts";
 
@@ -33,6 +34,14 @@ export type SiteForgeRepository = {
   }): Promise<SiteForgeConnection>;
   getProjectConnection(projectId: string): Promise<SiteForgeConnection | null>;
   getConnectionSecret(connectionId: string): Promise<StoredConnectionSecret | null>;
+  saveProjectAiConfig(params: {
+    projectId: string;
+    provider: "openai";
+    model: string;
+    secret?: StoredAiSecret | null;
+  }): Promise<void>;
+  getProjectAiSecret(projectId: string): Promise<StoredAiSecret | null>;
+  clearProjectAiSecret(projectId: string): Promise<void>;
   updateConnectionValidation(connectionId: string, patch: {
     status: ConnectionValidationStatus;
     thriveDetected: boolean;

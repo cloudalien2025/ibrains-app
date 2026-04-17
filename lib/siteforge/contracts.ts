@@ -38,6 +38,33 @@ export type SitePlan = {
   warnings: string[];
 };
 
+export const websiteGoalOptions = [
+  "book_calls",
+  "capture_leads",
+  "sell_products",
+  "drive_demos_trials",
+  "build_authority",
+] as const;
+
+export type WebsiteGoal = (typeof websiteGoalOptions)[number];
+
+export const brandToneOptions = ["premium", "friendly", "expert", "bold", "modern"] as const;
+
+export type BrandTone = (typeof brandToneOptions)[number];
+
+export type WebsiteBrief = {
+  businessName: string;
+  businessType: string;
+  businessDescription: string;
+  targetAudience: string;
+  websiteGoal: WebsiteGoal;
+  mainOffer: string;
+  brandTone: BrandTone;
+  marketLocation: string | null;
+  competitors: string | null;
+  differentiators: string | null;
+};
+
 export type ContentSection = {
   sectionId: string;
   heading: string;
@@ -228,6 +255,9 @@ export type BuildSession = {
   type: BuildSessionType;
   triggerSource: BuildTriggerSource;
   prompt: string;
+  websiteBrief: WebsiteBrief | null;
+  generationSource: "user_key" | "platform_key" | "deterministic_fallback";
+  aiModel: string | null;
   connectionProfile: Omit<ConnectionProfile, "appPassword"> | null;
   status: BuildSessionStatus;
   runState: BuildRunState;
@@ -262,8 +292,13 @@ export type SiteForgeProject = {
   status: SiteForgeProjectStatus;
   siteType: string | null;
   primaryPrompt: string | null;
+  websiteBrief?: WebsiteBrief | null;
   currentState: string;
   homepageStrategy: HomepageStrategyMode;
+  aiProvider?: "openai" | null;
+  aiModel?: string | null;
+  aiSecretRef?: string | null;
+  hasSavedAiSecret?: boolean;
   lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
@@ -274,6 +309,11 @@ export type SiteForgeProject = {
 export type ConnectionValidationStatus = "not_validated" | "valid" | "invalid";
 
 export type StoredConnectionSecret = {
+  ref: string;
+  cipherText: string;
+};
+
+export type StoredAiSecret = {
   ref: string;
   cipherText: string;
 };

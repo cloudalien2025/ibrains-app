@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { SiteForgeProject } from "@/lib/siteforge/contracts";
+import { parseWebsiteBrief } from "@/lib/siteforge/brief";
 import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
 import { normalizeProject } from "@/lib/siteforge/workspaceShape";
 
@@ -43,6 +44,7 @@ export async function POST(req: NextRequest) {
       : "AI-generated website build project";
   const primaryPrompt =
     typeof body?.primaryPrompt === "string" && body.primaryPrompt.trim() ? body.primaryPrompt.trim() : null;
+  const websiteBrief = parseWebsiteBrief(body?.websiteBrief);
 
   const now = nowIso();
   const project: SiteForgeProject = {
@@ -53,8 +55,13 @@ export async function POST(req: NextRequest) {
     status: "draft",
     siteType: null,
     primaryPrompt,
+    websiteBrief,
     currentState: "workspace",
     homepageStrategy: "use_existing",
+    aiProvider: "openai",
+    aiModel: "gpt-4.1-mini",
+    aiSecretRef: null,
+    hasSavedAiSecret: false,
     lastOpenedAt: now,
     description,
     latestSessionId: null,

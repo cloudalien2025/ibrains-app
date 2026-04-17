@@ -1,4 +1,5 @@
 import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
+import { WebsiteBrief, brandToneOptions, websiteGoalOptions } from "@/lib/siteforge/contracts";
 
 export type BuildStage =
   | "planning"
@@ -19,8 +20,13 @@ export type SiteForgeProjectView = {
   status: "draft" | "active" | "archived";
   siteType: string | null;
   primaryPrompt: string | null;
+  websiteBrief: WebsiteBrief | null;
   currentState: string;
   homepageStrategy: HomepageStrategy;
+  aiProvider: "openai" | null;
+  aiModel: string | null;
+  aiSecretRef: string | null;
+  hasSavedAiSecret: boolean;
   lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
@@ -65,6 +71,8 @@ export type BuildSessionView = {
   id: string;
   projectId: string;
   prompt: string;
+  generationSource: "user_key" | "platform_key" | "deterministic_fallback";
+  aiModel: string | null;
   connectionId: string | null;
   type: "generate" | "refine";
   createdAt: string;
@@ -182,12 +190,51 @@ export function normalizeProject(value: unknown): SiteForgeProjectView | null {
     status: value.status === "active" || value.status === "archived" ? value.status : "draft",
     siteType: nullableString(value.siteType),
     primaryPrompt: nullableString(value.primaryPrompt),
+    websiteBrief: normalizeWebsiteBrief(value.websiteBrief),
     currentState: stringOr(value.currentState, "workspace"),
     homepageStrategy: toStrategy(value.homepageStrategy),
+    aiProvider: value.aiProvider === "openai" ? "openai" : null,
+    aiModel: nullableString(value.aiModel),
+    aiSecretRef: nullableString(value.aiSecretRef),
+    hasSavedAiSecret: boolOr(value.hasSavedAiSecret),
     lastOpenedAt: nullableString(value.lastOpenedAt),
     description: stringOr(value.description, "SiteForge workspace project"),
     latestSessionId: nullableString(value.latestSessionId),
     updatedAt: stringOr(value.updatedAt, nowIso()),
+  };
+}
+
+function normalizeWebsiteBrief(value: unknown): WebsiteBrief | null {
+  if (!isRecord(value)) return null;
+  const businessName = stringOr(value.businessName, "");
+  const businessType = stringOr(value.businessType, "");
+  const businessDescription = stringOr(value.businessDescription, "");
+  const targetAudience = stringOr(value.targetAudience, "");
+  const websiteGoal = stringOr(value.websiteGoal, "");
+  const mainOffer = stringOr(value.mainOffer, "");
+  const brandTone = stringOr(value.brandTone, "");
+  if (
+    !businessName ||
+    !businessType ||
+    !businessDescription ||
+    !targetAudience ||
+    !mainOffer ||
+    !(websiteGoalOptions as readonly string[]).includes(websiteGoal) ||
+    !(brandToneOptions as readonly string[]).includes(brandTone)
+  ) {
+    return null;
+  }
+  return {
+    businessName,
+    businessType,
+    businessDescription,
+    targetAudience,
+    websiteGoal: websiteGoal as WebsiteBrief["websiteGoal"],
+    mainOffer,
+    brandTone: brandTone as WebsiteBrief["brandTone"],
+    marketLocation: nullableString(value.marketLocation),
+    competitors: nullableString(value.competitors),
+    differentiators: nullableString(value.differentiators),
   };
 }
 
@@ -230,6 +277,11 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
     id,
     projectId: stringOr(value.projectId, projectId),
     prompt: stringOr(value.prompt, ""),
+    generationSource:
+      value.generationSource === "user_key" || value.generationSource === "platform_key"
+        ? value.generationSource
+        : "deterministic_fallback",
+    aiModel: nullableString(value.aiModel),
     connectionId: nullableString(value.connectionId),
     type: value.type === "refine" ? "refine" : "generate",
     createdAt: stringOr(value.createdAt, nowIso()),

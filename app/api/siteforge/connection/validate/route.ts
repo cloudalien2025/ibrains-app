@@ -11,7 +11,6 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const connection = resolveConnection({
-    prompt: "validate",
     connection:
       body && typeof body === "object"
         ? {
