@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
 import {
@@ -18,6 +18,7 @@ import {
   SiteForgeSnapshotView as SiteForgeSnapshot,
   SiteForgeWorkspaceView as SiteForgeWorkspace,
 } from "@/lib/siteforge/workspaceShape";
+import { shouldTriggerProjectNameHandoff } from "@/lib/siteforge/projectNameHandoff";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -114,6 +115,10 @@ export default function SiteForgeAppPage() {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingCreatedProjectId, setPendingCreatedProjectId] = useState<string | null>(null);
+
+  const projectNameSectionRef = useRef<HTMLDivElement | null>(null);
+  const projectNameInputRef = useRef<HTMLInputElement | null>(null);
 
   const currentSession = useMemo(
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
@@ -141,6 +146,7 @@ export default function SiteForgeAppPage() {
     setHasThriveHint(false);
     setHomepageStrategy("use_existing");
     setConnectionResult(null);
+    setPendingCreatedProjectId(null);
   }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
@@ -187,6 +193,7 @@ export default function SiteForgeAppPage() {
     if (!projectId) return;
     setBusy(true);
     setError(null);
+    setPendingCreatedProjectId(null);
 
     try {
       setSelectedProjectId(projectId);
@@ -273,6 +280,32 @@ export default function SiteForgeAppPage() {
     return () => window.clearInterval(timer);
   }, [activeProject, currentSessionId, sessions]);
 
+  useEffect(() => {
+    const input = projectNameInputRef.current;
+    if (!input) return;
+
+    const shouldHandoff = shouldTriggerProjectNameHandoff({
+      pendingCreatedProjectId,
+      activeProjectId: selectedProjectId,
+      inputDisabled: input.disabled,
+    });
+
+    if (!shouldHandoff) return;
+
+    projectNameSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+
+    window.requestAnimationFrame(() => {
+      const target = projectNameInputRef.current;
+      if (!target || target.disabled) return;
+      target.focus();
+      target.select();
+      setPendingCreatedProjectId(null);
+    });
+  }, [pendingCreatedProjectId, selectedProjectId]);
+
   async function createProject() {
     setBusy(true);
     setError(null);
@@ -301,8 +334,10 @@ export default function SiteForgeAppPage() {
       if (!opened) {
         throw new Error("Project was created but could not be opened.");
       }
+      setPendingCreatedProjectId(normalized.project.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Project creation failed.");
+      setPendingCreatedProjectId(null);
     } finally {
       setBusy(false);
     }
@@ -629,7 +664,7 @@ export default function SiteForgeAppPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className={`${brainTheme.glassCard} p-6`}>
+          <div ref={projectNameSectionRef} className={`${brainTheme.glassCard} p-6`}>
             <div className="flex items-center justify-between gap-2">
               <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
                 Project Name
@@ -645,6 +680,7 @@ export default function SiteForgeAppPage() {
             </div>
             <input
               id="siteforge-project-name"
+              ref={projectNameInputRef}
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
               disabled={!selectedProjectId}
