@@ -5,6 +5,7 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { nowIso, toSlug } from "@/lib/siteforge/utils";
+import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
 
 export async function GET(
   _req: NextRequest,
@@ -23,7 +24,12 @@ export async function GET(
     return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
   }
 
-  return NextResponse.json(workspace, { status: 200 });
+  const normalized = normalizeWorkspace(workspace);
+  if (!normalized) {
+    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
+  }
+
+  return NextResponse.json(normalized, { status: 200 });
 }
 
 export async function PATCH(
@@ -68,7 +74,11 @@ export async function PATCH(
   });
 
   const workspace = await repo.getWorkspace(projectId, userId);
-  return NextResponse.json(workspace, { status: 200 });
+  const normalized = normalizeWorkspace(workspace);
+  if (!normalized) {
+    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
+  }
+  return NextResponse.json(normalized, { status: 200 });
 }
 
 export async function OPTIONS() {

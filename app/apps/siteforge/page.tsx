@@ -3,6 +3,21 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
+import {
+  BuildSessionView as BuildSession,
+  BuildStage,
+  HomepageStrategy,
+  normalizeProjectPayload,
+  normalizeProjectsPayload,
+  normalizeSession,
+  normalizeWorkspace,
+  resolveInitialProjectId,
+  SiteForgeConnectionView as SiteForgeConnection,
+  SiteForgeProjectView as SiteForgeProject,
+  SiteForgeRunLogView as SiteForgeRunLog,
+  SiteForgeSnapshotView as SiteForgeSnapshot,
+  SiteForgeWorkspaceView as SiteForgeWorkspace,
+} from "@/lib/siteforge/workspaceShape";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -11,120 +26,6 @@ type CapabilityCheck = {
   thriveDetected: boolean;
   thriveSignals: string[];
   message: string;
-};
-
-type BuildStage =
-  | "planning"
-  | "writing"
-  | "building"
-  | "reviewing"
-  | "finalizing"
-  | "executing"
-  | "completed"
-  | "failed";
-
-type HomepageStrategy = "use_existing" | "replace_existing" | "create_new" | "draft_only";
-
-type SiteForgeProject = {
-  id: string;
-  name: string;
-  slug: string;
-  status: "draft" | "active" | "archived";
-  siteType: string | null;
-  primaryPrompt: string | null;
-  currentState: string;
-  homepageStrategy: HomepageStrategy;
-  lastOpenedAt: string | null;
-  description: string;
-  latestSessionId: string | null;
-  updatedAt: string;
-};
-
-type SiteForgeConnection = {
-  connectionId: string;
-  projectId: string;
-  label: string;
-  wordpressUrl: string;
-  username: string;
-  authType: "application_password";
-  secretRef: string | null;
-  hasSavedSecret: boolean;
-  thriveDetected: boolean;
-  writeAccess: boolean;
-  lastValidatedAt: string | null;
-  lastValidationStatus: "not_validated" | "valid" | "invalid";
-  createdAt: string;
-  updatedAt: string;
-};
-
-type SiteForgeSnapshot = {
-  snapshotId: string;
-  projectId: string;
-  connectionId: string | null;
-  currentHomepageId: number | null;
-  currentHomepageTitle: string | null;
-  currentHomepageSource: "wordpress" | "thrive" | "unknown";
-  knownPages: Array<{ id: number | null; slug: string; title: string; url: string | null }>;
-  knownMenus: Array<{ id: number | null; label: string; source: string }>;
-  thriveDetected: boolean;
-  homepageStrategy: HomepageStrategy;
-  lastRunSummary: string | null;
-  lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
-  pagesAffected: number;
-  lastSyncedAt: string;
-};
-
-type BuildSession = {
-  id: string;
-  projectId: string;
-  prompt: string;
-  connectionId: string | null;
-  type: "generate" | "refine";
-  createdAt: string;
-  status: "queued" | "running" | "completed" | "failed";
-  runState: {
-    currentStage: BuildStage;
-    progressPct: number;
-    timeline: Array<{
-      at: string;
-      stage: BuildStage;
-      message: string;
-      level: "info" | "warning" | "error";
-    }>;
-  };
-  buildSpec: {
-    siteTitle: string;
-    pages: Array<{ title: string; slug: string; sections: Array<{ heading: string; body: string }> }>;
-  } | null;
-  executionResult: {
-    success: boolean;
-    createdPages: Array<{ slug: string; status: string; url: string | null }>;
-    homepage: { success: boolean; message: string };
-    menu: { success: boolean; message: string };
-    thrive: { enabled: boolean; appliedMappings: string[]; fallbackUsed: boolean };
-    warnings: string[];
-    errors: string[];
-  } | null;
-  revisionHistory: Array<{ id: string; at: string; request: { message: string } }>;
-  errorSummary: string | null;
-};
-
-type SiteForgeRunLog = {
-  logId: string;
-  sessionId: string;
-  stage: BuildStage;
-  message: string;
-  level: "info" | "warning" | "error";
-  timestamp: string;
-};
-
-type SiteForgeWorkspace = {
-  project: SiteForgeProject;
-  activeConnection: SiteForgeConnection | null;
-  snapshot: SiteForgeSnapshot | null;
-  latestRun: BuildSession | null;
-  runHistory: BuildSession[];
-  runLogs: SiteForgeRunLog[];
 };
 
 const quickSuggestions = ["Health & Wellness", "Ecommerce", "Coaching", "SaaS"];
@@ -289,22 +190,33 @@ export default function SiteForgeAppPage() {
 
     try {
       setSelectedProjectId(projectId);
-      const workspace = await fetchJson<SiteForgeWorkspace>(`/api/siteforge/projects/${encodeURIComponent(projectId)}`, {
+      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(projectId)}`, {
         method: "PATCH",
         body: JSON.stringify({ markOpened: true }),
       });
+      const workspace = normalizeWorkspace(payload);
+      if (!workspace) {
+        throw new Error("Invalid SiteForge workspace payload.");
+      }
       await applyWorkspace(workspace);
+      return true;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load workspace.");
+      setSelectedProjectId("");
+      setSessions([]);
+      setRunLogs([]);
+      setCurrentSessionId(null);
+      setSnapshot(null);
+      setSavedConnection(null);
+      return false;
     } finally {
       setBusy(false);
     }
   }
 
   async function loadProjects() {
-    const data = await fetchJson<{ projects: SiteForgeProject[]; lastOpenedProjectId: string | null }>(
-      "/api/siteforge/projects"
-    );
+    const raw = await fetchJson<unknown>("/api/siteforge/projects");
+    const data = normalizeProjectsPayload(raw);
     setProjects(data.projects);
 
     if (!data.projects.length) {
@@ -312,8 +224,21 @@ export default function SiteForgeAppPage() {
       return;
     }
 
-    const targetProjectId = data.lastOpenedProjectId ?? data.projects[0].id;
-    await openProject(targetProjectId);
+    const targetProjectId = resolveInitialProjectId(data.projects, data.lastOpenedProjectId);
+    if (!targetProjectId) {
+      resetWorkspaceState();
+      return;
+    }
+
+    const opened = await openProject(targetProjectId);
+    if (opened) return;
+
+    for (const candidate of data.projects) {
+      if (candidate.id === targetProjectId) continue;
+      if (await openProject(candidate.id)) return;
+    }
+
+    resetWorkspaceState();
   }
 
   useEffect(() => {
@@ -334,17 +259,19 @@ export default function SiteForgeAppPage() {
 
     const timer = window.setInterval(async () => {
       try {
-        const data = await fetchJson<{ session: BuildSession }>(
+        const data = await fetchJson<{ session?: unknown }>(
           `/api/siteforge/sessions/${encodeURIComponent(currentSessionId)}`
         );
-        setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
+        const normalizedSession = normalizeSession(data?.session, activeProject?.id ?? selected.id);
+        if (!normalizedSession) return;
+        setSessions((prev) => [normalizedSession, ...prev.filter((entry) => entry.id !== normalizedSession.id)]);
       } catch {
         // Polling is best-effort to keep workspace responsive.
       }
     }, 1700);
 
     return () => window.clearInterval(timer);
-  }, [currentSessionId, sessions]);
+  }, [activeProject, currentSessionId, sessions]);
 
   async function createProject() {
     setBusy(true);
@@ -356,7 +283,7 @@ export default function SiteForgeAppPage() {
         projectName.trim() && (!activeProject || projectName.trim() !== activeProject.name)
           ? projectName.trim()
           : `SiteForge Project ${nextProjectNumber}`;
-      const data = await fetchJson<{ project: SiteForgeProject }>("/api/siteforge/projects", {
+      const payload = await fetchJson<unknown>("/api/siteforge/projects", {
         method: "POST",
         body: JSON.stringify({
           name: createName,
@@ -364,8 +291,16 @@ export default function SiteForgeAppPage() {
           description: "Persistent SiteForge workspace",
         }),
       });
-      setProjects((prev) => [data.project, ...prev.filter((entry) => entry.id !== data.project.id)]);
-      await openProject(data.project.id);
+      const normalized = normalizeProjectPayload(payload);
+      if (!normalized) {
+        throw new Error("Project create response was invalid.");
+      }
+
+      setProjects((prev) => [normalized.project, ...prev.filter((entry) => entry.id !== normalized.project.id)]);
+      const opened = await openProject(normalized.project.id);
+      if (!opened) {
+        throw new Error("Project was created but could not be opened.");
+      }
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Project creation failed.");
     } finally {
@@ -380,7 +315,7 @@ export default function SiteForgeAppPage() {
     setError(null);
 
     try {
-      const workspace = await fetchJson<SiteForgeWorkspace>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
+      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
         method: "PATCH",
         body: JSON.stringify({
           name: projectName,
@@ -390,6 +325,10 @@ export default function SiteForgeAppPage() {
           markOpened: true,
         }),
       });
+      const workspace = normalizeWorkspace(payload);
+      if (!workspace) {
+        throw new Error("Project save response was invalid.");
+      }
       await applyWorkspace(workspace);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save project settings.");
