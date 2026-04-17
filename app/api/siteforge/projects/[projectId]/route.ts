@@ -4,7 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
-import { nowIso } from "@/lib/siteforge/utils";
+import { nowIso, toSlug } from "@/lib/siteforge/utils";
 
 export async function GET(
   _req: NextRequest,
@@ -59,9 +59,12 @@ export async function PATCH(
   }
 
   await repo.updateProject(projectId, {
+    name: body?.name && typeof body.name === "string" ? body.name.trim() || undefined : undefined,
+    slug: body?.name && typeof body.name === "string" && body.name.trim() ? toSlug(body.name.trim()) : undefined,
     updatedAt: nowIso(),
     currentState: body?.currentState && typeof body.currentState === "string" ? body.currentState : undefined,
     primaryPrompt: body?.primaryPrompt && typeof body.primaryPrompt === "string" ? body.primaryPrompt : undefined,
+    description: body?.description && typeof body.description === "string" ? body.description : undefined,
   });
 
   const workspace = await repo.getWorkspace(projectId, userId);
