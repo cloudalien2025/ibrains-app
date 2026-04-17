@@ -31,6 +31,9 @@ type CapabilityCheck = {
 };
 
 type CreateStatus = "idle" | "creating" | "created" | "error";
+type OpenProjectResult =
+  | { ok: true }
+  | { ok: false; reason: "superseded" | "failed"; message?: string };
 
 const quickSuggestions = ["Health & Wellness", "Ecommerce", "Coaching", "SaaS"];
 const visibleSteps: BuildStage[] = ["planning", "writing", "building", "reviewing", "finalizing"];
@@ -266,22 +269,25 @@ export default function SiteForgeAppPage() {
 
     setError("Selected project is out of sync. Reloading project state.");
     activeProjectIntentRef.current = candidateProjectId;
-    const opened = await openProject(candidateProjectId, "workspace");
-    if (!opened) {
+    const openResult = await openProject(candidateProjectId, "workspace");
+    if (!openResult.ok) {
       activeProjectIntentRef.current = null;
       setSelectedProjectId("");
-      setError("Active project is no longer available.");
+      setError(openResult.message ?? "Active project is no longer available.");
       return null;
     }
 
     return candidateProjectId;
   }
 
-  async function openProject(projectId: string, source: "load" | "create" | "user" | "workspace" = "user") {
-    if (!projectId) return;
+  async function openProject(
+    projectId: string,
+    source: "load" | "create" | "user" | "workspace" = "user"
+  ): Promise<OpenProjectResult> {
+    if (!projectId) return { ok: false, reason: "failed", message: "Project id is required." };
     const intentId = activeProjectIntentRef.current;
     if (source === "load" && intentId && intentId !== projectId) {
-      return false;
+      return { ok: false, reason: "superseded" };
     }
     const openSeq = openProjectSeqRef.current + 1;
     openProjectSeqRef.current = openSeq;
@@ -298,19 +304,20 @@ export default function SiteForgeAppPage() {
       if (!workspace) {
         throw new Error("Invalid SiteForge workspace payload.");
       }
-      if (openProjectSeqRef.current !== openSeq) return false;
+      if (openProjectSeqRef.current !== openSeq) return { ok: false, reason: "superseded" };
       await applyWorkspace(workspace);
-      return true;
+      return { ok: true };
     } catch (err: unknown) {
-      if (openProjectSeqRef.current !== openSeq) return false;
-      setError(err instanceof Error ? err.message : "Failed to load workspace.");
+      if (openProjectSeqRef.current !== openSeq) return { ok: false, reason: "superseded" };
+      const message = err instanceof Error ? err.message : "Failed to load workspace.";
+      setError(message);
       setSelectedProjectId("");
       setSessions([]);
       setRunLogs([]);
       setCurrentSessionId(null);
       setSnapshot(null);
       setSavedConnection(null);
-      return false;
+      return { ok: false, reason: "failed", message };
     } finally {
       if (openProjectSeqRef.current === openSeq) {
         setBusy(false);
@@ -350,15 +357,16 @@ export default function SiteForgeAppPage() {
     }
 
     if (loadProjectsSeqRef.current !== loadSeq) return;
-    const opened = await openProject(targetProjectId, "load");
+    const openResult = await openProject(targetProjectId, "load");
     if (loadProjectsSeqRef.current !== loadSeq) return;
-    if (opened) return;
+    if (openResult.ok || openResult.reason === "superseded") return;
 
     for (const candidate of data.projects) {
       if (candidate.id === targetProjectId) continue;
       if (activeProjectIntentRef.current && candidate.id !== activeProjectIntentRef.current) continue;
       if (loadProjectsSeqRef.current !== loadSeq) return;
-      if (await openProject(candidate.id, "load")) return;
+      const candidateResult = await openProject(candidate.id, "load");
+      if (candidateResult.ok || candidateResult.reason === "superseded") return;
       if (loadProjectsSeqRef.current !== loadSeq) return;
     }
 
@@ -456,8 +464,8 @@ export default function SiteForgeAppPage() {
       activeProjectIntentRef.current = normalized.project.id;
       setSelectedProjectId(normalized.project.id);
       const opened = await openProject(normalized.project.id, "create");
-      if (!opened) {
-        throw new Error("Project was created but could not be opened.");
+      if (!opened.ok && opened.reason === "failed") {
+        throw new Error(opened.message ?? "Project was created but could not be opened.");
       }
       setNewProjectName("");
       setCreateStatus("created");
