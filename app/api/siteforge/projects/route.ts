@@ -5,6 +5,7 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { SiteForgeProject } from "@/lib/siteforge/contracts";
 import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
+import { normalizeProject } from "@/lib/siteforge/workspaceShape";
 
 export async function GET() {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
@@ -15,7 +16,9 @@ export async function GET() {
 
   const repo = await getSiteForgeRepository();
   const lastOpenedProjectId = await repo.getLastOpenedProjectId(userId);
-  const projects = await repo.listProjects(userId);
+  const projects = (await repo.listProjects(userId))
+    .map((project) => normalizeProject(project))
+    .filter((project): project is NonNullable<ReturnType<typeof normalizeProject>> => Boolean(project));
   return NextResponse.json({ projects, lastOpenedProjectId }, { status: 200 });
 }
 
@@ -56,7 +59,7 @@ export async function POST(req: NextRequest) {
   const repo = await getSiteForgeRepository();
   await repo.createProject(project);
   await repo.markProjectOpened(userId, project.id);
-  return NextResponse.json({ project }, { status: 201 });
+  return NextResponse.json({ project: normalizeProject(project) }, { status: 201 });
 }
 
 export async function OPTIONS() {
