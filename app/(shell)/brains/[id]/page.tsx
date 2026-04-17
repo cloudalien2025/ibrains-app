@@ -8,6 +8,7 @@ import {
 } from "@/lib/brains/missionControlRunSelection";
 import { summarizePostIngestProcessing } from "@/lib/brains/postIngestProcessingContract";
 import { normalizeBrainRecord } from "@/lib/brains/brainViews";
+import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import BrainConsoleActions from "./_components/BrainConsoleActions";
 
 type BrainDetailProps = {
@@ -50,6 +51,15 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
   let runs: RunView[] = [];
   let latestRunPayload: unknown = null;
   let latestRunReportPayload: unknown = null;
+  let siteForgeAdminSummary: {
+    projects: number;
+    sessions: number;
+    activeRuns: number;
+    failedRuns: number;
+    completedRuns: number;
+    lastRunAt: string | null;
+    storageMode: "postgres" | "memory";
+  } | null = null;
 
   try {
     const [brainRes, statsRes, runsRes] = await Promise.all([
@@ -98,12 +108,18 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
         if (runReportRes.ok) latestRunReportPayload = await runReportRes.json().catch(() => null);
       }
     }
+
+    if (brainId === "siteforge") {
+      const repo = await getSiteForgeRepository();
+      siteForgeAdminSummary = await repo.getAdminSummary();
+    }
   } catch {
     brainRecord = { id: brainId };
     stats = null;
     runs = [];
     latestRunPayload = null;
     latestRunReportPayload = null;
+    siteForgeAdminSummary = null;
   }
   const brain = normalizeBrainRecord(brainRecord);
 
@@ -180,6 +196,73 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
           </div>
         </div>
       </section>
+
+      {brainId === "siteforge" ? (
+        <section className="rounded-[18px] border border-cyan-300/25 bg-slate-950/70 p-4 shadow-[0_16px_32px_rgba(2,6,23,0.55)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/75">
+                SiteForge Admin Traceability
+              </div>
+              <h2 className="mt-1 text-lg font-semibold text-white">User App Operational Snapshot</h2>
+              <p className="mt-1 text-xs text-slate-300">
+                Control-plane visibility into SiteForge app projects, sessions, and run outcomes.
+              </p>
+            </div>
+            <Link
+              href="/apps/siteforge"
+              className="rounded-full border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-300/25"
+            >
+              Open User App
+            </Link>
+          </div>
+          {siteForgeAdminSummary ? (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Projects
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {siteForgeAdminSummary.projects.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Sessions
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {siteForgeAdminSummary.sessions.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Active Runs
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {siteForgeAdminSummary.activeRuns.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Completed
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {siteForgeAdminSummary.completedRuns.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Failed
+                <div className="mt-1 text-sm font-semibold text-white">
+                  {siteForgeAdminSummary.failedRuns.toLocaleString()}
+                </div>
+              </div>
+              <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
+                Storage
+                <div className="mt-1 text-sm font-semibold text-white">{siteForgeAdminSummary.storageMode}</div>
+                <div className="mt-1 text-[11px] text-slate-400">
+                  Last run: {formatDate(siteForgeAdminSummary.lastRunAt)}
+                </div>
+              </div>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400">
+              SiteForge telemetry source is unavailable. App route still operates independently.
+            </p>
+          )}
+        </section>
+      ) : null}
 
       <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="min-w-0">
