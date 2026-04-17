@@ -11,6 +11,9 @@ describe("siteforge create UX contract", () => {
     expect(source.includes("Create your first project to get started.")).toBe(true);
     expect(source.includes("Creating...")).toBe(true);
     expect(source.includes("Project created:")).toBe(true);
+    expect(source.includes("Rename Current Project")).toBe(true);
+    expect(source.includes("No Active Project")).toBe(true);
+    expect(source.includes("Rename the active project after creation.")).toBe(true);
   });
 
   it("does not include create-to-untitled fallback semantics in page code", () => {

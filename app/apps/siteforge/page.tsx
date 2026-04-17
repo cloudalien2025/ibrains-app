@@ -727,75 +727,83 @@ export default function SiteForgeAppPage() {
         </section>
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-          <div className={`${brainTheme.glassCard} p-6`}>
-            <div className="flex items-center justify-between gap-2">
-              <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
-                Project Name
-              </label>
-              <span className="text-xs uppercase tracking-[0.12em] text-slate-300">
-                Name: {projectNameSaveState}
-              </span>
-            </div>
-            <input
-              id="siteforge-project-name"
-              value={projectName}
-              onChange={(event) => {
-                setProjectName(event.target.value);
-                if (projectNameSaveState === "saved" || projectNameSaveState === "error") {
-                  setProjectNameSaveState("idle");
-                }
-              }}
-              onBlur={() => {
-                if (
-                  shouldPersistProjectName({
-                    selectedProjectId,
-                    projectName,
-                    persistedProjectName,
-                  })
-                ) {
-                  void persistProjectNameUpdate();
-                }
-              }}
-              disabled={!selectedProjectId}
-              className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-            />
-
-            <label htmlFor="siteforge-prompt" className="mt-4 block text-sm font-medium text-slate-100">
-              Website Prompt
-            </label>
-            <textarea
-              id="siteforge-prompt"
-              value={prompt}
-              onChange={(event) => setPrompt(event.target.value)}
-              disabled={!selectedProjectId}
-              placeholder="Describe the website you want…"
-              className="mt-3 h-40 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
-            />
-
-            <div className="mt-4 flex flex-wrap gap-2">
-              {quickSuggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() =>
-                    setPrompt(`Build a ${suggestion.toLowerCase()} website with clear offers and strong calls to action.`)
+          {activeProject ? (
+            <div className={`${brainTheme.glassCard} p-6`}>
+              <div className="flex items-center justify-between gap-2">
+                <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
+                  Rename Current Project
+                </label>
+                <span className="text-xs uppercase tracking-[0.12em] text-slate-300">
+                  Name: {projectNameSaveState}
+                </span>
+              </div>
+              <input
+                id="siteforge-project-name"
+                value={projectName}
+                onChange={(event) => {
+                  setProjectName(event.target.value);
+                  if (projectNameSaveState === "saved" || projectNameSaveState === "error") {
+                    setProjectNameSaveState("idle");
                   }
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
+                }}
+                onBlur={() => {
+                  if (
+                    shouldPersistProjectName({
+                      selectedProjectId,
+                      projectName,
+                      persistedProjectName,
+                    })
+                  ) {
+                    void persistProjectNameUpdate();
+                  }
+                }}
+                className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+              />
 
-            <button
-              type="button"
-              onClick={generateSite}
-              disabled={busy || !prompt.trim()}
-              className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
-            >
-              Generate My Website
-            </button>
-          </div>
+              <label htmlFor="siteforge-prompt" className="mt-4 block text-sm font-medium text-slate-100">
+                Website Prompt
+              </label>
+              <textarea
+                id="siteforge-prompt"
+                value={prompt}
+                onChange={(event) => setPrompt(event.target.value)}
+                placeholder="Describe the website you want…"
+                className="mt-3 h-40 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
+              />
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                {quickSuggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() =>
+                      setPrompt(`Build a ${suggestion.toLowerCase()} website with clear offers and strong calls to action.`)
+                    }
+                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={generateSite}
+                disabled={!selectedProjectId || busy || !prompt.trim()}
+                className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                Generate My Website
+              </button>
+            </div>
+          ) : (
+            <div className={`${brainTheme.glassCard} p-6`}>
+              <div className="text-sm font-medium text-slate-100">No Active Project</div>
+              <p className="mt-2 text-sm text-slate-300">
+                Create a project at the top of the page to unlock rename and generation controls.
+              </p>
+              <p className="mt-2 text-xs text-slate-400">Rename the active project after creation.</p>
+            </div>
+          )}
 
           <aside className={`${brainTheme.glassCard} h-fit p-5`}>
             <div className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Run History</div>
