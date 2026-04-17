@@ -38,10 +38,20 @@ export async function POST(
   }
 
   const { projectId } = await Promise.resolve(params);
+  if (!projectId || !projectId.trim()) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: "Project id is required." } },
+      { status: 400 }
+    );
+  }
   const repo = await getSiteForgeRepository();
-  const project = await repo.getProject(projectId, userId);
+  const canonicalProjectId = projectId.trim();
+  const project = await repo.getProject(canonicalProjectId, userId);
   if (!project) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+      { status: 404 }
+    );
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
@@ -56,7 +66,7 @@ export async function POST(
 
   const resolved = await resolveRuntimeConnection({
     repo,
-    projectId,
+    projectId: canonicalProjectId,
     incoming,
     preferConnectionId: incoming.id,
   });
@@ -71,12 +81,12 @@ export async function POST(
   const result = await validateWordPressConnection(resolved.connection);
   const saved = await saveConnectionProfile({
     repo,
-    projectId,
+    projectId: canonicalProjectId,
     connection: resolved.connection,
     validation: result,
   });
 
-  await repo.updateProject(projectId, {
+  await repo.updateProject(canonicalProjectId, {
     status: result.connected ? "active" : "draft",
     siteType: result.thriveDetected ? "thrive" : null,
     currentState: "workspace",
@@ -103,14 +113,24 @@ export async function PATCH(
   }
 
   const { projectId } = await Promise.resolve(params);
+  if (!projectId || !projectId.trim()) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: "Project id is required." } },
+      { status: 400 }
+    );
+  }
   const repo = await getSiteForgeRepository();
-  const project = await repo.getProject(projectId, userId);
+  const canonicalProjectId = projectId.trim();
+  const project = await repo.getProject(canonicalProjectId, userId);
   if (!project) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+      { status: 404 }
+    );
   }
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const current = await repo.getProjectConnection(projectId);
+  const current = await repo.getProjectConnection(canonicalProjectId);
 
   const incoming = parseIncomingConnection(
     body
@@ -133,7 +153,7 @@ export async function PATCH(
 
   const resolved = await resolveRuntimeConnection({
     repo,
-    projectId,
+    projectId: canonicalProjectId,
     incoming,
     preferConnectionId: current?.connectionId ?? incoming.id,
   });
@@ -148,7 +168,7 @@ export async function PATCH(
   const result = await validateWordPressConnection(resolved.connection);
   const saved = await saveConnectionProfile({
     repo,
-    projectId,
+    projectId: canonicalProjectId,
     connection: resolved.connection,
     validation: result,
   });
