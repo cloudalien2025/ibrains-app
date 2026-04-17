@@ -1,4 +1,4 @@
-import { ConnectionProfile } from "@/lib/siteforge/contracts";
+import { ConnectionProfile, HomepageStrategyMode } from "@/lib/siteforge/contracts";
 import { runBuildPipeline, runRevisionPipeline } from "@/lib/siteforge/orchestrator";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 
@@ -17,6 +17,8 @@ export async function enqueueBuildJob(params: {
   sessionId: string;
   prompt: string;
   connection: ConnectionProfile | null;
+  connectionId?: string | null;
+  homepageStrategy?: HomepageStrategyMode;
 }): Promise<void> {
   const jobs = runningJobs();
   if (jobs.has(params.sessionId)) return;
@@ -31,6 +33,8 @@ export async function enqueueBuildJob(params: {
         sessionId: params.sessionId,
         prompt: params.prompt,
         connection: params.connection,
+        connectionId: params.connectionId,
+        homepageStrategy: params.homepageStrategy,
       });
     } finally {
       jobs.delete(params.sessionId);
@@ -42,6 +46,8 @@ export async function enqueueRevisionJob(params: {
   sessionId: string;
   message: string;
   connection: ConnectionProfile | null;
+  connectionId?: string | null;
+  homepageStrategy?: HomepageStrategyMode;
 }): Promise<void> {
   const jobs = runningJobs();
   const key = `${params.sessionId}:revision`;
@@ -57,6 +63,8 @@ export async function enqueueRevisionJob(params: {
         sessionId: params.sessionId,
         message: params.message,
         connection: params.connection,
+        connectionId: params.connectionId,
+        homepageStrategy: params.homepageStrategy,
       });
     } finally {
       jobs.delete(key);

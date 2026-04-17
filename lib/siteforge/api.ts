@@ -1,10 +1,12 @@
-import { ConnectionProfile } from "@/lib/siteforge/contracts";
+import { ConnectionProfile, homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/contracts";
 import { createId, nowIso } from "@/lib/siteforge/utils";
 
 export type BuildRequestPayload = {
   projectName?: string;
   projectDescription?: string;
   prompt: string;
+  connectionId?: string;
+  homepageStrategy?: HomepageStrategyMode;
   connection?: {
     label?: string;
     baseUrl?: string;
@@ -66,6 +68,12 @@ export function parseBuildPayload(body: unknown): BuildRequestPayload {
     projectName: typeof record.projectName === "string" ? record.projectName.trim() : undefined,
     projectDescription: typeof record.projectDescription === "string" ? record.projectDescription.trim() : undefined,
     prompt,
+    connectionId: typeof record.connectionId === "string" && record.connectionId.trim() ? record.connectionId.trim() : undefined,
+    homepageStrategy:
+      typeof record.homepageStrategy === "string" &&
+      (homepageStrategyModes as readonly string[]).includes(record.homepageStrategy)
+        ? (record.homepageStrategy as HomepageStrategyMode)
+        : undefined,
     connection: connectionRaw
       ? {
           label: typeof connectionRaw.label === "string" ? connectionRaw.label : undefined,

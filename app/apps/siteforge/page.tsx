@@ -23,18 +23,63 @@ type BuildStage =
   | "completed"
   | "failed";
 
+type HomepageStrategy = "use_existing" | "replace_existing" | "create_new" | "draft_only";
+
 type SiteForgeProject = {
   id: string;
   name: string;
+  slug: string;
+  status: "draft" | "active" | "archived";
+  siteType: string | null;
+  primaryPrompt: string | null;
+  currentState: string;
+  homepageStrategy: HomepageStrategy;
+  lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
   updatedAt: string;
+};
+
+type SiteForgeConnection = {
+  connectionId: string;
+  projectId: string;
+  label: string;
+  wordpressUrl: string;
+  username: string;
+  authType: "application_password";
+  secretRef: string | null;
+  hasSavedSecret: boolean;
+  thriveDetected: boolean;
+  writeAccess: boolean;
+  lastValidatedAt: string | null;
+  lastValidationStatus: "not_validated" | "valid" | "invalid";
+  createdAt: string;
+  updatedAt: string;
+};
+
+type SiteForgeSnapshot = {
+  snapshotId: string;
+  projectId: string;
+  connectionId: string | null;
+  currentHomepageId: number | null;
+  currentHomepageTitle: string | null;
+  currentHomepageSource: "wordpress" | "thrive" | "unknown";
+  knownPages: Array<{ id: number | null; slug: string; title: string; url: string | null }>;
+  knownMenus: Array<{ id: number | null; label: string; source: string }>;
+  thriveDetected: boolean;
+  homepageStrategy: HomepageStrategy;
+  lastRunSummary: string | null;
+  lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
+  pagesAffected: number;
+  lastSyncedAt: string;
 };
 
 type BuildSession = {
   id: string;
   projectId: string;
   prompt: string;
+  connectionId: string | null;
+  type: "generate" | "refine";
   createdAt: string;
   status: "queued" | "running" | "completed" | "failed";
   runState: {
@@ -61,6 +106,25 @@ type BuildSession = {
     errors: string[];
   } | null;
   revisionHistory: Array<{ id: string; at: string; request: { message: string } }>;
+  errorSummary: string | null;
+};
+
+type SiteForgeRunLog = {
+  logId: string;
+  sessionId: string;
+  stage: BuildStage;
+  message: string;
+  level: "info" | "warning" | "error";
+  timestamp: string;
+};
+
+type SiteForgeWorkspace = {
+  project: SiteForgeProject;
+  activeConnection: SiteForgeConnection | null;
+  snapshot: SiteForgeSnapshot | null;
+  latestRun: BuildSession | null;
+  runHistory: BuildSession[];
+  runLogs: SiteForgeRunLog[];
 };
 
 const quickSuggestions = ["Health & Wellness", "Ecommerce", "Coaching", "SaaS"];
@@ -119,14 +183,23 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
+function formatDate(value: string | null | undefined): string {
+  if (!value) return "Not available";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString();
+}
+
 export default function SiteForgeAppPage() {
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [sessions, setSessions] = useState<BuildSession[]>([]);
+  const [runLogs, setRunLogs] = useState<SiteForgeRunLog[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [snapshot, setSnapshot] = useState<SiteForgeSnapshot | null>(null);
+  const [savedConnection, setSavedConnection] = useState<SiteForgeConnection | null>(null);
 
   const [projectName, setProjectName] = useState("SiteForge Project");
-  const [projectDescription] = useState("Conversion-focused AI website build");
   const [prompt, setPrompt] = useState("");
   const [refinePrompt, setRefinePrompt] = useState("");
 
@@ -135,60 +208,102 @@ export default function SiteForgeAppPage() {
   const [username, setUsername] = useState("");
   const [appPassword, setAppPassword] = useState("");
   const [hasThriveHint, setHasThriveHint] = useState(false);
+  const [homepageStrategy, setHomepageStrategy] = useState<HomepageStrategy>("use_existing");
   const [connectionResult, setConnectionResult] = useState<CapabilityCheck | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const currentSession = useMemo(
+    () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
+    [sessions, currentSessionId]
+  );
+
+  async function applyWorkspace(workspace: SiteForgeWorkspace) {
+    setSessions(workspace.runHistory);
+    setRunLogs(workspace.runLogs);
+    setCurrentSessionId(workspace.latestRun?.id ?? workspace.runHistory[0]?.id ?? null);
+    setSnapshot(workspace.snapshot);
+    setSavedConnection(workspace.activeConnection);
+
+    setProjectName(workspace.project.name);
+    setPrompt(workspace.project.primaryPrompt ?? "");
+    setHomepageStrategy(workspace.project.homepageStrategy);
+
+    if (workspace.activeConnection) {
+      setConnectionLabel(workspace.activeConnection.label);
+      setBaseUrl(workspace.activeConnection.wordpressUrl);
+      setUsername(workspace.activeConnection.username);
+      setHasThriveHint(workspace.activeConnection.thriveDetected);
+      setConnectionResult({
+        connected: workspace.activeConnection.lastValidationStatus === "valid",
+        canWritePages: workspace.activeConnection.writeAccess,
+        canManageSettings: workspace.activeConnection.writeAccess,
+        thriveDetected: workspace.activeConnection.thriveDetected,
+        thriveSignals: [],
+        message:
+          workspace.activeConnection.lastValidationStatus === "valid"
+            ? "Connection validated and saved."
+            : workspace.activeConnection.lastValidationStatus === "invalid"
+              ? "Saved credentials need revalidation."
+              : "Connection not validated yet.",
+      });
+    } else {
+      setConnectionResult(null);
+    }
+
+    setAppPassword("");
+  }
+
+  async function openProject(projectId: string) {
+    if (!projectId) return;
+    setBusy(true);
+    setError(null);
+
+    try {
+      setSelectedProjectId(projectId);
+      const workspace = await fetchJson<SiteForgeWorkspace>(`/api/siteforge/projects/${encodeURIComponent(projectId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ markOpened: true }),
+      });
+      await applyWorkspace(workspace);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load workspace.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function loadProjects() {
-    const data = await fetchJson<{ projects: SiteForgeProject[] }>("/api/siteforge/projects");
+    const data = await fetchJson<{ projects: SiteForgeProject[]; lastOpenedProjectId: string | null }>(
+      "/api/siteforge/projects"
+    );
     setProjects(data.projects);
 
     if (!data.projects.length) {
       const created = await fetchJson<{ project: SiteForgeProject }>("/api/siteforge/projects", {
         method: "POST",
-        body: JSON.stringify({ name: projectName, description: projectDescription }),
+        body: JSON.stringify({ name: projectName, primaryPrompt: prompt }),
       });
       setProjects([created.project]);
-      setSelectedProjectId(created.project.id);
-      return created.project.id;
+      await openProject(created.project.id);
+      return;
     }
 
-    const fallback = selectedProjectId || data.projects[0].id;
-    setSelectedProjectId(fallback);
-    return fallback;
-  }
-
-  async function loadSessions(projectId: string) {
-    if (!projectId) return;
-    const data = await fetchJson<{ project: SiteForgeProject; sessions: BuildSession[] }>(
-      `/api/siteforge/projects/${encodeURIComponent(projectId)}`
-    );
-    setSessions(data.sessions);
-
-    if (!currentSessionId && data.sessions.length) {
-      setCurrentSessionId(data.sessions[0].id);
-    }
+    const targetProjectId = data.lastOpenedProjectId ?? data.projects[0].id;
+    await openProject(targetProjectId);
   }
 
   useEffect(() => {
     void (async () => {
       try {
-        const projectId = await loadProjects();
-        if (projectId) {
-          await loadSessions(projectId);
-        }
+        await loadProjects();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load SiteForge projects.");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const currentSession = useMemo(
-    () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
-    [sessions, currentSessionId]
-  );
 
   useEffect(() => {
     if (!currentSessionId) return;
@@ -202,22 +317,60 @@ export default function SiteForgeAppPage() {
         );
         setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
       } catch {
-        // Preserve current UI while transient polling errors recover.
+        // Polling is best-effort to keep workspace responsive.
       }
     }, 1700);
 
     return () => window.clearInterval(timer);
   }, [currentSessionId, sessions]);
 
-  async function validateConnection() {
+  async function createProject() {
     setBusy(true);
     setError(null);
+
     try {
-      const data = await fetchJson<{ result: CapabilityCheck }>("/api/siteforge/connection/validate", {
+      const data = await fetchJson<{ project: SiteForgeProject }>("/api/siteforge/projects", {
         method: "POST",
-        body: JSON.stringify({ label: connectionLabel, baseUrl, username, appPassword, hasThriveHint }),
+        body: JSON.stringify({
+          name: projectName,
+          primaryPrompt: prompt,
+          description: "Persistent SiteForge workspace",
+        }),
       });
+      setProjects((prev) => [data.project, ...prev]);
+      await openProject(data.project.id);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Project creation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveAndValidateConnection() {
+    if (!selectedProjectId) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
+        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            connectionId: savedConnection?.connectionId,
+            label: connectionLabel,
+            baseUrl,
+            username,
+            appPassword,
+            hasThriveHint,
+          }),
+        }
+      );
       setConnectionResult(data.result);
+      setSavedConnection(data.connection);
+      setAppPassword("");
+      await openProject(selectedProjectId);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Connection validation failed.");
     } finally {
@@ -225,29 +378,57 @@ export default function SiteForgeAppPage() {
     }
   }
 
-  async function generateSite() {
+  async function revalidateConnection() {
+    if (!selectedProjectId) return;
+
     setBusy(true);
     setError(null);
 
     try {
-      const projectId = selectedProjectId || (await loadProjects());
-      if (!projectId) throw new Error("Unable to resolve SiteForge project.");
+      const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
+        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            label: connectionLabel,
+            baseUrl,
+            username,
+            appPassword: appPassword || undefined,
+            hasThriveHint,
+          }),
+        }
+      );
+      setConnectionResult(data.result);
+      setSavedConnection(data.connection);
+      setAppPassword("");
+      await openProject(selectedProjectId);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Revalidation failed.");
+    } finally {
+      setBusy(false);
+    }
+  }
 
-      if (!selectedProjectId) setSelectedProjectId(projectId);
+  async function generateSite() {
+    if (!selectedProjectId || !prompt.trim()) return;
 
+    setBusy(true);
+    setError(null);
+
+    try {
       const data = await fetchJson<{ session: BuildSession }>(
-        `/api/siteforge/projects/${encodeURIComponent(projectId)}/build`,
+        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/build`,
         {
           method: "POST",
           body: JSON.stringify({
             prompt,
-            projectName,
-            projectDescription,
+            connectionId: savedConnection?.connectionId,
+            homepageStrategy,
             connection: {
               label: connectionLabel,
               baseUrl,
               username,
-              appPassword,
+              appPassword: appPassword || undefined,
               hasThriveHint,
             },
           }),
@@ -256,7 +437,8 @@ export default function SiteForgeAppPage() {
 
       setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
       setCurrentSessionId(data.session.id);
-      await loadSessions(projectId);
+      setAppPassword("");
+      await openProject(selectedProjectId);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start SiteForge build.");
     } finally {
@@ -275,17 +457,19 @@ export default function SiteForgeAppPage() {
         method: "POST",
         body: JSON.stringify({
           sessionId: currentSessionId,
+          connectionId: savedConnection?.connectionId,
           message: refinePrompt,
           connection: {
             label: connectionLabel,
             baseUrl,
             username,
-            appPassword,
+            appPassword: appPassword || undefined,
             hasThriveHint,
           },
         }),
       });
       setRefinePrompt("");
+      setAppPassword("");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Refinement request failed.");
     } finally {
@@ -293,7 +477,6 @@ export default function SiteForgeAppPage() {
     }
   }
 
-  const buildMode = Boolean(currentSession);
   const activity = currentSession?.runState.timeline ?? [];
 
   return (
@@ -308,7 +491,7 @@ export default function SiteForgeAppPage() {
               <div className="text-xs uppercase tracking-[0.2em] text-cyan-300/75">Apps</div>
               <h1 className="mt-2 text-3xl font-semibold text-white">SiteForge</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                Describe your site, connect WordPress, generate pages, and refine with guided AI revisions.
+                Persistent project workspace for connected WordPress site generation and refinement.
               </p>
             </div>
             <Link href="/" className={brainTheme.secondaryButton}>
@@ -323,18 +506,22 @@ export default function SiteForgeAppPage() {
             <select
               value={selectedProjectId}
               onChange={(event) => {
-                const id = event.target.value;
-                setSelectedProjectId(id);
-                void loadSessions(id);
+                void openProject(event.target.value);
               }}
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             >
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
-                  {project.name}
+                  {project.name} · {project.status}
                 </option>
               ))}
             </select>
+            <div className="mt-2 text-xs text-slate-400">
+              Last opened: {formatDate(projects.find((entry) => entry.id === selectedProjectId)?.lastOpenedAt)}
+            </div>
+            <button type="button" className={`${brainTheme.secondaryButton} mt-2`} onClick={createProject} disabled={busy}>
+              Create Project
+            </button>
           </div>
 
           <div className={`${brainTheme.glassCard} p-3`}>
@@ -345,6 +532,17 @@ export default function SiteForgeAppPage() {
               placeholder="https://example.com"
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             />
+            <label className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">Homepage Strategy</label>
+            <select
+              value={homepageStrategy}
+              onChange={(event) => setHomepageStrategy(event.target.value as HomepageStrategy)}
+              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+            >
+              <option value="use_existing">Use Existing</option>
+              <option value="replace_existing">Replace Existing</option>
+              <option value="create_new">Create New</option>
+              <option value="draft_only">Draft Only</option>
+            </select>
           </div>
 
           <div className={`${brainTheme.glassCard} p-3`}>
@@ -365,12 +563,15 @@ export default function SiteForgeAppPage() {
               type="password"
               value={appPassword}
               onChange={(event) => setAppPassword(event.target.value)}
-              placeholder="WordPress application password"
+              placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"}
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             />
-            <div className="mt-2 flex gap-2">
-              <button type="button" className={brainTheme.secondaryButton} onClick={validateConnection} disabled={busy}>
-                Validate
+            <div className="mt-2 flex flex-wrap gap-2">
+              <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy}>
+                Save + Validate
+              </button>
+              <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy}>
+                Revalidate
               </button>
               <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
                 <input
@@ -381,6 +582,9 @@ export default function SiteForgeAppPage() {
                 Thrive Installed
               </label>
             </div>
+            <div className="mt-2 text-xs text-slate-400">
+              Credentials: {savedConnection?.hasSavedSecret ? "saved" : "need update"}
+            </div>
           </div>
         </section>
 
@@ -388,79 +592,115 @@ export default function SiteForgeAppPage() {
           <div className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
         ) : null}
 
-        {!buildMode ? (
-          <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-            <div className={`${brainTheme.glassCard} p-6`}>
-              <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
-                Project Name
-              </label>
-              <input
-                id="siteforge-project-name"
-                value={projectName}
-                onChange={(event) => setProjectName(event.target.value)}
-                className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-              />
+        <section className="mt-4 grid gap-3 lg:grid-cols-3">
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Current Site State</div>
+            <div className="mt-2 text-sm text-slate-200">URL: {savedConnection?.wordpressUrl ?? "Not connected"}</div>
+            <div className="mt-1 text-sm text-slate-200">Connection: {savedConnection?.label ?? "Not set"}</div>
+            <div className="mt-1 text-sm text-slate-200">Validation: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
+            <div className="mt-1 text-sm text-slate-200">Thrive: {savedConnection?.thriveDetected ? "Detected" : "Not detected"}</div>
+            <div className="mt-1 text-sm text-slate-200">Current homepage: {snapshot?.currentHomepageTitle ?? "Unknown"}</div>
+            <div className="mt-1 text-sm text-slate-200">Strategy: {snapshot?.homepageStrategy ?? homepageStrategy}</div>
+            <div className="mt-1 text-sm text-slate-200">Last sync: {formatDate(snapshot?.lastSyncedAt)}</div>
+          </div>
 
-              <label htmlFor="siteforge-prompt" className="mt-4 block text-sm font-medium text-slate-100">
-                Website Prompt
-              </label>
-              <textarea
-                id="siteforge-prompt"
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Describe the website you want…"
-                className="mt-3 h-48 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
-              />
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Latest Run</div>
+            <div className="mt-2 text-sm text-slate-200">Status: {sessions[0]?.status ?? "No runs yet"}</div>
+            <div className="mt-1 text-sm text-slate-200">Summary: {snapshot?.lastRunSummary ?? "No summary yet"}</div>
+            <div className="mt-1 text-sm text-slate-200">Pages affected: {snapshot?.pagesAffected ?? 0}</div>
+            <div className="mt-1 text-sm text-slate-200">Run logs: {runLogs.length}</div>
+          </div>
 
-              <div className="mt-4 flex flex-wrap gap-2">
-                {quickSuggestions.map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    onClick={() =>
-                      setPrompt(
-                        `Build a ${suggestion.toLowerCase()} website with clear offers and strong calls to action.`
-                      )
-                    }
-                    className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Connection Status</div>
+            <p className="mt-2 text-sm text-slate-200">
+              {connectionResult
+                ? connectionResult.connected
+                  ? connectionResult.message
+                  : "Connection invalid"
+                : "Not validated"}
+            </p>
+            <div className="mt-2 text-xs text-slate-400">
+              Write access: {connectionResult?.canWritePages ? "Yes" : "No"} | Thrive: {connectionResult?.thriveDetected ? "Detected" : "Not detected"}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">Last validated: {formatDate(savedConnection?.lastValidatedAt)}</div>
+          </div>
+        </section>
 
-              <button
-                type="button"
-                onClick={generateSite}
-                disabled={busy || !prompt.trim()}
-                className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-                Generate My Website
-              </button>
+        <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
+          <div className={`${brainTheme.glassCard} p-6`}>
+            <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
+              Project Name
+            </label>
+            <input
+              id="siteforge-project-name"
+              value={projectName}
+              onChange={(event) => setProjectName(event.target.value)}
+              className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+            />
+
+            <label htmlFor="siteforge-prompt" className="mt-4 block text-sm font-medium text-slate-100">
+              Website Prompt
+            </label>
+            <textarea
+              id="siteforge-prompt"
+              value={prompt}
+              onChange={(event) => setPrompt(event.target.value)}
+              placeholder="Describe the website you want…"
+              className="mt-3 h-40 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
+            />
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              {quickSuggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() =>
+                    setPrompt(`Build a ${suggestion.toLowerCase()} website with clear offers and strong calls to action.`)
+                  }
+                  className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200 transition hover:bg-white/10"
+                >
+                  {suggestion}
+                </button>
+              ))}
             </div>
 
-            <aside className={`${brainTheme.glassCard} h-fit p-5`}>
-              <div className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Connection Status</div>
-              <p className="mt-2 text-sm text-slate-200">
-                {connectionResult
-                  ? connectionResult.connected
-                    ? connectionResult.message
-                    : "Connection failed"
-                  : "Not validated"}
-              </p>
-              {connectionResult ? (
-                <div className="mt-2 text-xs text-slate-400">
-                  Write access: {connectionResult.canWritePages ? "Yes" : "No"} | Thrive: {connectionResult.thriveDetected ? "Detected" : "Not detected"}
-                </div>
-              ) : null}
-            </aside>
-          </section>
-        ) : (
+            <button
+              type="button"
+              onClick={generateSite}
+              disabled={busy || !prompt.trim()}
+              className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
+            >
+              Generate My Website
+            </button>
+          </div>
+
+          <aside className={`${brainTheme.glassCard} h-fit p-5`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Run History</div>
+            <ul className="mt-2 space-y-2">
+              {sessions.map((session) => (
+                <li key={session.id}>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentSessionId(session.id)}
+                    className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200"
+                  >
+                    {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status}
+                  </button>
+                </li>
+              ))}
+              {!sessions.length ? <li className="text-xs text-slate-400">No run history yet.</li> : null}
+            </ul>
+          </aside>
+        </section>
+
+        {currentSession ? (
           <section className="mt-6 space-y-4">
-            <Stepper stage={currentSession?.runState.currentStage ?? "planning"} />
+            <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
 
             <div className={`${brainTheme.glassCard} p-4 text-sm text-slate-200`}>
-              Status: {currentSession?.status} · Stage: {currentSession?.runState.currentStage} · Progress: {currentSession?.runState.progressPct}%
+              Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
             </div>
 
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
@@ -481,7 +721,7 @@ export default function SiteForgeAppPage() {
               <aside className={`${brainTheme.glassCard} p-5`}>
                 <h2 className="text-lg font-semibold text-white">Live Preview</h2>
                 <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  {currentSession?.buildSpec?.pages?.length ? (
+                  {currentSession.buildSpec?.pages?.length ? (
                     <ul className="space-y-2 text-xs text-slate-300">
                       {currentSession.buildSpec.pages.map((page) => (
                         <li key={page.slug} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
@@ -496,18 +736,6 @@ export default function SiteForgeAppPage() {
                 </div>
               </aside>
             </div>
-
-            {currentSession?.executionResult ? (
-              <section className={`${brainTheme.glassCard} p-4`}>
-                <h3 className="text-sm font-semibold text-white">Execution Summary</h3>
-                <p className="mt-2 text-xs text-slate-300">
-                  Pages created: {currentSession.executionResult.createdPages.filter((entry) => entry.status === "created").length} · Homepage: {currentSession.executionResult.homepage.message}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  Thrive mode: {currentSession.executionResult.thrive.enabled ? "Enabled" : "Fallback WordPress"}
-                </p>
-              </section>
-            ) : null}
 
             <div className={`${brainTheme.glassCard} p-4`}>
               <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">
@@ -532,25 +760,8 @@ export default function SiteForgeAppPage() {
                 </button>
               </div>
             </div>
-
-            <section className={`${brainTheme.glassCard} p-4`}>
-              <h3 className="text-sm font-semibold text-white">Run History</h3>
-              <ul className="mt-2 space-y-2">
-                {sessions.map((session) => (
-                  <li key={session.id}>
-                    <button
-                      type="button"
-                      onClick={() => setCurrentSessionId(session.id)}
-                      className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200"
-                    >
-                      {new Date(session.createdAt).toLocaleString()} · {session.status} · {session.runState.currentStage}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </section>
           </section>
-        )}
+        ) : null}
       </main>
     </div>
   );

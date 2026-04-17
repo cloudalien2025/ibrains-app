@@ -3,6 +3,7 @@ import {
   BuildStage,
   CapabilityCheckResult,
   ConnectionProfile,
+  HomepageStrategyMode,
   OrchestratorOutput,
   RetryDirective,
 } from "@/lib/siteforge/contracts";
@@ -24,6 +25,7 @@ import {
 } from "@/lib/siteforge/refinement";
 import { SiteForgeRepository } from "@/lib/siteforge/repository/types";
 import { clampProgress, createId, nowIso } from "@/lib/siteforge/utils";
+import { persistSnapshotFromSession } from "@/lib/siteforge/workspace";
 
 const stageProgress: Record<BuildStage, number> = {
   planning: 15,
@@ -60,6 +62,7 @@ async function updateStage(
 ): Promise<void> {
   const session = await repo.getSession(sessionId);
   if (!session) return;
+  const timestamp = nowIso();
 
   await repo.updateSession(sessionId, {
     runState: {
@@ -68,14 +71,22 @@ async function updateStage(
       timeline: [
         ...session.runState.timeline,
         {
-          at: nowIso(),
+          at: timestamp,
           stage,
           message,
           level,
         },
       ],
     },
-    updatedAt: nowIso(),
+    updatedAt: timestamp,
+  });
+  await repo.appendRunLog({
+    logId: createId("sflog"),
+    sessionId,
+    stage,
+    message,
+    level,
+    timestamp,
   });
 }
 
@@ -84,6 +95,8 @@ export async function runBuildPipeline(params: {
   sessionId: string;
   prompt: string;
   connection: ConnectionProfile | null;
+  homepageStrategy?: HomepageStrategyMode;
+  connectionId?: string | null;
 }): Promise<void> {
   const { repo, sessionId, prompt, connection } = params;
 
@@ -107,6 +120,8 @@ export async function runBuildPipeline(params: {
     if (!qaResult.isValid) {
       await repo.updateSession(sessionId, {
         status: "failed",
+        errorSummary: "Build failed QA validation.",
+        completedAt: nowIso(),
         finishedAt: nowIso(),
       });
       await updateStage(repo, sessionId, "failed", "Build failed QA validation.", "error");
@@ -147,10 +162,23 @@ export async function runBuildPipeline(params: {
 
     await repo.updateSession(sessionId, {
       status: "completed",
+      completedAt: nowIso(),
       finishedAt: nowIso(),
       updatedAt: nowIso(),
     });
     await updateStage(repo, sessionId, "completed", "Build run completed");
+
+    const latest = await repo.getSession(sessionId);
+    if (latest) {
+      const project = await repo.getProject(latest.projectId, latest.userId);
+      await persistSnapshotFromSession({
+        repo,
+        session: latest,
+        homepageStrategy: params.homepageStrategy ?? project?.homepageStrategy ?? "use_existing",
+        connectionId: params.connectionId ?? latest.connectionId,
+        thriveDetected: Boolean(latest.executionResult?.thrive.enabled || connection?.hasThriveHint),
+      });
+    }
   } catch (error: unknown) {
     const retry = classifyRetry(error);
     await updateStage(
@@ -162,6 +190,8 @@ export async function runBuildPipeline(params: {
     );
     await repo.updateSession(sessionId, {
       status: "failed",
+      errorSummary: error instanceof Error ? error.message : "Unknown error",
+      completedAt: nowIso(),
       finishedAt: nowIso(),
     });
     await repo.appendFailure(sessionId, {
@@ -179,6 +209,8 @@ export async function runRevisionPipeline(params: {
   sessionId: string;
   message: string;
   connection: ConnectionProfile | null;
+  homepageStrategy?: HomepageStrategyMode;
+  connectionId?: string | null;
 }): Promise<void> {
   const { repo, sessionId, message, connection } = params;
   const session = await repo.getSession(sessionId);
@@ -196,6 +228,9 @@ export async function runRevisionPipeline(params: {
     const qa = runRevisionQa(revisedSpec);
 
     if (!qa.isValid) {
+      await repo.updateSession(sessionId, {
+        errorSummary: "Revision QA failed.",
+      });
       await updateStage(repo, sessionId, "failed", "Revision QA failed", "error");
       return;
     }
@@ -223,11 +258,24 @@ export async function runRevisionPipeline(params: {
     });
 
     await repo.updateSession(sessionId, {
+      type: "refine",
       buildSpec: revisedSpec,
       updatedAt: nowIso(),
     });
 
     await updateStage(repo, sessionId, "completed", "Revision completed");
+
+    const latest = await repo.getSession(sessionId);
+    if (latest) {
+      const project = await repo.getProject(latest.projectId, latest.userId);
+      await persistSnapshotFromSession({
+        repo,
+        session: latest,
+        homepageStrategy: params.homepageStrategy ?? project?.homepageStrategy ?? "use_existing",
+        connectionId: params.connectionId ?? latest.connectionId,
+        thriveDetected: Boolean(latest.executionResult?.thrive.enabled || connection?.hasThriveHint),
+      });
+    }
   } catch (error: unknown) {
     await updateStage(
       repo,
@@ -236,6 +284,9 @@ export async function runRevisionPipeline(params: {
       `Revision failed: ${error instanceof Error ? error.message : "unknown"}`,
       "error"
     );
+    await repo.updateSession(sessionId, {
+      errorSummary: error instanceof Error ? error.message : "unknown",
+    });
   }
 }
 
