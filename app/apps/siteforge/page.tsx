@@ -218,8 +218,35 @@ export default function SiteForgeAppPage() {
     () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
     [sessions, currentSessionId]
   );
+  const activeProject = useMemo(
+    () => projects.find((entry) => entry.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+
+  function resetWorkspaceState() {
+    setSelectedProjectId("");
+    setSessions([]);
+    setRunLogs([]);
+    setCurrentSessionId(null);
+    setSnapshot(null);
+    setSavedConnection(null);
+    setProjectName("SiteForge Project");
+    setPrompt("");
+    setRefinePrompt("");
+    setConnectionLabel("Primary WordPress Site");
+    setBaseUrl("");
+    setUsername("");
+    setAppPassword("");
+    setHasThriveHint(false);
+    setHomepageStrategy("use_existing");
+    setConnectionResult(null);
+  }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
+    setProjects((prev) => {
+      const others = prev.filter((entry) => entry.id !== workspace.project.id);
+      return [workspace.project, ...others];
+    });
     setSessions(workspace.runHistory);
     setRunLogs(workspace.runLogs);
     setCurrentSessionId(workspace.latestRun?.id ?? workspace.runHistory[0]?.id ?? null);
@@ -281,12 +308,7 @@ export default function SiteForgeAppPage() {
     setProjects(data.projects);
 
     if (!data.projects.length) {
-      const created = await fetchJson<{ project: SiteForgeProject }>("/api/siteforge/projects", {
-        method: "POST",
-        body: JSON.stringify({ name: projectName, primaryPrompt: prompt }),
-      });
-      setProjects([created.project]);
-      await openProject(created.project.id);
+      resetWorkspaceState();
       return;
     }
 
@@ -329,15 +351,20 @@ export default function SiteForgeAppPage() {
     setError(null);
 
     try {
+      const nextProjectNumber = projects.length + 1;
+      const createName =
+        projectName.trim() && (!activeProject || projectName.trim() !== activeProject.name)
+          ? projectName.trim()
+          : `SiteForge Project ${nextProjectNumber}`;
       const data = await fetchJson<{ project: SiteForgeProject }>("/api/siteforge/projects", {
         method: "POST",
         body: JSON.stringify({
-          name: projectName,
+          name: createName,
           primaryPrompt: prompt,
           description: "Persistent SiteForge workspace",
         }),
       });
-      setProjects((prev) => [data.project, ...prev]);
+      setProjects((prev) => [data.project, ...prev.filter((entry) => entry.id !== data.project.id)]);
       await openProject(data.project.id);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Project creation failed.");
@@ -345,6 +372,36 @@ export default function SiteForgeAppPage() {
       setBusy(false);
     }
   }
+
+  async function saveProjectDetails() {
+    if (!selectedProjectId) return;
+
+    setBusy(true);
+    setError(null);
+
+    try {
+      const workspace = await fetchJson<SiteForgeWorkspace>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: projectName,
+          primaryPrompt: prompt,
+          homepageStrategy,
+          currentState: "workspace",
+          markOpened: true,
+        }),
+      });
+      await applyWorkspace(workspace);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save project settings.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const projectSettingsDirty = Boolean(
+    activeProject &&
+      (projectName.trim() !== activeProject.name || prompt !== (activeProject.primaryPrompt ?? "") || homepageStrategy !== activeProject.homepageStrategy)
+  );
 
   async function saveAndValidateConnection() {
     if (!selectedProjectId) return;
@@ -508,8 +565,12 @@ export default function SiteForgeAppPage() {
               onChange={(event) => {
                 void openProject(event.target.value);
               }}
+              disabled={!projects.length || busy}
               className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
             >
+              {!projects.length ? (
+                <option value="">No projects yet</option>
+              ) : null}
               {projects.map((project) => (
                 <option key={project.id} value={project.id}>
                   {project.name} · {project.status}
@@ -517,7 +578,7 @@ export default function SiteForgeAppPage() {
               ))}
             </select>
             <div className="mt-2 text-xs text-slate-400">
-              Last opened: {formatDate(projects.find((entry) => entry.id === selectedProjectId)?.lastOpenedAt)}
+              Last opened: {formatDate(activeProject?.lastOpenedAt)}
             </div>
             <button type="button" className={`${brainTheme.secondaryButton} mt-2`} onClick={createProject} disabled={busy}>
               Create Project
@@ -630,13 +691,24 @@ export default function SiteForgeAppPage() {
 
         <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
           <div className={`${brainTheme.glassCard} p-6`}>
-            <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
-              Project Name
-            </label>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
+                Project Name
+              </label>
+              <button
+                type="button"
+                onClick={saveProjectDetails}
+                disabled={busy || !selectedProjectId || !projectSettingsDirty}
+                className={`${brainTheme.secondaryButton} disabled:cursor-not-allowed disabled:opacity-60`}
+              >
+                Save Project
+              </button>
+            </div>
             <input
               id="siteforge-project-name"
               value={projectName}
               onChange={(event) => setProjectName(event.target.value)}
+              disabled={!selectedProjectId}
               className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
             />
 
@@ -647,6 +719,7 @@ export default function SiteForgeAppPage() {
               id="siteforge-prompt"
               value={prompt}
               onChange={(event) => setPrompt(event.target.value)}
+              disabled={!selectedProjectId}
               placeholder="Describe the website you want…"
               className="mt-3 h-40 w-full rounded-2xl border border-white/15 bg-slate-950/65 px-4 py-3 text-sm text-white outline-none transition placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
             />
