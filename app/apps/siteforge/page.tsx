@@ -212,7 +212,7 @@ export default function SiteForgeAppPage() {
   async function persistProjectNameUpdate(): Promise<void> {
     if (
       !shouldPersistProjectName({
-        selectedProjectId,
+        selectedProjectId: activeProjectId ?? "",
         projectName,
         persistedProjectName,
       })
@@ -225,7 +225,13 @@ export default function SiteForgeAppPage() {
     setProjectNameSaveState("saving");
 
     try {
-      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}`, {
+      if (!activeProjectId) {
+        setProjectNameSaveState("error");
+        setError("No active project selected.");
+        return;
+      }
+
+      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(activeProjectId)}`, {
         method: "PATCH",
         body: JSON.stringify({
           name: projectName.trim(),
@@ -245,6 +251,30 @@ export default function SiteForgeAppPage() {
       setProjectNameSaveState("error");
       setError(err instanceof Error ? err.message : "Failed to save project name.");
     }
+  }
+
+  async function ensureCanonicalActiveProjectId(): Promise<string | null> {
+    if (hasValidActiveProject && activeProjectId) {
+      return activeProjectId;
+    }
+
+    const candidateProjectId = selectedProjectId || activeProjectIntentRef.current;
+    if (!candidateProjectId) {
+      setError("No active project selected.");
+      return null;
+    }
+
+    setError("Selected project is out of sync. Reloading project state.");
+    activeProjectIntentRef.current = candidateProjectId;
+    const opened = await openProject(candidateProjectId, "workspace");
+    if (!opened) {
+      activeProjectIntentRef.current = null;
+      setSelectedProjectId("");
+      setError("Active project is no longer available.");
+      return null;
+    }
+
+    return candidateProjectId;
   }
 
   async function openProject(projectId: string, source: "load" | "create" | "user" | "workspace" = "user") {
@@ -370,7 +400,7 @@ export default function SiteForgeAppPage() {
   useEffect(() => {
     if (
       !shouldPersistProjectName({
-        selectedProjectId,
+        selectedProjectId: activeProjectId ?? "",
         projectName,
         persistedProjectName,
       })
@@ -392,7 +422,7 @@ export default function SiteForgeAppPage() {
         clearTimeout(projectNameSaveTimerRef.current);
       }
     };
-  }, [persistedProjectName, projectName, selectedProjectId]);
+  }, [activeProjectId, persistedProjectName, projectName]);
 
   async function createProject() {
     const createName = normalizeNewProjectName(newProjectName);
@@ -442,17 +472,15 @@ export default function SiteForgeAppPage() {
   }
 
   async function saveAndValidateConnection() {
-    if (!hasValidActiveProject || !activeProjectId) {
-      setError("No active project selected.");
-      return;
-    }
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
 
     setBusy(true);
     setError(null);
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
-        `/api/siteforge/projects/${encodeURIComponent(activeProjectId)}/connection`,
+        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/connection`,
         {
           method: "POST",
           body: JSON.stringify({
@@ -468,10 +496,13 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      activeProjectIntentRef.current = activeProjectId;
-      await openProject(activeProjectId, "workspace");
+      activeProjectIntentRef.current = targetProjectId;
+      await openProject(targetProjectId, "workspace");
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === "Project not found.") {
+      if (
+        err instanceof Error &&
+        (err.message === "Project not found." || err.message === "Project not found for current user.")
+      ) {
         setError("Selected project could not be loaded.");
       } else {
         setError(err instanceof Error ? err.message : "Connection validation failed.");
@@ -482,17 +513,15 @@ export default function SiteForgeAppPage() {
   }
 
   async function revalidateConnection() {
-    if (!hasValidActiveProject || !activeProjectId) {
-      setError("No active project selected.");
-      return;
-    }
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
 
     setBusy(true);
     setError(null);
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
-        `/api/siteforge/projects/${encodeURIComponent(activeProjectId)}/connection`,
+        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/connection`,
         {
           method: "PATCH",
           body: JSON.stringify({
@@ -507,10 +536,13 @@ export default function SiteForgeAppPage() {
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
-      activeProjectIntentRef.current = activeProjectId;
-      await openProject(activeProjectId, "workspace");
+      activeProjectIntentRef.current = targetProjectId;
+      await openProject(targetProjectId, "workspace");
     } catch (err: unknown) {
-      if (err instanceof Error && err.message === "Project not found.") {
+      if (
+        err instanceof Error &&
+        (err.message === "Project not found." || err.message === "Project not found for current user.")
+      ) {
         setError("Selected project could not be loaded.");
       } else {
         setError(err instanceof Error ? err.message : "Revalidation failed.");
@@ -521,14 +553,16 @@ export default function SiteForgeAppPage() {
   }
 
   async function generateSite() {
-    if (!selectedProjectId || !prompt.trim()) return;
+    if (!prompt.trim()) return;
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
 
     setBusy(true);
     setError(null);
 
     try {
       const data = await fetchJson<{ session: BuildSession }>(
-        `/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/build`,
+        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/build`,
         {
           method: "POST",
           body: JSON.stringify({
@@ -549,8 +583,8 @@ export default function SiteForgeAppPage() {
       setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
       setCurrentSessionId(data.session.id);
       setAppPassword("");
-      activeProjectIntentRef.current = selectedProjectId;
-      await openProject(selectedProjectId, "workspace");
+      activeProjectIntentRef.current = targetProjectId;
+      await openProject(targetProjectId, "workspace");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to start SiteForge build.");
     } finally {
@@ -559,13 +593,15 @@ export default function SiteForgeAppPage() {
   }
 
   async function submitRefinement() {
-    if (!selectedProjectId || !currentSessionId || !refinePrompt.trim()) return;
+    if (!currentSessionId || !refinePrompt.trim()) return;
+    const targetProjectId = await ensureCanonicalActiveProjectId();
+    if (!targetProjectId) return;
 
     setBusy(true);
     setError(null);
 
     try {
-      await fetchJson<{ ok: true }>(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/refine`, {
+      await fetchJson<{ ok: true }>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/refine`, {
         method: "POST",
         body: JSON.stringify({
           sessionId: currentSessionId,
@@ -719,7 +755,7 @@ export default function SiteForgeAppPage() {
                 type="button"
                 className={brainTheme.secondaryButton}
                 onClick={saveAndValidateConnection}
-                disabled={busy || !hasValidActiveProject}
+                disabled={busy || !selectedProjectId}
               >
                 Save + Validate
               </button>
@@ -727,7 +763,7 @@ export default function SiteForgeAppPage() {
                 type="button"
                 className={brainTheme.secondaryButton}
                 onClick={revalidateConnection}
-                disabled={busy || !hasValidActiveProject}
+                disabled={busy || !selectedProjectId}
               >
                 Revalidate
               </button>
@@ -743,8 +779,12 @@ export default function SiteForgeAppPage() {
             <div className="mt-2 text-xs text-slate-400">
               Credentials: {savedConnection?.hasSavedSecret ? "saved" : "need update"}
             </div>
-            {!hasValidActiveProject ? (
+            {!selectedProjectId ? (
               <div className="mt-2 text-xs text-amber-200">Select a valid active project to validate this connection.</div>
+            ) : !hasValidActiveProject ? (
+              <div className="mt-2 text-xs text-amber-200">
+                Selected project is out of sync. Connection actions will reload project state before continuing.
+              </div>
             ) : null}
           </div>
         </section>
@@ -812,7 +852,7 @@ export default function SiteForgeAppPage() {
                 onBlur={() => {
                   if (
                     shouldPersistProjectName({
-                      selectedProjectId,
+                      selectedProjectId: activeProjectId ?? "",
                       projectName,
                       persistedProjectName,
                     })

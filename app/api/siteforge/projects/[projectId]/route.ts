@@ -19,10 +19,20 @@ export async function GET(
   }
 
   const { projectId } = await Promise.resolve(params);
+  if (!projectId || !projectId.trim()) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: "Project id is required." } },
+      { status: 400 }
+    );
+  }
+  const canonicalProjectId = projectId.trim();
   const repo = await getSiteForgeRepository();
-  const workspace = await repo.getWorkspace(projectId, userId);
+  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
   if (!workspace) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+      { status: 404 }
+    );
   }
 
   const normalized = normalizeWorkspace(workspace);
@@ -44,11 +54,21 @@ export async function PATCH(
   }
 
   const { projectId } = await Promise.resolve(params);
+  if (!projectId || !projectId.trim()) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: "Project id is required." } },
+      { status: 400 }
+    );
+  }
+  const canonicalProjectId = projectId.trim();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const repo = await getSiteForgeRepository();
-  const project = await repo.getProject(projectId, userId);
+  const project = await repo.getProject(canonicalProjectId, userId);
   if (!project) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
+    return NextResponse.json(
+      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+      { status: 404 }
+    );
   }
 
   const markOpened = body?.markOpened === true;
@@ -59,10 +79,10 @@ export async function PATCH(
       : null;
 
   if (markOpened) {
-    await repo.markProjectOpened(userId, projectId);
+    await repo.markProjectOpened(userId, canonicalProjectId);
   }
   if (homepageStrategy) {
-    await repo.setProjectHomepageStrategy(projectId, homepageStrategy);
+    await repo.setProjectHomepageStrategy(canonicalProjectId, homepageStrategy);
   }
 
   const updatePatch: Partial<SiteForgeProject> = {
@@ -85,9 +105,9 @@ export async function PATCH(
     updatePatch.description = body.description;
   }
 
-  await repo.updateProject(projectId, updatePatch);
+  await repo.updateProject(canonicalProjectId, updatePatch);
 
-  const workspace = await repo.getWorkspace(projectId, userId);
+  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
   const normalized = normalizeWorkspace(workspace);
   if (!normalized) {
     return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
