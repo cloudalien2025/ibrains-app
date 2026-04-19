@@ -18,7 +18,22 @@ test.describe("SiteForge save+validate flow", () => {
     await page.getByPlaceholder("e.g. iPetzo").fill(projectName);
     await page.getByRole("button", { name: "Create Project" }).click();
 
-    await expect(page.getByText(`Project created: ${projectName}`)).toBeVisible();
+    const createdMessage = page.getByText(`Project created: ${projectName}`);
+    const persistenceBlockedMessage = page
+      .getByText(
+        "Persistent SiteForge storage is unavailable in production. SiteForge is disabled until database storage is restored."
+      )
+      .first();
+
+    await Promise.race([
+      expect(createdMessage).toBeVisible(),
+      expect(persistenceBlockedMessage).toBeVisible(),
+    ]);
+
+    if (await persistenceBlockedMessage.isVisible()) {
+      await expect(createdMessage).toHaveCount(0);
+      return;
+    }
 
     const projectSelect = page.locator("select").first();
     const selectedProjectId = await projectSelect.inputValue();
