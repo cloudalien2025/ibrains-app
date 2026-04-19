@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { ConnectionProfile } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { createId, nowIso } from "@/lib/siteforge/utils";
 import { resolveRuntimeConnection, saveConnectionProfile } from "@/lib/siteforge/workspace";
 import { validateWordPressConnection } from "@/lib/siteforge/wordpress/service";
@@ -44,62 +45,71 @@ export async function POST(
       { status: 400 }
     );
   }
-  const repo = await getSiteForgeRepository();
-  const canonicalProjectId = projectId.trim();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const canonicalProjectId = projectId.trim();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const incoming = parseIncomingConnection(body);
+
+    if (!incoming) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "baseUrl and username are required." } },
+        { status: 400 }
+      );
+    }
+
+    const resolved = await resolveRuntimeConnection({
+      repo,
+      projectId: canonicalProjectId,
+      incoming,
+      preferConnectionId: incoming.id,
+    });
+
+    if (!resolved.connection?.appPassword) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "Application password is required for initial validation." } },
+        { status: 400 }
+      );
+    }
+
+    const result = await validateWordPressConnection(resolved.connection);
+    const saved = await saveConnectionProfile({
+      repo,
+      projectId: canonicalProjectId,
+      connection: resolved.connection,
+      validation: result,
+    });
+
+    await repo.updateProject(canonicalProjectId, {
+      status: result.connected ? "active" : "draft",
+      siteType: result.thriveDetected ? "thrive" : null,
+      currentState: "workspace",
+    });
+
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      {
+        result,
+        connection: saved,
+        credentialsSaved: saved.hasSavedSecret,
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to save SiteForge connection." } },
+      { status: 500 }
     );
   }
-
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const incoming = parseIncomingConnection(body);
-
-  if (!incoming) {
-    return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "baseUrl and username are required." } },
-      { status: 400 }
-    );
-  }
-
-  const resolved = await resolveRuntimeConnection({
-    repo,
-    projectId: canonicalProjectId,
-    incoming,
-    preferConnectionId: incoming.id,
-  });
-
-  if (!resolved.connection?.appPassword) {
-    return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "Application password is required for initial validation." } },
-      { status: 400 }
-    );
-  }
-
-  const result = await validateWordPressConnection(resolved.connection);
-  const saved = await saveConnectionProfile({
-    repo,
-    projectId: canonicalProjectId,
-    connection: resolved.connection,
-    validation: result,
-  });
-
-  await repo.updateProject(canonicalProjectId, {
-    status: result.connected ? "active" : "draft",
-    siteType: result.thriveDetected ? "thrive" : null,
-    currentState: "workspace",
-  });
-
-  return NextResponse.json(
-    {
-      result,
-      connection: saved,
-      credentialsSaved: saved.hasSavedSecret,
-    },
-    { status: 200 }
-  );
 }
 
 export async function PATCH(
@@ -119,61 +129,72 @@ export async function PATCH(
       { status: 400 }
     );
   }
-  const repo = await getSiteForgeRepository();
-  const canonicalProjectId = projectId.trim();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const canonicalProjectId = projectId.trim();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const current = await repo.getProjectConnection(canonicalProjectId);
+
+    const incoming = parseIncomingConnection(
+      body
+        ? {
+            ...body,
+            baseUrl: typeof body.baseUrl === "string" ? body.baseUrl : current?.wordpressUrl,
+            username: typeof body.username === "string" ? body.username : current?.username,
+            label: typeof body.label === "string" ? body.label : current?.label,
+            connectionId: current?.connectionId,
+          }
+        : null
+    );
+
+    if (!incoming) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "No saved connection to revalidate." } },
+        { status: 400 }
+      );
+    }
+
+    const resolved = await resolveRuntimeConnection({
+      repo,
+      projectId: canonicalProjectId,
+      incoming,
+      preferConnectionId: current?.connectionId ?? incoming.id,
+    });
+
+    if (!resolved.connection?.appPassword) {
+      return NextResponse.json(
+        {
+          error: { code: "BAD_REQUEST", message: "Credentials not saved. Provide application password to revalidate." },
+        },
+        { status: 400 }
+      );
+    }
+
+    const result = await validateWordPressConnection(resolved.connection);
+    const saved = await saveConnectionProfile({
+      repo,
+      projectId: canonicalProjectId,
+      connection: resolved.connection,
+      validation: result,
+    });
+
+    return NextResponse.json({ result, connection: saved, credentialsSaved: saved.hasSavedSecret }, { status: 200 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      { error: { code: "INTERNAL_ERROR", message: "Failed to revalidate SiteForge connection." } },
+      { status: 500 }
     );
   }
-
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const current = await repo.getProjectConnection(canonicalProjectId);
-
-  const incoming = parseIncomingConnection(
-    body
-      ? {
-          ...body,
-          baseUrl: typeof body.baseUrl === "string" ? body.baseUrl : current?.wordpressUrl,
-          username: typeof body.username === "string" ? body.username : current?.username,
-          label: typeof body.label === "string" ? body.label : current?.label,
-          connectionId: current?.connectionId,
-        }
-      : null
-  );
-
-  if (!incoming) {
-    return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "No saved connection to revalidate." } },
-      { status: 400 }
-    );
-  }
-
-  const resolved = await resolveRuntimeConnection({
-    repo,
-    projectId: canonicalProjectId,
-    incoming,
-    preferConnectionId: current?.connectionId ?? incoming.id,
-  });
-
-  if (!resolved.connection?.appPassword) {
-    return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "Credentials not saved. Provide application password to revalidate." } },
-      { status: 400 }
-    );
-  }
-
-  const result = await validateWordPressConnection(resolved.connection);
-  const saved = await saveConnectionProfile({
-    repo,
-    projectId: canonicalProjectId,
-    connection: resolved.connection,
-    validation: result,
-  });
-
-  return NextResponse.json({ result, connection: saved, credentialsSaved: saved.hasSavedSecret }, { status: 200 });
 }
 
 export async function OPTIONS() {

@@ -11,7 +11,18 @@ import {
   StoredConnectionSecret,
   WebsiteBrief,
 } from "@/lib/siteforge/contracts";
-import { SiteForgeFailureRecord, SiteForgeRepository } from "@/lib/siteforge/repository/types";
+import {
+  SiteForgeFailureRecord,
+  SiteForgeRepository,
+  SiteForgeStorageSummary,
+} from "@/lib/siteforge/repository/types";
+import {
+  buildStorageSummary,
+  getSiteForgeStoragePolicy,
+  SiteForgePersistenceError,
+  SiteForgePostgresAvailability,
+  SiteForgeStoragePolicy,
+} from "@/lib/siteforge/repository/persistence";
 import { nowIso } from "@/lib/siteforge/utils";
 
 type MemoryStore = {
@@ -47,7 +58,7 @@ function getMemoryStore(): MemoryStore {
   return globalThis.__siteforge_memory_store__;
 }
 
-async function hasPostgresTables(): Promise<boolean> {
+async function hasPostgresTables(): Promise<SiteForgePostgresAvailability> {
   try {
     const pool = getBrainLearningPool();
     const check = await pool.query(
@@ -56,9 +67,28 @@ async function hasPostgresTables(): Promise<boolean> {
       ) AS ok`
     );
     const row = check.rows[0] as { ok?: boolean } | undefined;
-    return Boolean(row?.ok);
-  } catch {
-    return false;
+    if (Boolean(row?.ok)) {
+      return { available: true, reasonCode: "ok", reason: null };
+    }
+    return {
+      available: false,
+      reasonCode: "missing_tables",
+      reason: "Required SiteForge database tables are missing (siteforge_projects not found).",
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "unknown database error";
+    if (/missing required env var: database_url/i.test(message)) {
+      return {
+        available: false,
+        reasonCode: "db_misconfigured",
+        reason: `Database configuration missing: ${message}`,
+      };
+    }
+    return {
+      available: false,
+      reasonCode: "db_unreachable",
+      reason: `Database connectivity check failed: ${message}`,
+    };
   }
 }
 
@@ -290,6 +320,11 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
 
 class MemoryRepository implements SiteForgeRepository {
   private readonly store = getMemoryStore();
+  private readonly storageSummary: SiteForgeStorageSummary;
+
+  constructor(summary: SiteForgeStorageSummary) {
+    this.storageSummary = summary;
+  }
 
   async createProject(project: SiteForgeProject): Promise<SiteForgeProject> {
     this.store.projects.set(project.id, project);
@@ -522,8 +557,7 @@ class MemoryRepository implements SiteForgeRepository {
     failedRuns: number;
     completedRuns: number;
     lastRunAt: string | null;
-    storageMode: "postgres" | "memory";
-  }> {
+  } & SiteForgeStorageSummary> {
     const sessions = [...this.store.sessions.values()];
     const lastRunAt = sessions.length
       ? sessions.map((session) => session.updatedAt).sort((a, b) => Date.parse(b) - Date.parse(a))[0]
@@ -535,7 +569,7 @@ class MemoryRepository implements SiteForgeRepository {
       failedRuns: sessions.filter((session) => session.status === "failed").length,
       completedRuns: sessions.filter((session) => session.status === "completed").length,
       lastRunAt,
-      storageMode: "memory",
+      ...this.storageSummary,
     };
   }
 }
@@ -1111,8 +1145,7 @@ class PostgresRepository implements SiteForgeRepository {
     failedRuns: number;
     completedRuns: number;
     lastRunAt: string | null;
-    storageMode: "postgres" | "memory";
-  }> {
+  } & SiteForgeStorageSummary> {
     const pool = getBrainLearningPool();
     const [projects, sessions, status, latest] = await Promise.all([
       pool.query<{ count: number }>(`SELECT COUNT(*)::int AS count FROM siteforge_projects`),
@@ -1134,19 +1167,79 @@ class PostgresRepository implements SiteForgeRepository {
       failedRuns: status.rows[0]?.failed_runs ?? 0,
       completedRuns: status.rows[0]?.completed_runs ?? 0,
       lastRunAt: latest.rows[0]?.updated_at ? new Date(latest.rows[0].updated_at).toISOString() : null,
-      storageMode: "postgres",
+      ...buildStorageSummary({
+        mode: "postgres",
+        availability: { available: true, reason: null, reasonCode: "ok" },
+        policy: getSiteForgeStoragePolicy(),
+      }),
     };
   }
 }
 
 let repoPromise: Promise<SiteForgeRepository> | null = null;
+let lastStorageStatus:
+  | (SiteForgeStorageSummary & {
+      postgresAvailable: boolean;
+      postgresReasonCode: SiteForgePostgresAvailability["reasonCode"];
+      postgresReason: string | null;
+      runtimeEnv: SiteForgeStoragePolicy["runtimeEnv"];
+    })
+  | null = null;
+
+function setStorageStatus(params: {
+  summary: SiteForgeStorageSummary;
+  availability: SiteForgePostgresAvailability;
+  policy: SiteForgeStoragePolicy;
+}): void {
+  lastStorageStatus = {
+    ...params.summary,
+    postgresAvailable: params.availability.available,
+    postgresReasonCode: params.availability.reasonCode,
+    postgresReason: params.availability.reason,
+    runtimeEnv: params.policy.runtimeEnv,
+  };
+}
+
+export function getSiteForgeStorageStatus() {
+  if (lastStorageStatus) return lastStorageStatus;
+  const policy = getSiteForgeStoragePolicy();
+  return {
+    storageMode: "memory" as const,
+    persistenceHealth: "unavailable" as const,
+    fallbackAllowed: policy.fallbackAllowed,
+    fallbackActive: false,
+    reason: "SiteForge repository has not been initialized.",
+    postgresAvailable: false,
+    postgresReasonCode: "db_unreachable" as const,
+    postgresReason: "Repository initialization has not run yet.",
+    runtimeEnv: policy.runtimeEnv,
+  };
+}
 
 export function getSiteForgeRepository(): Promise<SiteForgeRepository> {
   if (!repoPromise) {
     repoPromise = (async () => {
-      const usePostgres = await hasPostgresTables();
-      if (usePostgres) return new PostgresRepository();
-      return new MemoryRepository();
+      const policy = getSiteForgeStoragePolicy();
+      const availability = await hasPostgresTables();
+
+      if (availability.available) {
+        const summary = buildStorageSummary({ mode: "postgres", availability, policy });
+        setStorageStatus({ summary, availability, policy });
+        return new PostgresRepository();
+      }
+
+      if (policy.fallbackAllowed) {
+        const summary = buildStorageSummary({ mode: "memory", availability, policy });
+        setStorageStatus({ summary, availability, policy });
+        return new MemoryRepository(summary);
+      }
+
+      const error = new SiteForgePersistenceError({
+        availability,
+        policy,
+      });
+      lastStorageStatus = error.storage;
+      throw error;
     })();
   }
 

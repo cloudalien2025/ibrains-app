@@ -11,6 +11,16 @@ import {
   StoredConnectionSecret,
 } from "@/lib/siteforge/contracts";
 
+export type SiteForgePersistenceHealth = "healthy" | "degraded" | "unavailable";
+
+export type SiteForgeStorageSummary = {
+  storageMode: "postgres" | "memory";
+  persistenceHealth: SiteForgePersistenceHealth;
+  fallbackAllowed: boolean;
+  fallbackActive: boolean;
+  reason: string | null;
+};
+
 export type SiteForgeFailureRecord = {
   id: string;
   at: string;
@@ -71,6 +81,5 @@ export type SiteForgeRepository = {
     failedRuns: number;
     completedRuns: number;
     lastRunAt: string | null;
-    storageMode: "postgres" | "memory";
-  }>;
+  } & SiteForgeStorageSummary>;
 };

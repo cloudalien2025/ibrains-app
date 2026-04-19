@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { enqueueRevisionJob } from "@/lib/siteforge/runner";
 import { resolveConnection } from "@/lib/siteforge/api";
 import { resolveRuntimeConnection } from "@/lib/siteforge/workspace";
@@ -30,16 +31,17 @@ export async function POST(
     return NextResponse.json({ error: { code: "BAD_REQUEST", message: "sessionId is required." } }, { status: 400 });
   }
 
-  const repo = await getSiteForgeRepository();
-  const project = await repo.getProject(projectId, userId);
-  if (!project) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
-  }
+  try {
+    const repo = await getSiteForgeRepository();
+    const project = await repo.getProject(projectId, userId);
+    if (!project) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Project not found." } }, { status: 404 });
+    }
 
-  const session = await repo.getSession(sessionId);
-  if (!session || session.projectId !== projectId || session.userId !== userId) {
-    return NextResponse.json({ error: { code: "NOT_FOUND", message: "Session not found." } }, { status: 404 });
-  }
+    const session = await repo.getSession(sessionId);
+    if (!session || session.projectId !== projectId || session.userId !== userId) {
+      return NextResponse.json({ error: { code: "NOT_FOUND", message: "Session not found." } }, { status: 404 });
+    }
 
   const connectionFromBody = resolveConnection({
     connection:
@@ -54,23 +56,31 @@ export async function POST(
       : undefined,
   });
 
-  const resolved = await resolveRuntimeConnection({
-    repo,
-    projectId,
-    incoming: connectionFromBody,
-    preferConnectionId:
-      typeof body?.connectionId === "string" ? body.connectionId : (session.connectionId ?? undefined),
-  });
+    const resolved = await resolveRuntimeConnection({
+      repo,
+      projectId,
+      incoming: connectionFromBody,
+      preferConnectionId:
+        typeof body?.connectionId === "string" ? body.connectionId : (session.connectionId ?? undefined),
+    });
 
-  await enqueueRevisionJob({
-    sessionId,
-    message,
-    connection: resolved.connection,
-    connectionId: resolved.connectionId,
-    homepageStrategy: project.homepageStrategy,
-  });
+    await enqueueRevisionJob({
+      sessionId,
+      message,
+      connection: resolved.connection,
+      connectionId: resolved.connectionId,
+      homepageStrategy: project.homepageStrategy,
+    });
 
-  return NextResponse.json({ ok: true }, { status: 202 });
+    return NextResponse.json({ ok: true }, { status: 202 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to enqueue SiteForge refinement." } },
+      { status: 500 }
+    );
+  }
 }
 
 export async function OPTIONS() {

@@ -6,6 +6,7 @@ import { homepageStrategyModes, HomepageStrategyMode } from "@/lib/siteforge/con
 import type { SiteForgeProject } from "@/lib/siteforge/contracts";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { parseWebsiteBrief } from "@/lib/siteforge/brief";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { nowIso, toSlug } from "@/lib/siteforge/utils";
 import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
 
@@ -27,21 +28,33 @@ export async function GET(
     );
   }
   const canonicalProjectId = projectId.trim();
-  const repo = await getSiteForgeRepository();
-  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
-  if (!workspace) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const workspace = await repo.getWorkspace(canonicalProjectId, userId);
+    if (!workspace) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    const normalized = normalizeWorkspace(workspace);
+    if (!normalized) {
+      return NextResponse.json(
+        { error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(normalized, { status: 200 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      { error: { code: "INTERNAL_ERROR", message: "Failed to load SiteForge workspace." } },
+      { status: 500 }
     );
   }
-
-  const normalized = normalizeWorkspace(workspace);
-  if (!normalized) {
-    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
-  }
-
-  return NextResponse.json(normalized, { status: 200 });
 }
 
 export async function PATCH(
@@ -63,14 +76,15 @@ export async function PATCH(
   }
   const canonicalProjectId = projectId.trim();
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const repo = await getSiteForgeRepository();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
-    return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
-    );
-  }
+  try {
+    const repo = await getSiteForgeRepository();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
 
   const markOpened = body?.markOpened === true;
   const homepageStrategyRaw = typeof body?.homepageStrategy === "string" ? body.homepageStrategy : null;
@@ -79,12 +93,12 @@ export async function PATCH(
       ? (homepageStrategyRaw as HomepageStrategyMode)
       : null;
 
-  if (markOpened) {
-    await repo.markProjectOpened(userId, canonicalProjectId);
-  }
-  if (homepageStrategy) {
-    await repo.setProjectHomepageStrategy(canonicalProjectId, homepageStrategy);
-  }
+    if (markOpened) {
+      await repo.markProjectOpened(userId, canonicalProjectId);
+    }
+    if (homepageStrategy) {
+      await repo.setProjectHomepageStrategy(canonicalProjectId, homepageStrategy);
+    }
 
   const updatePatch: Partial<SiteForgeProject> = {
     updatedAt: nowIso(),
@@ -116,14 +130,25 @@ export async function PATCH(
     updatePatch.description = body.description;
   }
 
-  await repo.updateProject(canonicalProjectId, updatePatch);
+    await repo.updateProject(canonicalProjectId, updatePatch);
 
-  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
-  const normalized = normalizeWorkspace(workspace);
-  if (!normalized) {
-    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
+    const workspace = await repo.getWorkspace(canonicalProjectId, userId);
+    const normalized = normalizeWorkspace(workspace);
+    if (!normalized) {
+      return NextResponse.json(
+        { error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } },
+        { status: 500 }
+      );
+    }
+    return NextResponse.json(normalized, { status: 200 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to update SiteForge workspace." } },
+      { status: 500 }
+    );
   }
-  return NextResponse.json(normalized, { status: 200 });
 }
 
 export async function OPTIONS() {

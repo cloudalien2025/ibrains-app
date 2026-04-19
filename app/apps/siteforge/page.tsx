@@ -31,6 +31,15 @@ type CapabilityCheck = {
   message: string;
 };
 
+type StorageSummary = {
+  storageMode: "postgres" | "memory";
+  persistenceHealth: "healthy" | "degraded" | "unavailable";
+  fallbackAllowed: boolean;
+  fallbackActive: boolean;
+  reason: string | null;
+  runtimeEnv?: "test" | "development" | "production";
+};
+
 type CreateStatus = "idle" | "creating" | "created" | "error";
 type OpenProjectResult =
   | { ok: true }
@@ -151,6 +160,7 @@ export default function SiteForgeAppPage() {
   const [connectionResult, setConnectionResult] = useState<CapabilityCheck | null>(null);
   const [createStatus, setCreateStatus] = useState<CreateStatus>("idle");
   const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
+  const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -430,9 +440,29 @@ export default function SiteForgeAppPage() {
     resetWorkspaceState();
   }
 
+  async function loadStorageSummary() {
+    const res = await fetch("/api/siteforge/admin/summary", {
+      headers: { "Content-Type": "application/json" },
+    });
+    const payload = (await res.json().catch(() => null)) as
+      | { summary?: StorageSummary; error?: { message?: string } }
+      | null;
+    if (payload?.summary) {
+      setStorageSummary(payload.summary);
+      if (!res.ok && payload.error?.message) {
+        setError(payload.error.message);
+      }
+      return;
+    }
+    if (!res.ok && payload?.error?.message) {
+      setError(payload.error.message);
+    }
+  }
+
   useEffect(() => {
     void (async () => {
       try {
+        await loadStorageSummary();
         await loadProjects();
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Failed to load SiteForge projects.");
@@ -817,6 +847,12 @@ export default function SiteForgeAppPage() {
   }
 
   const activity = currentSession?.runState.timeline ?? [];
+  const storageStatusMessage =
+    storageSummary?.persistenceHealth === "unavailable"
+      ? "Persistent storage unavailable. SiteForge is disabled until database storage is restored."
+      : storageSummary?.persistenceHealth === "degraded"
+        ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
+        : "Persistent Postgres storage is healthy.";
 
   return (
     <div className="ecomviper-hud min-h-screen text-slate-100">
@@ -982,6 +1018,24 @@ export default function SiteForgeAppPage() {
 
         {error ? (
           <div className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
+        ) : null}
+
+        {storageSummary ? (
+          <section
+            className={`mt-4 rounded-xl px-4 py-3 text-sm ${
+              storageSummary.persistenceHealth === "healthy"
+                ? "border border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
+                : "border border-amber-300/35 bg-amber-500/10 text-amber-100"
+            }`}
+          >
+            <div className="font-medium">Storage mode: {storageSummary.storageMode}</div>
+            <div className="mt-1">
+              Persistence health: {storageSummary.persistenceHealth} | Memory fallback active:{" "}
+              {storageSummary.fallbackActive ? "yes" : "no"}
+            </div>
+            <div className="mt-1">{storageStatusMessage}</div>
+            {storageSummary.reason ? <div className="mt-1 text-xs opacity-90">Reason: {storageSummary.reason}</div> : null}
+          </section>
         ) : null}
 
         <section className="mt-4 grid gap-3 lg:grid-cols-3">
