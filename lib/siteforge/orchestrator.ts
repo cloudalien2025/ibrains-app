@@ -171,7 +171,7 @@ export async function runBuildPipeline(params: {
           enabled: thriveEnabled,
           appliedMappings: translated.appliedMappings,
           fallbackUsed: translated.fallbackUsed,
-        });
+        }, params.homepageStrategy ?? "use_existing");
         executionResult = execution;
         await repo.updateSession(sessionId, {
           buildSpec: translated.spec,
