@@ -122,6 +122,8 @@ export type BuildSpec = {
   };
 };
 
+export type PageIntent = "homepage" | "about" | "contact" | "faq" | "features" | "pricing" | "generic";
+
 export type QAWarning = {
   code: string;
   message: string;
@@ -156,6 +158,15 @@ export type ExecutionPageRecord = {
   url: string | null;
   status: "created" | "updated" | "failed";
   error?: string;
+  intent?: PageIntent;
+  decision?: "reused_existing" | "created_new";
+  decisionReason?: string;
+  matchedPage?: {
+    id: number | null;
+    slug: string;
+    title: string;
+    status?: string;
+  } | null;
 };
 
 export type ExecutionResult = {
@@ -165,6 +176,8 @@ export type ExecutionResult = {
     success: boolean;
     pageId: number | null;
     message: string;
+    title?: string | null;
+    reason?: string;
   };
   menu: {
     success: boolean;
@@ -179,6 +192,28 @@ export type ExecutionResult = {
   actionLog: ExecutionActionLog[];
   warnings: string[];
   errors: string[];
+  discovery?: {
+    source: "wordpress";
+    frontPageId: number | null;
+    frontPageTitle: string | null;
+    pages: Array<{
+      id: number;
+      slug: string;
+      title: string;
+      status: string;
+      url: string | null;
+    }>;
+  };
+  reconciliation?: {
+    homepageStrategy: HomepageStrategyMode;
+    decisions: Array<{
+      slug: string;
+      intent: PageIntent;
+      decision: "reused_existing" | "created_new";
+      targetPageId: number | null;
+      reason: string;
+    }>;
+  };
 };
 
 export type RevisionRequest = {
@@ -351,7 +386,16 @@ export type SiteForgeSnapshot = {
   currentHomepageId: number | null;
   currentHomepageTitle: string | null;
   currentHomepageSource: "wordpress" | "thrive" | "unknown";
-  knownPages: Array<{ id: number | null; slug: string; title: string; url: string | null }>;
+  knownPages: Array<{
+    id: number | null;
+    slug: string;
+    title: string;
+    url: string | null;
+    status?: string;
+    intent?: PageIntent;
+    source?: "existing" | "created" | "reused";
+    decision?: "reused_existing" | "created_new";
+  }>;
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
   homepageStrategy: HomepageStrategyMode;

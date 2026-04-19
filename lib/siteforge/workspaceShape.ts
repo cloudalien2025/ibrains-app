@@ -57,7 +57,16 @@ export type SiteForgeSnapshotView = {
   currentHomepageId: number | null;
   currentHomepageTitle: string | null;
   currentHomepageSource: "wordpress" | "thrive" | "unknown";
-  knownPages: Array<{ id: number | null; slug: string; title: string; url: string | null }>;
+  knownPages: Array<{
+    id: number | null;
+    slug: string;
+    title: string;
+    url: string | null;
+    status?: string;
+    intent?: "homepage" | "about" | "contact" | "faq" | "features" | "pricing" | "generic";
+    source?: "existing" | "created" | "reused";
+    decision?: "reused_existing" | "created_new";
+  }>;
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
   homepageStrategy: HomepageStrategy;
@@ -93,8 +102,20 @@ export type BuildSessionView = {
   } | null;
   executionResult: {
     success: boolean;
-    createdPages: Array<{ slug: string; status: string; url: string | null }>;
-    homepage: { success: boolean; message: string };
+    createdPages: Array<{
+      slug: string;
+      status: string;
+      url: string | null;
+      intent?: "homepage" | "about" | "contact" | "faq" | "features" | "pricing" | "generic";
+      decision?: "reused_existing" | "created_new";
+      decisionReason?: string;
+    }>;
+    homepage: {
+      success: boolean;
+      message: string;
+      title?: string | null;
+      reason?: string;
+    };
     menu: { success: boolean; message: string };
     thrive: { enabled: boolean; appliedMappings: string[]; fallbackUsed: boolean };
     warnings: string[];
@@ -330,14 +351,31 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                   slug: stringOr(page.slug, ""),
                   status: stringOr(page.status, "unknown"),
                   url: nullableString(page.url),
+                  intent:
+                    page.intent === "homepage" ||
+                    page.intent === "about" ||
+                    page.intent === "contact" ||
+                    page.intent === "faq" ||
+                    page.intent === "features" ||
+                    page.intent === "pricing" ||
+                    page.intent === "generic"
+                      ? page.intent
+                      : undefined,
+                  decision: page.decision === "reused_existing" || page.decision === "created_new" ? page.decision : undefined,
+                  decisionReason: typeof page.decisionReason === "string" ? page.decisionReason : undefined,
                 }))
             : [],
           homepage: isRecord(value.executionResult.homepage)
             ? {
                 success: boolOr(value.executionResult.homepage.success),
                 message: stringOr(value.executionResult.homepage.message, ""),
+                title:
+                  value.executionResult.homepage.title == null
+                    ? null
+                    : stringOr(value.executionResult.homepage.title, ""),
+                reason: typeof value.executionResult.homepage.reason === "string" ? value.executionResult.homepage.reason : undefined,
               }
-            : { success: false, message: "" },
+            : { success: false, message: "", title: null },
           menu: isRecord(value.executionResult.menu)
             ? {
                 success: boolOr(value.executionResult.menu.success),
@@ -401,6 +439,20 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
             slug: stringOr(page.slug, ""),
             title: stringOr(page.title, "Untitled"),
             url: nullableString(page.url),
+            status: typeof page.status === "string" ? page.status : undefined,
+            intent:
+              page.intent === "homepage" ||
+              page.intent === "about" ||
+              page.intent === "contact" ||
+              page.intent === "faq" ||
+              page.intent === "features" ||
+              page.intent === "pricing" ||
+              page.intent === "generic"
+                ? page.intent
+                : undefined,
+            source:
+              page.source === "existing" || page.source === "created" || page.source === "reused" ? page.source : undefined,
+            decision: page.decision === "reused_existing" || page.decision === "created_new" ? page.decision : undefined,
           }))
       : [],
     knownMenus: Array.isArray(value.knownMenus)

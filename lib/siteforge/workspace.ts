@@ -106,24 +106,71 @@ export async function persistSnapshotFromSession(params: {
 }): Promise<SiteForgeSnapshot> {
   const execution = params.session.executionResult;
   const homepageSlug = params.session.buildSpec?.homepageSlug;
-  const homepagePage = params.session.buildSpec?.pages.find((page) => page.slug === homepageSlug);
-  const homepageRecord = execution?.createdPages.find((page) => page.slug === homepageSlug) ?? null;
+  const homepageSpecPage = params.session.buildSpec?.pages.find((page) => page.slug === homepageSlug) ?? null;
+  const homepageRecord =
+    execution?.createdPages.find((page) => page.intent === "homepage") ??
+    (homepageSlug ? execution?.createdPages.find((page) => page.slug === homepageSlug) : undefined) ??
+    null;
+  const discoveryPages = execution?.discovery?.pages ?? [];
 
-  const knownPages =
-    execution?.createdPages.map((page) => ({
+  const knownPagesByIdOrSlug = new Map<string, SiteForgeSnapshot["knownPages"][number]>();
+
+  for (const page of discoveryPages) {
+    const key = page.id != null ? `id:${page.id}` : `slug:${page.slug}`;
+    knownPagesByIdOrSlug.set(key, {
+      id: page.id,
+      slug: page.slug,
+      title: page.title,
+      url: page.url,
+      status: page.status,
+      source: "existing",
+    });
+  }
+
+  for (const page of execution?.createdPages ?? []) {
+    const key = page.pageId != null ? `id:${page.pageId}` : `slug:${page.slug}`;
+    knownPagesByIdOrSlug.set(key, {
       id: page.pageId,
       slug: page.slug,
       title: page.title,
       url: page.url,
-    })) ?? [];
+      status: page.status,
+      intent: page.intent,
+      source: page.decision === "reused_existing" ? "reused" : "created",
+      decision: page.decision,
+    });
+  }
+
+  const knownPages = Array.from(knownPagesByIdOrSlug.values());
+
+  const canonicalHomepageId =
+    execution?.homepage?.pageId ??
+    homepageRecord?.pageId ??
+    execution?.discovery?.frontPageId ??
+    null;
+
+  const canonicalHomepageTitle =
+    execution?.homepage?.title ??
+    homepageRecord?.title ??
+    execution?.discovery?.frontPageTitle ??
+    homepageSpecPage?.title ??
+    null;
+
+  const canonicalHomepageSource =
+    homepageRecord?.decision === "reused_existing" ||
+    (execution?.homepage?.reason && execution.homepage.reason.startsWith("use_existing"))
+      ? "wordpress"
+      : params.thriveDetected
+        ? "thrive"
+        : "wordpress";
 
   const snapshot: SiteForgeSnapshot = {
     snapshotId: createId("sfsnap"),
     projectId: params.session.projectId,
     connectionId: params.connectionId,
-    currentHomepageId: homepageRecord?.pageId ?? null,
-    currentHomepageTitle: homepagePage?.title ?? null,
-    currentHomepageSource: params.thriveDetected ? "thrive" : "wordpress",
+    currentHomepageId: canonicalHomepageId,
+    currentHomepageTitle: canonicalHomepageTitle,
+    currentHomepageSource: canonicalHomepageSource,
     knownPages,
     knownMenus: execution?.menu?.menuId
       ? [{ id: execution.menu.menuId, label: "Primary Navigation", source: "wordpress" }]
@@ -131,7 +178,7 @@ export async function persistSnapshotFromSession(params: {
     thriveDetected: params.thriveDetected,
     homepageStrategy: params.homepageStrategy,
     lastRunSummary: execution
-      ? `Pages created: ${execution.createdPages.filter((entry) => entry.status !== "failed").length}`
+      ? `Pages applied: ${execution.createdPages.filter((entry) => entry.status === "created" || entry.status === "updated").length}`
       : `Build completed (${params.session.runState.currentStage})`,
     lastRunStatus: params.session.status,
     pagesAffected: knownPages.length,

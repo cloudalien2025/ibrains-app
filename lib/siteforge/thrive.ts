@@ -27,13 +27,16 @@ export function applyThriveMappings(spec: BuildSpec, enabled: boolean): ThriveTr
       thriveAware: true,
     },
     pages: spec.pages.map((page) => {
-      const thriveLayoutKey = page.slug === "home" ? "thrive-home-conversion" : "thrive-standard-content";
-      appliedMappings.push(`${page.slug}:${thriveLayoutKey}`);
+      const isHomepage = page.slug === spec.homepageSlug;
+      const thriveLayoutKey = isHomepage ? "thrive-homepage-canonical" : "thrive-standard-content";
+      const thrivePageRole = isHomepage ? "homepage" : "content";
+      appliedMappings.push(`${page.slug}:${thriveLayoutKey}:${thrivePageRole}`);
       return {
         ...page,
         metadata: {
           ...page.metadata,
           thriveLayoutKey,
+          thrivePageRole,
           renderMode: "thrive-template",
         },
       };
