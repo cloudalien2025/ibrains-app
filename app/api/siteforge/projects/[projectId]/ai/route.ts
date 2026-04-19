@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { normalizeOpenAiModel } from "@/lib/siteforge/ai";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { clearProjectAiConfig, saveProjectAiConfig } from "@/lib/siteforge/workspace";
 import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
 
@@ -38,41 +39,53 @@ export async function POST(
     );
   }
 
-  const repo = await getSiteForgeRepository();
-  const canonicalProjectId = projectId.trim();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const canonicalProjectId = projectId.trim();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    const model = parseModel(body?.model);
+    await saveProjectAiConfig({
+      repo,
+      projectId: canonicalProjectId,
+      model,
+      apiKey,
+    });
+
+    const workspace = await repo.getWorkspace(canonicalProjectId, userId);
+    const normalized = normalizeWorkspace(workspace);
+    if (!normalized) {
+      return NextResponse.json(
+        { error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      {
+        workspace: normalized,
+        ai: {
+          provider: "openai",
+          model,
+          status: "saved",
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to save SiteForge AI configuration." } },
+      { status: 500 }
     );
   }
-
-  const model = parseModel(body?.model);
-  await saveProjectAiConfig({
-    repo,
-    projectId: canonicalProjectId,
-    model,
-    apiKey,
-  });
-
-  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
-  const normalized = normalizeWorkspace(workspace);
-  if (!normalized) {
-    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
-  }
-
-  return NextResponse.json(
-    {
-      workspace: normalized,
-      ai: {
-        provider: "openai",
-        model,
-        status: "saved",
-      },
-    },
-    { status: 200 }
-  );
 }
 
 export async function PATCH(
@@ -96,41 +109,53 @@ export async function PATCH(
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const model = parseModel(body?.model);
 
-  const repo = await getSiteForgeRepository();
-  const canonicalProjectId = projectId.trim();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const canonicalProjectId = projectId.trim();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
+    await saveProjectAiConfig({
+      repo,
+      projectId: canonicalProjectId,
+      model,
+      apiKey: apiKey || undefined,
+    });
+
+    const workspace = await repo.getWorkspace(canonicalProjectId, userId);
+    const normalized = normalizeWorkspace(workspace);
+    if (!normalized) {
+      return NextResponse.json(
+        { error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      {
+        workspace: normalized,
+        ai: {
+          provider: "openai",
+          model,
+          status: normalized.project.hasSavedAiSecret ? "saved" : "not_saved",
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to update SiteForge AI configuration." } },
+      { status: 500 }
     );
   }
-
-  const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
-  await saveProjectAiConfig({
-    repo,
-    projectId: canonicalProjectId,
-    model,
-    apiKey: apiKey || undefined,
-  });
-
-  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
-  const normalized = normalizeWorkspace(workspace);
-  if (!normalized) {
-    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
-  }
-
-  return NextResponse.json(
-    {
-      workspace: normalized,
-      ai: {
-        provider: "openai",
-        model,
-        status: normalized.project.hasSavedAiSecret ? "saved" : "not_saved",
-      },
-    },
-    { status: 200 }
-  );
 }
 
 export async function DELETE(
@@ -151,39 +176,51 @@ export async function DELETE(
     );
   }
 
-  const repo = await getSiteForgeRepository();
-  const canonicalProjectId = projectId.trim();
-  const project = await repo.getProject(canonicalProjectId, userId);
-  if (!project) {
+  try {
+    const repo = await getSiteForgeRepository();
+    const canonicalProjectId = projectId.trim();
+    const project = await repo.getProject(canonicalProjectId, userId);
+    if (!project) {
+      return NextResponse.json(
+        { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
+        { status: 404 }
+      );
+    }
+
+    await clearProjectAiConfig({
+      repo,
+      projectId: canonicalProjectId,
+      model: project.aiModel ?? "gpt-4.1-mini",
+    });
+
+    const workspace = await repo.getWorkspace(canonicalProjectId, userId);
+    const normalized = normalizeWorkspace(workspace);
+    if (!normalized) {
+      return NextResponse.json(
+        { error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } },
+        { status: 500 }
+      );
+    }
+
     return NextResponse.json(
-      { error: { code: "NOT_FOUND", message: "Project not found for current user." } },
-      { status: 404 }
+      {
+        workspace: normalized,
+        ai: {
+          provider: "openai",
+          model: normalized.project.aiModel ?? "gpt-4.1-mini",
+          status: "not_saved",
+        },
+      },
+      { status: 200 }
+    );
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to remove SiteForge AI configuration." } },
+      { status: 500 }
     );
   }
-
-  await clearProjectAiConfig({
-    repo,
-    projectId: canonicalProjectId,
-    model: project.aiModel ?? "gpt-4.1-mini",
-  });
-
-  const workspace = await repo.getWorkspace(canonicalProjectId, userId);
-  const normalized = normalizeWorkspace(workspace);
-  if (!normalized) {
-    return NextResponse.json({ error: { code: "WORKSPACE_INVALID", message: "Project workspace could not be loaded." } }, { status: 500 });
-  }
-
-  return NextResponse.json(
-    {
-      workspace: normalized,
-      ai: {
-        provider: "openai",
-        model: normalized.project.aiModel ?? "gpt-4.1-mini",
-        status: "not_saved",
-      },
-    },
-    { status: 200 }
-  );
 }
 
 export async function OPTIONS() {

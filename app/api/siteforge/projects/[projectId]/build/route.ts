@@ -7,6 +7,7 @@ import { resolvePlatformOpenAiKey } from "@/lib/siteforge/ai";
 import { parseBuildPayload, resolveConnection, sanitizeConnection } from "@/lib/siteforge/api";
 import { createInitialRunState } from "@/lib/siteforge/orchestrator";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { enqueueBuildJob } from "@/lib/siteforge/runner";
 import { createId, nowIso } from "@/lib/siteforge/utils";
 import { resolveProjectAiApiKey, resolveRuntimeConnection } from "@/lib/siteforge/workspace";
@@ -111,6 +112,8 @@ export async function POST(
 
     return NextResponse.json({ session }, { status: 202 });
   } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
     return NextResponse.json(
       {
         error: {

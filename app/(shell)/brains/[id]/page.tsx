@@ -59,6 +59,10 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
     completedRuns: number;
     lastRunAt: string | null;
     storageMode: "postgres" | "memory";
+    persistenceHealth: "healthy" | "degraded" | "unavailable";
+    fallbackAllowed: boolean;
+    fallbackActive: boolean;
+    reason: string | null;
   } | null = null;
 
   try {
@@ -251,6 +255,9 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
               <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
                 Storage
                 <div className="mt-1 text-sm font-semibold text-white">{siteForgeAdminSummary.storageMode}</div>
+                <div className="mt-1 text-[11px] text-slate-300">
+                  Health: {siteForgeAdminSummary.persistenceHealth}
+                </div>
                 <div className="mt-1 text-[11px] text-slate-400">
                   Last run: {formatDate(siteForgeAdminSummary.lastRunAt)}
                 </div>

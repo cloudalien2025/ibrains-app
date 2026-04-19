@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { SiteForgePersistenceError } from "@/lib/siteforge/repository/persistence";
 
 const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
@@ -86,5 +87,29 @@ describe("siteforge projects route contract", () => {
       })
     );
     expect(repo.markProjectOpened).toHaveBeenCalledWith("user_1", "sfp_test_1");
+  });
+
+  it("returns precise persistence error when production storage is unavailable", async () => {
+    const persistenceError = new SiteForgePersistenceError({
+      availability: {
+        available: false,
+        reasonCode: "missing_tables",
+        reason: "Required SiteForge database tables are missing.",
+      },
+      policy: {
+        runtimeEnv: "production",
+        fallbackAllowed: false,
+        fallbackFlag: false,
+      },
+    });
+    mocks.getSiteForgeRepository.mockRejectedValue(persistenceError);
+
+    const { GET } = await import("@/app/api/siteforge/projects/route");
+    const res = await GET();
+    const body = (await res.json()) as { error: { code: string; message: string } };
+
+    expect(res.status).toBe(503);
+    expect(body.error.code).toBe("SITEFORGE_PERSISTENCE_UNAVAILABLE");
+    expect(body.error.message).toMatch(/Persistent SiteForge storage is unavailable in production/);
   });
 });

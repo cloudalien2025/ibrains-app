@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { SiteForgeProject } from "@/lib/siteforge/contracts";
+import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { parseWebsiteBrief } from "@/lib/siteforge/brief";
 import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
 import { normalizeProject } from "@/lib/siteforge/workspaceShape";
@@ -15,12 +16,21 @@ export async function GET() {
     return NextResponse.json({ error: { code: "UNAUTHORIZED", message: "Sign-in required" } }, { status: 401 });
   }
 
-  const repo = await getSiteForgeRepository();
-  const lastOpenedProjectId = await repo.getLastOpenedProjectId(userId);
-  const projects = (await repo.listProjects(userId))
-    .map((project) => normalizeProject(project))
-    .filter((project): project is NonNullable<ReturnType<typeof normalizeProject>> => Boolean(project));
-  return NextResponse.json({ projects, lastOpenedProjectId }, { status: 200 });
+  try {
+    const repo = await getSiteForgeRepository();
+    const lastOpenedProjectId = await repo.getLastOpenedProjectId(userId);
+    const projects = (await repo.listProjects(userId))
+      .map((project) => normalizeProject(project))
+      .filter((project): project is NonNullable<ReturnType<typeof normalizeProject>> => Boolean(project));
+    return NextResponse.json({ projects, lastOpenedProjectId }, { status: 200 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to load SiteForge projects." } },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -69,10 +79,19 @@ export async function POST(req: NextRequest) {
     updatedAt: now,
   };
 
-  const repo = await getSiteForgeRepository();
-  await repo.createProject(project);
-  await repo.markProjectOpened(userId, project.id);
-  return NextResponse.json({ project: normalizeProject(project) }, { status: 201 });
+  try {
+    const repo = await getSiteForgeRepository();
+    await repo.createProject(project);
+    await repo.markProjectOpened(userId, project.id);
+    return NextResponse.json({ project: normalizeProject(project) }, { status: 201 });
+  } catch (error: unknown) {
+    const persistenceError = maybeSiteForgePersistenceErrorResponse(error);
+    if (persistenceError) return persistenceError;
+    return NextResponse.json(
+      { error: { code: "INTERNAL_ERROR", message: "Failed to create SiteForge project." } },
+      { status: 500 }
+    );
+  }
 }
 
 export async function OPTIONS() {
