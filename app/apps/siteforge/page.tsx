@@ -192,7 +192,6 @@ export default function SiteForgeAppPage() {
   const [aiModel, setAiModel] = useState("gpt-4.1-mini");
   const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
-  const [builderPrompt, setBuilderPrompt] = useState("");
 
   const [connectionLabel, setConnectionLabel] = useState("Primary WordPress Site");
   const [baseUrl, setBaseUrl] = useState("");
@@ -1313,244 +1312,6 @@ export default function SiteForgeAppPage() {
       ? { label: "Scan Thrive Assets", action: () => void loadProjects() }
       : { label: "View Reusable Assets", action: () => setActiveNav("global_assets") };
 
-  const overviewNextAction: { label: string; helper: string; action: () => void } = !projectSelected || !briefCompleted || !aiConfigured
-    ? {
-        label: "Complete Setup",
-        helper: "Finish project details, brief, and API keys first.",
-        action: () => setActiveNav("settings"),
-      }
-    : !connectionValidated
-      ? {
-          label: "Validate Connection",
-          helper: "Confirm WordPress + Thrive access before scanning assets.",
-          action: () => setActiveNav("settings"),
-        }
-      : !assetScanCompleted
-        ? {
-            label: "Scan Thrive Assets",
-            helper: "Discover reusable templates, blocks, and layouts.",
-            action: () => {
-              setActiveNav("thrive_intelligence");
-              void loadProjects();
-            },
-          }
-        : !currentSession?.buildSpec
-          ? {
-              label: "Review Plan",
-              helper: "Confirm what SiteForge intends to build.",
-              action: () => setActiveNav("strategy"),
-            }
-          : {
-              label: "Build Site Draft",
-              helper: "Generate your latest draft from approved setup and plan.",
-              action: generateSite,
-            };
-
-  const [pagesReviewed, setPagesReviewed] = useState(false);
-
-  useEffect(() => {
-    setPagesReviewed(false);
-  }, [selectedProjectId, currentSession?.id]);
-
-  type BuilderStepId = 1 | 2 | 3 | 4 | 5;
-  type BuilderCanvasMode = "website" | "connect" | "plan" | "pages" | "build";
-
-  const currentBuilderStep: BuilderStepId =
-    !projectSelected || !briefCompleted
-      ? 1
-      : !aiConfigured || !connectionValidated
-        ? 2
-        : !currentSession?.buildSpec
-          ? 3
-          : !pagesReviewed
-            ? 4
-            : 5;
-
-  const builderSteps: Array<{ id: BuilderStepId; label: string; description: string }> = [
-    {
-      id: 1,
-      label: "1. Tell us about your website",
-      description: "Share your business, audience, and what you want your site to do.",
-    },
-    {
-      id: 2,
-      label: "2. Connect your site",
-      description: "Add your WordPress and Thrive details so SiteForge can work with your site.",
-    },
-    {
-      id: 3,
-      label: "3. Review your plan",
-      description: "See the pages and structure SiteForge recommends.",
-    },
-    {
-      id: 4,
-      label: "4. Review your pages",
-      description: "Check the pages, sections, and content before building.",
-    },
-    {
-      id: 5,
-      label: "5. Build your draft",
-      description: "Let SiteForge create your first website draft.",
-    },
-  ];
-  const [builderWorkspaceStep, setBuilderWorkspaceStep] = useState<BuilderStepId | null>(null);
-  const maxUnlockedBuilderStep: BuilderStepId =
-    !projectSelected || !briefCompleted
-      ? 1
-      : !aiConfigured || !connectionValidated
-        ? 2
-        : !currentSession?.buildSpec
-          ? 3
-          : !pagesReviewed
-            ? 4
-            : 5;
-
-  const activeBuilderStep: BuilderStepId =
-    builderWorkspaceStep && builderWorkspaceStep <= maxUnlockedBuilderStep ? builderWorkspaceStep : currentBuilderStep;
-
-  useEffect(() => {
-    if (!builderWorkspaceStep || builderWorkspaceStep > maxUnlockedBuilderStep) {
-      setBuilderWorkspaceStep(currentBuilderStep);
-    }
-  }, [builderWorkspaceStep, currentBuilderStep, maxUnlockedBuilderStep]);
-
-  const builderCanvasMode: BuilderCanvasMode =
-    activeBuilderStep === 1
-      ? "website"
-      : activeBuilderStep === 2
-        ? "connect"
-        : activeBuilderStep === 3
-          ? "plan"
-          : activeBuilderStep === 4
-            ? "pages"
-            : "build";
-
-  const currentStepMeta = builderSteps.find((step) => step.id === currentBuilderStep) ?? builderSteps[0];
-  const activeStepMeta = builderSteps.find((step) => step.id === activeBuilderStep) ?? builderSteps[0];
-
-  const stepTabMeta: Array<{ id: BuilderStepId; shortLabel: string; state: "done" | "current" | "locked"; unlocked: boolean }> = [
-    { id: 1, shortLabel: "1. Website", state: currentBuilderStep > 1 ? "done" : "current", unlocked: true },
-    {
-      id: 2,
-      shortLabel: "2. Connect",
-      state: currentBuilderStep > 2 ? "done" : currentBuilderStep === 2 ? "current" : "locked",
-      unlocked: maxUnlockedBuilderStep >= 2,
-    },
-    {
-      id: 3,
-      shortLabel: "3. Plan",
-      state: currentBuilderStep > 3 ? "done" : currentBuilderStep === 3 ? "current" : "locked",
-      unlocked: maxUnlockedBuilderStep >= 3,
-    },
-    {
-      id: 4,
-      shortLabel: "4. Pages",
-      state: currentBuilderStep > 4 ? "done" : currentBuilderStep === 4 ? "current" : "locked",
-      unlocked: maxUnlockedBuilderStep >= 4,
-    },
-    {
-      id: 5,
-      shortLabel: "5. Build",
-      state: currentBuilderStep === 5 ? "current" : "locked",
-      unlocked: maxUnlockedBuilderStep >= 5,
-    },
-  ];
-
-  const jumpToBuilderStep = (stepId: BuilderStepId) => {
-    if (stepId > maxUnlockedBuilderStep) return;
-    setBuilderWorkspaceStep(stepId);
-    if (stepId === 4) setPagesReviewed(false);
-    if (stepId === 5) setPagesReviewed(true);
-  };
-
-  const primaryBuilderAction: { label: string; action: () => void; disabled?: boolean } =
-    activeBuilderStep === 1
-      ? {
-          label: projectSelected ? "Save and Continue" : "Continue",
-          action: () => {
-            if (!projectSelected) {
-              setActiveNav("settings");
-              return;
-            }
-            void saveWebsiteBrief();
-          },
-          disabled: busy,
-        }
-      : activeBuilderStep === 2
-        ? {
-            label: "Check Connection",
-            action: () => {
-              void saveAndValidateConnection();
-            },
-            disabled: !selectedProjectId || busy,
-          }
-        : activeBuilderStep === 3
-          ? {
-              label: "Looks Good, Continue",
-              action: () => {
-                if (!currentSession?.buildSpec) {
-                  void generateSite();
-                  return;
-                }
-                jumpToBuilderStep(4);
-              },
-              disabled: !selectedProjectId || busy || !briefIsValid(),
-            }
-          : activeBuilderStep === 4
-            ? {
-                label: "Continue to Build",
-                action: () => {
-                  jumpToBuilderStep(5);
-                },
-              }
-            : {
-                label: "Build Draft",
-                action: () => {
-                  void generateSite();
-                },
-                disabled: !selectedProjectId || busy || !briefIsValid(),
-              };
-
-  const secondaryBuilderAction: { label: string; action: () => void } | null =
-    activeBuilderStep > 1
-      ? {
-          label: "Back",
-          action: () => {
-            if (activeBuilderStep === 2) {
-              jumpToBuilderStep(1);
-              return;
-            }
-            if (activeBuilderStep === 3) {
-              jumpToBuilderStep(2);
-              return;
-            }
-            if (activeBuilderStep === 4) {
-              jumpToBuilderStep(3);
-              return;
-            }
-            jumpToBuilderStep(4);
-          },
-        }
-      : null;
-
-  const builderFeed = [
-    !projectSelected
-      ? "Let's start by creating or selecting a project."
-      : "Let's start with your business and website goal.",
-    connectionValidated
-      ? "Connection validated. WordPress / Thrive access looks good."
-      : "I'm validating your WordPress / Thrive connection.",
-    assetScanCompleted
-      ? "I found reusable Thrive assets."
-      : "I'll scan for reusable Thrive assets once connection is validated.",
-    currentSession?.buildSpec
-      ? "Here's the plan I recommend based on your setup."
-      : "I'll prepare your recommended plan after setup is complete.",
-    currentSession?.status === "completed"
-      ? "Your latest site draft is ready for review."
-      : "I'm preparing your first site draft once pages are approved.",
-  ];
-
   const friendlyWarnings: string[] = [];
   if (connectionValidated && !savedConnection?.thriveDetected) {
     friendlyWarnings.push("Your site is connected, but Thrive could not be detected yet.");
@@ -1679,49 +1440,12 @@ export default function SiteForgeAppPage() {
           <aside className={`${brainTheme.glassCard} h-fit p-3`}>
             <div className="text-xs uppercase tracking-[0.15em] text-slate-400">SiteForge</div>
             <div className="mt-1 text-sm text-slate-200">{activeProject?.name ?? "No project selected"}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-300/80">Guided assistant</div>
-            <div className="mt-4 space-y-3">
-              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Current section</div>
-                <div className="mt-2 text-sm text-slate-100">
-                  {activeNav === "settings" ? "Setup" : activeNav === "mission_control" ? "Build" : activeNav === "publish" ? "Publish" : "Settings"}
-                </div>
-                <div className="mt-1 text-xs text-slate-400">{overviewNextAction.helper}</div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Builder Feed</div>
-                <div className="mt-2 space-y-2 text-xs text-slate-300">
-                  {builderFeed.slice(0, 3).map((message, index) => (
-                    <div key={`${index}-${message}`} className="rounded-lg border border-white/10 bg-white/5 p-2">
-                      {message}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                <label htmlFor="builder-prompt" className="text-xs uppercase tracking-[0.12em] text-slate-400">
-                  Ask SiteForge
-                </label>
-                <textarea
-                  id="builder-prompt"
-                  value={builderPrompt}
-                  onChange={(event) => setBuilderPrompt(event.target.value)}
-                  placeholder="Tell SiteForge what kind of website you want to build"
-                  className="mt-2 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                />
-                <div className="mt-2 space-y-2">
-                  <button
-                    type="button"
-                    className={`${brainTheme.glowButton} w-full justify-center`}
-                    onClick={activeNav === "settings" ? saveWebsiteBrief : activeNav === "publish" ? generateSite : primaryBuilderAction.action}
-                    disabled={activeNav === "mission_control" ? primaryBuilderAction.disabled : busy}
-                  >
-                    {activeNav === "settings" ? "Save and Continue" : activeNav === "publish" ? "Build Draft" : primaryBuilderAction.label}
-                  </button>
-                </div>
-              </div>
+            <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-300/80">Project context</div>
+            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+              <div>Section: {activeNav === "settings" ? "Setup" : activeNav === "mission_control" ? "Build" : activeNav === "publish" ? "Publish" : "Settings"}</div>
+              <div className="mt-1">Connection: {connectionValidated ? "validated" : "not validated"}</div>
+              <div className="mt-1">Assets scanned: {assetScanCompleted ? "yes" : "no"}</div>
+              <div className="mt-1">Latest run: {currentSession?.status ?? "not started"}</div>
             </div>
           </aside>
 
@@ -1928,6 +1652,9 @@ export default function SiteForgeAppPage() {
                         Reusable items found: {hasMeaningfulAssetData ? "Yes" : "Not yet"}
                       </div>
                     </div>
+                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveBuildTab("pages")}>
+                      Looks Good
+                    </button>
                   </div>
                 ) : null}
                 {activeBuildTab === "pages" ? (
@@ -1943,7 +1670,6 @@ export default function SiteForgeAppPage() {
                       type="button"
                       className={brainTheme.glowButton}
                       onClick={() => {
-                        setPagesReviewed(true);
                         setActiveNav("publish");
                       }}
                     >
@@ -1965,26 +1691,11 @@ export default function SiteForgeAppPage() {
                         No reusable assets found yet.
                       </div>
                     ) : null}
-                    <button type="button" className={brainTheme.glowButton} onClick={() => void loadProjects()}>
-                      Rescan Assets
-                    </button>
-                  </div>
-                ) : null}
-                {false ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div>Build status: {currentSession?.status ?? "not started"}</div>
-                      <div className="mt-1">Ready now: {setupCoreComplete ? "Yes" : "Not yet"}</div>
-                      <div className="mt-1">Needs attention: {setupCoreComplete ? "No blocking setup items." : "Complete setup and connection first."}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.glowButton} onClick={() => void generateSite()} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                        Build Draft
+                    {!hasMeaningfulAssetData ? (
+                      <button type="button" className={brainTheme.glowButton} onClick={() => void loadProjects()}>
+                        Rescan Assets
                       </button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setPagesReviewed(false)}>
-                        Fix Missing Items
-                      </button>
-                    </div>
+                    ) : null}
                   </div>
                 ) : null}
               </section>
@@ -2787,7 +2498,6 @@ export default function SiteForgeAppPage() {
                         <input type="password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"} className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Check Connection</button>
                         <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
                           <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
                           Thrive Installed
@@ -2813,19 +2523,19 @@ export default function SiteForgeAppPage() {
                           type="button"
                           className={brainTheme.glowButton}
                           onClick={() => {
-                            if (!setupCoreComplete) {
-                              void saveWebsiteBrief();
-                              return;
-                            }
                             if (!connectionValidated) {
                               void saveAndValidateConnection();
                               return;
                             }
+                            if (!setupCoreComplete) {
+                              void saveWebsiteBrief();
+                              return;
+                            }
                             setActiveNav("mission_control");
                           }}
-                          disabled={!selectedProjectId || busy}
+                          disabled={busy || !selectedProjectId}
                         >
-                          {!briefCompleted || !aiConfigured ? "Save and Continue" : !connectionValidated ? "Check Connection" : "Continue to Build"}
+                          {!connectionValidated ? "Check Connection" : !briefCompleted || !aiConfigured ? "Save and Continue" : "Continue to Build"}
                         </button>
                       </div>
                     </div>
