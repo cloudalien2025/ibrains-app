@@ -45,6 +45,45 @@ type OpenProjectResult =
   | { ok: true }
   | { ok: false; reason: "superseded" | "failed"; message?: string };
 
+type AgencyNavKey =
+  | "mission_control"
+  | "strategy"
+  | "brand"
+  | "funnels"
+  | "pages"
+  | "global_assets"
+  | "thrive_intelligence"
+  | "experiments"
+  | "publish"
+  | "settings";
+
+type AgencyStatus =
+  | "Not started"
+  | "Researching"
+  | "Drafting"
+  | "Recommended"
+  | "Awaiting approval"
+  | "Approved"
+  | "Building"
+  | "Built"
+  | "Needs revision"
+  | "Blocked";
+
+type ConfidenceLevel = "Low" | "Medium" | "High" | "Verified";
+
+type AgentRosterEntry = {
+  id: string;
+  displayName: string;
+  specialty: string;
+  mission: string;
+  currentTask: string;
+  status: AgencyStatus;
+  confidence: ConfidenceLevel;
+  ownedObjects: string[];
+  outputs: string[];
+  blockers?: string[];
+};
+
 const visibleSteps: BuildStage[] = ["planning", "writing", "building", "reviewing", "finalizing"];
 
 type WebsiteBriefForm = {
@@ -162,6 +201,11 @@ export default function SiteForgeAppPage() {
   const [createStatus, setCreateStatus] = useState<CreateStatus>("idle");
   const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
   const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
+  const [activeNav, setActiveNav] = useState<AgencyNavKey>("mission_control");
+  const [pageStudioSlug, setPageStudioSlug] = useState<string | null>(null);
+  const [assetsTab, setAssetsTab] = useState<
+    "headers" | "footers" | "symbols" | "sections" | "templates" | "layouts" | "cta_blocks" | "faqs" | "testimonials"
+  >("symbols");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -956,165 +1000,295 @@ export default function SiteForgeAppPage() {
         ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
         : "Persistent Postgres storage is healthy.";
 
+  const navItems: Array<{ key: AgencyNavKey; label: string }> = [
+    { key: "mission_control", label: "Mission Control" },
+    { key: "strategy", label: "Strategy" },
+    { key: "brand", label: "Brand" },
+    { key: "funnels", label: "Funnels" },
+    { key: "pages", label: "Pages" },
+    { key: "global_assets", label: "Global Assets" },
+    { key: "thrive_intelligence", label: "Thrive Intelligence" },
+    { key: "experiments", label: "Experiments" },
+    { key: "publish", label: "Publish" },
+    { key: "settings", label: "Settings" },
+  ];
+
+  const agencyTeam: AgentRosterEntry[] = [
+    {
+      id: "strategy_director",
+      displayName: "Strategy Director",
+      specialty: "Positioning and market strategy",
+      mission: "Approve strategic direction and market narrative.",
+      currentTask: "Align value proposition and roadmap.",
+      status: "Recommended",
+      confidence: marketIntelligence?.status === "used" ? "High" : "Medium",
+      ownedObjects: ["positioning", "sitemap", "go-to-market"],
+      outputs: ["Strategy decisions", "Sitemap recommendation"],
+    },
+    {
+      id: "brand_director",
+      displayName: "Brand Director",
+      specialty: "Identity and visual system",
+      mission: "Define brand rules and token consistency.",
+      currentTask: "Finalize brand personality and token set.",
+      status: "Drafting",
+      confidence: "Medium",
+      ownedObjects: ["brand identity", "design tokens"],
+      outputs: ["Brand rules", "Theme mapping"],
+    },
+    {
+      id: "theme_shell_architect",
+      displayName: "Theme Shell Architect",
+      specialty: "Thrive shell templates and layout systems",
+      mission: "Map pages to shell templates and layout systems.",
+      currentTask: "Recommend homepage shell template.",
+      status: "Awaiting approval",
+      confidence: thriveIntel ? "High" : "Low",
+      ownedObjects: ["shell templates", "layout systems"],
+      outputs: ["Shell recommendation"],
+    },
+    {
+      id: "content_architect",
+      displayName: "Content Architect",
+      specialty: "Section architecture and narrative flow",
+      mission: "Structure page section stacks for conversion.",
+      currentTask: "Finalize homepage section stack.",
+      status: "Recommended",
+      confidence: "High",
+      ownedObjects: ["section stack", "content hierarchy"],
+      outputs: ["Page section briefs"],
+    },
+    {
+      id: "copy_chief",
+      displayName: "Copy Chief",
+      specialty: "Messaging and CTA language",
+      mission: "Craft conversion-oriented copy variants.",
+      currentTask: "Refine hero and final CTA variants.",
+      status: "Drafting",
+      confidence: "Medium",
+      ownedObjects: ["headline library", "CTA language"],
+      outputs: ["Copy variants", "Objection handling"],
+    },
+    {
+      id: "thrive_asset_librarian",
+      displayName: "Thrive Asset Librarian",
+      specialty: "Reusable Thrive assets and matching",
+      mission: "Recommend reusable blocks and symbols.",
+      currentTask: "Audit symbol inventory and confidence matches.",
+      status: thriveIntel ? "Researching" : "Blocked",
+      confidence: thriveIntel ? "High" : "Low",
+      ownedObjects: ["reusable blocks", "section assets", "symbols"],
+      outputs: ["Asset recommendations", "Deprecation notes"],
+      blockers: thriveIntel ? [] : ["Thrive inventory not available"],
+    },
+    {
+      id: "builder_operations",
+      displayName: "Builder Operations Agent",
+      specialty: "Build sequencing and operational safety",
+      mission: "Coordinate ready-for-build handoff safely.",
+      currentTask: "Track section readiness and build queue.",
+      status: currentSession?.status === "running" ? "Building" : "Not started",
+      confidence: currentSession?.status === "completed" ? "Verified" : "Medium",
+      ownedObjects: ["build queue", "readiness checklist"],
+      outputs: ["Build package", "run summary"],
+    },
+    {
+      id: "cro_analyst",
+      displayName: "CRO Analyst",
+      specialty: "Conversion opportunities and experiments",
+      mission: "Propose high-impact test hypotheses.",
+      currentTask: "Prioritize CTA and trust-strip experiments.",
+      status: "Researching",
+      confidence: "Medium",
+      ownedObjects: ["experiments backlog", "evidence notes"],
+      outputs: ["Experiment briefs", "expected lift estimates"],
+    },
+    {
+      id: "qa_publish",
+      displayName: "QA / Publish Agent",
+      specialty: "Readiness review and release quality",
+      mission: "Verify publish checklist and approve release.",
+      currentTask: "Monitor publish blockers and unresolved approvals.",
+      status: "Awaiting approval",
+      confidence: "High",
+      ownedObjects: ["publish checklist", "audit log"],
+      outputs: ["Readiness score", "publish recommendation"],
+    },
+  ];
+
+  const fallbackTimelineAt = snapshot?.lastSyncedAt ?? currentSession?.createdAt ?? "1970-01-01T00:00:00.000Z";
+
+  const approvalQueue = [
+    {
+      itemName: "Homepage hero direction",
+      ownerAgent: "Strategy Director",
+      level: "Directional approval",
+      confidence: "High" as ConfidenceLevel,
+      affectedPages: ["Home"],
+      changeSummary: "Refined primary promise and audience targeting.",
+    },
+    {
+      itemName: "Shell recommendation",
+      ownerAgent: "Theme Shell Architect",
+      level: "Structural approval",
+      confidence: thriveIntel ? ("High" as ConfidenceLevel) : ("Low" as ConfidenceLevel),
+      affectedPages: ["Home", "Contact"],
+      changeSummary: "Map homepage to canonical shell template and content pages to standard shell.",
+    },
+    {
+      itemName: "CTA stack",
+      ownerAgent: "Copy Chief",
+      level: "Content approval",
+      confidence: "Medium" as ConfidenceLevel,
+      affectedPages: ["Home"],
+      changeSummary: "Primary CTA and secondary reassurance CTA aligned to funnel goal.",
+    },
+    {
+      itemName: "Ready for build package",
+      ownerAgent: "Builder Operations Agent",
+      level: "Build approval",
+      confidence: currentSession?.status === "completed" ? ("Verified" as ConfidenceLevel) : ("Medium" as ConfidenceLevel),
+      affectedPages: currentSession?.buildSpec?.pages.map((page) => page.title) ?? ["Home"],
+      changeSummary: "Section stack locked and quality checks prepared.",
+    },
+  ];
+
+  const workstreamBoard = [
+    {
+      stream: "Positioning",
+      owner: "Strategy Director",
+      progress: marketIntelligence?.status === "used" ? 82 : 56,
+      nextMilestone: "Approve strategic narrative",
+      blocker: marketIntelligence?.status === "used" ? null : "Market intelligence not configured",
+    },
+    {
+      stream: "Site Shell",
+      owner: "Theme Shell Architect",
+      progress: thriveIntel ? 76 : 34,
+      nextMilestone: "Approve shell template map",
+      blocker: thriveIntel ? null : "Thrive inventory unavailable",
+    },
+    {
+      stream: "Homepage",
+      owner: "Content Architect",
+      progress: currentSession?.buildSpec ? 78 : 24,
+      nextMilestone: "Approve section stack",
+      blocker: null,
+    },
+    {
+      stream: "Lead Funnel",
+      owner: "Builder Operations Agent",
+      progress: currentSession?.executionResult ? 61 : 20,
+      nextMilestone: "Connect lead magnet path",
+      blocker: "Awaiting structural approval",
+    },
+    {
+      stream: "Blog Engine",
+      owner: "Brand Director",
+      progress: 28,
+      nextMilestone: "Approve editorial taxonomy",
+      blocker: null,
+    },
+    {
+      stream: "Conversion System",
+      owner: "CRO Analyst",
+      progress: 44,
+      nextMilestone: "Launch first experiment set",
+      blocker: "Evidence baseline pending",
+    },
+  ];
+
+  const latestDeliverables = [
+    {
+      title: "Homepage strategy blueprint",
+      owner: "Strategy Director",
+      status: "Awaiting approval" as AgencyStatus,
+      at: currentSession?.createdAt ?? fallbackTimelineAt,
+    },
+    {
+      title: "Section stack recommendation",
+      owner: "Content Architect",
+      status: "Recommended" as AgencyStatus,
+      at: currentSession?.createdAt ?? fallbackTimelineAt,
+    },
+    {
+      title: "Thrive reusable asset shortlist",
+      owner: "Thrive Asset Librarian",
+      status: thriveIntel ? ("Recommended" as AgencyStatus) : ("Blocked" as AgencyStatus),
+      at: snapshot?.lastSyncedAt ?? fallbackTimelineAt,
+    },
+  ];
+
+  const pageRows =
+    currentSession?.buildSpec?.pages?.map((page) => {
+      const resolutionCount = thriveSectionResolutions.filter((entry) => entry.pageSlug === page.slug).length;
+      const approved = approvalQueue.filter((item) => item.affectedPages.includes(page.title)).length > 0;
+      const pageRole = page.slug === "home" || page.slug === "" ? "homepage" : "generic";
+      return {
+        slug: page.slug,
+        pageName: page.title,
+        pageType: pageRole === "homepage" ? "Landing page" : "Standard page",
+        goal: pageRole === "homepage" ? "Primary conversion" : "Support intent",
+        shell: "Layout System candidate pending",
+        contentStatus: page.sections.length ? "Recommended" : "Not started",
+        buildStatus: currentSession?.status === "completed" ? "Built" : "Awaiting approval",
+        approvalStatus: approved ? "Awaiting approval" : "Not started",
+        ownerAgent: pageRole === "homepage" ? "Content Architect" : "Theme Shell Architect",
+        funnel: pageRole === "homepage" ? "Primary funnel" : "Support flow",
+        resolutionCount,
+      };
+    }) ?? [];
+
+  const selectedPageRow = pageRows.find((page) => page.slug === pageStudioSlug) ?? pageRows[0] ?? null;
+  const selectedBuildPage =
+    currentSession?.buildSpec?.pages.find((page) => page.slug === (selectedPageRow?.slug ?? "")) ?? null;
+
+  const statusClass = (status: AgencyStatus | string) => {
+    if (status === "Blocked" || status === "Needs revision") return "border-rose-300/50 bg-rose-500/10 text-rose-100";
+    if (status === "Approved" || status === "Built") return "border-emerald-300/50 bg-emerald-500/10 text-emerald-100";
+    if (status === "Awaiting approval") return "border-amber-300/50 bg-amber-500/10 text-amber-100";
+    if (status === "Building" || status === "Researching" || status === "Drafting") return "border-cyan-300/50 bg-cyan-500/10 text-cyan-100";
+    return "border-white/20 bg-white/10 text-slate-200";
+  };
+
+  const inferSectionType = (heading: string): "hero" | "proof" | "benefits" | "cta" | "faq" | "testimonials" | "generic" => {
+    const normalized = heading.toLowerCase();
+    if (normalized.includes("hero")) return "hero";
+    if (normalized.includes("proof") || normalized.includes("trust")) return "proof";
+    if (normalized.includes("benefit") || normalized.includes("feature")) return "benefits";
+    if (normalized.includes("faq") || normalized.includes("question")) return "faq";
+    if (normalized.includes("testimonial") || normalized.includes("review")) return "testimonials";
+    if (normalized.includes("cta") || normalized.includes("offer") || normalized.includes("action")) return "cta";
+    return "generic";
+  };
+
   return (
     <div className="ecomviper-hud min-h-screen text-slate-100">
       <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
-      <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-35" />
+      <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-30" />
 
-      <main className="relative mx-auto max-w-7xl px-6 py-10">
+      <main className="relative mx-auto max-w-[1600px] px-6 py-8">
         <section className={`${brainTheme.glassCard} p-6`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-cyan-300/75">Apps</div>
-              <h1 className="mt-2 text-3xl font-semibold text-white">SiteForge</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                Persistent project workspace for connected WordPress site generation and refinement.
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge Agency OS</div>
+              <h1 className="mt-2 text-3xl font-semibold text-white">Your AI Web Agency for Thrive Themes</h1>
+              <p className="mt-2 max-w-4xl text-sm text-slate-300">
+                Mission Control for strategist, brand director, funnel architect, copy chief, Thrive asset librarian,
+                builder operations, CRO, and publish QA collaboration.
               </p>
             </div>
-            <Link href="/" className={brainTheme.secondaryButton}>
-              Back to iBrains
-            </Link>
-          </div>
-        </section>
-
-        <section className="mt-4 grid gap-3 md:grid-cols-3">
-          <div className={`${brainTheme.glassCard} p-3`}>
-            <label className="text-xs uppercase tracking-[0.18em] text-slate-400">Project</label>
-            <select
-              value={selectedProjectId}
-              onChange={(event) => {
-                activeProjectIntentRef.current = event.target.value || null;
-                void openProject(event.target.value, "user");
-              }}
-              disabled={!projects.length || busy}
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            >
-              {selectedProjectId && !selectedProjectInOptions ? (
-                <option value={selectedProjectId}>Loading selected project...</option>
-              ) : null}
-              {!projects.length ? (
-                <option value="">No project selected</option>
-              ) : null}
-              {projects.map((project) => (
-                <option key={project.id} value={project.id}>
-                  {project.name} · {project.status}
-                </option>
-              ))}
-            </select>
-            <div className="mt-2 text-xs text-slate-400">
-              Last opened: {formatDate(activeProject?.lastOpenedAt)}
-            </div>
-            <label className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">New Project Name</label>
-            <input
-              value={newProjectName}
-              onChange={(event) => {
-                setNewProjectName(event.target.value);
-                if (createStatus !== "creating") {
-                  setCreateStatus("idle");
-                  setCreateStatusMessage(null);
-                }
-              }}
-              placeholder="e.g. iPetzo"
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            />
-            <button
-              type="button"
-              className={`${brainTheme.secondaryButton} mt-2`}
-              onClick={createProject}
-              disabled={busy || !normalizeNewProjectName(newProjectName)}
-            >
-              {createStatus === "creating" ? "Creating..." : "Create Project"}
-            </button>
-            {createStatusMessage ? (
-              <div
-                className={`mt-2 text-xs ${createStatus === "error" ? "text-rose-200" : createStatus === "created" ? "text-emerald-200" : "text-slate-300"}`}
-              >
-                {createStatusMessage}
-              </div>
-            ) : null}
-            {!activeProject ? (
-              <div className="mt-2 text-xs text-slate-400">Create your first project to get started.</div>
-            ) : null}
-          </div>
-
-          <div className={`${brainTheme.glassCard} p-3`}>
-            <label className="text-xs uppercase tracking-[0.18em] text-slate-400">WordPress URL</label>
-            <input
-              value={baseUrl}
-              onChange={(event) => setBaseUrl(event.target.value)}
-              placeholder="https://example.com"
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            />
-            <label className="mt-2 block text-xs uppercase tracking-[0.18em] text-slate-400">Homepage Strategy</label>
-            <select
-              value={homepageStrategy}
-              onChange={(event) => setHomepageStrategy(event.target.value as HomepageStrategy)}
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            >
-              <option value="use_existing">Use Existing</option>
-              <option value="replace_existing">Replace Existing</option>
-              <option value="create_new">Create New</option>
-              <option value="draft_only">Draft Only</option>
-            </select>
-          </div>
-
-          <div className={`${brainTheme.glassCard} p-3`}>
-            <label className="text-xs uppercase tracking-[0.18em] text-slate-400">Connection</label>
-            <input
-              value={connectionLabel}
-              onChange={(event) => setConnectionLabel(event.target.value)}
-              placeholder="Connection label"
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            />
-            <input
-              value={username}
-              onChange={(event) => setUsername(event.target.value)}
-              placeholder="WordPress username"
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            />
-            <input
-              type="password"
-              value={appPassword}
-              onChange={(event) => setAppPassword(event.target.value)}
-              placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"}
-              className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-            />
-            <div className="mt-2 flex flex-wrap gap-2">
-              <button
-                type="button"
-                className={brainTheme.secondaryButton}
-                onClick={saveAndValidateConnection}
-                disabled={busy || !selectedProjectId}
-              >
-                Save + Validate
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
+                Edit Brief
               </button>
-              <button
-                type="button"
-                className={brainTheme.secondaryButton}
-                onClick={revalidateConnection}
-                disabled={busy || !selectedProjectId}
-              >
-                Revalidate
+              <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("strategy")}>
+                View Blueprint
               </button>
-              <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
-                <input
-                  type="checkbox"
-                  checked={hasThriveHint}
-                  onChange={(event) => setHasThriveHint(event.target.checked)}
-                />
-                Thrive Installed
-              </label>
+              <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
+                Ready for Build
+              </button>
             </div>
-            <div className="mt-2 text-xs text-slate-400">
-              Credentials: {savedConnection?.hasSavedSecret ? "saved" : "need update"}
-            </div>
-            {!selectedProjectId ? (
-              <div className="mt-2 text-xs text-amber-200">Select a valid active project to validate this connection.</div>
-            ) : !hasValidActiveProject ? (
-              <div className="mt-2 text-xs text-amber-200">
-                Selected project is out of sync. Connection actions will reload project state before continuing.
-              </div>
-            ) : null}
           </div>
         </section>
 
@@ -1132,670 +1306,846 @@ export default function SiteForgeAppPage() {
           >
             <div className="font-medium">Storage mode: {storageSummary.storageMode}</div>
             <div className="mt-1">
-              Persistence health: {storageSummary.persistenceHealth} | Memory fallback active:{" "}
-              {storageSummary.fallbackActive ? "yes" : "no"}
+              Persistence health: {storageSummary.persistenceHealth} | Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}
             </div>
             <div className="mt-1">{storageStatusMessage}</div>
             {storageSummary.reason ? <div className="mt-1 text-xs opacity-90">Reason: {storageSummary.reason}</div> : null}
           </section>
         ) : null}
 
-        <section className="mt-4 grid gap-3 lg:grid-cols-3">
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Current Site State</div>
-            <div className="mt-2 text-sm text-slate-200">URL: {savedConnection?.wordpressUrl ?? "Not connected"}</div>
-            <div className="mt-1 text-sm text-slate-200">Connection: {savedConnection?.label ?? "Not set"}</div>
-            <div className="mt-1 text-sm text-slate-200">Validation: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
-            <div className="mt-1 text-sm text-slate-200">Thrive: {savedConnection?.thriveDetected ? "Detected" : "Not detected"}</div>
-            <div className="mt-1 text-sm text-slate-200">
-              Thrive Mode:{" "}
-              {thriveCurrentMode === "thrive_native_staging_mode"
-                ? "Thrive-native approved-target mode"
-                : thriveCurrentMode === "blocked_native_mode"
-                  ? "Blocked native mode"
-                  : thriveCurrentMode === "thrive_intel_mode"
-                    ? "Thrive-aware safe mode"
-                    : thriveExecutionMode === "wp_safe_mode"
-                      ? "WP safe mode"
-                      : "Future Thrive-native mode"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
-            <div className="mt-1 text-sm text-slate-200">
-              Thrive symbols: {thriveIntel?.symbolSummary.total ?? 0} (headers {thriveIntel?.symbolSummary.headers ?? 0}, footers {thriveIntel?.symbolSummary.footers ?? 0})
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Thrive primitives: templates {thriveIntel?.primitiveCounts.thriveTemplate ?? 0}, layouts {thriveIntel?.primitiveCounts.thriveLayout ?? 0}, sections {thriveIntel?.primitiveCounts.thriveSection ?? 0}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">Current homepage: {snapshot?.currentHomepageTitle ?? "Unknown"}</div>
-            <div className="mt-1 text-sm text-slate-200">Strategy: {snapshot?.homepageStrategy ?? homepageStrategy}</div>
-            <div className="mt-1 text-sm text-slate-200">Last sync: {formatDate(snapshot?.lastSyncedAt)}</div>
-          </div>
-
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Latest Run</div>
-            <div className="mt-2 text-sm text-slate-200">Status: {sessions[0]?.status ?? "No runs yet"}</div>
-            <div className="mt-1 text-sm text-slate-200">
-              Generation path:{" "}
-              {sessions[0]
-                ? sessions[0].generationSource === "user_key"
-                  ? "user-provided key"
-                  : sessions[0].generationSource === "platform_key"
-                    ? "platform key"
-                    : "deterministic fallback"
-                : "N/A"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">Model: {sessions[0]?.aiModel ?? "N/A"}</div>
-            <div className="mt-1 text-sm text-slate-200">Summary: {snapshot?.lastRunSummary ?? "No summary yet"}</div>
-            <div className="mt-1 text-sm text-slate-200">Pages affected: {snapshot?.pagesAffected ?? 0}</div>
-            <div className="mt-1 text-sm text-slate-200">Run logs: {runLogs.length}</div>
-          </div>
-
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Connection Status</div>
-            <p className="mt-2 text-sm text-slate-200">
-              {connectionResult
-                ? connectionResult.connected
-                  ? connectionResult.message
-                  : "Connection invalid"
-                : "Not validated"}
-            </p>
-            <div className="mt-2 text-xs text-slate-400">
-              Write access: {connectionResult?.canWritePages ? "Yes" : "No"} | Thrive: {connectionResult?.thriveDetected ? "Detected" : "Not detected"}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              Thrive intel available: {currentSession?.executionResult?.thrive.intelligenceAvailable ? "Yes" : "No"} | Symbol inventory:{" "}
-              {currentSession?.executionResult?.thrive.symbolInventoryPresent ? "Present" : "Not captured"}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              Runtime modes: wp_safe_mode={thriveRuntime.wpSafeMode ? "on" : "off"} | thrive_intel_mode={thriveRuntime.thriveIntelMode ? "on" : "off"} | staging_native_mode={thriveRuntime.stagingNativeMode ? "on" : "off"}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">Last validated: {formatDate(savedConnection?.lastValidatedAt)}</div>
-          </div>
-        </section>
-
-        <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Thrive Intelligence</div>
-            <div className="mt-2 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
-            <div className="mt-1 text-sm text-slate-200">Skin slug: {thriveIntel?.activeSkin?.slug ?? "Unknown"}</div>
-            <div className="mt-1 text-sm text-slate-200">
-              Symbol inventory by role: headers {thriveIntel?.symbolSummary.headers ?? 0}, footers {thriveIntel?.symbolSummary.footers ?? 0}, sections {thriveIntel?.symbolSummary.sections ?? 0}, unknown {thriveIntel?.symbolSummary.unknown ?? 0}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Reusable now: {reusableSummary.reusableNow} | Safely writable now: {reusableSummary.safeWritableNow} | Future staged-native only: {reusableSummary.stagedOnly}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Homepage targeting truth: {snapshot?.currentHomepageTitle ?? "Unknown"} ({snapshot?.currentHomepageSource ?? "unknown"})
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              Warnings: {thriveIntel?.warnings.length ? thriveIntel.warnings.join(" | ") : "None"}
-            </div>
-          </div>
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Section Visual Mapping</div>
-            <div className="mt-2 text-xs text-slate-300">
-              Deterministic visual pattern and Thrive primitive resolution per section.
-            </div>
-            <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
-              {thriveSectionResolutions.length ? (
-                thriveSectionResolutions.map((entry) => (
-                  <div key={`${entry.pageSlug}:${entry.sectionId}`} className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200">
-                    <div>
-                      {entry.pageSlug} / {entry.sectionType} {"->"} {entry.visualPattern}
-                    </div>
-                    <div className="mt-1 text-slate-300">
-                      primitive={entry.selectedVisualPrimitive} ({entry.primitiveSelectionSource}) | matched=
-                      {entry.matchedSymbolTitle ?? "none"} | confidence={entry.confidence.toFixed(2)}
-                    </div>
-                    <div className="mt-1 text-slate-400">
-                      target={entry.preferredRenderTarget} | designIntent={entry.designIntentSatisfied ? "satisfied" : "fallback"}
-                      {entry.fallbackReason ? ` | fallback=${entry.fallbackReason}` : ""}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
-                  No section resolution data yet. Run Generate to compute Thrive-aware section mapping.
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-4 grid gap-3">
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Visual Composition</div>
-            <div className="mt-2 text-sm text-slate-200">
-              hero={visualCompositionSummary.hero} | features={visualCompositionSummary.features} | cta={visualCompositionSummary.cta}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              faq={visualCompositionSummary.faq} | testimonials={visualCompositionSummary.testimonial} | trust={visualCompositionSummary.trust}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              reused={visualCompositionSummary.reused} | created={visualCompositionSummary.created} | fallback={visualCompositionSummary.fallback}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              {visualCompositionSummary.lowDesignWarnings.length
-                ? `Low-design warnings: ${visualCompositionSummary.lowDesignWarnings.join(" | ")}`
-                : "No low-design fallback warnings recorded."}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-4 grid gap-3">
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Market Intelligence</div>
-            <div className="mt-2 text-sm text-slate-200">
-              Status: {marketIntelligence?.status ?? "not_configured"} | Source: {marketIntelligence?.source ?? "none"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Planner enriched: {marketIntelligence?.plannerEnriched ? "yes" : "no"} | Content enriched:{" "}
-              {marketIntelligence?.contentEnriched ? "yes" : "no"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Pattern counts: competitors={marketIntelligence?.competitorPatterns.length ?? 0}, sections=
-              {marketIntelligence?.commonPageSections.length ?? 0}, cta={marketIntelligence?.ctaPatterns.length ?? 0},
-              faq={marketIntelligence?.faqThemes.length ?? 0}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              {marketIntelligence?.summary ?? "No structured market brief captured for this run."}
-            </div>
-            <div className="mt-1 text-[11px] text-slate-500">
-              fingerprint={marketIntelligence?.fingerprint ?? "none"}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Target Panel</div>
-            <div className="mt-2 text-sm text-slate-200">
-              Eligibility: {thriveNativeGuard?.eligible ? "Eligible" : "Blocked"}{" "}
-              {thriveNativeGuard?.blockedReason ? `(${thriveNativeGuard.blockedReason})` : ""}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Target mode: {thriveNativeGuard?.nativeTargetMode ?? "blocked"} | classification:{" "}
-              {thriveNativeGuard?.targetClassification ?? "unknown_target"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Approved target: {thriveNativeGuard?.approvedTargetHost ?? "none"} | approval source:{" "}
-              {thriveNativeGuard?.approvalSource ?? "none"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Contract schema: {thriveNativeGuard?.schemaContractVersion ?? "missing"} | Host:{" "}
-              {thriveNativeGuard?.connectionHost ?? "unknown"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Approved native operations: {thriveNativeGuard?.allowlistedOperations.join(", ") || "none"}
-            </div>
-            <div className="mt-2 text-xs text-slate-400">
-              Runtime mode states: wp_safe_mode, thrive_intel_mode, thrive_native_staging_mode, blocked_native_mode
-            </div>
-          </div>
-
-          <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Composition & Verification</div>
-            <div className="mt-2 text-sm text-slate-200">
-              Plan mode: {thriveNativeComposition?.mode ?? "not generated"} | Homepage post id:{" "}
-              {thriveNativeComposition?.homepagePostId ?? "unknown"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Reuse {thriveNativeComposition?.summary.reusedExisting ?? 0} | Native create{" "}
-              {thriveNativeComposition?.summary.createdNative ?? 0} | WP fallback{" "}
-              {thriveNativeComposition?.summary.wpFallback ?? 0}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Verification status:{" "}
-              {thriveNativeExecution
-                ? thriveNativeExecution.success
-                  ? "verified"
-                  : "verification issues"
-                : "not executed"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              Rollback/reset availability: {thriveNativeExecution?.rollback.available ? "available" : "not available"}
-            </div>
-            <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">Native Validation</div>
-            <div className="mt-1 text-sm text-slate-200">
-              Validation mode: {thriveNativeValidation?.mode ?? "not_run"} | status: {thriveNativeValidation?.status ?? "unknown"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              verification: steps={thriveNativeValidation?.verification.stepsTotal ?? 0} verified=
-              {thriveNativeValidation?.verification.verifiedSteps ?? 0} failed=
-              {thriveNativeValidation?.verification.failedSteps ?? 0}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              render status: {thriveNativeValidation?.verification.renderability.status ?? "unknown_render_failure"} |
-              http={thriveNativeValidation?.verification.renderability.httpStatus ?? "n/a"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200 break-all">
-              checked URL: {thriveNativeValidation?.verification.renderability.checkedUrl ?? "none"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200 break-all">
-              final URL: {thriveNativeValidation?.verification.renderability.finalUrl ?? "none"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              rollback result:{" "}
-              {thriveNativeValidation
-                ? thriveNativeValidation.rollbackVerification.attempted
-                  ? thriveNativeValidation.rollbackVerification.success
-                    ? "completed"
-                    : "incomplete"
-                  : "not attempted"
-                : "unknown"}
-            </div>
-            <div className="mt-1 text-sm text-slate-200">
-              promotion candidate:{" "}
-              {thriveNativeValidation?.promotionCandidateSummary.ready ? "ready" : "not ready"} (
-              {thriveNativeValidation?.promotionCandidateSummary.reason ?? "unknown"})
-            </div>
-            <div className="mt-2 max-h-40 space-y-2 overflow-auto pr-1 text-xs">
-              {(thriveNativeExecution?.steps ?? []).length ? (
-                (thriveNativeExecution?.steps ?? []).map((step, idx) => (
-                  <div key={`${step.operation}-${idx}`} className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200">
-                    <div>
-                      {step.operation} {"->"} {step.objectType} {step.targetId ?? "n/a"}
-                    </div>
-                    <div className="mt-1 text-slate-400">
-                      verified={step.verificationPassed ? "yes" : "no"} | rollbackReady={step.rollbackReady ? "yes" : "no"} |
-                      status={step.responseStatus ?? "n/a"}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
-                  No native execution recorded for this run.
-                </div>
-              )}
-            </div>
-            <div className="mt-3 text-xs text-slate-300">Native validation outcomes</div>
-            <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1 text-xs">
-              {(thriveNativeValidation?.sectionOutcomes ?? []).length ? (
-                (thriveNativeValidation?.sectionOutcomes ?? []).map((entry) => (
-                  <div
-                    key={`${entry.pageSlug}:${entry.sectionId}:validation`}
-                    className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200"
-                  >
-                    <div>
-                      {entry.sectionType} {"->"} {entry.outcome} ({entry.operation ?? "none"}) id=
-                      {entry.targetId ?? "n/a"}
-                    </div>
-                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
-                  No native validation summary recorded yet.
-                </div>
-              )}
-            </div>
-            <div className="mt-3 text-xs text-slate-300">Render diagnostics</div>
-            <div className="mt-2 rounded-lg border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200">
-              <div>legacy page link: {thriveNativeValidation?.verification.renderability.legacyPageLink ?? "none"}</div>
-              <div>redirect hops: {thriveNativeValidation?.verification.renderability.redirectChain.length ?? 0}</div>
-              <div className="mt-1 text-slate-400 break-all">
-                body snippet: {thriveNativeValidation?.verification.renderability.bodySnippet ?? "n/a"}
-              </div>
-            </div>
-            <div className="mt-3 text-xs text-slate-300">Section-native mapping</div>
-            <div className="mt-2 max-h-36 space-y-2 overflow-auto pr-1 text-xs">
-              {(thriveNativeComposition?.sections ?? []).length ? (
-                (thriveNativeComposition?.sections ?? []).map((entry) => (
-                  <div
-                    key={`${entry.pageSlug}:${entry.sectionId}:native`}
-                    className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200"
-                  >
-                    <div>
-                      {entry.sectionType} {"->"} {entry.intent} ({entry.selectedOperation ?? "none"})
-                    </div>
-                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
-                  No native section mapping computed yet.
-                </div>
-              )}
-            </div>
-          </div>
-        </section>
-
-        <section className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_280px]">
-          {activeProject ? (
-            <div className={`${brainTheme.glassCard} p-6`}>
-              <div className="flex items-center justify-between gap-2">
-                <label htmlFor="siteforge-project-name" className="text-sm font-medium text-slate-100">
-                  Rename Current Project
-                </label>
-                <span className="text-xs uppercase tracking-[0.12em] text-slate-300">
-                  Name: {projectNameSaveState}
-                </span>
-              </div>
-              <input
-                id="siteforge-project-name"
-                value={projectName}
-                onChange={(event) => {
-                  setProjectName(event.target.value);
-                  if (projectNameSaveState === "saved" || projectNameSaveState === "error") {
-                    setProjectNameSaveState("idle");
-                  }
-                }}
-                onBlur={() => {
-                  if (
-                    shouldPersistProjectName({
-                      selectedProjectId: activeProjectId ?? "",
-                      projectName,
-                      persistedProjectName,
-                    })
-                  ) {
-                    void persistProjectNameUpdate();
-                  }
-                }}
-                className="mt-2 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-              />
-
-              <div className="mt-6 rounded-2xl border border-white/15 bg-slate-950/45 p-4">
-                <h3 className="text-sm font-semibold text-slate-100">Website Strategy Brief</h3>
-                <p className="mt-1 text-xs text-slate-300">
-                  Tell SiteForge about your business, who you serve, and what you want your website to achieve.
-                </p>
-                <div className="mt-4 grid gap-3 md:grid-cols-2">
-                  <div>
-                    <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
-                    <input
-                      id="siteforge-brief-business-name"
-                      value={briefForm.businessName}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-brief-business-type" className="text-xs text-slate-300">Business type / category</label>
-                    <input
-                      id="siteforge-brief-business-type"
-                      value={briefForm.businessType}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label htmlFor="siteforge-brief-business-description" className="text-xs text-slate-300">What does the business do?</label>
-                    <textarea
-                      id="siteforge-brief-business-description"
-                      value={briefForm.businessDescription}
-                      onChange={(event) =>
-                        setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))
-                      }
-                      className="mt-1 h-24 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label htmlFor="siteforge-brief-target-audience" className="text-xs text-slate-300">Who is the target audience?</label>
-                    <input
-                      id="siteforge-brief-target-audience"
-                      value={briefForm.targetAudience}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-brief-goal" className="text-xs text-slate-300">Main goal of website</label>
-                    <select
-                      id="siteforge-brief-goal"
-                      value={briefForm.websiteGoal}
-                      onChange={(event) =>
-                        setBriefForm((prev) => ({
-                          ...prev,
-                          websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"],
-                        }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    >
-                      <option value="book_calls">Book calls</option>
-                      <option value="capture_leads">Capture leads</option>
-                      <option value="sell_products">Sell products</option>
-                      <option value="drive_demos_trials">Drive demos/trials</option>
-                      <option value="build_authority">Build authority</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-brief-tone" className="text-xs text-slate-300">Brand tone</label>
-                    <select
-                      id="siteforge-brief-tone"
-                      value={briefForm.brandTone}
-                      onChange={(event) =>
-                        setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))
-                      }
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    >
-                      <option value="premium">Premium</option>
-                      <option value="friendly">Friendly</option>
-                      <option value="expert">Expert</option>
-                      <option value="bold">Bold</option>
-                      <option value="modern">Modern</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label htmlFor="siteforge-brief-main-offer" className="text-xs text-slate-300">Main offer / service / product</label>
-                    <input
-                      id="siteforge-brief-main-offer"
-                      value={briefForm.mainOffer}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-brief-market-location" className="text-xs text-slate-300">Location / market (optional)</label>
-                    <input
-                      id="siteforge-brief-market-location"
-                      value={briefForm.marketLocation}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, marketLocation: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-brief-competitors" className="text-xs text-slate-300">Competitors / inspiration (optional)</label>
-                    <input
-                      id="siteforge-brief-competitors"
-                      value={briefForm.competitors}
-                      onChange={(event) => setBriefForm((prev) => ({ ...prev, competitors: event.target.value }))}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label htmlFor="siteforge-brief-differentiators" className="text-xs text-slate-300">Notes / differentiators (optional)</label>
-                    <textarea
-                      id="siteforge-brief-differentiators"
-                      value={briefForm.differentiators}
-                      onChange={(event) =>
-                        setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))
-                      }
-                      className="mt-1 h-24 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 flex items-center gap-3">
-                  <button type="button" className={brainTheme.secondaryButton} onClick={saveWebsiteBrief} disabled={busy}>
-                    Save Website Brief
-                  </button>
-                  <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</span>
-                </div>
-              </div>
-
-              <div className="mt-4 rounded-2xl border border-white/15 bg-slate-950/45 p-4">
-                <h3 className="text-sm font-semibold text-slate-100">AI & Research API Configuration</h3>
-                <p className="mt-1 text-xs text-slate-300">
-                  Save API credentials server-side for this project. Plaintext keys are not returned to the browser after save.
-                </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-3">
-                  <div>
-                    <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">Model</label>
-                    <select
-                      id="siteforge-ai-model"
-                      value={aiModel}
-                      onChange={(event) => setAiModel(event.target.value)}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    >
-                      <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                      <option value="gpt-4.1">gpt-4.1</option>
-                      <option value="gpt-5-mini">gpt-5-mini</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-ai-key" className="text-xs text-slate-300">OpenAI API key</label>
-                    <input
-                      id="siteforge-ai-key"
-                      type="password"
-                      value={aiApiKey}
-                      onChange={(event) => setAiApiKey(event.target.value)}
-                      placeholder={activeProject.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label htmlFor="siteforge-serpapi-key" className="text-xs text-slate-300">SerpApi API key</label>
-                    <input
-                      id="siteforge-serpapi-key"
-                      type="password"
-                      value={serpApiKey}
-                      onChange={(event) => setSerpApiKey(event.target.value)}
-                      placeholder={activeProject.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."}
-                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>
-                    Save API Keys
-                  </button>
-                  <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("update")} disabled={busy}>
-                    Update Model / Keys
-                  </button>
-                  <button
-                    type="button"
-                    className={brainTheme.secondaryButton}
-                    onClick={removeAiKey}
-                    disabled={busy || (!activeProject.hasSavedAiSecret && !activeProject.hasSavedSerpApiSecret)}
-                  >
-                    Remove Saved Keys
-                  </button>
-                </div>
-                <div className="mt-2 text-xs text-slate-300">
-                  Status: OpenAI={activeProject.hasSavedAiSecret ? "saved" : "not saved"} | SerpApi=
-                  {activeProject.hasSavedSerpApiSecret ? "saved" : "not saved"}
-                  {aiStatusMessage ? ` · ${aiStatusMessage}` : ""}
-                </div>
-              </div>
-
-              <button
-                type="button"
-                onClick={generateSite}
-                disabled={!selectedProjectId || busy || !briefIsValid()}
-                className={`${brainTheme.glowButton} mt-6 w-full sm:w-auto disabled:cursor-not-allowed disabled:opacity-60`}
-              >
-                Generate My Website
-              </button>
-              <div className="mt-2 text-xs text-slate-300">
-                Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} |
-                Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}
-              </div>
-            </div>
-          ) : (
-            <div className={`${brainTheme.glassCard} p-6`}>
-              <div className="text-sm font-medium text-slate-100">No Active Project</div>
-              <p className="mt-2 text-sm text-slate-300">
-                Create a project at the top of the page to unlock rename and generation controls.
-              </p>
-              <p className="mt-2 text-xs text-slate-400">Rename the active project after creation.</p>
-            </div>
-          )}
-
-          <aside className={`${brainTheme.glassCard} h-fit p-5`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Run History</div>
-            <ul className="mt-2 space-y-2">
-              {sessions.map((session) => (
-                <li key={session.id}>
-                  <button
-                    type="button"
-                    onClick={() => setCurrentSessionId(session.id)}
-                    className="w-full rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200"
-                  >
-                    {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status}
-                  </button>
-                </li>
+        <section className="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+          <aside className={`${brainTheme.glassCard} h-fit p-3`}>
+            <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Agency Navigation</div>
+            <nav className="mt-3 space-y-1">
+              {navItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
+                    activeNav === item.key
+                      ? "border border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+                      : "border border-transparent bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"
+                  }`}
+                  onClick={() => setActiveNav(item.key)}
+                >
+                  {item.label}
+                </button>
               ))}
-              {!sessions.length ? <li className="text-xs text-slate-400">No run history yet.</li> : null}
-            </ul>
-          </aside>
-        </section>
+            </nav>
 
-        {currentSession ? (
-          <section className="mt-6 space-y-4">
-            <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
-
-            <div className={`${brainTheme.glassCard} p-4 text-sm text-slate-200`}>
-              Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
+            <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3">
+              <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Agency Team</div>
+              <div className="mt-2 space-y-2">
+                {agencyTeam.slice(0, 4).map((agent) => (
+                  <div key={agent.id} className="rounded-lg border border-white/10 bg-white/5 p-2">
+                    <div className="text-xs font-medium text-slate-100">{agent.displayName}</div>
+                    <div className="mt-1 text-[11px] text-slate-400">{agent.currentTask}</div>
+                  </div>
+                ))}
+              </div>
+              <button type="button" className={`${brainTheme.secondaryButton} mt-3 w-full`} onClick={() => setActiveNav("mission_control")}>
+                Open Full Roster
+              </button>
             </div>
+          </aside>
 
-            <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
-              <article className={`${brainTheme.glassCard} p-5`}>
-                <h2 className="text-lg font-semibold text-white">Build Activity</h2>
-                <ul className="mt-4 space-y-3">
-                  {activity.map((update, index) => (
-                    <li
-                      key={`${update.at}-${index}`}
-                      className="rounded-xl border border-white/10 bg-slate-950/50 px-4 py-3 text-sm text-slate-200"
-                    >
-                      {update.message}
-                    </li>
-                  ))}
-                </ul>
-              </article>
+          <div className="space-y-4">
+            {activeNav === "mission_control" ? (
+              <>
+                <section className="grid gap-4 xl:grid-cols-2">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Project Mission Card</div>
+                    <div className="mt-3 grid gap-2 text-sm text-slate-200 md:grid-cols-2">
+                      <div>Site name: {activeProject?.name ?? "No Active Project"}</div>
+                      <div>Primary goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
+                      <div>Market / audience: {briefForm.targetAudience || "Not set"}</div>
+                      <div>Main offer: {briefForm.mainOffer || "Not set"}</div>
+                      <div>Funnel type: {homepageStrategy}</div>
+                      <div>Thrive stack detected: {savedConnection?.thriveDetected ? "yes" : "no"}</div>
+                      <div className="md:col-span-2">Current stage: {currentSession?.runState.currentStage ?? "planning"}</div>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>Edit Brief</button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("strategy")}>View Blueprint</button>
+                    </div>
+                  </div>
 
-              <aside className={`${brainTheme.glassCard} p-5`}>
-                <h2 className="text-lg font-semibold text-white">Live Preview</h2>
-                <div className="mt-4 rounded-2xl border border-white/10 bg-slate-950/70 p-4">
-                  {currentSession.buildSpec?.pages?.length ? (
-                    <ul className="space-y-2 text-xs text-slate-300">
-                      {currentSession.buildSpec.pages.map((page) => (
-                        <li key={page.slug} className="rounded-lg border border-white/10 bg-white/5 px-3 py-2">
-                          <div className="font-semibold text-white">/{page.slug}</div>
-                          <div>{page.sections.length} sections</div>
-                        </li>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Agency Team Card</div>
+                    <div className="mt-3 space-y-2">
+                      {agencyTeam.map((agent) => (
+                        <div key={agent.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-sm font-medium text-slate-100">{agent.displayName}</div>
+                              <div className="text-xs text-slate-400">{agent.specialty}</div>
+                            </div>
+                            <span className={`rounded-full border px-2 py-1 text-[11px] ${statusClass(agent.status)}`}>{agent.status}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-slate-300">Current task: {agent.currentTask}</div>
+                          <div className="mt-1 text-[11px] text-slate-400">Confidence: {agent.confidence}</div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grid gap-4 xl:grid-cols-2">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Approval Queue Card</div>
+                    <div className="mt-3 space-y-2">
+                      {approvalQueue.map((approval) => (
+                        <div key={approval.itemName} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div className="font-medium text-slate-100">{approval.itemName}</div>
+                            <span className="text-xs text-slate-400">{approval.level}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-slate-300">Owner: {approval.ownerAgent} · confidence: {approval.confidence}</div>
+                          <div className="mt-1 text-xs text-slate-300">{approval.changeSummary}</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button type="button" className={brainTheme.secondaryButton}>Review</button>
+                            <button type="button" className={brainTheme.secondaryButton}>Approve</button>
+                            <button type="button" className={brainTheme.secondaryButton}>Request Revision</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Workstream Progress Board</div>
+                    <div className="mt-3 space-y-2">
+                      {workstreamBoard.map((stream) => (
+                        <div key={stream.stream} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <div className="font-medium text-slate-100">{stream.stream}</div>
+                            <div className="text-xs text-slate-300">{stream.progress}%</div>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded bg-white/10">
+                            <div className="h-full rounded bg-cyan-300/70" style={{ width: `${stream.progress}%` }} />
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">Owner: {stream.owner} · Next milestone: {stream.nextMilestone}</div>
+                          <div className="mt-1 text-xs text-amber-200">{stream.blocker ? `Blocker: ${stream.blocker}` : "No active blockers"}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+
+                <section className="grid gap-4 xl:grid-cols-3">
+                  <div className={`${brainTheme.glassCard} p-4 xl:col-span-2`}>
+                    <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Latest Deliverables Card</div>
+                    <div className="mt-3 space-y-2">
+                      {latestDeliverables.map((deliverable) => (
+                        <div key={deliverable.title} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+                            <div className="font-medium text-slate-100">{deliverable.title}</div>
+                            <span className={`rounded-full border px-2 py-1 text-[11px] ${statusClass(deliverable.status)}`}>{deliverable.status}</span>
+                          </div>
+                          <div className="mt-1 text-xs text-slate-400">Owner: {deliverable.owner} · {formatDate(deliverable.at)}</div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button type="button" className={brainTheme.secondaryButton}>Preview</button>
+                            <button type="button" className={brainTheme.secondaryButton}>Compare</button>
+                            <button type="button" className={brainTheme.secondaryButton}>Approve</button>
+                            <button type="button" className={brainTheme.secondaryButton}>Revise</button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className={`${brainTheme.glassCard} p-4`}>
+                      <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Thrive Snapshot Card</div>
+                      <div className="mt-2 space-y-1 text-xs text-slate-300">
+                        <div>Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
+                        <div>Homepage mapping: {snapshot?.currentHomepageTitle ?? "Unknown"}</div>
+                        <div>Template count: {thriveIntel?.primitiveCounts.thriveTemplate ?? 0}</div>
+                        <div>Layout count: {thriveIntel?.primitiveCounts.thriveLayout ?? 0}</div>
+                        <div>Section count: {thriveIntel?.primitiveCounts.thriveSection ?? 0}</div>
+                        <div>Symbol count: {thriveIntel?.symbolSummary.total ?? 0}</div>
+                        <div>Warning count: {thriveIntel?.warnings.length ?? 0}</div>
+                      </div>
+                    </div>
+
+                    <div className={`${brainTheme.glassCard} p-4`}>
+                      <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Risk / Warnings Card</div>
+                      <div className="mt-2 space-y-1 text-xs text-amber-200">
+                        {thriveIntel?.warnings?.length ? thriveIntel.warnings.map((warning) => <div key={warning}>- {warning}</div>) : <div>- No active blockers reported.</div>}
+                        {marketIntelligence?.status !== "used" ? <div>- Market intelligence enrichment not fully active.</div> : null}
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <section className={`${brainTheme.glassCard} p-4`}>
+                  <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Agency Pulse Activity Feed</div>
+                  <div className="mt-3 grid gap-2 md:grid-cols-2">
+                    {activity.length ? (
+                      activity.slice(0, 10).map((entry, idx) => (
+                        <div key={`${entry.at}-${idx}`} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs">
+                          <div className="text-slate-300">{formatDate(entry.at)}</div>
+                          <div className="mt-1 text-slate-100">{entry.message}</div>
+                          <div className="mt-1 text-slate-400">Stage: {entry.stage} · Level: {entry.level}</div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
+                        No activity yet. Start with Strategy approvals or run Ready for Build.
+                      </div>
+                    )}
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            {activeNav === "strategy" ? (
+              <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_300px]">
+                <div className="space-y-4">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">Business Brief Panel</h2>
+                    <div className="mt-2 grid gap-2 text-sm text-slate-300 md:grid-cols-2">
+                      <div>Business name: {briefForm.businessName || "Not set"}</div>
+                      <div>Business type: {briefForm.businessType || "Not set"}</div>
+                      <div>Main offer: {briefForm.mainOffer || "Not set"}</div>
+                      <div>Website goal: {briefForm.websiteGoal}</div>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">ICP / Audience Panel</h2>
+                    <p className="mt-2 text-sm text-slate-300">{briefForm.targetAudience || "Define ICP and buying triggers in Settings > Website Strategy Brief."}</p>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">Positioning Panel</h2>
+                    <p className="mt-2 text-sm text-slate-300">{briefForm.businessDescription || "No positioning narrative yet."}</p>
+                    <div className="mt-2 text-xs text-slate-400">Differentiators: {briefForm.differentiators || "Not set"}</div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">Sitemap Recommendation Panel</h2>
+                    <div className="mt-2 text-sm text-slate-300">{currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Run Ready for Build to generate sitemap recommendation."}</div>
+                  </div>
+                </div>
+                <aside className="space-y-4">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Strategy Decisions</h3>
+                    <div className="mt-2 space-y-2 text-xs text-slate-300">
+                      {approvalQueue.slice(0, 2).map((approval) => (
+                        <div key={approval.itemName} className="rounded-lg border border-white/10 bg-white/5 p-2">{approval.itemName}</div>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Strategy Director</h3>
+                    <div className="mt-2 text-xs text-slate-300">Owner: Strategy Director</div>
+                    <div className="mt-1 text-xs text-slate-400">Status: Recommended · Confidence: {marketIntelligence?.status === "used" ? "High" : "Medium"}</div>
+                  </div>
+                </aside>
+              </section>
+            ) : null}
+
+            {activeNav === "brand" ? (
+              <section className="grid gap-4 xl:grid-cols-2">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Brand Identity Panel</h2>
+                  <div className="mt-2 text-sm text-slate-300">Tone: {briefForm.brandTone} · Business: {briefForm.businessName || "Not set"}</div>
+                </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Design Tokens Panel</h2>
+                  <div className="mt-2 text-sm text-slate-300">Token system is inherited from SiteForge visual design defaults and can be overridden per page.</div>
+                </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Thrive Theme Mapping Panel</h2>
+                  <div className="mt-2 text-sm text-slate-300">Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"} · Layout candidate: {selectedPageRow?.shell ?? "Pending"}</div>
+                </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Brand Rules Panel</h2>
+                  <div className="mt-2 text-sm text-slate-300">Preserve tone consistency, CTA hierarchy, and section rhythm across all page deliverables.</div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "funnels" ? (
+              <section className="space-y-4">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Funnel Overview Board</h2>
+                  <div className="mt-3 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
+                    {["Homepage", "Lead Magnet", "Opt-in Confirmation", "Thank You", "Core Offer", "Follow-up Content"].map((node) => (
+                      <div key={node} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                        <div className="font-medium text-slate-100">{node}</div>
+                        <div className="mt-1">Owner: Builder Operations Agent</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Funnel Logic Panel</h3>
+                    <p className="mt-2 text-sm text-slate-300">Map CTA hand-offs and approval gates between key funnel nodes.</p>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Offer Stack Panel</h3>
+                    <p className="mt-2 text-sm text-slate-300">Primary offer: {briefForm.mainOffer || "Not set"}</p>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Conversion Recommendations Panel</h3>
+                    <p className="mt-2 text-sm text-slate-300">Prioritize CTA clarity, trust strips, and FAQ objection handling before build approval.</p>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "pages" ? (
+              <section className="space-y-4">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Pages Index</h2>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
+                    <span className="rounded-full border border-white/20 px-2 py-1">status</span>
+                    <span className="rounded-full border border-white/20 px-2 py-1">page type</span>
+                    <span className="rounded-full border border-white/20 px-2 py-1">owner agent</span>
+                    <span className="rounded-full border border-white/20 px-2 py-1">funnel</span>
+                    <span className="rounded-full border border-white/20 px-2 py-1">approved / unapproved</span>
+                    <span className="rounded-full border border-white/20 px-2 py-1">built / unbuilt</span>
+                  </div>
+                  <div className="mt-3 overflow-auto">
+                    <table className="min-w-full text-left text-xs text-slate-300">
+                      <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                        <tr>
+                          <th className="px-2 py-2">Page Name</th>
+                          <th className="px-2 py-2">Page Type</th>
+                          <th className="px-2 py-2">Goal</th>
+                          <th className="px-2 py-2">Shell</th>
+                          <th className="px-2 py-2">Content Status</th>
+                          <th className="px-2 py-2">Build Status</th>
+                          <th className="px-2 py-2">Approval Status</th>
+                          <th className="px-2 py-2">Owner Agent</th>
+                          <th className="px-2 py-2">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pageRows.map((row) => (
+                          <tr key={row.slug} className="border-t border-white/10">
+                            <td className="px-2 py-2">{row.pageName}</td>
+                            <td className="px-2 py-2">{row.pageType}</td>
+                            <td className="px-2 py-2">{row.goal}</td>
+                            <td className="px-2 py-2">{row.shell}</td>
+                            <td className="px-2 py-2">{row.contentStatus}</td>
+                            <td className="px-2 py-2">{row.buildStatus}</td>
+                            <td className="px-2 py-2">{row.approvalStatus}</td>
+                            <td className="px-2 py-2">{row.ownerAgent}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex flex-wrap gap-1">
+                                <button type="button" className={brainTheme.secondaryButton} onClick={() => setPageStudioSlug(row.slug)}>Open Page Studio</button>
+                                <button type="button" className={brainTheme.secondaryButton}>Preview Brief</button>
+                                <button type="button" className={brainTheme.secondaryButton}>Compare Versions</button>
+                                <button type="button" className={brainTheme.secondaryButton}>Approve</button>
+                                <button type="button" className={brainTheme.secondaryButton}>Send to Build</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                        {!pageRows.length ? (
+                          <tr>
+                            <td className="px-2 py-3 text-slate-400" colSpan={9}>No pages yet. Generate a build package to start page collaboration.</td>
+                          </tr>
+                        ) : null}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Page Studio</h2>
+                  {selectedBuildPage ? (
+                    <div className="mt-3 grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)_260px]">
+                      <aside className="space-y-3">
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Page overview</div>
+                          <div className="mt-2 text-sm text-slate-100">{selectedBuildPage.title}</div>
+                          <div className="text-xs text-slate-400">Goal: {selectedPageRow?.goal ?? "Support intent"}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Section navigator</div>
+                          <div className="mt-2 space-y-1 text-xs text-slate-300">
+                            {selectedBuildPage.sections.map((section, index) => (
+                              <div key={`${section.heading}-${index}`}>{section.heading}</div>
+                            ))}
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Dependencies: shell template, CTA stack, FAQ approval</div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Linked funnel steps: {selectedPageRow?.funnel ?? "Primary funnel"}</div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Reusable assets used: {selectedPageRow?.resolutionCount ?? 0}</div>
+                      </aside>
+
+                      <div className="space-y-3">
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Page Brief Card</div>
+                          <div className="mt-2 text-sm text-slate-200">{selectedPageRow?.goal ?? "Support intent"}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Shell Recommendation Card</div>
+                          <div className="mt-2 text-sm text-slate-200">{selectedPageRow?.shell ?? "Pending shell recommendation"}</div>
+                        </div>
+                        <div className="space-y-2">
+                          {selectedBuildPage.sections.map((section, index) => {
+                            const inferredType = inferSectionType(section.heading);
+                            const sectionResolution = thriveSectionResolutions.find(
+                              (entry) => entry.pageSlug === selectedBuildPage.slug && entry.sectionType === inferredType
+                            );
+                            return (
+                              <div key={`${section.heading}-${index}`} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                  <div>
+                                    <div className="text-sm font-medium text-slate-100">{section.heading}</div>
+                                    <div className="text-xs text-slate-400">Purpose: {inferredType}</div>
+                                  </div>
+                                  <span className={`rounded-full border px-2 py-1 text-[11px] ${statusClass(sectionResolution?.designIntentSatisfied ? "Approved" : "Awaiting approval")}`}>
+                                    {sectionResolution?.designIntentSatisfied ? "Approved" : "Awaiting approval"}
+                                  </span>
+                                </div>
+                                <div className="mt-2 text-xs text-slate-300">Content summary: {section.body}</div>
+                                <div className="mt-1 text-xs text-slate-400">Recommended Thrive asset type: {sectionResolution?.selectedVisualPrimitive ?? "wordpress_structured_fallback"}</div>
+                                <div className="mt-1 text-xs text-slate-400">Matched reusable asset: {sectionResolution?.matchedSymbolTitle ?? "None"}</div>
+                                <div className="mt-1 text-xs text-slate-400">Owner agent: {inferredType === "cta" ? "Copy Chief" : "Content Architect"}</div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  <button type="button" className={brainTheme.secondaryButton}>Preview</button>
+                                  <button type="button" className={brainTheme.secondaryButton}>Swap Variant</button>
+                                  <button type="button" className={brainTheme.secondaryButton}>Approve</button>
+                                  <button type="button" className={brainTheme.secondaryButton}>Request Revision</button>
+                                  <button type="button" className={brainTheme.secondaryButton}>Lock Section</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-200">Copy Layer Panel: Managed by Copy Chief with versioned CTA and objection-handling variants.</div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-200">Build Readiness Panel: {currentSession?.status === "completed" ? "Ready" : "Needs review"}</div>
+                      </div>
+
+                      <aside className="space-y-3">
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Agent Collaboration Panel</div>
+                          <div className="mt-2 space-y-2 text-xs text-slate-300">
+                            <div>Strategy Director: Direction aligned</div>
+                            <div>Content Architect: Section stack in review</div>
+                            <div>Copy Chief: CTA variants pending approval</div>
+                          </div>
+                        </div>
+                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Version History Card</div>
+                          <div className="mt-2 space-y-1 text-xs text-slate-300">
+                            <div>v3 · Awaiting approval · {formatDate(currentSession?.createdAt)}</div>
+                            <div>v2 · Recommended · {formatDate(currentSession?.createdAt)}</div>
+                          </div>
+                        </div>
+                      </aside>
+                    </div>
                   ) : (
-                    <p className="text-xs text-slate-400">Preview will populate as build artifacts become available.</p>
+                    <div className="mt-2 text-sm text-slate-300">Open a page from Pages Index to start Page Studio collaboration.</div>
                   )}
                 </div>
-              </aside>
-            </div>
+              </section>
+            ) : null}
 
-            <div className={`${brainTheme.glassCard} p-4`}>
-              <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">
-                Refine
-              </label>
-              <div className="mt-2 flex gap-2">
-                <input
-                  id="siteforge-refine"
-                  type="text"
-                  value={refinePrompt}
-                  onChange={(event) => setRefinePrompt(event.target.value)}
-                  placeholder="Make changes or refine your site…"
-                  className="w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-400 focus:border-cyan-300/50 focus:ring-2 focus:ring-cyan-300/35"
-                />
-                <button
-                  type="button"
-                  onClick={submitRefinement}
-                  className={brainTheme.secondaryButton}
-                  disabled={busy || !refinePrompt.trim()}
-                >
-                  Apply
-                </button>
+            {activeNav === "global_assets" ? (
+              <section className="space-y-4">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Global Assets Library</h2>
+                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
+                    {([
+                      ["headers", "Headers"],
+                      ["footers", "Footers"],
+                      ["symbols", "Symbols / Reusable Blocks"],
+                      ["sections", "Sections"],
+                      ["templates", "Templates / Shell Templates"],
+                      ["layouts", "Layouts / Layout Systems"],
+                      ["cta_blocks", "CTA Blocks"],
+                      ["faqs", "FAQs"],
+                      ["testimonials", "Testimonials"],
+                    ] as const).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setAssetsTab(key)}
+                        className={`rounded-full border px-3 py-1 ${assetsTab === key ? "border-cyan-300/60 bg-cyan-500/15 text-cyan-100" : "border-white/20 bg-white/5 text-slate-300"}`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {(thriveIntel?.symbolInventory ?? []).slice(0, 9).map((asset) => (
+                      <div key={asset.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                        <div className="text-sm font-medium text-slate-100">{asset.title}</div>
+                        <div className="mt-1">Type: {assetsTab}</div>
+                        <div className="mt-1">Category: {asset.taxonomy.name ?? "unknown"}</div>
+                        <div className="mt-1">Usage count: {Math.max(1, Math.round((asset.keywords?.length ?? 1) * 1.4))}</div>
+                        <div className="mt-1">Source: Thrive inventory</div>
+                        <div className="mt-1">Status: {asset.reusable ? "active" : "review"}</div>
+                        <div className="mt-1">Compatible page types: homepage, content</div>
+                        <div className="mt-1">Fingerprint / match confidence: {asset.contentHash ?? "n/a"} / {asset.reusable ? "0.88" : "0.51"}</div>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <button type="button" className={brainTheme.secondaryButton}>Preview</button>
+                          <button type="button" className={brainTheme.secondaryButton}>Reuse</button>
+                          <button type="button" className={brainTheme.secondaryButton}>Recommend for page</button>
+                          <button type="button" className={brainTheme.secondaryButton}>Mark preferred</button>
+                          <button type="button" className={brainTheme.secondaryButton}>Mark deprecated</button>
+                        </div>
+                      </div>
+                    ))}
+                    {!thriveIntel?.symbolInventory?.length ? (
+                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
+                        No asset inventory yet. Open Thrive Intelligence and refresh inventory.
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "thrive_intelligence" ? (
+              <section className="space-y-4">
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">Environment Snapshot Card</h2>
+                    <div className="mt-2 space-y-1 text-xs text-slate-300">
+                      <div>Thrive detected: {savedConnection?.thriveDetected ? "yes" : "no"}</div>
+                      <div>Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
+                      <div>Homepage mapping: {snapshot?.currentHomepageId ?? "unknown"} / {snapshot?.currentHomepageTitle ?? "unknown"}</div>
+                      <div>page_for_posts: {thriveIntel?.safeHints.frontPageUsesWpSettings ? "configured" : "unknown"}</div>
+                      <div>Connection state: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
+                      <div>Last inventory refresh: {formatDate(thriveIntel?.collectedAt)}</div>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h2 className="text-sm font-semibold text-slate-100">Inventory Summary Card</h2>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
+                      <div>Template count: {thriveIntel?.primitiveCounts.thriveTemplate ?? 0}</div>
+                      <div>Layout count: {thriveIntel?.primitiveCounts.thriveLayout ?? 0}</div>
+                      <div>Section count: {thriveIntel?.primitiveCounts.thriveSection ?? 0}</div>
+                      <div>Symbol count: {thriveIntel?.symbolSummary.total ?? 0}</div>
+                      <div>Header count: {thriveIntel?.symbolSummary.headers ?? 0}</div>
+                      <div>Footer count: {thriveIntel?.symbolSummary.footers ?? 0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Symbol Intelligence Panel</h2>
+                  <div className="mt-3 overflow-auto">
+                    <table className="min-w-full text-left text-xs text-slate-300">
+                      <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                        <tr>
+                          <th className="px-2 py-2">ID</th>
+                          <th className="px-2 py-2">Title</th>
+                          <th className="px-2 py-2">Category</th>
+                          <th className="px-2 py-2">Builder payload</th>
+                          <th className="px-2 py-2">CSS</th>
+                          <th className="px-2 py-2">Fingerprint hash</th>
+                          <th className="px-2 py-2">Recommended use cases</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(thriveIntel?.symbolInventory ?? []).map((symbol) => (
+                          <tr key={symbol.id} className="border-t border-white/10">
+                            <td className="px-2 py-2">{symbol.id}</td>
+                            <td className="px-2 py-2">{symbol.title}</td>
+                            <td className="px-2 py-2">{symbol.taxonomy.name ?? "unknown"}</td>
+                            <td className="px-2 py-2">{symbol.hasBuilderContent ? "present" : "none"}</td>
+                            <td className="px-2 py-2">{symbol.hasCustomCss ? "present" : "none"}</td>
+                            <td className="px-2 py-2">{symbol.contentHash ?? "n/a"}</td>
+                            <td className="px-2 py-2">{symbol.keywords?.slice(0, 3).join(", ") || "general section use"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Template Intelligence Panel</h3>
+                    <div className="mt-2 space-y-1 text-xs text-slate-300">
+                      <div>Homepage candidate: {thriveNativeComposition?.shellLayoutCandidate ?? "thrive-homepage-canonical"}</div>
+                      <div>Page candidate: thrive-standard-content</div>
+                      <div>Post/archive candidates: staged for future mapping</div>
+                      <div>Mapped use cases: homepage shell, content shell</div>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Risk / Safety Panel</h3>
+                    <div className="mt-2 space-y-1 text-xs text-slate-300">
+                      <div>Blocked endpoints: none introduced in this lane</div>
+                      <div>Read-only mode: enabled for intelligence-only workflows</div>
+                      <div>Unresolved mappings: {thriveSectionResolutions.filter((entry) => !entry.designIntentSatisfied).length}</div>
+                      <div>Staging required flags: {thriveNativeGuard?.eligible ? "no" : "yes"}</div>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Refresh / Manifest Panel</h3>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => void loadProjects()}>Refresh inventory</button>
+                      <button type="button" className={brainTheme.secondaryButton}>Compare previous snapshot</button>
+                      <button type="button" className={brainTheme.secondaryButton}>Export manifest</button>
+                      <button type="button" className={brainTheme.secondaryButton}>View discovery log</button>
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "experiments" ? (
+              <section className="grid gap-4 xl:grid-cols-3">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold text-slate-100">Active Experiments</h3>
+                  <div className="mt-2 space-y-2 text-xs text-slate-300">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Variant A: CTA button hierarchy · expected gain 8% · confidence Medium</div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Variant B: Trust-strip placement · expected gain 5% · confidence Medium</div>
+                  </div>
+                </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold text-slate-100">Opportunities Queue</h3>
+                  <div className="mt-2 space-y-2 text-xs text-slate-300">
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">FAQ compression test · affected pages: Home</div>
+                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Hero proof-point density test · affected pages: Home, About</div>
+                  </div>
+                </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold text-slate-100">Evidence Panel</h3>
+                  <div className="mt-2 text-xs text-slate-300">Evidence is seed-backed in this release lane and ready for analytics wiring.</div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "publish" ? (
+              <section className="space-y-4">
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Readiness Summary</h3>
+                    <div className="mt-2 text-sm text-slate-300">{currentSession?.status === "completed" ? "Build package complete" : "Awaiting build completion"}</div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4 xl:col-span-2`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Publish Checklist</h3>
+                    <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
+                      <div>homepage assigned: {snapshot?.currentHomepageId ? "yes" : "no"}</div>
+                      <div>core CTA working: {currentSession?.status === "completed" ? "yes" : "no"}</div>
+                      <div>lead magnet connected: no</div>
+                      <div>thank-you flow complete: no</div>
+                      <div>header/footer approved: {thriveIntel?.symbolSummary.headers ? "yes" : "no"}</div>
+                      <div>mobile review complete: pending</div>
+                      <div>legal pages present: pending</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Publish Actions</h3>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <button type="button" className={brainTheme.secondaryButton}>Approve Direction</button>
+                      <button type="button" className={brainTheme.secondaryButton}>Approve Structure</button>
+                      <button type="button" className={brainTheme.secondaryButton}>Approve Content</button>
+                      <button type="button" className={brainTheme.glowButton}>Promote to Publish</button>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Audit Log</h3>
+                    <div className="mt-2 space-y-1 text-xs text-slate-300">
+                      {activity.slice(0, 6).map((entry, idx) => (
+                        <div key={`${entry.at}-${idx}`}>{formatDate(entry.at)} · {entry.stage} · {entry.message}</div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+
+            {activeNav === "settings" ? (
+              <section className="space-y-4">
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h2 className="text-sm font-semibold text-slate-100">Project Settings</h2>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Project</label>
+                      <select
+                        value={selectedProjectId}
+                        onChange={(event) => {
+                          activeProjectIntentRef.current = event.target.value || null;
+                          void openProject(event.target.value, "user");
+                        }}
+                        disabled={!projects.length || busy}
+                        className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                      >
+                        {selectedProjectId && !selectedProjectInOptions ? (
+                          <option value={selectedProjectId}>Loading selected project...</option>
+                        ) : null}
+                        {!projects.length ? <option value="">No project selected</option> : null}
+                        {projects.map((project) => (
+                          <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">New Project Name</label>
+                      <input value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} placeholder="e.g. iPetzo" className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                      <button type="button" className={`${brainTheme.secondaryButton} mt-2`} onClick={createProject} disabled={busy || !normalizeNewProjectName(newProjectName)}>
+                        {createStatus === "creating" ? "Creating..." : "Create Project"}
+                      </button>
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Rename Current Project</label>
+                      <input id="siteforge-project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">WordPress URL</label>
+                      <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com" className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                    </div>
+                  </div>
+                  {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
+                  {!activeProject ? (
+                    <div className="mt-2 text-xs text-slate-400">Create your first project to get started.</div>
+                  ) : null}
+                </div>
+
+                {activeProject ? (
+                  <>
+                    <div className={`${brainTheme.glassCard} p-4`}>
+                      <h3 className="text-sm font-semibold text-slate-100">Website Strategy Brief</h3>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div>
+                          <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
+                          <input id="siteforge-brief-business-name" value={briefForm.businessName} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-business-type" className="text-xs text-slate-300">Business type / category</label>
+                          <input id="siteforge-brief-business-type" value={briefForm.businessType} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label htmlFor="siteforge-brief-business-description" className="text-xs text-slate-300">What does the business do?</label>
+                          <textarea id="siteforge-brief-business-description" value={briefForm.businessDescription} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-target-audience" className="text-xs text-slate-300">Who is the target audience?</label>
+                          <input id="siteforge-brief-target-audience" value={briefForm.targetAudience} onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-goal" className="text-xs text-slate-300">Main goal of website</label>
+                          <select id="siteforge-brief-goal" value={briefForm.websiteGoal} onChange={(event) => setBriefForm((prev) => ({ ...prev, websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                            {websiteGoalOptions.map((goal) => <option key={goal} value={goal}>{goal}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-tone" className="text-xs text-slate-300">Brand tone</label>
+                          <select id="siteforge-brief-tone" value={briefForm.brandTone} onChange={(event) => setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                            {brandToneOptions.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-main-offer" className="text-xs text-slate-300">Main offer / service / product</label>
+                          <input id="siteforge-brief-main-offer" value={briefForm.mainOffer} onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-market-location" className="text-xs text-slate-300">Location / market (optional)</label>
+                          <input id="siteforge-brief-market-location" value={briefForm.marketLocation} onChange={(event) => setBriefForm((prev) => ({ ...prev, marketLocation: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-brief-competitors" className="text-xs text-slate-300">Competitors / inspiration (optional)</label>
+                          <input id="siteforge-brief-competitors" value={briefForm.competitors} onChange={(event) => setBriefForm((prev) => ({ ...prev, competitors: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div className="md:col-span-2">
+                          <label htmlFor="siteforge-brief-differentiators" className="text-xs text-slate-300">Notes / differentiators (optional)</label>
+                          <textarea id="siteforge-brief-differentiators" value={briefForm.differentiators} onChange={(event) => setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className={brainTheme.secondaryButton} onClick={saveWebsiteBrief} disabled={busy}>Save Website Brief</button>
+                        <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</span>
+                      </div>
+                    </div>
+
+                    <div className={`${brainTheme.glassCard} p-4`}>
+                      <h3 className="text-sm font-semibold text-slate-100">AI & Research API Configuration</h3>
+                      <p className="mt-1 text-xs text-slate-300">Save API credentials server-side for this project. Plaintext keys are not returned to the browser after save.</p>
+                      <div className="mt-3 grid gap-3 md:grid-cols-3">
+                        <div>
+                          <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">Model</label>
+                          <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-ai-key" className="text-xs text-slate-300">OpenAI API key</label>
+                          <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={activeProject.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-serpapi-key" className="text-xs text-slate-300">SerpApi API key</label>
+                          <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} placeholder={activeProject.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                        </div>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
+                        <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("update")} disabled={busy}>Update Model / Keys</button>
+                        <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || (!activeProject.hasSavedAiSecret && !activeProject.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-300">Status: OpenAI={activeProject.hasSavedAiSecret ? "saved" : "not saved"} | SerpApi={activeProject.hasSavedSerpApiSecret ? "saved" : "not saved"}{aiStatusMessage ? ` · ${aiStatusMessage}` : ""}</div>
+                    </div>
+
+                    <div className={`${brainTheme.glassCard} p-4`}>
+                      <h3 className="text-sm font-semibold text-slate-100">Connection + Operations</h3>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                        <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection label" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                        <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="WordPress username" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                        <input type="password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"} className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Save + Validate</button>
+                        <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy || !selectedProjectId}>Revalidate</button>
+                        <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
+                          <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
+                          Thrive Installed
+                        </label>
+                        <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>Ready for Build</button>
+                      </div>
+                      <div className="mt-2 text-xs text-slate-300">Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} | Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}</div>
+                    </div>
+                  </>
+                ) : (
+                  <div className={`${brainTheme.glassCard} p-6`}>
+                    <div className="text-sm font-medium text-slate-100">No Active Project</div>
+                    <p className="mt-2 text-sm text-slate-300">Create a project at the top of the page to unlock rename and generation controls.</p>
+                    <p className="mt-2 text-xs text-slate-400">Rename the active project after creation.</p>
+                  </div>
+                )}
+              </section>
+            ) : null}
+
+            <section className={`${brainTheme.glassCard} p-4`}>
+              <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Run History</div>
+              <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                {sessions.map((session) => (
+                  <button key={session.id} type="button" onClick={() => setCurrentSessionId(session.id)} className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200">
+                    {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status} · {session.runState.currentStage}
+                  </button>
+                ))}
+                {!sessions.length ? <div className="text-xs text-slate-400">No run history yet.</div> : null}
               </div>
-            </div>
-          </section>
-        ) : null}
+
+              {currentSession ? (
+                <div className="mt-4 space-y-3">
+                  <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
+                  <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                    Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
+                  </div>
+                  <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Refinement Request</label>
+                  <div className="flex flex-wrap gap-2">
+                    <input id="siteforge-refine" value={refinePrompt} onChange={(event) => setRefinePrompt(event.target.value)} placeholder="Request revision" className="min-w-[260px] flex-1 rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                    <button type="button" className={brainTheme.secondaryButton} onClick={submitRefinement} disabled={busy || !refinePrompt.trim()}>Request Revision</button>
+                  </div>
+                </div>
+              ) : null}
+            </section>
+          </div>
+        </section>
       </main>
     </div>
   );
