@@ -1001,16 +1001,16 @@ export default function SiteForgeAppPage() {
         : "Persistent Postgres storage is healthy.";
 
   const navItems: Array<{ key: AgencyNavKey; label: string }> = [
-    { key: "mission_control", label: "Mission Control" },
-    { key: "strategy", label: "Strategy" },
+    { key: "mission_control", label: "Overview" },
+    { key: "strategy", label: "Plan" },
     { key: "brand", label: "Brand" },
     { key: "funnels", label: "Funnels" },
     { key: "pages", label: "Pages" },
-    { key: "global_assets", label: "Global Assets" },
-    { key: "thrive_intelligence", label: "Thrive Intelligence" },
-    { key: "experiments", label: "Experiments" },
-    { key: "publish", label: "Publish" },
-    { key: "settings", label: "Settings" },
+    { key: "global_assets", label: "Reusable Assets" },
+    { key: "thrive_intelligence", label: "Thrive Setup" },
+    { key: "experiments", label: "Optimization" },
+    { key: "publish", label: "Launch" },
+    { key: "settings", label: "Setup" },
   ];
 
   const agencyTeam: AgentRosterEntry[] = [
@@ -1242,6 +1242,115 @@ export default function SiteForgeAppPage() {
   const selectedPageRow = pageRows.find((page) => page.slug === pageStudioSlug) ?? pageRows[0] ?? null;
   const selectedBuildPage =
     currentSession?.buildSpec?.pages.find((page) => page.slug === (selectedPageRow?.slug ?? "")) ?? null;
+  const symbolInventory = thriveIntel?.symbolInventory ?? [];
+  const templateCount = thriveIntel?.primitiveCounts.thriveTemplate ?? 0;
+  const layoutCount = thriveIntel?.primitiveCounts.thriveLayout ?? 0;
+  const sectionCount = thriveIntel?.primitiveCounts.thriveSection ?? 0;
+  const symbolCount = thriveIntel?.symbolSummary.total ?? 0;
+  const hasMeaningfulAssetData = symbolCount + templateCount + layoutCount + sectionCount > 0;
+  const projectSelected = Boolean(selectedProjectId && activeProject);
+  const briefCompleted = briefIsValid();
+  const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
+  const connectionValidated = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
+  const assetScanCompleted = hasMeaningfulAssetData;
+  const connectionNeedsAttention = Boolean(
+    savedConnection && savedConnection.lastValidationStatus && savedConnection.lastValidationStatus !== "valid"
+  );
+  const assetScanNeedsAttention = Boolean(connectionValidated && !hasMeaningfulAssetData);
+
+  const setupSteps: Array<{
+    id: string;
+    label: string;
+    state: "complete" | "incomplete" | "attention";
+    actionLabel: string;
+    action: () => void;
+  }> = [
+    {
+      id: "project",
+      label: "Project selected",
+      state: projectSelected ? "complete" : "incomplete",
+      actionLabel: "Open Setup",
+      action: () => setActiveNav("settings"),
+    },
+    {
+      id: "brief",
+      label: "Brief completed",
+      state: briefCompleted ? "complete" : "incomplete",
+      actionLabel: "Complete Brief",
+      action: () => setActiveNav("settings"),
+    },
+    {
+      id: "ai",
+      label: "AI configured",
+      state: aiConfigured ? "complete" : "incomplete",
+      actionLabel: "Configure API Keys",
+      action: () => setActiveNav("settings"),
+    },
+    {
+      id: "connection",
+      label: "Connection validated",
+      state: connectionValidated ? "complete" : connectionNeedsAttention ? "attention" : "incomplete",
+      actionLabel: "Validate Connection",
+      action: () => setActiveNav("settings"),
+    },
+    {
+      id: "assets",
+      label: "Asset scan completed",
+      state: assetScanCompleted ? "complete" : assetScanNeedsAttention ? "attention" : "incomplete",
+      actionLabel: connectionValidated ? "Scan Thrive Assets" : "Validate Connection",
+      action: () => {
+        if (connectionValidated) {
+          void loadProjects();
+          return;
+        }
+        setActiveNav("settings");
+      },
+    },
+  ];
+
+  const primaryThriveAction: { label: string; action: () => void } = !connectionValidated
+    ? { label: "Validate Connection", action: () => setActiveNav("settings") }
+    : !hasMeaningfulAssetData
+      ? { label: "Scan Thrive Assets", action: () => void loadProjects() }
+      : { label: "View Reusable Assets", action: () => setActiveNav("global_assets") };
+
+  const friendlyWarnings: string[] = [];
+  if (connectionValidated && !savedConnection?.thriveDetected) {
+    friendlyWarnings.push("Your site is connected, but Thrive could not be detected yet.");
+  }
+  if (connectionValidated && !hasMeaningfulAssetData) {
+    friendlyWarnings.push("We connected successfully, but no reusable Thrive assets were found yet.");
+  }
+  if (connectionValidated && !thriveIntel?.activeSkin?.name) {
+    friendlyWarnings.push("Your site is connected, but the active skin could not be identified.");
+  }
+  if (thriveExecutionMode === "wp_safe_mode") {
+    friendlyWarnings.push("SiteForge is currently in safe mode, so advanced Thrive-native composition is staged only.");
+  }
+  if (!thriveNativeGuard?.eligible) {
+    friendlyWarnings.push("Native composition remains guarded until eligibility checks pass.");
+  }
+
+  const ctaBlockCount = symbolInventory.filter((symbol) =>
+    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("cta") || keyword.toLowerCase().includes("offer"))
+  ).length;
+  const faqBlockCount = symbolInventory.filter((symbol) =>
+    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("faq") || keyword.toLowerCase().includes("question"))
+  ).length;
+  const testimonialCount = symbolInventory.filter((symbol) =>
+    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("testimonial") || keyword.toLowerCase().includes("review"))
+  ).length;
+
+  const assetPreviewGroups = [
+    { name: "Headers", count: thriveIntel?.symbolSummary.headers ?? 0, type: "Header" },
+    { name: "Footers", count: thriveIntel?.symbolSummary.footers ?? 0, type: "Footer" },
+    { name: "Reusable Blocks", count: symbolCount, type: "Reusable Block" },
+    { name: "Templates", count: templateCount, type: "Template" },
+    { name: "Layout Systems", count: layoutCount, type: "Layout System" },
+    { name: "CTA Blocks", count: ctaBlockCount, type: "CTA Block" },
+    { name: "FAQs", count: faqBlockCount, type: "FAQ" },
+    { name: "Testimonials", count: testimonialCount, type: "Testimonial" },
+  ];
 
   const statusClass = (status: AgencyStatus | string) => {
     if (status === "Blocked" || status === "Needs revision") return "border-rose-300/50 bg-rose-500/10 text-rose-100";
@@ -1274,19 +1383,19 @@ export default function SiteForgeAppPage() {
               <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge Agency OS</div>
               <h1 className="mt-2 text-3xl font-semibold text-white">Your AI Web Agency for Thrive Themes</h1>
               <p className="mt-2 max-w-4xl text-sm text-slate-300">
-                Mission Control for strategist, brand director, funnel architect, copy chief, Thrive asset librarian,
+                Overview for strategist, brand director, funnel architect, copy chief, Thrive asset librarian,
                 builder operations, CRO, and publish QA collaboration.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
-                Edit Brief
+                Complete Brief
               </button>
               <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("strategy")}>
-                View Blueprint
+                View Plan
               </button>
               <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                Ready for Build
+                Build Site Draft
               </button>
             </div>
           </div>
@@ -1296,7 +1405,7 @@ export default function SiteForgeAppPage() {
           <div className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
         ) : null}
 
-        {storageSummary ? (
+        {storageSummary && activeNav !== "thrive_intelligence" ? (
           <section
             className={`mt-4 rounded-xl px-4 py-3 text-sm ${
               storageSummary.persistenceHealth === "healthy"
@@ -1365,8 +1474,8 @@ export default function SiteForgeAppPage() {
                       <div className="md:col-span-2">Current stage: {currentSession?.runState.currentStage ?? "planning"}</div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>Edit Brief</button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("strategy")}>View Blueprint</button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>Complete Brief</button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("strategy")}>View Plan</button>
                     </div>
                   </div>
 
@@ -1491,7 +1600,7 @@ export default function SiteForgeAppPage() {
                       ))
                     ) : (
                       <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
-                        No activity yet. Start with Strategy approvals or run Ready for Build.
+                        No activity yet. Start with Plan approvals or run Build Site Draft.
                       </div>
                     )}
                   </div>
@@ -1513,7 +1622,7 @@ export default function SiteForgeAppPage() {
                   </div>
                   <div className={`${brainTheme.glassCard} p-4`}>
                     <h2 className="text-sm font-semibold text-slate-100">ICP / Audience Panel</h2>
-                    <p className="mt-2 text-sm text-slate-300">{briefForm.targetAudience || "Define ICP and buying triggers in Settings > Website Strategy Brief."}</p>
+                    <p className="mt-2 text-sm text-slate-300">{briefForm.targetAudience || "Define ICP and buying triggers in Setup > Website Strategy Brief."}</p>
                   </div>
                   <div className={`${brainTheme.glassCard} p-4`}>
                     <h2 className="text-sm font-semibold text-slate-100">Positioning Panel</h2>
@@ -1522,7 +1631,7 @@ export default function SiteForgeAppPage() {
                   </div>
                   <div className={`${brainTheme.glassCard} p-4`}>
                     <h2 className="text-sm font-semibold text-slate-100">Sitemap Recommendation Panel</h2>
-                    <div className="mt-2 text-sm text-slate-300">{currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Run Ready for Build to generate sitemap recommendation."}</div>
+                    <div className="mt-2 text-sm text-slate-300">{currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Run Build Site Draft to generate sitemap recommendation."}</div>
                   </div>
                 </div>
                 <aside className="space-y-4">
@@ -1749,7 +1858,7 @@ export default function SiteForgeAppPage() {
             {activeNav === "global_assets" ? (
               <section className="space-y-4">
                 <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Global Assets Library</h2>
+                  <h2 className="text-sm font-semibold text-slate-100">Reusable Assets Library</h2>
                   <div className="mt-2 flex flex-wrap gap-2 text-xs">
                     {([
                       ["headers", "Headers"],
@@ -1794,7 +1903,7 @@ export default function SiteForgeAppPage() {
                     ))}
                     {!thriveIntel?.symbolInventory?.length ? (
                       <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
-                        No asset inventory yet. Open Thrive Intelligence and refresh inventory.
+                        No asset inventory yet. Open Thrive Setup and scan assets.
                       </div>
                     ) : null}
                   </div>
@@ -1804,92 +1913,243 @@ export default function SiteForgeAppPage() {
 
             {activeNav === "thrive_intelligence" ? (
               <section className="space-y-4">
-                <div className="grid gap-4 xl:grid-cols-2">
+                <div className={`${brainTheme.glassCard} p-5`}>
+                  <h2 className="text-lg font-semibold text-slate-100">Thrive Setup &amp; Assets</h2>
+                  <p className="mt-2 text-sm text-slate-300">
+                    Connect your Thrive site, verify access, and scan reusable assets for SiteForge.
+                  </p>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
                   <div className={`${brainTheme.glassCard} p-4`}>
-                    <h2 className="text-sm font-semibold text-slate-100">Environment Snapshot Card</h2>
-                    <div className="mt-2 space-y-1 text-xs text-slate-300">
-                      <div>Thrive detected: {savedConnection?.thriveDetected ? "yes" : "no"}</div>
-                      <div>Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
-                      <div>Homepage mapping: {snapshot?.currentHomepageId ?? "unknown"} / {snapshot?.currentHomepageTitle ?? "unknown"}</div>
-                      <div>page_for_posts: {thriveIntel?.safeHints.frontPageUsesWpSettings ? "configured" : "unknown"}</div>
-                      <div>Connection state: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
-                      <div>Last inventory refresh: {formatDate(thriveIntel?.collectedAt)}</div>
+                    <h3 className="text-sm font-semibold text-slate-100">Setup Progress</h3>
+                    <div className="mt-3 space-y-2">
+                      {setupSteps.map((step) => (
+                        <div key={step.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2">
+                          <div className="flex items-center gap-2 text-sm text-slate-200">
+                            <span
+                              className={`h-2.5 w-2.5 rounded-full ${
+                                step.state === "complete"
+                                  ? "bg-emerald-400"
+                                  : step.state === "attention"
+                                    ? "bg-amber-300"
+                                    : "bg-slate-500"
+                              }`}
+                            />
+                            <span>{step.label}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs uppercase tracking-[0.12em] text-slate-400">
+                              {step.state === "complete" ? "complete" : step.state === "attention" ? "attention needed" : "incomplete"}
+                            </span>
+                            {step.state !== "complete" ? (
+                              <button type="button" className={brainTheme.secondaryButton} onClick={step.action}>
+                                {step.actionLabel}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                   <div className={`${brainTheme.glassCard} p-4`}>
-                    <h2 className="text-sm font-semibold text-slate-100">Inventory Summary Card</h2>
-                    <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                      <div>Template count: {thriveIntel?.primitiveCounts.thriveTemplate ?? 0}</div>
-                      <div>Layout count: {thriveIntel?.primitiveCounts.thriveLayout ?? 0}</div>
-                      <div>Section count: {thriveIntel?.primitiveCounts.thriveSection ?? 0}</div>
-                      <div>Symbol count: {thriveIntel?.symbolSummary.total ?? 0}</div>
-                      <div>Header count: {thriveIntel?.symbolSummary.headers ?? 0}</div>
-                      <div>Footer count: {thriveIntel?.symbolSummary.footers ?? 0}</div>
+                    <h3 className="text-sm font-semibold text-slate-100">Primary Action</h3>
+                    <p className="mt-2 text-xs text-slate-300">
+                      {connectionValidated
+                        ? hasMeaningfulAssetData
+                          ? "Your Thrive assets are ready. Continue into reusable assets."
+                          : "Connection is valid. Run an asset scan to discover reusable blocks and templates."
+                        : "Validate your WordPress connection before asset discovery."}
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button type="button" className={brainTheme.glowButton} onClick={primaryThriveAction.action}>
+                        {primaryThriveAction.label}
+                      </button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
+                        Back to Setup
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 xl:grid-cols-2">
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Connection Status</h3>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
+                      <div>Thrive detected: {savedConnection?.thriveDetected ? "Yes" : "No"}</div>
+                      <div>Connection validated: {connectionValidated ? "Yes" : "No"}</div>
+                      <div>Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
+                      <div>Last scan: {formatDate(thriveIntel?.collectedAt)}</div>
+                    </div>
+                  </div>
+                  <div className={`${brainTheme.glassCard} p-4`}>
+                    <h3 className="text-sm font-semibold text-slate-100">Assets Found</h3>
+                    <div className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
+                      <div>Homepage found: {snapshot?.currentHomepageId ? "Yes" : "No"}</div>
+                      <div>Reusable blocks found: {symbolCount}</div>
+                      <div>Templates found: {templateCount}</div>
+                      <div>Warnings found: {friendlyWarnings.length}</div>
                     </div>
                   </div>
                 </div>
 
                 <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Symbol Intelligence Panel</h2>
-                  <div className="mt-3 overflow-auto">
-                    <table className="min-w-full text-left text-xs text-slate-300">
-                      <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                        <tr>
-                          <th className="px-2 py-2">ID</th>
-                          <th className="px-2 py-2">Title</th>
-                          <th className="px-2 py-2">Category</th>
-                          <th className="px-2 py-2">Builder payload</th>
-                          <th className="px-2 py-2">CSS</th>
-                          <th className="px-2 py-2">Fingerprint hash</th>
-                          <th className="px-2 py-2">Recommended use cases</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {(thriveIntel?.symbolInventory ?? []).map((symbol) => (
-                          <tr key={symbol.id} className="border-t border-white/10">
-                            <td className="px-2 py-2">{symbol.id}</td>
-                            <td className="px-2 py-2">{symbol.title}</td>
-                            <td className="px-2 py-2">{symbol.taxonomy.name ?? "unknown"}</td>
-                            <td className="px-2 py-2">{symbol.hasBuilderContent ? "present" : "none"}</td>
-                            <td className="px-2 py-2">{symbol.hasCustomCss ? "present" : "none"}</td>
-                            <td className="px-2 py-2">{symbol.contentHash ?? "n/a"}</td>
-                            <td className="px-2 py-2">{symbol.keywords?.slice(0, 3).join(", ") || "general section use"}</td>
-                          </tr>
+                  <h3 className="text-sm font-semibold text-slate-100">Reusable Assets Preview</h3>
+                  {hasMeaningfulAssetData ? (
+                    <>
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                        {assetPreviewGroups.map((group) => (
+                          <div key={group.name} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                            <div className="text-sm font-medium text-slate-100">{group.name}</div>
+                            <div className="mt-1">Count: {group.count}</div>
+                            <div className="mt-1">Type: {group.type}</div>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
+                      </div>
+                      <div className="mt-4 overflow-auto">
+                        <table className="min-w-full text-left text-xs text-slate-300">
+                          <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                            <tr>
+                              <th className="px-2 py-2">Name</th>
+                              <th className="px-2 py-2">Type</th>
+                              <th className="px-2 py-2">Category</th>
+                              <th className="px-2 py-2">Reusable</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {symbolInventory.slice(0, 8).map((asset) => (
+                              <tr key={asset.id} className="border-t border-white/10">
+                                <td className="px-2 py-2">{asset.title}</td>
+                                <td className="px-2 py-2">Reusable Block</td>
+                                <td className="px-2 py-2">{asset.taxonomy.name ?? "General"}</td>
+                                <td className="px-2 py-2">{asset.reusable ? "Yes" : "Review"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="mt-3 rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-4 text-sm text-slate-300">
+                      <div>No reusable Thrive assets found yet.</div>
+                      <button type="button" className={`${brainTheme.secondaryButton} mt-3`} onClick={() => void loadProjects()}>
+                        Scan Thrive Assets
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <h3 className="text-sm font-semibold text-slate-100">Warnings</h3>
+                  <div className="mt-3 space-y-2 text-xs text-slate-300">
+                    {friendlyWarnings.length ? (
+                      friendlyWarnings.map((warning) => (
+                        <div key={warning} className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-amber-100">
+                          {warning}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-xl border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-emerald-100">
+                        No warnings. Thrive setup and asset discovery look healthy.
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className="grid gap-4 xl:grid-cols-3">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Template Intelligence Panel</h3>
-                    <div className="mt-2 space-y-1 text-xs text-slate-300">
-                      <div>Homepage candidate: {thriveNativeComposition?.shellLayoutCandidate ?? "thrive-homepage-canonical"}</div>
-                      <div>Page candidate: thrive-standard-content</div>
-                      <div>Post/archive candidates: staged for future mapping</div>
-                      <div>Mapped use cases: homepage shell, content shell</div>
+                <details className={`${brainTheme.glassCard} group p-4`}>
+                  <summary className="cursor-pointer list-none text-sm font-semibold text-slate-100">
+                    Technical Details
+                    <span className="ml-2 text-xs font-normal text-slate-400 group-open:hidden">Show advanced diagnostics</span>
+                  </summary>
+                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Connection Details</h4>
+                      <div className="mt-2 space-y-1">
+                        <div>Connection state: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
+                        <div>Homepage mapping: {snapshot?.currentHomepageId ?? "unknown"} / {snapshot?.currentHomepageTitle ?? "unknown"}</div>
+                        <div>Front-page WP setting: {thriveIntel?.safeHints.frontPageUsesWpSettings ? "configured" : "unknown"}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Inventory Counts</h4>
+                      <div className="mt-2 grid gap-1 md:grid-cols-2">
+                        <div>Template count: {templateCount}</div>
+                        <div>Layout count: {layoutCount}</div>
+                        <div>Section count: {sectionCount}</div>
+                        <div>Symbol count: {symbolCount}</div>
+                        <div>Header count: {thriveIntel?.symbolSummary.headers ?? 0}</div>
+                        <div>Footer count: {thriveIntel?.symbolSummary.footers ?? 0}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Reusable Blocks</h4>
+                      <div className="mt-3 overflow-auto">
+                        <table className="min-w-full text-left">
+                          <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
+                            <tr>
+                              <th className="px-2 py-2">ID</th>
+                              <th className="px-2 py-2">Title</th>
+                              <th className="px-2 py-2">Category</th>
+                              <th className="px-2 py-2">Payload</th>
+                              <th className="px-2 py-2">CSS</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {symbolInventory.map((symbol) => (
+                              <tr key={symbol.id} className="border-t border-white/10">
+                                <td className="px-2 py-2">{symbol.id}</td>
+                                <td className="px-2 py-2">{symbol.title}</td>
+                                <td className="px-2 py-2">{symbol.taxonomy.name ?? "unknown"}</td>
+                                <td className="px-2 py-2">{symbol.hasBuilderContent ? "present" : "none"}</td>
+                                <td className="px-2 py-2">{symbol.hasCustomCss ? "present" : "none"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Template Matches</h4>
+                      <div className="mt-2 space-y-1">
+                        <div>Homepage candidate: {thriveNativeComposition?.shellLayoutCandidate ?? "thrive-homepage-canonical"}</div>
+                        <div>Page candidate: thrive-standard-content</div>
+                        <div>Post/archive candidates: staged for future mapping</div>
+                        <div>Mapped use cases: homepage shell, content shell</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Safety &amp; Mode</h4>
+                      <div className="mt-2 space-y-1">
+                        <div>Execution mode: {thriveExecutionMode}</div>
+                        <div>Native guard eligible: {thriveNativeGuard?.eligible ? "yes" : "no"}</div>
+                        <div>Read-only mode: enabled for intelligence-first workflows</div>
+                        <div>Unresolved mappings: {thriveSectionResolutions.filter((entry) => !entry.designIntentSatisfied).length}</div>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                      <h4 className="text-sm font-semibold text-slate-100">Advanced Tools</h4>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        <button type="button" className={brainTheme.secondaryButton} onClick={() => void loadProjects()}>Scan Thrive Assets</button>
+                        <button type="button" className={brainTheme.secondaryButton}>Compare Last Scan</button>
+                        <button type="button" className={brainTheme.secondaryButton}>Export Technical Report</button>
+                        <button type="button" className={brainTheme.secondaryButton}>View Scan Log</button>
+                      </div>
+                    </div>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 xl:col-span-2">
+                      <h4 className="text-sm font-semibold text-slate-100">Storage &amp; Persistence</h4>
+                      {storageSummary ? (
+                        <div className="mt-2 space-y-1">
+                          <div>Storage mode: {storageSummary.storageMode}</div>
+                          <div>Persistence health: {storageSummary.persistenceHealth}</div>
+                          <div>Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}</div>
+                          <div>{storageStatusMessage}</div>
+                        </div>
+                      ) : (
+                        <div className="mt-2">Storage summary unavailable.</div>
+                      )}
                     </div>
                   </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Risk / Safety Panel</h3>
-                    <div className="mt-2 space-y-1 text-xs text-slate-300">
-                      <div>Blocked endpoints: none introduced in this lane</div>
-                      <div>Read-only mode: enabled for intelligence-only workflows</div>
-                      <div>Unresolved mappings: {thriveSectionResolutions.filter((entry) => !entry.designIntentSatisfied).length}</div>
-                      <div>Staging required flags: {thriveNativeGuard?.eligible ? "no" : "yes"}</div>
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Refresh / Manifest Panel</h3>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => void loadProjects()}>Refresh inventory</button>
-                      <button type="button" className={brainTheme.secondaryButton}>Compare previous snapshot</button>
-                      <button type="button" className={brainTheme.secondaryButton}>Export manifest</button>
-                      <button type="button" className={brainTheme.secondaryButton}>View discovery log</button>
-                    </div>
-                  </div>
-                </div>
+                </details>
               </section>
             ) : null}
 
@@ -2104,7 +2364,7 @@ export default function SiteForgeAppPage() {
                           <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
                           Thrive Installed
                         </label>
-                        <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>Ready for Build</button>
+                        <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>Build Site Draft</button>
                       </div>
                       <div className="mt-2 text-xs text-slate-300">Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} | Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}</div>
                     </div>
