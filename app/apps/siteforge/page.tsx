@@ -1349,47 +1349,127 @@ export default function SiteForgeAppPage() {
               action: generateSite,
             };
 
-  type BuilderCanvasMode = "setup" | "thrive_assets" | "plan" | "pages" | "review";
+  const [pagesReviewed, setPagesReviewed] = useState(false);
 
-  const builderCanvasMode: BuilderCanvasMode = !projectSelected || !briefCompleted || !aiConfigured || !connectionValidated
-    ? "setup"
-    : !assetScanCompleted
-      ? "thrive_assets"
-      : !currentSession?.buildSpec
-        ? "plan"
-        : !pageRows.length
-          ? "pages"
-          : "review";
+  useEffect(() => {
+    setPagesReviewed(false);
+  }, [selectedProjectId, currentSession?.id]);
 
-  const builderStepLabel: Record<BuilderCanvasMode, string> = {
-    setup: "Complete project setup",
-    thrive_assets: "Scan Thrive assets",
-    plan: "Review recommended plan",
-    pages: "Review pages",
-    review: "Review readiness",
-  };
+  type BuilderStepId = 1 | 2 | 3 | 4 | 5;
+  type BuilderCanvasMode = "website" | "connect" | "plan" | "pages" | "build";
 
-  const builderTaskList = [
-    "Complete project setup",
-    "Finish website brief",
-    "Save AI configuration",
-    "Validate WordPress / Thrive connection",
-    "Scan Thrive assets",
-    "Review recommended plan",
-    "Review pages",
-    "Build site draft",
+  const currentBuilderStep: BuilderStepId =
+    !projectSelected || !briefCompleted
+      ? 1
+      : !aiConfigured || !connectionValidated
+        ? 2
+        : !currentSession?.buildSpec
+          ? 3
+          : !pagesReviewed
+            ? 4
+            : 5;
+
+  const builderCanvasMode: BuilderCanvasMode =
+    currentBuilderStep === 1
+      ? "website"
+      : currentBuilderStep === 2
+        ? "connect"
+        : currentBuilderStep === 3
+          ? "plan"
+          : currentBuilderStep === 4
+            ? "pages"
+            : "build";
+
+  const builderSteps: Array<{ id: BuilderStepId; label: string; description: string }> = [
+    {
+      id: 1,
+      label: "1. Tell us about your website",
+      description: "Share your business, audience, and what you want your site to do.",
+    },
+    {
+      id: 2,
+      label: "2. Connect your site",
+      description: "Add your WordPress and Thrive details so SiteForge can work with your site.",
+    },
+    {
+      id: 3,
+      label: "3. Review your plan",
+      description: "See the pages and structure SiteForge recommends.",
+    },
+    {
+      id: 4,
+      label: "4. Review your pages",
+      description: "Check the pages, sections, and content before building.",
+    },
+    {
+      id: 5,
+      label: "5. Build your draft",
+      description: "Let SiteForge create your first website draft.",
+    },
   ];
-  const builderTaskCompletion = [
-    projectSelected,
-    briefCompleted,
-    aiConfigured,
-    connectionValidated,
-    assetScanCompleted,
-    Boolean(currentSession?.buildSpec),
-    pageRows.length > 0,
-    currentSession?.status === "completed",
-  ];
-  const firstIncompleteTaskIndex = builderTaskCompletion.findIndex((done) => !done);
+  const currentStepMeta = builderSteps.find((step) => step.id === currentBuilderStep) ?? builderSteps[0];
+
+  const primaryBuilderAction: { label: string; action: () => void; disabled?: boolean } =
+    currentBuilderStep === 1
+      ? {
+          label: projectSelected ? "Save and Continue" : "Continue",
+          action: () => {
+            if (!projectSelected) {
+              setActiveNav("settings");
+              return;
+            }
+            void saveWebsiteBrief();
+          },
+          disabled: busy,
+        }
+      : currentBuilderStep === 2
+        ? {
+            label: "Check Connection",
+            action: () => {
+              void saveAndValidateConnection();
+            },
+            disabled: !selectedProjectId || busy,
+          }
+        : currentBuilderStep === 3
+          ? {
+              label: "Review Plan",
+              action: () => {
+                if (!currentSession?.buildSpec) {
+                  void generateSite();
+                  return;
+                }
+                setActiveNav("strategy");
+              },
+              disabled: !selectedProjectId || busy || !briefIsValid(),
+            }
+          : currentBuilderStep === 4
+            ? {
+                label: "Review Pages",
+                action: () => {
+                  setPagesReviewed(true);
+                  setActiveNav("pages");
+                },
+              }
+            : {
+                label: "Build Draft",
+                action: () => {
+                  void generateSite();
+                },
+                disabled: !selectedProjectId || busy || !briefIsValid(),
+              };
+
+  const secondaryBuilderAction: { label: string; action: () => void } | null =
+    currentBuilderStep > 1
+      ? {
+          label: "Back",
+          action: () => {
+            if (currentBuilderStep === 2) setActiveNav("mission_control");
+            if (currentBuilderStep === 3) setActiveNav("settings");
+            if (currentBuilderStep === 4) setPagesReviewed(false);
+            if (currentBuilderStep === 5) setPagesReviewed(false);
+          },
+        }
+      : null;
 
   const builderFeed = [
     !projectSelected
@@ -1482,14 +1562,8 @@ export default function SiteForgeAppPage() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
-                Complete Setup
-              </button>
-              <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("thrive_intelligence")}>
-                View Thrive Assets
-              </button>
-              <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                Build Site Draft
+              <button type="button" className={brainTheme.glowButton} onClick={() => void generateSite()} disabled={!selectedProjectId || busy || !briefIsValid()}>
+                Build Draft
               </button>
             </div>
           </div>
@@ -1564,8 +1638,25 @@ export default function SiteForgeAppPage() {
               <div className="mt-4 space-y-3">
                 <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
                   <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Current Step</div>
-                  <div className="mt-2 text-sm text-slate-100">{builderStepLabel[builderCanvasMode]}</div>
-                  <div className="mt-1 text-xs text-slate-400">{overviewNextAction.helper}</div>
+                  <div className="mt-2 text-sm text-slate-100">
+                    Step {currentStepMeta.id} — {currentStepMeta.label.replace(/^\d+\.\s/, "")}
+                  </div>
+                  <div className="mt-1 text-xs text-slate-400">{currentStepMeta.description}</div>
+                </div>
+
+                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Progress Steps</div>
+                  <div className="mt-2 space-y-1 text-xs text-slate-300">
+                    {builderSteps.map((step) => {
+                      const state = step.id < currentBuilderStep ? "Done" : step.id === currentBuilderStep ? "Current" : "Next";
+                      return (
+                        <div key={step.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
+                          <span>{step.label}</span>
+                          <span className="text-[11px] text-slate-400">{state}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
@@ -1580,22 +1671,6 @@ export default function SiteForgeAppPage() {
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Task List</div>
-                  <div className="mt-2 space-y-1 text-xs text-slate-300">
-                    {builderTaskList.map((task, index) => {
-                      const isComplete = builderTaskCompletion[index];
-                      const isNext = !isComplete && firstIncompleteTaskIndex === index;
-                      return (
-                        <div key={task} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
-                          <span>{task}</span>
-                          <span className="text-[11px] text-slate-400">{isComplete ? "complete" : isNext ? "next" : "in progress"}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
                   <label htmlFor="builder-prompt" className="text-xs uppercase tracking-[0.12em] text-slate-400">
                     Ask SiteForge
                   </label>
@@ -1603,19 +1678,27 @@ export default function SiteForgeAppPage() {
                     id="builder-prompt"
                     value={builderPrompt}
                     onChange={(event) => setBuilderPrompt(event.target.value)}
-                    placeholder="Describe your business and what you want this website to do"
+                    placeholder="Tell SiteForge what kind of website you want to build"
                     className="mt-2 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
                   />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
-                      Use Current Setup
+                  <div className="mt-2 space-y-2">
+                    <button
+                      type="button"
+                      className={`${brainTheme.glowButton} w-full justify-center`}
+                      onClick={primaryBuilderAction.action}
+                      disabled={primaryBuilderAction.disabled}
+                    >
+                      {primaryBuilderAction.label}
                     </button>
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
-                      Revise Plan
-                    </button>
-                    <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                      Build Site Draft
-                    </button>
+                    {secondaryBuilderAction ? (
+                      <button
+                        type="button"
+                        onClick={secondaryBuilderAction.action}
+                        className="text-xs text-slate-300 underline underline-offset-4 hover:text-slate-100"
+                      >
+                        {secondaryBuilderAction.label}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1639,78 +1722,230 @@ export default function SiteForgeAppPage() {
           <div className="space-y-4">
             {activeNav === "mission_control" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
-                <h2 className="text-lg font-semibold text-slate-100">Workspace</h2>
-                <p className="mt-2 text-sm text-slate-300">
-                  Current step: {builderStepLabel[builderCanvasMode]}.
-                </p>
-                {builderCanvasMode === "setup" ? (
-                  <div className="mt-4 space-y-3">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div className="font-medium text-slate-100">Setup Canvas</div>
-                      <div className="mt-1">Project details, Website Brief, AI Configuration, and WordPress / Thrive Connection are managed in Settings.</div>
-                      <div className="mt-1">Current status: project={projectSelected ? "ready" : "missing"}, brief={briefCompleted ? "ready" : "missing"}, ai={aiConfigured ? "ready" : "missing"}, connection={connectionValidated ? "ready" : "missing"}.</div>
+                {builderCanvasMode === "website" ? (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-slate-100">Step 1 — Tell us about your website</h2>
+                    <p className="text-sm text-slate-300">Tell SiteForge what you do and what you want your website to achieve.</p>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <label htmlFor="siteforge-step1-business-name" className="text-xs text-slate-300">Website name</label>
+                        <input
+                          id="siteforge-step1-business-name"
+                          value={briefForm.businessName}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step1-business-type" className="text-xs text-slate-300">Business type</label>
+                        <input
+                          id="siteforge-step1-business-type"
+                          value={briefForm.businessType}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step1-audience" className="text-xs text-slate-300">Audience</label>
+                        <input
+                          id="siteforge-step1-audience"
+                          value={briefForm.targetAudience}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step1-goal" className="text-xs text-slate-300">Goal</label>
+                        <select
+                          id="siteforge-step1-goal"
+                          value={briefForm.websiteGoal}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"] }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        >
+                          {websiteGoalOptions.map((goal) => (
+                            <option key={goal} value={goal}>{goal}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step1-offer" className="text-xs text-slate-300">Offer</label>
+                        <input
+                          id="siteforge-step1-offer"
+                          value={briefForm.mainOffer}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step1-tone" className="text-xs text-slate-300">Tone</label>
+                        <select
+                          id="siteforge-step1-tone"
+                          value={briefForm.brandTone}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        >
+                          {brandToneOptions.map((tone) => (
+                            <option key={tone} value={tone}>{tone}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="md:col-span-2">
+                        <label htmlFor="siteforge-step1-notes" className="text-xs text-slate-300">Optional notes</label>
+                        <textarea
+                          id="siteforge-step1-notes"
+                          value={briefForm.differentiators}
+                          onChange={(event) => setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))}
+                          className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
                     </div>
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("settings")}>
-                      Open Settings Workspace
-                    </button>
                   </div>
                 ) : null}
-                {builderCanvasMode === "thrive_assets" ? (
-                  <div className="mt-4 space-y-3">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div className="font-medium text-slate-100">Thrive Assets Canvas</div>
-                      <div className="mt-1">Connection: {connectionValidated ? "validated" : "needs validation"} · Thrive detected: {savedConnection?.thriveDetected ? "yes" : "no"}</div>
-                      <div className="mt-1">Reusable assets found: {hasMeaningfulAssetData ? "yes" : "no"}</div>
+                {builderCanvasMode === "connect" ? (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-slate-100">Step 2 — Connect your site</h2>
+                    <p className="text-sm text-slate-300">Add your WordPress and Thrive details so SiteForge can check your site.</p>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                      <div>
+                        <label htmlFor="siteforge-step2-url" className="text-xs text-slate-300">WordPress URL</label>
+                        <input
+                          id="siteforge-step2-url"
+                          value={baseUrl}
+                          onChange={(event) => setBaseUrl(event.target.value)}
+                          placeholder="https://example.com"
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step2-username" className="text-xs text-slate-300">Username</label>
+                        <input
+                          id="siteforge-step2-username"
+                          value={username}
+                          onChange={(event) => setUsername(event.target.value)}
+                          placeholder="WordPress username"
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor="siteforge-step2-password" className="text-xs text-slate-300">App password</label>
+                        <input
+                          id="siteforge-step2-password"
+                          type="password"
+                          value={appPassword}
+                          onChange={(event) => setAppPassword(event.target.value)}
+                          placeholder={savedConnection?.hasSavedSecret ? "Update app password (optional)" : "WordPress app password"}
+                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                        />
+                      </div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.glowButton} onClick={() => void loadProjects()}>
-                        Scan Thrive Assets
-                      </button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("thrive_intelligence")}>
-                        Open Thrive Assets
-                      </button>
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                      <div className="text-sm font-medium text-slate-100">AI Access</div>
+                      <div className="mt-2 grid gap-3 md:grid-cols-3">
+                        <div>
+                          <label htmlFor="siteforge-step2-model" className="text-xs text-slate-300">Model</label>
+                          <select
+                            id="siteforge-step2-model"
+                            value={aiModel}
+                            onChange={(event) => setAiModel(event.target.value)}
+                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                          >
+                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                            <option value="gpt-4.1">gpt-4.1</option>
+                            <option value="gpt-5-mini">gpt-5-mini</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-step2-openai" className="text-xs text-slate-300">OpenAI key</label>
+                          <input
+                            id="siteforge-step2-openai"
+                            type="password"
+                            value={aiApiKey}
+                            onChange={(event) => setAiApiKey(event.target.value)}
+                            placeholder={activeProject?.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."}
+                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="siteforge-step2-serpapi" className="text-xs text-slate-300">SerpApi key</label>
+                          <input
+                            id="siteforge-step2-serpapi"
+                            type="password"
+                            value={serpApiKey}
+                            onChange={(event) => setSerpApiKey(event.target.value)}
+                            placeholder={activeProject?.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."}
+                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-slate-300">
+                      Connection result: {connectionResult?.connected ? "Connected" : savedConnection?.lastValidationStatus ?? "Not checked"} ·
+                      Thrive detected: {connectionResult?.thriveDetected || savedConnection?.thriveDetected ? " Yes" : " No"}
                     </div>
                   </div>
                 ) : null}
                 {builderCanvasMode === "plan" ? (
-                  <div className="mt-4 space-y-3">
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-slate-100">Step 3 — Review your plan</h2>
+                    <p className="text-sm text-slate-300">Here is the website plan SiteForge recommends.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div className="font-medium text-slate-100">Plan Canvas</div>
-                      <div className="mt-1">Business: {briefForm.businessName || "Not set"} · Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
-                      <div className="mt-1">Suggested pages: {currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Generate draft to produce plan pages."}</div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                        Build Site Draft
-                      </button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
-                        Revise Plan
-                      </button>
+                      <div>Business: {briefForm.businessName || "Not set"} · Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
+                      <div className="mt-1">
+                        Pages: {currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Build draft to generate a plan."}
+                      </div>
+                      <div className="mt-1">
+                        Messaging: {briefForm.businessDescription || "Add business details to sharpen messaging."}
+                      </div>
+                      <div className="mt-1">
+                        Reusable items found: {hasMeaningfulAssetData ? "Yes" : "Not yet"}
+                      </div>
                     </div>
                   </div>
                 ) : null}
                 {builderCanvasMode === "pages" ? (
-                  <div className="mt-4 space-y-3">
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-slate-100">Step 4 — Review your pages</h2>
+                    <p className="text-sm text-slate-300">Check your pages before SiteForge builds the draft.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div className="font-medium text-slate-100">Pages Canvas</div>
-                      <div className="mt-1">Pages ready: {pageRows.length}</div>
+                      <div>Pages: {pageRows.length || 0}</div>
                       <div className="mt-1">Selected page: {selectedPageRow?.pageName ?? "none"}</div>
+                      <div className="mt-1">Sections: {selectedBuildPage?.sections.length ?? 0}</div>
+                      <div className="mt-1">Recommended reusable items: {selectedPageRow?.resolutionCount ?? 0}</div>
                     </div>
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("pages")}>
-                      Open Pages Workspace
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={brainTheme.glowButton}
+                        onClick={() => {
+                          setPagesReviewed(true);
+                          setActiveNav("publish");
+                        }}
+                      >
+                        Continue to Build
+                      </button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("pages")}>
+                        Open Pages
+                      </button>
+                    </div>
                   </div>
                 ) : null}
-                {builderCanvasMode === "review" ? (
-                  <div className="mt-4 space-y-3">
+                {builderCanvasMode === "build" ? (
+                  <div className="space-y-4">
+                    <h2 className="text-xl font-semibold text-slate-100">Step 5 — Build your draft</h2>
+                    <p className="text-sm text-slate-300">Build your first website draft when everything looks right.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div className="font-medium text-slate-100">Review Canvas</div>
-                      <div className="mt-1">Build status: {currentSession?.status ?? "not started"}</div>
-                      <div className="mt-1">Ready for launch review: {setupAllComplete ? "yes" : "no"}</div>
+                      <div>Build status: {currentSession?.status ?? "not started"}</div>
+                      <div className="mt-1">Ready now: {setupCoreComplete ? "Yes" : "Not yet"}</div>
+                      <div className="mt-1">Needs attention: {setupCoreComplete ? "No blocking setup items." : "Complete setup and connection first."}</div>
                     </div>
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("publish")}>
-                      Open Review Workspace
-                    </button>
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={brainTheme.glowButton} onClick={() => void generateSite()} disabled={!selectedProjectId || busy || !briefIsValid()}>
+                        Build Draft
+                      </button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setPagesReviewed(false)}>
+                        Fix Missing Items
+                      </button>
+                    </div>
                   </div>
                 ) : null}
               </section>
@@ -2590,31 +2825,33 @@ export default function SiteForgeAppPage() {
               </section>
             ) : null}
 
-            <section className={`${brainTheme.glassCard} p-4`}>
-              <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Run History</div>
-              <div className="mt-2 grid gap-2 lg:grid-cols-2">
-                {sessions.map((session) => (
-                  <button key={session.id} type="button" onClick={() => setCurrentSessionId(session.id)} className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200">
-                    {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status} · {session.runState.currentStage}
-                  </button>
-                ))}
-                {!sessions.length ? <div className="text-xs text-slate-400">No run history yet.</div> : null}
-              </div>
-
-              {currentSession ? (
-                <div className="mt-4 space-y-3">
-                  <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
-                  <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
-                    Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
-                  </div>
-                  <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Refinement Request</label>
-                  <div className="flex flex-wrap gap-2">
-                    <input id="siteforge-refine" value={refinePrompt} onChange={(event) => setRefinePrompt(event.target.value)} placeholder="Request revision" className="min-w-[260px] flex-1 rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                    <button type="button" className={brainTheme.secondaryButton} onClick={submitRefinement} disabled={busy || !refinePrompt.trim()}>Request Revision</button>
-                  </div>
+            {activeNav === "strategy" ? (
+              <section className={`${brainTheme.glassCard} p-4`}>
+                <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Run History</div>
+                <div className="mt-2 grid gap-2 lg:grid-cols-2">
+                  {sessions.map((session) => (
+                    <button key={session.id} type="button" onClick={() => setCurrentSessionId(session.id)} className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200">
+                      {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status} · {session.runState.currentStage}
+                    </button>
+                  ))}
+                  {!sessions.length ? <div className="text-xs text-slate-400">No run history yet.</div> : null}
                 </div>
-              ) : null}
-            </section>
+
+                {currentSession ? (
+                  <div className="mt-4 space-y-3">
+                    <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
+                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
+                      Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
+                    </div>
+                    <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Refinement Request</label>
+                    <div className="flex flex-wrap gap-2">
+                      <input id="siteforge-refine" value={refinePrompt} onChange={(event) => setRefinePrompt(event.target.value)} placeholder="Request revision" className="min-w-[260px] flex-1 rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
+                      <button type="button" className={brainTheme.secondaryButton} onClick={submitRefinement} disabled={busy || !refinePrompt.trim()}>Request Revision</button>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            ) : null}
           </div>
         </section>
       </main>
