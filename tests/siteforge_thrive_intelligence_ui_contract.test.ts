@@ -3,14 +3,14 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("siteforge thrive intelligence UI contract", () => {
-  it("renders user-friendly thrive setup and renamed navigation surfaces", () => {
+  it("keeps Thrive setup available within the simplified builder navigation", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Overview")).toBe(true);
-    expect(source.includes("Reusable Assets")).toBe(true);
-    expect(source.includes("Thrive Setup")).toBe(true);
-    expect(source.includes("Launch")).toBe(true);
+    expect(source.includes("Builder")).toBe(true);
+    expect(source.includes("Review")).toBe(true);
+    expect(source.includes("Thrive Assets")).toBe(true);
+    expect(source.includes("Advanced")).toBe(true);
     expect(source.includes("Setup")).toBe(true);
 
     expect(source.includes("Thrive Setup &amp; Assets")).toBe(true);
