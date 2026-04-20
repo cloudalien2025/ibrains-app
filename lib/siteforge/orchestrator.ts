@@ -16,10 +16,10 @@ import { applyThriveMappings, detectThriveCapability } from "@/lib/siteforge/thr
 import { discoverThriveIntelligence } from "@/lib/siteforge/thriveIntelligence";
 import {
   evaluateThriveNativeGuard,
-  executeThriveNativePlan,
   getThriveExecutionRuntime,
 } from "@/lib/siteforge/thriveNativeHarness";
 import { createThriveNativeCompositionPlan } from "@/lib/siteforge/thriveNativeComposer";
+import { runThriveNativeValidation } from "@/lib/siteforge/thriveNativeValidation";
 import {
   executeBuildSpecToWordPress,
   executeRevisionToWordPress,
@@ -191,12 +191,14 @@ export async function runBuildPipeline(params: {
           nativeGuard: null,
           nativeComposition: null,
           nativeExecution: null,
+          nativeValidation: null,
           sectionResolutions: translated.sectionResolutions,
         }, params.homepageStrategy ?? "use_existing");
 
         const nativeGuard = evaluateThriveNativeGuard(connection);
         let nativeComposition = null;
         let nativeExecution = null;
+        let nativeValidation = null;
         let currentMode: "wp_safe_mode" | "thrive_intel_mode" | "thrive_native_staging_mode" | "blocked_native_mode" =
           runtime.thriveIntelMode ? "thrive_intel_mode" : "wp_safe_mode";
 
@@ -209,15 +211,21 @@ export async function runBuildPipeline(params: {
             guard: nativeGuard,
           });
           if (nativeGuard.eligible) {
-            nativeExecution = await executeThriveNativePlan({
+            const validationMode = process.env.SITEFORGE_THRIVE_NATIVE_VALIDATION_MODE === "dry_run" ? "dry_run" : "real_run";
+            const rollbackStrategy =
+              process.env.SITEFORGE_THRIVE_NATIVE_VALIDATION_ROLLBACK === "1" ? "after_run" : "none";
+            nativeValidation = await runThriveNativeValidation({
               connection,
-              mode: nativeComposition.mode,
-              operations: nativeComposition.operations.map((entry) => ({
-                operation: entry.operation,
-                payload: entry.payload,
-              })),
+              spec: translated.spec,
+              intelligence: thriveIntelligence,
+              sectionResolutions: translated.sectionResolutions,
+              execution,
+              mode: validationMode,
+              rollbackStrategy,
             });
-            currentMode = nativeExecution.success ? "thrive_native_staging_mode" : "blocked_native_mode";
+            nativeExecution = nativeValidation.execution;
+            currentMode =
+              nativeValidation.status === "passed" ? "thrive_native_staging_mode" : "blocked_native_mode";
             translated.spec.metadata.contractCaptureRef =
               translated.spec.metadata.contractCaptureRef ??
               `contract:${nativeGuard.schemaContractVersion ?? "unknown"}:${nowIso()}`;
@@ -230,6 +238,7 @@ export async function runBuildPipeline(params: {
         execution.thrive.nativeGuard = nativeGuard;
         execution.thrive.nativeComposition = nativeComposition;
         execution.thrive.nativeExecution = nativeExecution;
+        execution.thrive.nativeValidation = nativeValidation;
         executionResult = execution;
         await repo.updateSession(sessionId, {
           buildSpec: translated.spec,

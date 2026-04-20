@@ -229,6 +229,92 @@ export type SiteForgeSnapshotView = {
     };
     warnings: string[];
   } | null;
+  thriveNativeValidation: {
+    runId: string;
+    mode: "dry_run" | "real_run";
+    startedAt: string;
+    completedAt: string;
+    status: "passed" | "failed" | "blocked";
+    planMode: "thrive_native_staging_mode" | "blocked_native_mode";
+    homepagePostId: number | null;
+    summary: {
+      reusedExisting: number;
+      createdNative: number;
+      wpFallback: number;
+      verificationFailed: number;
+      blockedByGuard: number;
+      blockedByMissingContract: number;
+    };
+    sectionOutcomes: Array<{
+      pageSlug: string;
+      sectionId: string;
+      sectionType: "hero" | "problem" | "solution" | "features" | "testimonials" | "cta" | "faq" | "contact";
+      outcome:
+        | "reused_existing"
+        | "created_native"
+        | "wp_fallback"
+        | "verification_failed"
+        | "blocked_by_guard"
+        | "blocked_by_missing_contract";
+      operation:
+        | "assignTemplateToPost"
+        | "createOrUpdateSymbol"
+        | "createOrUpdateSection"
+        | "createOrUpdateTemplateShellReference"
+        | "attachReusablePrimitiveToPagePlan"
+        | "importArchitectContentArtifact"
+        | "importThemeBuilderArtifact"
+        | null;
+      targetId: number | null;
+      reason: string;
+    }>;
+    verification: {
+      stepsTotal: number;
+      verifiedSteps: number;
+      failedSteps: number;
+      pageReachable: boolean;
+      pageIdentityOk: boolean;
+      objectStateOk: boolean;
+      notes: string[];
+    };
+    rollbackVerification: {
+      attempted: boolean;
+      success: boolean;
+      notes: string[];
+    };
+    promotionCandidateSummary: {
+      ready: boolean;
+      reason: string;
+      environment: string;
+      runFingerprint: string;
+      pageId: number | null;
+      shellTemplateId: number | null;
+      reusedSymbolIds: number[];
+      createdObjectIds: Array<{
+        objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+        id: number;
+      }>;
+      payloadHashes: string[];
+      verificationSnapshot: {
+        stepsTotal: number;
+        verifiedSteps: number;
+        failedSteps: number;
+        objectStateOk: boolean;
+        pageReachable: boolean;
+        pageIdentityOk: boolean;
+      };
+      rollbackSnapshot: {
+        available: boolean;
+        attempted: boolean;
+        success: boolean;
+      };
+      themeArtifactRef: string | null;
+      architectContentArtifactRef: string | null;
+      landingPageArtifactRef: string | null;
+      designPackArtifactRef: string | null;
+      contractCaptureRef: string | null;
+    };
+  } | null;
   homepageStrategy: HomepageStrategy;
   lastRunSummary: string | null;
   lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
@@ -290,6 +376,7 @@ export type BuildSessionView = {
       nativeGuard: SiteForgeSnapshotView["thriveNativeGuard"] | null;
       nativeComposition: SiteForgeSnapshotView["thriveNativeComposition"] | null;
       nativeExecution: SiteForgeSnapshotView["thriveNativeExecution"] | null;
+      nativeValidation: SiteForgeSnapshotView["thriveNativeValidation"] | null;
       sectionResolutions: SiteForgeSnapshotView["thriveSectionResolutions"];
     };
     warnings: string[];
@@ -674,6 +761,124 @@ function normalizeThriveNativeExecution(value: unknown): SiteForgeSnapshotView["
   };
 }
 
+function normalizeThriveNativeValidation(value: unknown): SiteForgeSnapshotView["thriveNativeValidation"] {
+  if (!isRecord(value)) return null;
+  const summaryRaw = isRecord(value.summary) ? value.summary : {};
+  const verificationRaw = isRecord(value.verification) ? value.verification : {};
+  const rollbackVerificationRaw = isRecord(value.rollbackVerification) ? value.rollbackVerification : {};
+  const promotionRaw = isRecord(value.promotionCandidateSummary) ? value.promotionCandidateSummary : {};
+  const verificationSnapshotRaw = isRecord(promotionRaw.verificationSnapshot) ? promotionRaw.verificationSnapshot : {};
+  const rollbackSnapshotRaw = isRecord(promotionRaw.rollbackSnapshot) ? promotionRaw.rollbackSnapshot : {};
+
+  return {
+    runId: stringOr(value.runId, ""),
+    mode: value.mode === "dry_run" ? "dry_run" : "real_run",
+    startedAt: stringOr(value.startedAt, nowIso()),
+    completedAt: stringOr(value.completedAt, nowIso()),
+    status: value.status === "passed" || value.status === "blocked" ? value.status : "failed",
+    planMode: value.planMode === "blocked_native_mode" ? "blocked_native_mode" : "thrive_native_staging_mode",
+    homepagePostId: typeof value.homepagePostId === "number" ? value.homepagePostId : null,
+    summary: {
+      reusedExisting: numberOr(summaryRaw.reusedExisting),
+      createdNative: numberOr(summaryRaw.createdNative),
+      wpFallback: numberOr(summaryRaw.wpFallback),
+      verificationFailed: numberOr(summaryRaw.verificationFailed),
+      blockedByGuard: numberOr(summaryRaw.blockedByGuard),
+      blockedByMissingContract: numberOr(summaryRaw.blockedByMissingContract),
+    },
+    sectionOutcomes: Array.isArray(value.sectionOutcomes)
+      ? value.sectionOutcomes
+          .filter(isRecord)
+          .map((entry) => ({
+            pageSlug: stringOr(entry.pageSlug, ""),
+            sectionId: stringOr(entry.sectionId, ""),
+            sectionType:
+              entry.sectionType === "hero" ||
+              entry.sectionType === "problem" ||
+              entry.sectionType === "solution" ||
+              entry.sectionType === "features" ||
+              entry.sectionType === "testimonials" ||
+              entry.sectionType === "cta" ||
+              entry.sectionType === "faq" ||
+              entry.sectionType === "contact"
+                ? entry.sectionType
+                : "hero",
+            outcome:
+              entry.outcome === "reused_existing" ||
+              entry.outcome === "created_native" ||
+              entry.outcome === "wp_fallback" ||
+              entry.outcome === "verification_failed" ||
+              entry.outcome === "blocked_by_guard" ||
+              entry.outcome === "blocked_by_missing_contract"
+                ? entry.outcome
+                : "wp_fallback",
+            operation: entry.operation ? normalizeNativeOperation(entry.operation) : null,
+            targetId: typeof entry.targetId === "number" ? entry.targetId : null,
+            reason: stringOr(entry.reason, ""),
+          }))
+      : [],
+    verification: {
+      stepsTotal: numberOr(verificationRaw.stepsTotal),
+      verifiedSteps: numberOr(verificationRaw.verifiedSteps),
+      failedSteps: numberOr(verificationRaw.failedSteps),
+      pageReachable: boolOr(verificationRaw.pageReachable),
+      pageIdentityOk: boolOr(verificationRaw.pageIdentityOk),
+      objectStateOk: boolOr(verificationRaw.objectStateOk),
+      notes: Array.isArray(verificationRaw.notes)
+        ? verificationRaw.notes.filter((entry): entry is string => typeof entry === "string")
+        : [],
+    },
+    rollbackVerification: {
+      attempted: boolOr(rollbackVerificationRaw.attempted),
+      success: boolOr(rollbackVerificationRaw.success),
+      notes: Array.isArray(rollbackVerificationRaw.notes)
+        ? rollbackVerificationRaw.notes.filter((entry): entry is string => typeof entry === "string")
+        : [],
+    },
+    promotionCandidateSummary: {
+      ready: boolOr(promotionRaw.ready),
+      reason: stringOr(promotionRaw.reason, ""),
+      environment: stringOr(promotionRaw.environment, "unknown"),
+      runFingerprint: stringOr(promotionRaw.runFingerprint, ""),
+      pageId: typeof promotionRaw.pageId === "number" ? promotionRaw.pageId : null,
+      shellTemplateId: typeof promotionRaw.shellTemplateId === "number" ? promotionRaw.shellTemplateId : null,
+      reusedSymbolIds: Array.isArray(promotionRaw.reusedSymbolIds)
+        ? promotionRaw.reusedSymbolIds.filter((entry): entry is number => typeof entry === "number")
+        : [],
+      createdObjectIds: Array.isArray(promotionRaw.createdObjectIds)
+        ? promotionRaw.createdObjectIds
+            .filter(isRecord)
+            .map((entry) => ({
+              objectType:
+                entry.objectType === "thrive_template" || entry.objectType === "thrive_section" ? entry.objectType : "tcb_symbol",
+              id: numberOr(entry.id),
+            }))
+        : [],
+      payloadHashes: Array.isArray(promotionRaw.payloadHashes)
+        ? promotionRaw.payloadHashes.filter((entry): entry is string => typeof entry === "string")
+        : [],
+      verificationSnapshot: {
+        stepsTotal: numberOr(verificationSnapshotRaw.stepsTotal),
+        verifiedSteps: numberOr(verificationSnapshotRaw.verifiedSteps),
+        failedSteps: numberOr(verificationSnapshotRaw.failedSteps),
+        objectStateOk: boolOr(verificationSnapshotRaw.objectStateOk),
+        pageReachable: boolOr(verificationSnapshotRaw.pageReachable),
+        pageIdentityOk: boolOr(verificationSnapshotRaw.pageIdentityOk),
+      },
+      rollbackSnapshot: {
+        available: boolOr(rollbackSnapshotRaw.available),
+        attempted: boolOr(rollbackSnapshotRaw.attempted),
+        success: boolOr(rollbackSnapshotRaw.success),
+      },
+      themeArtifactRef: nullableString(promotionRaw.themeArtifactRef),
+      architectContentArtifactRef: nullableString(promotionRaw.architectContentArtifactRef),
+      landingPageArtifactRef: nullableString(promotionRaw.landingPageArtifactRef),
+      designPackArtifactRef: nullableString(promotionRaw.designPackArtifactRef),
+      contractCaptureRef: nullableString(promotionRaw.contractCaptureRef),
+    },
+  };
+}
+
 function toStage(value: unknown): BuildStage {
   return typeof value === "string" && stageSet.has(value as BuildStage) ? (value as BuildStage) : "planning";
 }
@@ -905,6 +1110,7 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 nativeGuard: normalizeThriveNativeGuard(value.executionResult.thrive.nativeGuard),
                 nativeComposition: normalizeThriveNativeComposition(value.executionResult.thrive.nativeComposition),
                 nativeExecution: normalizeThriveNativeExecution(value.executionResult.thrive.nativeExecution),
+                nativeValidation: normalizeThriveNativeValidation(value.executionResult.thrive.nativeValidation),
                 sectionResolutions: normalizeThriveSectionResolutions(value.executionResult.thrive.sectionResolutions),
               }
             : {
@@ -920,6 +1126,7 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 nativeGuard: null,
                 nativeComposition: null,
                 nativeExecution: null,
+                nativeValidation: null,
                 sectionResolutions: [],
               },
           warnings: Array.isArray(value.executionResult.warnings)
@@ -1008,6 +1215,7 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
     thriveNativeGuard: normalizeThriveNativeGuard(value.thriveNativeGuard),
     thriveNativeComposition: normalizeThriveNativeComposition(value.thriveNativeComposition),
     thriveNativeExecution: normalizeThriveNativeExecution(value.thriveNativeExecution),
+    thriveNativeValidation: normalizeThriveNativeValidation(value.thriveNativeValidation),
     homepageStrategy: toStrategy(value.homepageStrategy),
     lastRunSummary: nullableString(value.lastRunSummary),
     lastRunStatus:

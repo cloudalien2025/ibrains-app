@@ -130,6 +130,7 @@ describe("siteforge snapshot persistence reconciliation", () => {
         nativeGuard: null,
         nativeComposition: null,
         nativeExecution: null,
+        nativeValidation: null,
         sectionResolutions: [
           {
             pageSlug: "home",
@@ -264,6 +265,7 @@ describe("siteforge snapshot persistence reconciliation", () => {
         nativeGuard: null,
         nativeComposition: null,
         nativeExecution: null,
+        nativeValidation: null,
         sectionResolutions: [],
         intelligence: null,
       },

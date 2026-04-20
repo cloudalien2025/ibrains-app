@@ -52,6 +52,7 @@ describe("siteforge workspace shape normalization", () => {
     expect(workspace?.snapshot?.thriveNativeGuard).toBeNull();
     expect(workspace?.snapshot?.thriveNativeComposition).toBeNull();
     expect(workspace?.snapshot?.thriveNativeExecution).toBeNull();
+    expect(workspace?.snapshot?.thriveNativeValidation).toBeNull();
   });
 
   it("normalizes project creation payload and rejects invalid shapes", () => {

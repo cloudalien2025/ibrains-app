@@ -141,6 +141,7 @@ const thriveMeta = {
   nativeGuard: null,
   nativeComposition: null,
   nativeExecution: null,
+  nativeValidation: null,
   sectionResolutions: [],
 };
 

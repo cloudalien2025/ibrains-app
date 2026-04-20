@@ -1,4 +1,4 @@
-# SiteForge Thrive-Native Blueprint (Staging Composer v1)
+# SiteForge Thrive-Native Blueprint (Staging Composer + Validation v1)
 
 ## 1) Current Truth
 SiteForge now operates in four explicit runtime states:
@@ -104,17 +104,41 @@ Rollback model (v1):
 - exposes delete rollback steps for supported object types
 - executes deterministic cleanup on explicit rollback call
 
-## 6) Workspace / Session Truth
+## 6) Native Validation Runner (Dry-Run + Real-Run)
+SiteForge now includes a dedicated staging validation runner (`lib/siteforge/thriveNativeValidation.ts`).
+
+Validation modes:
+- `dry_run`: compose + guard + precheck + homepage state checks, no native writes
+- `real_run`: execute contract-approved native operations in staging, verify state, optionally roll back created objects
+
+Per-section outcomes are explicitly classified as:
+- `reused_existing`
+- `created_native`
+- `wp_fallback`
+- `verification_failed`
+- `blocked_by_guard`
+- `blocked_by_missing_contract`
+
+Run-level validation captures:
+- guard status and plan mode
+- step verification aggregation
+- homepage identity/reachability checks
+- created object state checks
+- rollback verification status when executed
+- promotion-candidate summary
+
+## 7) Workspace / Session Truth
 SiteForge persists native staging metadata in run/snapshot truth:
 - `thrive.nativeGuard`
 - `thrive.nativeComposition`
 - `thrive.nativeExecution`
+- `thrive.nativeValidation`
 - section resolution details
 - runtime mode summary and current mode
 
 This gives deterministic replay/debug and a clear contract-capture history for each run.
 
-## 7) UI / Product Surface
+## 8) UI / Product Surface
 SiteForge workspace now exposes a dedicated native staging control surface:
 - guard eligibility and block reason
 - allowlisted operation set
@@ -122,14 +146,26 @@ SiteForge workspace now exposes a dedicated native staging control surface:
 - composition summary (reuse/create/fallback/block)
 - step-level execution + verification
 - rollback/reset availability
+- native validation mode/status
+- per-section validation outcomes
+- promotion candidate readiness and reason
 
-## 8) Artifact Capture and Promotion Path
-v1 stores the metadata needed for future artifact-driven promotion:
+## 9) Artifact Capture and Promotion Path
+Validation runs now persist a promotion-candidate summary with:
+- run fingerprint
+- environment marker
+- target page id
+- reused symbol ids
 - object ids
 - payload hashes
-- section-to-operation mapping
-- verification outcomes
-- rollback metadata
+- verification snapshot
+- rollback snapshot
+- nullable artifact references:
+  - `themeArtifactRef`
+  - `architectContentArtifactRef`
+  - `landingPageArtifactRef`
+  - `designPackArtifactRef`
+  - `contractCaptureRef`
 
 Future promotion flow remains:
 1. compose in staging
@@ -138,7 +174,7 @@ Future promotion flow remains:
 4. promote intentionally
 5. never fuzz opaque live endpoints
 
-## 9) Explicit Off-Limits
+## 10) Explicit Off-Limits
 Still off-limits for production:
 - blind writes to `ttb/v1/*` and `tcb/v1/*`
 - generic Thrive CPT mutation without guard + contract + allowlist

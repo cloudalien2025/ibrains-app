@@ -75,6 +75,7 @@ const execution: ExecutionResult = {
     nativeGuard: null,
     nativeComposition: null,
     nativeExecution: null,
+    nativeValidation: null,
     sectionResolutions: [],
   },
   actionLog: [],
