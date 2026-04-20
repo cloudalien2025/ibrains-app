@@ -191,6 +191,7 @@ export function createThriveNativeCompositionPlan(params: {
       postId: homepagePostId,
       templateId: 0,
       source: "composer_v1",
+      status: "publish",
     };
     operations.push({
       operation: "assignTemplateToPost",

@@ -279,6 +279,24 @@ export type SiteForgeSnapshotView = {
       pageReachable: boolean;
       pageIdentityOk: boolean;
       objectStateOk: boolean;
+      renderability: {
+        status:
+          | "render_ok"
+          | "wp_404"
+          | "wrong_target_url"
+          | "redirect_mismatch"
+          | "network_failure"
+          | "template_assignment_incomplete"
+          | "front_page_mismatch"
+          | "unknown_render_failure";
+        checkedUrl: string | null;
+        finalUrl: string | null;
+        legacyPageLink: string | null;
+        httpStatus: number | null;
+        redirectChain: string[];
+        responseHeaders: Record<string, string>;
+        bodySnippet: string | null;
+      };
       notes: string[];
     };
     rollbackVerification: {
@@ -788,6 +806,7 @@ function normalizeThriveNativeValidation(value: unknown): SiteForgeSnapshotView[
   if (!isRecord(value)) return null;
   const summaryRaw = isRecord(value.summary) ? value.summary : {};
   const verificationRaw = isRecord(value.verification) ? value.verification : {};
+  const renderabilityRaw = isRecord(verificationRaw.renderability) ? verificationRaw.renderability : {};
   const rollbackVerificationRaw = isRecord(value.rollbackVerification) ? value.rollbackVerification : {};
   const promotionRaw = isRecord(value.promotionCandidateSummary) ? value.promotionCandidateSummary : {};
   const verificationSnapshotRaw = isRecord(promotionRaw.verificationSnapshot) ? promotionRaw.verificationSnapshot : {};
@@ -847,6 +866,34 @@ function normalizeThriveNativeValidation(value: unknown): SiteForgeSnapshotView[
       pageReachable: boolOr(verificationRaw.pageReachable),
       pageIdentityOk: boolOr(verificationRaw.pageIdentityOk),
       objectStateOk: boolOr(verificationRaw.objectStateOk),
+      renderability: {
+        status:
+          renderabilityRaw.status === "render_ok" ||
+          renderabilityRaw.status === "wp_404" ||
+          renderabilityRaw.status === "wrong_target_url" ||
+          renderabilityRaw.status === "redirect_mismatch" ||
+          renderabilityRaw.status === "network_failure" ||
+          renderabilityRaw.status === "template_assignment_incomplete" ||
+          renderabilityRaw.status === "front_page_mismatch" ||
+          renderabilityRaw.status === "unknown_render_failure"
+            ? renderabilityRaw.status
+            : "unknown_render_failure",
+        checkedUrl: nullableString(renderabilityRaw.checkedUrl),
+        finalUrl: nullableString(renderabilityRaw.finalUrl),
+        legacyPageLink: nullableString(renderabilityRaw.legacyPageLink),
+        httpStatus: typeof renderabilityRaw.httpStatus === "number" ? renderabilityRaw.httpStatus : null,
+        redirectChain: Array.isArray(renderabilityRaw.redirectChain)
+          ? renderabilityRaw.redirectChain.filter((entry): entry is string => typeof entry === "string")
+          : [],
+        responseHeaders: isRecord(renderabilityRaw.responseHeaders)
+          ? Object.fromEntries(
+              Object.entries(renderabilityRaw.responseHeaders)
+                .filter(([, value]) => typeof value === "string")
+                .map(([key, value]) => [key, value as string])
+            )
+          : {},
+        bodySnippet: nullableString(renderabilityRaw.bodySnippet),
+      },
       notes: Array.isArray(verificationRaw.notes)
         ? verificationRaw.notes.filter((entry): entry is string => typeof entry === "string")
         : [],

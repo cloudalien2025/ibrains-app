@@ -188,6 +188,21 @@ Known note from the run:
 - homepage public renderability check returned `404` for the resolved public link while page identity checks and operation verification still passed
 - this is reported as a non-blocking verification note, not a native contract failure
 
+Root cause and fix (post-#322):
+- root cause: renderability used `wp/v2/pages/{id}.link` directly, which can be a non-canonical front-page URL for homepage checks
+- fix: render verification now resolves canonical homepage target from `wp/v2/settings` (`show_on_front`, `page_on_front`, `siteurl`) and checks site root when the assigned page is the configured front page
+- verification now stores explicit render diagnostics:
+  - render status class (`render_ok`, `wp_404`, `wrong_target_url`, `front_page_mismatch`, etc.)
+  - checked URL and final URL
+  - redirect chain
+  - response-header snapshot
+  - response body snippet
+
+Success criteria for native homepage assignment now require:
+1. native execution steps verified
+2. page identity verified
+3. canonical homepage renderability status = `render_ok`
+
 ## 11) Explicit Off-Limits
 Still off-limits for production:
 - blind writes to `ttb/v1/*` and `tcb/v1/*`

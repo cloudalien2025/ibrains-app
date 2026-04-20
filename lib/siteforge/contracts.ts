@@ -508,6 +508,16 @@ export type ThriveNativeValidationSectionOutcome = {
   reason: string;
 };
 
+export type ThriveNativeRenderabilityStatus =
+  | "render_ok"
+  | "wp_404"
+  | "wrong_target_url"
+  | "redirect_mismatch"
+  | "network_failure"
+  | "template_assignment_incomplete"
+  | "front_page_mismatch"
+  | "unknown_render_failure";
+
 export type ThriveNativeValidationResult = {
   runId: string;
   mode: "dry_run" | "real_run";
@@ -533,6 +543,16 @@ export type ThriveNativeValidationResult = {
     pageReachable: boolean;
     pageIdentityOk: boolean;
     objectStateOk: boolean;
+    renderability: {
+      status: ThriveNativeRenderabilityStatus;
+      checkedUrl: string | null;
+      finalUrl: string | null;
+      legacyPageLink: string | null;
+      httpStatus: number | null;
+      redirectChain: string[];
+      responseHeaders: Record<string, string>;
+      bodySnippet: string | null;
+    };
     notes: string[];
   };
   execution: ThriveNativeExecutionResult | null;

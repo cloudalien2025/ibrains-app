@@ -1264,6 +1264,16 @@ export default function SiteForgeAppPage() {
               {thriveNativeValidation?.verification.failedSteps ?? 0}
             </div>
             <div className="mt-1 text-sm text-slate-200">
+              render status: {thriveNativeValidation?.verification.renderability.status ?? "unknown_render_failure"} |
+              http={thriveNativeValidation?.verification.renderability.httpStatus ?? "n/a"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200 break-all">
+              checked URL: {thriveNativeValidation?.verification.renderability.checkedUrl ?? "none"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200 break-all">
+              final URL: {thriveNativeValidation?.verification.renderability.finalUrl ?? "none"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
               rollback result:{" "}
               {thriveNativeValidation
                 ? thriveNativeValidation.rollbackVerification.attempted
@@ -1317,6 +1327,14 @@ export default function SiteForgeAppPage() {
                   No native validation summary recorded yet.
                 </div>
               )}
+            </div>
+            <div className="mt-3 text-xs text-slate-300">Render diagnostics</div>
+            <div className="mt-2 rounded-lg border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200">
+              <div>legacy page link: {thriveNativeValidation?.verification.renderability.legacyPageLink ?? "none"}</div>
+              <div>redirect hops: {thriveNativeValidation?.verification.renderability.redirectChain.length ?? 0}</div>
+              <div className="mt-1 text-slate-400 break-all">
+                body snippet: {thriveNativeValidation?.verification.renderability.bodySnippet ?? "n/a"}
+              </div>
             </div>
             <div className="mt-3 text-xs text-slate-300">Section-native mapping</div>
             <div className="mt-2 max-h-36 space-y-2 overflow-auto pr-1 text-xs">

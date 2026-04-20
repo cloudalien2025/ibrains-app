@@ -153,8 +153,13 @@ describe("siteforge thrive native validation runner", () => {
         const method = init?.method ?? "GET";
         if (method !== "GET") writes.push(`${method}:${url}`);
 
-        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65, link: "https://staging.example.com/home" });
-        if (method === "GET" && url === "https://staging.example.com/home") return new Response("<html>ok</html>", { status: 200 });
+        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) {
+          return json({ id: 65, status: "publish", link: "https://staging.example.com/home" });
+        }
+        if (method === "GET" && url.includes("/wp-json/wp/v2/settings")) {
+          return json({ show_on_front: "page", page_on_front: 65, siteurl: "https://staging.example.com" });
+        }
+        if (method === "GET" && url === "https://staging.example.com/") return new Response("<html>ok</html>", { status: 200 });
         throw new Error(`Unhandled request ${method} ${url}`);
       }) as unknown as typeof fetch
     );
@@ -174,6 +179,8 @@ describe("siteforge thrive native validation runner", () => {
     expect(result.summary.reusedExisting).toBeGreaterThan(0);
     expect(result.promotionCandidateSummary.ready).toBe(false);
     expect(result.promotionCandidateSummary.reason).toBe("dry_run_only");
+    expect(result.verification.renderability.status).toBe("render_ok");
+    expect(result.verification.renderability.checkedUrl).toBe("https://staging.example.com/");
   });
 
   it("runs real mode with verification and rollback cleanup for created objects", async () => {
@@ -194,7 +201,7 @@ describe("siteforge thrive native validation runner", () => {
 
         if (method === "POST" && url.includes("/wp-json/wp/v2/thrive_template")) return json({ id: 200, slug: "acme-shell" });
         if (method === "POST" && url.includes("/wp-json/wp/v2/thrive_section")) return json({ id: 201, slug: "acme-cta" });
-        if (method === "POST" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65 });
+        if (method === "POST" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65, status: "publish" });
 
         if (method === "GET" && url.includes("/wp-json/wp/v2/thrive_template/200")) {
           return deleted.has("thrive_template:200") ? json({ code: "not_found" }, 404) : json({ id: 200, slug: "acme-shell" }, 200);
@@ -202,8 +209,13 @@ describe("siteforge thrive native validation runner", () => {
         if (method === "GET" && url.includes("/wp-json/wp/v2/thrive_section/201")) {
           return deleted.has("thrive_section:201") ? json({ code: "not_found" }, 404) : json({ id: 201, slug: "acme-cta" }, 200);
         }
-        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65, link: "https://staging.example.com/home" }, 200);
-        if (method === "GET" && url === "https://staging.example.com/home") return new Response("<html>ok</html>", { status: 200 });
+        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) {
+          return json({ id: 65, status: "publish", link: "https://staging.example.com/home" }, 200);
+        }
+        if (method === "GET" && url.includes("/wp-json/wp/v2/settings")) {
+          return json({ show_on_front: "page", page_on_front: 65, siteurl: "https://staging.example.com" }, 200);
+        }
+        if (method === "GET" && url === "https://staging.example.com/") return new Response("<html>ok</html>", { status: 200 });
 
         if (method === "DELETE" && url.includes("/wp-json/wp/v2/thrive_template/200")) {
           deleted.add("thrive_template:200");
@@ -236,6 +248,7 @@ describe("siteforge thrive native validation runner", () => {
     expect(result.rollbackVerification.success).toBe(true);
     expect(result.promotionCandidateSummary.payloadHashes.length).toBeGreaterThan(0);
     expect(result.promotionCandidateSummary.createdObjectIds.some((entry) => entry.id === 200)).toBe(true);
+    expect(result.verification.renderability.status).toBe("render_ok");
   });
 
   it("returns blocked result when guard eligibility fails", async () => {
@@ -251,5 +264,79 @@ describe("siteforge thrive native validation runner", () => {
     expect(result.status).toBe("blocked");
     expect(result.summary.blockedByGuard).toBeGreaterThan(0);
     expect(result.promotionCandidateSummary.ready).toBe(false);
+  });
+
+  it("classifies front-page mismatch when homepage settings point elsewhere", async () => {
+    process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING = "1";
+    process.env.SITEFORGE_APPROVED_NATIVE_TARGETS = "staging.example.com";
+    process.env.SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION = "v1";
+    process.env.SITEFORGE_THRIVE_ROUTE_ALLOWLIST = "/wp-json/wp/v2/thrive_template,/wp-json/wp/v2/thrive_section,/wp-json/wp/v2/pages";
+    process.env.SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST =
+      "createOrUpdateTemplateShellReference,attachReusablePrimitiveToPagePlan,createOrUpdateSection,assignTemplateToPost";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        const method = init?.method ?? "GET";
+        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) {
+          return json({ id: 65, status: "publish", link: "https://staging.example.com/home" });
+        }
+        if (method === "GET" && url.includes("/wp-json/wp/v2/settings")) {
+          return json({ show_on_front: "page", page_on_front: 501, siteurl: "https://staging.example.com" });
+        }
+        if (method === "GET" && url === "https://staging.example.com/home") return new Response("<html>404 not found</html>", { status: 404 });
+        throw new Error(`Unhandled request ${method} ${url}`);
+      }) as unknown as typeof fetch
+    );
+
+    const result = await runThriveNativeValidation({
+      connection,
+      spec,
+      intelligence,
+      sectionResolutions,
+      execution,
+      mode: "dry_run",
+    });
+
+    expect(result.verification.renderability.status).toBe("front_page_mismatch");
+    expect(result.verification.pageReachable).toBe(false);
+    expect(result.verification.notes.some((entry) => entry.includes("front_page_mismatch_setting"))).toBe(true);
+  });
+
+  it("classifies wrong-target-url when fallback page link is unreachable", async () => {
+    process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING = "1";
+    process.env.SITEFORGE_APPROVED_NATIVE_TARGETS = "staging.example.com";
+    process.env.SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION = "v1";
+    process.env.SITEFORGE_THRIVE_ROUTE_ALLOWLIST = "/wp-json/wp/v2/thrive_template,/wp-json/wp/v2/thrive_section,/wp-json/wp/v2/pages";
+    process.env.SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST =
+      "createOrUpdateTemplateShellReference,attachReusablePrimitiveToPagePlan,createOrUpdateSection,assignTemplateToPost";
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        const method = init?.method ?? "GET";
+        if (method === "GET" && url.includes("/wp-json/wp/v2/pages/65")) {
+          return json({ id: 65, status: "publish", link: "https://staging.example.com/home" });
+        }
+        if (method === "GET" && url.includes("/wp-json/wp/v2/settings")) return json({ code: "forbidden" }, 403);
+        if (method === "GET" && url === "https://staging.example.com/home") return new Response("<html>404 not found</html>", { status: 404 });
+        throw new Error(`Unhandled request ${method} ${url}`);
+      }) as unknown as typeof fetch
+    );
+
+    const result = await runThriveNativeValidation({
+      connection,
+      spec,
+      intelligence,
+      sectionResolutions,
+      execution,
+      mode: "dry_run",
+    });
+
+    expect(result.verification.renderability.status).toBe("wrong_target_url");
+    expect(result.verification.renderability.checkedUrl).toBe("https://staging.example.com/home");
+    expect(result.verification.renderability.httpStatus).toBe(404);
   });
 });

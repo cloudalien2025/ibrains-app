@@ -376,6 +376,9 @@ export async function executeThriveNativePlan(params: {
       payload.templateId = lastTemplateId;
       payload.meta = { ...(payload.meta as Record<string, unknown> | undefined), thrive_template_id: lastTemplateId };
     }
+    if (operation.operation === "assignTemplateToPost" && payload.status == null) {
+      payload.status = "publish";
+    }
     const step = await executeThriveNativeOperation({
       connection: params.connection,
       operation: operation.operation,
@@ -499,7 +502,12 @@ export async function assignTemplateToPost(params: {
   return executeThriveNativeOperation({
     connection: params.connection,
     operation: "assignTemplateToPost",
-    payload: { postId: params.postId, meta: { thrive_template_id: params.templateId }, templateId: params.templateId },
+    payload: {
+      postId: params.postId,
+      meta: { thrive_template_id: params.templateId },
+      templateId: params.templateId,
+      status: "publish",
+    },
   });
 }
 
