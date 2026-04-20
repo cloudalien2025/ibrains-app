@@ -211,9 +211,14 @@ function classifyRenderability(params: {
 
 function summarizeOutcomes(outcomes: ThriveNativeValidationResult["sectionOutcomes"]): ThriveNativeValidationResult["summary"] {
   return {
-    reusedExisting: outcomes.filter((entry) => entry.outcome === "reused_existing").length,
-    createdNative: outcomes.filter((entry) => entry.outcome === "created_native").length,
-    wpFallback: outcomes.filter((entry) => entry.outcome === "wp_fallback").length,
+    reusedExisting: outcomes.filter((entry) => entry.outcome === "reused_existing" || entry.outcome === "reused_visual_symbol").length,
+    createdNative: outcomes.filter((entry) =>
+      entry.outcome === "created_native" ||
+      entry.outcome === "created_visual_native_section" ||
+      entry.outcome === "created_visual_cta_block" ||
+      entry.outcome === "created_visual_faq_toggle"
+    ).length,
+    wpFallback: outcomes.filter((entry) => entry.outcome === "wp_fallback" || entry.outcome === "improved_visual_fallback").length,
     verificationFailed: outcomes.filter((entry) => entry.outcome === "verification_failed").length,
     blockedByGuard: outcomes.filter((entry) => entry.outcome === "blocked_by_guard").length,
     blockedByMissingContract: outcomes.filter((entry) => entry.outcome === "blocked_by_missing_contract").length,
@@ -495,6 +500,10 @@ export async function runThriveNativeValidation(params: {
     outcome: entry.intent,
     operation: entry.selectedOperation,
     targetId: null,
+    visualPattern: entry.visualPattern,
+    visualPrimitive: entry.visualPrimitive,
+    designIntentSatisfied: entry.designIntentSatisfied,
+    fallbackReason: entry.fallbackReason ?? null,
     reason: entry.reason,
   }));
 

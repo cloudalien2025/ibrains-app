@@ -21,9 +21,14 @@ function opAllowed(guard: ThriveNativeGuardStatus, operation: ThriveNativeOperat
 
 function summarize(planSections: ThriveNativeCompositionPlan["sections"]): ThriveNativeCompositionPlan["summary"] {
   return {
-    reusedExisting: planSections.filter((entry) => entry.intent === "reused_existing").length,
-    createdNative: planSections.filter((entry) => entry.intent === "created_native").length,
-    wpFallback: planSections.filter((entry) => entry.intent === "wp_fallback").length,
+    reusedExisting: planSections.filter((entry) => entry.intent === "reused_existing" || entry.intent === "reused_visual_symbol").length,
+    createdNative: planSections.filter((entry) =>
+      entry.intent === "created_native" ||
+      entry.intent === "created_visual_native_section" ||
+      entry.intent === "created_visual_cta_block" ||
+      entry.intent === "created_visual_faq_toggle"
+    ).length,
+    wpFallback: planSections.filter((entry) => entry.intent === "wp_fallback" || entry.intent === "improved_visual_fallback").length,
     blockedByGuard: planSections.filter((entry) => entry.intent === "blocked_by_guard").length,
     blockedByMissingContract: planSections.filter((entry) => entry.intent === "blocked_by_missing_contract").length,
   };
@@ -59,6 +64,10 @@ export function createThriveNativeCompositionPlan(params: {
       selectedOperation: null,
       targetObjectType: "none" as const,
       matchedSymbolId: null,
+      visualPattern: section.metadata?.visualComposition?.visualPattern,
+      visualPrimitive: section.metadata?.visualPrimitiveSelection?.selectedPrimitive,
+      designIntentSatisfied: false,
+      fallbackReason: params.guard.blockedReason ?? "guard_blocked",
       reason: params.guard.blockedReason ?? "guard_blocked",
     }));
 
@@ -79,6 +88,8 @@ export function createThriveNativeCompositionPlan(params: {
       slug: `${slugify(params.spec.siteTitle)}-homepage-shell`,
       shellLayoutCandidate,
       shellTemplateGroupCandidate,
+      designSystemVersion: params.spec.metadata.designSystemVersion ?? "siteforge_visual_v1",
+      visualDesignTokens: params.spec.metadata.visualDesignTokens ?? null,
       status: "publish",
     };
     operations.push({
@@ -100,10 +111,14 @@ export function createThriveNativeCompositionPlan(params: {
         pageSlug: homepageSlug,
         sectionId: section.id,
         sectionType: section.type,
-        intent: "wp_fallback",
+        intent: "improved_visual_fallback",
         selectedOperation: null,
         targetObjectType: "none",
         matchedSymbolId: null,
+        visualPattern: section.metadata?.visualComposition?.visualPattern,
+        visualPrimitive: "wordpress_structured_fallback",
+        designIntentSatisfied: false,
+        fallbackReason: "section_type_out_of_scope_v1",
         reason: "section_type_out_of_scope_v1",
       });
       continue;
@@ -125,16 +140,20 @@ export function createThriveNativeCompositionPlan(params: {
         objectType: "attachment",
         payload,
         payloadHash: fingerprintNativePayload(payload),
-        reason: "reuse_existing_symbol",
+        reason: "reused_visual_symbol",
       });
       sections.push({
         pageSlug: homepageSlug,
         sectionId: section.id,
         sectionType: section.type,
-        intent: "reused_existing",
+        intent: "reused_visual_symbol",
         selectedOperation: "attachReusablePrimitiveToPagePlan",
         targetObjectType: "attachment",
         matchedSymbolId,
+        visualPattern: resolution?.visualPattern,
+        visualPrimitive: resolution?.selectedVisualPrimitive ?? "thrive_template_symbol",
+        designIntentSatisfied: resolution?.designIntentSatisfied ?? true,
+        fallbackReason: resolution?.fallbackReason ?? null,
         reason: resolution?.reason ?? "matched_symbol",
       });
       continue;
@@ -150,6 +169,10 @@ export function createThriveNativeCompositionPlan(params: {
         selectedOperation: null,
         targetObjectType: "none",
         matchedSymbolId: null,
+        visualPattern: resolution?.visualPattern ?? section.metadata?.visualComposition?.visualPattern,
+        visualPrimitive: resolution?.selectedVisualPrimitive ?? section.metadata?.visualPrimitiveSelection?.selectedPrimitive,
+        designIntentSatisfied: false,
+        fallbackReason: `operation_not_available:${createOperation}`,
         reason: `operation_not_available:${createOperation}`,
       });
       continue;
@@ -162,6 +185,10 @@ export function createThriveNativeCompositionPlan(params: {
       sectionType: section.type,
       heading: section.heading,
       body: section.body,
+      visualPattern: resolution?.visualPattern ?? section.metadata?.visualComposition?.visualPattern,
+      visualPrimitive: resolution?.selectedVisualPrimitive ?? section.metadata?.visualPrimitiveSelection?.selectedPrimitive,
+      designIntentSatisfied: resolution?.designIntentSatisfied ?? false,
+      visualDesignTokens: params.spec.metadata.visualDesignTokens ?? null,
       status: "publish",
     };
 
@@ -177,11 +204,20 @@ export function createThriveNativeCompositionPlan(params: {
       pageSlug: homepageSlug,
       sectionId: section.id,
       sectionType: section.type,
-      intent: "created_native",
+      intent:
+        section.type === "faq"
+          ? "created_visual_faq_toggle"
+          : section.type === "cta"
+            ? "created_visual_cta_block"
+            : "created_visual_native_section",
       selectedOperation: createOperation,
       targetObjectType: createOperation === "createOrUpdateSymbol" ? "tcb_symbol" : "thrive_section",
       matchedSymbolId: null,
-      reason: "no_reusable_symbol_candidate",
+      visualPattern: resolution?.visualPattern ?? section.metadata?.visualComposition?.visualPattern,
+      visualPrimitive: resolution?.selectedVisualPrimitive ?? section.metadata?.visualPrimitiveSelection?.selectedPrimitive,
+      designIntentSatisfied: resolution?.designIntentSatisfied ?? true,
+      fallbackReason: resolution?.fallbackReason ?? null,
+      reason: "created_visual_native_from_design_intent",
     });
   }
 

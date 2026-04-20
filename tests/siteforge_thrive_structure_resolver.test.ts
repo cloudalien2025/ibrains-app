@@ -106,8 +106,18 @@ describe("siteforge thrive structure resolver", () => {
     expect(["thrive_symbol_reference", "thrive_content_template_reference", "wp_html_fallback"]).toContain(
       faq?.metadata?.preferredRenderTarget
     );
+    expect(hero?.metadata?.visualPrimitiveSelection?.requestedPattern).toBeDefined();
+    expect(hero?.metadata?.visualPrimitiveSelection?.selectedPrimitive).toBeDefined();
 
     expect(translated.sectionResolutions.length).toBe(3);
     expect(translated.sectionResolutions.some((entry) => entry.resolution === "existing_symbol")).toBe(true);
+    expect(translated.sectionResolutions.some((entry) => entry.visualPattern === "hero_centered")).toBe(true);
+    expect(
+      translated.sectionResolutions.every((entry) =>
+        ["existing_reusable_symbol", "existing_compatible_primitive", "native_create_contract", "safe_fallback"].includes(
+          entry.primitiveSelectionSource
+        )
+      )
+    ).toBe(true);
   });
 });

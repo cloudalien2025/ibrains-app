@@ -106,6 +106,31 @@ export type SiteForgeSnapshotView = {
       | "future_landing_page_candidate"
       | "wp_html_fallback";
     resolution: "existing_symbol" | "existing_content_template" | "future_landing_page_candidate" | "wp_html_fallback";
+    visualPattern:
+      | "hero_split"
+      | "hero_centered"
+      | "feature_cards_grid"
+      | "icon_benefits_row"
+      | "testimonial_cards"
+      | "faq_toggle"
+      | "cta_band"
+      | "trust_strip"
+      | "app_mockup_showcase"
+      | "alternating_content_band";
+    selectedVisualPrimitive:
+      | "thrive_content_box"
+      | "thrive_call_to_action"
+      | "thrive_toggle"
+      | "thrive_template_symbol"
+      | "thrive_columns_background_band"
+      | "wordpress_structured_fallback";
+    primitiveSelectionSource:
+      | "existing_reusable_symbol"
+      | "existing_compatible_primitive"
+      | "native_create_contract"
+      | "safe_fallback";
+    designIntentSatisfied: boolean;
+    fallbackReason: string | null;
     matchedSymbolId: number | null;
     matchedSymbolTitle: string | null;
     matchedRole: "header" | "footer" | "section" | "unknown" | null;
@@ -162,7 +187,17 @@ export type SiteForgeSnapshotView = {
       pageSlug: string;
       sectionId: string;
       sectionType: "hero" | "problem" | "solution" | "features" | "testimonials" | "cta" | "faq" | "contact";
-      intent: "reused_existing" | "created_native" | "wp_fallback" | "blocked_by_guard" | "blocked_by_missing_contract";
+      intent:
+        | "reused_existing"
+        | "created_native"
+        | "wp_fallback"
+        | "blocked_by_guard"
+        | "blocked_by_missing_contract"
+        | "reused_visual_symbol"
+        | "created_visual_native_section"
+        | "created_visual_cta_block"
+        | "created_visual_faq_toggle"
+        | "improved_visual_fallback";
       selectedOperation:
         | "assignTemplateToPost"
         | "createOrUpdateSymbol"
@@ -174,6 +209,26 @@ export type SiteForgeSnapshotView = {
         | null;
       targetObjectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment" | "none";
       matchedSymbolId: number | null;
+      visualPattern?:
+        | "hero_split"
+        | "hero_centered"
+        | "feature_cards_grid"
+        | "icon_benefits_row"
+        | "testimonial_cards"
+        | "faq_toggle"
+        | "cta_band"
+        | "trust_strip"
+        | "app_mockup_showcase"
+        | "alternating_content_band";
+      visualPrimitive?:
+        | "thrive_content_box"
+        | "thrive_call_to_action"
+        | "thrive_toggle"
+        | "thrive_template_symbol"
+        | "thrive_columns_background_band"
+        | "wordpress_structured_fallback";
+      designIntentSatisfied?: boolean;
+      fallbackReason?: string | null;
       reason: string;
     }>;
     summary: {
@@ -259,7 +314,12 @@ export type SiteForgeSnapshotView = {
         | "wp_fallback"
         | "verification_failed"
         | "blocked_by_guard"
-        | "blocked_by_missing_contract";
+        | "blocked_by_missing_contract"
+        | "reused_visual_symbol"
+        | "created_visual_native_section"
+        | "created_visual_cta_block"
+        | "created_visual_faq_toggle"
+        | "improved_visual_fallback";
       operation:
         | "assignTemplateToPost"
         | "createOrUpdateSymbol"
@@ -270,6 +330,26 @@ export type SiteForgeSnapshotView = {
         | "importThemeBuilderArtifact"
         | null;
       targetId: number | null;
+      visualPattern?:
+        | "hero_split"
+        | "hero_centered"
+        | "feature_cards_grid"
+        | "icon_benefits_row"
+        | "testimonial_cards"
+        | "faq_toggle"
+        | "cta_band"
+        | "trust_strip"
+        | "app_mockup_showcase"
+        | "alternating_content_band";
+      visualPrimitive?:
+        | "thrive_content_box"
+        | "thrive_call_to_action"
+        | "thrive_toggle"
+        | "thrive_template_symbol"
+        | "thrive_columns_background_band"
+        | "wordpress_structured_fallback";
+      designIntentSatisfied?: boolean;
+      fallbackReason?: string | null;
       reason: string;
     }>;
     verification: {
@@ -464,6 +544,43 @@ function numberOr(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
 }
 
+function normalizeVisualPattern(value: unknown): NonNullable<SiteForgeSnapshotView["thriveSectionResolutions"][number]["visualPattern"]> {
+  return value === "hero_split" ||
+    value === "hero_centered" ||
+    value === "feature_cards_grid" ||
+    value === "icon_benefits_row" ||
+    value === "testimonial_cards" ||
+    value === "faq_toggle" ||
+    value === "cta_band" ||
+    value === "trust_strip" ||
+    value === "app_mockup_showcase" ||
+    value === "alternating_content_band"
+    ? value
+    : "alternating_content_band";
+}
+
+function normalizeVisualPrimitive(value: unknown): NonNullable<SiteForgeSnapshotView["thriveSectionResolutions"][number]["selectedVisualPrimitive"]> {
+  return value === "thrive_content_box" ||
+    value === "thrive_call_to_action" ||
+    value === "thrive_toggle" ||
+    value === "thrive_template_symbol" ||
+    value === "thrive_columns_background_band" ||
+    value === "wordpress_structured_fallback"
+    ? value
+    : "wordpress_structured_fallback";
+}
+
+function normalizePrimitiveSelectionSource(
+  value: unknown
+): NonNullable<SiteForgeSnapshotView["thriveSectionResolutions"][number]["primitiveSelectionSource"]> {
+  return value === "existing_reusable_symbol" ||
+    value === "existing_compatible_primitive" ||
+    value === "native_create_contract" ||
+    value === "safe_fallback"
+    ? value
+    : "safe_fallback";
+}
+
 function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thriveIntelligence"] | null {
   if (!isRecord(value)) return null;
   const activeSkinRaw = isRecord(value.activeSkin) ? value.activeSkin : null;
@@ -582,6 +699,11 @@ function normalizeThriveSectionResolutions(value: unknown): SiteForgeSnapshotVie
         entry.resolution === "wp_html_fallback"
           ? entry.resolution
           : "wp_html_fallback",
+      visualPattern: normalizeVisualPattern(entry.visualPattern),
+      selectedVisualPrimitive: normalizeVisualPrimitive(entry.selectedVisualPrimitive),
+      primitiveSelectionSource: normalizePrimitiveSelectionSource(entry.primitiveSelectionSource),
+      designIntentSatisfied: boolOr(entry.designIntentSatisfied),
+      fallbackReason: nullableString(entry.fallbackReason),
       matchedSymbolId: typeof entry.matchedSymbolId === "number" ? entry.matchedSymbolId : null,
       matchedSymbolTitle: nullableString(entry.matchedSymbolTitle),
       matchedRole:
@@ -697,7 +819,12 @@ function normalizeThriveNativeComposition(value: unknown): SiteForgeSnapshotView
               entry.intent === "created_native" ||
               entry.intent === "wp_fallback" ||
               entry.intent === "blocked_by_guard" ||
-              entry.intent === "blocked_by_missing_contract"
+              entry.intent === "blocked_by_missing_contract" ||
+              entry.intent === "reused_visual_symbol" ||
+              entry.intent === "created_visual_native_section" ||
+              entry.intent === "created_visual_cta_block" ||
+              entry.intent === "created_visual_faq_toggle" ||
+              entry.intent === "improved_visual_fallback"
                 ? entry.intent
                 : "wp_fallback",
             selectedOperation: entry.selectedOperation == null ? null : normalizeNativeOperation(entry.selectedOperation),
@@ -710,6 +837,10 @@ function normalizeThriveNativeComposition(value: unknown): SiteForgeSnapshotView
                 ? entry.targetObjectType
                 : "none",
             matchedSymbolId: typeof entry.matchedSymbolId === "number" ? entry.matchedSymbolId : null,
+            visualPattern: entry.visualPattern == null ? undefined : normalizeVisualPattern(entry.visualPattern),
+            visualPrimitive: entry.visualPrimitive == null ? undefined : normalizeVisualPrimitive(entry.visualPrimitive),
+            designIntentSatisfied: typeof entry.designIntentSatisfied === "boolean" ? entry.designIntentSatisfied : undefined,
+            fallbackReason: entry.fallbackReason == null ? undefined : nullableString(entry.fallbackReason),
             reason: stringOr(entry.reason, ""),
           }))
       : [],
@@ -851,11 +982,20 @@ function normalizeThriveNativeValidation(value: unknown): SiteForgeSnapshotView[
               entry.outcome === "wp_fallback" ||
               entry.outcome === "verification_failed" ||
               entry.outcome === "blocked_by_guard" ||
-              entry.outcome === "blocked_by_missing_contract"
+              entry.outcome === "blocked_by_missing_contract" ||
+              entry.outcome === "reused_visual_symbol" ||
+              entry.outcome === "created_visual_native_section" ||
+              entry.outcome === "created_visual_cta_block" ||
+              entry.outcome === "created_visual_faq_toggle" ||
+              entry.outcome === "improved_visual_fallback"
                 ? entry.outcome
                 : "wp_fallback",
             operation: entry.operation ? normalizeNativeOperation(entry.operation) : null,
             targetId: typeof entry.targetId === "number" ? entry.targetId : null,
+            visualPattern: entry.visualPattern == null ? undefined : normalizeVisualPattern(entry.visualPattern),
+            visualPrimitive: entry.visualPrimitive == null ? undefined : normalizeVisualPrimitive(entry.visualPrimitive),
+            designIntentSatisfied: typeof entry.designIntentSatisfied === "boolean" ? entry.designIntentSatisfied : undefined,
+            fallbackReason: entry.fallbackReason == null ? undefined : nullableString(entry.fallbackReason),
             reason: stringOr(entry.reason, ""),
           }))
       : [],

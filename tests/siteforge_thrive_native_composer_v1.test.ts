@@ -74,6 +74,11 @@ const sectionResolutions: ThriveSectionResolution[] = [
     symbolCandidateType: "header",
     preferredRenderTarget: "thrive_symbol_reference",
     resolution: "existing_symbol",
+    visualPattern: "hero_split",
+    selectedVisualPrimitive: "thrive_template_symbol",
+    primitiveSelectionSource: "existing_reusable_symbol",
+    designIntentSatisfied: true,
+    fallbackReason: null,
     matchedSymbolId: 57,
     matchedSymbolTitle: "Header",
     matchedRole: "header",
@@ -89,6 +94,11 @@ const sectionResolutions: ThriveSectionResolution[] = [
     symbolCandidateType: "cta",
     preferredRenderTarget: "wp_html_fallback",
     resolution: "wp_html_fallback",
+    visualPattern: "cta_band",
+    selectedVisualPrimitive: "wordpress_structured_fallback",
+    primitiveSelectionSource: "safe_fallback",
+    designIntentSatisfied: false,
+    fallbackReason: "native_primitive_unavailable",
     matchedSymbolId: null,
     matchedSymbolTitle: null,
     matchedRole: null,
@@ -131,8 +141,12 @@ describe("siteforge thrive native composer v1", () => {
     expect(plan.mode).toBe("thrive_native_staging_mode");
     expect(plan.homepagePostId).toBe(65);
     expect(plan.summary.reusedExisting).toBeGreaterThanOrEqual(1);
-    expect(plan.sections.some((entry) => entry.intent === "reused_existing")).toBe(true);
-    expect(plan.sections.some((entry) => entry.intent === "created_native")).toBe(true);
+    expect(plan.sections.some((entry) => entry.intent === "reused_visual_symbol")).toBe(true);
+    expect(
+      plan.sections.some(
+        (entry) => entry.intent === "created_visual_cta_block" || entry.intent === "created_visual_native_section"
+      )
+    ).toBe(true);
     expect(plan.operations.some((entry) => entry.operation === "createOrUpdateTemplateShellReference")).toBe(true);
   });
 

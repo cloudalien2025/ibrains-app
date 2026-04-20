@@ -216,6 +216,49 @@ export default function SiteForgeAppPage() {
     }),
     [thriveSectionResolutions]
   );
+  const visualCompositionSummary = useMemo(() => {
+    const byType = (type: string) => thriveSectionResolutions.find((entry) => entry.sectionType === type);
+    const hero = byType("hero");
+    const features = byType("features");
+    const cta = byType("cta");
+    const faq = byType("faq");
+    const testimonial = byType("testimonials");
+    const trust = byType("contact") ?? byType("problem");
+    const sectionIntents = thriveNativeComposition?.sections ?? [];
+    const reused = sectionIntents.filter(
+      (entry) => entry.intent === "reused_existing" || entry.intent === "reused_visual_symbol"
+    ).length;
+    const created = sectionIntents.filter(
+      (entry) =>
+        entry.intent === "created_native" ||
+        entry.intent === "created_visual_native_section" ||
+        entry.intent === "created_visual_cta_block" ||
+        entry.intent === "created_visual_faq_toggle"
+    ).length;
+    const fallback = sectionIntents.filter(
+      (entry) =>
+        entry.intent === "wp_fallback" ||
+        entry.intent === "improved_visual_fallback" ||
+        entry.intent === "blocked_by_guard" ||
+        entry.intent === "blocked_by_missing_contract"
+    ).length;
+    const lowDesignWarnings = thriveSectionResolutions
+      .filter((entry) => !entry.designIntentSatisfied || entry.primitiveSelectionSource === "safe_fallback")
+      .map((entry) => `${entry.sectionType}:${entry.fallbackReason ?? "safe_fallback"}`);
+
+    return {
+      hero: hero?.visualPattern ?? "n/a",
+      features: features?.visualPattern ?? "n/a",
+      cta: cta?.visualPattern ?? "n/a",
+      faq: faq?.visualPattern ?? "n/a",
+      testimonial: testimonial?.visualPattern ?? "n/a",
+      trust: trust?.visualPattern ?? "n/a",
+      reused,
+      created,
+      fallback,
+      lowDesignWarnings,
+    };
+  }, [thriveSectionResolutions, thriveNativeComposition]);
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
@@ -1178,22 +1221,25 @@ export default function SiteForgeAppPage() {
             </div>
           </div>
           <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Section Resolution</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Section Visual Mapping</div>
             <div className="mt-2 text-xs text-slate-300">
-              Section-to-symbol mapping suggestions are deterministic and advisory in safe mode.
+              Deterministic visual pattern and Thrive primitive resolution per section.
             </div>
             <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
               {thriveSectionResolutions.length ? (
                 thriveSectionResolutions.map((entry) => (
                   <div key={`${entry.pageSlug}:${entry.sectionId}`} className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200">
                     <div>
-                      {entry.pageSlug} / {entry.sectionType} {"->"} {entry.resolution}
+                      {entry.pageSlug} / {entry.sectionType} {"->"} {entry.visualPattern}
                     </div>
                     <div className="mt-1 text-slate-300">
-                      target={entry.preferredRenderTarget} | matched={entry.matchedSymbolTitle ?? "none"} | confidence=
-                      {entry.confidence.toFixed(2)}
+                      primitive={entry.selectedVisualPrimitive} ({entry.primitiveSelectionSource}) | matched=
+                      {entry.matchedSymbolTitle ?? "none"} | confidence={entry.confidence.toFixed(2)}
                     </div>
-                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
+                    <div className="mt-1 text-slate-400">
+                      target={entry.preferredRenderTarget} | designIntent={entry.designIntentSatisfied ? "satisfied" : "fallback"}
+                      {entry.fallbackReason ? ` | fallback=${entry.fallbackReason}` : ""}
+                    </div>
                   </div>
                 ))
               ) : (
@@ -1201,6 +1247,26 @@ export default function SiteForgeAppPage() {
                   No section resolution data yet. Run Generate to compute Thrive-aware section mapping.
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 grid gap-3">
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Visual Composition</div>
+            <div className="mt-2 text-sm text-slate-200">
+              hero={visualCompositionSummary.hero} | features={visualCompositionSummary.features} | cta={visualCompositionSummary.cta}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              faq={visualCompositionSummary.faq} | testimonials={visualCompositionSummary.testimonial} | trust={visualCompositionSummary.trust}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              reused={visualCompositionSummary.reused} | created={visualCompositionSummary.created} | fallback={visualCompositionSummary.fallback}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              {visualCompositionSummary.lowDesignWarnings.length
+                ? `Low-design warnings: ${visualCompositionSummary.lowDesignWarnings.join(" | ")}`
+                : "No low-design fallback warnings recorded."}
             </div>
           </div>
         </section>

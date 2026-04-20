@@ -62,4 +62,63 @@ describe("siteforge workspace shape normalization", () => {
     const bad = normalizeProjectPayload({ project: { name: "Missing Id" } });
     expect(bad).toBeNull();
   });
+
+  it("preserves visual composition metadata for section and native outcomes", () => {
+    const workspace = normalizeWorkspace({
+      project: { id: "p_visual", name: "Visual Project" },
+      snapshot: {
+        snapshotId: "snap_visual",
+        projectId: "p_visual",
+        thriveSectionResolutions: [
+          {
+            pageSlug: "home",
+            sectionId: "s_hero",
+            sectionType: "hero",
+            sectionIntent: "conversion",
+            symbolCandidateType: "header",
+            preferredRenderTarget: "thrive_symbol_reference",
+            resolution: "existing_symbol",
+            visualPattern: "hero_split",
+            selectedVisualPrimitive: "thrive_template_symbol",
+            primitiveSelectionSource: "existing_reusable_symbol",
+            designIntentSatisfied: true,
+            fallbackReason: null,
+            matchedSymbolId: 57,
+            matchedSymbolTitle: "Header",
+            matchedRole: "header",
+            confidence: 0.9,
+            reason: "match",
+            rejectedReasons: [],
+          },
+        ],
+        thriveNativeComposition: {
+          mode: "thrive_native_staging_mode",
+          sections: [
+            {
+              pageSlug: "home",
+              sectionId: "s_cta",
+              sectionType: "cta",
+              intent: "created_visual_cta_block",
+              selectedOperation: "createOrUpdateSection",
+              targetObjectType: "thrive_section",
+              matchedSymbolId: null,
+              visualPattern: "cta_band",
+              visualPrimitive: "thrive_call_to_action",
+              designIntentSatisfied: true,
+              fallbackReason: null,
+              reason: "created",
+            },
+          ],
+          operations: [],
+          summary: {},
+        },
+      },
+      runHistory: [],
+      runLogs: [],
+    });
+
+    expect(workspace?.snapshot?.thriveSectionResolutions[0]?.visualPattern).toBe("hero_split");
+    expect(workspace?.snapshot?.thriveSectionResolutions[0]?.selectedVisualPrimitive).toBe("thrive_template_symbol");
+    expect(workspace?.snapshot?.thriveNativeComposition?.sections[0]?.intent).toBe("created_visual_cta_block");
+  });
 });
