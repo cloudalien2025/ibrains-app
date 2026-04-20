@@ -1369,17 +1369,6 @@ export default function SiteForgeAppPage() {
             ? 4
             : 5;
 
-  const builderCanvasMode: BuilderCanvasMode =
-    currentBuilderStep === 1
-      ? "website"
-      : currentBuilderStep === 2
-        ? "connect"
-        : currentBuilderStep === 3
-          ? "plan"
-          : currentBuilderStep === 4
-            ? "pages"
-            : "build";
-
   const builderSteps: Array<{ id: BuilderStepId; label: string; description: string }> = [
     {
       id: 1,
@@ -1407,10 +1396,78 @@ export default function SiteForgeAppPage() {
       description: "Let SiteForge create your first website draft.",
     },
   ];
+  const [builderWorkspaceStep, setBuilderWorkspaceStep] = useState<BuilderStepId | null>(null);
+  const maxUnlockedBuilderStep: BuilderStepId =
+    !projectSelected || !briefCompleted
+      ? 1
+      : !aiConfigured || !connectionValidated
+        ? 2
+        : !currentSession?.buildSpec
+          ? 3
+          : !pagesReviewed
+            ? 4
+            : 5;
+
+  const activeBuilderStep: BuilderStepId =
+    builderWorkspaceStep && builderWorkspaceStep <= maxUnlockedBuilderStep ? builderWorkspaceStep : currentBuilderStep;
+
+  useEffect(() => {
+    if (!builderWorkspaceStep || builderWorkspaceStep > maxUnlockedBuilderStep) {
+      setBuilderWorkspaceStep(currentBuilderStep);
+    }
+  }, [builderWorkspaceStep, currentBuilderStep, maxUnlockedBuilderStep]);
+
+  const builderCanvasMode: BuilderCanvasMode =
+    activeBuilderStep === 1
+      ? "website"
+      : activeBuilderStep === 2
+        ? "connect"
+        : activeBuilderStep === 3
+          ? "plan"
+          : activeBuilderStep === 4
+            ? "pages"
+            : "build";
+
   const currentStepMeta = builderSteps.find((step) => step.id === currentBuilderStep) ?? builderSteps[0];
+  const activeStepMeta = builderSteps.find((step) => step.id === activeBuilderStep) ?? builderSteps[0];
+
+  const stepTabMeta: Array<{ id: BuilderStepId; shortLabel: string; state: "done" | "current" | "locked"; unlocked: boolean }> = [
+    { id: 1, shortLabel: "1. Website", state: currentBuilderStep > 1 ? "done" : "current", unlocked: true },
+    {
+      id: 2,
+      shortLabel: "2. Connect",
+      state: currentBuilderStep > 2 ? "done" : currentBuilderStep === 2 ? "current" : "locked",
+      unlocked: maxUnlockedBuilderStep >= 2,
+    },
+    {
+      id: 3,
+      shortLabel: "3. Plan",
+      state: currentBuilderStep > 3 ? "done" : currentBuilderStep === 3 ? "current" : "locked",
+      unlocked: maxUnlockedBuilderStep >= 3,
+    },
+    {
+      id: 4,
+      shortLabel: "4. Pages",
+      state: currentBuilderStep > 4 ? "done" : currentBuilderStep === 4 ? "current" : "locked",
+      unlocked: maxUnlockedBuilderStep >= 4,
+    },
+    {
+      id: 5,
+      shortLabel: "5. Build",
+      state: currentBuilderStep === 5 ? "current" : "locked",
+      unlocked: maxUnlockedBuilderStep >= 5,
+    },
+  ];
+
+  const jumpToBuilderStep = (stepId: BuilderStepId) => {
+    if (stepId > maxUnlockedBuilderStep) return;
+    setBuilderWorkspaceStep(stepId);
+    if (stepId === 4) setPagesReviewed(false);
+    if (stepId === 5) setPagesReviewed(true);
+  };
 
   const primaryBuilderAction: { label: string; action: () => void; disabled?: boolean } =
-    currentBuilderStep === 1
+    activeBuilderStep === 1
       ? {
           label: projectSelected ? "Save and Continue" : "Continue",
           action: () => {
@@ -1422,7 +1479,7 @@ export default function SiteForgeAppPage() {
           },
           disabled: busy,
         }
-      : currentBuilderStep === 2
+      : activeBuilderStep === 2
         ? {
             label: "Check Connection",
             action: () => {
@@ -1430,24 +1487,23 @@ export default function SiteForgeAppPage() {
             },
             disabled: !selectedProjectId || busy,
           }
-        : currentBuilderStep === 3
+        : activeBuilderStep === 3
           ? {
-              label: "Review Plan",
+              label: "Looks Good, Continue",
               action: () => {
                 if (!currentSession?.buildSpec) {
                   void generateSite();
                   return;
                 }
-                setActiveNav("strategy");
+                jumpToBuilderStep(4);
               },
               disabled: !selectedProjectId || busy || !briefIsValid(),
             }
-          : currentBuilderStep === 4
+          : activeBuilderStep === 4
             ? {
-                label: "Review Pages",
+                label: "Continue to Build",
                 action: () => {
-                  setPagesReviewed(true);
-                  setActiveNav("pages");
+                  jumpToBuilderStep(5);
                 },
               }
             : {
@@ -1459,14 +1515,23 @@ export default function SiteForgeAppPage() {
               };
 
   const secondaryBuilderAction: { label: string; action: () => void } | null =
-    currentBuilderStep > 1
+    activeBuilderStep > 1
       ? {
           label: "Back",
           action: () => {
-            if (currentBuilderStep === 2) setActiveNav("mission_control");
-            if (currentBuilderStep === 3) setActiveNav("settings");
-            if (currentBuilderStep === 4) setPagesReviewed(false);
-            if (currentBuilderStep === 5) setPagesReviewed(false);
+            if (activeBuilderStep === 2) {
+              jumpToBuilderStep(1);
+              return;
+            }
+            if (activeBuilderStep === 3) {
+              jumpToBuilderStep(2);
+              return;
+            }
+            if (activeBuilderStep === 4) {
+              jumpToBuilderStep(3);
+              return;
+            }
+            jumpToBuilderStep(4);
           },
         }
       : null;
@@ -1637,26 +1702,9 @@ export default function SiteForgeAppPage() {
             {activeNav === "mission_control" ? (
               <div className="mt-4 space-y-3">
                 <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Current Step</div>
-                  <div className="mt-2 text-sm text-slate-100">
-                    Step {currentStepMeta.id} — {currentStepMeta.label.replace(/^\d+\.\s/, "")}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-400">{currentStepMeta.description}</div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Progress Steps</div>
-                  <div className="mt-2 space-y-1 text-xs text-slate-300">
-                    {builderSteps.map((step) => {
-                      const state = step.id < currentBuilderStep ? "Done" : step.id === currentBuilderStep ? "Current" : "Next";
-                      return (
-                        <div key={step.id} className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-white/5 px-2 py-1.5">
-                          <span>{step.label}</span>
-                          <span className="text-[11px] text-slate-400">{state}</span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Now</div>
+                  <div className="mt-2 text-sm text-slate-100">Step {currentStepMeta.id}</div>
+                  <div className="mt-1 text-xs text-slate-400">{currentStepMeta.label.replace(/^\d+\.\s/, "")}</div>
                 </div>
 
                 <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
@@ -1722,10 +1770,40 @@ export default function SiteForgeAppPage() {
           <div className="space-y-4">
             {activeNav === "mission_control" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
+                <div className="sticky top-2 z-10 rounded-xl border border-white/10 bg-slate-950/85 p-2 backdrop-blur">
+                  <div className="grid gap-2 md:grid-cols-5">
+                    {stepTabMeta.map((tab) => {
+                      const isWorkspaceActive = activeBuilderStep === tab.id;
+                      const baseClass = tab.state === "current"
+                        ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
+                        : tab.state === "done"
+                          ? "border-emerald-300/50 bg-emerald-500/15 text-emerald-100"
+                          : "border-white/15 bg-white/5 text-slate-400";
+                      return (
+                        <button
+                          key={tab.id}
+                          type="button"
+                          onClick={() => jumpToBuilderStep(tab.id)}
+                          disabled={!tab.unlocked}
+                          className={`rounded-lg border px-3 py-2 text-left text-xs transition ${baseClass} ${
+                            isWorkspaceActive ? "ring-1 ring-cyan-300/60" : ""
+                          } ${tab.unlocked ? "hover:border-white/30" : "cursor-not-allowed opacity-70"}`}
+                        >
+                          <div className="font-medium">{tab.shortLabel}</div>
+                          <div className="mt-1 text-[11px] uppercase tracking-[0.08em]">{tab.state === "done" ? "Done" : tab.state === "current" ? "Current" : "Locked"}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <h2 className="text-xl font-semibold text-slate-100">Step {activeStepMeta.id} — {activeStepMeta.label.replace(/^\d+\.\s/, "")}</h2>
+                  <p className="mt-1 text-sm text-slate-300">{activeStepMeta.description}</p>
+                </div>
+
                 {builderCanvasMode === "website" ? (
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-100">Step 1 — Tell us about your website</h2>
-                    <p className="text-sm text-slate-300">Tell SiteForge what you do and what you want your website to achieve.</p>
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
                         <label htmlFor="siteforge-step1-business-name" className="text-xs text-slate-300">Website name</label>
@@ -1803,8 +1881,6 @@ export default function SiteForgeAppPage() {
                 ) : null}
                 {builderCanvasMode === "connect" ? (
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-100">Step 2 — Connect your site</h2>
-                    <p className="text-sm text-slate-300">Add your WordPress and Thrive details so SiteForge can check your site.</p>
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                       <div>
                         <label htmlFor="siteforge-step2-url" className="text-xs text-slate-300">WordPress URL</label>
@@ -1886,8 +1962,6 @@ export default function SiteForgeAppPage() {
                 ) : null}
                 {builderCanvasMode === "plan" ? (
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-100">Step 3 — Review your plan</h2>
-                    <p className="text-sm text-slate-300">Here is the website plan SiteForge recommends.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Business: {briefForm.businessName || "Not set"} · Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
                       <div className="mt-1">
@@ -1904,8 +1978,6 @@ export default function SiteForgeAppPage() {
                 ) : null}
                 {builderCanvasMode === "pages" ? (
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-100">Step 4 — Review your pages</h2>
-                    <p className="text-sm text-slate-300">Check your pages before SiteForge builds the draft.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Pages: {pageRows.length || 0}</div>
                       <div className="mt-1">Selected page: {selectedPageRow?.pageName ?? "none"}</div>
@@ -1931,8 +2003,6 @@ export default function SiteForgeAppPage() {
                 ) : null}
                 {builderCanvasMode === "build" ? (
                   <div className="space-y-4">
-                    <h2 className="text-xl font-semibold text-slate-100">Step 5 — Build your draft</h2>
-                    <p className="text-sm text-slate-300">Build your first website draft when everything looks right.</p>
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Build status: {currentSession?.status ?? "not started"}</div>
                       <div className="mt-1">Ready now: {setupCoreComplete ? "Yes" : "Not yet"}</div>
