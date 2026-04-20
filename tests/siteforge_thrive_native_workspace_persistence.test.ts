@@ -71,6 +71,79 @@ function sessionWithNative(): BuildSession {
           rollback: { available: false, steps: [] },
           warnings: [],
         },
+        nativeValidation: {
+          runId: "sfnative_1",
+          mode: "real_run",
+          startedAt: now,
+          completedAt: now,
+          status: "passed",
+          guard: {
+            eligible: true,
+            blockedReason: null,
+            environment: "test",
+            stagingMarkerValid: true,
+            connectionHost: "staging.example.com",
+            allowlistedOperations: ["createOrUpdateSection"],
+            routeAllowlist: ["/wp-json/wp/v2/thrive_section"],
+            schemaContractVersion: "v1",
+          },
+          planMode: "thrive_native_staging_mode",
+          homepagePostId: 65,
+          summary: {
+            reusedExisting: 1,
+            createdNative: 1,
+            wpFallback: 0,
+            verificationFailed: 0,
+            blockedByGuard: 0,
+            blockedByMissingContract: 0,
+          },
+          sectionOutcomes: [],
+          verification: {
+            stepsTotal: 1,
+            verifiedSteps: 1,
+            failedSteps: 0,
+            pageReachable: true,
+            pageIdentityOk: true,
+            objectStateOk: true,
+            notes: [],
+          },
+          execution: null,
+          rollback: null,
+          rollbackVerification: {
+            attempted: false,
+            success: true,
+            notes: [],
+          },
+          promotionCandidateSummary: {
+            ready: true,
+            reason: "validation_passed",
+            environment: "test",
+            runFingerprint: "abc123",
+            pageId: 65,
+            shellTemplateId: 10,
+            reusedSymbolIds: [],
+            createdObjectIds: [],
+            payloadHashes: ["hash1"],
+            verificationSnapshot: {
+              stepsTotal: 1,
+              verifiedSteps: 1,
+              failedSteps: 0,
+              objectStateOk: true,
+              pageReachable: true,
+              pageIdentityOk: true,
+            },
+            rollbackSnapshot: {
+              available: false,
+              attempted: false,
+              success: true,
+            },
+            themeArtifactRef: null,
+            architectContentArtifactRef: null,
+            landingPageArtifactRef: null,
+            designPackArtifactRef: null,
+            contractCaptureRef: "contract:v1",
+          },
+        },
         sectionResolutions: [],
       },
       actionLog: [],
@@ -105,5 +178,7 @@ describe("siteforge thrive native workspace persistence", () => {
     expect(snapshot.thriveNativeGuard?.eligible).toBe(true);
     expect(snapshot.thriveNativeComposition?.mode).toBe("thrive_native_staging_mode");
     expect(snapshot.thriveNativeExecution?.success).toBe(true);
+    expect(snapshot.thriveNativeValidation?.status).toBe("passed");
+    expect(snapshot.thriveNativeValidation?.promotionCandidateSummary.ready).toBe(true);
   });
 });

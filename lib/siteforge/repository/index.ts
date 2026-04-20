@@ -317,6 +317,7 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
   const embeddedNativeGuard = isObjectRecord(intelRecord?.nativeGuard) ? intelRecord.nativeGuard : null;
   const embeddedNativeComposition = isObjectRecord(intelRecord?.nativeComposition) ? intelRecord.nativeComposition : null;
   const embeddedNativeExecution = isObjectRecord(intelRecord?.nativeExecution) ? intelRecord.nativeExecution : null;
+  const embeddedNativeValidation = isObjectRecord(intelRecord?.nativeValidation) ? intelRecord.nativeValidation : null;
 
   return {
     snapshotId: row.id,
@@ -338,6 +339,7 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
     thriveNativeGuard: embeddedNativeGuard as SiteForgeSnapshot["thriveNativeGuard"],
     thriveNativeComposition: embeddedNativeComposition as SiteForgeSnapshot["thriveNativeComposition"],
     thriveNativeExecution: embeddedNativeExecution as SiteForgeSnapshot["thriveNativeExecution"],
+    thriveNativeValidation: embeddedNativeValidation as SiteForgeSnapshot["thriveNativeValidation"],
     homepageStrategy: row.homepage_strategy,
     lastRunSummary: row.last_run_summary,
     lastRunStatus: row.last_run_status,
@@ -1072,7 +1074,8 @@ class PostgresRepository implements SiteForgeRepository {
       snapshot.thriveSectionResolutions.length > 0 ||
       snapshot.thriveNativeComposition ||
       snapshot.thriveNativeExecution ||
-      snapshot.thriveNativeGuard
+      snapshot.thriveNativeGuard ||
+      snapshot.thriveNativeValidation
         ? {
             intel: snapshot.thriveIntelligence,
             sectionResolutions: snapshot.thriveSectionResolutions,
@@ -1080,6 +1083,7 @@ class PostgresRepository implements SiteForgeRepository {
             nativeGuard: snapshot.thriveNativeGuard,
             nativeComposition: snapshot.thriveNativeComposition,
             nativeExecution: snapshot.thriveNativeExecution,
+            nativeValidation: snapshot.thriveNativeValidation,
           }
         : null;
     await pool.query(

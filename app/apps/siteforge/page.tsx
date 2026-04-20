@@ -200,6 +200,8 @@ export default function SiteForgeAppPage() {
     currentSession?.executionResult?.thrive.nativeComposition ?? snapshot?.thriveNativeComposition ?? null;
   const thriveNativeExecution =
     currentSession?.executionResult?.thrive.nativeExecution ?? snapshot?.thriveNativeExecution ?? null;
+  const thriveNativeValidation =
+    currentSession?.executionResult?.thrive.nativeValidation ?? snapshot?.thriveNativeValidation ?? null;
   const thriveSectionResolutions =
     currentSession?.executionResult?.thrive.sectionResolutions ?? snapshot?.thriveSectionResolutions ?? [];
   const reusableSummary = useMemo(
@@ -1248,6 +1250,30 @@ export default function SiteForgeAppPage() {
             <div className="mt-1 text-sm text-slate-200">
               Rollback/reset availability: {thriveNativeExecution?.rollback.available ? "available" : "not available"}
             </div>
+            <div className="mt-2 text-xs uppercase tracking-[0.18em] text-slate-400">Native Validation</div>
+            <div className="mt-1 text-sm text-slate-200">
+              Validation mode: {thriveNativeValidation?.mode ?? "not_run"} | status: {thriveNativeValidation?.status ?? "unknown"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              verification: steps={thriveNativeValidation?.verification.stepsTotal ?? 0} verified=
+              {thriveNativeValidation?.verification.verifiedSteps ?? 0} failed=
+              {thriveNativeValidation?.verification.failedSteps ?? 0}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              rollback result:{" "}
+              {thriveNativeValidation
+                ? thriveNativeValidation.rollbackVerification.attempted
+                  ? thriveNativeValidation.rollbackVerification.success
+                    ? "completed"
+                    : "incomplete"
+                  : "not attempted"
+                : "unknown"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              promotion candidate:{" "}
+              {thriveNativeValidation?.promotionCandidateSummary.ready ? "ready" : "not ready"} (
+              {thriveNativeValidation?.promotionCandidateSummary.reason ?? "unknown"})
+            </div>
             <div className="mt-2 max-h-40 space-y-2 overflow-auto pr-1 text-xs">
               {(thriveNativeExecution?.steps ?? []).length ? (
                 (thriveNativeExecution?.steps ?? []).map((step, idx) => (
@@ -1264,6 +1290,27 @@ export default function SiteForgeAppPage() {
               ) : (
                 <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
                   No native staging execution recorded for this run.
+                </div>
+              )}
+            </div>
+            <div className="mt-3 text-xs text-slate-300">Native validation outcomes</div>
+            <div className="mt-2 max-h-32 space-y-2 overflow-auto pr-1 text-xs">
+              {(thriveNativeValidation?.sectionOutcomes ?? []).length ? (
+                (thriveNativeValidation?.sectionOutcomes ?? []).map((entry) => (
+                  <div
+                    key={`${entry.pageSlug}:${entry.sectionId}:validation`}
+                    className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200"
+                  >
+                    <div>
+                      {entry.sectionType} {"->"} {entry.outcome} ({entry.operation ?? "none"}) id=
+                      {entry.targetId ?? "n/a"}
+                    </div>
+                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
+                  No native validation summary recorded yet.
                 </div>
               )}
             </div>

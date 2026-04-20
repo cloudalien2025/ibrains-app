@@ -124,6 +124,7 @@ describe("siteforge thrive safe-mode integration", () => {
         nativeGuard: null,
         nativeComposition: null,
         nativeExecution: null,
+        nativeValidation: null,
         sectionResolutions: translated.sectionResolutions,
       },
       "use_existing"

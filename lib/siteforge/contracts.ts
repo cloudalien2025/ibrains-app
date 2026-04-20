@@ -251,6 +251,7 @@ export type ExecutionResult = {
     nativeGuard: ThriveNativeGuardStatus | null;
     nativeComposition: ThriveNativeCompositionPlan | null;
     nativeExecution: ThriveNativeExecutionResult | null;
+    nativeValidation: ThriveNativeValidationResult | null;
     sectionResolutions: ThriveSectionResolution[];
   };
   actionLog: ExecutionActionLog[];
@@ -487,6 +488,90 @@ export type ThriveNativeExecutionResult = {
   warnings: string[];
 };
 
+export type ThriveNativeValidationSectionOutcome = {
+  pageSlug: string;
+  sectionId: string;
+  sectionType: BuildSpecSection["type"];
+  outcome:
+    | "reused_existing"
+    | "created_native"
+    | "wp_fallback"
+    | "verification_failed"
+    | "blocked_by_guard"
+    | "blocked_by_missing_contract";
+  operation: ThriveNativeOperation | null;
+  targetId: number | null;
+  reason: string;
+};
+
+export type ThriveNativeValidationResult = {
+  runId: string;
+  mode: "dry_run" | "real_run";
+  startedAt: string;
+  completedAt: string;
+  status: "passed" | "failed" | "blocked";
+  guard: ThriveNativeGuardStatus;
+  planMode: "thrive_native_staging_mode" | "blocked_native_mode";
+  homepagePostId: number | null;
+  summary: {
+    reusedExisting: number;
+    createdNative: number;
+    wpFallback: number;
+    verificationFailed: number;
+    blockedByGuard: number;
+    blockedByMissingContract: number;
+  };
+  sectionOutcomes: ThriveNativeValidationSectionOutcome[];
+  verification: {
+    stepsTotal: number;
+    verifiedSteps: number;
+    failedSteps: number;
+    pageReachable: boolean;
+    pageIdentityOk: boolean;
+    objectStateOk: boolean;
+    notes: string[];
+  };
+  execution: ThriveNativeExecutionResult | null;
+  rollback: ThriveNativeExecutionResult["rollback"] | null;
+  rollbackVerification: {
+    attempted: boolean;
+    success: boolean;
+    notes: string[];
+  };
+  promotionCandidateSummary: {
+    ready: boolean;
+    reason: string;
+    environment: string;
+    runFingerprint: string;
+    pageId: number | null;
+    shellTemplateId: number | null;
+    reusedSymbolIds: number[];
+    createdObjectIds: Array<{
+      objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+      id: number;
+    }>;
+    payloadHashes: string[];
+    verificationSnapshot: {
+      stepsTotal: number;
+      verifiedSteps: number;
+      failedSteps: number;
+      objectStateOk: boolean;
+      pageReachable: boolean;
+      pageIdentityOk: boolean;
+    };
+    rollbackSnapshot: {
+      available: boolean;
+      attempted: boolean;
+      success: boolean;
+    };
+    themeArtifactRef: string | null;
+    architectContentArtifactRef: string | null;
+    landingPageArtifactRef: string | null;
+    designPackArtifactRef: string | null;
+    contractCaptureRef: string | null;
+  };
+};
+
 export type BuildRunState = {
   currentStage: BuildStage;
   progressPct: number;
@@ -628,6 +713,7 @@ export type SiteForgeSnapshot = {
   thriveNativeGuard: ThriveNativeGuardStatus | null;
   thriveNativeComposition: ThriveNativeCompositionPlan | null;
   thriveNativeExecution: ThriveNativeExecutionResult | null;
+  thriveNativeValidation: ThriveNativeValidationResult | null;
   homepageStrategy: HomepageStrategyMode;
   lastRunSummary: string | null;
   lastRunStatus: BuildSessionStatus | null;

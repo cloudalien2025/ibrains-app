@@ -186,6 +186,7 @@ export async function persistSnapshotFromSession(params: {
     thriveNativeGuard: execution?.thrive?.nativeGuard ?? null,
     thriveNativeComposition: execution?.thrive?.nativeComposition ?? null,
     thriveNativeExecution: execution?.thrive?.nativeExecution ?? null,
+    thriveNativeValidation: execution?.thrive?.nativeValidation ?? null,
     homepageStrategy: params.homepageStrategy,
     lastRunSummary: execution
       ? `Pages applied: ${execution.createdPages.filter((entry) => entry.status === "created" || entry.status === "updated").length}`
