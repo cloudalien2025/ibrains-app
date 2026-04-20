@@ -240,7 +240,7 @@ export default function Home() {
                 </a>
               </div>
               <p className="mt-3 text-xs text-zinc-400">
-                Tip: set <span className="font-mono">NEXT_PUBLIC_WORKER_URL</span> in Vercel env vars if you ever change the API host.
+                Tip: set <span className="font-mono">NEXT_PUBLIC_WORKER_URL</span> in the app environment if you ever change the API host.
               </p>
               {state.phase === "error" ? (
                 <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-100">
