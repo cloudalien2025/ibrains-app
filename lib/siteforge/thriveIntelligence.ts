@@ -1,5 +1,6 @@
 import { ConnectionProfile, ThriveIntelligence, ThriveSymbolRole, ThriveSymbolIntelligence } from "@/lib/siteforge/contracts";
 import { nowIso } from "@/lib/siteforge/utils";
+import { createHash } from "node:crypto";
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, "");
@@ -32,6 +33,22 @@ function inferRoleFromToken(token: string): ThriveSymbolRole {
   if (normalized.includes("footer")) return "footer";
   if (normalized.includes("section")) return "section";
   return "unknown";
+}
+
+function tokenize(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]+/g, " ")
+    .split(/\s+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .slice(0, 32);
+}
+
+function stableHash(value: string): string | null {
+  const input = value.trim();
+  if (!input) return null;
+  return createHash("sha256").update(input).digest("hex").slice(0, 16);
 }
 
 export function inferThriveSymbolRole(params: {
@@ -98,6 +115,7 @@ function toSymbolIntelligence(entry: Record<string, unknown>): ThriveSymbolIntel
   });
   const tveUpdatedPost = typeof entry.tve_updated_post === "string" ? entry.tve_updated_post : "";
   const tveCustomCss = typeof entry.tve_custom_css === "string" ? entry.tve_custom_css : "";
+  const tokenSource = [title, slug, taxonomySlug ?? "", taxonomyName ?? ""].join(" ");
 
   return {
     id,
@@ -111,6 +129,9 @@ function toSymbolIntelligence(entry: Record<string, unknown>): ThriveSymbolIntel
     reusable: true,
     hasBuilderContent: tveUpdatedPost.trim().length > 0,
     hasCustomCss: tveCustomCss.trim().length > 0,
+    contentHash: stableHash(tveUpdatedPost),
+    cssHash: stableHash(tveCustomCss),
+    keywords: tokenize(tokenSource),
   };
 }
 

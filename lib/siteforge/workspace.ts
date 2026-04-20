@@ -177,6 +177,12 @@ export async function persistSnapshotFromSession(params: {
       : [],
     thriveDetected: params.thriveDetected,
     thriveIntelligence: execution?.thrive?.intelligence ?? null,
+    thriveSectionResolutions: execution?.thrive?.sectionResolutions ?? [],
+    thriveModeSummary: execution?.thrive?.runtime ?? {
+      wpSafeMode: true,
+      thriveIntelMode: false,
+      stagingNativeMode: false,
+    },
     homepageStrategy: params.homepageStrategy,
     lastRunSummary: execution
       ? `Pages applied: ${execution.createdPages.filter((entry) => entry.status === "created" || entry.status === "updated").length}`

@@ -99,7 +99,20 @@ export type BuildSpecSection = {
     pageSlug?: string;
     sectionIntent?: "conversion" | "informational" | "trust" | "navigation";
     thriveSymbolRoleCandidate?: "header" | "footer" | "section" | "unknown";
-    preferredRenderTarget?: "wordpress_page_content" | "thrive_symbol_reference" | "future_thrive_template_assignment";
+    pageRole?: PageIntent;
+    shellRole?: "homepage_shell" | "standard_shell" | "conversion_shell" | "utility_shell" | "unknown";
+    symbolCandidateType?: "header" | "footer" | "cta" | "testimonial" | "faq" | "marketing" | "generic";
+    preferredRenderTarget?: ThriveRenderTarget;
+    shellTemplateGroupCandidate?: string | null;
+    shellLayoutCandidate?: string | null;
+    reusableSymbolCandidates?: number[];
+    contentTemplateCandidates?: number[];
+    landingPageCandidate?: string | null;
+    rendererMode?: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode";
+    themeArtifactRef?: string | null;
+    architectContentArtifactRef?: string | null;
+    landingPageArtifactRef?: string | null;
+    designPackArtifactRef?: string | null;
     [key: string]: unknown;
   };
 };
@@ -113,7 +126,19 @@ export type BuildSpecPage = {
   metadata: {
     template: "landing" | "standard" | "contact";
     thriveLayoutKey?: string;
-    preferredRenderTarget?: "wordpress_page_content" | "thrive_symbol_reference" | "future_thrive_template_assignment";
+    pageRole?: PageIntent;
+    shellRole?: "homepage_shell" | "standard_shell" | "conversion_shell" | "utility_shell" | "unknown";
+    preferredRenderTarget?: ThriveRenderTarget;
+    shellTemplateGroupCandidate?: string | null;
+    shellLayoutCandidate?: string | null;
+    reusableSymbolCandidates?: number[];
+    contentTemplateCandidates?: number[];
+    landingPageCandidate?: string | null;
+    rendererMode?: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode";
+    themeArtifactRef?: string | null;
+    architectContentArtifactRef?: string | null;
+    landingPageArtifactRef?: string | null;
+    designPackArtifactRef?: string | null;
     [key: string]: unknown;
   };
 };
@@ -128,11 +153,23 @@ export type BuildSpec = {
     thriveAware: boolean;
     thriveMode?: "wp_safe_mode" | "future_thrive_native_mode";
     thriveIntelligenceUsed?: boolean;
+    thriveExecutionMode?: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode";
+    themeArtifactRef?: string | null;
+    architectContentArtifactRef?: string | null;
+    landingPageArtifactRef?: string | null;
+    designPackArtifactRef?: string | null;
     createdAt: string;
   };
 };
 
 export type PageIntent = "homepage" | "about" | "contact" | "faq" | "features" | "pricing" | "generic";
+export type ThriveRenderTarget =
+  | "wordpress_page_content"
+  | "thrive_symbol_reference"
+  | "thrive_content_template_reference"
+  | "future_thrive_template_assignment"
+  | "future_landing_page_candidate"
+  | "wp_html_fallback";
 
 export type QAWarning = {
   code: string;
@@ -202,6 +239,12 @@ export type ExecutionResult = {
     intelligenceAvailable: boolean;
     symbolInventoryPresent: boolean;
     intelligence: ThriveIntelligence | null;
+    runtime: {
+      wpSafeMode: boolean;
+      thriveIntelMode: boolean;
+      stagingNativeMode: boolean;
+    };
+    sectionResolutions: ThriveSectionResolution[];
   };
   actionLog: ExecutionActionLog[];
   warnings: string[];
@@ -295,6 +338,25 @@ export type ThriveSymbolIntelligence = {
   reusable: boolean;
   hasBuilderContent: boolean;
   hasCustomCss: boolean;
+  contentHash?: string | null;
+  cssHash?: string | null;
+  keywords?: string[];
+};
+
+export type ThriveSectionResolution = {
+  pageSlug: string;
+  sectionId: string;
+  sectionType: BuildSpecSection["type"];
+  sectionIntent: NonNullable<BuildSpecSection["metadata"]>["sectionIntent"];
+  symbolCandidateType: NonNullable<BuildSpecSection["metadata"]>["symbolCandidateType"];
+  preferredRenderTarget: ThriveRenderTarget;
+  resolution: "existing_symbol" | "existing_content_template" | "future_landing_page_candidate" | "wp_html_fallback";
+  matchedSymbolId: number | null;
+  matchedSymbolTitle: string | null;
+  matchedRole: ThriveSymbolRole | null;
+  confidence: number;
+  reason: string;
+  rejectedReasons: string[];
 };
 
 export type ThriveIntelligence = {
@@ -459,6 +521,12 @@ export type SiteForgeSnapshot = {
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
   thriveIntelligence: ThriveIntelligence | null;
+  thriveSectionResolutions: ThriveSectionResolution[];
+  thriveModeSummary: {
+    wpSafeMode: boolean;
+    thriveIntelMode: boolean;
+    stagingNativeMode: boolean;
+  };
   homepageStrategy: HomepageStrategyMode;
   lastRunSummary: string | null;
   lastRunStatus: BuildSessionStatus | null;

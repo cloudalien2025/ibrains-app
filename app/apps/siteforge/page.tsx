@@ -182,6 +182,25 @@ export default function SiteForgeAppPage() {
   const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);
   const thriveIntel = snapshot?.thriveIntelligence ?? currentSession?.executionResult?.thrive.intelligence ?? null;
   const thriveExecutionMode = currentSession?.executionResult?.thrive.executionMode ?? "wp_safe_mode";
+  const thriveRuntime = currentSession?.executionResult?.thrive.runtime ?? snapshot?.thriveModeSummary ?? {
+    wpSafeMode: true,
+    thriveIntelMode: false,
+    stagingNativeMode: false,
+  };
+  const thriveSectionResolutions =
+    currentSession?.executionResult?.thrive.sectionResolutions ?? snapshot?.thriveSectionResolutions ?? [];
+  const reusableSummary = useMemo(
+    () => ({
+      reusableNow: thriveSectionResolutions.filter((entry) => entry.resolution === "existing_symbol").length,
+      safeWritableNow: thriveSectionResolutions.filter((entry) => entry.preferredRenderTarget === "wordpress_page_content" || entry.preferredRenderTarget === "wp_html_fallback").length,
+      stagedOnly: thriveSectionResolutions.filter(
+        (entry) =>
+          entry.preferredRenderTarget === "future_landing_page_candidate" ||
+          entry.preferredRenderTarget === "future_thrive_template_assignment"
+      ).length,
+    }),
+    [thriveSectionResolutions]
+  );
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
@@ -1059,7 +1078,16 @@ export default function SiteForgeAppPage() {
             <div className="mt-1 text-sm text-slate-200">Connection: {savedConnection?.label ?? "Not set"}</div>
             <div className="mt-1 text-sm text-slate-200">Validation: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
             <div className="mt-1 text-sm text-slate-200">Thrive: {savedConnection?.thriveDetected ? "Detected" : "Not detected"}</div>
-            <div className="mt-1 text-sm text-slate-200">Thrive Mode: {thriveExecutionMode === "wp_safe_mode" ? "Thrive-aware safe mode" : "Future Thrive-native mode"}</div>
+            <div className="mt-1 text-sm text-slate-200">
+              Thrive Mode:{" "}
+              {thriveRuntime.stagingNativeMode
+                ? "Staging-native mode"
+                : thriveRuntime.thriveIntelMode
+                  ? "Thrive-aware safe mode"
+                  : thriveExecutionMode === "wp_safe_mode"
+                    ? "WP safe mode"
+                    : "Future Thrive-native mode"}
+            </div>
             <div className="mt-1 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
             <div className="mt-1 text-sm text-slate-200">
               Thrive symbols: {thriveIntel?.symbolSummary.total ?? 0} (headers {thriveIntel?.symbolSummary.headers ?? 0}, footers {thriveIntel?.symbolSummary.footers ?? 0})
@@ -1107,7 +1135,56 @@ export default function SiteForgeAppPage() {
               Thrive intel available: {currentSession?.executionResult?.thrive.intelligenceAvailable ? "Yes" : "No"} | Symbol inventory:{" "}
               {currentSession?.executionResult?.thrive.symbolInventoryPresent ? "Present" : "Not captured"}
             </div>
+            <div className="mt-2 text-xs text-slate-400">
+              Runtime modes: wp_safe_mode={thriveRuntime.wpSafeMode ? "on" : "off"} | thrive_intel_mode={thriveRuntime.thriveIntelMode ? "on" : "off"} | staging_native_mode={thriveRuntime.stagingNativeMode ? "on" : "off"}
+            </div>
             <div className="mt-2 text-xs text-slate-400">Last validated: {formatDate(savedConnection?.lastValidatedAt)}</div>
+          </div>
+        </section>
+
+        <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)]">
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Thrive Intelligence</div>
+            <div className="mt-2 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
+            <div className="mt-1 text-sm text-slate-200">Skin slug: {thriveIntel?.activeSkin?.slug ?? "Unknown"}</div>
+            <div className="mt-1 text-sm text-slate-200">
+              Symbol inventory by role: headers {thriveIntel?.symbolSummary.headers ?? 0}, footers {thriveIntel?.symbolSummary.footers ?? 0}, sections {thriveIntel?.symbolSummary.sections ?? 0}, unknown {thriveIntel?.symbolSummary.unknown ?? 0}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Reusable now: {reusableSummary.reusableNow} | Safely writable now: {reusableSummary.safeWritableNow} | Future staged-native only: {reusableSummary.stagedOnly}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Homepage targeting truth: {snapshot?.currentHomepageTitle ?? "Unknown"} ({snapshot?.currentHomepageSource ?? "unknown"})
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              Warnings: {thriveIntel?.warnings.length ? thriveIntel.warnings.join(" | ") : "None"}
+            </div>
+          </div>
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Section Resolution</div>
+            <div className="mt-2 text-xs text-slate-300">
+              Section-to-symbol mapping suggestions are deterministic and advisory in safe mode.
+            </div>
+            <div className="mt-3 max-h-56 space-y-2 overflow-auto pr-1">
+              {thriveSectionResolutions.length ? (
+                thriveSectionResolutions.map((entry) => (
+                  <div key={`${entry.pageSlug}:${entry.sectionId}`} className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-xs text-slate-200">
+                    <div>
+                      {entry.pageSlug} / {entry.sectionType} {"->"} {entry.resolution}
+                    </div>
+                    <div className="mt-1 text-slate-300">
+                      target={entry.preferredRenderTarget} | matched={entry.matchedSymbolTitle ?? "none"} | confidence=
+                      {entry.confidence.toFixed(2)}
+                    </div>
+                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
+                  No section resolution data yet. Run Generate to compute Thrive-aware section mapping.
+                </div>
+              )}
+            </div>
           </div>
         </section>
 
