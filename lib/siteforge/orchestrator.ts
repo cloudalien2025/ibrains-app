@@ -14,7 +14,12 @@ import { runBuildSpecAgent } from "@/lib/siteforge/agents/buildSpec";
 import { runQaAgent } from "@/lib/siteforge/agents/qa";
 import { applyThriveMappings, detectThriveCapability } from "@/lib/siteforge/thrive";
 import { discoverThriveIntelligence } from "@/lib/siteforge/thriveIntelligence";
-import { getThriveExecutionRuntime } from "@/lib/siteforge/thriveNativeHarness";
+import {
+  evaluateThriveNativeGuard,
+  executeThriveNativePlan,
+  getThriveExecutionRuntime,
+} from "@/lib/siteforge/thriveNativeHarness";
+import { createThriveNativeCompositionPlan } from "@/lib/siteforge/thriveNativeComposer";
 import {
   executeBuildSpecToWordPress,
   executeRevisionToWordPress,
@@ -182,8 +187,49 @@ export async function runBuildPipeline(params: {
           symbolInventoryPresent: Boolean((thriveIntelligence?.symbolInventory.length ?? 0) > 0),
           intelligence: thriveIntelligence,
           runtime,
+          currentMode: runtime.thriveIntelMode ? "thrive_intel_mode" : "wp_safe_mode",
+          nativeGuard: null,
+          nativeComposition: null,
+          nativeExecution: null,
           sectionResolutions: translated.sectionResolutions,
         }, params.homepageStrategy ?? "use_existing");
+
+        const nativeGuard = evaluateThriveNativeGuard(connection);
+        let nativeComposition = null;
+        let nativeExecution = null;
+        let currentMode: "wp_safe_mode" | "thrive_intel_mode" | "thrive_native_staging_mode" | "blocked_native_mode" =
+          runtime.thriveIntelMode ? "thrive_intel_mode" : "wp_safe_mode";
+
+        if (runtime.stagingNativeMode) {
+          nativeComposition = createThriveNativeCompositionPlan({
+            spec: translated.spec,
+            intelligence: thriveIntelligence,
+            sectionResolutions: translated.sectionResolutions,
+            execution,
+            guard: nativeGuard,
+          });
+          if (nativeGuard.eligible) {
+            nativeExecution = await executeThriveNativePlan({
+              connection,
+              mode: nativeComposition.mode,
+              operations: nativeComposition.operations.map((entry) => ({
+                operation: entry.operation,
+                payload: entry.payload,
+              })),
+            });
+            currentMode = nativeExecution.success ? "thrive_native_staging_mode" : "blocked_native_mode";
+            translated.spec.metadata.contractCaptureRef =
+              translated.spec.metadata.contractCaptureRef ??
+              `contract:${nativeGuard.schemaContractVersion ?? "unknown"}:${nowIso()}`;
+          } else {
+            currentMode = "blocked_native_mode";
+          }
+        }
+
+        execution.thrive.currentMode = currentMode;
+        execution.thrive.nativeGuard = nativeGuard;
+        execution.thrive.nativeComposition = nativeComposition;
+        execution.thrive.nativeExecution = nativeExecution;
         executionResult = execution;
         await repo.updateSession(sessionId, {
           buildSpec: translated.spec,

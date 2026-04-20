@@ -309,10 +309,14 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
   const intelRecord: Record<string, unknown> | null = isObjectRecord(storedIntelligence)
     ? (storedIntelligence as Record<string, unknown>)
     : null;
+  const intelPayload = isObjectRecord(intelRecord?.intel) ? (intelRecord?.intel as Record<string, unknown>) : intelRecord;
   const embeddedSectionResolutions = Array.isArray(intelRecord?.sectionResolutions)
     ? intelRecord.sectionResolutions
     : [];
   const embeddedModeSummary = isObjectRecord(intelRecord?.modeSummary) ? intelRecord.modeSummary : {};
+  const embeddedNativeGuard = isObjectRecord(intelRecord?.nativeGuard) ? intelRecord.nativeGuard : null;
+  const embeddedNativeComposition = isObjectRecord(intelRecord?.nativeComposition) ? intelRecord.nativeComposition : null;
+  const embeddedNativeExecution = isObjectRecord(intelRecord?.nativeExecution) ? intelRecord.nativeExecution : null;
 
   return {
     snapshotId: row.id,
@@ -324,13 +328,16 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
     knownPages: Array.isArray(row.known_pages) ? row.known_pages : [],
     knownMenus: Array.isArray(row.known_menus) ? row.known_menus : [],
     thriveDetected: row.thrive_detected,
-    thriveIntelligence: row.thrive_intelligence && typeof row.thrive_intelligence === "object" ? row.thrive_intelligence : null,
+    thriveIntelligence: intelPayload as SiteForgeSnapshot["thriveIntelligence"] | null,
     thriveSectionResolutions: embeddedSectionResolutions as SiteForgeSnapshot["thriveSectionResolutions"],
     thriveModeSummary: {
       wpSafeMode: embeddedModeSummary.wpSafeMode === false ? false : true,
       thriveIntelMode: Boolean(embeddedModeSummary.thriveIntelMode),
       stagingNativeMode: Boolean(embeddedModeSummary.stagingNativeMode),
     },
+    thriveNativeGuard: embeddedNativeGuard as SiteForgeSnapshot["thriveNativeGuard"],
+    thriveNativeComposition: embeddedNativeComposition as SiteForgeSnapshot["thriveNativeComposition"],
+    thriveNativeExecution: embeddedNativeExecution as SiteForgeSnapshot["thriveNativeExecution"],
     homepageStrategy: row.homepage_strategy,
     lastRunSummary: row.last_run_summary,
     lastRunStatus: row.last_run_status,
@@ -1060,13 +1067,21 @@ class PostgresRepository implements SiteForgeRepository {
 
   async upsertSnapshot(snapshot: SiteForgeSnapshot): Promise<SiteForgeSnapshot> {
     const pool = getBrainLearningPool();
-    const intelligencePayload = snapshot.thriveIntelligence
-      ? {
-          ...snapshot.thriveIntelligence,
-          sectionResolutions: snapshot.thriveSectionResolutions,
-          modeSummary: snapshot.thriveModeSummary,
-        }
-      : null;
+    const intelligencePayload =
+      snapshot.thriveIntelligence ||
+      snapshot.thriveSectionResolutions.length > 0 ||
+      snapshot.thriveNativeComposition ||
+      snapshot.thriveNativeExecution ||
+      snapshot.thriveNativeGuard
+        ? {
+            intel: snapshot.thriveIntelligence,
+            sectionResolutions: snapshot.thriveSectionResolutions,
+            modeSummary: snapshot.thriveModeSummary,
+            nativeGuard: snapshot.thriveNativeGuard,
+            nativeComposition: snapshot.thriveNativeComposition,
+            nativeExecution: snapshot.thriveNativeExecution,
+          }
+        : null;
     await pool.query(
       `INSERT INTO siteforge_snapshots (
         id, project_id, connection_id, current_homepage_id, current_homepage_title, current_homepage_source,

@@ -76,6 +76,7 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
           contentTemplateCandidates: [],
           landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
           rendererMode: "wp_safe_mode" as const,
+          contractCaptureRef: null,
           sectionIntent: sectionIntent(section.sectionType),
           preferredRenderTarget: "wordpress_page_content" as const,
           thriveSymbolRoleCandidate,
@@ -100,6 +101,7 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
         contentTemplateCandidates: [],
         landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
         rendererMode: "wp_safe_mode" as const,
+        contractCaptureRef: null,
         preferredRenderTarget: "wordpress_page_content" as const,
       },
     };
@@ -123,6 +125,7 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
       architectContentArtifactRef: null,
       landingPageArtifactRef: null,
       designPackArtifactRef: null,
+      contractCaptureRef: null,
       createdAt: nowIso(),
     },
   };

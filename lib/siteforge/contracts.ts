@@ -113,6 +113,7 @@ export type BuildSpecSection = {
     architectContentArtifactRef?: string | null;
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
+    contractCaptureRef?: string | null;
     [key: string]: unknown;
   };
 };
@@ -139,6 +140,7 @@ export type BuildSpecPage = {
     architectContentArtifactRef?: string | null;
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
+    contractCaptureRef?: string | null;
     [key: string]: unknown;
   };
 };
@@ -158,6 +160,7 @@ export type BuildSpec = {
     architectContentArtifactRef?: string | null;
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
+    contractCaptureRef?: string | null;
     createdAt: string;
   };
 };
@@ -244,6 +247,10 @@ export type ExecutionResult = {
       thriveIntelMode: boolean;
       stagingNativeMode: boolean;
     };
+    currentMode: "wp_safe_mode" | "thrive_intel_mode" | "thrive_native_staging_mode" | "blocked_native_mode";
+    nativeGuard: ThriveNativeGuardStatus | null;
+    nativeComposition: ThriveNativeCompositionPlan | null;
+    nativeExecution: ThriveNativeExecutionResult | null;
     sectionResolutions: ThriveSectionResolution[];
   };
   actionLog: ExecutionActionLog[];
@@ -389,6 +396,97 @@ export type ThriveIntelligence = {
   warnings: string[];
 };
 
+export type ThriveNativeOperation =
+  | "assignTemplateToPost"
+  | "createOrUpdateSymbol"
+  | "createOrUpdateSection"
+  | "createOrUpdateTemplateShellReference"
+  | "attachReusablePrimitiveToPagePlan"
+  | "importArchitectContentArtifact"
+  | "importThemeBuilderArtifact";
+
+export type ThriveNativeGuardStatus = {
+  eligible: boolean;
+  blockedReason: string | null;
+  environment: "test" | "development" | "production";
+  stagingMarkerValid: boolean;
+  connectionHost: string;
+  allowlistedOperations: ThriveNativeOperation[];
+  routeAllowlist: string[];
+  schemaContractVersion: string | null;
+};
+
+export type ThriveNativeCompositionSection = {
+  pageSlug: string;
+  sectionId: string;
+  sectionType: BuildSpecSection["type"];
+  intent: "reused_existing" | "created_native" | "wp_fallback" | "blocked_by_guard" | "blocked_by_missing_contract";
+  selectedOperation: ThriveNativeOperation | null;
+  targetObjectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment" | "none";
+  matchedSymbolId: number | null;
+  reason: string;
+};
+
+export type ThriveNativeCompositionPlan = {
+  mode: "thrive_native_staging_mode" | "blocked_native_mode";
+  homepagePostId: number | null;
+  shellTemplateGroupCandidate: string | null;
+  shellLayoutCandidate: string | null;
+  operations: Array<{
+    operation: ThriveNativeOperation;
+    objectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment";
+    payload: Record<string, unknown>;
+    payloadHash: string;
+    reason: string;
+  }>;
+  sections: ThriveNativeCompositionSection[];
+  summary: {
+    reusedExisting: number;
+    createdNative: number;
+    wpFallback: number;
+    blockedByGuard: number;
+    blockedByMissingContract: number;
+  };
+};
+
+export type ThriveNativeExecutionStepResult = {
+  operation: ThriveNativeOperation;
+  objectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment";
+  targetId: number | null;
+  endpoint: string;
+  method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+  payloadHash: string;
+  success: boolean;
+  verificationPassed: boolean;
+  rollbackReady: boolean;
+  detail: string;
+  responseStatus?: number;
+};
+
+export type ThriveNativeExecutionResult = {
+  executedAt: string;
+  success: boolean;
+  mode: "thrive_native_staging_mode" | "blocked_native_mode";
+  steps: ThriveNativeExecutionStepResult[];
+  createdObjects: Array<{
+    objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+    id: number;
+    sourceOperation: ThriveNativeOperation;
+  }>;
+  rollback: {
+    available: boolean;
+    steps: Array<{
+      objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+      id: number;
+      operation: "DELETE";
+      attempted: boolean;
+      success: boolean;
+      detail: string;
+    }>;
+  };
+  warnings: string[];
+};
+
 export type BuildRunState = {
   currentStage: BuildStage;
   progressPct: number;
@@ -527,6 +625,9 @@ export type SiteForgeSnapshot = {
     thriveIntelMode: boolean;
     stagingNativeMode: boolean;
   };
+  thriveNativeGuard: ThriveNativeGuardStatus | null;
+  thriveNativeComposition: ThriveNativeCompositionPlan | null;
+  thriveNativeExecution: ThriveNativeExecutionResult | null;
   homepageStrategy: HomepageStrategyMode;
   lastRunSummary: string | null;
   lastRunStatus: BuildSessionStatus | null;

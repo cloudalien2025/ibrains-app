@@ -187,6 +187,19 @@ export default function SiteForgeAppPage() {
     thriveIntelMode: false,
     stagingNativeMode: false,
   };
+  const thriveCurrentMode =
+    currentSession?.executionResult?.thrive.currentMode ??
+    (thriveRuntime.stagingNativeMode
+      ? "thrive_native_staging_mode"
+      : thriveRuntime.thriveIntelMode
+        ? "thrive_intel_mode"
+        : "wp_safe_mode");
+  const thriveNativeGuard =
+    currentSession?.executionResult?.thrive.nativeGuard ?? snapshot?.thriveNativeGuard ?? null;
+  const thriveNativeComposition =
+    currentSession?.executionResult?.thrive.nativeComposition ?? snapshot?.thriveNativeComposition ?? null;
+  const thriveNativeExecution =
+    currentSession?.executionResult?.thrive.nativeExecution ?? snapshot?.thriveNativeExecution ?? null;
   const thriveSectionResolutions =
     currentSession?.executionResult?.thrive.sectionResolutions ?? snapshot?.thriveSectionResolutions ?? [];
   const reusableSummary = useMemo(
@@ -1080,13 +1093,15 @@ export default function SiteForgeAppPage() {
             <div className="mt-1 text-sm text-slate-200">Thrive: {savedConnection?.thriveDetected ? "Detected" : "Not detected"}</div>
             <div className="mt-1 text-sm text-slate-200">
               Thrive Mode:{" "}
-              {thriveRuntime.stagingNativeMode
-                ? "Staging-native mode"
-                : thriveRuntime.thriveIntelMode
-                  ? "Thrive-aware safe mode"
-                  : thriveExecutionMode === "wp_safe_mode"
-                    ? "WP safe mode"
-                    : "Future Thrive-native mode"}
+              {thriveCurrentMode === "thrive_native_staging_mode"
+                ? "Thrive-native staging mode"
+                : thriveCurrentMode === "blocked_native_mode"
+                  ? "Blocked native mode"
+                  : thriveCurrentMode === "thrive_intel_mode"
+                    ? "Thrive-aware safe mode"
+                    : thriveExecutionMode === "wp_safe_mode"
+                      ? "WP safe mode"
+                      : "Future Thrive-native mode"}
             </div>
             <div className="mt-1 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
             <div className="mt-1 text-sm text-slate-200">
@@ -1182,6 +1197,93 @@ export default function SiteForgeAppPage() {
               ) : (
                 <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
                   No section resolution data yet. Run Generate to compute Thrive-aware section mapping.
+                </div>
+              )}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Staging Panel</div>
+            <div className="mt-2 text-sm text-slate-200">
+              Eligibility: {thriveNativeGuard?.eligible ? "Eligible" : "Blocked"}{" "}
+              {thriveNativeGuard?.blockedReason ? `(${thriveNativeGuard.blockedReason})` : ""}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Environment: {thriveNativeGuard?.environment ?? "unknown"} | Staging marker valid:{" "}
+              {thriveNativeGuard?.stagingMarkerValid ? "yes" : "no"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Contract schema: {thriveNativeGuard?.schemaContractVersion ?? "missing"} | Host:{" "}
+              {thriveNativeGuard?.connectionHost ?? "unknown"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Approved native operations: {thriveNativeGuard?.allowlistedOperations.join(", ") || "none"}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              Runtime mode states: wp_safe_mode, thrive_intel_mode, thrive_native_staging_mode, blocked_native_mode
+            </div>
+          </div>
+
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Composition & Verification</div>
+            <div className="mt-2 text-sm text-slate-200">
+              Plan mode: {thriveNativeComposition?.mode ?? "not generated"} | Homepage post id:{" "}
+              {thriveNativeComposition?.homepagePostId ?? "unknown"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Reuse {thriveNativeComposition?.summary.reusedExisting ?? 0} | Native create{" "}
+              {thriveNativeComposition?.summary.createdNative ?? 0} | WP fallback{" "}
+              {thriveNativeComposition?.summary.wpFallback ?? 0}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Verification status:{" "}
+              {thriveNativeExecution
+                ? thriveNativeExecution.success
+                  ? "verified"
+                  : "verification issues"
+                : "not executed"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Rollback/reset availability: {thriveNativeExecution?.rollback.available ? "available" : "not available"}
+            </div>
+            <div className="mt-2 max-h-40 space-y-2 overflow-auto pr-1 text-xs">
+              {(thriveNativeExecution?.steps ?? []).length ? (
+                (thriveNativeExecution?.steps ?? []).map((step, idx) => (
+                  <div key={`${step.operation}-${idx}`} className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200">
+                    <div>
+                      {step.operation} {"->"} {step.objectType} {step.targetId ?? "n/a"}
+                    </div>
+                    <div className="mt-1 text-slate-400">
+                      verified={step.verificationPassed ? "yes" : "no"} | rollbackReady={step.rollbackReady ? "yes" : "no"} |
+                      status={step.responseStatus ?? "n/a"}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
+                  No native staging execution recorded for this run.
+                </div>
+              )}
+            </div>
+            <div className="mt-3 text-xs text-slate-300">Section-native mapping</div>
+            <div className="mt-2 max-h-36 space-y-2 overflow-auto pr-1 text-xs">
+              {(thriveNativeComposition?.sections ?? []).length ? (
+                (thriveNativeComposition?.sections ?? []).map((entry) => (
+                  <div
+                    key={`${entry.pageSlug}:${entry.sectionId}:native`}
+                    className="rounded-lg border border-white/10 bg-slate-950/50 p-2 text-slate-200"
+                  >
+                    <div>
+                      {entry.sectionType} {"->"} {entry.intent} ({entry.selectedOperation ?? "none"})
+                    </div>
+                    <div className="mt-1 text-slate-400">reason={entry.reason}</div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
+                  No native section mapping computed yet.
                 </div>
               )}
             </div>

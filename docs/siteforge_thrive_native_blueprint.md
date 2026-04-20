@@ -1,86 +1,147 @@
-# SiteForge Thrive-Native Blueprint (Premier, Safe-Mode First)
+# SiteForge Thrive-Native Blueprint (Staging Composer v1)
 
-## 1) Current Control Surface (Production-Safe)
-Production writes remain constrained to proven WordPress endpoints:
+## 1) Current Truth
+SiteForge now operates in four explicit runtime states:
+- `wp_safe_mode`
+- `thrive_intel_mode`
+- `thrive_native_staging_mode`
+- `blocked_native_mode`
+
+Production remains constrained to safe WordPress write surfaces:
 - `/wp-json/wp/v2/pages`
 - `/wp-json/wp/v2/settings`
-- existing menu flows already used by SiteForge
+- existing menu endpoints already used by SiteForge
 
-Thrive endpoints stay read-only in production. SiteForge does not perform blind `ttb/v1`, `tcb/v1`, or generic Thrive CPT write mutations in runtime safe mode.
+## 2) Staging-Native Contract Registry (v1)
+SiteForge now uses an explicit operation registry (`lib/siteforge/thriveNativeContracts.ts`) for every native staging write.
 
-## 2) Known Thrive-Native Primitives (Grounded)
-From safe GET discovery and live reverse-engineering:
-- Theme shell: active skin (`thrive_skin_tax`)
-- Reusable Architect blocks: `tcb_symbol`
-- Theme Builder primitives: `thrive_template`, `thrive_layout`, `thrive_section` counts/inventory hints
+Each operation contract defines:
+- operation name
+- endpoint/mechanism
+- method
+- required payload fields
+- expected response shape
+- object type
+- verification method
+- rollback support
+- allowed environments
+- payload fingerprinting (`sha256_json`)
 
-SiteForge normalizes symbol intelligence into:
-- identity: `id`, `title`, `slug`, taxonomy
-- inferred role: `header | footer | section | unknown`
-- reusability and payload signals: builder payload present, custom CSS present
-- lightweight fingerprints: `contentHash`, `cssHash`, token keywords
+### v1 Operation Set
+- `assignTemplateToPost`
+- `createOrUpdateSymbol`
+- `createOrUpdateSection`
+- `createOrUpdateTemplateShellReference`
+- `attachReusablePrimitiveToPagePlan`
+- `importArchitectContentArtifact` (placeholder)
+- `importThemeBuilderArtifact` (placeholder)
 
-## 3) What SiteForge Now Understands
-SiteForge now reasons in Thrive-native planning terms while keeping execution safe:
-- page role (`homepage`, `about`, `contact`, `faq`, `features`, `pricing`, `generic`)
-- shell role (`homepage_shell`, `standard_shell`, `conversion_shell`, `utility_shell`)
-- section intent (`conversion`, `informational`, `trust`, `navigation`)
-- symbol candidate type (`header`, `footer`, `cta`, `testimonial`, `faq`, `marketing`, `generic`)
-- preferred render target (`thrive_symbol_reference`, `thrive_content_template_reference`, `future_landing_page_candidate`, `wp_html_fallback`, etc.)
+No staging-native operation executes unless:
+1. staging guard is eligible
+2. operation is contract-defined
+3. operation is allowlisted
+4. payload passes required-field validation
+5. verification strategy exists
 
-Resolver output is persisted as section-resolution intelligence:
-- chosen resolution tier (`existing_symbol`, `existing_content_template`, `future_landing_page_candidate`, `wp_html_fallback`)
-- matched symbol id/title/role (if any)
-- confidence and explicit reasons/rejections
+## 3) Staging Guard Model
+Guard inputs:
+- `SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING=1`
+- `SITEFORGE_THRIVE_STAGING_MARKER=staging`
+- `SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION`
+- `SITEFORGE_THRIVE_ROUTE_ALLOWLIST`
+- optional `SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST`
 
-## 4) Safe-Mode Symbol Reuse Strategy
-Deterministic matching order:
-1. existing symbol (`tcb_symbol`)
-2. existing content-template candidate (if safely discoverable)
-3. future landing-page candidate
-4. WordPress HTML fallback
+Hard blocks:
+- production environment
+- invalid/missing staging marker
+- missing schema contract version
+- missing allowlisted operation set
+- live host patterns (including `ipetzo`)
 
-This makes SiteForge Thrive-first in planning/reuse without introducing risky runtime mutations.
+## 4) Native Composer v1 Scope
+The composer (`lib/siteforge/thriveNativeComposer.ts`) is intentionally narrow and deterministic.
 
-## 5) Staging-Native Harness (Disabled by Default)
-SiteForge now includes a staging-only native harness interface with hard guards:
-- Feature flag required: `SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING=1`
-- Must not run in production
-- Requires explicit staging marker + route allowlist + schema contract version
-- Blocks live iPetzo-like hosts
-- Emits auditable logs for attempted native operations
+### Supported v1 section scope
+- homepage shell targeting
+- hero
+- CTA
+- features
+- FAQ
+- testimonials
+- header/footer reuse flow
 
-Stubs/interfaces now exist for:
-- `assignTemplateToPost()`
-- `createOrUpdateThriveSymbol()`
-- `createOrUpdateThriveSection()`
-- `importArchitectContentArtifact()`
-- `importThemeBuilderArtifact()`
+### Resolution priority
+1. reuse existing primitive (`attachReusablePrimitiveToPagePlan`)
+2. create minimal native object (`createOrUpdateSymbol` or `createOrUpdateSection`)
+3. safe fallback / blocked states
 
-## 6) Artifact-First Future Boundary
-Future native composition should use artifact boundaries rather than opaque endpoint fuzzing:
-- Theme Builder export bundle
-- Architect content export bundle
-- Landing page export bundle
-- Design Pack import/export bundle
+Each section is labeled as one of:
+- `reused_existing`
+- `created_native`
+- `wp_fallback`
+- `blocked_by_guard`
+- `blocked_by_missing_contract`
 
-Planned references in contracts:
-- `themeArtifactRef`
-- `architectContentArtifactRef`
-- `landingPageArtifactRef`
-- `designPackArtifactRef`
+## 5) Native Execution, Verification, Audit, Rollback
+Execution layer (`lib/siteforge/thriveNativeHarness.ts`) now:
+- validates guard + allowlist + contract + payload
+- executes approved operation
+- fingerprints payload
+- verifies result (`response_fields`, `read_back`, or logical)
+- records step-level audit metadata
 
-## 7) Staged Promotion Flow
-1. Live site inspection (strict read-only)
-2. Build Thrive intelligence manifests and section-resolution maps
-3. Prepare artifacts in staging
-4. Validate schema contracts and invariants
-5. Import/promote with audit trail
-6. Never fuzz live opaque Thrive write endpoints
+Stored step metadata includes:
+- endpoint
+- method
+- object type
+- target id
+- payload hash
+- success/verification flags
+- rollback readiness
 
-## 8) Explicitly Off-Limits in Production
-- Blind writes to `ttb/v1/*` or `tcb/v1/*`
-- Generic Thrive CPT mutation without staging contracts
-- Unbounded builder blob rewriting
+Rollback model (v1):
+- tracks created native objects per run
+- exposes delete rollback steps for supported object types
+- executes deterministic cleanup on explicit rollback call
 
-This keeps production deterministic and safe while moving SiteForge toward true Thrive-native depth.
+## 6) Workspace / Session Truth
+SiteForge persists native staging metadata in run/snapshot truth:
+- `thrive.nativeGuard`
+- `thrive.nativeComposition`
+- `thrive.nativeExecution`
+- section resolution details
+- runtime mode summary and current mode
+
+This gives deterministic replay/debug and a clear contract-capture history for each run.
+
+## 7) UI / Product Surface
+SiteForge workspace now exposes a dedicated native staging control surface:
+- guard eligibility and block reason
+- allowlisted operation set
+- schema contract version
+- composition summary (reuse/create/fallback/block)
+- step-level execution + verification
+- rollback/reset availability
+
+## 8) Artifact Capture and Promotion Path
+v1 stores the metadata needed for future artifact-driven promotion:
+- object ids
+- payload hashes
+- section-to-operation mapping
+- verification outcomes
+- rollback metadata
+
+Future promotion flow remains:
+1. compose in staging
+2. verify
+3. capture stable object graph/artifacts
+4. promote intentionally
+5. never fuzz opaque live endpoints
+
+## 9) Explicit Off-Limits
+Still off-limits for production:
+- blind writes to `ttb/v1/*` and `tcb/v1/*`
+- generic Thrive CPT mutation without guard + contract + allowlist
+- unconstrained builder blob rewrites
+
+This keeps production safe while enabling real Thrive-native authoring in staging.

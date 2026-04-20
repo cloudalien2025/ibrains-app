@@ -120,6 +120,10 @@ describe("siteforge thrive safe-mode integration", () => {
         symbolInventoryPresent: true,
         intelligence,
         runtime,
+        currentMode: "thrive_intel_mode",
+        nativeGuard: null,
+        nativeComposition: null,
+        nativeExecution: null,
         sectionResolutions: translated.sectionResolutions,
       },
       "use_existing"

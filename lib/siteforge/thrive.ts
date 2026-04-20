@@ -336,6 +336,7 @@ export function applyThriveMappings(spec: BuildSpec, enabled: boolean, intellige
       architectContentArtifactRef: spec.metadata.architectContentArtifactRef ?? null,
       landingPageArtifactRef: spec.metadata.landingPageArtifactRef ?? null,
       designPackArtifactRef: spec.metadata.designPackArtifactRef ?? null,
+      contractCaptureRef: spec.metadata.contractCaptureRef ?? null,
     },
     pages: spec.pages.map((page) => {
       const pageRole = pageRoleFor(page, spec.homepageSlug);
@@ -377,6 +378,7 @@ export function applyThriveMappings(spec: BuildSpec, enabled: boolean, intellige
           preferredRenderTarget: "wordpress_page_content",
           rendererMode,
           thriveExecutionMode: "wp_safe_mode",
+          contractCaptureRef: page.metadata.contractCaptureRef ?? null,
         },
         sections: page.sections.map((section) => {
           const sectionIntent = sectionIntentFor(section.type);
@@ -399,6 +401,7 @@ export function applyThriveMappings(spec: BuildSpec, enabled: boolean, intellige
               shellRole,
               shellTemplateGroupCandidate: templateGroup,
               shellLayoutCandidate: layoutCandidate,
+              contractCaptureRef: section.metadata?.contractCaptureRef ?? null,
             },
           };
         }),

@@ -137,6 +137,10 @@ const thriveMeta = {
     thriveIntelMode: false,
     stagingNativeMode: false,
   },
+  currentMode: "wp_safe_mode" as const,
+  nativeGuard: null,
+  nativeComposition: null,
+  nativeExecution: null,
   sectionResolutions: [],
 };
 
