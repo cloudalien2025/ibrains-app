@@ -118,6 +118,117 @@ export type SiteForgeSnapshotView = {
     thriveIntelMode: boolean;
     stagingNativeMode: boolean;
   };
+  thriveNativeGuard: {
+    eligible: boolean;
+    blockedReason: string | null;
+    environment: "test" | "development" | "production";
+    stagingMarkerValid: boolean;
+    connectionHost: string;
+    allowlistedOperations: Array<
+      | "assignTemplateToPost"
+      | "createOrUpdateSymbol"
+      | "createOrUpdateSection"
+      | "createOrUpdateTemplateShellReference"
+      | "attachReusablePrimitiveToPagePlan"
+      | "importArchitectContentArtifact"
+      | "importThemeBuilderArtifact"
+    >;
+    routeAllowlist: string[];
+    schemaContractVersion: string | null;
+  } | null;
+  thriveNativeComposition: {
+    mode: "thrive_native_staging_mode" | "blocked_native_mode";
+    homepagePostId: number | null;
+    shellTemplateGroupCandidate: string | null;
+    shellLayoutCandidate: string | null;
+    operations: Array<{
+      operation:
+        | "assignTemplateToPost"
+        | "createOrUpdateSymbol"
+        | "createOrUpdateSection"
+        | "createOrUpdateTemplateShellReference"
+        | "attachReusablePrimitiveToPagePlan"
+        | "importArchitectContentArtifact"
+        | "importThemeBuilderArtifact";
+      objectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment";
+      payloadHash: string;
+      reason: string;
+    }>;
+    sections: Array<{
+      pageSlug: string;
+      sectionId: string;
+      sectionType: "hero" | "problem" | "solution" | "features" | "testimonials" | "cta" | "faq" | "contact";
+      intent: "reused_existing" | "created_native" | "wp_fallback" | "blocked_by_guard" | "blocked_by_missing_contract";
+      selectedOperation:
+        | "assignTemplateToPost"
+        | "createOrUpdateSymbol"
+        | "createOrUpdateSection"
+        | "createOrUpdateTemplateShellReference"
+        | "attachReusablePrimitiveToPagePlan"
+        | "importArchitectContentArtifact"
+        | "importThemeBuilderArtifact"
+        | null;
+      targetObjectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment" | "none";
+      matchedSymbolId: number | null;
+      reason: string;
+    }>;
+    summary: {
+      reusedExisting: number;
+      createdNative: number;
+      wpFallback: number;
+      blockedByGuard: number;
+      blockedByMissingContract: number;
+    };
+  } | null;
+  thriveNativeExecution: {
+    executedAt: string;
+    success: boolean;
+    mode: "thrive_native_staging_mode" | "blocked_native_mode";
+    steps: Array<{
+      operation:
+        | "assignTemplateToPost"
+        | "createOrUpdateSymbol"
+        | "createOrUpdateSection"
+        | "createOrUpdateTemplateShellReference"
+        | "attachReusablePrimitiveToPagePlan"
+        | "importArchitectContentArtifact"
+        | "importThemeBuilderArtifact";
+      objectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment";
+      targetId: number | null;
+      endpoint: string;
+      method: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
+      payloadHash: string;
+      success: boolean;
+      verificationPassed: boolean;
+      rollbackReady: boolean;
+      detail: string;
+      responseStatus?: number;
+    }>;
+    createdObjects: Array<{
+      objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+      id: number;
+      sourceOperation:
+        | "assignTemplateToPost"
+        | "createOrUpdateSymbol"
+        | "createOrUpdateSection"
+        | "createOrUpdateTemplateShellReference"
+        | "attachReusablePrimitiveToPagePlan"
+        | "importArchitectContentArtifact"
+        | "importThemeBuilderArtifact";
+    }>;
+    rollback: {
+      available: boolean;
+      steps: Array<{
+        objectType: "thrive_template" | "thrive_section" | "tcb_symbol";
+        id: number;
+        operation: "DELETE";
+        attempted: boolean;
+        success: boolean;
+        detail: string;
+      }>;
+    };
+    warnings: string[];
+  } | null;
   homepageStrategy: HomepageStrategy;
   lastRunSummary: string | null;
   lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
@@ -175,6 +286,10 @@ export type BuildSessionView = {
       symbolInventoryPresent: boolean;
       intelligence: SiteForgeSnapshotView["thriveIntelligence"] | null;
       runtime: SiteForgeSnapshotView["thriveModeSummary"];
+      currentMode: "wp_safe_mode" | "thrive_intel_mode" | "thrive_native_staging_mode" | "blocked_native_mode";
+      nativeGuard: SiteForgeSnapshotView["thriveNativeGuard"] | null;
+      nativeComposition: SiteForgeSnapshotView["thriveNativeComposition"] | null;
+      nativeExecution: SiteForgeSnapshotView["thriveNativeExecution"] | null;
       sectionResolutions: SiteForgeSnapshotView["thriveSectionResolutions"];
     };
     warnings: string[];
@@ -373,6 +488,190 @@ function normalizeThriveSectionResolutions(value: unknown): SiteForgeSnapshotVie
         ? entry.rejectedReasons.filter((item): item is string => typeof item === "string")
         : [],
     }));
+}
+
+function normalizeNativeOperation(
+  value: unknown
+): NonNullable<SiteForgeSnapshotView["thriveNativeGuard"]>["allowlistedOperations"][number] {
+  return value === "assignTemplateToPost" ||
+    value === "createOrUpdateSymbol" ||
+    value === "createOrUpdateSection" ||
+    value === "createOrUpdateTemplateShellReference" ||
+    value === "attachReusablePrimitiveToPagePlan" ||
+    value === "importArchitectContentArtifact" ||
+    value === "importThemeBuilderArtifact"
+    ? value
+    : "attachReusablePrimitiveToPagePlan";
+}
+
+function normalizeThriveNativeGuard(value: unknown): SiteForgeSnapshotView["thriveNativeGuard"] {
+  if (!isRecord(value)) return null;
+  return {
+    eligible: boolOr(value.eligible),
+    blockedReason: nullableString(value.blockedReason),
+    environment:
+      value.environment === "production" || value.environment === "test" || value.environment === "development"
+        ? value.environment
+        : "development",
+    stagingMarkerValid: boolOr(value.stagingMarkerValid),
+    connectionHost: stringOr(value.connectionHost, ""),
+    allowlistedOperations: Array.isArray(value.allowlistedOperations)
+      ? value.allowlistedOperations.map((entry) => normalizeNativeOperation(entry))
+      : [],
+    routeAllowlist: Array.isArray(value.routeAllowlist)
+      ? value.routeAllowlist.filter((entry): entry is string => typeof entry === "string")
+      : [],
+    schemaContractVersion: nullableString(value.schemaContractVersion),
+  };
+}
+
+function normalizeThriveNativeComposition(value: unknown): SiteForgeSnapshotView["thriveNativeComposition"] {
+  if (!isRecord(value)) return null;
+  return {
+    mode: value.mode === "blocked_native_mode" ? "blocked_native_mode" : "thrive_native_staging_mode",
+    homepagePostId: typeof value.homepagePostId === "number" ? value.homepagePostId : null,
+    shellTemplateGroupCandidate: nullableString(value.shellTemplateGroupCandidate),
+    shellLayoutCandidate: nullableString(value.shellLayoutCandidate),
+    operations: Array.isArray(value.operations)
+      ? value.operations
+          .filter(isRecord)
+          .map((entry) => ({
+            operation: normalizeNativeOperation(entry.operation),
+            objectType:
+              entry.objectType === "thrive_template" ||
+              entry.objectType === "thrive_section" ||
+              entry.objectType === "tcb_symbol"
+                ? entry.objectType
+                : "attachment",
+            payloadHash: stringOr(entry.payloadHash, ""),
+            reason: stringOr(entry.reason, ""),
+          }))
+      : [],
+    sections: Array.isArray(value.sections)
+      ? value.sections
+          .filter(isRecord)
+          .map((entry) => ({
+            pageSlug: stringOr(entry.pageSlug, ""),
+            sectionId: stringOr(entry.sectionId, ""),
+            sectionType:
+              entry.sectionType === "hero" ||
+              entry.sectionType === "problem" ||
+              entry.sectionType === "solution" ||
+              entry.sectionType === "features" ||
+              entry.sectionType === "testimonials" ||
+              entry.sectionType === "cta" ||
+              entry.sectionType === "faq" ||
+              entry.sectionType === "contact"
+                ? entry.sectionType
+                : "solution",
+            intent:
+              entry.intent === "reused_existing" ||
+              entry.intent === "created_native" ||
+              entry.intent === "wp_fallback" ||
+              entry.intent === "blocked_by_guard" ||
+              entry.intent === "blocked_by_missing_contract"
+                ? entry.intent
+                : "wp_fallback",
+            selectedOperation: entry.selectedOperation == null ? null : normalizeNativeOperation(entry.selectedOperation),
+            targetObjectType:
+              entry.targetObjectType === "thrive_template" ||
+              entry.targetObjectType === "thrive_section" ||
+              entry.targetObjectType === "tcb_symbol" ||
+              entry.targetObjectType === "attachment" ||
+              entry.targetObjectType === "none"
+                ? entry.targetObjectType
+                : "none",
+            matchedSymbolId: typeof entry.matchedSymbolId === "number" ? entry.matchedSymbolId : null,
+            reason: stringOr(entry.reason, ""),
+          }))
+      : [],
+    summary: isRecord(value.summary)
+      ? {
+          reusedExisting: numberOr(value.summary.reusedExisting),
+          createdNative: numberOr(value.summary.createdNative),
+          wpFallback: numberOr(value.summary.wpFallback),
+          blockedByGuard: numberOr(value.summary.blockedByGuard),
+          blockedByMissingContract: numberOr(value.summary.blockedByMissingContract),
+        }
+      : {
+          reusedExisting: 0,
+          createdNative: 0,
+          wpFallback: 0,
+          blockedByGuard: 0,
+          blockedByMissingContract: 0,
+        },
+  };
+}
+
+function normalizeThriveNativeExecution(value: unknown): SiteForgeSnapshotView["thriveNativeExecution"] {
+  if (!isRecord(value)) return null;
+  return {
+    executedAt: stringOr(value.executedAt, nowIso()),
+    success: boolOr(value.success),
+    mode: value.mode === "blocked_native_mode" ? "blocked_native_mode" : "thrive_native_staging_mode",
+    steps: Array.isArray(value.steps)
+      ? value.steps
+          .filter(isRecord)
+          .map((step) => ({
+            operation: normalizeNativeOperation(step.operation),
+            objectType:
+              step.objectType === "thrive_template" ||
+              step.objectType === "thrive_section" ||
+              step.objectType === "tcb_symbol"
+                ? step.objectType
+                : "attachment",
+            targetId: typeof step.targetId === "number" ? step.targetId : null,
+            endpoint: stringOr(step.endpoint, ""),
+            method:
+              step.method === "GET" ||
+              step.method === "PUT" ||
+              step.method === "PATCH" ||
+              step.method === "DELETE" ||
+              step.method === "POST"
+                ? step.method
+                : "POST",
+            payloadHash: stringOr(step.payloadHash, ""),
+            success: boolOr(step.success),
+            verificationPassed: boolOr(step.verificationPassed),
+            rollbackReady: boolOr(step.rollbackReady),
+            detail: stringOr(step.detail, ""),
+            responseStatus: typeof step.responseStatus === "number" ? step.responseStatus : undefined,
+          }))
+      : [],
+    createdObjects: Array.isArray(value.createdObjects)
+      ? value.createdObjects
+          .filter(isRecord)
+          .map((entry) => ({
+            objectType:
+              entry.objectType === "thrive_template" || entry.objectType === "thrive_section" ? entry.objectType : "tcb_symbol",
+            id: numberOr(entry.id),
+            sourceOperation: normalizeNativeOperation(entry.sourceOperation),
+          }))
+      : [],
+    rollback: isRecord(value.rollback)
+      ? {
+          available: boolOr(value.rollback.available),
+          steps: Array.isArray(value.rollback.steps)
+            ? value.rollback.steps
+                .filter(isRecord)
+                .map((entry) => ({
+                  objectType:
+                    entry.objectType === "thrive_template" ||
+                    entry.objectType === "thrive_section" ||
+                    entry.objectType === "tcb_symbol"
+                      ? entry.objectType
+                      : "tcb_symbol",
+                  id: numberOr(entry.id),
+                  operation: "DELETE" as const,
+                  attempted: boolOr(entry.attempted),
+                  success: boolOr(entry.success),
+                  detail: stringOr(entry.detail, ""),
+                }))
+            : [],
+        }
+      : { available: false, steps: [] },
+    warnings: Array.isArray(value.warnings) ? value.warnings.filter((entry): entry is string => typeof entry === "string") : [],
+  };
 }
 
 function toStage(value: unknown): BuildStage {
@@ -597,6 +896,15 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                       stagingNativeMode: boolOr(value.executionResult.thrive.runtime.stagingNativeMode),
                     }
                   : { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
+                currentMode:
+                  value.executionResult.thrive.currentMode === "thrive_native_staging_mode" ||
+                  value.executionResult.thrive.currentMode === "blocked_native_mode" ||
+                  value.executionResult.thrive.currentMode === "thrive_intel_mode"
+                    ? value.executionResult.thrive.currentMode
+                    : "wp_safe_mode",
+                nativeGuard: normalizeThriveNativeGuard(value.executionResult.thrive.nativeGuard),
+                nativeComposition: normalizeThriveNativeComposition(value.executionResult.thrive.nativeComposition),
+                nativeExecution: normalizeThriveNativeExecution(value.executionResult.thrive.nativeExecution),
                 sectionResolutions: normalizeThriveSectionResolutions(value.executionResult.thrive.sectionResolutions),
               }
             : {
@@ -608,6 +916,10 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 symbolInventoryPresent: false,
                 intelligence: null,
                 runtime: { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
+                currentMode: "wp_safe_mode",
+                nativeGuard: null,
+                nativeComposition: null,
+                nativeExecution: null,
                 sectionResolutions: [],
               },
           warnings: Array.isArray(value.executionResult.warnings)
@@ -693,6 +1005,9 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
           stagingNativeMode: boolOr(value.thriveModeSummary.stagingNativeMode),
         }
       : { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
+    thriveNativeGuard: normalizeThriveNativeGuard(value.thriveNativeGuard),
+    thriveNativeComposition: normalizeThriveNativeComposition(value.thriveNativeComposition),
+    thriveNativeExecution: normalizeThriveNativeExecution(value.thriveNativeExecution),
     homepageStrategy: toStrategy(value.homepageStrategy),
     lastRunSummary: nullableString(value.lastRunSummary),
     lastRunStatus:

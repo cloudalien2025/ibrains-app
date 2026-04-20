@@ -17,5 +17,10 @@ describe("siteforge thrive intelligence UI contract", () => {
     expect(source.includes("Thrive Intelligence")).toBe(true);
     expect(source.includes("Section Resolution")).toBe(true);
     expect(source.includes("Runtime modes: wp_safe_mode=")).toBe(true);
+    expect(source.includes("Native Staging Panel")).toBe(true);
+    expect(source.includes("Native Composition & Verification")).toBe(true);
+    expect(source.includes("thrive_native_staging_mode")).toBe(true);
+    expect(source.includes("Rollback/reset availability")).toBe(true);
+    expect(source.includes("Section-native mapping")).toBe(true);
   });
 });

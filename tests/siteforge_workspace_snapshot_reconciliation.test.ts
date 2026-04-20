@@ -126,6 +126,10 @@ describe("siteforge snapshot persistence reconciliation", () => {
           thriveIntelMode: true,
           stagingNativeMode: false,
         },
+        currentMode: "thrive_intel_mode",
+        nativeGuard: null,
+        nativeComposition: null,
+        nativeExecution: null,
         sectionResolutions: [
           {
             pageSlug: "home",
@@ -203,6 +207,9 @@ describe("siteforge snapshot persistence reconciliation", () => {
     expect(snapshot.thriveIntelligence?.symbolSummary.headers).toBe(1);
     expect(snapshot.thriveModeSummary.thriveIntelMode).toBe(true);
     expect(snapshot.thriveSectionResolutions[0]?.matchedSymbolId).toBe(57);
+    expect(snapshot.thriveNativeGuard).toBeNull();
+    expect(snapshot.thriveNativeComposition).toBeNull();
+    expect(snapshot.thriveNativeExecution).toBeNull();
 
     expect(snapshot.knownPages).toEqual(
       expect.arrayContaining([
@@ -253,6 +260,10 @@ describe("siteforge snapshot persistence reconciliation", () => {
           thriveIntelMode: false,
           stagingNativeMode: false,
         },
+        currentMode: "wp_safe_mode",
+        nativeGuard: null,
+        nativeComposition: null,
+        nativeExecution: null,
         sectionResolutions: [],
         intelligence: null,
       },
