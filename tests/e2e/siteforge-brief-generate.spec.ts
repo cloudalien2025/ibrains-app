@@ -101,6 +101,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Settings" }).click();
 
     await page.locator("#siteforge-ai-key").fill("sk-test");
     await page.getByRole("button", { name: "Save API Keys" }).click();
@@ -111,7 +112,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
     await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
 
-    const generateButton = page.getByRole("button", { name: "Generate My Website" });
+    const generateButton = page.getByRole("button", { name: "Ready for Build" }).first();
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
 
     await generateButton.click();

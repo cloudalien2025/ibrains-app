@@ -1116,6 +1116,8 @@ export default function SiteForgeAppPage() {
     },
   ];
 
+  const fallbackTimelineAt = snapshot?.lastSyncedAt ?? currentSession?.createdAt ?? "1970-01-01T00:00:00.000Z";
+
   const approvalQueue = [
     {
       itemName: "Homepage hero direction",
@@ -1201,19 +1203,19 @@ export default function SiteForgeAppPage() {
       title: "Homepage strategy blueprint",
       owner: "Strategy Director",
       status: "Awaiting approval" as AgencyStatus,
-      at: currentSession?.createdAt ?? new Date().toISOString(),
+      at: currentSession?.createdAt ?? fallbackTimelineAt,
     },
     {
       title: "Section stack recommendation",
       owner: "Content Architect",
       status: "Recommended" as AgencyStatus,
-      at: currentSession?.createdAt ?? new Date().toISOString(),
+      at: currentSession?.createdAt ?? fallbackTimelineAt,
     },
     {
       title: "Thrive reusable asset shortlist",
       owner: "Thrive Asset Librarian",
       status: thriveIntel ? ("Recommended" as AgencyStatus) : ("Blocked" as AgencyStatus),
-      at: snapshot?.lastSyncedAt ?? new Date().toISOString(),
+      at: snapshot?.lastSyncedAt ?? fallbackTimelineAt,
     },
   ];
 
