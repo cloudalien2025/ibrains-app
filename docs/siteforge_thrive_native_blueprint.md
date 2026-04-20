@@ -1,4 +1,4 @@
-# SiteForge Thrive-Native Blueprint (Staging Composer + Validation v1)
+# SiteForge Thrive-Native Blueprint (Approved Native Target + Validation v1)
 
 ## 1) Current Truth
 SiteForge now operates in four explicit runtime states:
@@ -12,8 +12,8 @@ Production remains constrained to safe WordPress write surfaces:
 - `/wp-json/wp/v2/settings`
 - existing menu endpoints already used by SiteForge
 
-## 2) Staging-Native Contract Registry (v1)
-SiteForge now uses an explicit operation registry (`lib/siteforge/thriveNativeContracts.ts`) for every native staging write.
+## 2) Native Contract Registry (v1)
+SiteForge now uses an explicit operation registry (`lib/siteforge/thriveNativeContracts.ts`) for every approved-target native write.
 
 Each operation contract defines:
 - operation name
@@ -36,27 +36,30 @@ Each operation contract defines:
 - `importArchitectContentArtifact` (placeholder)
 - `importThemeBuilderArtifact` (placeholder)
 
-No staging-native operation executes unless:
-1. staging guard is eligible
+No native operation executes unless:
+1. target guard is eligible
 2. operation is contract-defined
 3. operation is allowlisted
 4. payload passes required-field validation
 5. verification strategy exists
 
-## 3) Staging Guard Model
+## 3) Approved Target Guard Model
 Guard inputs:
-- `SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING=1`
-- `SITEFORGE_THRIVE_STAGING_MARKER=staging`
+- `SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING=1` (or `SITEFORGE_ENABLE_THRIVE_NATIVE=1`)
+- `SITEFORGE_APPROVED_NATIVE_TARGETS`
 - `SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION`
 - `SITEFORGE_THRIVE_ROUTE_ALLOWLIST`
 - optional `SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST`
 
 Hard blocks:
 - production environment
-- invalid/missing staging marker
+- target host not explicitly approved
 - missing schema contract version
 - missing allowlisted operation set
-- live host patterns (including `ipetzo`)
+- missing contract/verification/rollback constraints
+
+Current approved non-production target for validation:
+- `ipetzo.com`
 
 ## 4) Native Composer v1 Scope
 The composer (`lib/siteforge/thriveNativeComposer.ts`) is intentionally narrow and deterministic.
@@ -105,11 +108,11 @@ Rollback model (v1):
 - executes deterministic cleanup on explicit rollback call
 
 ## 6) Native Validation Runner (Dry-Run + Real-Run)
-SiteForge now includes a dedicated staging validation runner (`lib/siteforge/thriveNativeValidation.ts`).
+SiteForge now includes a dedicated approved-target validation runner (`lib/siteforge/thriveNativeValidation.ts`).
 
 Validation modes:
 - `dry_run`: compose + guard + precheck + homepage state checks, no native writes
-- `real_run`: execute contract-approved native operations in staging, verify state, optionally roll back created objects
+- `real_run`: execute contract-approved native operations on an approved target, verify state, optionally roll back created objects
 
 Per-section outcomes are explicitly classified as:
 - `reused_existing`
@@ -139,14 +142,14 @@ SiteForge persists native staging metadata in run/snapshot truth:
 This gives deterministic replay/debug and a clear contract-capture history for each run.
 
 ## 8) UI / Product Surface
-SiteForge workspace now exposes a dedicated native staging control surface:
+SiteForge workspace now exposes a dedicated native target validation surface:
 - guard eligibility and block reason
 - allowlisted operation set
 - schema contract version
 - composition summary (reuse/create/fallback/block)
 - step-level execution + verification
 - rollback/reset availability
-- native validation mode/status
+- native validation mode/status and approved-target identity
 - per-section validation outcomes
 - promotion candidate readiness and reason
 
@@ -168,13 +171,24 @@ Validation runs now persist a promotion-candidate summary with:
   - `contractCaptureRef`
 
 Future promotion flow remains:
-1. compose in staging
+1. compose on approved non-production target
 2. verify
 3. capture stable object graph/artifacts
 4. promote intentionally
 5. never fuzz opaque live endpoints
 
-## 10) Explicit Off-Limits
+## 10) First Real Approved-Target Cycle
+The first real native validation cycle has now been executed against approved target `ipetzo.com`:
+- dry-run completed with deterministic section outcomes
+- real-run executed contract-approved operations and passed verification
+- rollback/reset removed run-created native objects and verified cleanup
+- promotion candidate summary was captured with run fingerprint, payload hashes, created object ids, and rollback snapshot
+
+Known note from the run:
+- homepage public renderability check returned `404` for the resolved public link while page identity checks and operation verification still passed
+- this is reported as a non-blocking verification note, not a native contract failure
+
+## 11) Explicit Off-Limits
 Still off-limits for production:
 - blind writes to `ttb/v1/*` and `tcb/v1/*`
 - generic Thrive CPT mutation without guard + contract + allowlist

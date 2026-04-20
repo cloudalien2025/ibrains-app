@@ -102,7 +102,11 @@ const eligibleGuard: ThriveNativeGuardStatus = {
   eligible: true,
   blockedReason: null,
   environment: "test",
-  stagingMarkerValid: true,
+  nativeTargetMode: "approved_non_production_target",
+  targetClassification: "approved_non_production_target",
+  nativeTargetEligibility: "eligible",
+  approvedTargetHost: "staging.example.com",
+  approvalSource: "env_allowlist",
   connectionHost: "staging.example.com",
   allowlistedOperations: [
     "createOrUpdateTemplateShellReference",

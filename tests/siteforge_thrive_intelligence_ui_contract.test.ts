@@ -17,12 +17,14 @@ describe("siteforge thrive intelligence UI contract", () => {
     expect(source.includes("Thrive Intelligence")).toBe(true);
     expect(source.includes("Section Resolution")).toBe(true);
     expect(source.includes("Runtime modes: wp_safe_mode=")).toBe(true);
-    expect(source.includes("Native Staging Panel")).toBe(true);
+    expect(source.includes("Native Target Panel")).toBe(true);
     expect(source.includes("Native Composition & Verification")).toBe(true);
     expect(source.includes("Native Validation")).toBe(true);
     expect(source.includes("Validation mode:")).toBe(true);
     expect(source.includes("promotion candidate:")).toBe(true);
     expect(source.includes("Native validation outcomes")).toBe(true);
+    expect(source.includes("Approved target:")).toBe(true);
+    expect(source.includes("approval source:")).toBe(true);
     expect(source.includes("thrive_native_staging_mode")).toBe(true);
     expect(source.includes("Rollback/reset availability")).toBe(true);
     expect(source.includes("Section-native mapping")).toBe(true);
