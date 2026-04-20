@@ -20,12 +20,14 @@ export type ThriveExecutionRuntime = {
   stagingNativeMode: boolean;
 };
 
-const ALLOWED_STAGING_MARKER = "staging";
-
 function currentEnvironment(): "test" | "development" | "production" {
   if (process.env.NODE_ENV === "production") return "production";
   if (process.env.NODE_ENV === "test") return "test";
   return "development";
+}
+
+function nativeFeatureEnabled(): boolean {
+  return process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING === "1" || process.env.SITEFORGE_ENABLE_THRIVE_NATIVE === "1";
 }
 
 function normalizeHost(url: string): string {
@@ -38,6 +40,16 @@ function normalizeHost(url: string): string {
 
 function normalizeBaseUrl(baseUrl: string): string {
   return baseUrl.trim().replace(/\/+$/, "");
+}
+
+function normalizeApprovedTarget(entry: string): string | null {
+  const raw = entry.trim().toLowerCase();
+  if (!raw) return null;
+  try {
+    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.toLowerCase();
+  } catch {
+    return null;
+  }
 }
 
 function authHeaders(connection: ConnectionProfile): HeadersInit {
@@ -82,12 +94,15 @@ function deriveOperationsFromRoutes(routes: string[]): ThriveNativeOperation[] {
 
 export function evaluateThriveNativeGuard(connection: ConnectionProfile): ThriveNativeGuardStatus {
   const environment = currentEnvironment();
-  const enableNativeStaging = process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING === "1";
-  const stagingMarker = (process.env.SITEFORGE_THRIVE_STAGING_MARKER ?? "").toLowerCase();
+  const nativeEnabled = nativeFeatureEnabled();
   const routeAllowlist = (process.env.SITEFORGE_THRIVE_ROUTE_ALLOWLIST ?? "")
     .split(",")
     .map((entry) => entry.trim())
     .filter(Boolean);
+  const approvedTargets = (process.env.SITEFORGE_APPROVED_NATIVE_TARGETS ?? "")
+    .split(",")
+    .map((entry) => normalizeApprovedTarget(entry))
+    .filter((entry): entry is string => Boolean(entry));
   const explicitOperations = (process.env.SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST ?? "")
     .split(",")
     .map((entry) => entry.trim())
@@ -99,21 +114,58 @@ export function evaluateThriveNativeGuard(connection: ConnectionProfile): Thrive
   const allowlistedOperations = [...new Set([...explicitOperations, ...derivedFromRoutes])];
   const schemaContractVersion = process.env.SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION ?? null;
   const host = normalizeHost(connection.baseUrl);
+  const targetApproved = Boolean(host && approvedTargets.includes(host));
+  const targetClassification: ThriveNativeGuardStatus["targetClassification"] = !host
+    ? "unknown_target"
+    : targetApproved
+      ? "approved_non_production_target"
+      : "unapproved_target";
 
   let blockedReason: string | null = null;
-  if (!enableNativeStaging) blockedReason = "staging_flag_disabled";
+  if (!nativeEnabled) blockedReason = "native_flag_disabled";
+  else if (!host) blockedReason = "blocked_unapproved_target";
+  else if (!targetApproved) blockedReason = "blocked_unapproved_target";
   else if (environment === "production") blockedReason = "production_environment_block";
-  else if (stagingMarker !== ALLOWED_STAGING_MARKER) blockedReason = "invalid_staging_marker";
-  else if (!schemaContractVersion) blockedReason = "missing_schema_contract_version";
-  else if (!allowlistedOperations.length) blockedReason = "missing_operation_allowlist";
-  else if (!host) blockedReason = "invalid_connection_host";
-  else if (host.includes("ipetzo")) blockedReason = "blocked_live_host";
+  else if (!schemaContractVersion) blockedReason = "blocked_schema_contract";
+  else if (!allowlistedOperations.length) blockedReason = "blocked_allowlist";
+  else {
+    for (const operation of allowlistedOperations) {
+      const contract = getNativeContract(operation);
+      if (!contract) {
+        blockedReason = "blocked_missing_contract";
+        break;
+      }
+      if (!contract.verification || !contract.verification.type) {
+        blockedReason = "blocked_missing_verification";
+        break;
+      }
+      const requiresRollback =
+        operation === "createOrUpdateTemplateShellReference" ||
+        operation === "createOrUpdateSection" ||
+        operation === "createOrUpdateSymbol";
+      if (requiresRollback && (!contract.rollback.supported || !contract.rollback.endpointTemplate)) {
+        blockedReason = "blocked_missing_rollback";
+        break;
+      }
+    }
+  }
+
+  const eligible = blockedReason == null;
+  const nativeTargetMode: ThriveNativeGuardStatus["nativeTargetMode"] = eligible
+    ? "approved_non_production_target"
+    : targetClassification === "unapproved_target"
+      ? "unapproved_target"
+      : "blocked";
 
   return {
-    eligible: blockedReason == null,
+    eligible,
     blockedReason,
     environment,
-    stagingMarkerValid: stagingMarker === ALLOWED_STAGING_MARKER,
+    nativeTargetMode,
+    targetClassification,
+    nativeTargetEligibility: eligible ? "eligible" : "blocked",
+    approvedTargetHost: targetApproved ? host : null,
+    approvalSource: targetApproved ? "env_allowlist" : null,
     connectionHost: host,
     allowlistedOperations,
     routeAllowlist,
@@ -151,12 +203,13 @@ async function safeJson(response: Response): Promise<Record<string, unknown> | n
 }
 
 function endpointWithPayload(endpoint: string, payload: Record<string, unknown>): string {
+  const optionalId = (value: unknown): string => (typeof value === "number" && Number.isFinite(value) ? String(value) : "");
   return endpoint
     .replace("{postId}", String(payload.postId ?? ""))
-    .replace("{templateId?}", payload.templateId ? String(payload.templateId) : "")
-    .replace("{symbolId?}", payload.symbolId ? String(payload.symbolId) : "")
-    .replace("{sectionId?}", payload.sectionId ? String(payload.sectionId) : "")
-    .replace("{templateId?}", payload.templateId ? String(payload.templateId) : "")
+    .replace("{templateId?}", optionalId(payload.templateId))
+    .replace("{symbolId?}", optionalId(payload.symbolId))
+    .replace("{sectionId?}", optionalId(payload.sectionId))
+    .replace("{templateId?}", optionalId(payload.templateId))
     .replace(/\/\/$/, "/")
     .replace(/\/\{[^}]+\?\}/g, "")
     .replace(/\/+/g, "/")
@@ -405,7 +458,8 @@ export async function rollbackThriveNativeExecution(params: {
     }
 
     const endpoint = rollbackTemplate.replace("{id}", String(item.id));
-    const res = await fetch(`${baseUrl}${endpoint}`, {
+    const deleteUrl = `${baseUrl}${endpoint}${endpoint.includes("?") ? "&force=true" : "?force=true"}`;
+    const res = await fetch(deleteUrl, {
       method: "DELETE",
       headers,
       cache: "no-store",
@@ -428,9 +482,7 @@ export async function rollbackThriveNativeExecution(params: {
 }
 
 export function getThriveExecutionRuntime(params: { thriveIntelligenceAvailable: boolean }): ThriveExecutionRuntime {
-  const nativeEnabled = process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING === "1";
-  const marker = (process.env.SITEFORGE_THRIVE_STAGING_MARKER ?? "").toLowerCase();
-  const stagingNativeMode = nativeEnabled && marker === ALLOWED_STAGING_MARKER && currentEnvironment() !== "production";
+  const stagingNativeMode = nativeFeatureEnabled() && currentEnvironment() !== "production";
 
   return {
     wpSafeMode: true,

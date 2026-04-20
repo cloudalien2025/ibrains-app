@@ -1096,7 +1096,7 @@ export default function SiteForgeAppPage() {
             <div className="mt-1 text-sm text-slate-200">
               Thrive Mode:{" "}
               {thriveCurrentMode === "thrive_native_staging_mode"
-                ? "Thrive-native staging mode"
+                ? "Thrive-native approved-target mode"
                 : thriveCurrentMode === "blocked_native_mode"
                   ? "Blocked native mode"
                   : thriveCurrentMode === "thrive_intel_mode"
@@ -1207,14 +1207,18 @@ export default function SiteForgeAppPage() {
 
         <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <div className={`${brainTheme.glassCard} p-4`}>
-            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Staging Panel</div>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Target Panel</div>
             <div className="mt-2 text-sm text-slate-200">
               Eligibility: {thriveNativeGuard?.eligible ? "Eligible" : "Blocked"}{" "}
               {thriveNativeGuard?.blockedReason ? `(${thriveNativeGuard.blockedReason})` : ""}
             </div>
             <div className="mt-1 text-sm text-slate-200">
-              Environment: {thriveNativeGuard?.environment ?? "unknown"} | Staging marker valid:{" "}
-              {thriveNativeGuard?.stagingMarkerValid ? "yes" : "no"}
+              Target mode: {thriveNativeGuard?.nativeTargetMode ?? "blocked"} | classification:{" "}
+              {thriveNativeGuard?.targetClassification ?? "unknown_target"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Approved target: {thriveNativeGuard?.approvedTargetHost ?? "none"} | approval source:{" "}
+              {thriveNativeGuard?.approvalSource ?? "none"}
             </div>
             <div className="mt-1 text-sm text-slate-200">
               Contract schema: {thriveNativeGuard?.schemaContractVersion ?? "missing"} | Host:{" "}
@@ -1289,7 +1293,7 @@ export default function SiteForgeAppPage() {
                 ))
               ) : (
                 <div className="rounded-lg border border-dashed border-white/20 bg-slate-950/40 p-3 text-slate-300">
-                  No native staging execution recorded for this run.
+                  No native execution recorded for this run.
                 </div>
               )}
             </div>

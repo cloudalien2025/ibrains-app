@@ -20,7 +20,8 @@ const connection: ConnectionProfile = {
 afterEach(() => {
   vi.restoreAllMocks();
   delete process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING;
-  delete process.env.SITEFORGE_THRIVE_STAGING_MARKER;
+  delete process.env.SITEFORGE_ENABLE_THRIVE_NATIVE;
+  delete process.env.SITEFORGE_APPROVED_NATIVE_TARGETS;
   delete process.env.SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION;
   delete process.env.SITEFORGE_THRIVE_ROUTE_ALLOWLIST;
   delete process.env.SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST;
@@ -29,7 +30,7 @@ afterEach(() => {
 describe("siteforge thrive native execution + rollback", () => {
   it("executes approved operations with verification and tracks rollback candidates", async () => {
     process.env.SITEFORGE_ENABLE_THRIVE_NATIVE_STAGING = "1";
-    process.env.SITEFORGE_THRIVE_STAGING_MARKER = "staging";
+    process.env.SITEFORGE_APPROVED_NATIVE_TARGETS = "staging.example.com";
     process.env.SITEFORGE_THRIVE_SCHEMA_CONTRACT_VERSION = "v1";
     process.env.SITEFORGE_THRIVE_ROUTE_ALLOWLIST = "/wp-json/wp/v2/thrive_template,/wp-json/wp/v2/thrive_section";
     process.env.SITEFORGE_THRIVE_NATIVE_OPERATION_ALLOWLIST = "createOrUpdateTemplateShellReference,createOrUpdateSection";

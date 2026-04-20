@@ -207,8 +207,14 @@ async function verifyRollbackCleanup(params: {
     const endpoint = endpointForObject(entry.objectType, entry.id);
     const res = await fetch(`${baseUrl}${endpoint}?context=edit`, { method: "GET", headers, cache: "no-store" });
     if (res.ok) {
-      success = false;
-      notes.push(`rollback_residual_object:${entry.objectType}:${entry.id}`);
+      const record = await safeJson(res);
+      const status = typeof record?.status === "string" ? record.status.toLowerCase() : "";
+      if (status === "trash") {
+        notes.push(`rollback_object_trashed:${entry.objectType}:${entry.id}`);
+      } else {
+        success = false;
+        notes.push(`rollback_residual_object:${entry.objectType}:${entry.id}`);
+      }
     }
   }
 

@@ -410,7 +410,11 @@ export type ThriveNativeGuardStatus = {
   eligible: boolean;
   blockedReason: string | null;
   environment: "test" | "development" | "production";
-  stagingMarkerValid: boolean;
+  nativeTargetMode: "blocked" | "approved_non_production_target" | "unapproved_target";
+  targetClassification: "approved_non_production_target" | "unapproved_target" | "unknown_target";
+  nativeTargetEligibility: "eligible" | "blocked";
+  approvedTargetHost: string | null;
+  approvalSource: "env_allowlist" | "project_policy" | "unknown" | null;
   connectionHost: string;
   allowlistedOperations: ThriveNativeOperation[];
   routeAllowlist: string[];

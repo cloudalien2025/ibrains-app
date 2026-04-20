@@ -122,7 +122,11 @@ export type SiteForgeSnapshotView = {
     eligible: boolean;
     blockedReason: string | null;
     environment: "test" | "development" | "production";
-    stagingMarkerValid: boolean;
+    nativeTargetMode: "blocked" | "approved_non_production_target" | "unapproved_target";
+    targetClassification: "approved_non_production_target" | "unapproved_target" | "unknown_target";
+    nativeTargetEligibility: "eligible" | "blocked";
+    approvedTargetHost: string | null;
+    approvalSource: "env_allowlist" | "project_policy" | "unknown" | null;
     connectionHost: string;
     allowlistedOperations: Array<
       | "assignTemplateToPost"
@@ -600,7 +604,26 @@ function normalizeThriveNativeGuard(value: unknown): SiteForgeSnapshotView["thri
       value.environment === "production" || value.environment === "test" || value.environment === "development"
         ? value.environment
         : "development",
-    stagingMarkerValid: boolOr(value.stagingMarkerValid),
+    nativeTargetMode:
+      value.nativeTargetMode === "approved_non_production_target" ||
+      value.nativeTargetMode === "unapproved_target" ||
+      value.nativeTargetMode === "blocked"
+        ? value.nativeTargetMode
+        : "blocked",
+    targetClassification:
+      value.targetClassification === "approved_non_production_target" ||
+      value.targetClassification === "unapproved_target" ||
+      value.targetClassification === "unknown_target"
+        ? value.targetClassification
+        : "unknown_target",
+    nativeTargetEligibility: value.nativeTargetEligibility === "eligible" ? "eligible" : "blocked",
+    approvedTargetHost: nullableString(value.approvedTargetHost),
+    approvalSource:
+      value.approvalSource === "env_allowlist" ||
+      value.approvalSource === "project_policy" ||
+      value.approvalSource === "unknown"
+        ? value.approvalSource
+        : null,
     connectionHost: stringOr(value.connectionHost, ""),
     allowlistedOperations: Array.isArray(value.allowlistedOperations)
       ? value.allowlistedOperations.map((entry) => normalizeNativeOperation(entry))
