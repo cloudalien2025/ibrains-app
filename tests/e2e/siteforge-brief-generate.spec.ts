@@ -101,7 +101,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Setup", exact: true }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
 
     await page.locator("#siteforge-ai-key").fill("sk-test");
     await page.getByRole("button", { name: "Save API Keys" }).click();
