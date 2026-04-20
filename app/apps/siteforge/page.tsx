@@ -57,6 +57,8 @@ type AgencyNavKey =
   | "publish"
   | "settings";
 
+type BuildTabKey = "plan" | "pages" | "assets";
+
 type AgencyStatus =
   | "Not started"
   | "Researching"
@@ -202,7 +204,8 @@ export default function SiteForgeAppPage() {
   const [createStatus, setCreateStatus] = useState<CreateStatus>("idle");
   const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
   const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
-  const [activeNav, setActiveNav] = useState<AgencyNavKey>("mission_control");
+  const [activeNav, setActiveNav] = useState<AgencyNavKey>("settings");
+  const [activeBuildTab, setActiveBuildTab] = useState<BuildTabKey>("plan");
   const [pageStudioSlug, setPageStudioSlug] = useState<string | null>(null);
   const [assetsTab, setAssetsTab] = useState<
     "headers" | "footers" | "symbols" | "sections" | "templates" | "layouts" | "cta_blocks" | "faqs" | "testimonials"
@@ -1002,15 +1005,9 @@ export default function SiteForgeAppPage() {
         : "Persistent Postgres storage is healthy.";
 
   const primaryNavItems: Array<{ key: AgencyNavKey; label: string }> = [
-    { key: "mission_control", label: "Builder" },
-    { key: "pages", label: "Pages" },
-    { key: "publish", label: "Review" },
-    { key: "settings", label: "Settings" },
-  ];
-
-  const secondaryNavItems: Array<{ key: AgencyNavKey; label: string }> = [
-    { key: "thrive_intelligence", label: "Thrive Assets" },
-    { key: "strategy", label: "Advanced" },
+    { key: "settings", label: "Setup" },
+    { key: "mission_control", label: "Build" },
+    { key: "publish", label: "Publish" },
   ];
 
   const agencyTeam: AgentRosterEntry[] = [
@@ -1620,17 +1617,40 @@ export default function SiteForgeAppPage() {
         <section className={`${brainTheme.glassCard} p-6`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge AI Builder</div>
-              <h1 className="mt-2 text-3xl font-semibold text-white">Guided Thrive Website Builder</h1>
+              <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge</div>
+              <h1 className="mt-2 text-3xl font-semibold text-white">Setup, Build, Publish</h1>
               <p className="mt-2 max-w-4xl text-sm text-slate-300">
-                Tell SiteForge what you want to build. Follow one clear step at a time while the workspace updates live.
+                Complete setup once, review what SiteForge will build, then publish your draft with one clear next step each time.
               </p>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={brainTheme.glowButton} onClick={() => void generateSite()} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                Build Draft
+            <nav className="flex flex-wrap items-center gap-2">
+              {primaryNavItems.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={`rounded-xl px-4 py-2 text-sm transition ${
+                    activeNav === item.key
+                      ? "border border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+                      : "border border-transparent bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"
+                  }`}
+                  onClick={() => setActiveNav(item.key)}
+                >
+                  {item.label}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-label="Open settings"
+                className={`rounded-xl border px-3 py-2 text-sm transition ${
+                  activeNav === "strategy"
+                    ? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
+                    : "border-white/20 bg-white/5 text-slate-300 hover:border-white/30 hover:bg-white/10"
+                }`}
+                onClick={() => setActiveNav("strategy")}
+              >
+                ⚙
               </button>
-            </div>
+            </nav>
           </div>
         </section>
 
@@ -1659,150 +1679,84 @@ export default function SiteForgeAppPage() {
           <aside className={`${brainTheme.glassCard} h-fit p-3`}>
             <div className="text-xs uppercase tracking-[0.15em] text-slate-400">SiteForge</div>
             <div className="mt-1 text-sm text-slate-200">{activeProject?.name ?? "No project selected"}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-300/80">AI Builder</div>
-            <nav className="mt-3 space-y-1">
-              {primaryNavItems.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                    activeNav === item.key
-                      ? "border border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-                      : "border border-transparent bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"
-                  }`}
-                  onClick={() => setActiveNav(item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </nav>
-
-            {setupCoreComplete ? (
-              <div className="mt-4">
-                <div className="text-[11px] uppercase tracking-[0.12em] text-slate-500">Secondary</div>
-                <nav className="mt-2 space-y-1">
-                  {secondaryNavItems.map((item) => (
-                    <button
-                      key={item.key}
-                      type="button"
-                      className={`w-full rounded-xl px-3 py-2 text-left text-sm transition ${
-                        activeNav === item.key
-                          ? "border border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-                          : "border border-transparent bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"
-                      }`}
-                      onClick={() => setActiveNav(item.key)}
-                    >
-                      {item.label}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-            ) : null}
-
-            {activeNav === "mission_control" ? (
-              <div className="mt-4 space-y-3">
-                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Now</div>
-                  <div className="mt-2 text-sm text-slate-100">Step {currentStepMeta.id}</div>
-                  <div className="mt-1 text-xs text-slate-400">{currentStepMeta.label.replace(/^\d+\.\s/, "")}</div>
+            <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-300/80">Guided assistant</div>
+            <div className="mt-4 space-y-3">
+              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Current section</div>
+                <div className="mt-2 text-sm text-slate-100">
+                  {activeNav === "settings" ? "Setup" : activeNav === "mission_control" ? "Build" : activeNav === "publish" ? "Publish" : "Settings"}
                 </div>
-
-                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Builder Feed</div>
-                  <div className="mt-2 space-y-2 text-xs text-slate-300">
-                    {builderFeed.map((message, index) => (
-                      <div key={`${index}-${message}`} className="rounded-lg border border-white/10 bg-white/5 p-2">
-                        {message}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                  <label htmlFor="builder-prompt" className="text-xs uppercase tracking-[0.12em] text-slate-400">
-                    Ask SiteForge
-                  </label>
-                  <textarea
-                    id="builder-prompt"
-                    value={builderPrompt}
-                    onChange={(event) => setBuilderPrompt(event.target.value)}
-                    placeholder="Tell SiteForge what kind of website you want to build"
-                    className="mt-2 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                  />
-                  <div className="mt-2 space-y-2">
-                    <button
-                      type="button"
-                      className={`${brainTheme.glowButton} w-full justify-center`}
-                      onClick={primaryBuilderAction.action}
-                      disabled={primaryBuilderAction.disabled}
-                    >
-                      {primaryBuilderAction.label}
-                    </button>
-                    {secondaryBuilderAction ? (
-                      <button
-                        type="button"
-                        onClick={secondaryBuilderAction.action}
-                        className="text-xs text-slate-300 underline underline-offset-4 hover:text-slate-100"
-                      >
-                        {secondaryBuilderAction.label}
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Next Step</div>
-                <div className="mt-2 text-sm text-slate-200">{overviewNextAction.label}</div>
                 <div className="mt-1 text-xs text-slate-400">{overviewNextAction.helper}</div>
-                <div className="mt-3 flex flex-col gap-2">
-                  <button type="button" className={brainTheme.glowButton} onClick={overviewNextAction.action} disabled={busy}>
-                    {overviewNextAction.label}
-                  </button>
-                  <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
-                    Open Builder
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Builder Feed</div>
+                <div className="mt-2 space-y-2 text-xs text-slate-300">
+                  {builderFeed.slice(0, 3).map((message, index) => (
+                    <div key={`${index}-${message}`} className="rounded-lg border border-white/10 bg-white/5 p-2">
+                      {message}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
+                <label htmlFor="builder-prompt" className="text-xs uppercase tracking-[0.12em] text-slate-400">
+                  Ask SiteForge
+                </label>
+                <textarea
+                  id="builder-prompt"
+                  value={builderPrompt}
+                  onChange={(event) => setBuilderPrompt(event.target.value)}
+                  placeholder="Tell SiteForge what kind of website you want to build"
+                  className="mt-2 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                />
+                <div className="mt-2 space-y-2">
+                  <button
+                    type="button"
+                    className={`${brainTheme.glowButton} w-full justify-center`}
+                    onClick={activeNav === "settings" ? saveWebsiteBrief : activeNav === "publish" ? generateSite : primaryBuilderAction.action}
+                    disabled={activeNav === "mission_control" ? primaryBuilderAction.disabled : busy}
+                  >
+                    {activeNav === "settings" ? "Save and Continue" : activeNav === "publish" ? "Build Draft" : primaryBuilderAction.label}
                   </button>
                 </div>
               </div>
-            )}
+            </div>
           </aside>
 
           <div className="space-y-4">
             {activeNav === "mission_control" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
                 <div className="sticky top-2 z-10 rounded-xl border border-white/10 bg-slate-950/85 p-2 backdrop-blur">
-                  <div className="grid gap-2 md:grid-cols-5">
-                    {stepTabMeta.map((tab) => {
-                      const isWorkspaceActive = activeBuilderStep === tab.id;
-                      const baseClass = tab.state === "current"
-                        ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
-                        : tab.state === "done"
-                          ? "border-emerald-300/50 bg-emerald-500/15 text-emerald-100"
-                          : "border-white/15 bg-white/5 text-slate-400";
-                      return (
-                        <button
-                          key={tab.id}
-                          type="button"
-                          onClick={() => jumpToBuilderStep(tab.id)}
-                          disabled={!tab.unlocked}
-                          className={`rounded-lg border px-3 py-2 text-left text-xs transition ${baseClass} ${
-                            isWorkspaceActive ? "ring-1 ring-cyan-300/60" : ""
-                          } ${tab.unlocked ? "hover:border-white/30" : "cursor-not-allowed opacity-70"}`}
-                        >
-                          <div className="font-medium">{tab.shortLabel}</div>
-                          <div className="mt-1 text-[11px] uppercase tracking-[0.08em]">{tab.state === "done" ? "Done" : tab.state === "current" ? "Current" : "Locked"}</div>
-                        </button>
-                      );
-                    })}
+                  <div className="grid gap-2 md:grid-cols-3">
+                    {([
+                      ["plan", "Plan"],
+                      ["pages", "Pages"],
+                      ["assets", "Assets"],
+                    ] as const).map(([tabKey, label]) => (
+                      <button
+                        key={tabKey}
+                        type="button"
+                        onClick={() => setActiveBuildTab(tabKey)}
+                        className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
+                          activeBuildTab === tabKey
+                            ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
+                            : "border-white/15 bg-white/5 text-slate-300 hover:border-white/30"
+                        }`}
+                      >
+                        <div className="font-medium">{label}</div>
+                      </button>
+                    ))}
                   </div>
                 </div>
 
                 <div className="mt-4">
-                  <h2 className="text-xl font-semibold text-slate-100">Step {activeStepMeta.id} — {activeStepMeta.label.replace(/^\d+\.\s/, "")}</h2>
-                  <p className="mt-1 text-sm text-slate-300">{activeStepMeta.description}</p>
+                  <h2 className="text-xl font-semibold text-slate-100">Build</h2>
+                  <p className="mt-1 text-sm text-slate-300">Review your plan, pages, and reusable assets before moving to publish.</p>
                 </div>
 
-                {builderCanvasMode === "website" ? (
+                {false ? (
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2">
                       <div>
@@ -1879,7 +1833,7 @@ export default function SiteForgeAppPage() {
                     </div>
                   </div>
                 ) : null}
-                {builderCanvasMode === "connect" ? (
+                {false ? (
                   <div className="space-y-4">
                     <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                       <div>
@@ -1960,7 +1914,7 @@ export default function SiteForgeAppPage() {
                     </div>
                   </div>
                 ) : null}
-                {builderCanvasMode === "plan" ? (
+                {activeBuildTab === "plan" ? (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Business: {briefForm.businessName || "Not set"} · Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
@@ -1976,32 +1930,47 @@ export default function SiteForgeAppPage() {
                     </div>
                   </div>
                 ) : null}
-                {builderCanvasMode === "pages" ? (
+                {activeBuildTab === "pages" ? (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Pages: {pageRows.length || 0}</div>
                       <div className="mt-1">Selected page: {selectedPageRow?.pageName ?? "none"}</div>
+                      <div className="mt-1">Purpose: {selectedPageRow?.goal ?? "Support intent"}</div>
                       <div className="mt-1">Sections: {selectedBuildPage?.sections.length ?? 0}</div>
                       <div className="mt-1">Recommended reusable items: {selectedPageRow?.resolutionCount ?? 0}</div>
                     </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        className={brainTheme.glowButton}
-                        onClick={() => {
-                          setPagesReviewed(true);
-                          setActiveNav("publish");
-                        }}
-                      >
-                        Continue to Build
-                      </button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("pages")}>
-                        Open Pages
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      className={brainTheme.glowButton}
+                      onClick={() => {
+                        setPagesReviewed(true);
+                        setActiveNav("publish");
+                      }}
+                    >
+                      Approve Page
+                    </button>
                   </div>
                 ) : null}
-                {builderCanvasMode === "build" ? (
+                {activeBuildTab === "assets" ? (
+                  <div className="space-y-4">
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                      <div>Headers: {thriveIntel?.symbolSummary.headers ?? 0}</div>
+                      <div className="mt-1">Footers: {thriveIntel?.symbolSummary.footers ?? 0}</div>
+                      <div className="mt-1">CTA blocks: {ctaBlockCount}</div>
+                      <div className="mt-1">Templates: {templateCount}</div>
+                      <div className="mt-1">Layouts: {layoutCount}</div>
+                    </div>
+                    {!hasMeaningfulAssetData ? (
+                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-sm text-slate-300">
+                        No reusable assets found yet.
+                      </div>
+                    ) : null}
+                    <button type="button" className={brainTheme.glowButton} onClick={() => void loadProjects()}>
+                      Rescan Assets
+                    </button>
+                  </div>
+                ) : null}
+                {false ? (
                   <div className="space-y-4">
                     <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                       <div>Build status: {currentSession?.status ?? "not started"}</div>
@@ -2649,26 +2618,16 @@ export default function SiteForgeAppPage() {
             {activeNav === "publish" ? (
               <section className="space-y-4">
                 <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Review</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Confirm readiness, resolve blockers, and finalize the build package before launch.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                      Review Launch Readiness
-                    </button>
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("pages")}>
-                      Review Missing Items
-                    </button>
-                  </div>
+                  <h2 className="text-lg font-semibold text-slate-100">Publish</h2>
+                  <p className="mt-2 text-sm text-slate-300">Check readiness and complete the final build action.</p>
                 </div>
                 <div className="grid gap-4 xl:grid-cols-3">
                   <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Readiness Summary</h3>
+                    <h3 className="text-sm font-semibold text-slate-100">Ready</h3>
                     <div className="mt-2 text-sm text-slate-300">{currentSession?.status === "completed" ? "Build package complete" : "Awaiting build completion"}</div>
                   </div>
                   <div className={`${brainTheme.glassCard} p-4 xl:col-span-2`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Launch Checklist</h3>
+                    <h3 className="text-sm font-semibold text-slate-100">Needs attention</h3>
                     <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
                       <div>homepage assigned: {snapshot?.currentHomepageId ? "yes" : "no"}</div>
                       <div>core CTA working: {currentSession?.status === "completed" ? "yes" : "no"}</div>
@@ -2680,23 +2639,10 @@ export default function SiteForgeAppPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Launch Actions</h3>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.secondaryButton}>Review Launch Readiness</button>
-                      <button type="button" className={brainTheme.secondaryButton}>Finalize Build Package</button>
-                      <button type="button" className={brainTheme.secondaryButton}>Prepare Launch Package</button>
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Audit Log</h3>
-                    <div className="mt-2 space-y-1 text-xs text-slate-300">
-                      {activity.slice(0, 6).map((entry, idx) => (
-                        <div key={`${entry.at}-${idx}`}>{formatDate(entry.at)} · {entry.stage} · {entry.message}</div>
-                      ))}
-                    </div>
-                  </div>
+                <div className={`${brainTheme.glassCard} p-4`}>
+                  <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
+                    Build Draft
+                  </button>
                 </div>
               </section>
             ) : null}
@@ -2705,9 +2651,7 @@ export default function SiteForgeAppPage() {
               <section className="space-y-4">
                 <div className={`${brainTheme.glassCard} p-5`}>
                   <h2 className="text-lg font-semibold text-slate-100">Setup</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Complete project setup, save your brief and API keys, validate the connection, then continue to Thrive Setup.
-                  </p>
+                  <p className="mt-2 text-sm text-slate-300">Complete website details, connection, and AI access in one place.</p>
                 </div>
                 <div className={`${brainTheme.glassCard} p-4`}>
                   <h2 className="text-sm font-semibold text-slate-100">Project Details</h2>
@@ -2757,7 +2701,7 @@ export default function SiteForgeAppPage() {
                 {activeProject ? (
                   <>
                     <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">Website Strategy Brief</h3>
+                      <h3 className="text-sm font-semibold text-slate-100">About your website</h3>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
                         <div>
                           <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
@@ -2804,14 +2748,11 @@ export default function SiteForgeAppPage() {
                           <textarea id="siteforge-brief-differentiators" value={briefForm.differentiators} onChange={(event) => setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
                         </div>
                       </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className={brainTheme.secondaryButton} onClick={saveWebsiteBrief} disabled={busy}>Save Website Brief</button>
-                        <span className="text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</span>
-                      </div>
+                      <div className="mt-3 text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</div>
                     </div>
 
                     <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">AI & Research API Configuration</h3>
+                      <h3 className="text-sm font-semibold text-slate-100">AI access</h3>
                       <p className="mt-1 text-xs text-slate-300">Save API credentials server-side for this project. Plaintext keys are not returned to the browser after save.</p>
                       <div className="mt-3 grid gap-3 md:grid-cols-3">
                         <div>
@@ -2833,33 +2774,30 @@ export default function SiteForgeAppPage() {
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
-                        <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("update")} disabled={busy}>Update Model / Keys</button>
                         <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || (!activeProject.hasSavedAiSecret && !activeProject.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
                       </div>
                       <div className="mt-2 text-xs text-slate-300">Status: OpenAI={activeProject.hasSavedAiSecret ? "saved" : "not saved"} | SerpApi={activeProject.hasSavedSerpApiSecret ? "saved" : "not saved"}{aiStatusMessage ? ` · ${aiStatusMessage}` : ""}</div>
                     </div>
 
                     <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">WordPress / Thrive Connection</h3>
+                      <h3 className="text-sm font-semibold text-slate-100">Connect your site</h3>
                       <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
                         <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection label" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
                         <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="WordPress username" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
                         <input type="password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"} className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Save + Validate</button>
-                        <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy || !selectedProjectId}>Revalidate</button>
+                        <button type="button" className={brainTheme.secondaryButton} onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Check Connection</button>
                         <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
                           <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
                           Thrive Installed
                         </label>
-                        <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>Build Site Draft</button>
                       </div>
                       <div className="mt-2 text-xs text-slate-300">Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} | Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}</div>
                     </div>
 
                     <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">Validation Results</h3>
+                      <h3 className="text-sm font-semibold text-slate-100">Connection result</h3>
                       <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
                         <div>Connection: {connectionResult?.connected ? "connected" : savedConnection?.lastValidationStatus ?? "not validated"}</div>
                         <div>Can write pages: {connectionResult?.canWritePages ? "yes" : "unknown"}</div>
@@ -2870,18 +2808,25 @@ export default function SiteForgeAppPage() {
 
                     <div className={`${brainTheme.glassCard} sticky bottom-3 z-10 border border-cyan-300/30 bg-slate-950/85 p-4 backdrop-blur`}>
                       <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-xs text-slate-300">Next: validate your connection, then continue to Thrive Setup.</div>
-                        <div className="flex flex-wrap gap-2">
-                          <button type="button" className={brainTheme.secondaryButton} onClick={saveWebsiteBrief} disabled={busy}>
-                            Save Setup
-                          </button>
-                          <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy || !selectedProjectId}>
-                            Validate Connection
-                          </button>
-                          <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("thrive_intelligence")} disabled={!selectedProjectId}>
-                            Continue to Thrive Setup
-                          </button>
-                        </div>
+                        <div className="text-xs text-slate-300">Next action is based on what is already complete.</div>
+                        <button
+                          type="button"
+                          className={brainTheme.glowButton}
+                          onClick={() => {
+                            if (!setupCoreComplete) {
+                              void saveWebsiteBrief();
+                              return;
+                            }
+                            if (!connectionValidated) {
+                              void saveAndValidateConnection();
+                              return;
+                            }
+                            setActiveNav("mission_control");
+                          }}
+                          disabled={!selectedProjectId || busy}
+                        >
+                          {!briefCompleted || !aiConfigured ? "Save and Continue" : !connectionValidated ? "Check Connection" : "Continue to Build"}
+                        </button>
                       </div>
                     </div>
                   </>
