@@ -94,7 +94,14 @@ export type BuildSpecSection = {
   heading: string;
   body: string;
   cta?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    source?: string;
+    pageSlug?: string;
+    sectionIntent?: "conversion" | "informational" | "trust" | "navigation";
+    thriveSymbolRoleCandidate?: "header" | "footer" | "section" | "unknown";
+    preferredRenderTarget?: "wordpress_page_content" | "thrive_symbol_reference" | "future_thrive_template_assignment";
+    [key: string]: unknown;
+  };
 };
 
 export type BuildSpecPage = {
@@ -106,6 +113,7 @@ export type BuildSpecPage = {
   metadata: {
     template: "landing" | "standard" | "contact";
     thriveLayoutKey?: string;
+    preferredRenderTarget?: "wordpress_page_content" | "thrive_symbol_reference" | "future_thrive_template_assignment";
     [key: string]: unknown;
   };
 };
@@ -118,6 +126,8 @@ export type BuildSpec = {
   metadata: {
     conversionFocus: "high" | "medium";
     thriveAware: boolean;
+    thriveMode?: "wp_safe_mode" | "future_thrive_native_mode";
+    thriveIntelligenceUsed?: boolean;
     createdAt: string;
   };
 };
@@ -188,6 +198,10 @@ export type ExecutionResult = {
     enabled: boolean;
     appliedMappings: string[];
     fallbackUsed: boolean;
+    executionMode: "wp_safe_mode" | "future_thrive_native_mode";
+    intelligenceAvailable: boolean;
+    symbolInventoryPresent: boolean;
+    intelligence: ThriveIntelligence | null;
   };
   actionLog: ExecutionActionLog[];
   warnings: string[];
@@ -265,6 +279,52 @@ export type CapabilityCheckResult = {
   thriveDetected: boolean;
   thriveSignals: string[];
   message: string;
+};
+
+export type ThriveSymbolRole = "header" | "footer" | "section" | "unknown";
+
+export type ThriveSymbolIntelligence = {
+  id: number;
+  title: string;
+  slug: string;
+  taxonomy: {
+    slug: string | null;
+    name: string | null;
+  };
+  inferredRole: ThriveSymbolRole;
+  reusable: boolean;
+  hasBuilderContent: boolean;
+  hasCustomCss: boolean;
+};
+
+export type ThriveIntelligence = {
+  source: "wordpress_rest_get";
+  collectedAt: string;
+  mode: "wp_safe_mode";
+  activeSkin: {
+    id: number;
+    name: string;
+    slug: string;
+    tag: string | null;
+  } | null;
+  symbolInventory: ThriveSymbolIntelligence[];
+  symbolSummary: {
+    total: number;
+    headers: number;
+    footers: number;
+    sections: number;
+    unknown: number;
+  };
+  primitiveCounts: {
+    thriveTemplate: number;
+    thriveLayout: number;
+    thriveSection: number;
+    tcbSymbol: number;
+  };
+  safeHints: {
+    frontPageUsesWpSettings: boolean;
+  };
+  warnings: string[];
 };
 
 export type BuildRunState = {
@@ -398,6 +458,7 @@ export type SiteForgeSnapshot = {
   }>;
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
+  thriveIntelligence: ThriveIntelligence | null;
   homepageStrategy: HomepageStrategyMode;
   lastRunSummary: string | null;
   lastRunStatus: BuildSessionStatus | null;

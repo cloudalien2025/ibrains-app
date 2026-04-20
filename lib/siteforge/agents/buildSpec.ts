@@ -7,12 +7,25 @@ function templateForSlug(slug: string): BuildSpecPage["metadata"]["template"] {
   return "standard";
 }
 
+function sectionIntent(sectionType: BuildSpec["pages"][number]["sections"][number]["type"]): "conversion" | "informational" | "trust" | "navigation" {
+  if (sectionType === "hero" || sectionType === "cta") return "conversion";
+  if (sectionType === "testimonials") return "trust";
+  if (sectionType === "contact") return "navigation";
+  return "informational";
+}
+
 export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPackage): BuildSpec {
   const pages = sitePlan.pages.map((page) => {
     const content = contentPackage.pages.find((entry) => entry.pageId === page.id);
 
     const sections = page.sections.map((section) => {
       const match = content?.sections.find((entry) => entry.sectionId === section.id);
+      const thriveSymbolRoleCandidate: "header" | "footer" | "section" | "unknown" =
+        section.sectionType === "hero"
+          ? "header"
+          : section.sectionType === "contact"
+            ? "footer"
+            : "section";
       return {
         id: section.id,
         type: section.sectionType,
@@ -22,6 +35,9 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
         metadata: {
           source: "siteforge-v1",
           pageSlug: page.slug,
+          sectionIntent: sectionIntent(section.sectionType),
+          preferredRenderTarget: "wordpress_page_content" as const,
+          thriveSymbolRoleCandidate,
         },
       };
     });
@@ -34,6 +50,7 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
       sections,
       metadata: {
         template: templateForSlug(page.slug),
+        preferredRenderTarget: "wordpress_page_content" as const,
       },
     };
   });
@@ -49,6 +66,8 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
     metadata: {
       conversionFocus: "high",
       thriveAware: false,
+      thriveMode: "wp_safe_mode",
+      thriveIntelligenceUsed: false,
       createdAt: nowIso(),
     },
   };

@@ -124,7 +124,15 @@ const connection: ConnectionProfile = {
   appPassword: "pw",
 };
 
-const thriveMeta = { enabled: true, appliedMappings: ["home:thrive-homepage-canonical:homepage"], fallbackUsed: false };
+const thriveMeta = {
+  enabled: true,
+  appliedMappings: ["home:thrive-homepage-canonical:homepage"],
+  fallbackUsed: false,
+  executionMode: "wp_safe_mode" as const,
+  intelligenceAvailable: false,
+  symbolInventoryPresent: false,
+  intelligence: null,
+};
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -172,6 +180,9 @@ describe("siteforge wordpress reconciliation", () => {
     expect(result.homepage.reason).toBe("use_existing_front_page_retained");
     expect(result.homepage.pageId).toBe(10);
     expect(result.discovery?.frontPageId).toBe(10);
+    expect(result.thrive.executionMode).toBe("wp_safe_mode");
+    expect(result.thrive.intelligenceAvailable).toBe(false);
+    expect(result.thrive.symbolInventoryPresent).toBe(false);
 
     expect(result.reconciliation?.decisions).toEqual(
       expect.arrayContaining([

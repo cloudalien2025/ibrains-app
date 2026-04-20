@@ -48,6 +48,7 @@ describe("siteforge workspace shape normalization", () => {
     expect(workspace?.runHistory[0]?.runState.timeline).toEqual([]);
     expect(workspace?.runLogs[0]?.stage).toBe("planning");
     expect(workspace?.snapshot?.knownPages).toEqual([]);
+    expect(workspace?.snapshot?.thriveIntelligence).toBeNull();
   });
 
   it("normalizes project creation payload and rejects invalid shapes", () => {

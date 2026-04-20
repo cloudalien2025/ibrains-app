@@ -69,6 +69,26 @@ export type SiteForgeSnapshotView = {
   }>;
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
+  thriveIntelligence: {
+    source: "wordpress_rest_get";
+    collectedAt: string;
+    mode: "wp_safe_mode";
+    activeSkin: { id: number; name: string; slug: string; tag: string | null } | null;
+    symbolInventory: Array<{
+      id: number;
+      title: string;
+      slug: string;
+      taxonomy: { slug: string | null; name: string | null };
+      inferredRole: "header" | "footer" | "section" | "unknown";
+      reusable: boolean;
+      hasBuilderContent: boolean;
+      hasCustomCss: boolean;
+    }>;
+    symbolSummary: { total: number; headers: number; footers: number; sections: number; unknown: number };
+    primitiveCounts: { thriveTemplate: number; thriveLayout: number; thriveSection: number; tcbSymbol: number };
+    safeHints: { frontPageUsesWpSettings: boolean };
+    warnings: string[];
+  } | null;
   homepageStrategy: HomepageStrategy;
   lastRunSummary: string | null;
   lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
@@ -117,7 +137,15 @@ export type BuildSessionView = {
       reason?: string;
     };
     menu: { success: boolean; message: string };
-    thrive: { enabled: boolean; appliedMappings: string[]; fallbackUsed: boolean };
+    thrive: {
+      enabled: boolean;
+      appliedMappings: string[];
+      fallbackUsed: boolean;
+      executionMode: "wp_safe_mode" | "future_thrive_native_mode";
+      intelligenceAvailable: boolean;
+      symbolInventoryPresent: boolean;
+      intelligence: SiteForgeSnapshotView["thriveIntelligence"] | null;
+    };
     warnings: string[];
     errors: string[];
   } | null;
@@ -179,6 +207,69 @@ function boolOr(value: unknown, fallback = false): boolean {
 
 function numberOr(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thriveIntelligence"] | null {
+  if (!isRecord(value)) return null;
+  const activeSkinRaw = isRecord(value.activeSkin) ? value.activeSkin : null;
+  const symbolInventoryRaw = Array.isArray(value.symbolInventory) ? value.symbolInventory : [];
+  const symbolSummaryRaw = isRecord(value.symbolSummary) ? value.symbolSummary : {};
+  const primitiveCountsRaw = isRecord(value.primitiveCounts) ? value.primitiveCounts : {};
+  const safeHintsRaw = isRecord(value.safeHints) ? value.safeHints : {};
+
+  return {
+    source: "wordpress_rest_get",
+    collectedAt: stringOr(value.collectedAt, nowIso()),
+    mode: "wp_safe_mode",
+    activeSkin: activeSkinRaw
+      ? {
+          id: numberOr(activeSkinRaw.id),
+          name: stringOr(activeSkinRaw.name, "Unknown Skin"),
+          slug: stringOr(activeSkinRaw.slug, "unknown-skin"),
+          tag: nullableString(activeSkinRaw.tag),
+        }
+      : null,
+    symbolInventory: symbolInventoryRaw
+      .filter(isRecord)
+      .map((entry) => ({
+        id: numberOr(entry.id),
+        title: stringOr(entry.title, "Untitled Symbol"),
+        slug: stringOr(entry.slug, "symbol"),
+        taxonomy: isRecord(entry.taxonomy)
+          ? {
+              slug: nullableString(entry.taxonomy.slug),
+              name: nullableString(entry.taxonomy.name),
+            }
+          : { slug: null, name: null },
+        inferredRole:
+          entry.inferredRole === "header" ||
+          entry.inferredRole === "footer" ||
+          entry.inferredRole === "section" ||
+          entry.inferredRole === "unknown"
+            ? entry.inferredRole
+            : "unknown",
+        reusable: boolOr(entry.reusable, true),
+        hasBuilderContent: boolOr(entry.hasBuilderContent),
+        hasCustomCss: boolOr(entry.hasCustomCss),
+      })),
+    symbolSummary: {
+      total: numberOr(symbolSummaryRaw.total),
+      headers: numberOr(symbolSummaryRaw.headers),
+      footers: numberOr(symbolSummaryRaw.footers),
+      sections: numberOr(symbolSummaryRaw.sections),
+      unknown: numberOr(symbolSummaryRaw.unknown),
+    },
+    primitiveCounts: {
+      thriveTemplate: numberOr(primitiveCountsRaw.thriveTemplate),
+      thriveLayout: numberOr(primitiveCountsRaw.thriveLayout),
+      thriveSection: numberOr(primitiveCountsRaw.thriveSection),
+      tcbSymbol: numberOr(primitiveCountsRaw.tcbSymbol),
+    },
+    safeHints: {
+      frontPageUsesWpSettings: boolOr(safeHintsRaw.frontPageUsesWpSettings),
+    },
+    warnings: Array.isArray(value.warnings) ? value.warnings.filter((entry): entry is string => typeof entry === "string") : [],
+  };
 }
 
 function toStage(value: unknown): BuildStage {
@@ -389,8 +480,23 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                   ? value.executionResult.thrive.appliedMappings.filter((entry): entry is string => typeof entry === "string")
                   : [],
                 fallbackUsed: boolOr(value.executionResult.thrive.fallbackUsed),
+                executionMode:
+                  value.executionResult.thrive.executionMode === "future_thrive_native_mode"
+                    ? "future_thrive_native_mode"
+                    : "wp_safe_mode",
+                intelligenceAvailable: boolOr(value.executionResult.thrive.intelligenceAvailable),
+                symbolInventoryPresent: boolOr(value.executionResult.thrive.symbolInventoryPresent),
+                intelligence: normalizeThriveIntelligence(value.executionResult.thrive.intelligence),
               }
-            : { enabled: false, appliedMappings: [], fallbackUsed: false },
+            : {
+                enabled: false,
+                appliedMappings: [],
+                fallbackUsed: false,
+                executionMode: "wp_safe_mode",
+                intelligenceAvailable: false,
+                symbolInventoryPresent: false,
+                intelligence: null,
+              },
           warnings: Array.isArray(value.executionResult.warnings)
             ? value.executionResult.warnings.filter((entry): entry is string => typeof entry === "string")
             : [],
@@ -465,6 +571,7 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
           }))
       : [],
     thriveDetected: boolOr(value.thriveDetected),
+    thriveIntelligence: normalizeThriveIntelligence(value.thriveIntelligence),
     homepageStrategy: toStrategy(value.homepageStrategy),
     lastRunSummary: nullableString(value.lastRunSummary),
     lastRunStatus:

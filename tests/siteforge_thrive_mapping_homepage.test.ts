@@ -38,7 +38,7 @@ function buildSpec(): BuildSpec {
 
 describe("siteforge thrive homepage mapping", () => {
   it("maps canonical homepage by homepageSlug with explicit homepage role metadata", () => {
-    const translated = applyThriveMappings(buildSpec(), true);
+    const translated = applyThriveMappings(buildSpec(), true, null);
 
     const homepage = translated.spec.pages.find((page) => page.slug === "landing-page");
     const contact = translated.spec.pages.find((page) => page.slug === "contact");
@@ -48,6 +48,8 @@ describe("siteforge thrive homepage mapping", () => {
 
     expect(contact?.metadata.thriveLayoutKey).toBe("thrive-standard-content");
     expect(contact?.metadata.thrivePageRole).toBe("content");
+    expect(contact?.metadata.preferredRenderTarget).toBe("wordpress_page_content");
+    expect(translated.spec.metadata.thriveMode).toBe("wp_safe_mode");
     expect(translated.appliedMappings).toContain("landing-page:thrive-homepage-canonical:homepage");
   });
 });

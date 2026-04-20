@@ -840,7 +840,7 @@ async function createMenu(
 export async function executeBuildSpecToWordPress(
   connection: ConnectionProfile,
   spec: BuildSpec,
-  thrive: { enabled: boolean; appliedMappings: string[]; fallbackUsed: boolean },
+  thrive: ExecutionResult["thrive"],
   homepageStrategy: HomepageStrategyMode = "use_existing"
 ): Promise<ExecutionResult> {
   const actionLog: ExecutionActionLog[] = [];
