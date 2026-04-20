@@ -109,6 +109,15 @@ export type BuildSpecSection = {
     contentTemplateCandidates?: number[];
     landingPageCandidate?: string | null;
     rendererMode?: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode";
+    visualComposition?: VisualSectionComposition;
+    visualPrimitiveSelection?: {
+      requestedPattern: VisualPattern;
+      selectedPrimitive: ThriveVisualPrimitive;
+      selectedVia: "existing_reusable_symbol" | "existing_compatible_primitive" | "native_create_contract" | "safe_fallback";
+      reason: string;
+      designIntentSatisfied: boolean;
+      fallbackReason?: string | null;
+    };
     themeArtifactRef?: string | null;
     architectContentArtifactRef?: string | null;
     landingPageArtifactRef?: string | null;
@@ -156,6 +165,8 @@ export type BuildSpec = {
     thriveMode?: "wp_safe_mode" | "future_thrive_native_mode";
     thriveIntelligenceUsed?: boolean;
     thriveExecutionMode?: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode";
+    designSystemVersion?: "siteforge_visual_v1";
+    visualDesignTokens?: SiteForgeVisualDesignTokens;
     themeArtifactRef?: string | null;
     architectContentArtifactRef?: string | null;
     landingPageArtifactRef?: string | null;
@@ -166,6 +177,49 @@ export type BuildSpec = {
 };
 
 export type PageIntent = "homepage" | "about" | "contact" | "faq" | "features" | "pricing" | "generic";
+export type VisualPattern =
+  | "hero_split"
+  | "hero_centered"
+  | "feature_cards_grid"
+  | "icon_benefits_row"
+  | "testimonial_cards"
+  | "faq_toggle"
+  | "cta_band"
+  | "trust_strip"
+  | "app_mockup_showcase"
+  | "alternating_content_band";
+export type ThriveVisualPrimitive =
+  | "thrive_content_box"
+  | "thrive_call_to_action"
+  | "thrive_toggle"
+  | "thrive_template_symbol"
+  | "thrive_columns_background_band"
+  | "wordpress_structured_fallback";
+export type VisualSectionComposition = {
+  visualPattern: VisualPattern;
+  sectionLayout: "split" | "centered" | "grid_2" | "grid_3" | "grid_4" | "row" | "band";
+  emphasisLevel: "high" | "medium" | "low";
+  backgroundStyle: "surface" | "muted_band" | "accent_band" | "contrast_band";
+  cardStyle: "none" | "soft" | "elevated" | "outlined";
+  mediaSlot: "none" | "image" | "app_screenshot" | "icon_cluster";
+  iconStyle: "none" | "line" | "duotone" | "solid";
+  ctaStyle: "none" | "primary_button" | "dual_button" | "inline_link";
+  spacingDensity: "compact" | "comfortable" | "airy";
+  sectionBandStyle: "none" | "light" | "accent" | "dark";
+  trustSignalStyle: "none" | "badge_strip" | "rating_row" | "logo_row";
+  preferredNativePrimitives: ThriveVisualPrimitive[];
+};
+export type SiteForgeVisualDesignTokens = {
+  headingScale: "balanced_saas" | "bold_marketing";
+  bodyScale: "comfortable" | "compact";
+  sectionSpacing: "mobile_first_spacious" | "standard";
+  cardRadiusShadowLevel: "soft_depth" | "flat_clean";
+  buttonHierarchy: "primary_strong_secondary_ghost" | "single_primary";
+  accentBackgroundContrast: "high_contrast_clear_cta" | "soft_contrast";
+  trustSectionStyling: "logo_badge_with_soft_band" | "minimal";
+  appProductVisualEmphasis: "screenshot_forward" | "copy_forward";
+  maxTextDensityPerSection: "tight" | "moderate";
+};
 export type ThriveRenderTarget =
   | "wordpress_page_content"
   | "thrive_symbol_reference"
@@ -359,6 +413,11 @@ export type ThriveSectionResolution = {
   symbolCandidateType: NonNullable<BuildSpecSection["metadata"]>["symbolCandidateType"];
   preferredRenderTarget: ThriveRenderTarget;
   resolution: "existing_symbol" | "existing_content_template" | "future_landing_page_candidate" | "wp_html_fallback";
+  visualPattern: VisualPattern;
+  selectedVisualPrimitive: ThriveVisualPrimitive;
+  primitiveSelectionSource: "existing_reusable_symbol" | "existing_compatible_primitive" | "native_create_contract" | "safe_fallback";
+  designIntentSatisfied: boolean;
+  fallbackReason: string | null;
   matchedSymbolId: number | null;
   matchedSymbolTitle: string | null;
   matchedRole: ThriveSymbolRole | null;
@@ -425,10 +484,24 @@ export type ThriveNativeCompositionSection = {
   pageSlug: string;
   sectionId: string;
   sectionType: BuildSpecSection["type"];
-  intent: "reused_existing" | "created_native" | "wp_fallback" | "blocked_by_guard" | "blocked_by_missing_contract";
+  intent:
+    | "reused_existing"
+    | "created_native"
+    | "wp_fallback"
+    | "blocked_by_guard"
+    | "blocked_by_missing_contract"
+    | "reused_visual_symbol"
+    | "created_visual_native_section"
+    | "created_visual_cta_block"
+    | "created_visual_faq_toggle"
+    | "improved_visual_fallback";
   selectedOperation: ThriveNativeOperation | null;
   targetObjectType: "thrive_template" | "thrive_section" | "tcb_symbol" | "attachment" | "none";
   matchedSymbolId: number | null;
+  visualPattern?: VisualPattern;
+  visualPrimitive?: ThriveVisualPrimitive;
+  designIntentSatisfied?: boolean;
+  fallbackReason?: string | null;
   reason: string;
 };
 
@@ -502,9 +575,18 @@ export type ThriveNativeValidationSectionOutcome = {
     | "wp_fallback"
     | "verification_failed"
     | "blocked_by_guard"
-    | "blocked_by_missing_contract";
+    | "blocked_by_missing_contract"
+    | "reused_visual_symbol"
+    | "created_visual_native_section"
+    | "created_visual_cta_block"
+    | "created_visual_faq_toggle"
+    | "improved_visual_fallback";
   operation: ThriveNativeOperation | null;
   targetId: number | null;
+  visualPattern?: VisualPattern;
+  visualPrimitive?: ThriveVisualPrimitive;
+  designIntentSatisfied?: boolean;
+  fallbackReason?: string | null;
   reason: string;
 };
 

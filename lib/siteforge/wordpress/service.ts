@@ -8,7 +8,7 @@ import {
   HomepageStrategyMode,
   PageIntent,
 } from "@/lib/siteforge/contracts";
-import { sectionHtml } from "@/lib/siteforge/utils";
+import { sectionHtml, siteforgeVisualStyles } from "@/lib/siteforge/utils";
 
 type WordPressPage = {
   id: number;
@@ -511,9 +511,16 @@ async function discoverExistingSite(
 }
 
 function pageContentHtml(page: BuildSpec["pages"][number]): string {
-  const intro = `<h1>${page.title}</h1><p>${page.purpose}</p>`;
-  const sections = page.sections.map((section) => sectionHtml(section.heading, section.body, section.cta)).join("\n");
-  return `${intro}\n${sections}`;
+  const intro = `<div class="sf-wrap"><h1>${page.title}</h1><p>${page.purpose}</p>`;
+  const sections = page.sections
+    .map((section) =>
+      sectionHtml(section.heading, section.body, section.cta, {
+        visualPattern: section.metadata?.visualComposition?.visualPattern ?? null,
+        sectionBandStyle: section.metadata?.visualComposition?.sectionBandStyle ?? null,
+      })
+    )
+    .join("\n");
+  return `${siteforgeVisualStyles()}\n${intro}\n${sections}\n</div>`;
 }
 
 async function createPage(

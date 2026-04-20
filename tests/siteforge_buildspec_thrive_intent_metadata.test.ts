@@ -12,6 +12,8 @@ describe("siteforge buildspec thrive-aware intent metadata", () => {
     expect(spec.metadata.thriveMode).toBe("wp_safe_mode");
     expect(spec.metadata.thriveExecutionMode).toBe("wp_safe_mode");
     expect(spec.metadata.thriveIntelligenceUsed).toBe(false);
+    expect(spec.metadata.designSystemVersion).toBe("siteforge_visual_v1");
+    expect(spec.metadata.visualDesignTokens?.sectionSpacing).toBe("mobile_first_spacious");
 
     for (const page of spec.pages) {
       expect(page.metadata.preferredRenderTarget).toBe("wordpress_page_content");
@@ -22,6 +24,9 @@ describe("siteforge buildspec thrive-aware intent metadata", () => {
         expect(["conversion", "informational", "trust", "navigation"]).toContain(section.metadata?.sectionIntent);
         expect(["header", "footer", "section", "unknown"]).toContain(section.metadata?.thriveSymbolRoleCandidate);
         expect(["header", "footer", "cta", "testimonial", "faq", "marketing", "generic"]).toContain(section.metadata?.symbolCandidateType);
+        expect(section.metadata?.visualComposition).toBeTruthy();
+        expect(section.metadata?.visualComposition?.visualPattern).toBeTypeOf("string");
+        expect(Array.isArray(section.metadata?.visualComposition?.preferredNativePrimitives)).toBe(true);
       }
     }
   });
