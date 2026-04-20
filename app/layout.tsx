@@ -12,10 +12,13 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY;
+  const effectivePublishableKey = publishableKey || "pk_test_ibrains_missing_publishable_key";
+
   return (
     <html lang="en">
       <body className="antialiased">
-        <ClerkProvider>{children}</ClerkProvider>
+        <ClerkProvider publishableKey={effectivePublishableKey}>{children}</ClerkProvider>
       </body>
     </html>
   );

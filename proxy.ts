@@ -12,6 +12,10 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
+const hasClerkPublishableKey = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY);
+const hasClerkSecretKey = Boolean(process.env.CLERK_SECRET_KEY);
+const isClerkConfigured =
+  (hasClerkPublishableKey && hasClerkSecretKey) || process.env.NODE_ENV === "test" || process.env.VITEST === "true";
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
@@ -87,11 +91,24 @@ export default e2eMockGraph
   ? function e2eProxyBypass() {
       return NextResponse.next();
     }
-  : function proxy(req: NextRequest, event: NextFetchEvent) {
+  : async function proxy(req: NextRequest, event: NextFetchEvent) {
+      if (!isClerkConfigured) {
+        if (isProtectedRoute(req)) {
+          return NextResponse.redirect(new URL("/sign-in", req.url));
+        }
+        return NextResponse.next();
+      }
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
-      return clerkProxy(req, event);
+      try {
+        return await clerkProxy(req, event);
+      } catch {
+        if (isProtectedRoute(req)) {
+          return NextResponse.redirect(new URL("/sign-in", req.url));
+        }
+        return NextResponse.next();
+      }
     };
 
 export const config = {
