@@ -114,7 +114,36 @@ describe("siteforge snapshot persistence reconciliation", () => {
         reason: "use_existing_front_page_retained",
       },
       menu: { success: true, menuId: 77, message: "ok" },
-      thrive: { enabled: true, appliedMappings: [], fallbackUsed: false },
+      thrive: {
+        enabled: true,
+        appliedMappings: [],
+        fallbackUsed: false,
+        executionMode: "wp_safe_mode",
+        intelligenceAvailable: true,
+        symbolInventoryPresent: true,
+        intelligence: {
+          source: "wordpress_rest_get",
+          collectedAt: "2026-04-19T00:00:00.000Z",
+          mode: "wp_safe_mode",
+          activeSkin: { id: 8, name: "Shapeshift Theme", slug: "shapeshift-theme", tag: "q1qj01" },
+          symbolInventory: [
+            {
+              id: 57,
+              title: "Default Header for Shapeshift Theme",
+              slug: "default-header-for-shapeshift-theme",
+              taxonomy: { slug: "headers", name: "Headers" },
+              inferredRole: "header",
+              reusable: true,
+              hasBuilderContent: true,
+              hasCustomCss: true,
+            },
+          ],
+          symbolSummary: { total: 1, headers: 1, footers: 0, sections: 0, unknown: 0 },
+          primitiveCounts: { thriveTemplate: 19, thriveLayout: 5, thriveSection: 1, tcbSymbol: 9 },
+          safeHints: { frontPageUsesWpSettings: true },
+          warnings: [],
+        },
+      },
       actionLog: [],
       warnings: [],
       errors: [],
@@ -148,6 +177,8 @@ describe("siteforge snapshot persistence reconciliation", () => {
     expect(snapshot.currentHomepageId).toBe(10);
     expect(snapshot.currentHomepageTitle).toBe("Home");
     expect(snapshot.currentHomepageSource).toBe("wordpress");
+    expect(snapshot.thriveIntelligence?.activeSkin?.name).toBe("Shapeshift Theme");
+    expect(snapshot.thriveIntelligence?.symbolSummary.headers).toBe(1);
 
     expect(snapshot.knownPages).toEqual(
       expect.arrayContaining([
@@ -186,7 +217,15 @@ describe("siteforge snapshot persistence reconciliation", () => {
         reason: "settings_updated",
       },
       menu: { success: true, menuId: null, message: "ok" },
-      thrive: { enabled: true, appliedMappings: [], fallbackUsed: false },
+      thrive: {
+        enabled: true,
+        appliedMappings: [],
+        fallbackUsed: false,
+        executionMode: "wp_safe_mode",
+        intelligenceAvailable: false,
+        symbolInventoryPresent: false,
+        intelligence: null,
+      },
       actionLog: [],
       warnings: [],
       errors: [],

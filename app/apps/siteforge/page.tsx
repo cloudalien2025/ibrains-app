@@ -180,6 +180,8 @@ export default function SiteForgeAppPage() {
   );
   const activeProjectId = activeProject?.id ?? null;
   const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);
+  const thriveIntel = snapshot?.thriveIntelligence ?? currentSession?.executionResult?.thrive.intelligence ?? null;
+  const thriveExecutionMode = currentSession?.executionResult?.thrive.executionMode ?? "wp_safe_mode";
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
@@ -237,17 +239,29 @@ export default function SiteForgeAppPage() {
     setProjectName(workspace.project.name);
     setPersistedProjectName(workspace.project.name);
     setProjectNameSaveState("idle");
-    setBriefForm({
-      businessName: workspace.project.websiteBrief?.businessName ?? "",
-      businessType: workspace.project.websiteBrief?.businessType ?? "",
-      businessDescription: workspace.project.websiteBrief?.businessDescription ?? "",
-      targetAudience: workspace.project.websiteBrief?.targetAudience ?? "",
-      websiteGoal: workspace.project.websiteBrief?.websiteGoal ?? "capture_leads",
-      mainOffer: workspace.project.websiteBrief?.mainOffer ?? "",
-      brandTone: workspace.project.websiteBrief?.brandTone ?? "expert",
-      marketLocation: workspace.project.websiteBrief?.marketLocation ?? "",
-      competitors: workspace.project.websiteBrief?.competitors ?? "",
-      differentiators: workspace.project.websiteBrief?.differentiators ?? "",
+    setBriefForm((prev) => {
+      const incoming = workspace.project.websiteBrief;
+      const hasLocalDraft =
+        prev.businessName.trim() ||
+        prev.businessType.trim() ||
+        prev.businessDescription.trim() ||
+        prev.targetAudience.trim() ||
+        prev.mainOffer.trim();
+      if (!incoming && hasLocalDraft) {
+        return prev;
+      }
+      return {
+        businessName: incoming?.businessName ?? "",
+        businessType: incoming?.businessType ?? "",
+        businessDescription: incoming?.businessDescription ?? "",
+        targetAudience: incoming?.targetAudience ?? "",
+        websiteGoal: incoming?.websiteGoal ?? "capture_leads",
+        mainOffer: incoming?.mainOffer ?? "",
+        brandTone: incoming?.brandTone ?? "expert",
+        marketLocation: incoming?.marketLocation ?? "",
+        competitors: incoming?.competitors ?? "",
+        differentiators: incoming?.differentiators ?? "",
+      };
     });
     setAiModel(workspace.project.aiModel ?? "gpt-4.1-mini");
     setAiApiKey("");
@@ -1045,6 +1059,14 @@ export default function SiteForgeAppPage() {
             <div className="mt-1 text-sm text-slate-200">Connection: {savedConnection?.label ?? "Not set"}</div>
             <div className="mt-1 text-sm text-slate-200">Validation: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
             <div className="mt-1 text-sm text-slate-200">Thrive: {savedConnection?.thriveDetected ? "Detected" : "Not detected"}</div>
+            <div className="mt-1 text-sm text-slate-200">Thrive Mode: {thriveExecutionMode === "wp_safe_mode" ? "Thrive-aware safe mode" : "Future Thrive-native mode"}</div>
+            <div className="mt-1 text-sm text-slate-200">Active Thrive skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
+            <div className="mt-1 text-sm text-slate-200">
+              Thrive symbols: {thriveIntel?.symbolSummary.total ?? 0} (headers {thriveIntel?.symbolSummary.headers ?? 0}, footers {thriveIntel?.symbolSummary.footers ?? 0})
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Thrive primitives: templates {thriveIntel?.primitiveCounts.thriveTemplate ?? 0}, layouts {thriveIntel?.primitiveCounts.thriveLayout ?? 0}, sections {thriveIntel?.primitiveCounts.thriveSection ?? 0}
+            </div>
             <div className="mt-1 text-sm text-slate-200">Current homepage: {snapshot?.currentHomepageTitle ?? "Unknown"}</div>
             <div className="mt-1 text-sm text-slate-200">Strategy: {snapshot?.homepageStrategy ?? homepageStrategy}</div>
             <div className="mt-1 text-sm text-slate-200">Last sync: {formatDate(snapshot?.lastSyncedAt)}</div>
@@ -1080,6 +1102,10 @@ export default function SiteForgeAppPage() {
             </p>
             <div className="mt-2 text-xs text-slate-400">
               Write access: {connectionResult?.canWritePages ? "Yes" : "No"} | Thrive: {connectionResult?.thriveDetected ? "Detected" : "Not detected"}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              Thrive intel available: {currentSession?.executionResult?.thrive.intelligenceAvailable ? "Yes" : "No"} | Symbol inventory:{" "}
+              {currentSession?.executionResult?.thrive.symbolInventoryPresent ? "Present" : "Not captured"}
             </div>
             <div className="mt-2 text-xs text-slate-400">Last validated: {formatDate(savedConnection?.lastValidatedAt)}</div>
           </div>

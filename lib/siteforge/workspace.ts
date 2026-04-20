@@ -176,6 +176,7 @@ export async function persistSnapshotFromSession(params: {
       ? [{ id: execution.menu.menuId, label: "Primary Navigation", source: "wordpress" }]
       : [],
     thriveDetected: params.thriveDetected,
+    thriveIntelligence: execution?.thrive?.intelligence ?? null,
     homepageStrategy: params.homepageStrategy,
     lastRunSummary: execution
       ? `Pages applied: ${execution.createdPages.filter((entry) => entry.status === "created" || entry.status === "updated").length}`

@@ -13,6 +13,7 @@ import { runContentAgent } from "@/lib/siteforge/agents/content";
 import { runBuildSpecAgent } from "@/lib/siteforge/agents/buildSpec";
 import { runQaAgent } from "@/lib/siteforge/agents/qa";
 import { applyThriveMappings, detectThriveCapability } from "@/lib/siteforge/thrive";
+import { discoverThriveIntelligence } from "@/lib/siteforge/thriveIntelligence";
 import {
   executeBuildSpecToWordPress,
   executeRevisionToWordPress,
@@ -166,11 +167,16 @@ export async function runBuildPipeline(params: {
         );
       } else {
         const thriveEnabled = detectThriveCapability(capability);
-        const translated = applyThriveMappings(buildSpec, thriveEnabled);
+        const thriveIntelligence = thriveEnabled ? await discoverThriveIntelligence(connection) : null;
+        const translated = applyThriveMappings(buildSpec, thriveEnabled, thriveIntelligence);
         const execution = await executeBuildSpecToWordPress(connection, translated.spec, {
           enabled: thriveEnabled,
           appliedMappings: translated.appliedMappings,
           fallbackUsed: translated.fallbackUsed,
+          executionMode: "wp_safe_mode",
+          intelligenceAvailable: Boolean(thriveIntelligence),
+          symbolInventoryPresent: Boolean((thriveIntelligence?.symbolInventory.length ?? 0) > 0),
+          intelligence: thriveIntelligence,
         }, params.homepageStrategy ?? "use_existing");
         executionResult = execution;
         await repo.updateSession(sessionId, {

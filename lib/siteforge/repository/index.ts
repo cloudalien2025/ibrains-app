@@ -196,6 +196,7 @@ type SiteForgeSnapshotRow = {
   known_pages: SiteForgeSnapshot["knownPages"];
   known_menus: SiteForgeSnapshot["knownMenus"];
   thrive_detected: boolean;
+  thrive_intelligence: SiteForgeSnapshot["thriveIntelligence"] | null;
   homepage_strategy: HomepageStrategyMode;
   last_run_summary: string | null;
   last_run_status: BuildSession["status"] | null;
@@ -310,6 +311,7 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
     knownPages: Array.isArray(row.known_pages) ? row.known_pages : [],
     knownMenus: Array.isArray(row.known_menus) ? row.known_menus : [],
     thriveDetected: row.thrive_detected,
+    thriveIntelligence: row.thrive_intelligence && typeof row.thrive_intelligence === "object" ? row.thrive_intelligence : null,
     homepageStrategy: row.homepage_strategy,
     lastRunSummary: row.last_run_summary,
     lastRunStatus: row.last_run_status,
@@ -1042,12 +1044,12 @@ class PostgresRepository implements SiteForgeRepository {
     await pool.query(
       `INSERT INTO siteforge_snapshots (
         id, project_id, connection_id, current_homepage_id, current_homepage_title, current_homepage_source,
-        known_pages, known_menus, thrive_detected, homepage_strategy, last_run_summary,
+        known_pages, known_menus, thrive_detected, thrive_intelligence, homepage_strategy, last_run_summary,
         last_run_status, pages_affected, last_synced_at, created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,$11,
-        $12,$13,$14,$15,$16
+        $7,$8,$9,$10,$11,$12,
+        $13,$14,$15,$16,$17
       )
       ON CONFLICT (project_id)
       DO UPDATE SET
@@ -1059,6 +1061,7 @@ class PostgresRepository implements SiteForgeRepository {
         known_pages = EXCLUDED.known_pages,
         known_menus = EXCLUDED.known_menus,
         thrive_detected = EXCLUDED.thrive_detected,
+        thrive_intelligence = EXCLUDED.thrive_intelligence,
         homepage_strategy = EXCLUDED.homepage_strategy,
         last_run_summary = EXCLUDED.last_run_summary,
         last_run_status = EXCLUDED.last_run_status,
@@ -1075,6 +1078,7 @@ class PostgresRepository implements SiteForgeRepository {
         JSON.stringify(snapshot.knownPages),
         JSON.stringify(snapshot.knownMenus),
         snapshot.thriveDetected,
+        snapshot.thriveIntelligence ? JSON.stringify(snapshot.thriveIntelligence) : null,
         snapshot.homepageStrategy,
         snapshot.lastRunSummary,
         snapshot.lastRunStatus,
