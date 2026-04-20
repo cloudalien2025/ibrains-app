@@ -11,7 +11,25 @@ export async function requireSignedInUser(): Promise<RequireSignedInUserResult> 
     return { userId: "e2e-admin", unauthorizedResponse: null };
   }
 
-  const { userId } = await auth();
+  let userId: string | null = null;
+  try {
+    ({ userId } = await auth());
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Authentication unavailable.";
+    return {
+      userId: null,
+      unauthorizedResponse: NextResponse.json(
+        {
+          error: {
+            code: "AUTH_UNAVAILABLE",
+            message,
+          },
+        },
+        { status: 503 }
+      ),
+    };
+  }
+
   if (!userId) {
     return {
       userId: null,

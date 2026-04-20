@@ -17,3 +17,12 @@ Set these public Clerk URL vars so path-based auth pages render and redirect con
 - `NEXT_PUBLIC_CLERK_SIGN_UP_URL=/sign-up`
 - `NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL=/`
 - `NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL=/`
+
+Set a Clerk publishable key for browser auth. Either variable works in this repo:
+
+- `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=<pk_...>`
+- or `CLERK_PUBLISHABLE_KEY=<pk_...>`
+
+Set a Clerk secret key for server-side auth and middleware protection:
+
+- `CLERK_SECRET_KEY=<sk_...>`
