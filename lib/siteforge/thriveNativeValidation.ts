@@ -3,6 +3,7 @@ import {
   BuildSpec,
   ConnectionProfile,
   ExecutionResult,
+  ThriveNativeRenderabilityStatus,
   ThriveIntelligence,
   ThriveNativeCompositionPlan,
   ThriveNativeExecutionResult,
@@ -46,6 +47,166 @@ function endpointForObject(objectType: "thrive_template" | "thrive_section" | "t
   if (objectType === "thrive_template") return `/wp-json/wp/v2/thrive_template/${id}`;
   if (objectType === "thrive_section") return `/wp-json/wp/v2/thrive_section/${id}`;
   return `/wp-json/wp/v2/tcb_symbol/${id}`;
+}
+
+function toBodySnippet(raw: string | null): string | null {
+  if (!raw) return null;
+  const normalized = raw.replace(/\s+/g, " ").trim();
+  if (!normalized) return null;
+  return normalized.slice(0, 280);
+}
+
+function maybeWp404FromBody(snippet: string | null): boolean {
+  if (!snippet) return false;
+  const lower = snippet.toLowerCase();
+  return lower.includes("404") || lower.includes("not found") || lower.includes("page not found");
+}
+
+function headerSnapshot(headers: Headers): Record<string, string> {
+  const allow = new Set(["content-type", "cache-control", "x-redirect-by", "server", "x-powered-by"]);
+  const out: Record<string, string> = {};
+  for (const [key, value] of headers.entries()) {
+    const lower = key.toLowerCase();
+    if (allow.has(lower)) out[lower] = value;
+  }
+  return out;
+}
+
+function asInt(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function rootUrl(baseUrl: string): string {
+  const normalized = normalizeBaseUrl(baseUrl);
+  return `${normalized}/`;
+}
+
+async function fetchWithRedirectChain(params: {
+  url: string;
+  maxHops?: number;
+}): Promise<{
+  status: number;
+  finalUrl: string;
+  chain: string[];
+  headers: Record<string, string>;
+  bodySnippet: string | null;
+}> {
+  const chain: string[] = [];
+  const maxHops = Math.max(1, params.maxHops ?? 6);
+  let currentUrl = params.url;
+  let hops = 0;
+
+  while (true) {
+    const res = await fetch(currentUrl, { method: "GET", cache: "no-store", redirect: "manual" });
+    const status = res.status;
+    const redirectLocation = res.headers.get("location");
+    const isRedirect = status >= 300 && status < 400;
+    if (!isRedirect || !redirectLocation) {
+      const body = await res.text().catch(() => "");
+      return {
+        status,
+        finalUrl: currentUrl,
+        chain,
+        headers: headerSnapshot(res.headers),
+        bodySnippet: toBodySnippet(body),
+      };
+    }
+
+    chain.push(`${status}:${currentUrl}->${redirectLocation}`);
+    hops += 1;
+    if (hops > maxHops) {
+      return {
+        status,
+        finalUrl: currentUrl,
+        chain,
+        headers: headerSnapshot(res.headers),
+        bodySnippet: null,
+      };
+    }
+    currentUrl = new URL(redirectLocation, currentUrl).toString();
+  }
+}
+
+async function resolveHomepageRenderTarget(params: {
+  connection: ConnectionProfile;
+  homepagePostId: number;
+  pageLink: string | null;
+}): Promise<{
+  checkedUrl: string | null;
+  legacyPageLink: string | null;
+  frontPageMatches: boolean;
+  frontPageSignalKnown: boolean;
+  notes: string[];
+}> {
+  const notes: string[] = [];
+  const baseUrl = normalizeBaseUrl(params.connection.baseUrl);
+  const settingsRes = await fetch(`${baseUrl}/wp-json/wp/v2/settings`, {
+    method: "GET",
+    headers: authHeaders(params.connection),
+    cache: "no-store",
+  });
+
+  if (!settingsRes.ok) {
+    notes.push(`front_page_settings_lookup_failed:${settingsRes.status}`);
+    return {
+      checkedUrl: params.pageLink,
+      legacyPageLink: params.pageLink,
+      frontPageMatches: false,
+      frontPageSignalKnown: false,
+      notes,
+    };
+  }
+
+  const settings = await safeJson(settingsRes);
+  const showOnFront = typeof settings?.show_on_front === "string" ? settings.show_on_front : null;
+  const pageOnFront = asInt(settings?.page_on_front);
+  const siteUrl = typeof settings?.siteurl === "string" && settings.siteurl.trim() ? settings.siteurl.trim() : baseUrl;
+  const isFrontPage = showOnFront === "page" && pageOnFront === params.homepagePostId;
+
+  if (showOnFront !== "page") notes.push(`front_page_mode_non_page:${showOnFront ?? "unknown"}`);
+  if (showOnFront === "page" && pageOnFront !== params.homepagePostId) {
+    notes.push(`front_page_mismatch_setting:${pageOnFront ?? "null"}!=${params.homepagePostId}`);
+  }
+
+  return {
+    checkedUrl: isFrontPage ? rootUrl(siteUrl) : params.pageLink,
+    legacyPageLink: params.pageLink,
+    frontPageMatches: isFrontPage,
+    frontPageSignalKnown: true,
+    notes,
+  };
+}
+
+function classifyRenderability(params: {
+  hasNetworkError: boolean;
+  pageIdentityOk: boolean;
+  pageStatus: string | null;
+  checkedUrl: string | null;
+  status: number | null;
+  chain: string[];
+  bodySnippet: string | null;
+  frontPageMatches: boolean;
+  frontPageSignalKnown: boolean;
+  usedLegacyLink: boolean;
+}): ThriveNativeRenderabilityStatus {
+  if (params.hasNetworkError) return "network_failure";
+  if (!params.checkedUrl) return "wrong_target_url";
+  if (params.pageStatus && params.pageStatus !== "publish") return "front_page_mismatch";
+  if (params.chain.length >= 6) return "redirect_mismatch";
+  if (params.status != null && params.status >= 200 && params.status < 300) return "render_ok";
+  if (params.frontPageSignalKnown && !params.frontPageMatches && params.pageIdentityOk) return "front_page_mismatch";
+  if (params.status === 404) {
+    if (params.usedLegacyLink) return "wrong_target_url";
+    if (maybeWp404FromBody(params.bodySnippet)) return "wp_404";
+    return "template_assignment_incomplete";
+  }
+  if (params.status != null && params.status >= 300 && params.status < 400) return "redirect_mismatch";
+  return "unknown_render_failure";
 }
 
 function summarizeOutcomes(outcomes: ThriveNativeValidationResult["sectionOutcomes"]): ThriveNativeValidationResult["summary"] {
@@ -143,10 +304,29 @@ async function verifyCreatedObjects(params: {
 async function verifyHomepageState(params: {
   connection: ConnectionProfile;
   homepagePostId: number | null;
-}): Promise<{ pageReachable: boolean; pageIdentityOk: boolean; notes: string[] }> {
+}): Promise<{
+  pageReachable: boolean;
+  pageIdentityOk: boolean;
+  notes: string[];
+  renderability: ThriveNativeValidationResult["verification"]["renderability"];
+}> {
   const notes: string[] = [];
   if (!params.homepagePostId) {
-    return { pageReachable: false, pageIdentityOk: false, notes: ["homepage_post_missing"] };
+    return {
+      pageReachable: false,
+      pageIdentityOk: false,
+      notes: ["homepage_post_missing"],
+      renderability: {
+        status: "wrong_target_url",
+        checkedUrl: null,
+        finalUrl: null,
+        legacyPageLink: null,
+        httpStatus: null,
+        redirectChain: [],
+        responseHeaders: {},
+        bodySnippet: null,
+      },
+    };
   }
 
   const baseUrl = normalizeBaseUrl(params.connection.baseUrl);
@@ -162,27 +342,90 @@ async function verifyHomepageState(params: {
       pageReachable: false,
       pageIdentityOk: false,
       notes: [`homepage_page_lookup_failed:${pageRes.status}`],
+      renderability: {
+        status: "unknown_render_failure",
+        checkedUrl: null,
+        finalUrl: null,
+        legacyPageLink: null,
+        httpStatus: null,
+        redirectChain: [],
+        responseHeaders: {},
+        bodySnippet: null,
+      },
     };
   }
 
   const page = await safeJson(pageRes);
   const identityOk = typeof page?.id === "number" && page.id === params.homepagePostId;
   if (!identityOk) notes.push("homepage_page_identity_mismatch");
+  const pageStatus = typeof page?.status === "string" ? page.status.trim().toLowerCase() : null;
+  if (pageStatus && pageStatus !== "publish") {
+    notes.push(`homepage_page_not_published:${pageStatus}`);
+  }
+
+  const link = typeof page?.link === "string" && page.link.trim() ? page.link.trim() : null;
+  const target = await resolveHomepageRenderTarget({
+    connection: params.connection,
+    homepagePostId: params.homepagePostId,
+    pageLink: link,
+  });
+  notes.push(...target.notes);
 
   let pageReachable = false;
-  const link = typeof page?.link === "string" && page.link.trim() ? page.link : null;
-  if (!link) {
+  let status: number | null = null;
+  let finalUrl: string | null = null;
+  let redirectChain: string[] = [];
+  let responseHeaders: Record<string, string> = {};
+  let bodySnippet: string | null = null;
+  let hasNetworkError = false;
+
+  if (!target.checkedUrl) {
     notes.push("homepage_public_link_missing");
   } else {
-    const renderRes = await fetch(link, { method: "GET", cache: "no-store" });
-    pageReachable = renderRes.ok;
-    if (!renderRes.ok) notes.push(`homepage_render_unreachable:${renderRes.status}`);
+    try {
+      const renderRes = await fetchWithRedirectChain({ url: target.checkedUrl });
+      status = renderRes.status;
+      finalUrl = renderRes.finalUrl;
+      redirectChain = renderRes.chain;
+      responseHeaders = renderRes.headers;
+      bodySnippet = renderRes.bodySnippet;
+      pageReachable = renderRes.status >= 200 && renderRes.status < 300;
+      if (!pageReachable) notes.push(`homepage_render_unreachable:${renderRes.status}`);
+    } catch (error: unknown) {
+      hasNetworkError = true;
+      notes.push(`homepage_render_network_failure:${error instanceof Error ? error.message : "unknown"}`);
+    }
   }
+
+  const usedLegacyLink = Boolean(target.checkedUrl && target.legacyPageLink && target.checkedUrl === target.legacyPageLink);
+  const statusClass = classifyRenderability({
+    hasNetworkError,
+    pageIdentityOk: identityOk,
+    pageStatus,
+    checkedUrl: target.checkedUrl,
+    status,
+    chain: redirectChain,
+    bodySnippet,
+    frontPageMatches: target.frontPageMatches,
+    frontPageSignalKnown: target.frontPageSignalKnown,
+    usedLegacyLink,
+  });
+  notes.push(`homepage_render_status:${statusClass}`);
 
   return {
     pageReachable,
     pageIdentityOk: identityOk,
     notes,
+    renderability: {
+      status: statusClass,
+      checkedUrl: target.checkedUrl,
+      finalUrl,
+      legacyPageLink: target.legacyPageLink,
+      httpStatus: status,
+      redirectChain,
+      responseHeaders,
+      bodySnippet,
+    },
   };
 }
 
@@ -280,6 +523,16 @@ export async function runThriveNativeValidation(params: {
         pageReachable: false,
         pageIdentityOk: false,
         objectStateOk: false,
+        renderability: {
+          status: "unknown_render_failure",
+          checkedUrl: null,
+          finalUrl: null,
+          legacyPageLink: null,
+          httpStatus: null,
+          redirectChain: [],
+          responseHeaders: {},
+          bodySnippet: null,
+        },
         notes: [`guard_blocked:${guard.blockedReason ?? "unknown"}`],
       },
       execution: null,
@@ -353,6 +606,7 @@ export async function runThriveNativeValidation(params: {
         pageReachable: homepageCheck.pageReachable,
         pageIdentityOk: homepageCheck.pageIdentityOk,
         objectStateOk: true,
+        renderability: homepageCheck.renderability,
         notes: verificationNotes,
       },
       execution: null,
@@ -488,6 +742,7 @@ export async function runThriveNativeValidation(params: {
       pageReachable: homepageCheck.pageReachable,
       pageIdentityOk: homepageCheck.pageIdentityOk,
       objectStateOk,
+      renderability: homepageCheck.renderability,
       notes: verificationNotes,
     },
     execution: nativeExecution,

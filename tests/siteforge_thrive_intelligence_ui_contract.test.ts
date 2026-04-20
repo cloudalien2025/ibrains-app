@@ -21,6 +21,9 @@ describe("siteforge thrive intelligence UI contract", () => {
     expect(source.includes("Native Composition & Verification")).toBe(true);
     expect(source.includes("Native Validation")).toBe(true);
     expect(source.includes("Validation mode:")).toBe(true);
+    expect(source.includes("render status:")).toBe(true);
+    expect(source.includes("checked URL:")).toBe(true);
+    expect(source.includes("Render diagnostics")).toBe(true);
     expect(source.includes("promotion candidate:")).toBe(true);
     expect(source.includes("Native validation outcomes")).toBe(true);
     expect(source.includes("Approved target:")).toBe(true);

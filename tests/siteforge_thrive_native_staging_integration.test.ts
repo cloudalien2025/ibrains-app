@@ -110,7 +110,7 @@ describe("siteforge thrive native staging integration", () => {
         if (init?.method === "GET" && url.includes("/wp-json/wp/v2/thrive_template/200")) return json({ id: 200, slug: "acme-shell" });
         if (init?.method === "POST" && url.includes("/wp-json/wp/v2/thrive_section")) return json({ id: 201, slug: "acme-cta" });
         if (init?.method === "GET" && url.includes("/wp-json/wp/v2/thrive_section/201")) return json({ id: 201, slug: "acme-cta" });
-        if (init?.method === "POST" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65 });
+        if (init?.method === "POST" && url.includes("/wp-json/wp/v2/pages/65")) return json({ id: 65, status: "publish" });
         if (init?.method === "DELETE" && (url.includes("/wp-json/wp/v2/thrive_template/200") || url.includes("/wp-json/wp/v2/thrive_section/201"))) {
           return json({ deleted: true });
         }
