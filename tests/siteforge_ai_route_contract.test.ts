@@ -6,7 +6,9 @@ const mocks = {
   requireSignedInUser: vi.fn(),
   getSiteForgeRepository: vi.fn(),
   saveProjectAiConfig: vi.fn(),
+  saveProjectSerpApiConfig: vi.fn(),
   clearProjectAiConfig: vi.fn(),
+  clearProjectSerpApiConfig: vi.fn(),
   normalizeWorkspace: vi.fn(),
 };
 
@@ -18,7 +20,9 @@ vi.mock("@/lib/siteforge/repository", () => ({
 }));
 vi.mock("@/lib/siteforge/workspace", () => ({
   saveProjectAiConfig: mocks.saveProjectAiConfig,
+  saveProjectSerpApiConfig: mocks.saveProjectSerpApiConfig,
   clearProjectAiConfig: mocks.clearProjectAiConfig,
+  clearProjectSerpApiConfig: mocks.clearProjectSerpApiConfig,
 }));
 vi.mock("@/lib/siteforge/workspaceShape", () => ({
   normalizeWorkspace: mocks.normalizeWorkspace,
@@ -30,19 +34,19 @@ describe("siteforge AI route contract", () => {
     vi.clearAllMocks();
   });
 
-  it("saves AI key and returns masked status only", async () => {
+  it("saves API keys and returns masked status only", async () => {
     mocks.requireSignedInUser.mockResolvedValue({ userId: "u1", unauthorizedResponse: null });
     const repo = {
-      getProject: vi.fn().mockResolvedValue({ id: "p1", aiModel: "gpt-4.1-mini", hasSavedAiSecret: false }),
+      getProject: vi.fn().mockResolvedValue({ id: "p1", aiModel: "gpt-4.1-mini", hasSavedAiSecret: false, hasSavedSerpApiSecret: false }),
       getWorkspace: vi.fn().mockResolvedValue({ project: { id: "p1" } }),
     };
     mocks.getSiteForgeRepository.mockResolvedValue(repo);
-    mocks.normalizeWorkspace.mockReturnValue({ project: { hasSavedAiSecret: true } });
+    mocks.normalizeWorkspace.mockReturnValue({ project: { hasSavedAiSecret: true, hasSavedSerpApiSecret: true } });
 
     const { POST } = await import("@/app/api/siteforge/projects/[projectId]/ai/route");
     const req = new NextRequest("http://localhost/api/siteforge/projects/p1/ai", {
       method: "POST",
-      body: JSON.stringify({ apiKey: "sk-test-123", model: "gpt-4.1-mini" }),
+      body: JSON.stringify({ openAiApiKey: "sk-test-123", serpApiKey: "serpapi-test-123", model: "gpt-4.1-mini" }),
     });
 
     const res = await POST(req, { params: Promise.resolve({ projectId: "p1" }) });
@@ -50,18 +54,26 @@ describe("siteforge AI route contract", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(mocks.saveProjectAiConfig).toHaveBeenCalled();
+    expect(mocks.saveProjectSerpApiConfig).toHaveBeenCalled();
     expect(JSON.stringify(body)).not.toContain("sk-test-123");
-    expect(body.ai).toEqual({ provider: "openai", model: "gpt-4.1-mini", status: "saved" });
+    expect(JSON.stringify(body)).not.toContain("serpapi-test-123");
+    expect(body.ai).toEqual({
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      openAiConfigured: true,
+      serpApiConfigured: true,
+      status: "saved",
+    });
   });
 
   it("removes stored key", async () => {
     mocks.requireSignedInUser.mockResolvedValue({ userId: "u1", unauthorizedResponse: null });
     const repo = {
-      getProject: vi.fn().mockResolvedValue({ id: "p1", aiModel: "gpt-4.1-mini", hasSavedAiSecret: true }),
+      getProject: vi.fn().mockResolvedValue({ id: "p1", aiModel: "gpt-4.1-mini", hasSavedAiSecret: true, hasSavedSerpApiSecret: true }),
       getWorkspace: vi.fn().mockResolvedValue({ project: { id: "p1" } }),
     };
     mocks.getSiteForgeRepository.mockResolvedValue(repo);
-    mocks.normalizeWorkspace.mockReturnValue({ project: { aiModel: "gpt-4.1-mini" } });
+    mocks.normalizeWorkspace.mockReturnValue({ project: { aiModel: "gpt-4.1-mini", hasSavedAiSecret: false, hasSavedSerpApiSecret: false } });
 
     const { DELETE } = await import("@/app/api/siteforge/projects/[projectId]/ai/route");
     const req = new NextRequest("http://localhost/api/siteforge/projects/p1/ai", { method: "DELETE" });
@@ -69,6 +81,7 @@ describe("siteforge AI route contract", () => {
     const res = await DELETE(req, { params: Promise.resolve({ projectId: "p1" }) });
     expect(res.status).toBe(200);
     expect(mocks.clearProjectAiConfig).toHaveBeenCalled();
+    expect(mocks.clearProjectSerpApiConfig).toHaveBeenCalled();
   });
 
   it("returns precise persistence error when storage is unavailable", async () => {

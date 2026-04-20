@@ -10,7 +10,7 @@ import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
 import { enqueueBuildJob } from "@/lib/siteforge/runner";
 import { createId, nowIso } from "@/lib/siteforge/utils";
-import { resolveProjectAiApiKey, resolveRuntimeConnection } from "@/lib/siteforge/workspace";
+import { resolveProjectAiApiKey, resolveProjectSerpApiKey, resolveRuntimeConnection } from "@/lib/siteforge/workspace";
 
 export async function POST(
   req: NextRequest,
@@ -41,6 +41,7 @@ export async function POST(
     });
     const connection = resolvedConnection.connection;
     const userApiKey = await resolveProjectAiApiKey({ repo, projectId });
+    const userSerpApiKey = await resolveProjectSerpApiKey({ repo, projectId });
     const platformApiKey = resolvePlatformOpenAiKey();
     const resolvedApiKey = userApiKey || platformApiKey;
     const generationSource = userApiKey ? "user_key" : platformApiKey ? "platform_key" : "deterministic_fallback";
@@ -72,6 +73,7 @@ export async function POST(
       websiteBrief: payload.websiteBrief,
       generationSource,
       aiModel: model,
+      marketIntelligence: null,
       connectionProfile: sanitizeConnection(connection),
       status: "queued",
       runState: createInitialRunState(),
@@ -103,6 +105,7 @@ export async function POST(
       prompt: payload.prompt,
       websiteBrief: payload.websiteBrief,
       apiKey: resolvedApiKey,
+      serpApiKey: userSerpApiKey,
       aiModel: model,
       generationSource,
       connection,

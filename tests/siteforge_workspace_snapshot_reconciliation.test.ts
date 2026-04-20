@@ -15,6 +15,7 @@ function buildSession(execution: BuildSession["executionResult"]): BuildSession 
     websiteBrief: null,
     generationSource: "deterministic_fallback",
     aiModel: "gpt-5",
+    marketIntelligence: null,
     connectionProfile: null,
     status: "completed",
     runState: {
@@ -216,6 +217,7 @@ describe("siteforge snapshot persistence reconciliation", () => {
     expect(snapshot.thriveNativeGuard).toBeNull();
     expect(snapshot.thriveNativeComposition).toBeNull();
     expect(snapshot.thriveNativeExecution).toBeNull();
+    expect(snapshot.marketIntelligence).toBeNull();
 
     expect(snapshot.knownPages).toEqual(
       expect.arrayContaining([
@@ -303,5 +305,43 @@ describe("siteforge snapshot persistence reconciliation", () => {
 
     expect(snapshot.currentHomepageSource).toBe("thrive");
     expect(snapshot.currentHomepageId).toBe(101);
+  });
+
+  it("persists normalized market intelligence metadata into snapshot", async () => {
+    const execution = buildSession(null);
+    execution.marketIntelligence = {
+      status: "used",
+      source: "serpapi",
+      querySet: ["q1"],
+      competitorPatterns: ["example.com"],
+      commonPageSections: ["hero_section"],
+      recurringValueProps: ["ease_of_use"],
+      trustSignals: ["social_proof"],
+      ctaPatterns: ["book_demo"],
+      faqThemes: ["how_it_works"],
+      visualPatternHints: ["card_grid_layout"],
+      appStorePositioningHints: [],
+      contentWarnings: ["patterns_only_no_copy"],
+      summary: "summary",
+      fingerprint: "abc123",
+      generatedAt: "2026-04-19T00:00:00.000Z",
+      plannerEnriched: true,
+      contentEnriched: true,
+    };
+
+    const repo = {
+      upsertSnapshot: vi.fn(async (snapshot: SiteForgeSnapshot) => snapshot),
+    };
+
+    const snapshot = await persistSnapshotFromSession({
+      repo: repo as never,
+      session: execution,
+      homepageStrategy: "use_existing",
+      connectionId: "conn_1",
+      thriveDetected: false,
+    });
+
+    expect(snapshot.marketIntelligence?.source).toBe("serpapi");
+    expect(snapshot.marketIntelligence?.fingerprint).toBe("abc123");
   });
 });

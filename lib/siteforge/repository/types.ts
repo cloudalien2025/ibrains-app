@@ -52,6 +52,13 @@ export type SiteForgeRepository = {
   }): Promise<void>;
   getProjectAiSecret(projectId: string): Promise<StoredAiSecret | null>;
   clearProjectAiSecret(projectId: string): Promise<void>;
+  saveProjectSerpApiConfig(params: {
+    projectId: string;
+    provider: "serpapi";
+    secret?: StoredAiSecret | null;
+  }): Promise<void>;
+  getProjectSerpApiSecret(projectId: string): Promise<StoredAiSecret | null>;
+  clearProjectSerpApiSecret(projectId: string): Promise<void>;
   updateConnectionValidation(connectionId: string, patch: {
     status: ConnectionValidationStatus;
     thriveDetected: boolean;

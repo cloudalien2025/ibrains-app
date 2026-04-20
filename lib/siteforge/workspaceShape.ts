@@ -13,6 +13,26 @@ export type BuildStage =
 
 export type HomepageStrategy = "use_existing" | "replace_existing" | "create_new" | "draft_only";
 
+export type MarketIntelligenceView = {
+  status: "not_configured" | "used" | "error";
+  source: "none" | "serpapi";
+  querySet: string[];
+  competitorPatterns: string[];
+  commonPageSections: string[];
+  recurringValueProps: string[];
+  trustSignals: string[];
+  ctaPatterns: string[];
+  faqThemes: string[];
+  visualPatternHints: string[];
+  appStorePositioningHints: string[];
+  contentWarnings: string[];
+  summary: string;
+  fingerprint: string;
+  generatedAt: string;
+  plannerEnriched: boolean;
+  contentEnriched: boolean;
+};
+
 export type SiteForgeProjectView = {
   id: string;
   name: string;
@@ -27,6 +47,9 @@ export type SiteForgeProjectView = {
   aiModel: string | null;
   aiSecretRef: string | null;
   hasSavedAiSecret: boolean;
+  serpApiProvider: "serpapi" | null;
+  serpApiSecretRef: string | null;
+  hasSavedSerpApiSecret: boolean;
   lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
@@ -417,6 +440,7 @@ export type SiteForgeSnapshotView = {
       contractCaptureRef: string | null;
     };
   } | null;
+  marketIntelligence: MarketIntelligenceView | null;
   homepageStrategy: HomepageStrategy;
   lastRunSummary: string | null;
   lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
@@ -430,6 +454,7 @@ export type BuildSessionView = {
   prompt: string;
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   aiModel: string | null;
+  marketIntelligence: MarketIntelligenceView | null;
   connectionId: string | null;
   type: "generate" | "refine";
   createdAt: string;
@@ -542,6 +567,36 @@ function boolOr(value: unknown, fallback = false): boolean {
 
 function numberOr(value: unknown, fallback = 0): number {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+function stringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === "string") : [];
+}
+
+function normalizeMarketIntelligence(value: unknown): MarketIntelligenceView | null {
+  if (!isRecord(value)) return null;
+  return {
+    status:
+      value.status === "used" || value.status === "error" || value.status === "not_configured"
+        ? value.status
+        : "not_configured",
+    source: value.source === "serpapi" ? "serpapi" : "none",
+    querySet: stringArray(value.querySet),
+    competitorPatterns: stringArray(value.competitorPatterns),
+    commonPageSections: stringArray(value.commonPageSections),
+    recurringValueProps: stringArray(value.recurringValueProps),
+    trustSignals: stringArray(value.trustSignals),
+    ctaPatterns: stringArray(value.ctaPatterns),
+    faqThemes: stringArray(value.faqThemes),
+    visualPatternHints: stringArray(value.visualPatternHints),
+    appStorePositioningHints: stringArray(value.appStorePositioningHints),
+    contentWarnings: stringArray(value.contentWarnings),
+    summary: stringOr(value.summary, "No market intelligence summary available."),
+    fingerprint: stringOr(value.fingerprint, "none"),
+    generatedAt: stringOr(value.generatedAt, nowIso()),
+    plannerEnriched: boolOr(value.plannerEnriched),
+    contentEnriched: boolOr(value.contentEnriched),
+  };
 }
 
 function normalizeVisualPattern(value: unknown): NonNullable<SiteForgeSnapshotView["thriveSectionResolutions"][number]["visualPattern"]> {
@@ -1126,6 +1181,9 @@ export function normalizeProject(value: unknown): SiteForgeProjectView | null {
     aiModel: nullableString(value.aiModel),
     aiSecretRef: nullableString(value.aiSecretRef),
     hasSavedAiSecret: boolOr(value.hasSavedAiSecret),
+    serpApiProvider: value.serpApiProvider === "serpapi" ? "serpapi" : null,
+    serpApiSecretRef: nullableString(value.serpApiSecretRef),
+    hasSavedSerpApiSecret: boolOr(value.hasSavedSerpApiSecret),
     lastOpenedAt: nullableString(value.lastOpenedAt),
     description: stringOr(value.description, "SiteForge workspace project"),
     latestSessionId: nullableString(value.latestSessionId),
@@ -1211,6 +1269,7 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
         ? value.generationSource
         : "deterministic_fallback",
     aiModel: nullableString(value.aiModel),
+    marketIntelligence: normalizeMarketIntelligence(value.marketIntelligence),
     connectionId: nullableString(value.connectionId),
     type: value.type === "refine" ? "refine" : "generate",
     createdAt: stringOr(value.createdAt, nowIso()),
@@ -1426,6 +1485,7 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
     thriveNativeComposition: normalizeThriveNativeComposition(value.thriveNativeComposition),
     thriveNativeExecution: normalizeThriveNativeExecution(value.thriveNativeExecution),
     thriveNativeValidation: normalizeThriveNativeValidation(value.thriveNativeValidation),
+    marketIntelligence: normalizeMarketIntelligence(value.marketIntelligence),
     homepageStrategy: toStrategy(value.homepageStrategy),
     lastRunSummary: nullableString(value.lastRunSummary),
     lastRunStatus:

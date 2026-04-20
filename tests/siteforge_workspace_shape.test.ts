@@ -44,7 +44,9 @@ describe("siteforge workspace shape normalization", () => {
 
     expect(workspace).toBeTruthy();
     expect(workspace?.project.homepageStrategy).toBe("use_existing");
+    expect(workspace?.project.hasSavedSerpApiSecret).toBe(false);
     expect(workspace?.runHistory[0]?.runState.currentStage).toBe("planning");
+    expect(workspace?.runHistory[0]?.marketIntelligence).toBeNull();
     expect(workspace?.runHistory[0]?.runState.timeline).toEqual([]);
     expect(workspace?.runLogs[0]?.stage).toBe("planning");
     expect(workspace?.snapshot?.knownPages).toEqual([]);
@@ -53,6 +55,7 @@ describe("siteforge workspace shape normalization", () => {
     expect(workspace?.snapshot?.thriveNativeComposition).toBeNull();
     expect(workspace?.snapshot?.thriveNativeExecution).toBeNull();
     expect(workspace?.snapshot?.thriveNativeValidation).toBeNull();
+    expect(workspace?.snapshot?.marketIntelligence).toBeNull();
   });
 
   it("normalizes project creation payload and rejects invalid shapes", () => {
@@ -69,6 +72,25 @@ describe("siteforge workspace shape normalization", () => {
       snapshot: {
         snapshotId: "snap_visual",
         projectId: "p_visual",
+        marketIntelligence: {
+          status: "used",
+          source: "serpapi",
+          querySet: ["q1"],
+          competitorPatterns: ["example.com"],
+          commonPageSections: ["hero_section"],
+          recurringValueProps: ["ease_of_use"],
+          trustSignals: ["social_proof"],
+          ctaPatterns: ["book_demo"],
+          faqThemes: ["how_it_works"],
+          visualPatternHints: ["card_grid_layout"],
+          appStorePositioningHints: [],
+          contentWarnings: ["patterns_only_no_copy"],
+          summary: "summary",
+          fingerprint: "abc123",
+          generatedAt: "2026-04-20T00:00:00.000Z",
+          plannerEnriched: true,
+          contentEnriched: true,
+        },
         thriveSectionResolutions: [
           {
             pageSlug: "home",
@@ -120,5 +142,6 @@ describe("siteforge workspace shape normalization", () => {
     expect(workspace?.snapshot?.thriveSectionResolutions[0]?.visualPattern).toBe("hero_split");
     expect(workspace?.snapshot?.thriveSectionResolutions[0]?.selectedVisualPrimitive).toBe("thrive_template_symbol");
     expect(workspace?.snapshot?.thriveNativeComposition?.sections[0]?.intent).toBe("created_visual_cta_block");
+    expect(workspace?.snapshot?.marketIntelligence?.source).toBe("serpapi");
   });
 });

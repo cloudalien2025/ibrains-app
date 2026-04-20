@@ -18,6 +18,7 @@ export async function enqueueBuildJob(params: {
   prompt: string;
   websiteBrief: WebsiteBrief;
   apiKey: string;
+  serpApiKey: string | null;
   aiModel: string;
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   connection: ConnectionProfile | null;
@@ -38,6 +39,7 @@ export async function enqueueBuildJob(params: {
         prompt: params.prompt,
         websiteBrief: params.websiteBrief,
         apiKey: params.apiKey,
+        serpApiKey: params.serpApiKey,
         aiModel: params.aiModel,
         generationSource: params.generationSource,
         connection: params.connection,

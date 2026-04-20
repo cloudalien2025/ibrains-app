@@ -32,6 +32,7 @@ type MemoryStore = {
   connectionsByProject: Map<string, SiteForgeConnection>;
   connectionSecrets: Map<string, StoredConnectionSecret>;
   aiSecretsByProject: Map<string, StoredAiSecret>;
+  serpApiSecretsByProject: Map<string, StoredAiSecret>;
   snapshotsByProject: Map<string, SiteForgeSnapshot>;
   runLogsBySession: Map<string, SiteForgeRunLog[]>;
   lastOpenedProjectByUser: Map<string, string>;
@@ -50,6 +51,7 @@ function getMemoryStore(): MemoryStore {
       connectionsByProject: new Map(),
       connectionSecrets: new Map(),
       aiSecretsByProject: new Map(),
+      serpApiSecretsByProject: new Map(),
       snapshotsByProject: new Map(),
       runLogsBySession: new Map(),
       lastOpenedProjectByUser: new Map(),
@@ -117,6 +119,9 @@ type SiteForgeProjectRow = {
   ai_model: string | null;
   ai_secret_ref: string | null;
   has_saved_ai_secret: boolean | null;
+  serpapi_provider: "serpapi" | null;
+  serpapi_secret_ref: string | null;
+  has_saved_serpapi_secret: boolean | null;
   last_opened_at: string | Date | null;
   description: string;
   latest_session_id: string | null;
@@ -152,6 +157,7 @@ type SiteForgeSessionRow = {
   website_brief: BuildSession["websiteBrief"];
   generation_source: BuildSession["generationSource"] | null;
   ai_model: string | null;
+  market_intelligence: BuildSession["marketIntelligence"] | null;
   connection_profile: BuildSession["connectionProfile"] | null;
   status: BuildSession["status"];
   run_state: BuildSession["runState"];
@@ -197,6 +203,7 @@ type SiteForgeSnapshotRow = {
   known_menus: SiteForgeSnapshot["knownMenus"];
   thrive_detected: boolean;
   thrive_intelligence: SiteForgeSnapshot["thriveIntelligence"] | null;
+  market_intelligence: SiteForgeSnapshot["marketIntelligence"] | null;
   homepage_strategy: HomepageStrategyMode;
   last_run_summary: string | null;
   last_run_status: BuildSession["status"] | null;
@@ -222,6 +229,9 @@ function mapProjectRow(row: SiteForgeProjectRow): SiteForgeProject {
     aiModel: row.ai_model ?? null,
     aiSecretRef: row.ai_secret_ref ?? null,
     hasSavedAiSecret: row.has_saved_ai_secret ?? false,
+    serpApiProvider: row.serpapi_provider ?? null,
+    serpApiSecretRef: row.serpapi_secret_ref ?? null,
+    hasSavedSerpApiSecret: row.has_saved_serpapi_secret ?? false,
     lastOpenedAt: row.last_opened_at ? new Date(row.last_opened_at).toISOString() : null,
     description: row.description,
     latestSessionId: row.latest_session_id,
@@ -261,6 +271,7 @@ function mapSessionRow(row: SiteForgeSessionRow): BuildSession {
     websiteBrief: row.website_brief ?? null,
     generationSource: row.generation_source ?? "deterministic_fallback",
     aiModel: row.ai_model ?? null,
+    marketIntelligence: row.market_intelligence ?? null,
     connectionProfile: row.connection_profile,
     status: row.status,
     runState: row.run_state,
@@ -340,6 +351,7 @@ function mapSnapshotRow(row: SiteForgeSnapshotRow): SiteForgeSnapshot {
     thriveNativeComposition: embeddedNativeComposition as SiteForgeSnapshot["thriveNativeComposition"],
     thriveNativeExecution: embeddedNativeExecution as SiteForgeSnapshot["thriveNativeExecution"],
     thriveNativeValidation: embeddedNativeValidation as SiteForgeSnapshot["thriveNativeValidation"],
+    marketIntelligence: (isObjectRecord(row.market_intelligence) ? row.market_intelligence : null) as SiteForgeSnapshot["marketIntelligence"],
     homepageStrategy: row.homepage_strategy,
     lastRunSummary: row.last_run_summary,
     lastRunStatus: row.last_run_status,
@@ -461,6 +473,44 @@ class MemoryRepository implements SiteForgeRepository {
       aiProvider: project.aiProvider ?? "openai",
       aiSecretRef: null,
       hasSavedAiSecret: false,
+      updatedAt: nowIso(),
+    });
+  }
+
+  async saveProjectSerpApiConfig(params: {
+    projectId: string;
+    provider: "serpapi";
+    secret?: StoredAiSecret | null;
+  }): Promise<void> {
+    const project = this.store.projects.get(params.projectId);
+    if (!project) return;
+
+    this.store.projects.set(params.projectId, {
+      ...project,
+      serpApiProvider: params.provider,
+      serpApiSecretRef: params.secret?.ref ?? project.serpApiSecretRef ?? null,
+      hasSavedSerpApiSecret: params.secret ? true : (project.hasSavedSerpApiSecret ?? false),
+      updatedAt: nowIso(),
+    });
+
+    if (params.secret) {
+      this.store.serpApiSecretsByProject.set(params.projectId, params.secret);
+    }
+  }
+
+  async getProjectSerpApiSecret(projectId: string): Promise<StoredAiSecret | null> {
+    return this.store.serpApiSecretsByProject.get(projectId) ?? null;
+  }
+
+  async clearProjectSerpApiSecret(projectId: string): Promise<void> {
+    this.store.serpApiSecretsByProject.delete(projectId);
+    const project = this.store.projects.get(projectId);
+    if (!project) return;
+    this.store.projects.set(projectId, {
+      ...project,
+      serpApiProvider: project.serpApiProvider ?? "serpapi",
+      serpApiSecretRef: null,
+      hasSavedSerpApiSecret: false,
       updatedAt: nowIso(),
     });
   }
@@ -611,8 +661,9 @@ class PostgresRepository implements SiteForgeRepository {
       `INSERT INTO siteforge_projects (
         id, user_id, name, slug, status, site_type, primary_prompt, current_state,
         homepage_strategy, website_brief, ai_provider, ai_model, ai_secret_ref, has_saved_ai_secret,
+        serpapi_provider, serpapi_secret_ref, has_saved_serpapi_secret,
         last_opened_at, description, latest_session_id, created_at, updated_at
-      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22)`,
       [
         project.id,
         project.userId,
@@ -628,6 +679,9 @@ class PostgresRepository implements SiteForgeRepository {
         project.aiModel ?? null,
         project.aiSecretRef ?? null,
         project.hasSavedAiSecret ?? false,
+        project.serpApiProvider ?? null,
+        project.serpApiSecretRef ?? null,
+        project.hasSavedSerpApiSecret ?? false,
         project.lastOpenedAt,
         project.description,
         project.latestSessionId,
@@ -644,6 +698,7 @@ class PostgresRepository implements SiteForgeRepository {
       `SELECT
         id, user_id, name, slug, status, site_type, primary_prompt, current_state,
         homepage_strategy, website_brief, ai_provider, ai_model, ai_secret_ref, has_saved_ai_secret,
+        serpapi_provider, serpapi_secret_ref, has_saved_serpapi_secret,
         last_opened_at, description, latest_session_id, created_at, updated_at
        FROM siteforge_projects
        WHERE user_id = $1
@@ -659,6 +714,7 @@ class PostgresRepository implements SiteForgeRepository {
       `SELECT
         id, user_id, name, slug, status, site_type, primary_prompt, current_state,
         homepage_strategy, website_brief, ai_provider, ai_model, ai_secret_ref, has_saved_ai_secret,
+        serpapi_provider, serpapi_secret_ref, has_saved_serpapi_secret,
         last_opened_at, description, latest_session_id, created_at, updated_at
        FROM siteforge_projects WHERE id = $1 AND user_id = $2 LIMIT 1`,
       [projectId, userId]
@@ -686,10 +742,13 @@ class PostgresRepository implements SiteForgeRepository {
         ai_model = COALESCE($11, ai_model),
         ai_secret_ref = COALESCE($12, ai_secret_ref),
         has_saved_ai_secret = COALESCE($13, has_saved_ai_secret),
-        last_opened_at = COALESCE($14, last_opened_at),
-        description = COALESCE($15, description),
-        latest_session_id = COALESCE($16, latest_session_id),
-        updated_at = $17
+        serpapi_provider = COALESCE($14, serpapi_provider),
+        serpapi_secret_ref = COALESCE($15, serpapi_secret_ref),
+        has_saved_serpapi_secret = COALESCE($16, has_saved_serpapi_secret),
+        last_opened_at = COALESCE($17, last_opened_at),
+        description = COALESCE($18, description),
+        latest_session_id = COALESCE($19, latest_session_id),
+        updated_at = $20
       WHERE id = $1`,
       [
         projectId,
@@ -705,6 +764,9 @@ class PostgresRepository implements SiteForgeRepository {
         patch.aiModel ?? null,
         patch.aiSecretRef ?? null,
         patch.hasSavedAiSecret ?? null,
+        patch.serpApiProvider ?? null,
+        patch.serpApiSecretRef ?? null,
+        patch.hasSavedSerpApiSecret ?? null,
         patch.lastOpenedAt ?? null,
         patch.description ?? null,
         patch.latestSessionId ?? null,
@@ -833,9 +895,8 @@ class PostgresRepository implements SiteForgeRepository {
       `INSERT INTO siteforge_project_ai_configs (
          project_id, provider, model, secret_ref, secret_ciphertext, created_at, updated_at
        ) VALUES ($1,$2,$3,$4,$5,$6,$7)
-       ON CONFLICT (project_id)
+       ON CONFLICT (project_id, provider)
        DO UPDATE SET
-         provider = EXCLUDED.provider,
          model = EXCLUDED.model,
          secret_ref = COALESCE(EXCLUDED.secret_ref, siteforge_project_ai_configs.secret_ref),
          secret_ciphertext = COALESCE(EXCLUDED.secret_ciphertext, siteforge_project_ai_configs.secret_ciphertext),
@@ -860,7 +921,7 @@ class PostgresRepository implements SiteForgeRepository {
     const result = await pool.query<{ secret_ref: string | null; secret_ciphertext: string | null }>(
       `SELECT secret_ref, secret_ciphertext
        FROM siteforge_project_ai_configs
-       WHERE project_id = $1
+       WHERE project_id = $1 AND provider = 'openai'
        LIMIT 1`,
       [projectId]
     );
@@ -877,12 +938,77 @@ class PostgresRepository implements SiteForgeRepository {
     await pool.query(
       `UPDATE siteforge_project_ai_configs
        SET secret_ref = NULL, secret_ciphertext = NULL, updated_at = $2
-       WHERE project_id = $1`,
+       WHERE project_id = $1 AND provider = 'openai'`,
       [projectId, nowIso()]
     );
     await pool.query(
       `UPDATE siteforge_projects
        SET ai_secret_ref = NULL, has_saved_ai_secret = false, updated_at = $2
+       WHERE id = $1`,
+      [projectId, nowIso()]
+    );
+  }
+
+  async saveProjectSerpApiConfig(params: {
+    projectId: string;
+    provider: "serpapi";
+    secret?: StoredAiSecret | null;
+  }): Promise<void> {
+    const pool = getBrainLearningPool();
+    const secretRef = params.secret?.ref ?? null;
+    const secretCipher = params.secret?.cipherText ?? null;
+
+    await pool.query(
+      `INSERT INTO siteforge_project_ai_configs (
+         project_id, provider, model, secret_ref, secret_ciphertext, created_at, updated_at
+       ) VALUES ($1,$2,$3,$4,$5,$6,$7)
+       ON CONFLICT (project_id, provider)
+       DO UPDATE SET
+         secret_ref = COALESCE(EXCLUDED.secret_ref, siteforge_project_ai_configs.secret_ref),
+         secret_ciphertext = COALESCE(EXCLUDED.secret_ciphertext, siteforge_project_ai_configs.secret_ciphertext),
+         updated_at = EXCLUDED.updated_at`,
+      [params.projectId, params.provider, "serpapi_research_v1", secretRef, secretCipher, nowIso(), nowIso()]
+    );
+
+    await pool.query(
+      `UPDATE siteforge_projects
+       SET serpapi_provider = $2,
+           serpapi_secret_ref = COALESCE($3, serpapi_secret_ref),
+           has_saved_serpapi_secret = CASE WHEN $3 IS NULL THEN has_saved_serpapi_secret ELSE true END,
+           updated_at = $4
+       WHERE id = $1`,
+      [params.projectId, params.provider, secretRef, nowIso()]
+    );
+  }
+
+  async getProjectSerpApiSecret(projectId: string): Promise<StoredAiSecret | null> {
+    const pool = getBrainLearningPool();
+    const result = await pool.query<{ secret_ref: string | null; secret_ciphertext: string | null }>(
+      `SELECT secret_ref, secret_ciphertext
+       FROM siteforge_project_ai_configs
+       WHERE project_id = $1 AND provider = 'serpapi'
+       LIMIT 1`,
+      [projectId]
+    );
+    const row = result.rows[0];
+    if (!row?.secret_ref || !row?.secret_ciphertext) return null;
+    return {
+      ref: row.secret_ref,
+      cipherText: row.secret_ciphertext,
+    };
+  }
+
+  async clearProjectSerpApiSecret(projectId: string): Promise<void> {
+    const pool = getBrainLearningPool();
+    await pool.query(
+      `UPDATE siteforge_project_ai_configs
+       SET secret_ref = NULL, secret_ciphertext = NULL, updated_at = $2
+       WHERE project_id = $1 AND provider = 'serpapi'`,
+      [projectId, nowIso()]
+    );
+    await pool.query(
+      `UPDATE siteforge_projects
+       SET serpapi_secret_ref = NULL, has_saved_serpapi_secret = false, updated_at = $2
        WHERE id = $1`,
       [projectId, nowIso()]
     );
@@ -920,14 +1046,14 @@ class PostgresRepository implements SiteForgeRepository {
     await pool.query(
       `INSERT INTO siteforge_sessions (
         id, project_id, user_id, connection_id, session_type, trigger_source,
-        prompt, website_brief, generation_source, ai_model, connection_profile, status, run_state, site_plan, content_package,
+        prompt, website_brief, generation_source, ai_model, market_intelligence, connection_profile, status, run_state, site_plan, content_package,
         build_spec, qa_result, execution_result, revision_history, error_summary,
         started_at, completed_at, finished_at, created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,
-        $21,$22,$23,$24,$25
+        $7,$8,$9,$10,$11,$12,$13,$14,$15,$16,
+        $17,$18,$19,$20,$21,
+        $22,$23,$24,$25,$26
       )`,
       [
         session.id,
@@ -940,6 +1066,7 @@ class PostgresRepository implements SiteForgeRepository {
         session.websiteBrief ? JSON.stringify(session.websiteBrief) : null,
         session.generationSource,
         session.aiModel,
+        session.marketIntelligence ? JSON.stringify(session.marketIntelligence) : null,
         session.connectionProfile ? JSON.stringify(session.connectionProfile) : null,
         session.status,
         JSON.stringify(session.runState),
@@ -995,19 +1122,20 @@ class PostgresRepository implements SiteForgeRepository {
         website_brief = $6,
         generation_source = $7,
         ai_model = $8,
-        connection_profile = $9,
-        status = $10,
-        run_state = $11,
-        site_plan = $12,
-        content_package = $13,
-        build_spec = $14,
-        qa_result = $15,
-        execution_result = $16,
-        revision_history = $17,
-        error_summary = $18,
-        completed_at = $19,
-        finished_at = $20,
-        updated_at = $21
+        market_intelligence = $9,
+        connection_profile = $10,
+        status = $11,
+        run_state = $12,
+        site_plan = $13,
+        content_package = $14,
+        build_spec = $15,
+        qa_result = $16,
+        execution_result = $17,
+        revision_history = $18,
+        error_summary = $19,
+        completed_at = $20,
+        finished_at = $21,
+        updated_at = $22
       WHERE id = $1`,
       [
         sessionId,
@@ -1018,6 +1146,7 @@ class PostgresRepository implements SiteForgeRepository {
         merged.websiteBrief ? JSON.stringify(merged.websiteBrief) : null,
         merged.generationSource,
         merged.aiModel,
+        merged.marketIntelligence ? JSON.stringify(merged.marketIntelligence) : null,
         merged.connectionProfile ? JSON.stringify(merged.connectionProfile) : null,
         merged.status,
         JSON.stringify(merged.runState),
@@ -1089,12 +1218,12 @@ class PostgresRepository implements SiteForgeRepository {
     await pool.query(
       `INSERT INTO siteforge_snapshots (
         id, project_id, connection_id, current_homepage_id, current_homepage_title, current_homepage_source,
-        known_pages, known_menus, thrive_detected, thrive_intelligence, homepage_strategy, last_run_summary,
+        known_pages, known_menus, thrive_detected, thrive_intelligence, market_intelligence, homepage_strategy, last_run_summary,
         last_run_status, pages_affected, last_synced_at, created_at, updated_at
       ) VALUES (
         $1,$2,$3,$4,$5,$6,
-        $7,$8,$9,$10,$11,$12,
-        $13,$14,$15,$16,$17
+        $7,$8,$9,$10,$11,$12,$13,
+        $14,$15,$16,$17,$18
       )
       ON CONFLICT (project_id)
       DO UPDATE SET
@@ -1107,6 +1236,7 @@ class PostgresRepository implements SiteForgeRepository {
         known_menus = EXCLUDED.known_menus,
         thrive_detected = EXCLUDED.thrive_detected,
         thrive_intelligence = EXCLUDED.thrive_intelligence,
+        market_intelligence = EXCLUDED.market_intelligence,
         homepage_strategy = EXCLUDED.homepage_strategy,
         last_run_summary = EXCLUDED.last_run_summary,
         last_run_status = EXCLUDED.last_run_status,
@@ -1124,6 +1254,7 @@ class PostgresRepository implements SiteForgeRepository {
         JSON.stringify(snapshot.knownMenus),
         snapshot.thriveDetected,
         intelligencePayload ? JSON.stringify(intelligencePayload) : null,
+        snapshot.marketIntelligence ? JSON.stringify(snapshot.marketIntelligence) : null,
         snapshot.homepageStrategy,
         snapshot.lastRunSummary,
         snapshot.lastRunStatus,

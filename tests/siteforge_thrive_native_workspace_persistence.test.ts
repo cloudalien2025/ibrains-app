@@ -15,6 +15,7 @@ function sessionWithNative(): BuildSession {
     websiteBrief: null,
     generationSource: "deterministic_fallback",
     aiModel: "gpt-5",
+    marketIntelligence: null,
     connectionProfile: null,
     status: "completed",
     runState: { currentStage: "completed", progressPct: 100, timeline: [] },

@@ -147,6 +147,7 @@ export default function SiteForgeAppPage() {
   });
   const [briefSaveState, setBriefSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [aiApiKey, setAiApiKey] = useState("");
+  const [serpApiKey, setSerpApiKey] = useState("");
   const [aiModel, setAiModel] = useState("gpt-4.1-mini");
   const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
   const [refinePrompt, setRefinePrompt] = useState("");
@@ -202,6 +203,7 @@ export default function SiteForgeAppPage() {
     currentSession?.executionResult?.thrive.nativeExecution ?? snapshot?.thriveNativeExecution ?? null;
   const thriveNativeValidation =
     currentSession?.executionResult?.thrive.nativeValidation ?? snapshot?.thriveNativeValidation ?? null;
+  const marketIntelligence = currentSession?.marketIntelligence ?? snapshot?.marketIntelligence ?? null;
   const thriveSectionResolutions =
     currentSession?.executionResult?.thrive.sectionResolutions ?? snapshot?.thriveSectionResolutions ?? [];
   const reusableSummary = useMemo(
@@ -290,6 +292,7 @@ export default function SiteForgeAppPage() {
     });
     setBriefSaveState("idle");
     setAiApiKey("");
+    setSerpApiKey("");
     setAiModel("gpt-4.1-mini");
     setAiStatusMessage(null);
     setRefinePrompt("");
@@ -342,7 +345,12 @@ export default function SiteForgeAppPage() {
     });
     setAiModel(workspace.project.aiModel ?? "gpt-4.1-mini");
     setAiApiKey("");
-    setAiStatusMessage(workspace.project.hasSavedAiSecret ? "AI key saved" : "No AI key configured");
+    setSerpApiKey("");
+    setAiStatusMessage(
+      workspace.project.hasSavedAiSecret || workspace.project.hasSavedSerpApiSecret
+        ? "API keys saved"
+        : "No API keys configured"
+    );
     setHomepageStrategy(workspace.project.homepageStrategy);
 
     if (workspace.activeConnection) {
@@ -800,8 +808,8 @@ export default function SiteForgeAppPage() {
   async function saveAiConfig(mode: "save" | "update") {
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
-    if (!aiApiKey.trim() && mode === "save") {
-      setError("OpenAI API key is required.");
+    if (!aiApiKey.trim() && !serpApiKey.trim() && mode === "save") {
+      setError("Provide at least one API key (OpenAI or SerpApi).");
       return;
     }
 
@@ -814,7 +822,8 @@ export default function SiteForgeAppPage() {
         {
           method: mode === "save" ? "POST" : "PATCH",
           body: JSON.stringify({
-            apiKey: aiApiKey,
+            openAiApiKey: aiApiKey,
+            serpApiKey,
             model: aiModel,
           }),
         }
@@ -825,9 +834,10 @@ export default function SiteForgeAppPage() {
       }
       await applyWorkspace(workspace);
       setAiApiKey("");
-      setAiStatusMessage(data.ai.status === "saved" ? "AI key saved" : "No AI key configured");
+      setSerpApiKey("");
+      setAiStatusMessage(data.ai.status === "saved" ? "API keys saved" : "No API keys configured");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save AI configuration.");
+      setError(err instanceof Error ? err.message : "Failed to save API configuration.");
     } finally {
       setBusy(false);
     }
@@ -853,9 +863,10 @@ export default function SiteForgeAppPage() {
       }
       await applyWorkspace(workspace);
       setAiApiKey("");
-      setAiStatusMessage("No AI key configured");
+      setSerpApiKey("");
+      setAiStatusMessage("No API keys configured");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to remove AI key.");
+      setError(err instanceof Error ? err.message : "Failed to remove API keys.");
     } finally {
       setBusy(false);
     }
@@ -1271,6 +1282,30 @@ export default function SiteForgeAppPage() {
           </div>
         </section>
 
+        <section className="mt-4 grid gap-3">
+          <div className={`${brainTheme.glassCard} p-4`}>
+            <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Market Intelligence</div>
+            <div className="mt-2 text-sm text-slate-200">
+              Status: {marketIntelligence?.status ?? "not_configured"} | Source: {marketIntelligence?.source ?? "none"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Planner enriched: {marketIntelligence?.plannerEnriched ? "yes" : "no"} | Content enriched:{" "}
+              {marketIntelligence?.contentEnriched ? "yes" : "no"}
+            </div>
+            <div className="mt-1 text-sm text-slate-200">
+              Pattern counts: competitors={marketIntelligence?.competitorPatterns.length ?? 0}, sections=
+              {marketIntelligence?.commonPageSections.length ?? 0}, cta={marketIntelligence?.ctaPatterns.length ?? 0},
+              faq={marketIntelligence?.faqThemes.length ?? 0}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              {marketIntelligence?.summary ?? "No structured market brief captured for this run."}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-500">
+              fingerprint={marketIntelligence?.fingerprint ?? "none"}
+            </div>
+          </div>
+        </section>
+
         <section className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
           <div className={`${brainTheme.glassCard} p-4`}>
             <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Native Target Panel</div>
@@ -1588,11 +1623,11 @@ export default function SiteForgeAppPage() {
               </div>
 
               <div className="mt-4 rounded-2xl border border-white/15 bg-slate-950/45 p-4">
-                <h3 className="text-sm font-semibold text-slate-100">AI Configuration (OpenAI)</h3>
+                <h3 className="text-sm font-semibold text-slate-100">AI & Research API Configuration</h3>
                 <p className="mt-1 text-xs text-slate-300">
-                  Save your OpenAI key server-side for this project. Keys are not returned to the browser after save.
+                  Save API credentials server-side for this project. Plaintext keys are not returned to the browser after save.
                 </p>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
                   <div>
                     <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">Model</label>
                     <select
@@ -1617,20 +1652,37 @@ export default function SiteForgeAppPage() {
                       className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
                     />
                   </div>
+                  <div>
+                    <label htmlFor="siteforge-serpapi-key" className="text-xs text-slate-300">SerpApi API key</label>
+                    <input
+                      id="siteforge-serpapi-key"
+                      type="password"
+                      value={serpApiKey}
+                      onChange={(event) => setSerpApiKey(event.target.value)}
+                      placeholder={activeProject.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."}
+                      className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
+                    />
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>
-                    Save AI Key
+                    Save API Keys
                   </button>
                   <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("update")} disabled={busy}>
-                    Update Model
+                    Update Model / Keys
                   </button>
-                  <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || !activeProject.hasSavedAiSecret}>
-                    Remove Key
+                  <button
+                    type="button"
+                    className={brainTheme.secondaryButton}
+                    onClick={removeAiKey}
+                    disabled={busy || (!activeProject.hasSavedAiSecret && !activeProject.hasSavedSerpApiSecret)}
+                  >
+                    Remove Saved Keys
                   </button>
                 </div>
                 <div className="mt-2 text-xs text-slate-300">
-                  Status: {activeProject.hasSavedAiSecret ? "AI key saved" : "No AI key configured"}
+                  Status: OpenAI={activeProject.hasSavedAiSecret ? "saved" : "not saved"} | SerpApi=
+                  {activeProject.hasSavedSerpApiSecret ? "saved" : "not saved"}
                   {aiStatusMessage ? ` · ${aiStatusMessage}` : ""}
                 </div>
               </div>
@@ -1644,7 +1696,8 @@ export default function SiteForgeAppPage() {
                 Generate My Website
               </button>
               <div className="mt-2 text-xs text-slate-300">
-                Generation key path: {activeProject.hasSavedAiSecret ? "user-provided key" : "platform key if configured"}
+                Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} |
+                Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}
               </div>
             </div>
           ) : (

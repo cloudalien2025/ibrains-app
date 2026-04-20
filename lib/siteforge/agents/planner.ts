@@ -1,4 +1,4 @@
-import { SitePlan, SitePlanPage, SitePlanSection, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { MarketIntelligenceBrief, SitePlan, SitePlanPage, SitePlanSection, WebsiteBrief } from "@/lib/siteforge/contracts";
 import { generateStructuredJson } from "@/lib/siteforge/llm/openai";
 import { createId, toSlug } from "@/lib/siteforge/utils";
 import { validateSitePlan } from "@/lib/siteforge/agents/validators";
@@ -141,6 +141,7 @@ export async function runPlannerAgent(params: {
   brief: WebsiteBrief;
   model: string;
   apiKey: string;
+  marketIntelligence?: MarketIntelligenceBrief | null;
 }): Promise<SitePlan> {
   const prompt = [
     `Business name: ${params.brief.businessName}`,
@@ -153,6 +154,19 @@ export async function runPlannerAgent(params: {
     params.brief.marketLocation ? `Market: ${params.brief.marketLocation}` : "",
     params.brief.competitors ? `Competitors: ${params.brief.competitors}` : "",
     params.brief.differentiators ? `Differentiators: ${params.brief.differentiators}` : "",
+    params.marketIntelligence
+      ? `Market intelligence brief: ${JSON.stringify({
+          status: params.marketIntelligence.status,
+          source: params.marketIntelligence.source,
+          commonPageSections: params.marketIntelligence.commonPageSections,
+          recurringValueProps: params.marketIntelligence.recurringValueProps,
+          trustSignals: params.marketIntelligence.trustSignals,
+          ctaPatterns: params.marketIntelligence.ctaPatterns,
+          faqThemes: params.marketIntelligence.faqThemes,
+          visualPatternHints: params.marketIntelligence.visualPatternHints,
+          contentWarnings: params.marketIntelligence.contentWarnings,
+        })}`
+      : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -163,7 +177,7 @@ export async function runPlannerAgent(params: {
     schemaName: "siteforge_site_plan",
     schema: plannerSchema as unknown as Record<string, unknown>,
     system:
-      "You are SiteForge planner agent. Return only valid JSON matching schema. Build a practical conversion-oriented small business website plan.",
+      "You are SiteForge planner agent. Return only valid JSON matching schema. Build a practical conversion-oriented small business website plan using normalized market patterns when provided. Never copy competitor phrasing verbatim.",
     user: `${prompt}\n\nEnsure ids are stable-looking strings and homepage slug corresponds to an existing page.`,
   });
 

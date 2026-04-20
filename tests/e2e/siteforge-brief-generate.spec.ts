@@ -21,6 +21,9 @@ test.describe("SiteForge brief + AI generate flow", () => {
         aiModel: "gpt-4.1-mini",
         aiSecretRef: hasSavedAiSecret ? "ref_1" : null,
         hasSavedAiSecret,
+        serpApiProvider: "serpapi",
+        serpApiSecretRef: null,
+        hasSavedSerpApiSecret: false,
         lastOpenedAt: new Date().toISOString(),
         description: "x",
         latestSessionId: null,
@@ -100,7 +103,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
 
     await page.locator("#siteforge-ai-key").fill("sk-test");
-    await page.getByRole("button", { name: "Save AI Key" }).click();
+    await page.getByRole("button", { name: "Save API Keys" }).click();
 
     await page.locator("#siteforge-brief-business-name").fill("Acme Labs");
     await page.locator("#siteforge-brief-business-type").fill("SaaS");

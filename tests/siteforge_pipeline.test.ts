@@ -24,6 +24,26 @@ const brief = {
   differentiators: "Fast setup",
 };
 
+const marketIntelligence = {
+  status: "used" as const,
+  source: "serpapi" as const,
+  querySet: ["saas landing page faq cta"],
+  competitorPatterns: ["example.com"],
+  commonPageSections: ["hero_section", "feature_grid", "faq_section", "cta_band"],
+  recurringValueProps: ["ease_of_use", "speed_and_convenience"],
+  trustSignals: ["social_proof"],
+  ctaPatterns: ["book_demo", "start_free_trial"],
+  faqThemes: ["pricing_and_plans", "how_it_works"],
+  visualPatternHints: ["card_grid_layout", "faq_toggle"],
+  appStorePositioningHints: [],
+  contentWarnings: ["patterns_only_no_copy"],
+  summary: "Pattern summary",
+  fingerprint: "abc123def4567890",
+  generatedAt: new Date().toISOString(),
+  plannerEnriched: true,
+  contentEnriched: true,
+};
+
 describe("siteforge pipeline", () => {
   beforeEach(() => {
     mockGenerateStructuredJson.mockReset();
@@ -125,5 +145,64 @@ describe("siteforge pipeline", () => {
         (section) => /Refinement applied/i.test(section.body) || /New Conversion Section/i.test(section.heading)
       )
     ).toBe(true);
+  });
+
+  it("injects market intelligence context into planner and content prompts", async () => {
+    mockGenerateStructuredJson
+      .mockResolvedValueOnce({
+        businessType: "SaaS",
+        businessSummary: "CRM automation for sales teams",
+        siteGoal: "drive demos and trials",
+        primaryCTA: "Book a Demo",
+        targetAudience: "B2B sales leaders",
+        homepageSlug: "home",
+        navigation: ["Home"],
+        assumptions: [],
+        warnings: [],
+        pages: [
+          {
+            id: "page_home",
+            title: "Home",
+            slug: "home",
+            purpose: "Primary conversion page",
+            sections: [{ id: "sec_hero", sectionType: "hero", purpose: "Value prop" }],
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        siteTitle: "Acme Growth",
+        brandVoice: "expert and modern",
+        pages: [
+          {
+            pageId: "page_home",
+            title: "Home",
+            slug: "home",
+            headline: "Scale revenue faster",
+            subheadline: "Built for B2B sales teams",
+            cta: "Book a Demo",
+            sections: [{ sectionId: "sec_hero", heading: "Revenue", body: "Body", cta: null }],
+          },
+        ],
+      });
+
+    const plan = await runPlannerAgent({
+      brief,
+      model: "gpt-4.1-mini",
+      apiKey: "sk-test",
+      marketIntelligence,
+    });
+    await runContentAgent({
+      sitePlan: plan,
+      brief,
+      model: "gpt-4.1-mini",
+      apiKey: "sk-test",
+      marketIntelligence,
+    });
+
+    const plannerCall = mockGenerateStructuredJson.mock.calls[0]?.[0] as { user: string };
+    const contentCall = mockGenerateStructuredJson.mock.calls[1]?.[0] as { user: string };
+    expect(plannerCall.user).toContain("Market intelligence brief:");
+    expect(contentCall.user).toContain("Market intelligence brief:");
+    expect(contentCall.user).toContain("book_demo");
   });
 });
