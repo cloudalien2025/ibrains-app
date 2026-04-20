@@ -1,4 +1,4 @@
-import { ContentPackage, ContentPageContent, SitePlan, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { ContentPackage, ContentPageContent, MarketIntelligenceBrief, SitePlan, WebsiteBrief } from "@/lib/siteforge/contracts";
 import { validateContentPackage } from "@/lib/siteforge/agents/validators";
 import { generateStructuredJson } from "@/lib/siteforge/llm/openai";
 
@@ -106,14 +106,13 @@ export async function runContentAgent(params: {
   brief: WebsiteBrief;
   model: string;
   apiKey: string;
+  marketIntelligence?: MarketIntelligenceBrief | null;
 }): Promise<ContentPackage> {
   const raw = await generateStructuredJson<unknown>({
     apiKey: params.apiKey,
     model: params.model,
     schemaName: "siteforge_content_package",
     schema: contentSchema as unknown as Record<string, unknown>,
-    system:
-      "You are SiteForge content agent. Return only valid JSON matching schema. Create concise, high-conversion, truthful website copy.",
     user: [
       `Business name: ${params.brief.businessName}`,
       `Business type: ${params.brief.businessType}`,
@@ -122,8 +121,22 @@ export async function runContentAgent(params: {
       `Website goal: ${params.brief.websiteGoal}`,
       `Main offer: ${params.brief.mainOffer}`,
       `Brand tone: ${params.brief.brandTone}`,
+      params.marketIntelligence
+        ? `Market intelligence brief: ${JSON.stringify({
+            status: params.marketIntelligence.status,
+            source: params.marketIntelligence.source,
+            recurringValueProps: params.marketIntelligence.recurringValueProps,
+            trustSignals: params.marketIntelligence.trustSignals,
+            ctaPatterns: params.marketIntelligence.ctaPatterns,
+            faqThemes: params.marketIntelligence.faqThemes,
+            appStorePositioningHints: params.marketIntelligence.appStorePositioningHints,
+            contentWarnings: params.marketIntelligence.contentWarnings,
+          })}`
+        : "",
       `Plan JSON: ${JSON.stringify(params.sitePlan)}`,
     ].join("\n"),
+    system:
+      "You are SiteForge content agent. Return only valid JSON matching schema. Create concise, high-conversion, truthful website copy. Use market pattern guidance when provided, but do not copy competitor wording.",
   });
 
   return validateContentPackage(raw);

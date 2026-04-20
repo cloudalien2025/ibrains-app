@@ -65,6 +65,30 @@ export type WebsiteBrief = {
   differentiators: string | null;
 };
 
+export type MarketIntelligenceStatus = "not_configured" | "used" | "error";
+
+export type MarketIntelligenceSource = "none" | "serpapi";
+
+export type MarketIntelligenceBrief = {
+  status: MarketIntelligenceStatus;
+  source: MarketIntelligenceSource;
+  querySet: string[];
+  competitorPatterns: string[];
+  commonPageSections: string[];
+  recurringValueProps: string[];
+  trustSignals: string[];
+  ctaPatterns: string[];
+  faqThemes: string[];
+  visualPatternHints: string[];
+  appStorePositioningHints: string[];
+  contentWarnings: string[];
+  summary: string;
+  fingerprint: string;
+  generatedAt: string;
+  plannerEnriched: boolean;
+  contentEnriched: boolean;
+};
+
 export type ContentSection = {
   sectionId: string;
   heading: string;
@@ -704,6 +728,7 @@ export type BuildSession = {
   websiteBrief: WebsiteBrief | null;
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   aiModel: string | null;
+  marketIntelligence: MarketIntelligenceBrief | null;
   connectionProfile: Omit<ConnectionProfile, "appPassword"> | null;
   status: BuildSessionStatus;
   runState: BuildRunState;
@@ -745,6 +770,9 @@ export type SiteForgeProject = {
   aiModel?: string | null;
   aiSecretRef?: string | null;
   hasSavedAiSecret?: boolean;
+  serpApiProvider?: "serpapi" | null;
+  serpApiSecretRef?: string | null;
+  hasSavedSerpApiSecret?: boolean;
   lastOpenedAt: string | null;
   description: string;
   latestSessionId: string | null;
@@ -820,6 +848,7 @@ export type SiteForgeSnapshot = {
   thriveNativeComposition: ThriveNativeCompositionPlan | null;
   thriveNativeExecution: ThriveNativeExecutionResult | null;
   thriveNativeValidation: ThriveNativeValidationResult | null;
+  marketIntelligence: MarketIntelligenceBrief | null;
   homepageStrategy: HomepageStrategyMode;
   lastRunSummary: string | null;
   lastRunStatus: BuildSessionStatus | null;

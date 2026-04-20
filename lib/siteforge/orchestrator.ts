@@ -12,6 +12,7 @@ import { runPlannerAgent } from "@/lib/siteforge/agents/planner";
 import { runContentAgent } from "@/lib/siteforge/agents/content";
 import { runBuildSpecAgent } from "@/lib/siteforge/agents/buildSpec";
 import { runQaAgent } from "@/lib/siteforge/agents/qa";
+import { runMarketIntelligenceAgent } from "@/lib/siteforge/agents/marketIntelligence";
 import { applyThriveMappings, detectThriveCapability } from "@/lib/siteforge/thrive";
 import { discoverThriveIntelligence } from "@/lib/siteforge/thriveIntelligence";
 import {
@@ -104,6 +105,7 @@ export async function runBuildPipeline(params: {
   prompt: string;
   websiteBrief: WebsiteBrief;
   apiKey: string;
+  serpApiKey: string | null;
   aiModel: string;
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   connection: ConnectionProfile | null;
@@ -113,11 +115,24 @@ export async function runBuildPipeline(params: {
   const { repo, sessionId, connection } = params;
 
   try {
+    const marketIntelligence = await runMarketIntelligenceAgent({
+      brief: params.websiteBrief,
+      serpApiKey: params.serpApiKey,
+    });
+    await repo.updateSession(sessionId, { marketIntelligence });
+    await updateStage(
+      repo,
+      sessionId,
+      "planning",
+      `Market intelligence: ${marketIntelligence.status} (${marketIntelligence.source})`
+    );
+
     await updateStage(repo, sessionId, "planning", "Planning your site structure");
     const sitePlan = await runPlannerAgent({
       brief: params.websiteBrief,
       model: params.aiModel,
       apiKey: params.apiKey,
+      marketIntelligence,
     });
     await repo.updateSession(sessionId, { sitePlan, status: "running" });
     await updateStage(
@@ -133,6 +148,7 @@ export async function runBuildPipeline(params: {
       brief: params.websiteBrief,
       model: params.aiModel,
       apiKey: params.apiKey,
+      marketIntelligence,
     });
     await repo.updateSession(sessionId, { contentPackage });
 

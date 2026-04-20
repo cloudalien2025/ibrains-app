@@ -187,6 +187,7 @@ export async function persistSnapshotFromSession(params: {
     thriveNativeComposition: execution?.thrive?.nativeComposition ?? null,
     thriveNativeExecution: execution?.thrive?.nativeExecution ?? null,
     thriveNativeValidation: execution?.thrive?.nativeValidation ?? null,
+    marketIntelligence: params.session.marketIntelligence ?? null,
     homepageStrategy: params.homepageStrategy,
     lastRunSummary: execution
       ? `Pages applied: ${execution.createdPages.filter((entry) => entry.status === "created" || entry.status === "updated").length}`
@@ -233,6 +234,40 @@ export async function resolveProjectAiApiKey(params: {
   projectId: string;
 }): Promise<string | null> {
   const secret = await params.repo.getProjectAiSecret(params.projectId);
+  if (!secret) return null;
+  return decryptSecret(secret.cipherText);
+}
+
+export async function saveProjectSerpApiConfig(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+  apiKey?: string;
+}): Promise<void> {
+  const encrypted = params.apiKey?.trim() ? encryptSecret(params.apiKey.trim()) : null;
+  await params.repo.saveProjectSerpApiConfig({
+    projectId: params.projectId,
+    provider: "serpapi",
+    secret: encrypted as StoredAiSecret | null,
+  });
+}
+
+export async function clearProjectSerpApiConfig(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+}): Promise<void> {
+  await params.repo.saveProjectSerpApiConfig({
+    projectId: params.projectId,
+    provider: "serpapi",
+    secret: null,
+  });
+  await params.repo.clearProjectSerpApiSecret(params.projectId);
+}
+
+export async function resolveProjectSerpApiKey(params: {
+  repo: SiteForgeRepository;
+  projectId: string;
+}): Promise<string | null> {
+  const secret = await params.repo.getProjectSerpApiSecret(params.projectId);
   if (!secret) return null;
   return decryptSecret(secret.cipherText);
 }

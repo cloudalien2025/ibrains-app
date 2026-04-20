@@ -40,6 +40,7 @@ describe("siteforge repository", () => {
       websiteBrief: null,
       generationSource: "platform_key",
       aiModel: "gpt-4.1-mini",
+      marketIntelligence: null,
       connectionProfile: null,
       status: "queued",
       runState: createInitialRunState(),

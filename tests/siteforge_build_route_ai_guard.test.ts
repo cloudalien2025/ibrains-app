@@ -10,6 +10,7 @@ const mocks = {
   sanitizeConnection: vi.fn(),
   resolveRuntimeConnection: vi.fn(),
   resolveProjectAiApiKey: vi.fn(),
+  resolveProjectSerpApiKey: vi.fn(),
   enqueueBuildJob: vi.fn(),
   createInitialRunState: vi.fn(() => ({ currentStage: "planning", progressPct: 0, timeline: [] })),
 };
@@ -28,6 +29,7 @@ vi.mock("@/lib/siteforge/api", () => ({
 vi.mock("@/lib/siteforge/workspace", () => ({
   resolveRuntimeConnection: mocks.resolveRuntimeConnection,
   resolveProjectAiApiKey: mocks.resolveProjectAiApiKey,
+  resolveProjectSerpApiKey: mocks.resolveProjectSerpApiKey,
 }));
 vi.mock("@/lib/siteforge/runner", () => ({
   enqueueBuildJob: mocks.enqueueBuildJob,
@@ -42,6 +44,7 @@ describe("siteforge build route AI guard", () => {
     vi.clearAllMocks();
     delete process.env.SITEFORGE_OPENAI_API_KEY;
     delete process.env.OPENAI_API_KEY;
+    mocks.resolveProjectSerpApiKey.mockResolvedValue(null);
   });
 
   it("blocks generation when no user key and no platform key", async () => {
@@ -65,6 +68,7 @@ describe("siteforge build route AI guard", () => {
     mocks.resolveConnection.mockReturnValue(null);
     mocks.resolveRuntimeConnection.mockResolvedValue({ connection: null, connectionId: null });
     mocks.resolveProjectAiApiKey.mockResolvedValue(null);
+    mocks.resolveProjectSerpApiKey.mockResolvedValue(null);
 
     const repo = {
       getProject: vi.fn().mockResolvedValue({ id: "p1", homepageStrategy: "use_existing", aiModel: "gpt-4.1-mini" }),

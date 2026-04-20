@@ -5,11 +5,28 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { normalizeOpenAiModel } from "@/lib/siteforge/ai";
 import { getSiteForgeRepository } from "@/lib/siteforge/repository";
 import { maybeSiteForgePersistenceErrorResponse } from "@/lib/siteforge/apiErrors";
-import { clearProjectAiConfig, saveProjectAiConfig } from "@/lib/siteforge/workspace";
+import {
+  clearProjectAiConfig,
+  clearProjectSerpApiConfig,
+  saveProjectAiConfig,
+  saveProjectSerpApiConfig,
+} from "@/lib/siteforge/workspace";
 import { normalizeWorkspace } from "@/lib/siteforge/workspaceShape";
 
 function parseModel(value: unknown): string {
   return normalizeOpenAiModel(typeof value === "string" ? value : undefined);
+}
+
+function parseBody(raw: unknown): { openAiApiKey: string; serpApiKey: string; model: string } {
+  const body = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  const legacyOpenAiKey = typeof body.apiKey === "string" ? body.apiKey : "";
+  const openAiApiKey = typeof body.openAiApiKey === "string" ? body.openAiApiKey : legacyOpenAiKey;
+  const serpApiKey = typeof body.serpApiKey === "string" ? body.serpApiKey : "";
+  return {
+    openAiApiKey: openAiApiKey.trim(),
+    serpApiKey: serpApiKey.trim(),
+    model: parseModel(body.model),
+  };
 }
 
 export async function POST(
@@ -30,11 +47,15 @@ export async function POST(
     );
   }
 
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
-  if (!apiKey) {
+  const parsed = parseBody(await req.json().catch(() => null));
+  if (!parsed.openAiApiKey && !parsed.serpApiKey) {
     return NextResponse.json(
-      { error: { code: "BAD_REQUEST", message: "OpenAI API key is required." } },
+      {
+        error: {
+          code: "BAD_REQUEST",
+          message: "Provide at least one API key (OpenAI or SerpApi).",
+        },
+      },
       { status: 400 }
     );
   }
@@ -50,13 +71,21 @@ export async function POST(
       );
     }
 
-    const model = parseModel(body?.model);
-    await saveProjectAiConfig({
-      repo,
-      projectId: canonicalProjectId,
-      model,
-      apiKey,
-    });
+    if (parsed.openAiApiKey) {
+      await saveProjectAiConfig({
+        repo,
+        projectId: canonicalProjectId,
+        model: parsed.model,
+        apiKey: parsed.openAiApiKey,
+      });
+    }
+    if (parsed.serpApiKey) {
+      await saveProjectSerpApiConfig({
+        repo,
+        projectId: canonicalProjectId,
+        apiKey: parsed.serpApiKey,
+      });
+    }
 
     const workspace = await repo.getWorkspace(canonicalProjectId, userId);
     const normalized = normalizeWorkspace(workspace);
@@ -72,7 +101,9 @@ export async function POST(
         workspace: normalized,
         ai: {
           provider: "openai",
-          model,
+          model: parsed.model,
+          openAiConfigured: normalized.project.hasSavedAiSecret,
+          serpApiConfigured: normalized.project.hasSavedSerpApiSecret,
           status: "saved",
         },
       },
@@ -106,8 +137,7 @@ export async function PATCH(
     );
   }
 
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
-  const model = parseModel(body?.model);
+  const parsed = parseBody(await req.json().catch(() => null));
 
   try {
     const repo = await getSiteForgeRepository();
@@ -120,13 +150,19 @@ export async function PATCH(
       );
     }
 
-    const apiKey = typeof body?.apiKey === "string" ? body.apiKey.trim() : "";
     await saveProjectAiConfig({
       repo,
       projectId: canonicalProjectId,
-      model,
-      apiKey: apiKey || undefined,
+      model: parsed.model,
+      apiKey: parsed.openAiApiKey || undefined,
     });
+    if (parsed.serpApiKey) {
+      await saveProjectSerpApiConfig({
+        repo,
+        projectId: canonicalProjectId,
+        apiKey: parsed.serpApiKey,
+      });
+    }
 
     const workspace = await repo.getWorkspace(canonicalProjectId, userId);
     const normalized = normalizeWorkspace(workspace);
@@ -142,8 +178,10 @@ export async function PATCH(
         workspace: normalized,
         ai: {
           provider: "openai",
-          model,
-          status: normalized.project.hasSavedAiSecret ? "saved" : "not_saved",
+          model: parsed.model,
+          openAiConfigured: normalized.project.hasSavedAiSecret,
+          serpApiConfigured: normalized.project.hasSavedSerpApiSecret,
+          status: normalized.project.hasSavedAiSecret || normalized.project.hasSavedSerpApiSecret ? "saved" : "not_saved",
         },
       },
       { status: 200 }
@@ -187,11 +225,25 @@ export async function DELETE(
       );
     }
 
-    await clearProjectAiConfig({
-      repo,
-      projectId: canonicalProjectId,
-      model: project.aiModel ?? "gpt-4.1-mini",
-    });
+    const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
+    const provider =
+      body?.provider === "openai" || body?.provider === "serpapi" || body?.provider === "all"
+        ? body.provider
+        : "all";
+
+    if (provider === "openai" || provider === "all") {
+      await clearProjectAiConfig({
+        repo,
+        projectId: canonicalProjectId,
+        model: project.aiModel ?? "gpt-4.1-mini",
+      });
+    }
+    if (provider === "serpapi" || provider === "all") {
+      await clearProjectSerpApiConfig({
+        repo,
+        projectId: canonicalProjectId,
+      });
+    }
 
     const workspace = await repo.getWorkspace(canonicalProjectId, userId);
     const normalized = normalizeWorkspace(workspace);
@@ -208,6 +260,8 @@ export async function DELETE(
         ai: {
           provider: "openai",
           model: normalized.project.aiModel ?? "gpt-4.1-mini",
+          openAiConfigured: normalized.project.hasSavedAiSecret,
+          serpApiConfigured: normalized.project.hasSavedSerpApiSecret,
           status: "not_saved",
         },
       },

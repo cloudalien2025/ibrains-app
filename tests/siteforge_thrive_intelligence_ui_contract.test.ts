@@ -17,6 +17,9 @@ describe("siteforge thrive intelligence UI contract", () => {
     expect(source.includes("Thrive Intelligence")).toBe(true);
     expect(source.includes("Section Visual Mapping")).toBe(true);
     expect(source.includes("Visual Composition")).toBe(true);
+    expect(source.includes("Market Intelligence")).toBe(true);
+    expect(source.includes("Planner enriched:")).toBe(true);
+    expect(source.includes("fingerprint=")).toBe(true);
     expect(source.includes("Low-design warnings:")).toBe(true);
     expect(source.includes("Runtime modes: wp_safe_mode=")).toBe(true);
     expect(source.includes("Native Target Panel")).toBe(true);
