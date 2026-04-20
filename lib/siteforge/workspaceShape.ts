@@ -83,12 +83,41 @@ export type SiteForgeSnapshotView = {
       reusable: boolean;
       hasBuilderContent: boolean;
       hasCustomCss: boolean;
+      contentHash?: string | null;
+      cssHash?: string | null;
+      keywords?: string[];
     }>;
     symbolSummary: { total: number; headers: number; footers: number; sections: number; unknown: number };
     primitiveCounts: { thriveTemplate: number; thriveLayout: number; thriveSection: number; tcbSymbol: number };
     safeHints: { frontPageUsesWpSettings: boolean };
     warnings: string[];
   } | null;
+  thriveSectionResolutions: Array<{
+    pageSlug: string;
+    sectionId: string;
+    sectionType: "hero" | "problem" | "solution" | "features" | "testimonials" | "cta" | "faq" | "contact";
+    sectionIntent: "conversion" | "informational" | "trust" | "navigation";
+    symbolCandidateType: "header" | "footer" | "cta" | "testimonial" | "faq" | "marketing" | "generic";
+    preferredRenderTarget:
+      | "wordpress_page_content"
+      | "thrive_symbol_reference"
+      | "thrive_content_template_reference"
+      | "future_thrive_template_assignment"
+      | "future_landing_page_candidate"
+      | "wp_html_fallback";
+    resolution: "existing_symbol" | "existing_content_template" | "future_landing_page_candidate" | "wp_html_fallback";
+    matchedSymbolId: number | null;
+    matchedSymbolTitle: string | null;
+    matchedRole: "header" | "footer" | "section" | "unknown" | null;
+    confidence: number;
+    reason: string;
+    rejectedReasons: string[];
+  }>;
+  thriveModeSummary: {
+    wpSafeMode: boolean;
+    thriveIntelMode: boolean;
+    stagingNativeMode: boolean;
+  };
   homepageStrategy: HomepageStrategy;
   lastRunSummary: string | null;
   lastRunStatus: "queued" | "running" | "completed" | "failed" | null;
@@ -145,6 +174,8 @@ export type BuildSessionView = {
       intelligenceAvailable: boolean;
       symbolInventoryPresent: boolean;
       intelligence: SiteForgeSnapshotView["thriveIntelligence"] | null;
+      runtime: SiteForgeSnapshotView["thriveModeSummary"];
+      sectionResolutions: SiteForgeSnapshotView["thriveSectionResolutions"];
     };
     warnings: string[];
     errors: string[];
@@ -251,6 +282,11 @@ function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thr
         reusable: boolOr(entry.reusable, true),
         hasBuilderContent: boolOr(entry.hasBuilderContent),
         hasCustomCss: boolOr(entry.hasCustomCss),
+        contentHash: nullableString(entry.contentHash),
+        cssHash: nullableString(entry.cssHash),
+        keywords: Array.isArray(entry.keywords)
+          ? entry.keywords.filter((keyword): keyword is string => typeof keyword === "string")
+          : [],
       })),
     symbolSummary: {
       total: numberOr(symbolSummaryRaw.total),
@@ -270,6 +306,73 @@ function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thr
     },
     warnings: Array.isArray(value.warnings) ? value.warnings.filter((entry): entry is string => typeof entry === "string") : [],
   };
+}
+
+function normalizeThriveSectionResolutions(value: unknown): SiteForgeSnapshotView["thriveSectionResolutions"] {
+  const input = Array.isArray(value) ? value : [];
+  return input
+    .filter(isRecord)
+    .map((entry) => ({
+      pageSlug: stringOr(entry.pageSlug, ""),
+      sectionId: stringOr(entry.sectionId, ""),
+      sectionType:
+        entry.sectionType === "hero" ||
+        entry.sectionType === "problem" ||
+        entry.sectionType === "solution" ||
+        entry.sectionType === "features" ||
+        entry.sectionType === "testimonials" ||
+        entry.sectionType === "cta" ||
+        entry.sectionType === "faq" ||
+        entry.sectionType === "contact"
+          ? entry.sectionType
+          : "solution",
+      sectionIntent:
+        entry.sectionIntent === "conversion" ||
+        entry.sectionIntent === "informational" ||
+        entry.sectionIntent === "trust" ||
+        entry.sectionIntent === "navigation"
+          ? entry.sectionIntent
+          : "informational",
+      symbolCandidateType:
+        entry.symbolCandidateType === "header" ||
+        entry.symbolCandidateType === "footer" ||
+        entry.symbolCandidateType === "cta" ||
+        entry.symbolCandidateType === "testimonial" ||
+        entry.symbolCandidateType === "faq" ||
+        entry.symbolCandidateType === "marketing" ||
+        entry.symbolCandidateType === "generic"
+          ? entry.symbolCandidateType
+          : "generic",
+      preferredRenderTarget:
+        entry.preferredRenderTarget === "thrive_symbol_reference" ||
+        entry.preferredRenderTarget === "thrive_content_template_reference" ||
+        entry.preferredRenderTarget === "future_thrive_template_assignment" ||
+        entry.preferredRenderTarget === "future_landing_page_candidate" ||
+        entry.preferredRenderTarget === "wp_html_fallback"
+          ? entry.preferredRenderTarget
+          : "wordpress_page_content",
+      resolution:
+        entry.resolution === "existing_symbol" ||
+        entry.resolution === "existing_content_template" ||
+        entry.resolution === "future_landing_page_candidate" ||
+        entry.resolution === "wp_html_fallback"
+          ? entry.resolution
+          : "wp_html_fallback",
+      matchedSymbolId: typeof entry.matchedSymbolId === "number" ? entry.matchedSymbolId : null,
+      matchedSymbolTitle: nullableString(entry.matchedSymbolTitle),
+      matchedRole:
+        entry.matchedRole === "header" ||
+        entry.matchedRole === "footer" ||
+        entry.matchedRole === "section" ||
+        entry.matchedRole === "unknown"
+          ? entry.matchedRole
+          : null,
+      confidence: numberOr(entry.confidence),
+      reason: stringOr(entry.reason, "no_reason"),
+      rejectedReasons: Array.isArray(entry.rejectedReasons)
+        ? entry.rejectedReasons.filter((item): item is string => typeof item === "string")
+        : [],
+    }));
 }
 
 function toStage(value: unknown): BuildStage {
@@ -487,6 +590,14 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 intelligenceAvailable: boolOr(value.executionResult.thrive.intelligenceAvailable),
                 symbolInventoryPresent: boolOr(value.executionResult.thrive.symbolInventoryPresent),
                 intelligence: normalizeThriveIntelligence(value.executionResult.thrive.intelligence),
+                runtime: isRecord(value.executionResult.thrive.runtime)
+                  ? {
+                      wpSafeMode: boolOr(value.executionResult.thrive.runtime.wpSafeMode, true),
+                      thriveIntelMode: boolOr(value.executionResult.thrive.runtime.thriveIntelMode),
+                      stagingNativeMode: boolOr(value.executionResult.thrive.runtime.stagingNativeMode),
+                    }
+                  : { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
+                sectionResolutions: normalizeThriveSectionResolutions(value.executionResult.thrive.sectionResolutions),
               }
             : {
                 enabled: false,
@@ -496,6 +607,8 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 intelligenceAvailable: false,
                 symbolInventoryPresent: false,
                 intelligence: null,
+                runtime: { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
+                sectionResolutions: [],
               },
           warnings: Array.isArray(value.executionResult.warnings)
             ? value.executionResult.warnings.filter((entry): entry is string => typeof entry === "string")
@@ -572,6 +685,14 @@ function normalizeSnapshot(value: unknown, projectId: string): SiteForgeSnapshot
       : [],
     thriveDetected: boolOr(value.thriveDetected),
     thriveIntelligence: normalizeThriveIntelligence(value.thriveIntelligence),
+    thriveSectionResolutions: normalizeThriveSectionResolutions(value.thriveSectionResolutions),
+    thriveModeSummary: isRecord(value.thriveModeSummary)
+      ? {
+          wpSafeMode: boolOr(value.thriveModeSummary.wpSafeMode, true),
+          thriveIntelMode: boolOr(value.thriveModeSummary.thriveIntelMode),
+          stagingNativeMode: boolOr(value.thriveModeSummary.stagingNativeMode),
+        }
+      : { wpSafeMode: true, thriveIntelMode: false, stagingNativeMode: false },
     homepageStrategy: toStrategy(value.homepageStrategy),
     lastRunSummary: nullableString(value.lastRunSummary),
     lastRunStatus:

@@ -46,10 +46,13 @@ describe("siteforge thrive homepage mapping", () => {
     expect(homepage?.metadata.thriveLayoutKey).toBe("thrive-homepage-canonical");
     expect(homepage?.metadata.thrivePageRole).toBe("homepage");
 
-    expect(contact?.metadata.thriveLayoutKey).toBe("thrive-standard-content");
+    expect(contact?.metadata.thriveLayoutKey).toBe("thrive-contact-utility");
     expect(contact?.metadata.thrivePageRole).toBe("content");
     expect(contact?.metadata.preferredRenderTarget).toBe("wordpress_page_content");
+    expect(homepage?.metadata.shellTemplateGroupCandidate).toBe("homepage");
+    expect(homepage?.metadata.shellLayoutCandidate).toBe("thrive-homepage-canonical");
     expect(translated.spec.metadata.thriveMode).toBe("wp_safe_mode");
-    expect(translated.appliedMappings).toContain("landing-page:thrive-homepage-canonical:homepage");
+    expect(translated.appliedMappings.some((entry) => entry.startsWith("landing-page:thrive-homepage-canonical:homepage"))).toBe(true);
+    expect(Array.isArray(translated.sectionResolutions)).toBe(true);
   });
 });

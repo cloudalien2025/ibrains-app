@@ -121,6 +121,28 @@ describe("siteforge snapshot persistence reconciliation", () => {
         executionMode: "wp_safe_mode",
         intelligenceAvailable: true,
         symbolInventoryPresent: true,
+        runtime: {
+          wpSafeMode: true,
+          thriveIntelMode: true,
+          stagingNativeMode: false,
+        },
+        sectionResolutions: [
+          {
+            pageSlug: "home",
+            sectionId: "s_hero",
+            sectionType: "hero",
+            sectionIntent: "conversion",
+            symbolCandidateType: "header",
+            preferredRenderTarget: "thrive_symbol_reference",
+            resolution: "existing_symbol",
+            matchedSymbolId: 57,
+            matchedSymbolTitle: "Default Header for Shapeshift Theme",
+            matchedRole: "header",
+            confidence: 0.9,
+            reason: "role_match:header|keyword_hits:2|builder_payload_present",
+            rejectedReasons: [],
+          },
+        ],
         intelligence: {
           source: "wordpress_rest_get",
           collectedAt: "2026-04-19T00:00:00.000Z",
@@ -179,6 +201,8 @@ describe("siteforge snapshot persistence reconciliation", () => {
     expect(snapshot.currentHomepageSource).toBe("wordpress");
     expect(snapshot.thriveIntelligence?.activeSkin?.name).toBe("Shapeshift Theme");
     expect(snapshot.thriveIntelligence?.symbolSummary.headers).toBe(1);
+    expect(snapshot.thriveModeSummary.thriveIntelMode).toBe(true);
+    expect(snapshot.thriveSectionResolutions[0]?.matchedSymbolId).toBe(57);
 
     expect(snapshot.knownPages).toEqual(
       expect.arrayContaining([
@@ -224,6 +248,12 @@ describe("siteforge snapshot persistence reconciliation", () => {
         executionMode: "wp_safe_mode",
         intelligenceAvailable: false,
         symbolInventoryPresent: false,
+        runtime: {
+          wpSafeMode: true,
+          thriveIntelMode: false,
+          stagingNativeMode: false,
+        },
+        sectionResolutions: [],
         intelligence: null,
       },
       actionLog: [],

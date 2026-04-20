@@ -132,6 +132,12 @@ const thriveMeta = {
   intelligenceAvailable: false,
   symbolInventoryPresent: false,
   intelligence: null,
+  runtime: {
+    wpSafeMode: true,
+    thriveIntelMode: false,
+    stagingNativeMode: false,
+  },
+  sectionResolutions: [],
 };
 
 afterEach(() => {

@@ -14,5 +14,8 @@ describe("siteforge thrive intelligence UI contract", () => {
     expect(source.includes("Thrive primitives:")).toBe(true);
     expect(source.includes("Thrive intel available:")).toBe(true);
     expect(source.includes("Symbol inventory:")).toBe(true);
+    expect(source.includes("Thrive Intelligence")).toBe(true);
+    expect(source.includes("Section Resolution")).toBe(true);
+    expect(source.includes("Runtime modes: wp_safe_mode=")).toBe(true);
   });
 });

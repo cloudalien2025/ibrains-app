@@ -86,6 +86,8 @@ describe("siteforge thrive intelligence inventory", () => {
     });
     expect(intel?.safeHints.frontPageUsesWpSettings).toBe(true);
     expect(intel?.symbolInventory[0]?.hasBuilderContent).toBe(true);
+    expect(intel?.symbolInventory[0]?.contentHash).toBeTruthy();
+    expect(intel?.symbolInventory[0]?.keywords?.length).toBeGreaterThan(0);
   });
 
   it("infers role fallback from title/slug when taxonomy is missing", () => {
