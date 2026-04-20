@@ -239,17 +239,29 @@ export default function SiteForgeAppPage() {
     setProjectName(workspace.project.name);
     setPersistedProjectName(workspace.project.name);
     setProjectNameSaveState("idle");
-    setBriefForm({
-      businessName: workspace.project.websiteBrief?.businessName ?? "",
-      businessType: workspace.project.websiteBrief?.businessType ?? "",
-      businessDescription: workspace.project.websiteBrief?.businessDescription ?? "",
-      targetAudience: workspace.project.websiteBrief?.targetAudience ?? "",
-      websiteGoal: workspace.project.websiteBrief?.websiteGoal ?? "capture_leads",
-      mainOffer: workspace.project.websiteBrief?.mainOffer ?? "",
-      brandTone: workspace.project.websiteBrief?.brandTone ?? "expert",
-      marketLocation: workspace.project.websiteBrief?.marketLocation ?? "",
-      competitors: workspace.project.websiteBrief?.competitors ?? "",
-      differentiators: workspace.project.websiteBrief?.differentiators ?? "",
+    setBriefForm((prev) => {
+      const incoming = workspace.project.websiteBrief;
+      const hasLocalDraft =
+        prev.businessName.trim() ||
+        prev.businessType.trim() ||
+        prev.businessDescription.trim() ||
+        prev.targetAudience.trim() ||
+        prev.mainOffer.trim();
+      if (!incoming && hasLocalDraft) {
+        return prev;
+      }
+      return {
+        businessName: incoming?.businessName ?? "",
+        businessType: incoming?.businessType ?? "",
+        businessDescription: incoming?.businessDescription ?? "",
+        targetAudience: incoming?.targetAudience ?? "",
+        websiteGoal: incoming?.websiteGoal ?? "capture_leads",
+        mainOffer: incoming?.mainOffer ?? "",
+        brandTone: incoming?.brandTone ?? "expert",
+        marketLocation: incoming?.marketLocation ?? "",
+        competitors: incoming?.competitors ?? "",
+        differentiators: incoming?.differentiators ?? "",
+      };
     });
     setAiModel(workspace.project.aiModel ?? "gpt-4.1-mini");
     setAiApiKey("");
