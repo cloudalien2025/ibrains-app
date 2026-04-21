@@ -27,11 +27,14 @@ describe("siteforge first-time user journey UI contract", () => {
     expect(source.includes("Continue to Build")).toBe(true);
     expect(source.includes("Looks Good")).toBe(true);
     expect(source.includes("Approve Page")).toBe(true);
+    expect(source.includes("Review Build Status")).toBe(true);
     expect(source.includes("Rescan Assets")).toBe(true);
     expect(source.includes("Ask SiteForge")).toBe(false);
     expect(source.includes("Builder Feed")).toBe(false);
+    expect(source.includes("Build can only be started from Build.")).toBe(true);
     expect(source.includes('activeNav === "publish" ? "BuildDraft"')).toBe(false);
     expect(source.includes('activeNav === "publish" ? "Build Draft"')).toBe(false);
+    expect(source.includes(">Build Draft<")).toBe(false);
 
     expect(source.includes("Build")).toBe(true);
     expect(source.includes("Pages")).toBe(true);

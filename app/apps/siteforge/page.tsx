@@ -1248,6 +1248,11 @@ export default function SiteForgeAppPage() {
   const briefCompleted = briefIsValid();
   const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
   const connectionValidated = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
+  const hasPages = pageRows.length > 0;
+  const canApproveSelectedPage = hasPages && selectedPageRow !== null;
+  const canStartBuild = Boolean(selectedProjectId && !busy && briefCompleted);
+  const showAdvanced = activeNav === "strategy";
+  const hasPublishableResult = currentSession?.status === "completed";
   const assetScanCompleted = hasMeaningfulAssetData;
   const setupCoreComplete = projectSelected && briefCompleted && aiConfigured && connectionValidated;
   const setupAllComplete = setupCoreComplete && assetScanCompleted;
@@ -1478,6 +1483,14 @@ export default function SiteForgeAppPage() {
                 <div className="mt-4">
                   <h2 className="text-xl font-semibold text-slate-100">Build</h2>
                   <p className="mt-1 text-sm text-slate-300">Review your plan, pages, and reusable assets before moving to publish.</p>
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!canStartBuild}>
+                      Build Site Draft
+                    </button>
+                    {!canStartBuild ? (
+                      <span className="text-xs text-slate-400">Complete Setup and save your brief before starting a build.</span>
+                    ) : null}
+                  </div>
                 </div>
 
                 {false ? (
@@ -1672,9 +1685,15 @@ export default function SiteForgeAppPage() {
                       onClick={() => {
                         setActiveNav("publish");
                       }}
+                      disabled={!canApproveSelectedPage}
                     >
                       Approve Page
                     </button>
+                    {!canApproveSelectedPage ? (
+                      <div className="text-xs text-slate-400">
+                        Approve Page is unavailable until a generated page is selected.
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
                 {activeBuildTab === "assets" ? (
@@ -1823,9 +1842,6 @@ export default function SiteForgeAppPage() {
                     Review each page, confirm section stacks, and approve what should be included in the draft build.
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                      Build Site Draft
-                    </button>
                     <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
                       Back to Builder
                     </button>
@@ -2330,12 +2346,12 @@ export default function SiteForgeAppPage() {
               <section className="space-y-4">
                 <div className={`${brainTheme.glassCard} p-5`}>
                   <h2 className="text-lg font-semibold text-slate-100">Publish</h2>
-                  <p className="mt-2 text-sm text-slate-300">Check readiness and complete the final build action.</p>
+                  <p className="mt-2 text-sm text-slate-300">Review build readiness and final checks. Publishing remains a guided review step.</p>
                 </div>
                 <div className="grid gap-4 xl:grid-cols-3">
                   <div className={`${brainTheme.glassCard} p-4`}>
                     <h3 className="text-sm font-semibold text-slate-100">Ready</h3>
-                    <div className="mt-2 text-sm text-slate-300">{currentSession?.status === "completed" ? "Build package complete" : "Awaiting build completion"}</div>
+                    <div className="mt-2 text-sm text-slate-300">{hasPublishableResult ? "Build package complete" : "Awaiting build completion"}</div>
                   </div>
                   <div className={`${brainTheme.glassCard} p-4 xl:col-span-2`}>
                     <h3 className="text-sm font-semibold text-slate-100">Needs attention</h3>
@@ -2351,9 +2367,10 @@ export default function SiteForgeAppPage() {
                   </div>
                 </div>
                 <div className={`${brainTheme.glassCard} p-4`}>
-                  <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!selectedProjectId || busy || !briefIsValid()}>
-                    Build Draft
+                  <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("mission_control")}>
+                    Review Build Status
                   </button>
+                  <div className="mt-2 text-xs text-slate-400">Build can only be started from Build.</div>
                 </div>
               </section>
             ) : null}
@@ -2550,7 +2567,7 @@ export default function SiteForgeAppPage() {
               </section>
             ) : null}
 
-            {activeNav === "strategy" ? (
+            {showAdvanced ? (
               <section className={`${brainTheme.glassCard} p-4`}>
                 <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Run History</div>
                 <div className="mt-2 grid gap-2 lg:grid-cols-2">

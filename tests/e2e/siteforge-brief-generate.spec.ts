@@ -112,9 +112,9 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
     await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
 
-    await page.getByRole("button", { name: "Publish", exact: true }).click();
+    await page.getByRole("button", { name: "Build", exact: true }).click();
 
-    const generateButton = page.getByRole("button", { name: "Build Draft" }).first();
+    const generateButton = page.getByRole("button", { name: "Build Site Draft" }).first();
     await expect(generateButton).toBeEnabled({ timeout: 30000 });
 
     await generateButton.click();
