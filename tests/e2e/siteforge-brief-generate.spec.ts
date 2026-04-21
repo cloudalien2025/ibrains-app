@@ -5,6 +5,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     const projectId = "p1";
     const sessionId = "s1";
     let lastBuildBody: Record<string, unknown> | null = null;
+    let connectionValidated = false;
 
     const workspace = (hasSavedAiSecret: boolean) => ({
       project: {
@@ -29,7 +30,24 @@ test.describe("SiteForge brief + AI generate flow", () => {
         latestSessionId: null,
         updatedAt: new Date().toISOString(),
       },
-      activeConnection: null,
+      activeConnection: connectionValidated
+        ? {
+            connectionId: "c1",
+            projectId,
+            label: "Primary WordPress Site",
+            wordpressUrl: "https://example.com",
+            username: "admin",
+            authType: "application_password",
+            secretRef: "secret_1",
+            hasSavedSecret: true,
+            thriveDetected: true,
+            writeAccess: true,
+            lastValidatedAt: new Date().toISOString(),
+            lastValidationStatus: "valid",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : null,
       snapshot: null,
       latestRun: null,
       runHistory: [],
@@ -92,6 +110,26 @@ test.describe("SiteForge brief + AI generate flow", () => {
         return;
       }
 
+      if (url.endsWith(`/api/siteforge/projects/${projectId}/connection`) && method === "POST") {
+        connectionValidated = true;
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            result: {
+              connected: true,
+              canWritePages: true,
+              canManageSettings: true,
+              thriveDetected: true,
+              thriveSignals: ["thrive_theme"],
+              message: "Connection validated and saved.",
+            },
+            connection: workspace(false).activeConnection,
+            credentialsSaved: true,
+          }),
+        });
+        return;
+      }
+
       if (url.includes("/api/siteforge/sessions/") && method === "GET") {
         await route.fulfill({ status: 200, body: JSON.stringify({ session: null }) });
         return;
@@ -101,7 +139,11 @@ test.describe("SiteForge brief + AI generate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Setup", exact: true }).click();
+    await page.getByPlaceholder("https://example.com").fill("https://example.com");
+    await page.getByPlaceholder("WordPress username").fill("admin");
+    await page.getByPlaceholder(/WordPress application password/i).fill("app-pass");
+    await page.getByTestId("siteforge-validate-connection-action").click();
+    await page.getByRole("button", { name: "Tell Us About Your Business" }).click();
 
     await page.locator("#siteforge-ai-key").fill("sk-test");
     await page.getByRole("button", { name: "Save API Keys" }).click();
@@ -111,17 +153,12 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.locator("#siteforge-brief-business-description").fill("Sales pipeline software");
     await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
     await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
-
-    await page.getByRole("button", { name: "Build", exact: true }).click();
-
-    const generateButton = page.getByRole("button", { name: "Build Site Draft" }).first();
-    await expect(generateButton).toBeEnabled({ timeout: 30000 });
-
-    await generateButton.click();
+    await page.getByTestId("siteforge-generate-site-action").click();
 
     await expect.poll(() => lastBuildBody).not.toBeNull();
     const websiteBrief = (lastBuildBody as Record<string, unknown>).websiteBrief as Record<string, unknown>;
     expect(websiteBrief.businessName).toBe("Acme Labs");
     expect(websiteBrief.mainOffer).toBe("Pipeline automation suite");
+    expect((lastBuildBody as Record<string, unknown>).homepageStrategy).toBe("draft_only");
   });
 });

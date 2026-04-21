@@ -22,7 +22,7 @@ describe("siteforge active project override guard contract", () => {
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("const selectedProjectInOptions = useMemo(")).toBe(true);
-    expect(source.includes("{selectedProjectId && !selectedProjectInOptions ? (")).toBe(true);
+    expect(source.includes("selectedProjectId && !selectedProjectInOptions")).toBe(true);
     expect(source.includes("<option value={selectedProjectId}>Loading selected project...</option>")).toBe(true);
   });
 });

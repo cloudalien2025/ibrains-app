@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import Link from "next/link";
 import { brainTheme } from "@/components/brain-dock/brainTheme";
-import { brandToneOptions, websiteGoalOptions } from "@/lib/siteforge/contracts";
+import { brandToneOptions, homepageStrategyModes, websiteGoalOptions } from "@/lib/siteforge/contracts";
+import { normalizeNewProjectName } from "@/lib/siteforge/newProjectName";
+import { ProjectNameSaveState, shouldPersistProjectName } from "@/lib/siteforge/projectNameAutosave";
 import {
   BuildSessionView as BuildSession,
-  BuildStage,
   HomepageStrategy,
   normalizeProjectPayload,
   normalizeProjectsPayload,
@@ -19,8 +19,6 @@ import {
   SiteForgeSnapshotView as SiteForgeSnapshot,
   SiteForgeWorkspaceView as SiteForgeWorkspace,
 } from "@/lib/siteforge/workspaceShape";
-import { normalizeNewProjectName } from "@/lib/siteforge/newProjectName";
-import { ProjectNameSaveState, shouldPersistProjectName } from "@/lib/siteforge/projectNameAutosave";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -40,54 +38,6 @@ type StorageSummary = {
   runtimeEnv?: "test" | "development" | "production";
 };
 
-type CreateStatus = "idle" | "creating" | "created" | "error";
-type OpenProjectResult =
-  | { ok: true }
-  | { ok: false; reason: "superseded" | "failed"; message?: string };
-
-type AgencyNavKey =
-  | "mission_control"
-  | "strategy"
-  | "brand"
-  | "funnels"
-  | "pages"
-  | "global_assets"
-  | "thrive_intelligence"
-  | "experiments"
-  | "publish"
-  | "settings";
-
-type BuildTabKey = "plan" | "pages" | "assets";
-
-type AgencyStatus =
-  | "Not started"
-  | "Researching"
-  | "Drafting"
-  | "Recommended"
-  | "Awaiting approval"
-  | "Approved"
-  | "Building"
-  | "Built"
-  | "Needs revision"
-  | "Blocked";
-
-type ConfidenceLevel = "Low" | "Medium" | "High" | "Verified";
-
-type AgentRosterEntry = {
-  id: string;
-  displayName: string;
-  specialty: string;
-  mission: string;
-  currentTask: string;
-  status: AgencyStatus;
-  confidence: ConfidenceLevel;
-  ownedObjects: string[];
-  outputs: string[];
-  blockers?: string[];
-};
-
-const visibleSteps: BuildStage[] = ["planning", "writing", "building", "reviewing", "finalizing"];
-
 type WebsiteBriefForm = {
   businessName: string;
   businessType: string;
@@ -101,37 +51,21 @@ type WebsiteBriefForm = {
   differentiators: string;
 };
 
-function Stepper({ stage }: { stage: BuildStage }) {
-  const activeIndex = Math.max(0, visibleSteps.findIndex((entry) => entry === stage));
+type CreateStatus = "idle" | "creating" | "created" | "error";
+type OpenProjectResult =
+  | { ok: true }
+  | { ok: false; reason: "superseded" | "failed"; message?: string };
+type SimpleStepKey = "connect" | "business" | "generate" | "review" | "build" | "done";
+type BuildModeUsed = "thrive_native" | "thrive_fallback" | "wordpress_fallback";
 
-  return (
-    <div className="rounded-2xl border border-white/10 bg-slate-950/55 p-5">
-      <div className="flex items-center justify-between gap-3 overflow-x-auto">
-        {visibleSteps.map((step, index) => {
-          const complete = index < activeIndex;
-          const active = index === activeIndex;
-          const tone = complete
-            ? "border-emerald-300/60 bg-emerald-300/20 text-emerald-100"
-            : active
-              ? "border-cyan-300/60 bg-cyan-300/15 text-cyan-100"
-              : "border-white/20 bg-white/5 text-slate-300";
-
-          return (
-            <div key={step} className="flex min-w-max items-center gap-3">
-              <div className={`flex h-8 w-8 items-center justify-center rounded-full border text-xs font-semibold ${tone}`}>
-                {index + 1}
-              </div>
-              <div className="text-sm font-medium capitalize text-slate-100">{step}</div>
-              {index < visibleSteps.length - 1 ? (
-                <div className={`h-px w-12 ${index < activeIndex ? "bg-emerald-300/50" : "bg-white/15"}`} />
-              ) : null}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
+const simpleSteps: Array<{ key: SimpleStepKey; label: string }> = [
+  { key: "connect", label: "Connect Site" },
+  { key: "business", label: "Tell Us About Your Business" },
+  { key: "generate", label: "Generate Site" },
+  { key: "review", label: "Review Pages" },
+  { key: "build", label: "Build in Thrive" },
+  { key: "done", label: "Done" },
+];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
@@ -161,6 +95,24 @@ function formatDate(value: string | null | undefined): string {
   return date.toLocaleString();
 }
 
+function resolveFriendlyError(raw: string, context: "load" | "connect" | "generate" | "build" | "save"): string {
+  const text = raw.toLowerCase();
+  if (text.includes("project not found")) return "Selected project could not be loaded.";
+  if (text.includes("502") || text.includes("bad gateway")) {
+    if (context === "generate") return "We couldn’t generate your site yet.";
+    if (context === "build") return "Your WordPress site connected, but the build failed.";
+    return "We couldn’t complete that step right now.";
+  }
+  if (text.includes("application password is required")) return "Please add your WordPress application password to continue.";
+  if (text.includes("no usable openai api key") || text.includes("ai key")) {
+    return "Please save an AI key before generating your site.";
+  }
+  if (context === "generate") return "We couldn’t generate your site yet.";
+  if (context === "build") return "Thrive was detected, but the native build path is currently blocked.";
+  if (context === "connect") return "We couldn’t validate your WordPress connection yet.";
+  return raw;
+}
+
 export default function SiteForgeAppPage() {
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -174,6 +126,7 @@ export default function SiteForgeAppPage() {
   const [projectName, setProjectName] = useState("SiteForge Project");
   const [persistedProjectName, setPersistedProjectName] = useState("SiteForge Project");
   const [projectNameSaveState, setProjectNameSaveState] = useState<ProjectNameSaveState>("idle");
+
   const [briefForm, setBriefForm] = useState<WebsiteBriefForm>({
     businessName: "",
     businessType: "",
@@ -187,11 +140,11 @@ export default function SiteForgeAppPage() {
     differentiators: "",
   });
   const [briefSaveState, setBriefSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+
   const [aiApiKey, setAiApiKey] = useState("");
   const [serpApiKey, setSerpApiKey] = useState("");
   const [aiModel, setAiModel] = useState("gpt-4.1-mini");
   const [aiStatusMessage, setAiStatusMessage] = useState<string | null>(null);
-  const [refinePrompt, setRefinePrompt] = useState("");
 
   const [connectionLabel, setConnectionLabel] = useState("Primary WordPress Site");
   const [baseUrl, setBaseUrl] = useState("");
@@ -200,118 +153,143 @@ export default function SiteForgeAppPage() {
   const [hasThriveHint, setHasThriveHint] = useState(false);
   const [homepageStrategy, setHomepageStrategy] = useState<HomepageStrategy>("use_existing");
   const [connectionResult, setConnectionResult] = useState<CapabilityCheck | null>(null);
+
   const [createStatus, setCreateStatus] = useState<CreateStatus>("idle");
   const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
   const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
-  const [activeNav, setActiveNav] = useState<AgencyNavKey>("settings");
-  const [activeBuildTab, setActiveBuildTab] = useState<BuildTabKey>("plan");
-  const [pageStudioSlug, setPageStudioSlug] = useState<string | null>(null);
-  const [assetsTab, setAssetsTab] = useState<
-    "headers" | "footers" | "symbols" | "sections" | "templates" | "layouts" | "cta_blocks" | "faqs" | "testimonials"
-  >("symbols");
+  const [currentStep, setCurrentStep] = useState<SimpleStepKey>("connect");
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [technicalError, setTechnicalError] = useState<string | null>(null);
+
   const projectNameSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const projectNameSaveSeqRef = useRef(0);
   const loadProjectsSeqRef = useRef(0);
   const openProjectSeqRef = useRef(0);
   const activeProjectIntentRef = useRef<string | null>(null);
 
-  const currentSession = useMemo(
-    () => sessions.find((entry) => entry.id === currentSessionId) ?? null,
-    [sessions, currentSessionId]
-  );
   const activeProject = useMemo(
     () => projects.find((entry) => entry.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
   const activeProjectId = activeProject?.id ?? null;
   const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);
-  const thriveIntel = snapshot?.thriveIntelligence ?? currentSession?.executionResult?.thrive.intelligence ?? null;
-  const thriveExecutionMode = currentSession?.executionResult?.thrive.executionMode ?? "wp_safe_mode";
-  const thriveRuntime = currentSession?.executionResult?.thrive.runtime ?? snapshot?.thriveModeSummary ?? {
-    wpSafeMode: true,
-    thriveIntelMode: false,
-    stagingNativeMode: false,
-  };
-  const thriveCurrentMode =
-    currentSession?.executionResult?.thrive.currentMode ??
-    (thriveRuntime.stagingNativeMode
-      ? "thrive_native_staging_mode"
-      : thriveRuntime.thriveIntelMode
-        ? "thrive_intel_mode"
-        : "wp_safe_mode");
-  const thriveNativeGuard =
-    currentSession?.executionResult?.thrive.nativeGuard ?? snapshot?.thriveNativeGuard ?? null;
-  const thriveNativeComposition =
-    currentSession?.executionResult?.thrive.nativeComposition ?? snapshot?.thriveNativeComposition ?? null;
-  const thriveNativeExecution =
-    currentSession?.executionResult?.thrive.nativeExecution ?? snapshot?.thriveNativeExecution ?? null;
-  const thriveNativeValidation =
-    currentSession?.executionResult?.thrive.nativeValidation ?? snapshot?.thriveNativeValidation ?? null;
-  const marketIntelligence = currentSession?.marketIntelligence ?? snapshot?.marketIntelligence ?? null;
-  const thriveSectionResolutions =
-    currentSession?.executionResult?.thrive.sectionResolutions ?? snapshot?.thriveSectionResolutions ?? [];
-  const reusableSummary = useMemo(
-    () => ({
-      reusableNow: thriveSectionResolutions.filter((entry) => entry.resolution === "existing_symbol").length,
-      safeWritableNow: thriveSectionResolutions.filter((entry) => entry.preferredRenderTarget === "wordpress_page_content" || entry.preferredRenderTarget === "wp_html_fallback").length,
-      stagedOnly: thriveSectionResolutions.filter(
-        (entry) =>
-          entry.preferredRenderTarget === "future_landing_page_candidate" ||
-          entry.preferredRenderTarget === "future_thrive_template_assignment"
-      ).length,
-    }),
-    [thriveSectionResolutions]
-  );
-  const visualCompositionSummary = useMemo(() => {
-    const byType = (type: string) => thriveSectionResolutions.find((entry) => entry.sectionType === type);
-    const hero = byType("hero");
-    const features = byType("features");
-    const cta = byType("cta");
-    const faq = byType("faq");
-    const testimonial = byType("testimonials");
-    const trust = byType("contact") ?? byType("problem");
-    const sectionIntents = thriveNativeComposition?.sections ?? [];
-    const reused = sectionIntents.filter(
-      (entry) => entry.intent === "reused_existing" || entry.intent === "reused_visual_symbol"
-    ).length;
-    const created = sectionIntents.filter(
-      (entry) =>
-        entry.intent === "created_native" ||
-        entry.intent === "created_visual_native_section" ||
-        entry.intent === "created_visual_cta_block" ||
-        entry.intent === "created_visual_faq_toggle"
-    ).length;
-    const fallback = sectionIntents.filter(
-      (entry) =>
-        entry.intent === "wp_fallback" ||
-        entry.intent === "improved_visual_fallback" ||
-        entry.intent === "blocked_by_guard" ||
-        entry.intent === "blocked_by_missing_contract"
-    ).length;
-    const lowDesignWarnings = thriveSectionResolutions
-      .filter((entry) => !entry.designIntentSatisfied || entry.primitiveSelectionSource === "safe_fallback")
-      .map((entry) => `${entry.sectionType}:${entry.fallbackReason ?? "safe_fallback"}`);
 
-    return {
-      hero: hero?.visualPattern ?? "n/a",
-      features: features?.visualPattern ?? "n/a",
-      cta: cta?.visualPattern ?? "n/a",
-      faq: faq?.visualPattern ?? "n/a",
-      testimonial: testimonial?.visualPattern ?? "n/a",
-      trust: trust?.visualPattern ?? "n/a",
-      reused,
-      created,
-      fallback,
-      lowDesignWarnings,
+  const currentSession = useMemo(
+    () => sessions.find((entry) => entry.id === currentSessionId) ?? sessions[0] ?? null,
+    [sessions, currentSessionId]
+  );
+
+  const pageRows = useMemo(
+    () =>
+      currentSession?.buildSpec?.pages?.map((page) => ({
+        slug: page.slug,
+        title: page.title,
+        purpose: page.title === "Home" || page.slug === "home" ? "Primary conversion" : "Support intent",
+        sections: page.sections.length,
+      })) ?? [],
+    [currentSession]
+  );
+
+  const isConnected = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
+  const isThriveDetected = Boolean(connectionResult?.thriveDetected || savedConnection?.thriveDetected);
+  const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
+
+  const hasBusinessInfo = useMemo(() => {
+    const payload = {
+      businessName: briefForm.businessName.trim(),
+      businessType: briefForm.businessType.trim(),
+      businessDescription: briefForm.businessDescription.trim(),
+      targetAudience: briefForm.targetAudience.trim(),
+      mainOffer: briefForm.mainOffer.trim(),
     };
-  }, [thriveSectionResolutions, thriveNativeComposition]);
+    return Boolean(payload.businessName && payload.businessType && payload.businessDescription && payload.targetAudience && payload.mainOffer);
+  }, [briefForm]);
+
+  const hasGeneratedSitePlan = pageRows.length > 0;
+  const canReviewPages = hasGeneratedSitePlan;
+  const canBuildInThrive = isConnected && hasGeneratedSitePlan;
+  const isGenerating = currentSession?.status === "queued" || currentSession?.status === "running";
+  const hasCompletedBuild = currentSession?.status === "completed" && Boolean(currentSession?.executionResult);
+  const hasFatalBuildFailure = currentSession?.status === "failed";
+
+  const buildModeUsed: BuildModeUsed | null = useMemo(() => {
+    const thrive = currentSession?.executionResult?.thrive;
+    if (!thrive) return null;
+    if (thrive.buildModeUsed) return thrive.buildModeUsed;
+    if (thrive.currentMode === "thrive_native_staging_mode" && thrive.nativeValidation?.status === "passed") {
+      return "thrive_native";
+    }
+    if (thrive.enabled) return "thrive_fallback";
+    return "wordpress_fallback";
+  }, [currentSession]);
+
+  const canUseThriveNative = useMemo(() => {
+    if (!isThriveDetected) return false;
+    const guardEligible = currentSession?.executionResult?.thrive?.nativeGuard?.eligible;
+    if (typeof guardEligible === "boolean") return guardEligible;
+    return true;
+  }, [currentSession, isThriveDetected]);
+
+  const hasPartialBuildFailure = useMemo(() => {
+    if (!hasCompletedBuild) return false;
+    const execution = currentSession?.executionResult;
+    if (!execution) return false;
+    return !execution.success || execution.warnings.length > 0 || execution.errors.length > 0;
+  }, [currentSession, hasCompletedBuild]);
+
+  const storageStatusMessage =
+    storageSummary?.persistenceHealth === "unavailable"
+      ? "Persistent storage unavailable. SiteForge is disabled until database storage is restored."
+      : storageSummary?.persistenceHealth === "degraded"
+        ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
+        : "Persistent Postgres storage is healthy.";
+
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
   );
+
+  const unlockedStep: SimpleStepKey = useMemo(() => {
+    if (!isConnected) return "connect";
+    if (!hasBusinessInfo || !aiConfigured) return "business";
+    if (!hasGeneratedSitePlan) return "generate";
+    if (!hasCompletedBuild) return "review";
+    if (hasPartialBuildFailure) return "build";
+    return "done";
+  }, [aiConfigured, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, hasPartialBuildFailure, isConnected]);
+
+  function setUserError(rawMessage: string, context: "load" | "connect" | "generate" | "build" | "save") {
+    setTechnicalError(rawMessage);
+    setError(resolveFriendlyError(rawMessage, context));
+  }
+
+  function clearErrors() {
+    setError(null);
+    setTechnicalError(null);
+  }
+
+  function briefPayload() {
+    return {
+      businessName: briefForm.businessName.trim(),
+      businessType: briefForm.businessType.trim(),
+      businessDescription: briefForm.businessDescription.trim(),
+      targetAudience: briefForm.targetAudience.trim(),
+      websiteGoal: briefForm.websiteGoal,
+      mainOffer: briefForm.mainOffer.trim(),
+      brandTone: briefForm.brandTone,
+      marketLocation: briefForm.marketLocation.trim(),
+      competitors: briefForm.competitors.trim(),
+      differentiators: briefForm.differentiators.trim(),
+    };
+  }
+
+  function briefIsValid() {
+    const payload = briefPayload();
+    return Boolean(payload.businessName && payload.businessType && payload.businessDescription && payload.targetAudience && payload.mainOffer);
+  }
 
   function resetWorkspaceState() {
     activeProjectIntentRef.current = null;
@@ -342,7 +320,6 @@ export default function SiteForgeAppPage() {
     setSerpApiKey("");
     setAiModel("gpt-4.1-mini");
     setAiStatusMessage(null);
-    setRefinePrompt("");
     setConnectionLabel("Primary WordPress Site");
     setBaseUrl("");
     setUsername("");
@@ -350,6 +327,7 @@ export default function SiteForgeAppPage() {
     setHasThriveHint(false);
     setHomepageStrategy("use_existing");
     setConnectionResult(null);
+    setCurrentStep("connect");
   }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
@@ -366,6 +344,7 @@ export default function SiteForgeAppPage() {
     setProjectName(workspace.project.name);
     setPersistedProjectName(workspace.project.name);
     setProjectNameSaveState("idle");
+
     setBriefForm((prev) => {
       const incoming = workspace.project.websiteBrief;
       const hasLocalDraft =
@@ -374,9 +353,7 @@ export default function SiteForgeAppPage() {
         prev.businessDescription.trim() ||
         prev.targetAudience.trim() ||
         prev.mainOffer.trim();
-      if (!incoming && hasLocalDraft) {
-        return prev;
-      }
+      if (!incoming && hasLocalDraft) return prev;
       return {
         businessName: incoming?.businessName ?? "",
         businessType: incoming?.businessType ?? "",
@@ -390,13 +367,12 @@ export default function SiteForgeAppPage() {
         differentiators: incoming?.differentiators ?? "",
       };
     });
+
     setAiModel(workspace.project.aiModel ?? "gpt-4.1-mini");
     setAiApiKey("");
     setSerpApiKey("");
     setAiStatusMessage(
-      workspace.project.hasSavedAiSecret || workspace.project.hasSavedSerpApiSecret
-        ? "API keys saved"
-        : "No API keys configured"
+      workspace.project.hasSavedAiSecret || workspace.project.hasSavedSerpApiSecret ? "API keys saved" : "No API keys configured"
     );
     setHomepageStrategy(workspace.project.homepageStrategy);
 
@@ -426,13 +402,7 @@ export default function SiteForgeAppPage() {
   }
 
   async function persistProjectNameUpdate(): Promise<void> {
-    if (
-      !shouldPersistProjectName({
-        selectedProjectId: activeProjectId ?? "",
-        projectName,
-        persistedProjectName,
-      })
-    ) {
+    if (!shouldPersistProjectName({ selectedProjectId: activeProjectId ?? "", projectName, persistedProjectName })) {
       return;
     }
 
@@ -443,7 +413,7 @@ export default function SiteForgeAppPage() {
     try {
       if (!activeProjectId) {
         setProjectNameSaveState("error");
-        setError("No active project selected.");
+        setUserError("No active project selected.", "save");
         return;
       }
 
@@ -455,9 +425,7 @@ export default function SiteForgeAppPage() {
         }),
       });
       const workspace = normalizeWorkspace(payload);
-      if (!workspace) {
-        throw new Error("Project rename response was invalid.");
-      }
+      if (!workspace) throw new Error("Project rename response was invalid.");
 
       if (projectNameSaveSeqRef.current !== seq) return;
       await applyWorkspace(workspace);
@@ -465,28 +433,27 @@ export default function SiteForgeAppPage() {
     } catch (err: unknown) {
       if (projectNameSaveSeqRef.current !== seq) return;
       setProjectNameSaveState("error");
-      setError(err instanceof Error ? err.message : "Failed to save project name.");
+      const message = err instanceof Error ? err.message : "Failed to save project name.";
+      setUserError(message, "save");
     }
   }
 
   async function ensureCanonicalActiveProjectId(): Promise<string | null> {
-    if (hasValidActiveProject && activeProjectId) {
-      return activeProjectId;
-    }
+    if (hasValidActiveProject && activeProjectId) return activeProjectId;
 
     const candidateProjectId = selectedProjectId || activeProjectIntentRef.current;
     if (!candidateProjectId) {
-      setError("No active project selected.");
+      setUserError("No active project selected.", "load");
       return null;
     }
 
-    setError("Selected project is out of sync. Reloading project state.");
+    setUserError("Selected project is out of sync. Reloading project state.", "load");
     activeProjectIntentRef.current = candidateProjectId;
     const openResult = await openProject(candidateProjectId, "workspace");
     if (!openResult.ok) {
       activeProjectIntentRef.current = null;
       setSelectedProjectId("");
-      setError(openResult.message ?? "Active project is no longer available.");
+      setUserError(openResult.message ?? "Active project is no longer available.", "load");
       return null;
     }
 
@@ -502,10 +469,11 @@ export default function SiteForgeAppPage() {
     if (source === "load" && intentId && intentId !== projectId) {
       return { ok: false, reason: "superseded" };
     }
+
     const openSeq = openProjectSeqRef.current + 1;
     openProjectSeqRef.current = openSeq;
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
       setSelectedProjectId(projectId);
@@ -514,16 +482,14 @@ export default function SiteForgeAppPage() {
         body: JSON.stringify({ markOpened: true }),
       });
       const workspace = normalizeWorkspace(payload);
-      if (!workspace) {
-        throw new Error("Invalid SiteForge workspace payload.");
-      }
+      if (!workspace) throw new Error("Invalid SiteForge workspace payload.");
       if (openProjectSeqRef.current !== openSeq) return { ok: false, reason: "superseded" };
       await applyWorkspace(workspace);
       return { ok: true };
     } catch (err: unknown) {
       if (openProjectSeqRef.current !== openSeq) return { ok: false, reason: "superseded" };
       const message = err instanceof Error ? err.message : "Failed to load workspace.";
-      setError(message);
+      setUserError(message, "load");
       setSelectedProjectId("");
       setSessions([]);
       setRunLogs([]);
@@ -532,9 +498,7 @@ export default function SiteForgeAppPage() {
       setSavedConnection(null);
       return { ok: false, reason: "failed", message };
     } finally {
-      if (openProjectSeqRef.current === openSeq) {
-        setBusy(false);
-      }
+      if (openProjectSeqRef.current === openSeq) setBusy(false);
     }
   }
 
@@ -552,11 +516,7 @@ export default function SiteForgeAppPage() {
     }
 
     const intendedProjectId = activeProjectIntentRef.current;
-    if (
-      intendedProjectId &&
-      data.projects.some((project) => project.id === intendedProjectId) &&
-      selectedProjectId !== intendedProjectId
-    ) {
+    if (intendedProjectId && data.projects.some((project) => project.id === intendedProjectId) && selectedProjectId !== intendedProjectId) {
       setSelectedProjectId(intendedProjectId);
     }
 
@@ -564,6 +524,7 @@ export default function SiteForgeAppPage() {
       intendedProjectId && data.projects.some((project) => project.id === intendedProjectId)
         ? intendedProjectId
         : resolveInitialProjectId(data.projects, data.lastOpenedProjectId);
+
     if (!targetProjectId) {
       resetWorkspaceState();
       return;
@@ -590,19 +551,13 @@ export default function SiteForgeAppPage() {
     const res = await fetch("/api/siteforge/admin/summary", {
       headers: { "Content-Type": "application/json" },
     });
-    const payload = (await res.json().catch(() => null)) as
-      | { summary?: StorageSummary; error?: { message?: string } }
-      | null;
+    const payload = (await res.json().catch(() => null)) as { summary?: StorageSummary; error?: { message?: string } } | null;
     if (payload?.summary) {
       setStorageSummary(payload.summary);
-      if (!res.ok && payload.error?.message) {
-        setError(payload.error.message);
-      }
+      if (!res.ok && payload.error?.message) setUserError(payload.error.message, "load");
       return;
     }
-    if (!res.ok && payload?.error?.message) {
-      setError(payload.error.message);
-    }
+    if (!res.ok && payload?.error?.message) setUserError(payload.error.message, "load");
   }
 
   useEffect(() => {
@@ -611,7 +566,7 @@ export default function SiteForgeAppPage() {
         await loadStorageSummary();
         await loadProjects();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to load SiteForge projects.");
+        setUserError(err instanceof Error ? err.message : "Failed to load SiteForge projects.", "load");
       }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -624,14 +579,12 @@ export default function SiteForgeAppPage() {
 
     const timer = window.setInterval(async () => {
       try {
-        const data = await fetchJson<{ session?: unknown }>(
-          `/api/siteforge/sessions/${encodeURIComponent(currentSessionId)}`
-        );
+        const data = await fetchJson<{ session?: unknown }>(`/api/siteforge/sessions/${encodeURIComponent(currentSessionId)}`);
         const normalizedSession = normalizeSession(data?.session, activeProject?.id ?? selected.id);
         if (!normalizedSession) return;
         setSessions((prev) => [normalizedSession, ...prev.filter((entry) => entry.id !== normalizedSession.id)]);
       } catch {
-        // Polling is best-effort to keep workspace responsive.
+        // best-effort polling
       }
     }, 1700);
 
@@ -639,31 +592,45 @@ export default function SiteForgeAppPage() {
   }, [activeProject, currentSessionId, sessions]);
 
   useEffect(() => {
-    if (
-      !shouldPersistProjectName({
-        selectedProjectId: activeProjectId ?? "",
-        projectName,
-        persistedProjectName,
-      })
-    ) {
+    if (!shouldPersistProjectName({ selectedProjectId: activeProjectId ?? "", projectName, persistedProjectName })) {
       return;
     }
 
     setProjectNameSaveState("idle");
-    if (projectNameSaveTimerRef.current) {
-      clearTimeout(projectNameSaveTimerRef.current);
-    }
+    if (projectNameSaveTimerRef.current) clearTimeout(projectNameSaveTimerRef.current);
 
     projectNameSaveTimerRef.current = setTimeout(() => {
       void persistProjectNameUpdate();
     }, 500);
 
     return () => {
-      if (projectNameSaveTimerRef.current) {
-        clearTimeout(projectNameSaveTimerRef.current);
-      }
+      if (projectNameSaveTimerRef.current) clearTimeout(projectNameSaveTimerRef.current);
     };
   }, [activeProjectId, persistedProjectName, projectName]);
+
+  useEffect(() => {
+    if (hasFatalBuildFailure) {
+      setCurrentStep("build");
+      return;
+    }
+    if (hasCompletedBuild) {
+      setCurrentStep("done");
+      return;
+    }
+    if (hasGeneratedSitePlan) {
+      if (currentStep === "connect" || currentStep === "business" || currentStep === "generate") {
+        setCurrentStep("review");
+      }
+      return;
+    }
+    if (isConnected && hasBusinessInfo) {
+      if (currentStep === "connect" || currentStep === "business") setCurrentStep("generate");
+      return;
+    }
+    if (isConnected && currentStep === "connect") {
+      setCurrentStep("business");
+    }
+  }, [currentStep, hasBusinessInfo, hasCompletedBuild, hasFatalBuildFailure, hasGeneratedSitePlan, isConnected]);
 
   async function createProject() {
     const createName = normalizeNewProjectName(newProjectName);
@@ -675,22 +642,17 @@ export default function SiteForgeAppPage() {
 
     loadProjectsSeqRef.current += 1;
     setBusy(true);
-    setError(null);
+    clearErrors();
     setCreateStatus("creating");
     setCreateStatusMessage(null);
 
     try {
       const payload = await fetchJson<unknown>("/api/siteforge/projects", {
         method: "POST",
-        body: JSON.stringify({
-          name: createName,
-          description: "Persistent SiteForge workspace",
-        }),
+        body: JSON.stringify({ name: createName, description: "Persistent SiteForge workspace" }),
       });
       const normalized = normalizeProjectPayload(payload);
-      if (!normalized) {
-        throw new Error("Project create response was invalid.");
-      }
+      if (!normalized) throw new Error("Project create response was invalid.");
 
       setProjects((prev) => [normalized.project, ...prev.filter((entry) => entry.id !== normalized.project.id)]);
       activeProjectIntentRef.current = normalized.project.id;
@@ -703,9 +665,10 @@ export default function SiteForgeAppPage() {
       setCreateStatus("created");
       setCreateStatusMessage(`Project created: ${normalized.project.name}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Project creation failed.");
+      const message = err instanceof Error ? err.message : "Project creation failed.";
+      setUserError(message, "save");
       setCreateStatus("error");
-      setCreateStatusMessage(err instanceof Error ? err.message : "Project creation failed.");
+      setCreateStatusMessage(message);
     } finally {
       setBusy(false);
     }
@@ -716,7 +679,7 @@ export default function SiteForgeAppPage() {
     if (!targetProjectId) return;
 
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
@@ -733,20 +696,16 @@ export default function SiteForgeAppPage() {
           }),
         }
       );
+
       setConnectionResult(data.result);
       setSavedConnection(data.connection);
       setAppPassword("");
       activeProjectIntentRef.current = targetProjectId;
       await openProject(targetProjectId, "workspace");
+      setCurrentStep("business");
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        (err.message === "Project not found." || err.message === "Project not found for current user.")
-      ) {
-        setError("Selected project could not be loaded.");
-      } else {
-        setError(err instanceof Error ? err.message : "Connection validation failed.");
-      }
+      const message = err instanceof Error ? err.message : "Connection validation failed.";
+      setUserError(message, "connect");
     } finally {
       setBusy(false);
     }
@@ -757,7 +716,7 @@ export default function SiteForgeAppPage() {
     if (!targetProjectId) return;
 
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
       const data = await fetchJson<{ result: CapabilityCheck; connection: SiteForgeConnection }>(
@@ -779,56 +738,24 @@ export default function SiteForgeAppPage() {
       activeProjectIntentRef.current = targetProjectId;
       await openProject(targetProjectId, "workspace");
     } catch (err: unknown) {
-      if (
-        err instanceof Error &&
-        (err.message === "Project not found." || err.message === "Project not found for current user.")
-      ) {
-        setError("Selected project could not be loaded.");
-      } else {
-        setError(err instanceof Error ? err.message : "Revalidation failed.");
-      }
+      const message = err instanceof Error ? err.message : "Revalidation failed.";
+      setUserError(message, "connect");
     } finally {
       setBusy(false);
     }
-  }
-
-  function briefPayload() {
-    return {
-      businessName: briefForm.businessName.trim(),
-      businessType: briefForm.businessType.trim(),
-      businessDescription: briefForm.businessDescription.trim(),
-      targetAudience: briefForm.targetAudience.trim(),
-      websiteGoal: briefForm.websiteGoal,
-      mainOffer: briefForm.mainOffer.trim(),
-      brandTone: briefForm.brandTone,
-      marketLocation: briefForm.marketLocation.trim(),
-      competitors: briefForm.competitors.trim(),
-      differentiators: briefForm.differentiators.trim(),
-    };
-  }
-
-  function briefIsValid() {
-    const payload = briefPayload();
-    return Boolean(
-      payload.businessName &&
-        payload.businessType &&
-        payload.businessDescription &&
-        payload.targetAudience &&
-        payload.mainOffer
-    );
   }
 
   async function saveWebsiteBrief() {
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
     if (!briefIsValid()) {
-      setError("Please complete all required Website Brief fields before saving.");
+      setUserError("Please complete all required business fields.", "save");
       return;
     }
 
     setBusy(true);
     setBriefSaveState("saving");
-    setError(null);
+    clearErrors();
 
     try {
       const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}`, {
@@ -839,14 +766,14 @@ export default function SiteForgeAppPage() {
         }),
       });
       const workspace = normalizeWorkspace(payload);
-      if (!workspace) {
-        throw new Error("Website brief save response was invalid.");
-      }
+      if (!workspace) throw new Error("Website brief save response was invalid.");
       await applyWorkspace(workspace);
       setBriefSaveState("saved");
+      setCurrentStep("generate");
     } catch (err: unknown) {
       setBriefSaveState("error");
-      setError(err instanceof Error ? err.message : "Failed to save Website Brief.");
+      const message = err instanceof Error ? err.message : "Failed to save business info.";
+      setUserError(message, "save");
     } finally {
       setBusy(false);
     }
@@ -856,12 +783,12 @@ export default function SiteForgeAppPage() {
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
     if (!aiApiKey.trim() && !serpApiKey.trim() && mode === "save") {
-      setError("Provide at least one API key (OpenAI or SerpApi).");
+      setUserError("Provide at least one API key (OpenAI or SerpApi).", "save");
       return;
     }
 
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
       const data = await fetchJson<{ workspace: unknown; ai: { status: string } }>(
@@ -876,15 +803,14 @@ export default function SiteForgeAppPage() {
         }
       );
       const workspace = normalizeWorkspace(data.workspace);
-      if (!workspace) {
-        throw new Error("AI config response was invalid.");
-      }
+      if (!workspace) throw new Error("AI config response was invalid.");
       await applyWorkspace(workspace);
       setAiApiKey("");
       setSerpApiKey("");
       setAiStatusMessage(data.ai.status === "saved" ? "API keys saved" : "No API keys configured");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to save API configuration.");
+      const message = err instanceof Error ? err.message : "Failed to save AI configuration.";
+      setUserError(message, "save");
     } finally {
       setBusy(false);
     }
@@ -895,88 +821,45 @@ export default function SiteForgeAppPage() {
     if (!targetProjectId) return;
 
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
-      const data = await fetchJson<{ workspace: unknown }>(
-        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/ai`,
-        {
-          method: "DELETE",
-        }
-      );
+      const data = await fetchJson<{ workspace: unknown }>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/ai`, {
+        method: "DELETE",
+      });
       const workspace = normalizeWorkspace(data.workspace);
-      if (!workspace) {
-        throw new Error("AI config removal response was invalid.");
-      }
+      if (!workspace) throw new Error("AI config removal response was invalid.");
       await applyWorkspace(workspace);
       setAiApiKey("");
       setSerpApiKey("");
       setAiStatusMessage("No API keys configured");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to remove API keys.");
+      const message = err instanceof Error ? err.message : "Failed to remove API keys.";
+      setUserError(message, "save");
     } finally {
       setBusy(false);
     }
   }
 
-  async function generateSite() {
+  async function runSitePipeline(mode: "generate" | "build") {
     if (!briefIsValid()) {
-      setError("Please complete the Website Brief before generating.");
+      setUserError("Please complete your business info before generating.", "generate");
       return;
     }
+
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
 
     setBusy(true);
-    setError(null);
+    clearErrors();
 
     try {
-      const data = await fetchJson<{ session: BuildSession }>(
-        `/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/build`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            websiteBrief: briefPayload(),
-            connectionId: savedConnection?.connectionId,
-            homepageStrategy,
-            connection: {
-              label: connectionLabel,
-              baseUrl,
-              username,
-              appPassword: appPassword || undefined,
-              hasThriveHint,
-            },
-          }),
-        }
-      );
-
-      setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
-      setCurrentSessionId(data.session.id);
-      setAppPassword("");
-      activeProjectIntentRef.current = targetProjectId;
-      await openProject(targetProjectId, "workspace");
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to start SiteForge build.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function submitRefinement() {
-    if (!currentSessionId || !refinePrompt.trim()) return;
-    const targetProjectId = await ensureCanonicalActiveProjectId();
-    if (!targetProjectId) return;
-
-    setBusy(true);
-    setError(null);
-
-    try {
-      await fetchJson<{ ok: true }>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/refine`, {
+      const data = await fetchJson<{ session: BuildSession }>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/build`, {
         method: "POST",
         body: JSON.stringify({
-          sessionId: currentSessionId,
+          websiteBrief: briefPayload(),
           connectionId: savedConnection?.connectionId,
-          message: refinePrompt,
+          homepageStrategy: mode === "generate" ? "draft_only" : homepageStrategy,
           connection: {
             label: connectionLabel,
             baseUrl,
@@ -986,392 +869,37 @@ export default function SiteForgeAppPage() {
           },
         }),
       });
-      setRefinePrompt("");
+
+      setSessions((prev) => [data.session, ...prev.filter((entry) => entry.id !== data.session.id)]);
+      setCurrentSessionId(data.session.id);
       setAppPassword("");
+      activeProjectIntentRef.current = targetProjectId;
+      await openProject(targetProjectId, "workspace");
+      setCurrentStep(mode === "generate" ? "review" : "done");
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Refinement request failed.");
+      const message = err instanceof Error ? err.message : mode === "generate" ? "Failed to generate site." : "Build failed.";
+      setUserError(message, mode === "generate" ? "generate" : "build");
+      setCurrentStep(mode === "generate" ? "generate" : "build");
     } finally {
       setBusy(false);
     }
   }
 
-  const activity = currentSession?.runState.timeline ?? [];
-  const storageStatusMessage =
-    storageSummary?.persistenceHealth === "unavailable"
-      ? "Persistent storage unavailable. SiteForge is disabled until database storage is restored."
-      : storageSummary?.persistenceHealth === "degraded"
-        ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
-        : "Persistent Postgres storage is healthy.";
+  const currentTimeline = currentSession?.runState.timeline ?? [];
 
-  const primaryNavItems: Array<{ key: AgencyNavKey; label: string }> = [
-    { key: "settings", label: "Setup" },
-    { key: "mission_control", label: "Build" },
-    { key: "publish", label: "Publish" },
-  ];
-
-  const agencyTeam: AgentRosterEntry[] = [
-    {
-      id: "strategy_director",
-      displayName: "Strategy Director",
-      specialty: "Positioning and market strategy",
-      mission: "Approve strategic direction and market narrative.",
-      currentTask: "Align value proposition and roadmap.",
-      status: "Recommended",
-      confidence: marketIntelligence?.status === "used" ? "High" : "Medium",
-      ownedObjects: ["positioning", "sitemap", "go-to-market"],
-      outputs: ["Strategy decisions", "Sitemap recommendation"],
-    },
-    {
-      id: "brand_director",
-      displayName: "Brand Director",
-      specialty: "Identity and visual system",
-      mission: "Define brand rules and token consistency.",
-      currentTask: "Finalize brand personality and token set.",
-      status: "Drafting",
-      confidence: "Medium",
-      ownedObjects: ["brand identity", "design tokens"],
-      outputs: ["Brand rules", "Theme mapping"],
-    },
-    {
-      id: "theme_shell_architect",
-      displayName: "Theme Shell Architect",
-      specialty: "Thrive shell templates and layout systems",
-      mission: "Map pages to shell templates and layout systems.",
-      currentTask: "Recommend homepage shell template.",
-      status: "Awaiting approval",
-      confidence: thriveIntel ? "High" : "Low",
-      ownedObjects: ["shell templates", "layout systems"],
-      outputs: ["Shell recommendation"],
-    },
-    {
-      id: "content_architect",
-      displayName: "Content Architect",
-      specialty: "Section architecture and narrative flow",
-      mission: "Structure page section stacks for conversion.",
-      currentTask: "Finalize homepage section stack.",
-      status: "Recommended",
-      confidence: "High",
-      ownedObjects: ["section stack", "content hierarchy"],
-      outputs: ["Page section briefs"],
-    },
-    {
-      id: "copy_chief",
-      displayName: "Copy Chief",
-      specialty: "Messaging and CTA language",
-      mission: "Craft conversion-oriented copy variants.",
-      currentTask: "Refine hero and final CTA variants.",
-      status: "Drafting",
-      confidence: "Medium",
-      ownedObjects: ["headline library", "CTA language"],
-      outputs: ["Copy variants", "Objection handling"],
-    },
-    {
-      id: "thrive_asset_librarian",
-      displayName: "Thrive Asset Librarian",
-      specialty: "Reusable Thrive assets and matching",
-      mission: "Recommend reusable blocks and symbols.",
-      currentTask: "Audit symbol inventory and confidence matches.",
-      status: thriveIntel ? "Researching" : "Blocked",
-      confidence: thriveIntel ? "High" : "Low",
-      ownedObjects: ["reusable blocks", "section assets", "symbols"],
-      outputs: ["Asset recommendations", "Deprecation notes"],
-      blockers: thriveIntel ? [] : ["Thrive inventory not available"],
-    },
-    {
-      id: "builder_operations",
-      displayName: "Builder Operations Agent",
-      specialty: "Build sequencing and operational safety",
-      mission: "Coordinate ready-for-build handoff safely.",
-      currentTask: "Track section readiness and build queue.",
-      status: currentSession?.status === "running" ? "Building" : "Not started",
-      confidence: currentSession?.status === "completed" ? "Verified" : "Medium",
-      ownedObjects: ["build queue", "readiness checklist"],
-      outputs: ["Build package", "run summary"],
-    },
-    {
-      id: "cro_analyst",
-      displayName: "CRO Analyst",
-      specialty: "Conversion opportunities and experiments",
-      mission: "Propose high-impact test hypotheses.",
-      currentTask: "Prioritize CTA and trust-strip experiments.",
-      status: "Researching",
-      confidence: "Medium",
-      ownedObjects: ["experiments backlog", "evidence notes"],
-      outputs: ["Experiment briefs", "expected lift estimates"],
-    },
-    {
-      id: "qa_publish",
-      displayName: "QA / Publish Agent",
-      specialty: "Readiness review and release quality",
-      mission: "Verify publish checklist and approve release.",
-      currentTask: "Monitor publish blockers and unresolved approvals.",
-      status: "Awaiting approval",
-      confidence: "High",
-      ownedObjects: ["publish checklist", "audit log"],
-      outputs: ["Readiness score", "publish recommendation"],
-    },
-  ];
-
-  const fallbackTimelineAt = snapshot?.lastSyncedAt ?? currentSession?.createdAt ?? "1970-01-01T00:00:00.000Z";
-
-  const approvalQueue = [
-    {
-      itemName: "Homepage hero direction",
-      ownerAgent: "Strategy Director",
-      level: "Directional approval",
-      confidence: "High" as ConfidenceLevel,
-      affectedPages: ["Home"],
-      changeSummary: "Refined primary promise and audience targeting.",
-    },
-    {
-      itemName: "Shell recommendation",
-      ownerAgent: "Theme Shell Architect",
-      level: "Structural approval",
-      confidence: thriveIntel ? ("High" as ConfidenceLevel) : ("Low" as ConfidenceLevel),
-      affectedPages: ["Home", "Contact"],
-      changeSummary: "Map homepage to canonical shell template and content pages to standard shell.",
-    },
-    {
-      itemName: "CTA stack",
-      ownerAgent: "Copy Chief",
-      level: "Content approval",
-      confidence: "Medium" as ConfidenceLevel,
-      affectedPages: ["Home"],
-      changeSummary: "Primary CTA and secondary reassurance CTA aligned to funnel goal.",
-    },
-    {
-      itemName: "Ready for build package",
-      ownerAgent: "Builder Operations Agent",
-      level: "Build approval",
-      confidence: currentSession?.status === "completed" ? ("Verified" as ConfidenceLevel) : ("Medium" as ConfidenceLevel),
-      affectedPages: currentSession?.buildSpec?.pages.map((page) => page.title) ?? ["Home"],
-      changeSummary: "Section stack locked and quality checks prepared.",
-    },
-  ];
-
-  const workstreamBoard = [
-    {
-      stream: "Positioning",
-      owner: "Strategy Director",
-      progress: marketIntelligence?.status === "used" ? 82 : 56,
-      nextMilestone: "Approve strategic narrative",
-      blocker: marketIntelligence?.status === "used" ? null : "Market intelligence not configured",
-    },
-    {
-      stream: "Site Shell",
-      owner: "Theme Shell Architect",
-      progress: thriveIntel ? 76 : 34,
-      nextMilestone: "Approve shell template map",
-      blocker: thriveIntel ? null : "Thrive inventory unavailable",
-    },
-    {
-      stream: "Homepage",
-      owner: "Content Architect",
-      progress: currentSession?.buildSpec ? 78 : 24,
-      nextMilestone: "Approve section stack",
-      blocker: null,
-    },
-    {
-      stream: "Lead Funnel",
-      owner: "Builder Operations Agent",
-      progress: currentSession?.executionResult ? 61 : 20,
-      nextMilestone: "Connect lead magnet path",
-      blocker: "Awaiting structural approval",
-    },
-    {
-      stream: "Blog Engine",
-      owner: "Brand Director",
-      progress: 28,
-      nextMilestone: "Approve editorial taxonomy",
-      blocker: null,
-    },
-    {
-      stream: "Conversion System",
-      owner: "CRO Analyst",
-      progress: 44,
-      nextMilestone: "Launch first experiment set",
-      blocker: "Evidence baseline pending",
-    },
-  ];
-
-  const latestDeliverables = [
-    {
-      title: "Homepage strategy blueprint",
-      owner: "Strategy Director",
-      status: "Awaiting approval" as AgencyStatus,
-      at: currentSession?.createdAt ?? fallbackTimelineAt,
-    },
-    {
-      title: "Section stack recommendation",
-      owner: "Content Architect",
-      status: "Recommended" as AgencyStatus,
-      at: currentSession?.createdAt ?? fallbackTimelineAt,
-    },
-    {
-      title: "Thrive reusable asset shortlist",
-      owner: "Thrive Asset Librarian",
-      status: thriveIntel ? ("Recommended" as AgencyStatus) : ("Blocked" as AgencyStatus),
-      at: snapshot?.lastSyncedAt ?? fallbackTimelineAt,
-    },
-  ];
-
-  const pageRows =
-    currentSession?.buildSpec?.pages?.map((page) => {
-      const resolutionCount = thriveSectionResolutions.filter((entry) => entry.pageSlug === page.slug).length;
-      const approved = approvalQueue.filter((item) => item.affectedPages.includes(page.title)).length > 0;
-      const pageRole = page.slug === "home" || page.slug === "" ? "homepage" : "generic";
-      return {
-        slug: page.slug,
-        pageName: page.title,
-        pageType: pageRole === "homepage" ? "Landing page" : "Standard page",
-        goal: pageRole === "homepage" ? "Primary conversion" : "Support intent",
-        shell: "Layout System candidate pending",
-        contentStatus: page.sections.length ? "Recommended" : "Not started",
-        buildStatus: currentSession?.status === "completed" ? "Built" : "Awaiting approval",
-        approvalStatus: approved ? "Awaiting approval" : "Not started",
-        ownerAgent: pageRole === "homepage" ? "Content Architect" : "Theme Shell Architect",
-        funnel: pageRole === "homepage" ? "Primary funnel" : "Support flow",
-        resolutionCount,
-      };
-    }) ?? [];
-
-  const selectedPageRow = pageRows.find((page) => page.slug === pageStudioSlug) ?? pageRows[0] ?? null;
-  const selectedBuildPage =
-    currentSession?.buildSpec?.pages.find((page) => page.slug === (selectedPageRow?.slug ?? "")) ?? null;
-  const symbolInventory = thriveIntel?.symbolInventory ?? [];
-  const templateCount = thriveIntel?.primitiveCounts.thriveTemplate ?? 0;
-  const layoutCount = thriveIntel?.primitiveCounts.thriveLayout ?? 0;
-  const sectionCount = thriveIntel?.primitiveCounts.thriveSection ?? 0;
-  const symbolCount = thriveIntel?.symbolSummary.total ?? 0;
-  const hasMeaningfulAssetData = symbolCount + templateCount + layoutCount + sectionCount > 0;
-  const projectSelected = Boolean(selectedProjectId && activeProject);
-  const briefCompleted = briefIsValid();
-  const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
-  const connectionValidated = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
-  const hasPages = pageRows.length > 0;
-  const canApproveSelectedPage = hasPages && selectedPageRow !== null;
-  const canStartBuild = Boolean(selectedProjectId && !busy && briefCompleted);
-  const showAdvanced = activeNav === "strategy";
-  const hasPublishableResult = currentSession?.status === "completed";
-  const assetScanCompleted = hasMeaningfulAssetData;
-  const setupCoreComplete = projectSelected && briefCompleted && aiConfigured && connectionValidated;
-  const setupAllComplete = setupCoreComplete && assetScanCompleted;
-  const connectionNeedsAttention = Boolean(
-    savedConnection && savedConnection.lastValidationStatus && savedConnection.lastValidationStatus !== "valid"
-  );
-  const assetScanNeedsAttention = Boolean(connectionValidated && !hasMeaningfulAssetData);
-
-  const setupSteps: Array<{
-    id: string;
-    label: string;
-    state: "complete" | "incomplete" | "attention";
-    actionLabel: string;
-    action: () => void;
-  }> = [
-    {
-      id: "project",
-      label: "Project selected",
-      state: projectSelected ? "complete" : "incomplete",
-      actionLabel: "Open Setup",
-      action: () => setActiveNav("settings"),
-    },
-    {
-      id: "brief",
-      label: "Brief completed",
-      state: briefCompleted ? "complete" : "incomplete",
-      actionLabel: "Complete Brief",
-      action: () => setActiveNav("settings"),
-    },
-    {
-      id: "ai",
-      label: "AI configured",
-      state: aiConfigured ? "complete" : "incomplete",
-      actionLabel: "Configure API Keys",
-      action: () => setActiveNav("settings"),
-    },
-    {
-      id: "connection",
-      label: "Connection validated",
-      state: connectionValidated ? "complete" : connectionNeedsAttention ? "attention" : "incomplete",
-      actionLabel: "Validate Connection",
-      action: () => setActiveNav("settings"),
-    },
-    {
-      id: "assets",
-      label: "Asset scan completed",
-      state: assetScanCompleted ? "complete" : assetScanNeedsAttention ? "attention" : "incomplete",
-      actionLabel: connectionValidated ? "Scan Thrive Assets" : "Validate Connection",
-      action: () => {
-        if (connectionValidated) {
-          void loadProjects();
-          return;
-        }
-        setActiveNav("settings");
-      },
-    },
-  ];
-
-  const primaryThriveAction: { label: string; action: () => void } = !connectionValidated
-    ? { label: "Validate Connection", action: () => setActiveNav("settings") }
-    : !hasMeaningfulAssetData
-      ? { label: "Scan Thrive Assets", action: () => void loadProjects() }
-      : { label: "View Reusable Assets", action: () => setActiveNav("global_assets") };
-
-  const friendlyWarnings: string[] = [];
-  if (connectionValidated && !savedConnection?.thriveDetected) {
-    friendlyWarnings.push("Your site is connected, but Thrive could not be detected yet.");
-  }
-  if (connectionValidated && !hasMeaningfulAssetData) {
-    friendlyWarnings.push("We connected successfully, but no reusable Thrive assets were found yet.");
-  }
-  if (connectionValidated && !thriveIntel?.activeSkin?.name) {
-    friendlyWarnings.push("Your site is connected, but the active skin could not be identified.");
-  }
-  if (thriveExecutionMode === "wp_safe_mode") {
-    friendlyWarnings.push("SiteForge is currently in safe mode, so advanced Thrive-native composition is staged only.");
-  }
-  if (!thriveNativeGuard?.eligible) {
-    friendlyWarnings.push("Native composition remains guarded until eligibility checks pass.");
-  }
-
-  const ctaBlockCount = symbolInventory.filter((symbol) =>
-    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("cta") || keyword.toLowerCase().includes("offer"))
-  ).length;
-  const faqBlockCount = symbolInventory.filter((symbol) =>
-    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("faq") || keyword.toLowerCase().includes("question"))
-  ).length;
-  const testimonialCount = symbolInventory.filter((symbol) =>
-    (symbol.keywords ?? []).some((keyword) => keyword.toLowerCase().includes("testimonial") || keyword.toLowerCase().includes("review"))
-  ).length;
-
-  const assetPreviewGroups = [
-    { name: "Headers", count: thriveIntel?.symbolSummary.headers ?? 0, type: "Header" },
-    { name: "Footers", count: thriveIntel?.symbolSummary.footers ?? 0, type: "Footer" },
-    { name: "Reusable Blocks", count: symbolCount, type: "Reusable Block" },
-    { name: "Templates", count: templateCount, type: "Template" },
-    { name: "Layout Systems", count: layoutCount, type: "Layout System" },
-    { name: "CTA Blocks", count: ctaBlockCount, type: "CTA Block" },
-    { name: "FAQs", count: faqBlockCount, type: "FAQ" },
-    { name: "Testimonials", count: testimonialCount, type: "Testimonial" },
-  ];
-
-  const statusClass = (status: AgencyStatus | string) => {
-    if (status === "Blocked" || status === "Needs revision") return "border-rose-300/50 bg-rose-500/10 text-rose-100";
-    if (status === "Approved" || status === "Built") return "border-emerald-300/50 bg-emerald-500/10 text-emerald-100";
-    if (status === "Awaiting approval") return "border-amber-300/50 bg-amber-500/10 text-amber-100";
-    if (status === "Building" || status === "Researching" || status === "Drafting") return "border-cyan-300/50 bg-cyan-500/10 text-cyan-100";
-    return "border-white/20 bg-white/10 text-slate-200";
+  const stepUnlocked = (key: SimpleStepKey): boolean => {
+    if (key === "connect") return true;
+    if (key === "business") return isConnected;
+    if (key === "generate") return isConnected && hasBusinessInfo && aiConfigured;
+    if (key === "review") return canReviewPages;
+    if (key === "build") return canBuildInThrive;
+    return hasCompletedBuild;
   };
 
-  const inferSectionType = (heading: string): "hero" | "proof" | "benefits" | "cta" | "faq" | "testimonials" | "generic" => {
-    const normalized = heading.toLowerCase();
-    if (normalized.includes("hero")) return "hero";
-    if (normalized.includes("proof") || normalized.includes("trust")) return "proof";
-    if (normalized.includes("benefit") || normalized.includes("feature")) return "benefits";
-    if (normalized.includes("faq") || normalized.includes("question")) return "faq";
-    if (normalized.includes("testimonial") || normalized.includes("review")) return "testimonials";
-    if (normalized.includes("cta") || normalized.includes("offer") || normalized.includes("action")) return "cta";
-    return "generic";
+  const stepCardTone = (key: SimpleStepKey): string => {
+    if (currentStep === key) return "border-cyan-300/60 bg-cyan-500/15 text-cyan-100";
+    if (stepUnlocked(key)) return "border-emerald-300/35 bg-emerald-500/10 text-emerald-100";
+    return "border-white/20 bg-white/5 text-slate-300";
   };
 
   return (
@@ -1379,52 +907,33 @@ export default function SiteForgeAppPage() {
       <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
       <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-30" />
 
-      <main className="relative mx-auto max-w-[1600px] px-6 py-8">
+      <main className="relative mx-auto max-w-[1280px] px-6 py-8">
         <section className={`${brainTheme.glassCard} p-6`}>
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
               <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge</div>
-              <h1 className="mt-2 text-3xl font-semibold text-white">Setup, Build, Publish</h1>
-              <p className="mt-2 max-w-4xl text-sm text-slate-300">
-                Complete setup once, review what SiteForge will build, then publish your draft with one clear next step each time.
+              <h1 className="mt-2 text-3xl font-semibold text-white">Simple Thrive Website Builder</h1>
+              <p className="mt-2 max-w-3xl text-sm text-slate-300">
+                Connect your site, share your business details, generate pages, review them, then build in Thrive.
               </p>
             </div>
-            <nav className="flex flex-wrap items-center gap-2">
-              {primaryNavItems.map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  className={`rounded-xl px-4 py-2 text-sm transition ${
-                    activeNav === item.key
-                      ? "border border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-                      : "border border-transparent bg-white/5 text-slate-300 hover:border-white/20 hover:bg-white/10"
-                  }`}
-                  onClick={() => setActiveNav(item.key)}
-                >
-                  {item.label}
-                </button>
-              ))}
-              <button
-                type="button"
-                aria-label="Open settings"
-                className={`rounded-xl border px-3 py-2 text-sm transition ${
-                  activeNav === "strategy"
-                    ? "border-cyan-300/50 bg-cyan-500/15 text-cyan-100"
-                    : "border-white/20 bg-white/5 text-slate-300 hover:border-white/30 hover:bg-white/10"
-                }`}
-                onClick={() => setActiveNav("strategy")}
-              >
-                ⚙
-              </button>
-            </nav>
+            <button
+              type="button"
+              className={brainTheme.secondaryButton}
+              onClick={() => setShowAdvanced((prev) => !prev)}
+            >
+              {showAdvanced ? "Hide Advanced" : "Advanced"}
+            </button>
           </div>
         </section>
 
         {error ? (
-          <div className="mt-4 rounded-xl border border-rose-300/40 bg-rose-500/10 px-4 py-3 text-sm text-rose-100">{error}</div>
+          <section className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
+            {error}
+          </section>
         ) : null}
 
-        {storageSummary && (storageSummary.persistenceHealth !== "healthy" || storageSummary.fallbackActive) && activeNav !== "thrive_intelligence" ? (
+        {storageSummary && (storageSummary.persistenceHealth !== "healthy" || storageSummary.fallbackActive) ? (
           <section
             className={`mt-4 rounded-xl px-4 py-3 text-sm ${
               storageSummary.persistenceHealth === "healthy"
@@ -1437,1161 +946,430 @@ export default function SiteForgeAppPage() {
               Persistence health: {storageSummary.persistenceHealth} | Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}
             </div>
             <div className="mt-1">{storageStatusMessage}</div>
-            {storageSummary.reason ? <div className="mt-1 text-xs opacity-90">Reason: {storageSummary.reason}</div> : null}
           </section>
         ) : null}
 
-        <section className="mt-4 grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
-          <aside className={`${brainTheme.glassCard} h-fit p-3`}>
-            <div className="text-xs uppercase tracking-[0.15em] text-slate-400">SiteForge</div>
-            <div className="mt-1 text-sm text-slate-200">{activeProject?.name ?? "No project selected"}</div>
-            <div className="mt-1 text-[11px] uppercase tracking-[0.12em] text-cyan-300/80">Project context</div>
+        <section className="mt-4 grid gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          <aside className={`${brainTheme.glassCard} h-fit p-4`}>
+            <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Progress</div>
+            <div className="mt-3 space-y-2">
+              {simpleSteps.map((step, index) => (
+                <button
+                  key={step.key}
+                  type="button"
+                  onClick={() => {
+                    if (stepUnlocked(step.key)) setCurrentStep(step.key);
+                  }}
+                  disabled={!stepUnlocked(step.key)}
+                  className={`w-full rounded-xl border px-3 py-2 text-left text-xs transition ${stepCardTone(step.key)} ${
+                    !stepUnlocked(step.key) ? "opacity-70" : ""
+                  }`}
+                >
+                  <div className="font-semibold">{index + 1}. {step.label}</div>
+                </button>
+              ))}
+            </div>
             <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-              <div>Section: {activeNav === "settings" ? "Setup" : activeNav === "mission_control" ? "Build" : activeNav === "publish" ? "Publish" : "Settings"}</div>
-              <div className="mt-1">Connection: {connectionValidated ? "validated" : "not validated"}</div>
-              <div className="mt-1">Assets scanned: {assetScanCompleted ? "yes" : "no"}</div>
+              <div>Connected: {isConnected ? "yes" : "no"}</div>
+              <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
+              <div className="mt-1">Can use Thrive native: {canUseThriveNative ? "yes" : "no"}</div>
+              <div className="mt-1">Generated pages: {pageRows.length}</div>
               <div className="mt-1">Latest run: {currentSession?.status ?? "not started"}</div>
             </div>
           </aside>
 
           <div className="space-y-4">
-            {activeNav === "mission_control" ? (
+            {currentStep === "connect" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
-                <div className="sticky top-2 z-10 rounded-xl border border-white/10 bg-slate-950/85 p-2 backdrop-blur">
-                  <div className="grid gap-2 md:grid-cols-3">
-                    {([
-                      ["plan", "Plan"],
-                      ["pages", "Pages"],
-                      ["assets", "Assets"],
-                    ] as const).map(([tabKey, label]) => (
-                      <button
-                        key={tabKey}
-                        type="button"
-                        onClick={() => setActiveBuildTab(tabKey)}
-                        className={`rounded-lg border px-3 py-2 text-left text-xs transition ${
-                          activeBuildTab === tabKey
-                            ? "border-cyan-300/60 bg-cyan-500/20 text-cyan-100"
-                            : "border-white/15 bg-white/5 text-slate-300 hover:border-white/30"
-                        }`}
-                      >
-                        <div className="font-medium">{label}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                <h2 className="text-xl font-semibold text-slate-100">Connect Site</h2>
+                <p className="mt-2 text-sm text-slate-300">Connect your WordPress site so SiteForge can build pages for you.</p>
 
-                <div className="mt-4">
-                  <h2 className="text-xl font-semibold text-slate-100">Build</h2>
-                  <p className="mt-1 text-sm text-slate-300">Review your plan, pages, and reusable assets before moving to publish.</p>
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    <button type="button" className={brainTheme.glowButton} onClick={generateSite} disabled={!canStartBuild}>
-                      Build Site Draft
-                    </button>
-                    {!canStartBuild ? (
-                      <span className="text-xs text-slate-400">Complete Setup and save your brief before starting a build.</span>
-                    ) : null}
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Project</label>
+                    <select
+                      value={selectedProjectId}
+                      onChange={(event) => {
+                        activeProjectIntentRef.current = event.target.value || null;
+                        void openProject(event.target.value, "user");
+                      }}
+                      disabled={!projects.length || busy}
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    >
+                      {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
+                      {!projects.length ? <option value="">No project selected</option> : null}
+                      {projects.map((project) => (
+                        <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
+                      ))}
+                    </select>
                   </div>
-                </div>
 
-                {false ? (
-                  <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <div>
-                        <label htmlFor="siteforge-step1-business-name" className="text-xs text-slate-300">Website name</label>
-                        <input
-                          id="siteforge-step1-business-name"
-                          value={briefForm.businessName}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step1-business-type" className="text-xs text-slate-300">Business type</label>
-                        <input
-                          id="siteforge-step1-business-type"
-                          value={briefForm.businessType}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step1-audience" className="text-xs text-slate-300">Audience</label>
-                        <input
-                          id="siteforge-step1-audience"
-                          value={briefForm.targetAudience}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step1-goal" className="text-xs text-slate-300">Goal</label>
-                        <select
-                          id="siteforge-step1-goal"
-                          value={briefForm.websiteGoal}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"] }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        >
-                          {websiteGoalOptions.map((goal) => (
-                            <option key={goal} value={goal}>{goal}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step1-offer" className="text-xs text-slate-300">Offer</label>
-                        <input
-                          id="siteforge-step1-offer"
-                          value={briefForm.mainOffer}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step1-tone" className="text-xs text-slate-300">Tone</label>
-                        <select
-                          id="siteforge-step1-tone"
-                          value={briefForm.brandTone}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        >
-                          {brandToneOptions.map((tone) => (
-                            <option key={tone} value={tone}>{tone}</option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="md:col-span-2">
-                        <label htmlFor="siteforge-step1-notes" className="text-xs text-slate-300">Optional notes</label>
-                        <textarea
-                          id="siteforge-step1-notes"
-                          value={briefForm.differentiators}
-                          onChange={(event) => setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))}
-                          className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ) : null}
-                {false ? (
-                  <div className="space-y-4">
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                      <div>
-                        <label htmlFor="siteforge-step2-url" className="text-xs text-slate-300">WordPress URL</label>
-                        <input
-                          id="siteforge-step2-url"
-                          value={baseUrl}
-                          onChange={(event) => setBaseUrl(event.target.value)}
-                          placeholder="https://example.com"
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step2-username" className="text-xs text-slate-300">Username</label>
-                        <input
-                          id="siteforge-step2-username"
-                          value={username}
-                          onChange={(event) => setUsername(event.target.value)}
-                          placeholder="WordPress username"
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label htmlFor="siteforge-step2-password" className="text-xs text-slate-300">App password</label>
-                        <input
-                          id="siteforge-step2-password"
-                          type="password"
-                          value={appPassword}
-                          onChange={(event) => setAppPassword(event.target.value)}
-                          placeholder={savedConnection?.hasSavedSecret ? "Update app password (optional)" : "WordPress app password"}
-                          className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                      <div className="text-sm font-medium text-slate-100">AI Access</div>
-                      <div className="mt-2 grid gap-3 md:grid-cols-3">
-                        <div>
-                          <label htmlFor="siteforge-step2-model" className="text-xs text-slate-300">Model</label>
-                          <select
-                            id="siteforge-step2-model"
-                            value={aiModel}
-                            onChange={(event) => setAiModel(event.target.value)}
-                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                          >
-                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                            <option value="gpt-4.1">gpt-4.1</option>
-                            <option value="gpt-5-mini">gpt-5-mini</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-step2-openai" className="text-xs text-slate-300">OpenAI key</label>
-                          <input
-                            id="siteforge-step2-openai"
-                            type="password"
-                            value={aiApiKey}
-                            onChange={(event) => setAiApiKey(event.target.value)}
-                            placeholder={activeProject?.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."}
-                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                          />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-step2-serpapi" className="text-xs text-slate-300">SerpApi key</label>
-                          <input
-                            id="siteforge-step2-serpapi"
-                            type="password"
-                            value={serpApiKey}
-                            onChange={(event) => setSerpApiKey(event.target.value)}
-                            placeholder={activeProject?.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."}
-                            className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm"
-                          />
-                        </div>
-                      </div>
-                    </div>
-                    <div className="text-xs text-slate-300">
-                      Connection result: {connectionResult?.connected ? "Connected" : savedConnection?.lastValidationStatus ?? "Not checked"} ·
-                      Thrive detected: {connectionResult?.thriveDetected || savedConnection?.thriveDetected ? " Yes" : " No"}
-                    </div>
-                  </div>
-                ) : null}
-                {activeBuildTab === "plan" ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div>Business: {briefForm.businessName || "Not set"} · Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
-                      <div className="mt-1">
-                        Pages: {currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Build draft to generate a plan."}
-                      </div>
-                      <div className="mt-1">
-                        Messaging: {briefForm.businessDescription || "Add business details to sharpen messaging."}
-                      </div>
-                      <div className="mt-1">
-                        Reusable items found: {hasMeaningfulAssetData ? "Yes" : "Not yet"}
-                      </div>
-                    </div>
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveBuildTab("pages")}>
-                      Looks Good
-                    </button>
-                  </div>
-                ) : null}
-                {activeBuildTab === "pages" ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div>Pages: {pageRows.length || 0}</div>
-                      <div className="mt-1">Selected page: {selectedPageRow?.pageName ?? "none"}</div>
-                      <div className="mt-1">Purpose: {selectedPageRow?.goal ?? "Support intent"}</div>
-                      <div className="mt-1">Sections: {selectedBuildPage?.sections.length ?? 0}</div>
-                      <div className="mt-1">Recommended reusable items: {selectedPageRow?.resolutionCount ?? 0}</div>
-                    </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">New Project Name</label>
+                    <input
+                      value={newProjectName}
+                      onChange={(event) => setNewProjectName(event.target.value)}
+                      placeholder="e.g. iPetzo"
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
                     <button
                       type="button"
-                      className={brainTheme.glowButton}
-                      onClick={() => {
-                        setActiveNav("publish");
-                      }}
-                      disabled={!canApproveSelectedPage}
+                      className={`${brainTheme.secondaryButton} mt-2`}
+                      onClick={createProject}
+                      disabled={busy || !normalizeNewProjectName(newProjectName)}
                     >
-                      Approve Page
-                    </button>
-                    {!canApproveSelectedPage ? (
-                      <div className="text-xs text-slate-400">
-                        Approve Page is unavailable until a generated page is selected.
-                      </div>
-                    ) : null}
-                  </div>
-                ) : null}
-                {activeBuildTab === "assets" ? (
-                  <div className="space-y-4">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
-                      <div>Headers: {thriveIntel?.symbolSummary.headers ?? 0}</div>
-                      <div className="mt-1">Footers: {thriveIntel?.symbolSummary.footers ?? 0}</div>
-                      <div className="mt-1">CTA blocks: {ctaBlockCount}</div>
-                      <div className="mt-1">Templates: {templateCount}</div>
-                      <div className="mt-1">Layouts: {layoutCount}</div>
-                    </div>
-                    {!hasMeaningfulAssetData ? (
-                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-sm text-slate-300">
-                        No reusable assets found yet.
-                      </div>
-                    ) : null}
-                    {!hasMeaningfulAssetData ? (
-                      <button type="button" className={brainTheme.glowButton} onClick={() => void loadProjects()}>
-                        Rescan Assets
-                      </button>
-                    ) : null}
-                  </div>
-                ) : null}
-              </section>
-            ) : null}
-
-            {activeNav === "strategy" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Advanced</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Optional workspaces and deeper controls are available here after the guided builder flow starts.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("pages")}>
-                      Continue to Pages
-                    </button>
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
-                      Back to Builder
+                      {createStatus === "creating" ? "Creating..." : "Create Project"}
                     </button>
                   </div>
-                </div>
 
-                <div className="grid gap-4 lg:grid-cols-2">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Strategy Snapshot</h3>
-                    <div className="mt-2 grid gap-2 text-sm text-slate-300">
-                      <div>Business: {briefForm.businessName || "Not set"}</div>
-                      <div>Goal: {briefForm.websiteGoal.replaceAll("_", " ")}</div>
-                      <div>Audience: {briefForm.targetAudience || "Not set"}</div>
-                      <div>Main offer: {briefForm.mainOffer || "Not set"}</div>
-                      <div>Positioning: {briefForm.businessDescription || "Not set"}</div>
-                    </div>
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Rename Current Project</label>
+                    <input
+                      id="siteforge-project-name"
+                      value={projectName}
+                      onChange={(event) => setProjectName(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
+                    <div className="mt-1 text-xs text-slate-400">Rename state: {projectNameSaveState}</div>
                   </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Page Map</h3>
-                    <div className="mt-2 text-sm text-slate-300">
-                      {currentSession?.buildSpec?.pages?.map((page) => page.title).join(" · ") || "Build a draft to generate the initial page plan."}
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Funnel Flow</h3>
-                    <div className="mt-2 text-xs text-slate-300">
-                      Homepage -&gt; Lead Magnet -&gt; Thank You -&gt; Core Offer -&gt; Follow-up Content
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Messaging Notes</h3>
-                    <div className="mt-2 text-xs text-slate-300">
-                      Tone: {briefForm.brandTone} · Differentiators: {briefForm.differentiators || "Not set"}
-                    </div>
-                    <div className="mt-2 text-xs text-slate-400">
-                      Market intelligence: {marketIntelligence?.status === "used" ? "used" : "brief-only"}
-                    </div>
-                  </div>
-                </div>
 
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Workflow Readiness</h3>
-                  <div className="mt-2 grid gap-2 md:grid-cols-2 text-xs text-slate-300">
-                    <div>Setup complete: {setupCoreComplete ? "yes" : "no"}</div>
-                    <div>Plan approved: {approvalQueue.length ? "in review" : "pending"}</div>
-                    <div>Pages reviewed: {pageRows.length ? "in progress" : "not started"}</div>
-                    <div>Ready to build: {setupAllComplete ? "yes" : "not yet"}</div>
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Connection Label</label>
+                    <input
+                      value={connectionLabel}
+                      onChange={(event) => setConnectionLabel(event.target.value)}
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
                   </div>
-                </div>
-              </section>
-            ) : null}
 
-            {activeNav === "brand" ? (
-              <section className="grid gap-4 xl:grid-cols-2">
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Brand Identity</h2>
-                  <div className="mt-2 text-sm text-slate-300">Tone: {briefForm.brandTone} · Business: {briefForm.businessName || "Not set"}</div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Design Tokens</h2>
-                  <div className="mt-2 text-sm text-slate-300">Token system is inherited from SiteForge visual design defaults and can be overridden per page.</div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Thrive Theme Mapping</h2>
-                  <div className="mt-2 text-sm text-slate-300">Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"} · Layout candidate: {selectedPageRow?.shell ?? "Pending"}</div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Brand Rules</h2>
-                  <div className="mt-2 text-sm text-slate-300">Preserve tone consistency, CTA hierarchy, and section rhythm across all page deliverables.</div>
-                </div>
-              </section>
-            ) : null}
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">WordPress URL</label>
+                    <input
+                      value={baseUrl}
+                      onChange={(event) => setBaseUrl(event.target.value)}
+                      placeholder="https://example.com"
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
+                  </div>
 
-            {activeNav === "funnels" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Funnel Overview Board</h2>
-                  <div className="mt-3 grid gap-3 md:grid-cols-3 lg:grid-cols-6">
-                    {["Homepage", "Lead Magnet", "Opt-in Confirmation", "Thank You", "Core Offer", "Follow-up Content"].map((node) => (
-                      <div key={node} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                        <div className="font-medium text-slate-100">{node}</div>
-                        <div className="mt-1">Owner: Builder Operations Agent</div>
-                      </div>
-                    ))}
+                  <div>
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">WordPress Username</label>
+                    <input
+                      value={username}
+                      onChange={(event) => setUsername(event.target.value)}
+                      placeholder="WordPress username"
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
                   </div>
-                </div>
-                <div className="grid gap-4 xl:grid-cols-3">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Funnel Logic</h3>
-                    <p className="mt-2 text-sm text-slate-300">Map CTA hand-offs and approval gates between key funnel nodes.</p>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Offer Stack</h3>
-                    <p className="mt-2 text-sm text-slate-300">Primary offer: {briefForm.mainOffer || "Not set"}</p>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Conversion Recommendations</h3>
-                    <p className="mt-2 text-sm text-slate-300">Prioritize CTA clarity, trust strips, and FAQ objection handling before build approval.</p>
-                  </div>
-                </div>
-              </section>
-            ) : null}
 
-            {activeNav === "pages" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Pages</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Review each page, confirm section stacks, and approve what should be included in the draft build.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("mission_control")}>
-                      Back to Builder
-                    </button>
+                  <div className="md:col-span-2">
+                    <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Application Password</label>
+                    <input
+                      type="password"
+                      value={appPassword}
+                      onChange={(event) => setAppPassword(event.target.value)}
+                      placeholder={savedConnection?.hasSavedSecret ? "Update password (optional)" : "WordPress application password"}
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    />
                   </div>
                 </div>
 
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Pages Index</h2>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-400">
-                    <span className="rounded-full border border-white/20 px-2 py-1">status</span>
-                    <span className="rounded-full border border-white/20 px-2 py-1">page type</span>
-                    <span className="rounded-full border border-white/20 px-2 py-1">owner agent</span>
-                    <span className="rounded-full border border-white/20 px-2 py-1">funnel</span>
-                    <span className="rounded-full border border-white/20 px-2 py-1">approved / unapproved</span>
-                    <span className="rounded-full border border-white/20 px-2 py-1">built / unbuilt</span>
-                  </div>
-                  <div className="mt-3 overflow-auto">
-                    <table className="min-w-full text-left text-xs text-slate-300">
-                      <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                        <tr>
-                          <th className="px-2 py-2">Page Name</th>
-                          <th className="px-2 py-2">Page Type</th>
-                          <th className="px-2 py-2">Goal</th>
-                          <th className="px-2 py-2">Shell</th>
-                          <th className="px-2 py-2">Content Status</th>
-                          <th className="px-2 py-2">Build Status</th>
-                          <th className="px-2 py-2">Approval Status</th>
-                          <th className="px-2 py-2">Owner Agent</th>
-                          <th className="px-2 py-2">Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {pageRows.map((row) => (
-                          <tr key={row.slug} className="border-t border-white/10">
-                            <td className="px-2 py-2">{row.pageName}</td>
-                            <td className="px-2 py-2">{row.pageType}</td>
-                            <td className="px-2 py-2">{row.goal}</td>
-                            <td className="px-2 py-2">{row.shell}</td>
-                            <td className="px-2 py-2">{row.contentStatus}</td>
-                            <td className="px-2 py-2">{row.buildStatus}</td>
-                            <td className="px-2 py-2">{row.approvalStatus}</td>
-                            <td className="px-2 py-2">{row.ownerAgent}</td>
-                            <td className="px-2 py-2">
-                              <div className="flex flex-wrap gap-1">
-                                <button type="button" className={brainTheme.secondaryButton} onClick={() => setPageStudioSlug(row.slug)}>Open Page Studio</button>
-                                <button type="button" className={brainTheme.secondaryButton}>Preview Brief</button>
-                                <button type="button" className={brainTheme.secondaryButton}>Compare Versions</button>
-                                <button type="button" className={brainTheme.secondaryButton}>Approve</button>
-                                <button type="button" className={brainTheme.secondaryButton}>Send to Build</button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                        {!pageRows.length ? (
-                          <tr>
-                            <td className="px-2 py-3 text-slate-400" colSpan={9}>No pages yet. Generate a build package to start page collaboration.</td>
-                          </tr>
-                        ) : null}
-                      </tbody>
-                    </table>
-                  </div>
+                <div className="mt-4 flex items-center gap-3 text-xs text-slate-300">
+                  <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2">
+                    <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
+                    Thrive already installed
+                  </label>
+                  <div>{connectionResult?.message ?? "Connection not checked yet."}</div>
                 </div>
 
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Selected Page Workflow</h2>
-                  {selectedBuildPage ? (
-                    <div className="mt-3 grid gap-4 lg:grid-cols-[250px_minmax(0,1fr)_260px]">
-                      <aside className="space-y-3">
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Page overview</div>
-                          <div className="mt-2 text-sm text-slate-100">{selectedBuildPage.title}</div>
-                          <div className="text-xs text-slate-400">Goal: {selectedPageRow?.goal ?? "Support intent"}</div>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Section navigator</div>
-                          <div className="mt-2 space-y-1 text-xs text-slate-300">
-                            {selectedBuildPage.sections.map((section, index) => (
-                              <div key={`${section.heading}-${index}`}>{section.heading}</div>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Dependencies: shell template, CTA stack, FAQ approval</div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Linked funnel steps: {selectedPageRow?.funnel ?? "Primary funnel"}</div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">Reusable assets used: {selectedPageRow?.resolutionCount ?? 0}</div>
-                      </aside>
+                {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
 
-                      <div className="space-y-3">
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Page Purpose</div>
-                          <div className="mt-2 text-sm text-slate-200">{selectedPageRow?.goal ?? "Support intent"}</div>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Shell Recommendation</div>
-                          <div className="mt-2 text-sm text-slate-200">{selectedPageRow?.shell ?? "Pending shell recommendation"}</div>
-                        </div>
-                        <div className="space-y-2">
-                          {selectedBuildPage.sections.map((section, index) => {
-                            const inferredType = inferSectionType(section.heading);
-                            const sectionResolution = thriveSectionResolutions.find(
-                              (entry) => entry.pageSlug === selectedBuildPage.slug && entry.sectionType === inferredType
-                            );
-                            return (
-                              <div key={`${section.heading}-${index}`} className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                                <div className="flex flex-wrap items-center justify-between gap-2">
-                                  <div>
-                                    <div className="text-sm font-medium text-slate-100">{section.heading}</div>
-                                    <div className="text-xs text-slate-400">Purpose: {inferredType}</div>
-                                  </div>
-                                  <span className={`rounded-full border px-2 py-1 text-[11px] ${statusClass(sectionResolution?.designIntentSatisfied ? "Approved" : "Awaiting approval")}`}>
-                                    {sectionResolution?.designIntentSatisfied ? "Approved" : "Awaiting approval"}
-                                  </span>
-                                </div>
-                                <div className="mt-2 text-xs text-slate-300">Content summary: {section.body}</div>
-                                <div className="mt-1 text-xs text-slate-400">Recommended Thrive asset type: {sectionResolution?.selectedVisualPrimitive ?? "wordpress_structured_fallback"}</div>
-                                <div className="mt-1 text-xs text-slate-400">Matched reusable asset: {sectionResolution?.matchedSymbolTitle ?? "None"}</div>
-                                <div className="mt-1 text-xs text-slate-400">Owner agent: {inferredType === "cta" ? "Copy Chief" : "Content Architect"}</div>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  <button type="button" className={brainTheme.secondaryButton}>Preview</button>
-                                  <button type="button" className={brainTheme.secondaryButton}>Swap Variant</button>
-                                  <button type="button" className={brainTheme.secondaryButton}>Approve</button>
-                                  <button type="button" className={brainTheme.secondaryButton}>Request Revision</button>
-                                  <button type="button" className={brainTheme.secondaryButton}>Lock Section</button>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-200">Copy Summary: Managed by Copy Chief with CTA and objection-handling variants.</div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-200">Build Readiness: {currentSession?.status === "completed" ? "Ready" : "Needs review"}</div>
-                      </div>
-
-                      <aside className="space-y-3">
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Collaboration</div>
-                          <div className="mt-2 space-y-2 text-xs text-slate-300">
-                            <div>Strategy Director: Direction aligned</div>
-                            <div>Content Architect: Section stack in review</div>
-                            <div>Copy Chief: CTA variants pending approval</div>
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3">
-                          <div className="text-xs uppercase tracking-[0.12em] text-slate-400">Version History</div>
-                          <div className="mt-2 space-y-1 text-xs text-slate-300">
-                            <div>v3 · Awaiting approval · {formatDate(currentSession?.createdAt)}</div>
-                            <div>v2 · Recommended · {formatDate(currentSession?.createdAt)}</div>
-                          </div>
-                        </div>
-                      </aside>
-                    </div>
-                  ) : (
-                    <div className="mt-2 text-sm text-slate-300">Open a page from Pages Index to start Page Studio collaboration.</div>
-                  )}
-                </div>
-              </section>
-            ) : null}
-
-            {activeNav === "global_assets" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Reusable Assets</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Review what SiteForge can reuse from your Thrive site and select assets for the current build.
-                  </p>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("pages")}>
-                      Use Assets in Pages
-                    </button>
-                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("thrive_intelligence")}>
-                      Back to Thrive Setup
-                    </button>
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-xs">
-                    {([
-                      ["headers", "Headers"],
-                      ["footers", "Footers"],
-                      ["symbols", "Symbols / Reusable Blocks"],
-                      ["sections", "Sections"],
-                      ["templates", "Templates / Shell Templates"],
-                      ["layouts", "Layouts / Layout Systems"],
-                      ["cta_blocks", "CTA Blocks"],
-                      ["faqs", "FAQs"],
-                      ["testimonials", "Testimonials"],
-                    ] as const).map(([key, label]) => (
-                      <button
-                        key={key}
-                        type="button"
-                        onClick={() => setAssetsTab(key)}
-                        className={`rounded-full border px-3 py-1 ${assetsTab === key ? "border-cyan-300/60 bg-cyan-500/15 text-cyan-100" : "border-white/20 bg-white/5 text-slate-300"}`}
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="mt-3 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                    Recommended for current build:{" "}
-                    {(thriveIntel?.symbolInventory ?? [])
-                      .slice(0, 3)
-                      .map((asset) => asset.title)
-                      .join(" · ") || "Run Scan Thrive Assets to find reusable candidates."}
-                  </div>
-                  <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                    {(thriveIntel?.symbolInventory ?? []).slice(0, 9).map((asset) => (
-                      <div key={asset.id} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                        <div className="text-sm font-medium text-slate-100">{asset.title}</div>
-                        <div className="mt-1">Type: {assetsTab}</div>
-                        <div className="mt-1">Category: {asset.taxonomy.name ?? "unknown"}</div>
-                        <div className="mt-1">Usage count: {Math.max(1, Math.round((asset.keywords?.length ?? 1) * 1.4))}</div>
-                        <div className="mt-1">Source: Thrive inventory</div>
-                        <div className="mt-1">Status: {asset.reusable ? "active" : "review"}</div>
-                        <div className="mt-1">Compatible page types: homepage, content</div>
-                        <div className="mt-1">Fingerprint / match confidence: {asset.contentHash ?? "n/a"} / {asset.reusable ? "0.88" : "0.51"}</div>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <button type="button" className={brainTheme.secondaryButton}>Preview</button>
-                          <button type="button" className={brainTheme.secondaryButton}>Reuse</button>
-                          <button type="button" className={brainTheme.secondaryButton}>Recommend for page</button>
-                          <button type="button" className={brainTheme.secondaryButton}>Mark preferred</button>
-                          <button type="button" className={brainTheme.secondaryButton}>Mark deprecated</button>
-                        </div>
-                      </div>
-                    ))}
-                    {!thriveIntel?.symbolInventory?.length ? (
-                      <div className="rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-3 text-xs text-slate-300">
-                        No reusable Thrive assets found yet.
-                        <div className="mt-2">
-                          <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("thrive_intelligence")}>
-                            Scan Thrive Assets
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-            ) : null}
-
-            {activeNav === "thrive_intelligence" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Thrive Setup &amp; Assets</h2>
-                  <p className="mt-2 text-sm text-slate-300">
-                    Connect your Thrive site, verify access, and scan reusable assets for SiteForge.
-                  </p>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Setup Progress</h3>
-                    <div className="mt-3 space-y-2">
-                      {setupSteps.map((step) => (
-                        <div key={step.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-slate-950/45 px-3 py-2">
-                          <div className="flex items-center gap-2 text-sm text-slate-200">
-                            <span
-                              className={`h-2.5 w-2.5 rounded-full ${
-                                step.state === "complete"
-                                  ? "bg-emerald-400"
-                                  : step.state === "attention"
-                                    ? "bg-amber-300"
-                                    : "bg-slate-500"
-                              }`}
-                            />
-                            <span>{step.label}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs uppercase tracking-[0.12em] text-slate-400">
-                              {step.state === "complete" ? "complete" : step.state === "attention" ? "attention needed" : "incomplete"}
-                            </span>
-                            {step.state !== "complete" ? (
-                              <button type="button" className={brainTheme.secondaryButton} onClick={step.action}>
-                                {step.actionLabel}
-                              </button>
-                            ) : null}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Primary Action</h3>
-                    <p className="mt-2 text-xs text-slate-300">
-                      {connectionValidated
-                        ? hasMeaningfulAssetData
-                          ? "Your Thrive assets are ready. Continue into reusable assets."
-                          : "Connection is valid. Run an asset scan to discover reusable blocks and templates."
-                        : "Validate your WordPress connection before asset discovery."}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button type="button" className={brainTheme.glowButton} onClick={primaryThriveAction.action}>
-                        {primaryThriveAction.label}
-                      </button>
-                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setActiveNav("settings")}>
-                        Back to Setup
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Connection Status</h3>
-                    <div className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                      <div>Thrive detected: {savedConnection?.thriveDetected ? "Yes" : "No"}</div>
-                      <div>Connection validated: {connectionValidated ? "Yes" : "No"}</div>
-                      <div>Active skin: {thriveIntel?.activeSkin?.name ?? "Unknown"}</div>
-                      <div>Last scan: {formatDate(thriveIntel?.collectedAt)}</div>
-                    </div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Assets Found</h3>
-                    <div className="mt-3 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                      <div>Homepage found: {snapshot?.currentHomepageId ? "Yes" : "No"}</div>
-                      <div>Reusable blocks found: {symbolCount}</div>
-                      <div>Templates found: {templateCount}</div>
-                      <div>Warnings found: {friendlyWarnings.length}</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Reusable Assets Preview</h3>
-                  {hasMeaningfulAssetData ? (
-                    <>
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                        {assetPreviewGroups.map((group) => (
-                          <div key={group.name} className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                            <div className="text-sm font-medium text-slate-100">{group.name}</div>
-                            <div className="mt-1">Count: {group.count}</div>
-                            <div className="mt-1">Type: {group.type}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="mt-4 overflow-auto">
-                        <table className="min-w-full text-left text-xs text-slate-300">
-                          <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                            <tr>
-                              <th className="px-2 py-2">Name</th>
-                              <th className="px-2 py-2">Type</th>
-                              <th className="px-2 py-2">Category</th>
-                              <th className="px-2 py-2">Reusable</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {symbolInventory.slice(0, 8).map((asset) => (
-                              <tr key={asset.id} className="border-t border-white/10">
-                                <td className="px-2 py-2">{asset.title}</td>
-                                <td className="px-2 py-2">Reusable Block</td>
-                                <td className="px-2 py-2">{asset.taxonomy.name ?? "General"}</td>
-                                <td className="px-2 py-2">{asset.reusable ? "Yes" : "Review"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="mt-3 rounded-xl border border-dashed border-white/20 bg-slate-950/40 p-4 text-sm text-slate-300">
-                      <div>No reusable Thrive assets found yet.</div>
-                      <button type="button" className={`${brainTheme.secondaryButton} mt-3`} onClick={() => void loadProjects()}>
-                        Scan Thrive Assets
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Warnings</h3>
-                  <div className="mt-3 space-y-2 text-xs text-slate-300">
-                    {friendlyWarnings.length ? (
-                      friendlyWarnings.map((warning) => (
-                        <div key={warning} className="rounded-xl border border-amber-300/30 bg-amber-500/10 px-3 py-2 text-amber-100">
-                          {warning}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="rounded-xl border border-emerald-300/30 bg-emerald-500/10 px-3 py-2 text-emerald-100">
-                        No warnings. Thrive setup and asset discovery look healthy.
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <details className={`${brainTheme.glassCard} group p-4`}>
-                  <summary className="cursor-pointer list-none text-sm font-semibold text-slate-100">
-                    Technical Details
-                    <span className="ml-2 text-xs font-normal text-slate-400 group-open:hidden">Show advanced diagnostics</span>
-                  </summary>
-                  <div className="mt-4 grid gap-4 xl:grid-cols-2">
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Connection Details</h4>
-                      <div className="mt-2 space-y-1">
-                        <div>Connection state: {savedConnection?.lastValidationStatus ?? "not_validated"}</div>
-                        <div>Homepage mapping: {snapshot?.currentHomepageId ?? "unknown"} / {snapshot?.currentHomepageTitle ?? "unknown"}</div>
-                        <div>Front-page WP setting: {thriveIntel?.safeHints.frontPageUsesWpSettings ? "configured" : "unknown"}</div>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Inventory Counts</h4>
-                      <div className="mt-2 grid gap-1 md:grid-cols-2">
-                        <div>Template count: {templateCount}</div>
-                        <div>Layout count: {layoutCount}</div>
-                        <div>Section count: {sectionCount}</div>
-                        <div>Symbol count: {symbolCount}</div>
-                        <div>Header count: {thriveIntel?.symbolSummary.headers ?? 0}</div>
-                        <div>Footer count: {thriveIntel?.symbolSummary.footers ?? 0}</div>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Reusable Blocks</h4>
-                      <div className="mt-3 overflow-auto">
-                        <table className="min-w-full text-left">
-                          <thead className="text-[11px] uppercase tracking-[0.08em] text-slate-400">
-                            <tr>
-                              <th className="px-2 py-2">ID</th>
-                              <th className="px-2 py-2">Title</th>
-                              <th className="px-2 py-2">Category</th>
-                              <th className="px-2 py-2">Payload</th>
-                              <th className="px-2 py-2">CSS</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {symbolInventory.map((symbol) => (
-                              <tr key={symbol.id} className="border-t border-white/10">
-                                <td className="px-2 py-2">{symbol.id}</td>
-                                <td className="px-2 py-2">{symbol.title}</td>
-                                <td className="px-2 py-2">{symbol.taxonomy.name ?? "unknown"}</td>
-                                <td className="px-2 py-2">{symbol.hasBuilderContent ? "present" : "none"}</td>
-                                <td className="px-2 py-2">{symbol.hasCustomCss ? "present" : "none"}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Template Matches</h4>
-                      <div className="mt-2 space-y-1">
-                        <div>Homepage candidate: {thriveNativeComposition?.shellLayoutCandidate ?? "thrive-homepage-canonical"}</div>
-                        <div>Page candidate: thrive-standard-content</div>
-                        <div>Post/archive candidates: staged for future mapping</div>
-                        <div>Mapped use cases: homepage shell, content shell</div>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Safety &amp; Mode</h4>
-                      <div className="mt-2 space-y-1">
-                        <div>Execution mode: {thriveExecutionMode}</div>
-                        <div>Native guard eligible: {thriveNativeGuard?.eligible ? "yes" : "no"}</div>
-                        <div>Read-only mode: enabled for intelligence-first workflows</div>
-                        <div>Unresolved mappings: {thriveSectionResolutions.filter((entry) => !entry.designIntentSatisfied).length}</div>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
-                      <h4 className="text-sm font-semibold text-slate-100">Advanced Tools</h4>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        <button type="button" className={brainTheme.secondaryButton} onClick={() => void loadProjects()}>Scan Thrive Assets</button>
-                        <button type="button" className={brainTheme.secondaryButton}>Compare Last Scan</button>
-                        <button type="button" className={brainTheme.secondaryButton}>Export Technical Report</button>
-                        <button type="button" className={brainTheme.secondaryButton}>View Scan Log</button>
-                      </div>
-                    </div>
-                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 xl:col-span-2">
-                      <h4 className="text-sm font-semibold text-slate-100">Storage &amp; Persistence</h4>
-                      {storageSummary ? (
-                        <div className="mt-2 space-y-1">
-                          <div>Storage mode: {storageSummary.storageMode}</div>
-                          <div>Persistence health: {storageSummary.persistenceHealth}</div>
-                          <div>Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}</div>
-                          <div>{storageStatusMessage}</div>
-                        </div>
-                      ) : (
-                        <div className="mt-2">Storage summary unavailable.</div>
-                      )}
-                    </div>
-                  </div>
-                </details>
-              </section>
-            ) : null}
-
-            {activeNav === "experiments" ? (
-              <section className="grid gap-4 xl:grid-cols-3">
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Active Experiments</h3>
-                  <div className="mt-2 space-y-2 text-xs text-slate-300">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Variant A: CTA button hierarchy · expected gain 8% · confidence Medium</div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Variant B: Trust-strip placement · expected gain 5% · confidence Medium</div>
-                  </div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Opportunities Queue</h3>
-                  <div className="mt-2 space-y-2 text-xs text-slate-300">
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">FAQ compression test · affected pages: Home</div>
-                    <div className="rounded-lg border border-white/10 bg-white/5 p-2">Hero proof-point density test · affected pages: Home, About</div>
-                  </div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h3 className="text-sm font-semibold text-slate-100">Evidence</h3>
-                  <div className="mt-2 text-xs text-slate-300">Evidence is seed-backed in this release lane and ready for analytics wiring.</div>
-                </div>
-              </section>
-            ) : null}
-
-            {activeNav === "publish" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Publish</h2>
-                  <p className="mt-2 text-sm text-slate-300">Review build readiness and final checks. Publishing remains a guided review step.</p>
-                </div>
-                <div className="grid gap-4 xl:grid-cols-3">
-                  <div className={`${brainTheme.glassCard} p-4`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Ready</h3>
-                    <div className="mt-2 text-sm text-slate-300">{hasPublishableResult ? "Build package complete" : "Awaiting build completion"}</div>
-                  </div>
-                  <div className={`${brainTheme.glassCard} p-4 xl:col-span-2`}>
-                    <h3 className="text-sm font-semibold text-slate-100">Needs attention</h3>
-                    <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                      <div>homepage assigned: {snapshot?.currentHomepageId ? "yes" : "no"}</div>
-                      <div>core CTA working: {currentSession?.status === "completed" ? "yes" : "no"}</div>
-                      <div>lead magnet connected: no</div>
-                      <div>thank-you flow complete: no</div>
-                      <div>header/footer approved: {thriveIntel?.symbolSummary.headers ? "yes" : "no"}</div>
-                      <div>mobile review complete: pending</div>
-                      <div>legal pages present: pending</div>
-                    </div>
-                  </div>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <button type="button" className={brainTheme.glowButton} onClick={() => setActiveNav("mission_control")}>
-                    Review Build Status
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" data-testid="siteforge-validate-connection-action" className={brainTheme.glowButton} onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>
+                    Validate Connection
                   </button>
-                  <div className="mt-2 text-xs text-slate-400">Build can only be started from Build.</div>
-                </div>
-              </section>
-            ) : null}
-
-            {activeNav === "settings" ? (
-              <section className="space-y-4">
-                <div className={`${brainTheme.glassCard} p-5`}>
-                  <h2 className="text-lg font-semibold text-slate-100">Setup</h2>
-                  <p className="mt-2 text-sm text-slate-300">Complete website details, connection, and AI access in one place.</p>
-                </div>
-                <div className={`${brainTheme.glassCard} p-4`}>
-                  <h2 className="text-sm font-semibold text-slate-100">Project Details</h2>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Project</label>
-                      <select
-                        value={selectedProjectId}
-                        onChange={(event) => {
-                          activeProjectIntentRef.current = event.target.value || null;
-                          void openProject(event.target.value, "user");
-                        }}
-                        disabled={!projects.length || busy}
-                        className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
-                      >
-                        {selectedProjectId && !selectedProjectInOptions ? (
-                          <option value={selectedProjectId}>Loading selected project...</option>
-                        ) : null}
-                        {!projects.length ? <option value="">No project selected</option> : null}
-                        {projects.map((project) => (
-                          <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">New Project Name</label>
-                      <input value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} placeholder="e.g. iPetzo" className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                      <button type="button" className={`${brainTheme.secondaryButton} mt-2`} onClick={createProject} disabled={busy || !normalizeNewProjectName(newProjectName)}>
-                        {createStatus === "creating" ? "Creating..." : "Create Project"}
-                      </button>
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">Rename Current Project</label>
-                      <input id="siteforge-project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                    </div>
-                    <div>
-                      <label className="text-xs uppercase tracking-[0.12em] text-slate-400">WordPress URL</label>
-                      <input value={baseUrl} onChange={(event) => setBaseUrl(event.target.value)} placeholder="https://example.com" className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                    </div>
-                  </div>
-                  {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
-                  {!activeProject ? (
-                    <div className="mt-2 text-xs text-slate-400">Create your first project to get started.</div>
+                  {savedConnection ? (
+                    <button type="button" className={brainTheme.secondaryButton} onClick={revalidateConnection} disabled={busy || !selectedProjectId}>
+                      Recheck Connection
+                    </button>
+                  ) : null}
+                  {isConnected ? (
+                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("business")}>Continue</button>
                   ) : null}
                 </div>
+              </section>
+            ) : null}
 
-                {activeProject ? (
-                  <>
-                    <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">About your website</h3>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2">
-                        <div>
-                          <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
-                          <input id="siteforge-brief-business-name" value={briefForm.businessName} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-business-type" className="text-xs text-slate-300">Business type / category</label>
-                          <input id="siteforge-brief-business-type" value={briefForm.businessType} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label htmlFor="siteforge-brief-business-description" className="text-xs text-slate-300">What does the business do?</label>
-                          <textarea id="siteforge-brief-business-description" value={briefForm.businessDescription} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-target-audience" className="text-xs text-slate-300">Who is the target audience?</label>
-                          <input id="siteforge-brief-target-audience" value={briefForm.targetAudience} onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-goal" className="text-xs text-slate-300">Main goal of website</label>
-                          <select id="siteforge-brief-goal" value={briefForm.websiteGoal} onChange={(event) => setBriefForm((prev) => ({ ...prev, websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
-                            {websiteGoalOptions.map((goal) => <option key={goal} value={goal}>{goal}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-tone" className="text-xs text-slate-300">Brand tone</label>
-                          <select id="siteforge-brief-tone" value={briefForm.brandTone} onChange={(event) => setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
-                            {brandToneOptions.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-main-offer" className="text-xs text-slate-300">Main offer / service / product</label>
-                          <input id="siteforge-brief-main-offer" value={briefForm.mainOffer} onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-market-location" className="text-xs text-slate-300">Location / market (optional)</label>
-                          <input id="siteforge-brief-market-location" value={briefForm.marketLocation} onChange={(event) => setBriefForm((prev) => ({ ...prev, marketLocation: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-brief-competitors" className="text-xs text-slate-300">Competitors / inspiration (optional)</label>
-                          <input id="siteforge-brief-competitors" value={briefForm.competitors} onChange={(event) => setBriefForm((prev) => ({ ...prev, competitors: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div className="md:col-span-2">
-                          <label htmlFor="siteforge-brief-differentiators" className="text-xs text-slate-300">Notes / differentiators (optional)</label>
-                          <textarea id="siteforge-brief-differentiators" value={briefForm.differentiators} onChange={(event) => setBriefForm((prev) => ({ ...prev, differentiators: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                      </div>
-                      <div className="mt-3 text-xs uppercase tracking-[0.12em] text-slate-300">Brief: {briefSaveState}</div>
-                    </div>
+            {currentStep === "business" ? (
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-xl font-semibold text-slate-100">Tell Us About Your Business</h2>
+                <p className="mt-2 text-sm text-slate-300">Add your business details so SiteForge can generate the right pages and messaging.</p>
 
-                    <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">AI access</h3>
-                      <p className="mt-1 text-xs text-slate-300">Save API credentials server-side for this project. Plaintext keys are not returned to the browser after save.</p>
-                      <div className="mt-3 grid gap-3 md:grid-cols-3">
-                        <div>
-                          <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">Model</label>
-                          <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
-                            <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                            <option value="gpt-4.1">gpt-4.1</option>
-                            <option value="gpt-5-mini">gpt-5-mini</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-ai-key" className="text-xs text-slate-300">OpenAI API key</label>
-                          <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={activeProject.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                        <div>
-                          <label htmlFor="siteforge-serpapi-key" className="text-xs text-slate-300">SerpApi API key</label>
-                          <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} placeholder={activeProject.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
-                        </div>
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
-                        <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || (!activeProject.hasSavedAiSecret && !activeProject.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-300">Status: OpenAI={activeProject.hasSavedAiSecret ? "saved" : "not saved"} | SerpApi={activeProject.hasSavedSerpApiSecret ? "saved" : "not saved"}{aiStatusMessage ? ` · ${aiStatusMessage}` : ""}</div>
-                    </div>
-
-                    <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">Connect your site</h3>
-                      <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-                        <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} placeholder="Connection label" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                        <input value={username} onChange={(event) => setUsername(event.target.value)} placeholder="WordPress username" className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                        <input type="password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} placeholder={savedConnection?.hasSavedSecret ? "Update application password (optional)" : "WordPress application password"} className="w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                      </div>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-xs">
-                          <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} />
-                          Thrive Installed
-                        </label>
-                      </div>
-                      <div className="mt-2 text-xs text-slate-300">Generation key path: {activeProject.hasSavedAiSecret ? "user-provided OpenAI key" : "platform OpenAI key if configured"} | Market intelligence: {activeProject.hasSavedSerpApiSecret ? "SerpApi enabled" : "SerpApi not configured"}</div>
-                    </div>
-
-                    <div className={`${brainTheme.glassCard} p-4`}>
-                      <h3 className="text-sm font-semibold text-slate-100">Connection result</h3>
-                      <div className="mt-2 grid gap-2 text-xs text-slate-300 md:grid-cols-2">
-                        <div>Connection: {connectionResult?.connected ? "connected" : savedConnection?.lastValidationStatus ?? "not validated"}</div>
-                        <div>Can write pages: {connectionResult?.canWritePages ? "yes" : "unknown"}</div>
-                        <div>Thrive detected: {connectionResult?.thriveDetected || savedConnection?.thriveDetected ? "yes" : "no"}</div>
-                        <div>Signals: {connectionResult?.thriveSignals?.join(", ") || "none yet"}</div>
-                      </div>
-                    </div>
-
-                    <div className={`${brainTheme.glassCard} sticky bottom-3 z-10 border border-cyan-300/30 bg-slate-950/85 p-4 backdrop-blur`}>
-                      <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="text-xs text-slate-300">Next action is based on what is already complete.</div>
-                        <button
-                          type="button"
-                          className={brainTheme.glowButton}
-                          onClick={() => {
-                            if (!connectionValidated) {
-                              void saveAndValidateConnection();
-                              return;
-                            }
-                            if (!setupCoreComplete) {
-                              void saveWebsiteBrief();
-                              return;
-                            }
-                            setActiveNav("mission_control");
-                          }}
-                          disabled={busy || !selectedProjectId}
-                        >
-                          {!connectionValidated ? "Check Connection" : !briefCompleted || !aiConfigured ? "Save and Continue" : "Continue to Build"}
-                        </button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className={`${brainTheme.glassCard} p-6`}>
-                    <div className="text-sm font-medium text-slate-100">No Active Project</div>
-                    <p className="mt-2 text-sm text-slate-300">Create a project at the top of the page to unlock rename and generation controls.</p>
-                    <p className="mt-2 text-xs text-slate-400">Rename the active project after creation.</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="siteforge-brief-business-name" className="text-xs text-slate-300">Business name</label>
+                    <input id="siteforge-brief-business-name" value={briefForm.businessName} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
                   </div>
-                )}
+                  <div>
+                    <label htmlFor="siteforge-brief-business-type" className="text-xs text-slate-300">Business type</label>
+                    <input id="siteforge-brief-business-type" value={briefForm.businessType} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label htmlFor="siteforge-brief-business-description" className="text-xs text-slate-300">What does your business do?</label>
+                    <textarea id="siteforge-brief-business-description" value={briefForm.businessDescription} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))} className="mt-1 h-20 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-target-audience" className="text-xs text-slate-300">Target audience</label>
+                    <input id="siteforge-brief-target-audience" value={briefForm.targetAudience} onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-main-offer" className="text-xs text-slate-300">Main offer</label>
+                    <input id="siteforge-brief-main-offer" value={briefForm.mainOffer} onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-goal" className="text-xs text-slate-300">Main goal</label>
+                    <select id="siteforge-brief-goal" value={briefForm.websiteGoal} onChange={(event) => setBriefForm((prev) => ({ ...prev, websiteGoal: event.target.value as WebsiteBriefForm["websiteGoal"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                      {websiteGoalOptions.map((goal) => <option key={goal} value={goal}>{goal}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-brief-tone" className="text-xs text-slate-300">Brand tone</label>
+                    <select id="siteforge-brief-tone" value={briefForm.brandTone} onChange={(event) => setBriefForm((prev) => ({ ...prev, brandTone: event.target.value as WebsiteBriefForm["brandTone"] }))} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                      {brandToneOptions.map((tone) => <option key={tone} value={tone}>{tone}</option>)}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="siteforge-ai-key" className="text-xs text-slate-300">OpenAI API key</label>
+                    <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} placeholder={activeProject?.hasSavedAiSecret ? "Enter key to replace saved key" : "sk-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-serpapi-key" className="text-xs text-slate-300">SerpApi API key (optional)</label>
+                    <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} placeholder={activeProject?.hasSavedSerpApiSecret ? "Enter key to replace saved key" : "serpapi-..."} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label htmlFor="siteforge-ai-model" className="text-xs text-slate-300">AI model</label>
+                    <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-xl border border-white/15 bg-slate-950/65 px-3 py-2 text-sm">
+                      <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                      <option value="gpt-4.1">gpt-4.1</option>
+                      <option value="gpt-5-mini">gpt-5-mini</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="mt-4 text-xs text-slate-300">Business info save state: {briefSaveState} · AI status: {aiStatusMessage ?? "not configured"}</div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={brainTheme.secondaryButton} onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
+                  <button type="button" className={brainTheme.secondaryButton} onClick={removeAiKey} disabled={busy || (!activeProject?.hasSavedAiSecret && !activeProject?.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
+                  <button type="button" data-testid="siteforge-business-continue-action" className={brainTheme.glowButton} onClick={saveWebsiteBrief} disabled={busy || !selectedProjectId}>Continue</button>
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === "generate" ? (
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-xl font-semibold text-slate-100">Generate Site</h2>
+                <p className="mt-2 text-sm text-slate-300">Generate your initial site package and page plan.</p>
+
+                <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                  <div>Connected: {isConnected ? "yes" : "no"}</div>
+                  <div className="mt-1">Business info complete: {hasBusinessInfo ? "yes" : "no"}</div>
+                  <div className="mt-1">AI configured: {aiConfigured ? "yes" : "no"}</div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" data-testid="siteforge-generate-site-action" className={brainTheme.glowButton} onClick={() => void runSitePipeline("generate")} disabled={busy || !isConnected || !hasBusinessInfo || !aiConfigured}>
+                    Generate Site
+                  </button>
+                  {hasGeneratedSitePlan ? (
+                    <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("review")}>Continue</button>
+                  ) : null}
+                </div>
+                {isGenerating ? <div className="mt-3 text-xs text-cyan-200">Generating your site plan…</div> : null}
+              </section>
+            ) : null}
+
+            {currentStep === "review" ? (
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-xl font-semibold text-slate-100">Review Pages</h2>
+                <p className="mt-2 text-sm text-slate-300">Check the generated pages before building in Thrive.</p>
+
+                <div className="mt-4 overflow-auto">
+                  <table className="min-w-full text-left text-sm text-slate-300">
+                    <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
+                      <tr>
+                        <th className="px-2 py-2">Page</th>
+                        <th className="px-2 py-2">Purpose</th>
+                        <th className="px-2 py-2">Sections</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((page) => (
+                        <tr key={page.slug} className="border-t border-white/10">
+                          <td className="px-2 py-2">{page.title}</td>
+                          <td className="px-2 py-2">{page.purpose}</td>
+                          <td className="px-2 py-2">{page.sections}</td>
+                        </tr>
+                      ))}
+                      {!pageRows.length ? (
+                        <tr>
+                          <td colSpan={3} className="px-2 py-3 text-slate-400">No pages yet. Generate your site first.</td>
+                        </tr>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={brainTheme.glowButton} onClick={() => setCurrentStep("build")} disabled={!canReviewPages}>
+                    Continue
+                  </button>
+                  {!canReviewPages ? <div className="text-xs text-slate-400">Generate Site first to review pages.</div> : null}
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === "build" ? (
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-xl font-semibold text-slate-100">Build in Thrive</h2>
+                <p className="mt-2 text-sm text-slate-300">Build your generated site using Thrive-native execution when available.</p>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                    <div>Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
+                    <div className="mt-1">Native path available: {canUseThriveNative ? "yes" : "no"}</div>
+                    <div className="mt-1">Current mode: {buildModeUsed ?? "not run"}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                    <div>Homepage strategy</div>
+                    <select
+                      value={homepageStrategy}
+                      onChange={(event) => setHomepageStrategy(event.target.value as HomepageStrategy)}
+                      className="mt-2 w-full rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm"
+                    >
+                      {homepageStrategyModes.map((mode) => (
+                        <option key={mode} value={mode}>{mode}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {!canUseThriveNative ? (
+                  <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                    Thrive was detected, but the native build path is currently blocked.
+                  </div>
+                ) : null}
+
+                {hasPartialBuildFailure ? (
+                  <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                    We created some pages, but a few steps still need attention.
+                  </div>
+                ) : null}
+
+                {hasFatalBuildFailure ? (
+                  <div className="mt-3 rounded-xl border border-rose-300/40 bg-rose-500/10 p-3 text-xs text-rose-100">
+                    Your WordPress site connected, but the build failed.
+                  </div>
+                ) : null}
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" data-testid="siteforge-build-in-thrive-action" className={brainTheme.glowButton} onClick={() => void runSitePipeline("build")} disabled={busy || !canBuildInThrive}>
+                    Build in Thrive
+                  </button>
+                  <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("done")} disabled={!hasCompletedBuild}>
+                    Finish
+                  </button>
+                </div>
+              </section>
+            ) : null}
+
+            {currentStep === "done" ? (
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-xl font-semibold text-slate-100">Done</h2>
+                <p className="mt-2 text-sm text-slate-300">Your latest run is complete. You can rebuild anytime from Build in Thrive.</p>
+                <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                  <div>Build mode used: {buildModeUsed ?? "not available"}</div>
+                  <div className="mt-1">Completed: {hasCompletedBuild ? "yes" : "no"}</div>
+                  <div className="mt-1">Latest run: {currentSession?.status ?? "none"}</div>
+                  <div className="mt-1">Last updated: {formatDate(currentSession?.createdAt)}</div>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("review")}>Review Pages</button>
+                  <button type="button" className={brainTheme.glowButton} onClick={() => setCurrentStep("build")}>Build in Thrive</button>
+                </div>
               </section>
             ) : null}
 
             {showAdvanced ? (
-              <section className={`${brainTheme.glassCard} p-4`}>
-                <div className="text-xs uppercase tracking-[0.15em] text-slate-400">Run History</div>
-                <div className="mt-2 grid gap-2 lg:grid-cols-2">
-                  {sessions.map((session) => (
-                    <button key={session.id} type="button" onClick={() => setCurrentSessionId(session.id)} className="rounded-lg border border-white/10 bg-slate-950/50 px-3 py-2 text-left text-xs text-slate-200">
-                      {new Date(session.createdAt).toLocaleString()} · {session.type} · {session.status} · {session.runState.currentStage}
-                    </button>
-                  ))}
-                  {!sessions.length ? <div className="text-xs text-slate-400">No run history yet.</div> : null}
-                </div>
+              <section className={`${brainTheme.glassCard} p-5`}>
+                <h2 className="text-lg font-semibold text-slate-100">Advanced</h2>
+                <p className="mt-2 text-sm text-slate-300">Technical details, diagnostics, run history, and raw errors.</p>
 
-                {currentSession ? (
-                  <div className="mt-4 space-y-3">
-                    <Stepper stage={currentSession.runState.currentStage ?? "planning"} />
-                    <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3 text-sm text-slate-300">
-                      Status: {currentSession.status} · Stage: {currentSession.runState.currentStage} · Progress: {currentSession.runState.progressPct}%
-                    </div>
-                    <label htmlFor="siteforge-refine" className="text-xs uppercase tracking-[0.18em] text-slate-300/75">Refinement Request</label>
-                    <div className="flex flex-wrap gap-2">
-                      <input id="siteforge-refine" value={refinePrompt} onChange={(event) => setRefinePrompt(event.target.value)} placeholder="Request revision" className="min-w-[260px] flex-1 rounded-lg border border-white/15 bg-slate-950/70 px-3 py-2 text-sm" />
-                      <button type="button" className={brainTheme.secondaryButton} onClick={submitRefinement} disabled={busy || !refinePrompt.trim()}>Request Revision</button>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                    <h3 className="text-sm font-semibold text-slate-100">Run History</h3>
+                    <div className="mt-2 space-y-1">
+                      {sessions.map((session) => (
+                        <button
+                          key={session.id}
+                          type="button"
+                          onClick={() => setCurrentSessionId(session.id)}
+                          className="w-full rounded-lg border border-white/10 bg-slate-900/60 px-2 py-1 text-left"
+                        >
+                          {formatDate(session.createdAt)} · {session.type} · {session.status} · {session.runState.currentStage}
+                        </button>
+                      ))}
+                      {!sessions.length ? <div>No run history yet.</div> : null}
                     </div>
                   </div>
-                ) : null}
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300">
+                    <h3 className="text-sm font-semibold text-slate-100">Diagnostics</h3>
+                    <div className="mt-2 space-y-1">
+                      <div>Execution mode: {currentSession?.executionResult?.thrive.executionMode ?? "unknown"}</div>
+                      <div>Current mode: {currentSession?.executionResult?.thrive.currentMode ?? "unknown"}</div>
+                      <div>Native guard eligible: {currentSession?.executionResult?.thrive.nativeGuard?.eligible ? "yes" : "no"}</div>
+                      <div>Native validation: {currentSession?.executionResult?.thrive.nativeValidation?.status ?? "not run"}</div>
+                      <div>Warnings: {currentSession?.executionResult?.warnings.length ?? 0}</div>
+                      <div>Errors: {currentSession?.executionResult?.errors.length ?? 0}</div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 lg:col-span-2">
+                    <h3 className="text-sm font-semibold text-slate-100">Timeline</h3>
+                    <div className="mt-2 space-y-1">
+                      {currentTimeline.map((entry, index) => (
+                        <div key={`${entry.at}-${index}`}>{formatDate(entry.at)} · {entry.stage} · {entry.level} · {entry.message}</div>
+                      ))}
+                      {!currentTimeline.length ? <div>No timeline entries.</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 lg:col-span-2">
+                    <h3 className="text-sm font-semibold text-slate-100">Run Logs</h3>
+                    <div className="mt-2 max-h-56 space-y-1 overflow-auto">
+                      {runLogs.map((log) => (
+                        <div key={log.logId}>{formatDate(log.timestamp)} · {log.stage} · {log.level} · {log.message}</div>
+                      ))}
+                      {!runLogs.length ? <div>No run logs yet.</div> : null}
+                    </div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 lg:col-span-2">
+                    <h3 className="text-sm font-semibold text-slate-100">Raw Errors</h3>
+                    <div className="mt-2">{technicalError ?? "None"}</div>
+                    <div className="mt-2">Session error summary: {currentSession?.errorSummary ?? "None"}</div>
+                  </div>
+
+                  <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-xs text-slate-300 lg:col-span-2">
+                    <h3 className="text-sm font-semibold text-slate-100">Snapshot</h3>
+                    <div className="mt-2">Homepage: {snapshot?.currentHomepageTitle ?? "unknown"}</div>
+                    <div className="mt-1">Known pages: {snapshot?.knownPages.length ?? 0}</div>
+                    <div className="mt-1">Thrive symbols: {snapshot?.thriveIntelligence?.symbolSummary.total ?? 0}</div>
+                    <div className="mt-1">Section resolutions: {snapshot?.thriveSectionResolutions.length ?? 0}</div>
+                  </div>
+                </div>
               </section>
             ) : null}
           </div>

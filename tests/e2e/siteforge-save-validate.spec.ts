@@ -13,7 +13,6 @@ test.describe("SiteForge save+validate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Setup", exact: true }).click();
 
     const projectName = `iPetzo ${Date.now()}`;
     await page.getByPlaceholder("e.g. iPetzo").fill(projectName);
@@ -21,9 +20,7 @@ test.describe("SiteForge save+validate flow", () => {
 
     const createdMessage = page.getByText(`Project created: ${projectName}`);
     const persistenceBlockedMessage = page
-      .getByText(
-        "Persistent SiteForge storage is unavailable in production. SiteForge is disabled until database storage is restored."
-      )
+      .getByText("Persistent storage unavailable. SiteForge is disabled until database storage is restored.")
       .first();
 
     await Promise.race([
@@ -52,7 +49,7 @@ test.describe("SiteForge save+validate flow", () => {
       );
     });
 
-    await page.getByRole("button", { name: "Check Connection" }).click();
+    await page.getByTestId("siteforge-validate-connection-action").click();
     const validateResponse = await validateResponsePromise;
 
     expect(validateResponse.status()).toBe(200);
