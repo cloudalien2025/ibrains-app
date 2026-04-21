@@ -2354,6 +2354,22 @@ export default function SiteForgeAppPage() {
           {error ? <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{error}</div> : null}
         </section>
 
+        {storageSummary && (storageSummary.persistenceHealth !== "healthy" || storageSummary.fallbackActive) ? (
+          <section
+            className={`mt-4 rounded-xl px-4 py-3 text-sm ${
+              storageSummary.persistenceHealth === "healthy"
+                ? "border border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
+                : "border border-amber-300/35 bg-amber-500/10 text-amber-100"
+            }`}
+          >
+            <div className="font-medium">Storage mode: {storageSummary.storageMode}</div>
+            <div className="mt-1">
+              Persistence health: {storageSummary.persistenceHealth} | Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}
+            </div>
+            <div className="mt-1">{storageStatusMessage}</div>
+          </section>
+        ) : null}
+
         <section className="mt-4 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
           <aside className="h-fit rounded-2xl border border-white/12 bg-slate-900/60 p-3">
             <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Agency Navigation</div>
