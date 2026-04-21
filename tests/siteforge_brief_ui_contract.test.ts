@@ -3,11 +3,11 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("siteforge guided brief UI contract", () => {
-  it("renders simple business-info fields and avoids legacy prompt chips", () => {
+  it("renders strategy-driven business brief fields", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Tell Us About Your Business")).toBe(true);
+    expect(source.includes("Business Brief Editor")).toBe(true);
     expect(source.includes("Business name")).toBe(true);
     expect(source.includes("Target audience")).toBe(true);
     expect(source.includes("Website Prompt")).toBe(false);
@@ -17,7 +17,7 @@ describe("siteforge guided brief UI contract", () => {
     expect(source.includes("SaaS")).toBe(false);
   });
 
-  it("renders AI key controls in the business step", () => {
+  it("renders AI key controls in settings workspace", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 

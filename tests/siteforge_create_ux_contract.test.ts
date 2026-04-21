@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 describe("siteforge create UX contract", () => {
-  it("uses explicit empty-state and create feedback copy", () => {
+  it("keeps deterministic project creation and naming controls", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
@@ -11,6 +11,7 @@ describe("siteforge create UX contract", () => {
     expect(source.includes("Creating...")).toBe(true);
     expect(source.includes("Project created:")).toBe(true);
     expect(source.includes("Rename Current Project")).toBe(true);
+    expect(source.includes("Mission Control")).toBe(true);
   });
 
   it("does not include create-to-untitled fallback semantics in page code", () => {
