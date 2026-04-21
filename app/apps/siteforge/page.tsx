@@ -555,7 +555,7 @@ export default function SiteForgeAppPage() {
         ownerAgentId: "content-architect",
         status: "Awaiting approval",
         confidence: "High",
-        timestamp: new Date().toISOString(),
+        timestamp: activeProject?.updatedAt ?? currentSession?.createdAt ?? "",
       },
       {
         id: "dl-seed-2",
@@ -563,10 +563,10 @@ export default function SiteForgeAppPage() {
         ownerAgentId: "theme-shell-architect",
         status: "Recommended",
         confidence: "High",
-        timestamp: new Date().toISOString(),
+        timestamp: activeProject?.updatedAt ?? currentSession?.createdAt ?? "",
       },
     ];
-  }, [currentSession]);
+  }, [activeProject?.updatedAt, currentSession]);
 
   const reusableAssets = useMemo<ReusableAsset[]>(() => {
     const symbols = snapshot?.thriveIntelligence?.symbolInventory ?? [];
@@ -1403,6 +1403,165 @@ export default function SiteForgeAppPage() {
             </dl>
           </SurfaceCard>
         </div>
+
+        <SurfaceCard title="Agency Intake Controls" owner="Builder Operations Agent" status="Drafting" confidence="High">
+          <div className="grid gap-3 md:grid-cols-2 text-xs text-slate-200">
+            <div>
+              <label className="text-slate-300">Project</label>
+              <select
+                value={selectedProjectId}
+                onChange={(event) => {
+                  activeProjectIntentRef.current = event.target.value || null;
+                  void openProject(event.target.value, "user");
+                }}
+                disabled={!projects.length || busy}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              >
+                {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
+                {!projects.length ? <option value="">No project selected</option> : null}
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-300">New Project Name</label>
+              <input
+                value={newProjectName}
+                onChange={(event) => setNewProjectName(event.target.value)}
+                placeholder="e.g. iPetzo"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+              <button
+                type="button"
+                className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+                onClick={createProject}
+                disabled={busy || !normalizeNewProjectName(newProjectName)}
+              >
+                {createStatus === "creating" ? "Creating..." : "Create Project"}
+              </button>
+            </div>
+            <div>
+              <label className="text-slate-300">WordPress URL</label>
+              <input
+                value={baseUrl}
+                onChange={(event) => setBaseUrl(event.target.value)}
+                placeholder="https://example.com"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="text-slate-300">WordPress Username</label>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+                placeholder="WordPress username"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label className="text-slate-300">Application Password</label>
+              <input
+                type="password"
+                value={appPassword}
+                onChange={(event) => setAppPassword(event.target.value)}
+                placeholder="WordPress application password"
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="siteforge-ai-key" className="text-slate-300">OpenAI API key</label>
+              <input
+                id="siteforge-ai-key"
+                type="password"
+                value={aiApiKey}
+                onChange={(event) => setAiApiKey(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="siteforge-brief-business-name" className="text-slate-300">Business name</label>
+              <input
+                id="siteforge-brief-business-name"
+                value={briefForm.businessName}
+                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="siteforge-brief-business-type" className="text-slate-300">Business type</label>
+              <input
+                id="siteforge-brief-business-type"
+                value={briefForm.businessType}
+                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="siteforge-brief-target-audience" className="text-slate-300">Target audience</label>
+              <input
+                id="siteforge-brief-target-audience"
+                value={briefForm.targetAudience}
+                onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div>
+              <label htmlFor="siteforge-brief-main-offer" className="text-slate-300">Main offer</label>
+              <input
+                id="siteforge-brief-main-offer"
+                value={briefForm.mainOffer}
+                onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="siteforge-brief-business-description" className="text-slate-300">What does your business do?</label>
+              <textarea
+                id="siteforge-brief-business-description"
+                value={briefForm.businessDescription}
+                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))}
+                className="mt-1 h-20 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+              onClick={() => setReviewMessage(null)}
+            >
+              Tell Us About Your Business
+            </button>
+            <button
+              type="button"
+              data-testid="siteforge-validate-connection-action"
+              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100"
+              onClick={saveAndValidateConnection}
+              disabled={busy || !selectedProjectId}
+            >
+              Validate Connection
+            </button>
+            <button
+              type="button"
+              data-testid="siteforge-generate-site-action"
+              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100"
+              onClick={() => void runSitePipeline("generate")}
+              disabled={busy || !isConnected || !hasBusinessInfo || !aiConfigured}
+            >
+              Generate Site
+            </button>
+            <button
+              type="button"
+              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+              onClick={() => void saveAiConfig("save")}
+              disabled={busy}
+            >
+              Save API Keys
+            </button>
+          </div>
+          {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
+        </SurfaceCard>
 
         <SurfaceCard title="Workstream Progress Board" owner="Mission Control" status="Drafting" confidence="High">
           <div className="overflow-auto">
