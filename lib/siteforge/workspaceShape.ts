@@ -490,12 +490,14 @@ export type BuildSessionView = {
       reason?: string;
     };
     menu: { success: boolean; message: string };
-    thrive: {
-      enabled: boolean;
-      appliedMappings: string[];
-      fallbackUsed: boolean;
-      executionMode: "wp_safe_mode" | "future_thrive_native_mode";
-      intelligenceAvailable: boolean;
+      thrive: {
+        enabled: boolean;
+        appliedMappings: string[];
+        fallbackUsed: boolean;
+        executionMode: "wp_safe_mode" | "future_thrive_native_mode";
+        buildModeUsed?: "thrive_native" | "thrive_fallback" | "wordpress_fallback";
+        buildModeReason?: string | null;
+        intelligenceAvailable: boolean;
       symbolInventoryPresent: boolean;
       intelligence: SiteForgeSnapshotView["thriveIntelligence"] | null;
       runtime: SiteForgeSnapshotView["thriveModeSummary"];
@@ -1360,6 +1362,16 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                   value.executionResult.thrive.executionMode === "future_thrive_native_mode"
                     ? "future_thrive_native_mode"
                     : "wp_safe_mode",
+                buildModeUsed:
+                  value.executionResult.thrive.buildModeUsed === "thrive_native" ||
+                  value.executionResult.thrive.buildModeUsed === "thrive_fallback" ||
+                  value.executionResult.thrive.buildModeUsed === "wordpress_fallback"
+                    ? value.executionResult.thrive.buildModeUsed
+                    : undefined,
+                buildModeReason:
+                  value.executionResult.thrive.buildModeReason == null
+                    ? null
+                    : stringOr(value.executionResult.thrive.buildModeReason, ""),
                 intelligenceAvailable: boolOr(value.executionResult.thrive.intelligenceAvailable),
                 symbolInventoryPresent: boolOr(value.executionResult.thrive.symbolInventoryPresent),
                 intelligence: normalizeThriveIntelligence(value.executionResult.thrive.intelligence),
@@ -1387,6 +1399,8 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
                 appliedMappings: [],
                 fallbackUsed: false,
                 executionMode: "wp_safe_mode",
+                buildModeUsed: undefined,
+                buildModeReason: null,
                 intelligenceAvailable: false,
                 symbolInventoryPresent: false,
                 intelligence: null,

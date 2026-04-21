@@ -194,11 +194,22 @@ export async function runBuildPipeline(params: {
           thriveIntelligenceAvailable: Boolean(thriveIntelligence),
         });
         const translated = applyThriveMappings(buildSpec, thriveEnabled, thriveIntelligence);
+        const prefersThriveNative = thriveEnabled && runtime.stagingNativeMode;
+        await updateStage(
+          repo,
+          sessionId,
+          "executing",
+          prefersThriveNative
+            ? "Executing Build in Thrive (native-first with fallback protection)"
+            : "Executing standard WordPress build"
+        );
         const execution = await executeBuildSpecToWordPress(connection, translated.spec, {
           enabled: thriveEnabled,
           appliedMappings: translated.appliedMappings,
           fallbackUsed: translated.fallbackUsed,
-          executionMode: "wp_safe_mode",
+          executionMode: prefersThriveNative ? "future_thrive_native_mode" : "wp_safe_mode",
+          buildModeUsed: thriveEnabled ? "thrive_fallback" : "wordpress_fallback",
+          buildModeReason: thriveEnabled ? "thrive_detected_native_pending" : "thrive_not_detected",
           intelligenceAvailable: Boolean(thriveIntelligence),
           symbolInventoryPresent: Boolean((thriveIntelligence?.symbolInventory.length ?? 0) > 0),
           intelligence: thriveIntelligence,
@@ -215,6 +226,10 @@ export async function runBuildPipeline(params: {
         let nativeComposition = null;
         let nativeExecution = null;
         let nativeValidation = null;
+        let buildModeUsed: "thrive_native" | "thrive_fallback" | "wordpress_fallback" = thriveEnabled
+          ? "thrive_fallback"
+          : "wordpress_fallback";
+        let buildModeReason: string | null = thriveEnabled ? "thrive_detected_native_pending" : "thrive_not_detected";
         let currentMode: "wp_safe_mode" | "thrive_intel_mode" | "thrive_native_staging_mode" | "blocked_native_mode" =
           runtime.thriveIntelMode ? "thrive_intel_mode" : "wp_safe_mode";
 
@@ -240,14 +255,26 @@ export async function runBuildPipeline(params: {
               rollbackStrategy,
             });
             nativeExecution = nativeValidation.execution;
-            currentMode =
-              nativeValidation.status === "passed" ? "thrive_native_staging_mode" : "blocked_native_mode";
+            if (nativeValidation.status === "passed") {
+              currentMode = "thrive_native_staging_mode";
+              buildModeUsed = "thrive_native";
+              buildModeReason = "native_validation_passed";
+            } else {
+              currentMode = "blocked_native_mode";
+              buildModeUsed = "thrive_fallback";
+              buildModeReason = `native_validation_${nativeValidation.status}`;
+            }
             translated.spec.metadata.contractCaptureRef =
               translated.spec.metadata.contractCaptureRef ??
               `contract:${nativeGuard.schemaContractVersion ?? "unknown"}:${nowIso()}`;
           } else {
             currentMode = "blocked_native_mode";
+            buildModeUsed = thriveEnabled ? "thrive_fallback" : "wordpress_fallback";
+            buildModeReason = `native_guard_blocked:${nativeGuard.blockedReason ?? "unknown"}`;
           }
+        } else if (thriveEnabled) {
+          buildModeUsed = "thrive_fallback";
+          buildModeReason = "native_runtime_unavailable";
         }
 
         execution.thrive.currentMode = currentMode;
@@ -255,6 +282,15 @@ export async function runBuildPipeline(params: {
         execution.thrive.nativeComposition = nativeComposition;
         execution.thrive.nativeExecution = nativeExecution;
         execution.thrive.nativeValidation = nativeValidation;
+        execution.thrive.buildModeUsed = buildModeUsed;
+        execution.thrive.buildModeReason = buildModeReason;
+        if (buildModeUsed !== "thrive_native") {
+          execution.warnings.push(
+            buildModeUsed === "thrive_fallback"
+              ? "Thrive-native build path was unavailable; fallback path was used."
+              : "Thrive was not detected; standard WordPress fallback path was used."
+          );
+        }
         executionResult = execution;
         await repo.updateSession(sessionId, {
           buildSpec: translated.spec,

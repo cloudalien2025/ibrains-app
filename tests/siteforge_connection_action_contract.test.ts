@@ -13,8 +13,8 @@ describe("siteforge connection action contract", () => {
     );
     expect(source.includes("async function ensureCanonicalActiveProjectId(): Promise<string | null> {")).toBe(true);
     expect(source.includes("const targetProjectId = await ensureCanonicalActiveProjectId();")).toBe(true);
-    expect(source.includes('setError("No active project selected.");')).toBe(true);
-    expect(source.includes("setError(\"Selected project is out of sync. Reloading project state.\");")).toBe(true);
+    expect(source.includes('setUserError("No active project selected.", "load");')).toBe(true);
+    expect(source.includes('setUserError("Selected project is out of sync. Reloading project state.", "load");')).toBe(true);
     expect(source.includes("`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/connection`")).toBe(true);
     expect(source.includes("disabled={busy || !selectedProjectId}")).toBe(true);
   });
@@ -23,9 +23,6 @@ describe("siteforge connection action contract", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(
-      source.includes('(err.message === "Project not found." || err.message === "Project not found for current user.")')
-    ).toBe(true);
-    expect(source.includes('setError("Selected project could not be loaded.");')).toBe(true);
+    expect(source.includes('if (text.includes("project not found")) return "Selected project could not be loaded.";')).toBe(true);
   });
 });

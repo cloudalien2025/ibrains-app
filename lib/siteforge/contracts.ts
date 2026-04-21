@@ -317,6 +317,8 @@ export type ExecutionResult = {
     appliedMappings: string[];
     fallbackUsed: boolean;
     executionMode: "wp_safe_mode" | "future_thrive_native_mode";
+    buildModeUsed?: "thrive_native" | "thrive_fallback" | "wordpress_fallback";
+    buildModeReason?: string | null;
     intelligenceAvailable: boolean;
     symbolInventoryPresent: boolean;
     intelligence: ThriveIntelligence | null;
