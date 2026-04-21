@@ -7,7 +7,7 @@ describe("siteforge thrive intelligence UI contract", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Build in Thrive")).toBe(true);
+    expect(source.includes("Build Draft")).toBe(true);
     expect(source.includes("Native path available:")).toBe(true);
     expect(source.includes("Build mode used:")).toBe(true);
     expect(source.includes("Thrive was detected, but the native build path is currently blocked.")).toBe(true);

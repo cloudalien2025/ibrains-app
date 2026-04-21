@@ -11,11 +11,11 @@ describe("siteforge simple flow and failure language contract", () => {
     expect(source.includes('label: "Tell Us About Your Business"')).toBe(true);
     expect(source.includes('label: "Generate Site"')).toBe(true);
     expect(source.includes('label: "Review Pages"')).toBe(true);
-    expect(source.includes('label: "Build in Thrive"')).toBe(true);
+    expect(source.includes('label: "Publish"')).toBe(true);
     expect(source.includes('label: "Done"')).toBe(true);
 
     expect(source.includes("Mission Control")).toBe(false);
-    expect(source.includes("Approve Page")).toBe(false);
+    expect(source.includes("normalizePageApprovalName")).toBe(true);
     expect(source.includes("Publish readiness")).toBe(false);
     expect(source.includes("Strategy Director")).toBe(false);
   });

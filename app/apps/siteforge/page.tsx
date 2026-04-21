@@ -57,13 +57,21 @@ type OpenProjectResult =
   | { ok: false; reason: "superseded" | "failed"; message?: string };
 type SimpleStepKey = "connect" | "business" | "generate" | "review" | "build" | "done";
 type BuildModeUsed = "thrive_native" | "thrive_fallback" | "wordpress_fallback";
+type BuildDraftState = {
+  canBuildDraft: boolean;
+  blockers: string[];
+};
+type SelectedPageApprovalState =
+  | { kind: "empty"; message: string }
+  | { kind: "needs_selection"; message: string }
+  | { kind: "ready"; buttonLabel: string };
 
 const simpleSteps: Array<{ key: SimpleStepKey; label: string }> = [
   { key: "connect", label: "Connect Site" },
   { key: "business", label: "Tell Us About Your Business" },
   { key: "generate", label: "Generate Site" },
   { key: "review", label: "Review Pages" },
-  { key: "build", label: "Build in Thrive" },
+  { key: "build", label: "Publish" },
   { key: "done", label: "Done" },
 ];
 
@@ -113,6 +121,45 @@ function resolveFriendlyError(raw: string, context: "load" | "connect" | "genera
   return raw;
 }
 
+export function normalizePageApprovalName(title: string): string {
+  const trimmed = title.trim();
+  if (!trimmed) return "Page";
+  if (trimmed === "Home") return "Homepage";
+  if (trimmed.toLowerCase().endsWith("page")) return trimmed;
+  return `${trimmed} Page`;
+}
+
+export function getBuildDraftState({
+  projectSelected,
+  isConnected,
+  pageCount,
+  approvedPageCount,
+}: {
+  projectSelected: boolean;
+  isConnected: boolean;
+  pageCount: number;
+  approvedPageCount: number;
+}): BuildDraftState {
+  const blockers: string[] = [];
+  if (!projectSelected) blockers.push("Select a project first.");
+  if (!isConnected) blockers.push("Validate your WordPress connection.");
+  if (pageCount === 0) blockers.push("Generate pages before publishing.");
+  if (approvedPageCount === 0) blockers.push("Approve at least one page before building your draft.");
+  return { canBuildDraft: blockers.length === 0, blockers };
+}
+
+export function getSelectedPageApprovalState({
+  pageRows,
+  selectedPage,
+}: {
+  pageRows: Array<{ title: string }>;
+  selectedPage: { title: string } | null;
+}): SelectedPageApprovalState {
+  if (!pageRows.length) return { kind: "empty", message: "No pages are ready for review yet." };
+  if (!selectedPage) return { kind: "needs_selection", message: "Select a page to review." };
+  return { kind: "ready", buttonLabel: `Approve ${normalizePageApprovalName(selectedPage.title)}` };
+}
+
 export default function SiteForgeAppPage() {
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -159,6 +206,11 @@ export default function SiteForgeAppPage() {
   const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
   const [currentStep, setCurrentStep] = useState<SimpleStepKey>("connect");
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
+  const [approvedPageSlugs, setApprovedPageSlugs] = useState<string[]>([]);
+  const [reviewMessage, setReviewMessage] = useState<string | null>(null);
+  const [buildDraftStatus, setBuildDraftStatus] = useState<"idle" | "running" | "success" | "error">("idle");
+  const [buildDraftMessage, setBuildDraftMessage] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +302,24 @@ export default function SiteForgeAppPage() {
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
+  );
+  const selectedReviewPage = useMemo(
+    () => pageRows.find((page) => page.slug === selectedPageSlug) ?? null,
+    [pageRows, selectedPageSlug]
+  );
+  const pageApprovalState = useMemo(
+    () => getSelectedPageApprovalState({ pageRows, selectedPage: selectedReviewPage }),
+    [pageRows, selectedReviewPage]
+  );
+  const buildDraftState = useMemo(
+    () =>
+      getBuildDraftState({
+        projectSelected: Boolean(selectedProjectId),
+        isConnected,
+        pageCount: pageRows.length,
+        approvedPageCount: approvedPageSlugs.length,
+      }),
+    [approvedPageSlugs.length, isConnected, pageRows.length, selectedProjectId]
   );
 
   const unlockedStep: SimpleStepKey = useMemo(() => {
@@ -609,6 +679,11 @@ export default function SiteForgeAppPage() {
   }, [activeProjectId, persistedProjectName, projectName]);
 
   useEffect(() => {
+    setApprovedPageSlugs((prev) => prev.filter((slug) => pageRows.some((page) => page.slug === slug)));
+    setSelectedPageSlug((prev) => (prev && pageRows.some((page) => page.slug === prev) ? prev : null));
+  }, [pageRows]);
+
+  useEffect(() => {
     if (hasFatalBuildFailure) {
       setCurrentStep("build");
       return;
@@ -843,7 +918,15 @@ export default function SiteForgeAppPage() {
 
   async function runSitePipeline(mode: "generate" | "build") {
     if (!briefIsValid()) {
-      setUserError("Please complete your business info before generating.", "generate");
+      const message =
+        mode === "generate"
+          ? "Please complete your business info before generating."
+          : "Complete the required items before building your draft.";
+      setUserError(message, mode === "generate" ? "generate" : "build");
+      if (mode === "build") {
+        setBuildDraftStatus("error");
+        setBuildDraftMessage(message);
+      }
       return;
     }
 
@@ -852,6 +935,10 @@ export default function SiteForgeAppPage() {
 
     setBusy(true);
     clearErrors();
+    if (mode === "build") {
+      setBuildDraftStatus("running");
+      setBuildDraftMessage("Building draft…");
+    }
 
     try {
       const data = await fetchJson<{ session: BuildSession }>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/build`, {
@@ -876,10 +963,18 @@ export default function SiteForgeAppPage() {
       activeProjectIntentRef.current = targetProjectId;
       await openProject(targetProjectId, "workspace");
       setCurrentStep(mode === "generate" ? "review" : "done");
+      if (mode === "build") {
+        setBuildDraftStatus("success");
+        setBuildDraftMessage("Draft build completed successfully.");
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : mode === "generate" ? "Failed to generate site." : "Build failed.";
       setUserError(message, mode === "generate" ? "generate" : "build");
       setCurrentStep(mode === "generate" ? "generate" : "build");
+      if (mode === "build") {
+        setBuildDraftStatus("error");
+        setBuildDraftMessage(resolveFriendlyError(message, "build"));
+      }
     } finally {
       setBusy(false);
     }
@@ -914,7 +1009,7 @@ export default function SiteForgeAppPage() {
               <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">SiteForge</div>
               <h1 className="mt-2 text-3xl font-semibold text-white">Simple Thrive Website Builder</h1>
               <p className="mt-2 max-w-3xl text-sm text-slate-300">
-                Connect your site, share your business details, generate pages, review them, then build in Thrive.
+                Connect your site, share your business details, generate pages, approve them, then publish your draft.
               </p>
             </div>
             <button
@@ -1193,7 +1288,7 @@ export default function SiteForgeAppPage() {
             {currentStep === "review" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
                 <h2 className="text-xl font-semibold text-slate-100">Review Pages</h2>
-                <p className="mt-2 text-sm text-slate-300">Check the generated pages before building in Thrive.</p>
+                <p className="mt-2 text-sm text-slate-300">Check generated pages and approve the exact page you want to publish.</p>
 
                 <div className="mt-4 overflow-auto">
                   <table className="min-w-full text-left text-sm text-slate-300">
@@ -1207,7 +1302,19 @@ export default function SiteForgeAppPage() {
                     <tbody>
                       {pageRows.map((page) => (
                         <tr key={page.slug} className="border-t border-white/10">
-                          <td className="px-2 py-2">{page.title}</td>
+                          <td className="px-2 py-2">
+                            <button
+                              type="button"
+                              className={`rounded px-1 py-0.5 text-left ${selectedPageSlug === page.slug ? "text-cyan-200 underline" : "text-slate-200"}`}
+                              onClick={() => {
+                                setSelectedPageSlug(page.slug);
+                                setReviewMessage(null);
+                              }}
+                            >
+                              {page.title}
+                            </button>
+                            {approvedPageSlugs.includes(page.slug) ? <span className="ml-2 text-xs text-emerald-200">Approved</span> : null}
+                          </td>
                           <td className="px-2 py-2">{page.purpose}</td>
                           <td className="px-2 py-2">{page.sections}</td>
                         </tr>
@@ -1221,19 +1328,48 @@ export default function SiteForgeAppPage() {
                   </table>
                 </div>
 
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" className={brainTheme.glowButton} onClick={() => setCurrentStep("build")} disabled={!canReviewPages}>
-                    Continue
-                  </button>
-                  {!canReviewPages ? <div className="text-xs text-slate-400">Generate Site first to review pages.</div> : null}
+                <div className="mt-4 space-y-3">
+                  {pageApprovalState.kind === "empty" ? (
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
+                      <div>{pageApprovalState.message}</div>
+                      <button type="button" className={`${brainTheme.glowButton} mt-3`} onClick={() => setCurrentStep("generate")}>
+                        Back to Plan
+                      </button>
+                    </div>
+                  ) : null}
+                  {pageApprovalState.kind === "needs_selection" ? (
+                    <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">{pageApprovalState.message}</div>
+                  ) : null}
+                  {pageApprovalState.kind === "ready" ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        className={brainTheme.glowButton}
+                        onClick={() => {
+                          if (!selectedReviewPage) return;
+                          if (!approvedPageSlugs.includes(selectedReviewPage.slug)) {
+                            setApprovedPageSlugs((prev) => [...prev, selectedReviewPage.slug]);
+                          }
+                          setReviewMessage(`${normalizePageApprovalName(selectedReviewPage.title)} approved.`);
+                        }}
+                      >
+                        {pageApprovalState.buttonLabel}
+                      </button>
+                      <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("build")} disabled={!approvedPageSlugs.length}>
+                        Go to Publish
+                      </button>
+                    </div>
+                  ) : null}
+                  {reviewMessage ? <div className="text-xs text-emerald-200">{reviewMessage}</div> : null}
+                  {approvedPageSlugs.length ? <div className="text-xs text-slate-400">Approved pages: {approvedPageSlugs.length}</div> : null}
                 </div>
               </section>
             ) : null}
 
             {currentStep === "build" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
-                <h2 className="text-xl font-semibold text-slate-100">Build in Thrive</h2>
-                <p className="mt-2 text-sm text-slate-300">Build your generated site using Thrive-native execution when available.</p>
+                <h2 className="text-xl font-semibold text-slate-100">Publish</h2>
+                <p className="mt-2 text-sm text-slate-300">Build your draft in Thrive once the required items are complete.</p>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
@@ -1274,20 +1410,49 @@ export default function SiteForgeAppPage() {
                 ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-2">
-                  <button type="button" data-testid="siteforge-build-in-thrive-action" className={brainTheme.glowButton} onClick={() => void runSitePipeline("build")} disabled={busy || !canBuildInThrive}>
-                    Build in Thrive
+                  <button
+                    type="button"
+                    data-testid="siteforge-build-draft-action"
+                    className={`${brainTheme.glowButton} ${busy || !buildDraftState.canBuildDraft ? "cursor-not-allowed opacity-60" : ""}`}
+                    onClick={() => void runSitePipeline("build")}
+                    disabled={busy || !buildDraftState.canBuildDraft}
+                  >
+                    {buildDraftStatus === "running" ? "Building Draft..." : buildDraftState.canBuildDraft ? "Build Draft" : "Fix Required Items"}
                   </button>
                   <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("done")} disabled={!hasCompletedBuild}>
                     Finish
                   </button>
                 </div>
+                {!buildDraftState.canBuildDraft ? (
+                  <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-100">
+                    <div>Complete the missing items before building your draft.</div>
+                    <ul className="mt-2 list-disc pl-4">
+                      {buildDraftState.blockers.map((blocker) => (
+                        <li key={blocker}>{blocker}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+                {buildDraftMessage ? (
+                  <div
+                    className={`mt-3 rounded-xl border p-3 text-xs ${
+                      buildDraftStatus === "error"
+                        ? "border-rose-300/40 bg-rose-500/10 text-rose-100"
+                        : buildDraftStatus === "success"
+                          ? "border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
+                          : "border-cyan-300/40 bg-cyan-500/10 text-cyan-100"
+                    }`}
+                  >
+                    {buildDraftMessage}
+                  </div>
+                ) : null}
               </section>
             ) : null}
 
             {currentStep === "done" ? (
               <section className={`${brainTheme.glassCard} p-5`}>
                 <h2 className="text-xl font-semibold text-slate-100">Done</h2>
-                <p className="mt-2 text-sm text-slate-300">Your latest run is complete. You can rebuild anytime from Build in Thrive.</p>
+                <p className="mt-2 text-sm text-slate-300">Your latest run is complete. You can rebuild anytime from Publish.</p>
                 <div className="mt-4 rounded-xl border border-white/10 bg-slate-950/45 p-3 text-sm text-slate-300">
                   <div>Build mode used: {buildModeUsed ?? "not available"}</div>
                   <div className="mt-1">Completed: {hasCompletedBuild ? "yes" : "no"}</div>
@@ -1296,7 +1461,7 @@ export default function SiteForgeAppPage() {
                 </div>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <button type="button" className={brainTheme.secondaryButton} onClick={() => setCurrentStep("review")}>Review Pages</button>
-                  <button type="button" className={brainTheme.glowButton} onClick={() => setCurrentStep("build")}>Build in Thrive</button>
+                  <button type="button" className={brainTheme.glowButton} onClick={() => setCurrentStep("build")}>Publish</button>
                 </div>
               </section>
             ) : null}

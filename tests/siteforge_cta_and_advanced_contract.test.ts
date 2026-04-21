@@ -8,11 +8,12 @@ describe("siteforge CTA and advanced visibility contract", () => {
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("Generate Site")).toBe(true);
-    expect(source.includes("Build in Thrive")).toBe(true);
+    expect(source.includes("Build Draft")).toBe(true);
     expect(source.includes("runSitePipeline(\"generate\")")).toBe(true);
     expect(source.includes("runSitePipeline(\"build\")")).toBe(true);
-    expect(source.includes("Build Draft")).toBe(false);
-    expect(source.includes("Approve Page")).toBe(false);
+    expect(source.includes("Fix Required Items")).toBe(true);
+    expect(source.includes("buttonLabel: `Approve ${normalizePageApprovalName(selectedPage.title)}`")).toBe(true);
+    expect(source.includes("normalizePageApprovalName")).toBe(true);
     expect(source.includes("Review Build Status")).toBe(false);
   });
 
