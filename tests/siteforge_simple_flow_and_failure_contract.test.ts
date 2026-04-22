@@ -3,23 +3,24 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("siteforge 2050 flow and failure language contract", () => {
-  it("enforces the six-screen flow", () => {
+  it("enforces the three-step flow", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("function renderIntentScreen()")).toBe(true);
-    expect(source.includes("function renderConnectScreen()")).toBe(true);
-    expect(source.includes("function renderPreviewScreen()")).toBe(true);
-    expect(source.includes("function renderApproveScreen()")).toBe(true);
-    expect(source.includes("function renderBuildScreen()")).toBe(true);
-    expect(source.includes("function renderLaunchScreen()")).toBe(true);
+    expect(source.includes("function renderConnectStep()")).toBe(true);
+    expect(source.includes("function renderDescribeStep()")).toBe(true);
+    expect(source.includes("function renderLaunchStep()")).toBe(true);
+    expect(source.includes("function renderPreviewScreen()")).toBe(false);
+    expect(source.includes("function renderApproveScreen()")).toBe(false);
+    expect(source.includes("function renderBuildScreen()")).toBe(false);
   });
 
-  it("keeps plain-language build states and user-friendly errors", () => {
+  it("keeps plain-language launch states and user-friendly errors", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Preparing")).toBe(true);
+    expect(source.includes("Researching")).toBe(true);
+    expect(source.includes("Planning")).toBe(true);
     expect(source.includes("Building")).toBe(true);
     expect(source.includes("Verifying")).toBe(true);
     expect(source.includes("Ready")).toBe(true);

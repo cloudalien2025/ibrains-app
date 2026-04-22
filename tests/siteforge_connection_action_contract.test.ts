@@ -13,7 +13,6 @@ describe("siteforge connection orchestration contract", () => {
     expect(source.includes("async function connectAndBegin() {")).toBe(true);
     expect(source.includes("await saveAiConfig(\"save\");")).toBe(true);
     expect(source.includes("await saveAndValidateConnection();")).toBe(true);
-    expect(source.includes("await runSitePipeline(\"generate\");")).toBe(true);
     expect(source.includes("`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/connection`")).toBe(true);
   });
 

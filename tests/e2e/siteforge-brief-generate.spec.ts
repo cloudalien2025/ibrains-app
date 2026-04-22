@@ -1,12 +1,12 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("SiteForge 2050 describe + connect flow", () => {
-  test("creates direction from intent and starts preview build", async ({ page }) => {
+test.describe("SiteForge 2050 connect + describe flow", () => {
+  test("connects first, then creates website plan from intent", async ({ page }) => {
     const projectId = "p1";
     const sessionId = "s1";
-    let lastBuildBody: Record<string, unknown> | null = null;
     let connectionValidated = false;
     let aiSaved = false;
+    let savedWebsiteBrief: Record<string, unknown> | null = null;
 
     const workspace = (hasSavedAiSecret: boolean) => ({
       project: {
@@ -16,7 +16,7 @@ test.describe("SiteForge 2050 describe + connect flow", () => {
         status: "draft",
         siteType: null,
         primaryPrompt: null,
-        websiteBrief: null,
+        websiteBrief: savedWebsiteBrief,
         currentState: "workspace",
         homepageStrategy: "use_existing",
         aiProvider: "openai",
@@ -72,6 +72,10 @@ test.describe("SiteForge 2050 describe + connect flow", () => {
       }
 
       if (url.endsWith(`/api/siteforge/projects/${projectId}`) && method === "PATCH") {
+        const body = req.postDataJSON() as { websiteBrief?: Record<string, unknown> } | null;
+        if (body?.websiteBrief) {
+          savedWebsiteBrief = body.websiteBrief;
+        }
         await route.fulfill({ status: 200, body: JSON.stringify(workspace(aiSaved)) });
         return;
       }
@@ -85,9 +89,7 @@ test.describe("SiteForge 2050 describe + connect flow", () => {
         return;
       }
 
-      if (url.endsWith(`/api/siteforge/projects/${projectId}/build`) && method === "POST") {
-        const data = req.postData();
-        lastBuildBody = data ? (JSON.parse(data) as Record<string, unknown>) : null;
+      if (url.includes("/api/siteforge/projects/") && url.endsWith("/build") && method === "POST") {
         await route.fulfill({
           status: 202,
           body: JSON.stringify({
@@ -143,20 +145,18 @@ test.describe("SiteForge 2050 describe + connect flow", () => {
     const intent = "Build a high-converting homepage for my AI pet app.";
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByTestId("siteforge-intent-prompt").fill(intent);
-    await page.getByTestId("siteforge-create-direction-action").click();
 
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/WordPress application password/i).fill("app-pass");
     await page.locator("#siteforge-ai-key").fill("sk-test");
+    await page.getByTestId("siteforge-connect-website-action").click();
+    await expect(page.getByText("Connected").first()).toBeVisible();
 
-    await page.getByTestId("siteforge-connect-begin-action").click();
-
-    await expect.poll(() => lastBuildBody).not.toBeNull();
-    const websiteBrief = (lastBuildBody as Record<string, unknown>).websiteBrief as Record<string, unknown>;
-    expect(websiteBrief.businessDescription).toBe(intent);
-    expect(websiteBrief.mainOffer).toBe("Primary offer with clear conversion path");
-    expect((lastBuildBody as Record<string, unknown>).homepageStrategy).toBe("draft_only");
+    await page.getByRole("button", { name: "Describe" }).click();
+    await page.getByTestId("siteforge-intent-prompt").fill(intent);
+    await page.getByTestId("siteforge-create-plan-action").click();
+    await expect(page.getByText("Website plan ready.")).toBeVisible();
+    await expect(page.getByTestId("siteforge-intent-prompt")).toHaveValue(intent);
   });
 });
