@@ -55,7 +55,7 @@ function visualPatternForSection(params: {
   const { sectionType, pageRole, appLike } = params;
   if (sectionType === "hero") return appLike ? "hero_split" : "hero_centered";
   if (sectionType === "features") return "feature_cards_grid";
-  if (sectionType === "testimonials") return "testimonial_cards";
+  if (sectionType === "testimonials") return appLike ? "trust_strip" : "testimonial_cards";
   if (sectionType === "faq") return "faq_toggle";
   if (sectionType === "cta") return "cta_band";
   if (sectionType === "contact") return "trust_strip";
@@ -199,8 +199,8 @@ function compositionForPattern(pattern: VisualPattern): VisualSectionComposition
       sectionLayout: "split",
       emphasisLevel: "medium",
       backgroundStyle: "surface",
-      cardStyle: "none",
-      mediaSlot: "app_screenshot",
+      cardStyle: "elevated",
+      mediaSlot: "image",
       iconStyle: "line",
       ctaStyle: "inline_link",
       spacingDensity: "comfortable",

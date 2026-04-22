@@ -10,7 +10,7 @@ const industryRules: Array<{ match: RegExp; businessType: string; audience: stri
   { match: /saas|software|app|platform|b2b/i, businessType: "SaaS", audience: "decision makers", goal: "drive demos and trials" },
 ];
 
-function createSections(forPage: string): SitePlanSection[] {
+function createSections(forPage: string, params: { appLike: boolean }): SitePlanSection[] {
   if (forPage === "contact") {
     return [
       { id: createId("sec"), sectionType: "hero", purpose: "Set contact expectations and response window" },
@@ -23,8 +23,20 @@ function createSections(forPage: string): SitePlanSection[] {
     return [
       { id: createId("sec"), sectionType: "hero", purpose: "Position brand mission" },
       { id: createId("sec"), sectionType: "solution", purpose: "Explain approach and outcomes" },
-      { id: createId("sec"), sectionType: "testimonials", purpose: "Build trust" },
+      { id: createId("sec"), sectionType: "features", purpose: "Show concrete operational strengths" },
       { id: createId("sec"), sectionType: "cta", purpose: "Move visitor to conversion action" },
+    ];
+  }
+
+  if (forPage === "home" && params.appLike) {
+    return [
+      { id: createId("sec"), sectionType: "hero", purpose: "State the value proposition and audience fit clearly" },
+      { id: createId("sec"), sectionType: "problem", purpose: "Frame the real workflow pain and stakes" },
+      { id: createId("sec"), sectionType: "features", purpose: "Show practical feature pillars derived from the brief" },
+      { id: createId("sec"), sectionType: "solution", purpose: "Demonstrate the differentiated product approach" },
+      { id: createId("sec"), sectionType: "testimonials", purpose: "Provide neutral trust framing without fabricated testimonials" },
+      { id: createId("sec"), sectionType: "faq", purpose: "Answer common adoption and safety concerns" },
+      { id: createId("sec"), sectionType: "cta", purpose: "Drive a specific high-intent action" },
     ];
   }
 
@@ -33,19 +45,19 @@ function createSections(forPage: string): SitePlanSection[] {
     { id: createId("sec"), sectionType: "problem", purpose: "Frame the core customer pain" },
     { id: createId("sec"), sectionType: "solution", purpose: "Present the offer" },
     { id: createId("sec"), sectionType: "features", purpose: "Summarize differentiators" },
-    { id: createId("sec"), sectionType: "testimonials", purpose: "Provide social proof" },
+    { id: createId("sec"), sectionType: "testimonials", purpose: "Build trust with grounded assurance statements" },
     { id: createId("sec"), sectionType: "cta", purpose: "Drive primary conversion action" },
   ];
 }
 
-function createPage(title: string, purpose: string): SitePlanPage {
+function createPage(title: string, purpose: string, params: { appLike: boolean }): SitePlanPage {
   const slug = toSlug(title === "Home" ? "home" : title);
   return {
     id: createId("page"),
     title,
     slug,
     purpose,
-    sections: createSections(slug),
+    sections: createSections(slug, params),
   };
 }
 
@@ -53,11 +65,12 @@ export function runPlannerAgentDeterministic(prompt: string): SitePlan {
   const rule = industryRules.find((candidate) => candidate.match.test(prompt));
   const businessType = rule?.businessType ?? "Service Business";
   const targetAudience = rule?.audience ?? null;
+  const appLike = /saas|software|app|platform|mobile/i.test(prompt);
 
   const pages = [
-    createPage("Home", "Primary conversion page"),
-    createPage("About", "Trust and credibility page"),
-    createPage("Contact", "Lead capture and outreach page"),
+    createPage("Home", "Primary conversion page", { appLike }),
+    createPage("About", "Trust and credibility page", { appLike }),
+    createPage("Contact", "Lead capture and outreach page", { appLike }),
   ];
 
   return {
@@ -177,8 +190,10 @@ export async function runPlannerAgent(params: {
     schemaName: "siteforge_site_plan",
     schema: plannerSchema as unknown as Record<string, unknown>,
     system:
-      "You are SiteForge planner agent. Return only valid JSON matching schema. Build a practical conversion-oriented small business website plan using normalized market patterns when provided. Never copy competitor phrasing verbatim.",
-    user: `${prompt}\n\nEnsure ids are stable-looking strings and homepage slug corresponds to an existing page.`,
+      "You are SiteForge planner agent. Return only valid JSON matching schema. Build a practical conversion-oriented website plan with clear page hierarchy and section order for mobile-first landing pages. Use normalized market patterns when provided. Never copy competitor phrasing verbatim and never propose fabricated testimonials.",
+    user:
+      `${prompt}\n\nEnsure ids are stable-looking strings and homepage slug corresponds to an existing page.` +
+      "\nPrioritize sections with persuasive value and avoid filler or placeholder sections.",
   });
 
   return validateSitePlan(raw);

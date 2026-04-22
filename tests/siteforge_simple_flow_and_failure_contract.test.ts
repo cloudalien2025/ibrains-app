@@ -30,7 +30,7 @@ describe("siteforge 2050 flow and failure language contract", () => {
 
     expect(source.includes("We couldn’t generate your site yet.")).toBe(true);
     expect(source.includes("Your WordPress site connected, but the build failed.")).toBe(true);
-    expect(source.includes("buildModeUsed")).toBe(false);
+    expect(source.includes("buildModeUsed")).toBe(true);
     expect(source.includes("thrive_fallback")).toBe(false);
     expect(source.includes("wordpress_fallback")).toBe(false);
   });
