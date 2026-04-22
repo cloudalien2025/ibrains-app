@@ -51,8 +51,7 @@ type WebsiteBriefForm = {
 };
 
 type CreateStatus = "idle" | "creating" | "created" | "error";
-type PrimaryView = "setup" | "build" | "publish" | "settings";
-type BuildTab = "plan" | "pages" | "assets";
+type JourneyPhase = "describe" | "connect" | "preview" | "approve" | "build" | "launch";
 
 type OpenProjectResult =
   | { ok: true }
@@ -68,16 +67,23 @@ type SelectedPageApprovalState =
   | { kind: "needs_selection"; message: string }
   | { kind: "ready"; buttonLabel: string };
 
-const primaryNav: Array<{ id: PrimaryView; label: string }> = [
-  { id: "setup", label: "Setup" },
-  { id: "build", label: "Build" },
-  { id: "publish", label: "Publish" },
-];
+type IntentAssumptions = {
+  businessType: string;
+  audience: string;
+  offer: string;
+  tone: string;
+  siteArchetype: string;
+  ctaStrategy: string;
+  pageSet: string[];
+};
 
-const buildTabs: Array<{ id: BuildTab; label: string }> = [
-  { id: "plan", label: "Plan" },
-  { id: "pages", label: "Pages" },
-  { id: "assets", label: "Assets" },
+const journeyFlow: Array<{ id: JourneyPhase; label: string }> = [
+  { id: "describe", label: "Describe" },
+  { id: "connect", label: "Connect" },
+  { id: "preview", label: "Preview" },
+  { id: "approve", label: "Approve" },
+  { id: "build", label: "Build" },
+  { id: "launch", label: "Launch" },
 ];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -101,13 +107,6 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   return payload as T;
 }
 
-function formatDate(value: string | null | undefined): string {
-  if (!value) return "Not available";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleString();
-}
-
 function resolveFriendlyError(raw: string, context: "load" | "connect" | "generate" | "build" | "save"): string {
   const text = raw.toLowerCase();
   if (text.includes("project not found")) return "Selected project could not be loaded.";
@@ -124,6 +123,72 @@ function resolveFriendlyError(raw: string, context: "load" | "connect" | "genera
   if (context === "build") return "Thrive was detected, but the native build path is currently blocked.";
   if (context === "connect") return "We couldn’t validate your WordPress connection yet.";
   return raw;
+}
+
+function intentToAssumptions(prompt: string): IntentAssumptions {
+  const text = prompt.toLowerCase();
+  const businessType = text.includes("service")
+    ? "Local service business"
+    : text.includes("saas") || text.includes("app")
+      ? "SaaS / software"
+      : text.includes("boutique") || text.includes("brand")
+        ? "Boutique brand"
+        : "Growth business";
+
+  const audience = text.includes("local")
+    ? "Nearby buyers ready to act"
+    : text.includes("b2b")
+      ? "Decision makers evaluating solutions"
+      : "People searching for a trusted solution";
+
+  const offer = text.includes("call")
+    ? "Consultation call"
+    : text.includes("email") || text.includes("capture")
+      ? "Lead magnet + email nurture"
+      : "Primary offer with clear conversion path";
+
+  const tone = text.includes("trusted") || text.includes("trust") ? "credible" : text.includes("boutique") ? "premium" : "expert";
+  const siteArchetype = text.includes("homepage") ? "Single high-converting homepage" : "Conversion-focused growth site";
+  const ctaStrategy = text.includes("calls") ? "Call-first CTA" : "Lead capture first, conversion second";
+
+  return {
+    businessType,
+    audience,
+    offer,
+    tone,
+    siteArchetype,
+    ctaStrategy,
+    pageSet: ["Home", "Offer", "About", "Contact", "Lead Capture"],
+  };
+}
+
+function intentToBrief(prompt: string): WebsiteBriefForm {
+  const assumptions = intentToAssumptions(prompt);
+  const normalizedPrompt = prompt.trim();
+  const fallbackName = "Intent-led Site";
+
+  return {
+    businessName: fallbackName,
+    businessType: assumptions.businessType,
+    businessDescription: normalizedPrompt || "Website generated from intent.",
+    targetAudience: assumptions.audience,
+    websiteGoal: "capture_leads",
+    mainOffer: assumptions.offer,
+    brandTone: assumptions.tone === "premium" ? "premium" : assumptions.tone === "credible" ? "modern" : "expert",
+    marketLocation: "",
+    competitors: "",
+    differentiators: "Built from user intent with conversion-first structure.",
+  };
+}
+
+function intentToProjectName(prompt: string): string {
+  const cleaned = prompt
+    .replace(/[^a-zA-Z0-9\s]/g, " ")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(" ");
+  return normalizeNewProjectName(cleaned ? `${cleaned} Site` : "Intent SiteForge Project") ?? "Intent SiteForge Project";
 }
 
 export function normalizePageApprovalName(title: string): string {
@@ -166,8 +231,7 @@ export function getSelectedPageApprovalState({
 }
 
 export default function SiteForgeAppPage() {
-  const [activeView, setActiveView] = useState<PrimaryView>("setup");
-  const [activeBuildTab, setActiveBuildTab] = useState<BuildTab>("plan");
+  const [activePhase, setActivePhase] = useState<JourneyPhase>("describe");
 
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -213,10 +277,20 @@ export default function SiteForgeAppPage() {
   const [createStatusMessage, setCreateStatusMessage] = useState<string | null>(null);
   const [storageSummary, setStorageSummary] = useState<StorageSummary | null>(null);
 
+  const [intentPrompt, setIntentPrompt] = useState("");
+  const [intentAssumptions, setIntentAssumptions] = useState<IntentAssumptions | null>(null);
+  const [intentStatusMessage, setIntentStatusMessage] = useState<string | null>(null);
+  const [connectStatusMessage, setConnectStatusMessage] = useState<string | null>(null);
+
   const [selectedPageSlug, setSelectedPageSlug] = useState<string | null>(null);
   const [approvedPageSlugs, setApprovedPageSlugs] = useState<string[]>([]);
+  const [approvedPageSet, setApprovedPageSet] = useState(false);
+  const [approvedCtaStyle, setApprovedCtaStyle] = useState(false);
+  const [approvedReuseDecision, setApprovedReuseDecision] = useState(false);
+
   const [buildDraftStatus, setBuildDraftStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [buildDraftMessage, setBuildDraftMessage] = useState<string | null>(null);
+  const [launchMessage, setLaunchMessage] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +334,9 @@ export default function SiteForgeAppPage() {
     [pageRows, selectedPageSlug]
   );
 
+  const homePage = useMemo(() => pageRows.find((page) => page.slug === "home") ?? pageRows[0] ?? null, [pageRows]);
+  const homeApproved = Boolean(homePage && approvedPageSlugs.includes(homePage.slug));
+
   const isConnected = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
   const isThriveDetected = Boolean(connectionResult?.thriveDetected || savedConnection?.thriveDetected || snapshot?.thriveDetected);
   const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
@@ -277,22 +354,6 @@ export default function SiteForgeAppPage() {
 
   const hasGeneratedSitePlan = pageRows.length > 0;
   const hasCompletedBuild = currentSession?.status === "completed" && Boolean(currentSession?.executionResult);
-
-  const buildModeUsed = useMemo(() => {
-    const thrive = currentSession?.executionResult?.thrive;
-    if (!thrive) return null;
-    if (thrive.buildModeUsed) return thrive.buildModeUsed;
-    if (thrive.currentMode === "thrive_native_staging_mode" && thrive.nativeValidation?.status === "passed") return "thrive_native";
-    if (thrive.enabled) return "thrive_fallback";
-    return "wordpress_fallback";
-  }, [currentSession]);
-
-  const canUseThriveNative = useMemo(() => {
-    if (!isThriveDetected) return false;
-    const guardEligible = currentSession?.executionResult?.thrive?.nativeGuard?.eligible;
-    if (typeof guardEligible === "boolean") return guardEligible;
-    return true;
-  }, [currentSession, isThriveDetected]);
 
   const pageApprovalState = useMemo(
     () => getSelectedPageApprovalState({ pageRows, selectedPage: selectedBuildPage }),
@@ -334,7 +395,38 @@ export default function SiteForgeAppPage() {
     [aiConfigured, approvedPageSlugs.length, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, isConnected]
   );
 
-  const setupReady = hasBusinessInfo && isConnected && aiConfigured;
+  const allApprovalMomentsComplete =
+    homeApproved && approvedPageSet && approvedCtaStyle && (!isThriveDetected || approvedReuseDecision);
+
+  function recommendedPhase(): JourneyPhase {
+    if (!hasBusinessInfo) return "describe";
+    if (!isConnected || !aiConfigured) return "connect";
+    if (!hasGeneratedSitePlan) return "preview";
+    if (!allApprovalMomentsComplete) return "approve";
+    if (!hasCompletedBuild) return "build";
+    return "launch";
+  }
+
+  const phaseIndex = useMemo(() => {
+    const map = new Map<JourneyPhase, number>();
+    journeyFlow.forEach((phase, index) => map.set(phase.id, index));
+    return map;
+  }, []);
+
+  useEffect(() => {
+    const suggested = recommendedPhase();
+    const current = phaseIndex.get(activePhase) ?? 0;
+    const suggestedIndex = phaseIndex.get(suggested) ?? 0;
+    if (suggestedIndex > current) setActivePhase(suggested);
+  }, [activePhase, aiConfigured, allApprovalMomentsComplete, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, isConnected, phaseIndex]);
+
+  useEffect(() => {
+    if (!pageRows.length) {
+      setApprovedPageSet(false);
+      setApprovedCtaStyle(false);
+      setApprovedReuseDecision(false);
+    }
+  }, [pageRows.length, currentSession?.id]);
 
   function setUserError(rawMessage: string, context: "load" | "connect" | "generate" | "build" | "save") {
     setTechnicalError(rawMessage);
@@ -402,6 +494,10 @@ export default function SiteForgeAppPage() {
     setHasThriveHint(false);
     setHomepageStrategy("use_existing");
     setConnectionResult(null);
+    setIntentPrompt("");
+    setIntentAssumptions(null);
+    setIntentStatusMessage(null);
+    setConnectStatusMessage(null);
   }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
@@ -475,6 +571,16 @@ export default function SiteForgeAppPage() {
     setAppPassword("");
   }
 
+  async function saveWebsiteBriefPayload(targetProjectId: string, payload: ReturnType<typeof briefPayload>) {
+    const data = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}`, {
+      method: "PATCH",
+      body: JSON.stringify({ websiteBrief: payload, currentState: "workspace" }),
+    });
+    const workspace = normalizeWorkspace(data);
+    if (!workspace) throw new Error("Website brief save response was invalid.");
+    await applyWorkspace(workspace);
+  }
+
   async function persistProjectNameUpdate(): Promise<void> {
     if (!shouldPersistProjectName({ selectedProjectId: activeProjectId ?? "", projectName, persistedProjectName })) {
       return;
@@ -532,6 +638,32 @@ export default function SiteForgeAppPage() {
     }
 
     return candidateProjectId;
+  }
+
+  async function ensureProjectForIntent(intent: string): Promise<string | null> {
+    const canonical = await ensureCanonicalActiveProjectId();
+    if (canonical) return canonical;
+
+    const generatedName = intentToProjectName(intent);
+    if (!generatedName) return null;
+
+    setCreateStatus("creating");
+    setCreateStatusMessage(null);
+    const payload = await fetchJson<unknown>("/api/siteforge/projects", {
+      method: "POST",
+      body: JSON.stringify({ name: generatedName, description: "Persistent SiteForge workspace" }),
+    });
+    const normalized = normalizeProjectPayload(payload);
+    if (!normalized) throw new Error("Project create response was invalid.");
+
+    setProjects((prev) => [normalized.project, ...prev.filter((entry) => entry.id !== normalized.project.id)]);
+    activeProjectIntentRef.current = normalized.project.id;
+    setSelectedProjectId(normalized.project.id);
+    const opened = await openProject(normalized.project.id, "create");
+    if (!opened.ok && opened.reason === "failed") throw new Error(opened.message ?? "Project was created but could not be opened.");
+    setCreateStatus("created");
+    setCreateStatusMessage(`Project created: ${normalized.project.name}`);
+    return normalized.project.id;
   }
 
   async function openProject(
@@ -812,16 +944,7 @@ export default function SiteForgeAppPage() {
     clearErrors();
 
     try {
-      const payload = await fetchJson<unknown>(`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}`, {
-        method: "PATCH",
-        body: JSON.stringify({
-          websiteBrief: briefPayload(),
-          currentState: "workspace",
-        }),
-      });
-      const workspace = normalizeWorkspace(payload);
-      if (!workspace) throw new Error("Website brief save response was invalid.");
-      await applyWorkspace(workspace);
+      await saveWebsiteBriefPayload(targetProjectId, briefPayload());
       setBriefSaveState("saved");
     } catch (err: unknown) {
       setBriefSaveState("error");
@@ -956,430 +1079,605 @@ export default function SiteForgeAppPage() {
     }
   }
 
-  function renderSetup() {
+  async function createFirstDirection() {
+    const prompt = intentPrompt.trim();
+    if (!prompt) {
+      setIntentStatusMessage("Add your intent before creating direction.");
+      return;
+    }
+
+    setIntentStatusMessage("Creating first direction...");
+    clearErrors();
+
+    try {
+      const projectId = await ensureProjectForIntent(prompt);
+      if (!projectId) throw new Error("Unable to prepare a project for this intent.");
+
+      const inferred = intentToBrief(prompt);
+      const assumptions = intentToAssumptions(prompt);
+      setIntentAssumptions(assumptions);
+      setBriefForm(inferred);
+
+      setBusy(true);
+      setBriefSaveState("saving");
+      await saveWebsiteBriefPayload(projectId, {
+        businessName: inferred.businessName.trim(),
+        businessType: inferred.businessType.trim(),
+        businessDescription: inferred.businessDescription.trim(),
+        targetAudience: inferred.targetAudience.trim(),
+        websiteGoal: inferred.websiteGoal,
+        mainOffer: inferred.mainOffer.trim(),
+        brandTone: inferred.brandTone,
+        marketLocation: inferred.marketLocation.trim(),
+        competitors: inferred.competitors.trim(),
+        differentiators: inferred.differentiators.trim(),
+      });
+      setBriefSaveState("saved");
+      setIntentStatusMessage("Direction created. Review assumptions and continue.");
+      setActivePhase("connect");
+    } catch (err: unknown) {
+      setBriefSaveState("error");
+      const message = err instanceof Error ? err.message : "Failed to create first direction.";
+      setUserError(message, "save");
+      setIntentStatusMessage("We could not create direction yet.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function connectAndBegin() {
+    clearErrors();
+    setConnectStatusMessage("Preparing connection...");
+
+    try {
+      const targetProjectId = await ensureCanonicalActiveProjectId();
+      if (!targetProjectId) return;
+      if (!briefIsValid()) {
+        setConnectStatusMessage("Your direction needs more detail before connecting.");
+        setActivePhase("describe");
+        return;
+      }
+
+      if (aiApiKey.trim() || serpApiKey.trim()) {
+        setConnectStatusMessage("Saving AI access...");
+        await saveAiConfig("save");
+      } else if (!aiConfigured) {
+        setConnectStatusMessage("Add an AI key to begin.");
+        return;
+      }
+
+      setConnectStatusMessage("Connecting to WordPress...");
+      await saveAndValidateConnection();
+
+      setConnectStatusMessage("Creating your first preview...");
+      await runSitePipeline("generate");
+
+      setConnectStatusMessage("Connected and preview ready.");
+      setActivePhase("preview");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Connect and begin failed.";
+      setUserError(message, "connect");
+      setConnectStatusMessage("We could not connect and begin yet.");
+    }
+  }
+
+  function previewPages(): string[] {
+    if (pageRows.length) return pageRows.map((page) => page.title);
+    if (intentAssumptions?.pageSet?.length) return intentAssumptions.pageSet;
+    return ["Home", "Offer", "About", "Contact"];
+  }
+
+  function resolveBuildExperienceStatus(): { stage: "Preparing" | "Building" | "Verifying" | "Ready" | "Needs your input"; detail: string } {
+    if (hasCompletedBuild) {
+      return { stage: "Ready", detail: "Your draft is ready for launch review." };
+    }
+
+    if (!buildDraftState.canBuildDraft && (buildDraftStatus === "error" || approvedPageSlugs.length > 0)) {
+      return { stage: "Needs your input", detail: buildDraftState.blockers[0] ?? "A required input is missing." };
+    }
+
+    if (buildDraftStatus === "running") {
+      return { stage: "Building", detail: "Building a draft safely before publishing." };
+    }
+
+    const stage = String(currentSession?.runState.currentStage ?? "");
+    if (currentSession?.status === "queued") {
+      return { stage: "Preparing", detail: "Preparing your build sequence." };
+    }
+    if (currentSession?.status === "running") {
+      if (stage.includes("qa") || stage.includes("verif")) {
+        return { stage: "Verifying", detail: "Verifying layout and content for launch readiness." };
+      }
+      return { stage: "Building", detail: isThriveDetected ? "Building directly in Thrive." : "Building your draft safely before publishing." };
+    }
+
+    if (!buildDraftState.canBuildDraft) {
+      return { stage: "Needs your input", detail: buildDraftState.blockers[0] ?? "A required input is missing." };
+    }
+
+    return { stage: "Preparing", detail: "Build is ready when you confirm." };
+  }
+
+  function advanceTo(phase: JourneyPhase) {
+    setActivePhase(phase);
+    if (phase === "build") setLaunchMessage(null);
+  }
+
+  function renderIntentScreen() {
+    const examples = [
+      "Build a high-converting homepage for my AI pet app.",
+      "Create a trusted local service website that gets calls.",
+      "Build a boutique brand site with storytelling and email capture.",
+    ];
+
     return (
-      <div className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-2">
-          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-            <h2 className="text-lg font-semibold text-white">Project</h2>
-            <div className="mt-3 grid gap-3 text-xs text-slate-200">
-              <div>
-                <label className="text-slate-300">Current project</label>
-                <select
-                  data-testid="siteforge-project-select"
-                  value={selectedProjectId}
-                  onChange={(event) => {
-                    activeProjectIntentRef.current = event.target.value || null;
-                    void openProject(event.target.value, "user");
-                  }}
-                  disabled={!projects.length || busy}
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-                >
-                  {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
-                  {!projects.length ? <option value="">No project selected</option> : null}
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="text-slate-300">New project name</label>
-                <input
-                  data-testid="siteforge-new-project-name-input"
-                  placeholder="e.g. iPetzo"
-                  value={newProjectName}
-                  onChange={(event) => setNewProjectName(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-                />
-                <button
-                  type="button"
-                  className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
-                  onClick={createProject}
-                  disabled={busy || !normalizeNewProjectName(newProjectName)}
-                >
-                  {createStatus === "creating" ? "Creating..." : "Create Project"}
-                </button>
-              </div>
-              <div>
-                <label className="text-slate-300">Rename current project</label>
-                <input
-                  id="siteforge-project-name"
-                  value={projectName}
-                  onChange={(event) => setProjectName(event.target.value)}
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-                />
-                <div className="mt-1 text-slate-400">Rename state: {projectNameSaveState}</div>
-              </div>
-              {createStatusMessage ? <div className="text-slate-300">{createStatusMessage}</div> : null}
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-            <h2 className="text-lg font-semibold text-white">About your website</h2>
-            <div className="mt-3 grid gap-3 text-xs text-slate-200 md:grid-cols-2">
-              <div>
-                <label htmlFor="siteforge-brief-business-name">Business name</label>
-                <input id="siteforge-brief-business-name" value={briefForm.businessName} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-brief-business-type">Business type</label>
-                <input id="siteforge-brief-business-type" value={briefForm.businessType} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-brief-target-audience">Target audience</label>
-                <input id="siteforge-brief-target-audience" value={briefForm.targetAudience} onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-brief-main-offer">Main offer</label>
-                <input id="siteforge-brief-main-offer" value={briefForm.mainOffer} onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div className="md:col-span-2">
-                <label htmlFor="siteforge-brief-business-description">What does your business do?</label>
-                <textarea id="siteforge-brief-business-description" value={briefForm.businessDescription} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))} className="mt-1 h-24 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-3 text-xs">
-              <div className="text-slate-300">Save state: {briefSaveState}</div>
-              <button type="button" data-testid="siteforge-business-continue-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100" onClick={saveWebsiteBrief} disabled={busy || !selectedProjectId}>Save Website Brief</button>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-            <h2 className="text-lg font-semibold text-white">Connect your site</h2>
-            <div className="mt-3 grid gap-3 text-xs text-slate-200">
-              <div>
-                <label className="text-slate-300">Connection label</label>
-                <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label className="text-slate-300">WordPress URL</label>
-                <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label className="text-slate-300">WordPress username</label>
-                <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label className="text-slate-300">Application password</label>
-                <input type="password" placeholder="WordPress application password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2">
-                <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} /> Thrive already installed
-              </label>
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-              <div className="text-slate-300">{connectionResult?.message ?? "Connection not validated yet."}</div>
-              <div className="flex gap-2">
-                <button type="button" data-testid="siteforge-validate-connection-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100" onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Validate Connection</button>
-                {savedConnection ? (
-                  <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={revalidateConnection} disabled={busy || !selectedProjectId}>Recheck</button>
-                ) : null}
-              </div>
-            </div>
-          </section>
-
-          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-            <h2 className="text-lg font-semibold text-white">AI access</h2>
-            <div className="mt-3 grid gap-3 text-xs text-slate-200">
-              <div>
-                <label htmlFor="siteforge-ai-key">OpenAI API key</label>
-                <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-serpapi-key">SerpApi API key (optional)</label>
-                <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-ai-model">AI model</label>
-                <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2">
-                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                  <option value="gpt-4.1">gpt-4.1</option>
-                  <option value="gpt-5-mini">gpt-5-mini</option>
-                </select>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between gap-2 text-xs">
-              <div className="text-slate-300">AI status: {aiStatusMessage ?? "not configured"}</div>
-              <div className="flex gap-2">
-                <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
-                <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={removeAiKey} disabled={busy || (!activeProject?.hasSavedAiSecret && !activeProject?.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
-              </div>
-            </div>
-          </section>
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">Describe</h2>
+        <p className="text-sm text-slate-300">What kind of website do you want me to build?</p>
+        <textarea
+          data-testid="siteforge-intent-prompt"
+          value={intentPrompt}
+          onChange={(event) => setIntentPrompt(event.target.value)}
+          placeholder="Describe the site outcome you want..."
+          className="h-32 w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-slate-100"
+        />
+        <div className="flex flex-wrap gap-2 text-xs">
+          {examples.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => setIntentPrompt(example)}
+              className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-slate-200"
+            >
+              {example}
+            </button>
+          ))}
         </div>
 
-        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
-              <p className="mt-1 text-xs text-slate-300">Generate your initial plan after Setup is complete.</p>
+        {intentAssumptions ? (
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div className="font-medium text-white">AI assumptions</div>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
+              <div>Business type: {intentAssumptions.businessType}</div>
+              <div>Audience: {intentAssumptions.audience}</div>
+              <div>Offer: {intentAssumptions.offer}</div>
+              <div>Tone: {intentAssumptions.tone}</div>
+              <div>Site archetype: {intentAssumptions.siteArchetype}</div>
+              <div>CTA style: {intentAssumptions.ctaStrategy}</div>
             </div>
             <button
               type="button"
-              data-testid="siteforge-generate-site-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !setupReady ? "cursor-not-allowed opacity-60" : ""}`}
-              onClick={() => void runSitePipeline("generate")}
-              disabled={busy || !setupReady}
+              className="mt-3 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+              onClick={() => setActivePhase("connect")}
             >
-              Generate Plan
+              Refine assumptions
             </button>
           </div>
-          {!setupReady ? (
-            <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
-              {!hasBusinessInfo ? <li>Complete your website brief.</li> : null}
-              {!isConnected ? <li>Validate your WordPress connection.</li> : null}
-              {!aiConfigured ? <li>Save at least one API key.</li> : null}
-            </ul>
-          ) : null}
-        </section>
-      </div>
+        ) : null}
+
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-200">Primary action</div>
+            <button
+              type="button"
+              data-testid="siteforge-create-direction-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+              onClick={() => void createFirstDirection()}
+              disabled={busy}
+            >
+              Create first direction
+            </button>
+          </div>
+          {intentStatusMessage ? <div className="mt-2 text-xs text-slate-300">{intentStatusMessage}</div> : null}
+        </div>
+      </section>
     );
   }
 
-  function renderBuildPlan() {
-    return (
-      <div className="space-y-4">
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Plan readiness</h3>
-          <div className="mt-3 grid gap-3 text-xs text-slate-200 md:grid-cols-2">
-            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Project selected: {selectedProjectId ? "yes" : "no"}</div>
-            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Connection validated: {isConnected ? "yes" : "no"}</div>
-            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Plan generated: {hasGeneratedSitePlan ? "yes" : "no"}</div>
-            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Approved pages: {approvedPageSlugs.length}</div>
-          </div>
-        </section>
+  function renderConnectScreen() {
+    const symbolCount = snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0;
+    const templateCount = snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0;
 
-        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
-              <p className="mt-1 text-xs text-slate-300">Build a draft after required items are complete.</p>
-            </div>
+    return (
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">Connect</h2>
+        <p className="text-sm text-slate-300">Connect your site and access keys once. I will handle the rest.</p>
+
+        <div className="grid gap-3 text-sm text-slate-200 md:grid-cols-2">
+          <div>
+            <label className="text-slate-300">WordPress URL</label>
+            <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+          </div>
+          <div>
+            <label className="text-slate-300">Username</label>
+            <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+          </div>
+          <div>
+            <label className="text-slate-300">App password</label>
+            <input type="password" value={appPassword} placeholder="WordPress application password" onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+          </div>
+          <div>
+            <label htmlFor="siteforge-ai-key" className="text-slate-300">AI key</label>
+            <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+          </div>
+          <div className="md:col-span-2">
+            <label htmlFor="siteforge-serpapi-key" className="text-slate-300">Research key (optional)</label>
+            <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-200">Primary action</div>
             <button
               type="button"
-              data-testid="siteforge-build-draft-action"
+              data-testid="siteforge-connect-begin-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+              onClick={() => void connectAndBegin()}
+              disabled={busy}
+            >
+              Connect and begin
+            </button>
+          </div>
+          {connectStatusMessage ? <div className="mt-2 text-xs text-slate-300">{connectStatusMessage}</div> : null}
+        </div>
+
+        {(isConnected || snapshot) ? (
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div>Connected to WordPress: {isConnected ? "yes" : "not yet"}</div>
+            <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
+            <div className="mt-1">Reusable assets found: {symbolCount}</div>
+            <div className="mt-1">Existing shell opportunities found: {templateCount > 0 ? "yes" : "not yet"}</div>
+          </div>
+        ) : null}
+      </section>
+    );
+  }
+
+  function renderPreviewScreen() {
+    const pages = previewPages();
+    const reuseSummary = isThriveDetected
+      ? "I can reuse your existing Thrive shell and blocks where it improves speed."
+      : "No Thrive shell detected yet. I will build a safe draft structure first.";
+
+    return (
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">Preview</h2>
+        <p className="text-sm text-slate-300">Here is the site I think you need.</p>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr_0.9fr]">
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div className="font-medium text-white">AI reasoning summary</div>
+            <ul className="mt-2 list-disc space-y-1 pl-4">
+              <li>Direction: {intentAssumptions?.siteArchetype ?? "Conversion-focused growth site"}</li>
+              <li>Audience: {briefForm.targetAudience || intentAssumptions?.audience || "Defined from your prompt"}</li>
+              <li>Offer: {briefForm.mainOffer || intentAssumptions?.offer || "Primary offer will be clarified"}</li>
+              <li>CTA style: {intentAssumptions?.ctaStrategy ?? "Lead capture first, conversion second"}</li>
+              <li>{reuseSummary}</li>
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div className="font-medium text-white">Live site blueprint</div>
+            <div className="mt-2">Homepage approach: {homePage?.title ?? "Conversion-first homepage with strong proof and CTA"}</div>
+            <div className="mt-2">Proposed page set:</div>
+            <ul className="mt-1 list-disc pl-4">
+              {pages.map((page) => (
+                <li key={page}>{page}</li>
+              ))}
+            </ul>
+            <div className="mt-2">CTA style: {intentAssumptions?.ctaStrategy ?? "Focused primary CTA with one supporting CTA"}</div>
+            <div className="mt-2">Reuse decision: {isThriveDetected ? "Reuse where quality is high, replace where needed." : "Create new safe draft assets."}</div>
+          </div>
+
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div className="font-medium text-white">Active decision</div>
+            {hasGeneratedSitePlan ? (
+              <>
+                <div className="mt-2">Your first draft direction is ready for approval.</div>
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
+                  onClick={() => advanceTo("approve")}
+                >
+                  Review approvals
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="mt-2">I need a connected setup before I can render a full preview.</div>
+                <button
+                  type="button"
+                  className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
+                  onClick={() => advanceTo("connect")}
+                >
+                  Go to Connect
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderApproveScreen() {
+    if (!pageRows.length) {
+      return (
+        <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+          <h2 className="text-xl font-semibold text-white">Approve</h2>
+          <p className="text-sm text-slate-300">No pages are ready to approve yet.</p>
+          <button
+            type="button"
+            className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
+            onClick={() => advanceTo("preview")}
+          >
+            Review preview
+          </button>
+        </section>
+      );
+    }
+
+    const activeApproval = !homeApproved
+      ? { key: "home", label: "Approve Homepage", action: () => homePage && setApprovedPageSlugs((prev) => (prev.includes(homePage.slug) ? prev : [...prev, homePage.slug])) }
+      : !approvedPageSet
+        ? { key: "pageset", label: "Use this page set", action: () => setApprovedPageSet(true) }
+        : !approvedCtaStyle
+          ? { key: "cta", label: "Use this CTA style", action: () => setApprovedCtaStyle(true) }
+          : isThriveDetected && !approvedReuseDecision
+            ? { key: "reuse", label: "Approve reuse decisions", action: () => setApprovedReuseDecision(true) }
+            : null;
+
+    return (
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">Approve</h2>
+        <p className="text-sm text-slate-300">Confirm meaning, direction, and decisions before build.</p>
+
+        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.9fr]">
+          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+            <div className="font-medium text-white">Approval moments</div>
+            <ul className="mt-2 space-y-2">
+              <li className="rounded-lg border border-white/12 px-3 py-2">{homeApproved ? "[x]" : "[ ]"} Homepage direction</li>
+              <li className="rounded-lg border border-white/12 px-3 py-2">{approvedPageSet ? "[x]" : "[ ]"} Page set</li>
+              <li className="rounded-lg border border-white/12 px-3 py-2">{approvedCtaStyle ? "[x]" : "[ ]"} CTA style</li>
+              {isThriveDetected ? (
+                <li className="rounded-lg border border-white/12 px-3 py-2">{approvedReuseDecision ? "[x]" : "[ ]"} Reuse / replace decision</li>
+              ) : null}
+            </ul>
+          </div>
+
+          <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4 text-xs text-slate-200">
+            <div className="font-medium text-cyan-100">Primary action</div>
+            {activeApproval ? (
+              <button
+                type="button"
+                data-testid="siteforge-approve-active-action"
+                className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
+                onClick={activeApproval.action}
+              >
+                {activeApproval.label}
+              </button>
+            ) : (
+              <button
+                type="button"
+                data-testid="siteforge-approve-active-action"
+                className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
+                onClick={() => advanceTo("build")}
+              >
+                Move to Build
+              </button>
+            )}
+            <div className="mt-3">Selected page: {selectedBuildPage?.title ?? "None"}</div>
+            <div className="mt-1">Approval hint: {pageApprovalState.kind === "ready" ? pageApprovalState.buttonLabel : pageApprovalState.message}</div>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  function renderBuildScreen() {
+    const experience = resolveBuildExperienceStatus();
+
+    return (
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">Build</h2>
+        <p className="text-sm text-slate-300">I will build the approved draft safely before publishing.</p>
+
+        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-sm text-slate-200">
+          <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Status</div>
+          <div className="mt-2 text-xl font-semibold text-white">{experience.stage}</div>
+          <div className="mt-2 text-sm text-slate-300">{experience.detail}</div>
+          <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
+            <li>{isThriveDetected ? "Building directly in Thrive when safe." : "Building a safe draft structure first."}</li>
+            <li>{snapshot?.thriveIntelligence?.symbolInventory?.length ? "Reusing existing assets where quality is high." : "Creating reusable assets from approved direction."}</li>
+            <li>Verifying before launch review.</li>
+          </ul>
+        </div>
+
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-200">Primary action</div>
+            <button
+              type="button"
+              data-testid="siteforge-build-primary-action"
               className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !buildDraftState.canBuildDraft ? "cursor-not-allowed opacity-60" : ""}`}
               onClick={() => void runSitePipeline("build")}
               disabled={busy || !buildDraftState.canBuildDraft}
             >
-              {buildDraftStatus === "running" ? "Building Draft..." : buildDraftState.canBuildDraft ? "Build Draft" : "Fix Required Items"}
+              {buildDraftStatus === "running" ? "Building..." : "Build this in Thrive"}
             </button>
           </div>
           {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
-          {!buildDraftState.canBuildDraft ? (
-            <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
-              {buildDraftState.blockers.map((blocker) => (
-                <li key={blocker}>{blocker}</li>
-              ))}
-            </ul>
-          ) : null}
-          {!canUseThriveNative ? (
-            <div className="mt-3 text-xs text-amber-200">Thrive was detected, but the native build path is currently blocked.</div>
-          ) : null}
-        </section>
-      </div>
-    );
-  }
-
-  function renderBuildPages() {
-    return (
-      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Pages</h3>
-          <div className="mt-3 space-y-2 text-sm">
-            {pageRows.map((page) => (
-              <button
-                key={page.slug}
-                type="button"
-                className="w-full rounded-xl border border-white/12 bg-slate-900/60 px-3 py-3 text-left transition hover:bg-slate-900/80"
-                onClick={() => setSelectedPageSlug(page.slug)}
-              >
-                <div className="font-medium text-white">{page.title}</div>
-                <div className="mt-1 text-xs text-slate-300">{page.pageType} · {page.goal}</div>
-                <div className="mt-1 text-xs text-slate-400">Build: {page.buildStatus} · Approval: {page.approvalStatus}</div>
-              </button>
-            ))}
-            {!pageRows.length ? <div className="rounded-xl border border-white/12 bg-slate-900/60 px-3 py-4 text-slate-300">No pages yet.</div> : null}
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Page details</h3>
-          {selectedBuildPage ? (
-            <div className="mt-3 space-y-3 text-xs text-slate-200">
-              <div>Selected page: {selectedBuildPage.title}</div>
-              <div>Shell template: {selectedBuildPage.shell}</div>
-              <div>Sections: {(selectedBuildPage.sections ?? []).length}</div>
-              <div>Approval state: {pageApprovalState.kind === "ready" ? "ready" : pageApprovalState.kind}</div>
-              <button
-                type="button"
-                className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
-                onClick={() => {
-                  setApprovedPageSlugs((prev) => (prev.includes(selectedBuildPage.slug) ? prev : [...prev, selectedBuildPage.slug]));
-                }}
-              >
-                {pageApprovalState.kind === "ready" ? pageApprovalState.buttonLabel : "Approve selected page"}
-              </button>
-            </div>
-          ) : (
-            <div className="mt-3 text-xs text-slate-300">No pages are ready for review yet.</div>
-          )}
-        </section>
-      </div>
-    );
-  }
-
-  function renderBuildAssets() {
-    const symbolInventory = snapshot?.thriveIntelligence?.symbolInventory ?? [];
-    const warnings = [
-      ...(snapshot?.thriveIntelligence?.warnings ?? []),
-      ...(currentSession?.executionResult?.warnings ?? []),
-      ...(currentSession?.executionResult?.errors ?? []),
-    ];
-
-    return (
-      <div className="space-y-4">
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Asset intelligence</h3>
-          <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-200 md:grid-cols-4">
-            <div><dt className="text-slate-400">Thrive detected</dt><dd>{isThriveDetected ? "Yes" : "No"}</dd></div>
-            <div><dt className="text-slate-400">Template count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0}</dd></div>
-            <div><dt className="text-slate-400">Layout count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveLayout ?? 0}</dd></div>
-            <div><dt className="text-slate-400">Symbol count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0}</dd></div>
-          </dl>
-        </section>
-
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Top symbols</h3>
-          <div className="mt-3 overflow-auto">
-            <table className="min-w-full text-left text-xs text-slate-200">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="px-2 py-2">ID</th>
-                  <th className="px-2 py-2">Title</th>
-                  <th className="px-2 py-2">Category</th>
-                  <th className="px-2 py-2">Builder payload present</th>
-                </tr>
-              </thead>
-              <tbody>
-                {symbolInventory.slice(0, 8).map((symbol) => (
-                  <tr key={symbol.id} className="border-t border-white/10">
-                    <td className="px-2 py-2">{symbol.id}</td>
-                    <td className="px-2 py-2">{symbol.title || "Untitled"}</td>
-                    <td className="px-2 py-2">{symbol.taxonomy.name ?? "Uncategorized"}</td>
-                    <td className="px-2 py-2">{symbol.hasBuilderContent ? "Yes" : "No"}</td>
-                  </tr>
-                ))}
-                {!symbolInventory.length ? <tr><td colSpan={4} className="px-2 py-3 text-slate-400">No symbol inventory available yet.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Warnings</h3>
-          <ul className="mt-3 list-disc pl-5 text-xs text-slate-200">
-            {warnings.length ? warnings.slice(0, 8).map((warning) => <li key={warning}>{warning}</li>) : <li>No warnings detected.</li>}
-          </ul>
-        </section>
-      </div>
-    );
-  }
-
-  function renderBuild() {
-    return (
-      <div className="space-y-4">
-        <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
-          {buildTabs.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveBuildTab(tab.id)}
-              className={`rounded-full border px-4 py-2 text-sm transition ${
-                activeBuildTab === tab.id
-                  ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
-                  : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
         </div>
-        {activeBuildTab === "plan" ? renderBuildPlan() : null}
-        {activeBuildTab === "pages" ? renderBuildPages() : null}
-        {activeBuildTab === "assets" ? renderBuildAssets() : null}
-      </div>
+      </section>
     );
   }
 
-  function renderPublish() {
+  function renderLaunchScreen() {
+    const launchReady = hasCompletedBuild;
+    const title = launchReady ? "Ready to go live" : "One thing left";
+
+    let actionLabel = "Review build";
+    let action: () => void = () => advanceTo("build");
+    if (!hasGeneratedSitePlan) {
+      actionLabel = "Review preview";
+      action = () => advanceTo("preview");
+    } else if (!allApprovalMomentsComplete) {
+      actionLabel = "Review approvals";
+      action = () => advanceTo("approve");
+    } else if (launchReady && baseUrl) {
+      actionLabel = "Publish draft";
+      action = () => {
+        const target = `${baseUrl.replace(/\/$/, "")}/wp-admin/edit.php?post_type=page`;
+        window.open(target, "_blank", "noopener,noreferrer");
+        setLaunchMessage("Opened your WordPress publishing view in a new tab.");
+      };
+    } else if (launchReady) {
+      actionLabel = "Publish draft";
+      action = () => setLaunchMessage("Add your WordPress URL in Connect so I can open your publishing view.");
+    }
+
     const readyCount = publishChecklist.filter((item) => item.done).length;
-    const totalCount = publishChecklist.length;
 
     return (
-      <div className="space-y-4">
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h2 className="text-lg font-semibold text-white">Readiness</h2>
-          <div className="mt-3 text-sm text-slate-200">{readyCount}/{totalCount} checklist items complete.</div>
-          <div className="mt-2 text-xs text-slate-300">Build mode used: {buildModeUsed ?? "not run"}</div>
-          <div className="mt-1 text-xs text-slate-300">Native path available: {canUseThriveNative ? "yes" : "no"}</div>
-        </section>
+      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
+        <h2 className="text-xl font-semibold text-white">{title}</h2>
+        <p className="text-sm text-slate-300">{launchReady ? "Your draft passed build checks and is ready for final publishing." : "I still need one approval or build step before launch."}</p>
 
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h3 className="text-base font-semibold text-white">Checklist</h3>
-          <ul className="mt-3 space-y-2 text-xs text-slate-200">
-            {publishChecklist.map((item) => (
-              <li key={item.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
-                {item.done ? "[x]" : "[ ]"} {item.label}
-              </li>
-            ))}
-          </ul>
-        </section>
+        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+          <div>Progress: {readyCount}/{publishChecklist.length} launch signals complete.</div>
+          <div className="mt-2">Homepage ready: {homeApproved ? "yes" : "no"}</div>
+          <div className="mt-1">Page set confirmed: {approvedPageSet ? "yes" : "no"}</div>
+          <div className="mt-1">Build complete: {hasCompletedBuild ? "yes" : "no"}</div>
+        </div>
 
-        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
-              <p className="mt-1 text-xs text-slate-300">Promote only after Build draft succeeds.</p>
-            </div>
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-200">Primary action</div>
             <button
               type="button"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${!hasCompletedBuild ? "cursor-not-allowed opacity-60" : ""}`}
-              disabled={!hasCompletedBuild}
+              data-testid="siteforge-launch-primary-action"
+              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
+              onClick={action}
             >
-              Promote to Publish
+              {actionLabel}
             </button>
           </div>
-        </section>
-      </div>
+          {launchMessage ? <div className="mt-2 text-xs text-slate-300">{launchMessage}</div> : null}
+        </div>
+      </section>
     );
   }
 
-  function renderSettings() {
+  function renderAdvancedPanel() {
     return (
-      <div className="space-y-4">
-        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
-          <h2 className="text-lg font-semibold text-white">Diagnostics</h2>
-          <div className="mt-3 text-xs text-slate-200">Storage mode: {storageSummary?.storageMode ?? "unknown"}</div>
-          <div className="text-xs text-slate-200">Persistence health: {storageSummary?.persistenceHealth ?? "unknown"}</div>
-          <div className="text-xs text-slate-200">Memory fallback active: {storageSummary?.fallbackActive ? "yes" : "no"}</div>
-          <div className="mt-1 text-xs text-slate-300">{storageStatusMessage}</div>
-          <div className="mt-3 text-xs text-slate-300">Raw Errors: {technicalError ?? "None"}</div>
-          <div className="text-xs text-slate-300">Last run: {currentSession?.id ?? "none"}</div>
-          <div className="text-xs text-slate-300">Last log: {runLogs[0] ? `${formatDate(runLogs[0].timestamp)} · ${runLogs[0].stage}` : "none"}</div>
-        </section>
-      </div>
+      <details className="rounded-2xl border border-white/12 bg-slate-900/45 p-4 text-xs text-slate-200">
+        <summary className="cursor-pointer font-medium text-white">Advanced</summary>
+        <div className="mt-4 space-y-4">
+          <section className="rounded-xl border border-white/12 bg-white/5 p-3">
+            <div className="font-medium text-white">Diagnostics</div>
+            <div className="mt-2">Storage mode: {storageSummary?.storageMode ?? "unknown"}</div>
+            <div>Persistence health: {storageSummary?.persistenceHealth ?? "unknown"}</div>
+            <div>Memory fallback active: {storageSummary?.fallbackActive ? "yes" : "no"}</div>
+            <div className="mt-1 text-slate-300">{storageStatusMessage}</div>
+            <div className="mt-2 text-slate-300">Raw Errors: {technicalError ?? "None"}</div>
+            <div className="text-slate-300">Last run: {currentSession?.id ?? "none"}</div>
+          </section>
+
+          <section className="rounded-xl border border-white/12 bg-white/5 p-3">
+            <div className="font-medium text-white">Project controls</div>
+            <div className="mt-2">
+              <label className="text-slate-300">Current project</label>
+              <select
+                data-testid="siteforge-project-select"
+                value={selectedProjectId}
+                onChange={(event) => {
+                  activeProjectIntentRef.current = event.target.value || null;
+                  void openProject(event.target.value, "user");
+                }}
+                disabled={!projects.length || busy}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              >
+                {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
+                {!projects.length ? <option value="">No project selected</option> : null}
+                {projects.map((project) => (
+                  <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
+                ))}
+              </select>
+            </div>
+            <div className="mt-2">
+              <label className="text-slate-300">New project name</label>
+              <input
+                data-testid="siteforge-new-project-name-input"
+                placeholder="e.g. iPetzo"
+                value={newProjectName}
+                onChange={(event) => setNewProjectName(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+              <button
+                type="button"
+                className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2"
+                onClick={createProject}
+                disabled={busy || !normalizeNewProjectName(newProjectName)}
+              >
+                {createStatus === "creating" ? "Creating..." : "Create Project"}
+              </button>
+            </div>
+            <div className="mt-2">
+              <label className="text-slate-300">Rename current project</label>
+              <input
+                id="siteforge-project-name"
+                value={projectName}
+                onChange={(event) => setProjectName(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+              />
+              <div className="mt-1 text-slate-400">Rename state: {projectNameSaveState}</div>
+            </div>
+            {createStatusMessage ? <div className="mt-2 text-slate-300">{createStatusMessage}</div> : null}
+          </section>
+
+          <section className="rounded-xl border border-white/12 bg-white/5 p-3">
+            <div className="font-medium text-white">Connection details</div>
+            <button
+              type="button"
+              className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2"
+              onClick={() => void revalidateConnection()}
+              disabled={busy || !selectedProjectId}
+            >
+              Revalidate connection
+            </button>
+            <button
+              type="button"
+              className="ml-2 mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2"
+              onClick={removeAiKey}
+              disabled={busy || (!activeProject?.hasSavedAiSecret && !activeProject?.hasSavedSerpApiSecret)}
+            >
+              Remove Saved Keys
+            </button>
+          </section>
+
+          <section className="rounded-xl border border-white/12 bg-white/5 p-3">
+            <div className="font-medium text-white">Run logs</div>
+            <div className="mt-2 space-y-1 text-[11px] text-slate-300">
+              {runLogs.slice(0, 6).map((log) => (
+                <div key={log.logId}>{log.timestamp} · {log.stage} · {log.message}</div>
+              ))}
+              {!runLogs.length ? <div>No logs yet.</div> : null}
+            </div>
+          </section>
+        </div>
+      </details>
     );
   }
 
-  function renderView() {
-    if (activeView === "setup") return renderSetup();
-    if (activeView === "build") return renderBuild();
-    if (activeView === "publish") return renderPublish();
-    return renderSettings();
+  function renderPhase() {
+    if (activePhase === "describe") return renderIntentScreen();
+    if (activePhase === "connect") return renderConnectScreen();
+    if (activePhase === "preview") return renderPreviewScreen();
+    if (activePhase === "approve") return renderApproveScreen();
+    if (activePhase === "build") return renderBuildScreen();
+    return renderLaunchScreen();
   }
-
-  const isFirstTimeExperience = !projects.length || !pageRows.length;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_38%),radial-gradient(circle_at_90%_0%,_rgba(16,185,129,0.14),_transparent_30%),linear-gradient(180deg,_#050814_0%,_#0b1221_52%,_#070d19_100%)] text-slate-100">
@@ -1387,63 +1685,39 @@ export default function SiteForgeAppPage() {
         <section className="rounded-2xl border border-white/15 bg-slate-900/65 p-6 shadow-[0_10px_40px_rgba(15,23,42,0.45)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">SiteForge</div>
-              <h1 className="mt-2 text-3xl font-semibold text-white">SiteForge</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-300">Setup, build, and publish your site with a focused workflow.</p>
+              <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">SiteForge 2050</div>
+              <h1 className="mt-2 text-3xl font-semibold text-white">Your AI website partner</h1>
+              <p className="mt-2 max-w-3xl text-sm text-slate-300">From intent to launch: one decision at a time.</p>
             </div>
-            <div className="flex items-center gap-3">
-              <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
-                <div>Project: {activeProject?.name ?? "No project selected"}</div>
-                <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
-                <div className="mt-1">Connected: {isConnected ? "yes" : "no"}</div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveView("settings")}
-                className={`rounded-full border px-4 py-2 text-sm transition ${
-                  activeView === "settings"
-                    ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
-                    : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
-                }`}
-              >
-                Settings
-              </button>
+            <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
+              <div>Project: {activeProject?.name ?? "No project selected"}</div>
+              <div className="mt-1">Connection: {isConnected ? "connected" : "pending"}</div>
+              <div className="mt-1">Thrive: {isThriveDetected ? "detected" : "not detected"}</div>
             </div>
           </div>
+
           <div className="mt-5 flex flex-wrap gap-2 border-b border-white/10 pb-3">
-            {primaryNav.map((item) => (
+            {journeyFlow.map((phase) => (
               <button
-                key={item.id}
+                key={phase.id}
                 type="button"
-                onClick={() => setActiveView(item.id)}
+                onClick={() => setActivePhase(phase.id)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
-                  activeView === item.id
+                  activePhase === phase.id
                     ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
                     : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
                 }`}
               >
-                {item.label}
+                {phase.label}
               </button>
             ))}
           </div>
+
           {error ? <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{error}</div> : null}
         </section>
 
-        {storageSummary && storageSummary.persistenceHealth === "unavailable" ? (
-          <section className="mt-4 rounded-xl border border-amber-300/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
-            <div className="font-medium">Storage mode: {storageSummary.storageMode}</div>
-            <div className="mt-1">{storageStatusMessage}</div>
-          </section>
-        ) : null}
-
-        {isFirstTimeExperience ? (
-          <section className="mt-4 rounded-2xl border border-white/12 bg-slate-900/60 p-5">
-            <h2 className="text-xl font-semibold text-white">Welcome to SiteForge</h2>
-            <p className="mt-2 text-sm text-slate-300">Start in Setup. Once ready, use Build tabs (Plan, Pages, Assets), then Publish.</p>
-          </section>
-        ) : null}
-
-        <section className="mt-4">{renderView()}</section>
+        <section className="mt-4">{renderPhase()}</section>
+        <section className="mt-4">{renderAdvancedPanel()}</section>
       </main>
     </div>
   );

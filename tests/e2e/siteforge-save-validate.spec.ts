@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("SiteForge save+validate flow", () => {
-  test("create/select project keeps stable project identity for save+validate", async ({ page }) => {
+test.describe("SiteForge project binding + connect flow", () => {
+  test("advanced project controls keep stable identity through connect-and-begin", async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on("pageerror", (error) => {
       consoleErrors.push(String(error));
@@ -13,50 +13,44 @@ test.describe("SiteForge save+validate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.getByText("Advanced").click();
 
     const projectName = `iPetzo ${Date.now()}`;
     await page.getByTestId("siteforge-new-project-name-input").fill(projectName);
     await page.getByRole("button", { name: "Create Project" }).click();
 
     const createdMessage = page.getByText(`Project created: ${projectName}`);
-    const persistenceBlockedMessage = page
-      .getByText("Persistent storage unavailable. SiteForge is disabled until database storage is restored.")
-      .first();
-
-    await Promise.race([
-      expect(createdMessage).toBeVisible(),
-      expect(persistenceBlockedMessage).toBeVisible(),
-    ]);
-
-    if (await persistenceBlockedMessage.isVisible()) {
-      await expect(createdMessage).toHaveCount(0);
-      return;
-    }
+    await expect(createdMessage).toBeVisible();
 
     const projectSelect = page.getByTestId("siteforge-project-select");
     const selectedProjectId = await projectSelect.inputValue();
     await expect(projectSelect).not.toHaveValue("");
     await expect(projectSelect.locator("option:checked")).toContainText(projectName);
 
+    await page.getByTestId("siteforge-intent-prompt").fill("Create a trusted local service website that gets calls.");
+    await page.getByTestId("siteforge-create-direction-action").click();
+
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/application password/i).fill("app-pass");
+    await page.locator("#siteforge-ai-key").fill("sk-test");
 
-    const validateResponsePromise = page.waitForResponse((response) => {
+    const connectResponsePromise = page.waitForResponse((response) => {
       return (
         response.request().method() === "POST" &&
         response.url().includes(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`)
       );
     });
 
-    await page.getByTestId("siteforge-validate-connection-action").click();
-    const validateResponse = await validateResponsePromise;
+    await page.getByTestId("siteforge-connect-begin-action").click();
+    const connectResponse = await connectResponsePromise;
 
-    expect(validateResponse.status()).toBe(200);
+    expect(connectResponse.status()).toBe(200);
     await expect(page.getByText("Project not found.")).toHaveCount(0);
     await expect(page.getByText("Selected project could not be loaded.")).toHaveCount(0);
     await expect(projectSelect).toHaveValue(selectedProjectId);
     await expect(projectSelect.locator("option:checked")).toContainText(projectName);
+
     const blockingErrors = consoleErrors.filter((entry) => {
       return !entry.includes("clerk.accounts.dev") && !entry.includes("Failed to load resource: net::ERR_FAILED");
     });

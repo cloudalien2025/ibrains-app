@@ -2,21 +2,19 @@ import { describe, expect, it } from "vitest";
 import fs from "node:fs";
 import path from "node:path";
 
-describe("siteforge connection action contract", () => {
-  it("requires canonical active project binding for save + validate", () => {
+describe("siteforge connection orchestration contract", () => {
+  it("keeps canonical active project binding and orchestrated connect flow", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("const activeProjectId = activeProject?.id ?? null;")).toBe(true);
-    expect(source.includes("const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);")).toBe(
-      true
-    );
+    expect(source.includes("const hasValidActiveProject = Boolean(activeProjectId && selectedProjectId === activeProjectId);")).toBe(true);
     expect(source.includes("async function ensureCanonicalActiveProjectId(): Promise<string | null> {")).toBe(true);
-    expect(source.includes("const targetProjectId = await ensureCanonicalActiveProjectId();")).toBe(true);
-    expect(source.includes('setUserError("No active project selected.", "load");')).toBe(true);
-    expect(source.includes('setUserError("Selected project is out of sync. Reloading project state.", "load");')).toBe(true);
+    expect(source.includes("async function connectAndBegin() {")).toBe(true);
+    expect(source.includes("await saveAiConfig(\"save\");")).toBe(true);
+    expect(source.includes("await saveAndValidateConnection();")).toBe(true);
+    expect(source.includes("await runSitePipeline(\"generate\");")).toBe(true);
     expect(source.includes("`/api/siteforge/projects/${encodeURIComponent(targetProjectId)}/connection`")).toBe(true);
-    expect(source.includes("disabled={busy || !selectedProjectId}")).toBe(true);
   });
 
   it("maps stale project-not-found responses to precise selected-project message", () => {
