@@ -1,21 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { getBuildDraftState, getInlineApprovalState, getSelectedPageApprovalState, normalizePageApprovalName } from "@/app/apps/siteforge/page";
+import { getBuildDraftState, getSelectedPageApprovalState, normalizePageApprovalName } from "@/app/apps/siteforge/page";
 
 describe("siteforge action guardrails", () => {
   it("blocks build draft with explicit blockers when prerequisites are missing", () => {
     const state = getBuildDraftState({
       projectSelected: false,
       isConnected: false,
-      pageCount: 0,
-      approvedPageCount: 0,
+      hasWebsiteDescription: false,
     });
 
     expect(state.canBuildDraft).toBe(false);
     expect(state.blockers).toEqual([
       "Select a project first.",
       "Connect your website first.",
-      "Create your website plan first.",
-      "Approve your homepage.",
+      "Add your website description.",
     ]);
   });
 
@@ -23,8 +21,7 @@ describe("siteforge action guardrails", () => {
     const state = getBuildDraftState({
       projectSelected: true,
       isConnected: true,
-      pageCount: 3,
-      approvedPageCount: 1,
+      hasWebsiteDescription: true,
     });
 
     expect(state.canBuildDraft).toBe(true);
@@ -63,25 +60,13 @@ describe("siteforge action guardrails", () => {
     expect(normalizePageApprovalName("Contact Page")).toBe("Contact Page");
   });
 
-  it("only enables inline approval actions when visible targets exist", () => {
-    const empty = getInlineApprovalState({
-      hasHomepage: false,
-      homeApproved: false,
-      approvedPageSet: false,
-      approvedCtaStyle: false,
-      isThriveDetected: false,
-      approvedReuseDecision: false,
+  it("does not rely on approval-only blockers to build", () => {
+    const state = getBuildDraftState({
+      projectSelected: true,
+      isConnected: true,
+      hasWebsiteDescription: true,
     });
-    expect(empty.buttonLabel).toBeNull();
-
-    const homepage = getInlineApprovalState({
-      hasHomepage: true,
-      homeApproved: false,
-      approvedPageSet: false,
-      approvedCtaStyle: false,
-      isThriveDetected: false,
-      approvedReuseDecision: false,
-    });
-    expect(homepage.buttonLabel).toBe("Approve Homepage");
+    expect(state.canBuildDraft).toBe(true);
+    expect(state.blockers).not.toContain("Approve your homepage.");
   });
 });

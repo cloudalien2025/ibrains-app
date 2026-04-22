@@ -9,6 +9,11 @@ describe("siteforge describe and connect contract", () => {
 
     expect(source.includes("Describe the homepage and additional pages you want created.")).toBe(true);
     expect(source.includes("Create Website Plan")).toBe(true);
+    expect(source.includes("Plan summary")).toBe(true);
+    expect(source.includes("Approve Homepage")).toBe(false);
+    expect(source.includes("Use this page set")).toBe(false);
+    expect(source.includes("Use this CTA style")).toBe(false);
+    expect(source.includes("Approve reuse decisions")).toBe(false);
     expect(
       source.includes(
         "Build a homepage for iPetzo that quickly builds trust with dog and cat owners, explains the app clearly, and pushes them to start a trial. Also create an About page, FAQ page, and Contact page."

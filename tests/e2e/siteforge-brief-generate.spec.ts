@@ -157,6 +157,7 @@ test.describe("SiteForge 2050 connect + describe flow", () => {
     await page.getByTestId("siteforge-intent-prompt").fill(intent);
     await page.getByTestId("siteforge-create-plan-action").click();
     await expect(page.getByText("Website plan ready.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve Homepage" })).toHaveCount(0);
     await expect(page.getByTestId("siteforge-intent-prompt")).toHaveValue(intent);
   });
 });

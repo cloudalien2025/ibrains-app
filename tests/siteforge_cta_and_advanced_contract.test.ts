@@ -14,11 +14,15 @@ describe("siteforge 2050 CTA and advanced contract", () => {
     expect(source.includes("Build this in Thrive")).toBe(false);
   });
 
-  it("demotes diagnostics and internals into Advanced", () => {
+  it("removes diagnostics and internals from default UI", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes('<summary className="cursor-pointer font-medium text-white">Advanced</summary>')).toBe(true);
+    expect(source.includes('<summary className="cursor-pointer font-medium text-white">Advanced</summary>')).toBe(false);
+    expect(source.includes("Diagnostics")).toBe(false);
+    expect(source.includes("Project controls")).toBe(false);
+    expect(source.includes("Run logs")).toBe(false);
+    expect(source.includes("Connection details")).toBe(false);
     expect(source.includes("Build mode used")).toBe(false);
     expect(source.includes("Native path available")).toBe(false);
     expect(source.includes("Promote to Publish")).toBe(false);
