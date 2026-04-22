@@ -64,4 +64,46 @@ describe("siteforge website strategy synthesis", () => {
     expect(strategy.pageStrategy.requiredPages).toContain("Features");
     expect(strategy.thriveExecutionHints.prefersLandingPageStyle).toBe(true);
   });
+
+  it("varies homepage composition blueprint by intent", () => {
+    const serviceStrategy = synthesizeWebsiteStrategy({
+      brief: {
+        ...brief,
+        businessType: "Consulting service",
+        businessDescription: "B2B advisory and implementation",
+        mainOffer: "Service retainers",
+      },
+      marketIntelligence,
+      thriveIntelligence: null,
+    });
+    const productStrategy = synthesizeWebsiteStrategy({
+      brief: {
+        ...brief,
+        businessType: "Physical product brand",
+        businessDescription: "Consumer product storefront",
+        mainOffer: "Flagship starter kit",
+      },
+      marketIntelligence,
+      thriveIntelligence: null,
+    });
+
+    expect(serviceStrategy.siteType).toBe("service");
+    expect(serviceStrategy.homepageStrategy.sectionBlueprint).toEqual([
+      "hero",
+      "solution",
+      "features",
+      "testimonials",
+      "faq",
+      "contact",
+      "cta",
+    ]);
+    expect(productStrategy.siteType).toBe("product");
+    expect(productStrategy.homepageStrategy.sectionBlueprint).toEqual([
+      "hero",
+      "features",
+      "solution",
+      "testimonials",
+      "cta",
+    ]);
+  });
 });

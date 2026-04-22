@@ -209,8 +209,13 @@ export type BuildSpecSection = {
     designPackArtifactRef?: string | null;
     contractCaptureRef?: string | null;
     thriveRefs?: {
+      symbolRefSelected?: number | null;
       symbolRefCandidates?: number[];
+      templateRefSelected?: number | null;
       templateRefCandidates?: number[];
+      layoutRefSelected?: number | null;
+      layoutRefCandidates?: number[];
+      sectionRefSelected?: number | null;
       sectionRefCandidates?: number[];
     };
     renderTarget?: ThriveRenderTarget;
@@ -245,8 +250,13 @@ export type BuildSpecPage = {
     shellStrategy?: string | null;
     researchConfidence?: "high" | "medium" | "low";
     thriveRefs?: {
+      symbolRefSelected?: number | null;
       symbolRefCandidates?: number[];
+      templateRefSelected?: number | null;
       templateRefCandidates?: number[];
+      layoutRefSelected?: number | null;
+      layoutRefCandidates?: number[];
+      sectionRefSelected?: number | null;
       sectionRefCandidates?: number[];
     };
     [key: string]: unknown;
@@ -332,6 +342,14 @@ export type ThriveRenderTarget =
   | "future_thrive_template_assignment"
   | "future_landing_page_candidate"
   | "wp_html_fallback";
+
+export type ThriveExecutionPathDecision =
+  | "prefer_existing_thrive_symbol"
+  | "prefer_existing_thrive_section"
+  | "prefer_existing_thrive_template"
+  | "prefer_existing_thrive_layout"
+  | "safe_wordpress_render_with_thrive_hints"
+  | "staging_only_native_write_required";
 
 export type QAWarning = {
   code: string;

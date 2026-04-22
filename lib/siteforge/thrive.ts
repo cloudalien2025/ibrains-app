@@ -3,6 +3,8 @@ import {
   BuildSpecSection,
   CapabilityCheckResult,
   PageIntent,
+  ThriveExecutionPathDecision,
+  ThriveRenderTarget,
   ThriveVisualPrimitive,
   ThriveIntelligence,
   ThriveSectionResolution,
@@ -191,6 +193,21 @@ function preferredPrimitiveFromPattern(pattern: VisualPattern): ThriveVisualPrim
   return "wordpress_structured_fallback";
 }
 
+function renderTargetFromDecision(
+  decision: ThriveExecutionPathDecision
+): { preferredRenderTarget: ThriveRenderTarget; rendererMode: NonNullable<BuildSpecSection["metadata"]>["rendererMode"] } {
+  if (decision === "prefer_existing_thrive_symbol") {
+    return { preferredRenderTarget: "thrive_symbol_reference", rendererMode: "thrive_intel_mode" };
+  }
+  if (decision === "prefer_existing_thrive_section" || decision === "prefer_existing_thrive_template" || decision === "prefer_existing_thrive_layout") {
+    return { preferredRenderTarget: "thrive_content_template_reference", rendererMode: "thrive_intel_mode" };
+  }
+  if (decision === "staging_only_native_write_required") {
+    return { preferredRenderTarget: "future_landing_page_candidate", rendererMode: "wp_safe_mode" };
+  }
+  return { preferredRenderTarget: "wp_html_fallback", rendererMode: "wp_safe_mode" };
+}
+
 function resolveSection(params: {
   pageSlug: string;
   section: BuildSpecSection;
@@ -201,6 +218,71 @@ function resolveSection(params: {
   const symbols = params.intelligence?.symbolInventory ?? [];
   const visualPattern = visualPatternFromSection(params.section);
   const selectedVisualPrimitive = preferredPrimitiveFromPattern(visualPattern);
+  const renderTargetDecision = params.section.metadata?.renderTargetDecision as ThriveExecutionPathDecision | undefined;
+  const thriveRefs = params.section.metadata?.thriveRefs;
+
+  if (renderTargetDecision) {
+    const selected = renderTargetFromDecision(renderTargetDecision);
+    const selectedSymbolId = typeof thriveRefs?.symbolRefSelected === "number" ? thriveRefs.symbolRefSelected : null;
+    const confidence = selectedSymbolId ? 0.9 : 0.5;
+    return {
+      metadata: {
+        ...(params.section.metadata ?? {}),
+        sectionIntent: params.sectionIntent,
+        symbolCandidateType: params.symbolCandidateType,
+        thriveSymbolRoleCandidate: selectedSymbolId ? "section" : "unknown",
+        preferredRenderTarget: selected.preferredRenderTarget,
+        reusableSymbolCandidates: thriveRefs?.symbolRefCandidates ?? [],
+        contentTemplateCandidates: thriveRefs?.templateRefCandidates ?? [],
+        visualPrimitiveSelection: {
+          requestedPattern: visualPattern,
+          selectedPrimitive: selectedSymbolId ? "thrive_template_symbol" : selectedVisualPrimitive,
+          selectedVia:
+            renderTargetDecision === "safe_wordpress_render_with_thrive_hints"
+              ? "safe_fallback"
+              : renderTargetDecision === "prefer_existing_thrive_symbol"
+                ? "existing_reusable_symbol"
+                : "existing_compatible_primitive",
+          reason: "thrive_composition_resolver_selection",
+          designIntentSatisfied: renderTargetDecision !== "safe_wordpress_render_with_thrive_hints",
+          fallbackReason: params.section.metadata?.fallbackReason as string | null | undefined,
+        },
+        rendererMode: selected.rendererMode,
+      },
+      resolution: {
+        pageSlug: params.pageSlug,
+        sectionId: params.section.id,
+        sectionType: params.section.type,
+        sectionIntent: params.sectionIntent,
+        symbolCandidateType: params.symbolCandidateType,
+        preferredRenderTarget: selected.preferredRenderTarget,
+        resolution:
+          renderTargetDecision === "prefer_existing_thrive_symbol"
+            ? "existing_symbol"
+            : renderTargetDecision === "safe_wordpress_render_with_thrive_hints"
+              ? "wp_html_fallback"
+              : renderTargetDecision === "staging_only_native_write_required"
+                ? "future_landing_page_candidate"
+                : "existing_content_template",
+        visualPattern,
+        selectedVisualPrimitive: selectedSymbolId ? "thrive_template_symbol" : selectedVisualPrimitive,
+        primitiveSelectionSource:
+          renderTargetDecision === "safe_wordpress_render_with_thrive_hints"
+            ? "safe_fallback"
+            : renderTargetDecision === "prefer_existing_thrive_symbol"
+              ? "existing_reusable_symbol"
+              : "existing_compatible_primitive",
+        designIntentSatisfied: renderTargetDecision !== "safe_wordpress_render_with_thrive_hints",
+        fallbackReason: (params.section.metadata?.fallbackReason as string | null | undefined) ?? null,
+        matchedSymbolId: selectedSymbolId,
+        matchedSymbolTitle: selectedSymbolId ? `symbol-${selectedSymbolId}` : null,
+        matchedRole: selectedSymbolId ? "section" : null,
+        confidence,
+        reason: "resolver_guided_decision",
+        rejectedReasons: [],
+      },
+    };
+  }
 
   const scored = symbols
     .map((symbol) => {
