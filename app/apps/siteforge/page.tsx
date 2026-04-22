@@ -1519,6 +1519,9 @@ export default function SiteForgeAppPage() {
       null;
     const builtPageCount = currentSession?.executionResult?.createdPages.length ?? 0;
     const buildMode = currentSession?.executionResult?.thrive.buildModeUsed ?? null;
+    const strategy = currentSession?.websiteStrategy ?? null;
+    const researchSignal = currentSession?.marketIntelligence?.researchIntelligence ?? null;
+    const researchConfidence = currentSession?.marketIntelligence?.status === "used" ? "high" : "low";
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
@@ -1534,6 +1537,25 @@ export default function SiteForgeAppPage() {
             <li>{isThriveDetected ? "Building in Thrive" : "Building with your current site shell"}</li>
             <li>Verifying your draft</li>
           </ul>
+        </div>
+
+        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+          <div className="font-medium text-white">Intelligence summary</div>
+          <div className="mt-2">Research mode: {hasSerpApiAccess ? "SerpAPI pattern synthesis" : "Brief + connected site fallback"}.</div>
+          <div className="mt-1">Research confidence: {researchConfidence}.</div>
+          {researchSignal?.niche ? <div className="mt-1">Detected niche: {researchSignal.niche}.</div> : null}
+          {strategy ? (
+            <>
+              <div className="mt-1">Strategy: {strategy.siteType} site focused on {strategy.primaryConversionGoal}.</div>
+              <div className="mt-1">Primary CTA: {strategy.homepageStrategy.primaryCta}.</div>
+            </>
+          ) : null}
+          <div className="mt-1">
+            Thrive inventory: {snapshot?.thriveIntelligence?.symbolSummary.total ?? 0} symbols, {snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0} templates.
+          </div>
+          {snapshot?.thriveIntelligence?.activeSkin?.name ? (
+            <div className="mt-1">Active skin: {snapshot.thriveIntelligence.activeSkin.name}.</div>
+          ) : null}
         </div>
 
         <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-4">

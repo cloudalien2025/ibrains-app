@@ -69,6 +69,66 @@ export type MarketIntelligenceStatus = "not_configured" | "used" | "error";
 
 export type MarketIntelligenceSource = "none" | "serpapi";
 
+export type ResearchSourceSnapshot = {
+  query: string;
+  title: string;
+  snippet: string;
+  link: string;
+  domain: string;
+};
+
+export type ResearchIntelligence = {
+  niche: string;
+  audienceSegments: string[];
+  conversionGoal: string;
+  recurringValueProps: string[];
+  recurringCtaPatterns: string[];
+  recurringTrustPatterns: string[];
+  recurringSectionPatterns: string[];
+  visualDirectionSignals: string[];
+  differentiationOpportunities: string[];
+  recommendedPages: string[];
+  confidenceNotes: string[];
+  sourceSnapshots: ResearchSourceSnapshot[];
+};
+
+export type WebsiteStrategy = {
+  siteType: "app" | "service" | "product" | "hybrid";
+  primaryAudience: string;
+  secondaryAudience: string[];
+  primaryConversionGoal: string;
+  positioning: {
+    category: string;
+    differentiatedPromise: string;
+    tone: string;
+    trustModel: string;
+  };
+  homepageStrategy: {
+    heroObjective: string;
+    keyMessages: string[];
+    sectionBlueprint: Array<"hero" | "problem" | "solution" | "features" | "testimonials" | "cta" | "faq" | "contact">;
+    primaryCta: string;
+    secondaryCta: string;
+  };
+  pageStrategy: {
+    requiredPages: string[];
+    optionalPages: string[];
+  };
+  designDirection: {
+    visualTone: string;
+    density: "compact" | "balanced" | "spacious";
+    hierarchyStyle: string;
+    proofStyle: string;
+    mockupStrategy: string;
+  };
+  thriveExecutionHints: {
+    preferredShellType: string;
+    preferredSectionPatterns: string[];
+    preferredSymbolCategories: string[];
+    prefersLandingPageStyle: boolean;
+  };
+};
+
 export type MarketIntelligenceBrief = {
   status: MarketIntelligenceStatus;
   source: MarketIntelligenceSource;
@@ -87,6 +147,7 @@ export type MarketIntelligenceBrief = {
   generatedAt: string;
   plannerEnriched: boolean;
   contentEnriched: boolean;
+  researchIntelligence?: ResearchIntelligence;
 };
 
 export type ContentSection = {
@@ -147,6 +208,13 @@ export type BuildSpecSection = {
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
     contractCaptureRef?: string | null;
+    thriveRefs?: {
+      symbolRefCandidates?: number[];
+      templateRefCandidates?: number[];
+      sectionRefCandidates?: number[];
+    };
+    renderTarget?: ThriveRenderTarget;
+    researchConfidence?: "high" | "medium" | "low";
     [key: string]: unknown;
   };
 };
@@ -174,6 +242,13 @@ export type BuildSpecPage = {
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
     contractCaptureRef?: string | null;
+    shellStrategy?: string | null;
+    researchConfidence?: "high" | "medium" | "low";
+    thriveRefs?: {
+      symbolRefCandidates?: number[];
+      templateRefCandidates?: number[];
+      sectionRefCandidates?: number[];
+    };
     [key: string]: unknown;
   };
 };
@@ -196,6 +271,12 @@ export type BuildSpec = {
     landingPageArtifactRef?: string | null;
     designPackArtifactRef?: string | null;
     contractCaptureRef?: string | null;
+    researchConfidence?: "high" | "medium" | "low";
+    strategySignals?: {
+      siteType: WebsiteStrategy["siteType"];
+      primaryConversionGoal: string;
+      trustModel: string;
+    };
     createdAt: string;
   };
 };
@@ -453,15 +534,38 @@ export type ThriveSectionResolution = {
 };
 
 export type ThriveIntelligence = {
+  storageMode?: "wordpress-rest-readonly";
+  namespaces?: string[];
   source: "wordpress_rest_get";
   collectedAt: string;
   mode: "wp_safe_mode";
+  homepage?: {
+    showOnFront: string;
+    pageOnFront: number | null;
+    pageForPosts: number | null;
+  };
   activeSkin: {
     id: number;
     name: string;
     slug: string;
     tag: string | null;
+    isActive?: boolean;
   } | null;
+  templates?: Array<{
+    id: number;
+    slug: string;
+    title: string;
+  }>;
+  layouts?: Array<{
+    id: number;
+    slug: string;
+    title: string;
+  }>;
+  sections?: Array<{
+    id: number;
+    slug: string;
+    title: string;
+  }>;
   symbolInventory: ThriveSymbolIntelligence[];
   symbolSummary: {
     total: number;
@@ -478,6 +582,14 @@ export type ThriveIntelligence = {
   };
   safeHints: {
     frontPageUsesWpSettings: boolean;
+  };
+  discoveredCapabilities?: {
+    hasTtbNamespace: boolean;
+    hasTcbNamespace: boolean;
+    hasThemeNamespace: boolean;
+    hasTdNamespace: boolean;
+    hasTveDashNamespace: boolean;
+    designPackLikelyAvailable: boolean;
   };
   warnings: string[];
 };
@@ -731,6 +843,7 @@ export type BuildSession = {
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   aiModel: string | null;
   marketIntelligence: MarketIntelligenceBrief | null;
+  websiteStrategy?: WebsiteStrategy | null;
   connectionProfile: Omit<ConnectionProfile, "appPassword"> | null;
   status: BuildSessionStatus;
   runState: BuildRunState;

@@ -1,4 +1,4 @@
-import { MarketIntelligenceBrief, SitePlan, SitePlanPage, SitePlanSection, WebsiteBrief } from "@/lib/siteforge/contracts";
+import { MarketIntelligenceBrief, SitePlan, SitePlanPage, SitePlanSection, WebsiteBrief, WebsiteStrategy } from "@/lib/siteforge/contracts";
 import { generateStructuredJson } from "@/lib/siteforge/llm/openai";
 import { createId, toSlug } from "@/lib/siteforge/utils";
 import { validateSitePlan } from "@/lib/siteforge/agents/validators";
@@ -155,6 +155,7 @@ export async function runPlannerAgent(params: {
   model: string;
   apiKey: string;
   marketIntelligence?: MarketIntelligenceBrief | null;
+  websiteStrategy?: WebsiteStrategy | null;
 }): Promise<SitePlan> {
   const prompt = [
     `Business name: ${params.brief.businessName}`,
@@ -180,6 +181,7 @@ export async function runPlannerAgent(params: {
           contentWarnings: params.marketIntelligence.contentWarnings,
         })}`
       : "",
+    params.websiteStrategy ? `Website strategy: ${JSON.stringify(params.websiteStrategy)}` : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -196,5 +198,106 @@ export async function runPlannerAgent(params: {
       "\nPrioritize sections with persuasive value and avoid filler or placeholder sections.",
   });
 
-  return validateSitePlan(raw);
+  const validated = validateSitePlan(raw);
+  return applyStrategyToPlan({
+    plan: validated,
+    strategy: params.websiteStrategy ?? null,
+    brief: params.brief,
+  });
+}
+
+function pagePurposeFromTitle(title: string): string {
+  const normalized = title.toLowerCase();
+  if (normalized === "home") return "Primary conversion page";
+  if (normalized.includes("feature")) return "Explain product capability and differentiation";
+  if (normalized.includes("service")) return "Explain offer structure and outcomes";
+  if (normalized.includes("pricing")) return "Clarify plans and buying path";
+  if (normalized.includes("faq")) return "Resolve objections and adoption concerns";
+  if (normalized.includes("contact")) return "Capture high-intent outreach";
+  if (normalized.includes("about")) return "Build trust and credibility";
+  return "Support conversion intent";
+}
+
+function toSectionType(
+  value: WebsiteStrategy["homepageStrategy"]["sectionBlueprint"][number]
+): SitePlanSection["sectionType"] {
+  return value;
+}
+
+function applyStrategyToPlan(params: {
+  plan: SitePlan;
+  strategy: WebsiteStrategy | null;
+  brief: WebsiteBrief;
+}): SitePlan {
+  if (!params.strategy) return params.plan;
+  const strategy = params.strategy;
+
+  const requiredPages = strategy.pageStrategy.requiredPages.length
+    ? strategy.pageStrategy.requiredPages
+    : params.plan.pages.map((page) => page.title);
+
+  const nextPages: SitePlanPage[] = requiredPages.map((title, index) => {
+    const existing = params.plan.pages.find((page) => page.title.toLowerCase() === title.toLowerCase());
+    if (existing) return existing;
+    const slug = toSlug(title === "Home" ? "home" : title);
+    const sections =
+      slug === "home"
+        ? strategy.homepageStrategy.sectionBlueprint.map((sectionType) => ({
+            id: createId("sec"),
+            sectionType: toSectionType(sectionType),
+            purpose: `Strategic ${sectionType} section for ${strategy.primaryConversionGoal}`,
+          }))
+        : createSections(slug, { appLike: strategy.siteType === "app" || strategy.siteType === "hybrid" });
+    return {
+      id: createId("page"),
+      title,
+      slug,
+      purpose: pagePurposeFromTitle(title),
+      sections,
+    };
+  });
+
+  const homepage = nextPages.find((page) => page.slug === "home") ?? nextPages[0];
+  if (homepage) {
+    homepage.sections = strategy.homepageStrategy.sectionBlueprint.map((sectionType) => {
+      const existing = homepage.sections.find((entry) => entry.sectionType === sectionType);
+      return (
+        existing ?? {
+          id: createId("sec"),
+          sectionType: toSectionType(sectionType),
+          purpose: `Strategic ${sectionType} section for ${strategy.primaryConversionGoal}`,
+        }
+      );
+    });
+  }
+
+  return {
+    ...params.plan,
+    businessType: params.brief.businessType || params.plan.businessType,
+    siteGoal: strategy.primaryConversionGoal || params.plan.siteGoal,
+    primaryCTA: strategy.homepageStrategy.primaryCta || params.plan.primaryCTA,
+    targetAudience: strategy.primaryAudience || params.plan.targetAudience,
+    homepageSlug: homepage?.slug ?? params.plan.homepageSlug,
+    navigation: nextPages.map((page) => page.title),
+    pages: nextPages,
+    assumptions: uniqueAssumptions([
+      ...params.plan.assumptions,
+      `Strategy siteType: ${strategy.siteType}`,
+      `Trust model: ${strategy.positioning.trustModel}`,
+    ]),
+  };
+}
+
+function uniqueAssumptions(values: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of values) {
+    const normalized = value.trim();
+    if (!normalized) continue;
+    const key = normalized.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(normalized);
+  }
+  return out;
 }

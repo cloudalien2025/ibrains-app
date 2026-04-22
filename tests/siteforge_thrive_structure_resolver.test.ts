@@ -35,7 +35,7 @@ function intelligence(): ThriveIntelligence {
     source: "wordpress_rest_get",
     collectedAt: "2026-04-20T00:00:00.000Z",
     mode: "wp_safe_mode",
-    activeSkin: { id: 8, name: "Shapeshift", slug: "shapeshift", tag: "q1" },
+    activeSkin: { id: 8, name: "Shapeshift", slug: "shapeshift", tag: "q1", isActive: true },
     symbolInventory: [
       {
         id: 57,

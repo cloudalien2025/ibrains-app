@@ -1,5 +1,5 @@
 import { createId, nowIso, toSlug } from "@/lib/siteforge/utils";
-import { WebsiteBrief, brandToneOptions, websiteGoalOptions } from "@/lib/siteforge/contracts";
+import { WebsiteBrief, WebsiteStrategy, brandToneOptions, websiteGoalOptions } from "@/lib/siteforge/contracts";
 
 export type BuildStage =
   | "planning"
@@ -31,6 +31,20 @@ export type MarketIntelligenceView = {
   generatedAt: string;
   plannerEnriched: boolean;
   contentEnriched: boolean;
+  researchIntelligence: {
+    niche: string;
+    audienceSegments: string[];
+    conversionGoal: string;
+    recurringValueProps: string[];
+    recurringCtaPatterns: string[];
+    recurringTrustPatterns: string[];
+    recurringSectionPatterns: string[];
+    visualDirectionSignals: string[];
+    differentiationOpportunities: string[];
+    recommendedPages: string[];
+    confidenceNotes: string[];
+    sourceSnapshots: Array<{ query: string; title: string; snippet: string; link: string; domain: string }>;
+  } | null;
 };
 
 export type SiteForgeProjectView = {
@@ -93,10 +107,20 @@ export type SiteForgeSnapshotView = {
   knownMenus: Array<{ id: number | null; label: string; source: string }>;
   thriveDetected: boolean;
   thriveIntelligence: {
+    storageMode: "wordpress-rest-readonly";
+    namespaces: string[];
     source: "wordpress_rest_get";
     collectedAt: string;
     mode: "wp_safe_mode";
+    homepage: {
+      showOnFront: string;
+      pageOnFront: number | null;
+      pageForPosts: number | null;
+    };
     activeSkin: { id: number; name: string; slug: string; tag: string | null } | null;
+    templates: Array<{ id: number; slug: string; title: string }>;
+    layouts: Array<{ id: number; slug: string; title: string }>;
+    sections: Array<{ id: number; slug: string; title: string }>;
     symbolInventory: Array<{
       id: number;
       title: string;
@@ -113,6 +137,14 @@ export type SiteForgeSnapshotView = {
     symbolSummary: { total: number; headers: number; footers: number; sections: number; unknown: number };
     primitiveCounts: { thriveTemplate: number; thriveLayout: number; thriveSection: number; tcbSymbol: number };
     safeHints: { frontPageUsesWpSettings: boolean };
+    discoveredCapabilities: {
+      hasTtbNamespace: boolean;
+      hasTcbNamespace: boolean;
+      hasThemeNamespace: boolean;
+      hasTdNamespace: boolean;
+      hasTveDashNamespace: boolean;
+      designPackLikelyAvailable: boolean;
+    };
     warnings: string[];
   } | null;
   thriveSectionResolutions: Array<{
@@ -455,6 +487,7 @@ export type BuildSessionView = {
   generationSource: "user_key" | "platform_key" | "deterministic_fallback";
   aiModel: string | null;
   marketIntelligence: MarketIntelligenceView | null;
+  websiteStrategy: WebsiteStrategy | null;
   connectionId: string | null;
   type: "generate" | "refine";
   createdAt: string;
@@ -598,6 +631,92 @@ function normalizeMarketIntelligence(value: unknown): MarketIntelligenceView | n
     generatedAt: stringOr(value.generatedAt, nowIso()),
     plannerEnriched: boolOr(value.plannerEnriched),
     contentEnriched: boolOr(value.contentEnriched),
+    researchIntelligence: isRecord(value.researchIntelligence)
+      ? {
+          niche: stringOr(value.researchIntelligence.niche, ""),
+          audienceSegments: stringArray(value.researchIntelligence.audienceSegments),
+          conversionGoal: stringOr(value.researchIntelligence.conversionGoal, ""),
+          recurringValueProps: stringArray(value.researchIntelligence.recurringValueProps),
+          recurringCtaPatterns: stringArray(value.researchIntelligence.recurringCtaPatterns),
+          recurringTrustPatterns: stringArray(value.researchIntelligence.recurringTrustPatterns),
+          recurringSectionPatterns: stringArray(value.researchIntelligence.recurringSectionPatterns),
+          visualDirectionSignals: stringArray(value.researchIntelligence.visualDirectionSignals),
+          differentiationOpportunities: stringArray(value.researchIntelligence.differentiationOpportunities),
+          recommendedPages: stringArray(value.researchIntelligence.recommendedPages),
+          confidenceNotes: stringArray(value.researchIntelligence.confidenceNotes),
+          sourceSnapshots: Array.isArray(value.researchIntelligence.sourceSnapshots)
+            ? value.researchIntelligence.sourceSnapshots
+                .filter(isRecord)
+                .map((snapshot) => ({
+                  query: stringOr(snapshot.query, ""),
+                  title: stringOr(snapshot.title, ""),
+                  snippet: stringOr(snapshot.snippet, ""),
+                  link: stringOr(snapshot.link, ""),
+                  domain: stringOr(snapshot.domain, ""),
+                }))
+            : [],
+        }
+      : null,
+  };
+}
+
+function normalizeWebsiteStrategy(value: unknown): WebsiteStrategy | null {
+  if (!isRecord(value)) return null;
+  if (typeof value.siteType !== "string") return null;
+  if (!isRecord(value.positioning) || !isRecord(value.homepageStrategy) || !isRecord(value.pageStrategy) || !isRecord(value.designDirection) || !isRecord(value.thriveExecutionHints)) {
+    return null;
+  }
+  const siteType =
+    value.siteType === "app" || value.siteType === "service" || value.siteType === "product" || value.siteType === "hybrid"
+      ? value.siteType
+      : null;
+  if (!siteType) return null;
+
+  const homepageStrategy = value.homepageStrategy as Record<string, unknown>;
+  const pageStrategy = value.pageStrategy as Record<string, unknown>;
+  const positioning = value.positioning as Record<string, unknown>;
+  const designDirection = value.designDirection as Record<string, unknown>;
+  const thriveExecutionHints = value.thriveExecutionHints as Record<string, unknown>;
+
+  const sectionBlueprintRaw = stringArray(homepageStrategy.sectionBlueprint).filter((entry) =>
+    ["hero", "problem", "solution", "features", "testimonials", "cta", "faq", "contact"].includes(entry)
+  ) as WebsiteStrategy["homepageStrategy"]["sectionBlueprint"];
+
+  return {
+    siteType,
+    primaryAudience: stringOr(value.primaryAudience, ""),
+    secondaryAudience: stringArray(value.secondaryAudience),
+    primaryConversionGoal: stringOr(value.primaryConversionGoal, ""),
+    positioning: {
+      category: stringOr(positioning.category, ""),
+      differentiatedPromise: stringOr(positioning.differentiatedPromise, ""),
+      tone: stringOr(positioning.tone, ""),
+      trustModel: stringOr(positioning.trustModel, ""),
+    },
+    homepageStrategy: {
+      heroObjective: stringOr(homepageStrategy.heroObjective, ""),
+      keyMessages: stringArray(homepageStrategy.keyMessages),
+      sectionBlueprint: sectionBlueprintRaw.length ? sectionBlueprintRaw : ["hero", "problem", "solution", "features", "cta"],
+      primaryCta: stringOr(homepageStrategy.primaryCta, ""),
+      secondaryCta: stringOr(homepageStrategy.secondaryCta, ""),
+    },
+    pageStrategy: {
+      requiredPages: stringArray(pageStrategy.requiredPages),
+      optionalPages: stringArray(pageStrategy.optionalPages),
+    },
+    designDirection: {
+      visualTone: stringOr(designDirection.visualTone, ""),
+      density: designDirection.density === "compact" || designDirection.density === "balanced" || designDirection.density === "spacious" ? designDirection.density : "balanced",
+      hierarchyStyle: stringOr(designDirection.hierarchyStyle, ""),
+      proofStyle: stringOr(designDirection.proofStyle, ""),
+      mockupStrategy: stringOr(designDirection.mockupStrategy, ""),
+    },
+    thriveExecutionHints: {
+      preferredShellType: stringOr(thriveExecutionHints.preferredShellType, ""),
+      preferredSectionPatterns: stringArray(thriveExecutionHints.preferredSectionPatterns),
+      preferredSymbolCategories: stringArray(thriveExecutionHints.preferredSymbolCategories),
+      prefersLandingPageStyle: boolOr(thriveExecutionHints.prefersLandingPageStyle),
+    },
   };
 }
 
@@ -641,15 +760,27 @@ function normalizePrimitiveSelectionSource(
 function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thriveIntelligence"] | null {
   if (!isRecord(value)) return null;
   const activeSkinRaw = isRecord(value.activeSkin) ? value.activeSkin : null;
+  const homepageRaw = isRecord(value.homepage) ? value.homepage : {};
   const symbolInventoryRaw = Array.isArray(value.symbolInventory) ? value.symbolInventory : [];
+  const templatesRaw = Array.isArray(value.templates) ? value.templates : [];
+  const layoutsRaw = Array.isArray(value.layouts) ? value.layouts : [];
+  const sectionsRaw = Array.isArray(value.sections) ? value.sections : [];
   const symbolSummaryRaw = isRecord(value.symbolSummary) ? value.symbolSummary : {};
   const primitiveCountsRaw = isRecord(value.primitiveCounts) ? value.primitiveCounts : {};
   const safeHintsRaw = isRecord(value.safeHints) ? value.safeHints : {};
+  const discoveredCapabilitiesRaw = isRecord(value.discoveredCapabilities) ? value.discoveredCapabilities : {};
 
   return {
+    storageMode: "wordpress-rest-readonly",
+    namespaces: Array.isArray(value.namespaces) ? value.namespaces.filter((entry): entry is string => typeof entry === "string") : [],
     source: "wordpress_rest_get",
     collectedAt: stringOr(value.collectedAt, nowIso()),
     mode: "wp_safe_mode",
+    homepage: {
+      showOnFront: stringOr(homepageRaw.showOnFront, ""),
+      pageOnFront: typeof homepageRaw.pageOnFront === "number" ? homepageRaw.pageOnFront : null,
+      pageForPosts: typeof homepageRaw.pageForPosts === "number" ? homepageRaw.pageForPosts : null,
+    },
     activeSkin: activeSkinRaw
       ? {
           id: numberOr(activeSkinRaw.id),
@@ -658,6 +789,27 @@ function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thr
           tag: nullableString(activeSkinRaw.tag),
         }
       : null,
+    templates: templatesRaw
+      .filter(isRecord)
+      .map((entry) => ({
+        id: numberOr(entry.id),
+        slug: stringOr(entry.slug, "unknown-template"),
+        title: stringOr(entry.title, "Untitled Template"),
+      })),
+    layouts: layoutsRaw
+      .filter(isRecord)
+      .map((entry) => ({
+        id: numberOr(entry.id),
+        slug: stringOr(entry.slug, "unknown-layout"),
+        title: stringOr(entry.title, "Untitled Layout"),
+      })),
+    sections: sectionsRaw
+      .filter(isRecord)
+      .map((entry) => ({
+        id: numberOr(entry.id),
+        slug: stringOr(entry.slug, "unknown-section"),
+        title: stringOr(entry.title, "Untitled Section"),
+      })),
     symbolInventory: symbolInventoryRaw
       .filter(isRecord)
       .map((entry) => ({
@@ -701,6 +853,14 @@ function normalizeThriveIntelligence(value: unknown): SiteForgeSnapshotView["thr
     },
     safeHints: {
       frontPageUsesWpSettings: boolOr(safeHintsRaw.frontPageUsesWpSettings),
+    },
+    discoveredCapabilities: {
+      hasTtbNamespace: boolOr(discoveredCapabilitiesRaw.hasTtbNamespace),
+      hasTcbNamespace: boolOr(discoveredCapabilitiesRaw.hasTcbNamespace),
+      hasThemeNamespace: boolOr(discoveredCapabilitiesRaw.hasThemeNamespace),
+      hasTdNamespace: boolOr(discoveredCapabilitiesRaw.hasTdNamespace),
+      hasTveDashNamespace: boolOr(discoveredCapabilitiesRaw.hasTveDashNamespace),
+      designPackLikelyAvailable: boolOr(discoveredCapabilitiesRaw.designPackLikelyAvailable),
     },
     warnings: Array.isArray(value.warnings) ? value.warnings.filter((entry): entry is string => typeof entry === "string") : [],
   };
@@ -1272,6 +1432,7 @@ export function normalizeSession(value: unknown, projectId: string): BuildSessio
         : "deterministic_fallback",
     aiModel: nullableString(value.aiModel),
     marketIntelligence: normalizeMarketIntelligence(value.marketIntelligence),
+    websiteStrategy: normalizeWebsiteStrategy(value.websiteStrategy),
     connectionId: nullableString(value.connectionId),
     type: value.type === "refine" ? "refine" : "generate",
     createdAt: stringOr(value.createdAt, nowIso()),
