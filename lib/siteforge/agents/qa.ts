@@ -3,6 +3,9 @@ import { BuildSpec, QAError, QAResult, QAWarning } from "@/lib/siteforge/contrac
 export function runQaAgent(spec: BuildSpec): QAResult {
   const warnings: QAWarning[] = [];
   const errors: QAError[] = [];
+  const placeholderPattern = /app preview area|placeholder|lorem ipsum|your text here|coming soon/i;
+  const fakeTestimonialPattern = /\"[^\"]{10,}\"\s*-\s*(?:[A-Za-z]+\s+)?(founder|owner|ceo|customer|user|parent|vet|dr\.)\b/i;
+  const genericHeroPattern = /welcome to|your trusted partner|innovative solutions|ai-powered/i;
 
   if (!spec.siteTitle.trim()) {
     errors.push({ code: "SITE_TITLE_REQUIRED", message: "BuildSpec siteTitle is required.", field: "siteTitle" });
@@ -24,11 +27,32 @@ export function runQaAgent(spec: BuildSpec): QAResult {
     }
 
     page.sections.forEach((section) => {
+      if (placeholderPattern.test(`${section.heading} ${section.body}`)) {
+        errors.push({
+          code: "PLACEHOLDER_CONTENT_FORBIDDEN",
+          message: `Section ${section.id} on ${page.slug} contains placeholder copy.`,
+          field: "sections.body",
+        });
+      }
+      if (section.type === "testimonials" && fakeTestimonialPattern.test(`${section.heading} ${section.body}`)) {
+        errors.push({
+          code: "FAKE_TESTIMONIAL_FORBIDDEN",
+          message: `Section ${section.id} on ${page.slug} appears to include fabricated testimonial formatting.`,
+          field: "sections.body",
+        });
+      }
       if (!section.body.trim()) {
         warnings.push({
           code: "EMPTY_SECTION_BODY",
           message: `Section ${section.id} on ${page.slug} has empty body text.`,
           field: "sections.body",
+        });
+      }
+      if (section.type === "hero" && genericHeroPattern.test(section.heading)) {
+        warnings.push({
+          code: "GENERIC_HERO_COPY",
+          message: `Hero copy on ${page.slug} is generic and should be more specific.`,
+          field: "sections.heading",
         });
       }
     });

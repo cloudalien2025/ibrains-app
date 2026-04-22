@@ -37,12 +37,12 @@ import { clampProgress, createId, nowIso } from "@/lib/siteforge/utils";
 import { persistSnapshotFromSession } from "@/lib/siteforge/workspace";
 
 const stageProgress: Record<BuildStage, number> = {
-  planning: 15,
-  writing: 35,
-  building: 55,
-  reviewing: 72,
-  finalizing: 84,
-  executing: 96,
+  planning: 12,
+  writing: 32,
+  building: 52,
+  executing: 72,
+  reviewing: 88,
+  finalizing: 95,
   completed: 100,
   failed: 100,
 };
@@ -152,11 +152,11 @@ export async function runBuildPipeline(params: {
     });
     await repo.updateSession(sessionId, { contentPackage });
 
-    await updateStage(repo, sessionId, "building", "Building technical page specification");
+    await updateStage(repo, sessionId, "building", "Designing your layout");
     const buildSpec = runBuildSpecAgent(sitePlan, contentPackage);
     await repo.updateSession(sessionId, { buildSpec });
+    await updateStage(repo, sessionId, "building", "Building technical page specification");
 
-    await updateStage(repo, sessionId, "reviewing", "Running quality checks");
     const qaResult = runQaAgent(buildSpec);
     await repo.updateSession(sessionId, { qaResult });
 
@@ -172,8 +172,6 @@ export async function runBuildPipeline(params: {
     }
 
     let executionResult: OrchestratorOutput["executionResult"] = null;
-
-    await updateStage(repo, sessionId, "finalizing", "Finalizing build package");
 
     if (connection?.baseUrl && connection.username && connection.appPassword) {
       await updateStage(repo, sessionId, "executing", "Executing site build in WordPress");
@@ -298,6 +296,9 @@ export async function runBuildPipeline(params: {
         });
       }
     }
+
+    await updateStage(repo, sessionId, "reviewing", "Verifying your draft");
+    await updateStage(repo, sessionId, "finalizing", "Finalizing build package");
 
     await repo.updateSession(sessionId, {
       status: "completed",

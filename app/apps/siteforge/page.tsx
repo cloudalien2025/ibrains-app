@@ -96,6 +96,44 @@ type LaunchExperienceState = {
   detail: string;
 };
 
+type LaunchProgressStageId =
+  | "preparing"
+  | "researching"
+  | "planning"
+  | "writing"
+  | "designing"
+  | "building"
+  | "verifying"
+  | "ready";
+
+type LaunchProgressStageStatus = "completed" | "current" | "upcoming";
+
+type LaunchProgressStage = {
+  id: LaunchProgressStageId;
+  label: string;
+  description: string;
+  status: LaunchProgressStageStatus;
+};
+
+type LaunchProgressState = {
+  percentage: number;
+  currentStageLabel: string;
+  currentStageDescription: string;
+  stages: LaunchProgressStage[];
+  isActiveBuild: boolean;
+};
+
+const launchProgressStages: Array<{ id: LaunchProgressStageId; label: string }> = [
+  { id: "preparing", label: "Preparing your build" },
+  { id: "researching", label: "Researching your market" },
+  { id: "planning", label: "Planning your pages" },
+  { id: "writing", label: "Writing your content" },
+  { id: "designing", label: "Designing your layout" },
+  { id: "building", label: "Building in Thrive" },
+  { id: "verifying", label: "Verifying your draft" },
+  { id: "ready", label: "Draft ready" },
+];
+
 const journeyFlow: Array<{ id: JourneyPhase; label: string }> = [
   { id: "connect", label: "Connect" },
   { id: "describe", label: "Describe" },
@@ -309,6 +347,91 @@ export function getLaunchExperienceState({
   return { stage: "Ready to build", detail: "Everything is set. Build when you are ready." };
 }
 
+function resolveLaunchStageDescription(stageId: LaunchProgressStageId, params: { hasSerpApiKey: boolean; isThriveDetected: boolean }): string {
+  if (stageId === "preparing") return "Initializing your project context and build inputs.";
+  if (stageId === "researching") {
+    return params.hasSerpApiKey
+      ? "Analyzing market patterns and positioning signals for your category."
+      : "SerpAPI is unavailable, so we are grounding this build in your description and connected site.";
+  }
+  if (stageId === "planning") return "Mapping page priorities, section order, and conversion flow.";
+  if (stageId === "writing") return "Drafting conversion-focused copy from your brief.";
+  if (stageId === "designing") return "Composing section hierarchy, spacing rhythm, and visual structure.";
+  if (stageId === "building") {
+    return params.isThriveDetected
+      ? "Applying your page structure to Thrive-compatible output."
+      : "Building your draft with your current site shell and WordPress fallback path.";
+  }
+  if (stageId === "verifying") return "Running quality checks and validating your generated draft.";
+  return "Your draft is ready. Review, edit, and publish from Thrive.";
+}
+
+function resolveSessionStageIndex(params: { session: BuildSession | null; hasSerpApiKey: boolean }): number {
+  const session = params.session;
+  if (!session) return 0;
+  if (session.status === "queued") return 0;
+  if (session.status === "completed") return 7;
+
+  const current = String(session.runState.currentStage ?? "").toLowerCase();
+  const timelineMessages = session.runState.timeline.map((entry) => entry.message.toLowerCase());
+
+  if (current.includes("planning")) {
+    if (timelineMessages.some((message) => message.includes("planning your site structure"))) return 2;
+    if (timelineMessages.some((message) => message.includes("market intelligence"))) return 1;
+    return params.hasSerpApiKey ? 1 : 2;
+  }
+
+  if (current.includes("writing")) return 3;
+
+  if (current.includes("building")) {
+    if (timelineMessages.some((message) => message.includes("building technical page specification"))) return 5;
+    return 4;
+  }
+
+  if (current.includes("executing")) return 5;
+  if (current.includes("review") || current.includes("final")) return 6;
+  if (current.includes("completed")) return 7;
+
+  return 0;
+}
+
+export function getLaunchProgressState(params: {
+  currentSession: BuildSession | null;
+  hasCompletedBuild: boolean;
+  hasSerpApiKey: boolean;
+  isThriveDetected: boolean;
+}): LaunchProgressState {
+  const currentIndex = params.hasCompletedBuild ? 7 : resolveSessionStageIndex({ session: params.currentSession, hasSerpApiKey: params.hasSerpApiKey });
+  const currentStageMeta = launchProgressStages[currentIndex] ?? launchProgressStages[0];
+  const percentage = params.hasCompletedBuild
+    ? 100
+    : Math.max(
+        params.currentSession?.runState.progressPct ?? 0,
+        Math.round((currentIndex / (launchProgressStages.length - 1)) * 100)
+      );
+
+  const stages = launchProgressStages.map((stage, index) => ({
+    id: stage.id,
+    label: stage.label,
+    description: resolveLaunchStageDescription(stage.id, {
+      hasSerpApiKey: params.hasSerpApiKey,
+      isThriveDetected: params.isThriveDetected,
+    }),
+    status: (index < currentIndex ? "completed" : index === currentIndex ? "current" : "upcoming") as LaunchProgressStageStatus,
+  }));
+
+  const currentStage = stages[currentIndex] ?? stages[0];
+  const isActiveBuild = Boolean(params.currentSession && ["queued", "running"].includes(params.currentSession.status));
+
+  return {
+    percentage: Math.max(0, Math.min(100, percentage)),
+    currentStageLabel: currentStage.label,
+    currentStageDescription: currentStage.description,
+    stages,
+    isActiveBuild,
+  };
+}
+
 export default function SiteForgeAppPage() {
   const [activePhase, setActivePhase] = useState<JourneyPhase>("connect");
 
@@ -460,6 +583,17 @@ export default function SiteForgeAppPage() {
         hasWebsiteDescription: hasBusinessInfo,
       }),
     [currentSession, hasAiAccess, hasBusinessInfo, hasCompletedBuild, hasSerpApiAccess, isConnected]
+  );
+
+  const launchProgressState = useMemo(
+    () =>
+      getLaunchProgressState({
+        currentSession,
+        hasCompletedBuild,
+        hasSerpApiKey: hasSerpApiAccess,
+        isThriveDetected,
+      }),
+    [currentSession, hasCompletedBuild, hasSerpApiAccess, isThriveDetected]
   );
 
   const selectedProjectInOptions = useMemo(
@@ -1105,7 +1239,7 @@ export default function SiteForgeAppPage() {
     clearErrors();
     if (mode === "build") {
       setBuildDraftStatus("running");
-      setBuildDraftMessage("Building website...");
+      setBuildDraftMessage("Build started. Tracking progress below.");
     }
 
     try {
@@ -1131,8 +1265,8 @@ export default function SiteForgeAppPage() {
       activeProjectIntentRef.current = targetProjectId;
       await openProject(targetProjectId, "workspace");
       if (mode === "build") {
-        setBuildDraftStatus("success");
-        setBuildDraftMessage("Website build started.");
+        setBuildDraftStatus("running");
+        setBuildDraftMessage("Build is in progress.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : mode === "generate" ? "Failed to generate site." : "Build failed.";
@@ -1378,7 +1512,13 @@ export default function SiteForgeAppPage() {
   }
 
   function renderLaunchStep() {
-    const canBuild = buildDraftState.canBuildDraft && hasAiAccess;
+    const canBuild = buildDraftState.canBuildDraft && hasAiAccess && !launchProgressState.isActiveBuild && !hasCompletedBuild;
+    const homepageUrl =
+      currentSession?.executionResult?.createdPages.find((page) => page.slug === "home")?.url ??
+      currentSession?.executionResult?.createdPages[0]?.url ??
+      null;
+    const builtPageCount = currentSession?.executionResult?.createdPages.length ?? 0;
+    const buildMode = currentSession?.executionResult?.thrive.buildModeUsed ?? null;
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
@@ -1396,20 +1536,87 @@ export default function SiteForgeAppPage() {
           </ul>
         </div>
 
+        <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-xs uppercase tracking-[0.16em] text-cyan-200/90">Build progress</div>
+              <div className="mt-1 text-base font-semibold text-white">{launchProgressState.currentStageLabel}</div>
+              <div className="mt-1 text-xs text-slate-300">{launchProgressState.currentStageDescription}</div>
+            </div>
+            <div className="text-sm font-semibold text-cyan-100">{launchProgressState.percentage}%</div>
+          </div>
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800/90">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-cyan-300 to-emerald-300 transition-all duration-500"
+              style={{ width: `${launchProgressState.percentage}%` }}
+              aria-label="Build progress bar"
+              data-testid="siteforge-build-progress-bar"
+            />
+          </div>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2" data-testid="siteforge-build-stage-list">
+            {launchProgressState.stages.map((stage) => (
+              <li
+                key={stage.id}
+                className={`rounded-lg border px-2.5 py-2 text-xs ${
+                  stage.status === "completed"
+                    ? "border-emerald-300/40 bg-emerald-500/10 text-emerald-100"
+                    : stage.status === "current"
+                      ? "border-cyan-300/50 bg-cyan-500/10 text-cyan-100"
+                      : "border-white/10 bg-white/5 text-slate-300"
+                }`}
+              >
+                <div className="font-medium">{stage.label}</div>
+                <div className="mt-1 text-[11px] leading-4 opacity-90">{stage.description}</div>
+              </li>
+            ))}
+          </ul>
+        </div>
+
         <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-slate-200">Primary action</div>
-            <button
-              type="button"
-              data-testid="siteforge-build-website-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !canBuild || hasCompletedBuild ? "cursor-not-allowed opacity-60" : ""}`}
-              onClick={() => void runSitePipeline("build")}
-              disabled={busy || !canBuild || hasCompletedBuild}
-            >
-              {buildDraftStatus === "running" ? "Building..." : "Build Website"}
-            </button>
+            {hasCompletedBuild ? (
+              homepageUrl ? (
+                <a
+                  href={homepageUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="rounded-lg border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-100"
+                >
+                  View Draft in Thrive
+                </a>
+              ) : (
+                <button
+                  type="button"
+                  className="rounded-lg border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-100"
+                  onClick={() => setActivePhase("describe")}
+                >
+                  Review Draft Content
+                </button>
+              )
+            ) : (
+              <button
+                type="button"
+                data-testid="siteforge-build-website-action"
+                className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !canBuild ? "cursor-not-allowed opacity-60" : ""}`}
+                onClick={() => void runSitePipeline("build")}
+                disabled={busy || !canBuild}
+              >
+                {launchProgressState.isActiveBuild || buildDraftStatus === "running" ? "Building..." : "Build Website"}
+              </button>
+            )}
           </div>
           {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
+          {hasCompletedBuild ? (
+            <div className="mt-3 rounded-lg border border-emerald-300/30 bg-emerald-500/10 p-3 text-xs text-emerald-50">
+              <div className="font-medium">Draft ready</div>
+              <div className="mt-1">What was created: {builtPageCount} page{builtPageCount === 1 ? "" : "s"} in your draft build.</div>
+              <div className="mt-1">
+                What to review next: hero clarity, feature accuracy, CTA strength, and mobile section spacing before publish.
+              </div>
+              {buildMode ? <div className="mt-1">Build mode: {buildMode}.</div> : null}
+            </div>
+          ) : null}
         </div>
       </section>
     );
