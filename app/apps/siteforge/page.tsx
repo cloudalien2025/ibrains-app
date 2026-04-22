@@ -1522,6 +1522,19 @@ export default function SiteForgeAppPage() {
     const strategy = currentSession?.websiteStrategy ?? null;
     const researchSignal = currentSession?.marketIntelligence?.researchIntelligence ?? null;
     const researchConfidence = currentSession?.marketIntelligence?.status === "used" ? "high" : "low";
+    const usingThriveAssets = Boolean(
+      currentSession?.buildSpec?.pages.some((page) =>
+        page.sections.some((section) => {
+          const decision = (section as { metadata?: { renderTargetDecision?: string } }).metadata?.renderTargetDecision;
+          return (
+            decision === "prefer_existing_thrive_symbol" ||
+            decision === "prefer_existing_thrive_section" ||
+            decision === "prefer_existing_thrive_template" ||
+            decision === "prefer_existing_thrive_layout"
+          );
+        })
+      )
+    );
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
@@ -1556,6 +1569,7 @@ export default function SiteForgeAppPage() {
           {snapshot?.thriveIntelligence?.activeSkin?.name ? (
             <div className="mt-1">Active skin: {snapshot.thriveIntelligence.activeSkin.name}.</div>
           ) : null}
+          {usingThriveAssets ? <div className="mt-1">Using Thrive assets: selected reusable primitives matched your strategy.</div> : null}
         </div>
 
         <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-4">

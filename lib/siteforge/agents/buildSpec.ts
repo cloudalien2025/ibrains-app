@@ -6,11 +6,14 @@ import {
   PageIntent,
   SitePlan,
   SiteForgeVisualDesignTokens,
+  ThriveExecutionPathDecision,
   ThriveIntelligence,
+  ThriveRenderTarget,
   VisualPattern,
   VisualSectionComposition,
   WebsiteStrategy,
 } from "@/lib/siteforge/contracts";
+import { resolveThriveComposition } from "@/lib/siteforge/thriveCompositionResolver";
 import { nowIso } from "@/lib/siteforge/utils";
 
 function templateForSlug(slug: string): BuildSpecPage["metadata"]["template"] {
@@ -174,7 +177,7 @@ function compositionForPattern(pattern: VisualPattern): VisualSectionComposition
       mediaSlot: "none",
       iconStyle: "solid",
       ctaStyle: "none",
-      spacingDensity: "compact",
+      spacingDensity: "comfortable",
       sectionBandStyle: "light",
       trustSignalStyle: "logo_row",
       preferredNativePrimitives: ["thrive_content_box", "thrive_columns_background_band"],
@@ -200,14 +203,14 @@ function compositionForPattern(pattern: VisualPattern): VisualSectionComposition
     return {
       visualPattern: pattern,
       sectionLayout: "split",
-      emphasisLevel: "medium",
+      emphasisLevel: "high",
       backgroundStyle: "surface",
       cardStyle: "elevated",
       mediaSlot: "image",
       iconStyle: "line",
       ctaStyle: "inline_link",
       spacingDensity: "comfortable",
-      sectionBandStyle: "none",
+      sectionBandStyle: "accent",
       trustSignalStyle: "none",
       preferredNativePrimitives: ["thrive_columns_background_band", "thrive_content_box"],
     };
@@ -251,28 +254,13 @@ function inferResearchConfidence(params: {
   return "low";
 }
 
-function candidateSymbolIds(params: {
-  intelligence: ThriveIntelligence | null;
-  sectionType: BuildSpec["pages"][number]["sections"][number]["type"];
-  strategy: WebsiteStrategy | null;
-}): number[] {
-  const inventory = params.intelligence?.symbolInventory ?? [];
-  if (!inventory.length) return [];
-  const preferredCategories = new Set((params.strategy?.thriveExecutionHints.preferredSymbolCategories ?? []).map((entry) => entry.toLowerCase()));
-
-  return inventory
-    .filter((symbol) => {
-      if (params.sectionType === "hero") return symbol.inferredRole === "header";
-      if (params.sectionType === "contact") return symbol.inferredRole === "footer";
-      if (params.sectionType === "faq") return symbol.keywords?.some((entry) => entry.includes("faq")) ?? false;
-      if (params.sectionType === "cta") return symbol.keywords?.some((entry) => entry.includes("cta") || entry.includes("action")) ?? false;
-      if (preferredCategories.has("testimonial") && params.sectionType === "testimonials") {
-        return symbol.keywords?.some((entry) => entry.includes("testimonial") || entry.includes("review")) ?? false;
-      }
-      return symbol.inferredRole === "section";
-    })
-    .slice(0, 6)
-    .map((entry) => entry.id);
+function toPreferredRenderTarget(decision: ThriveExecutionPathDecision): ThriveRenderTarget {
+  if (decision === "prefer_existing_thrive_symbol") return "thrive_symbol_reference";
+  if (decision === "prefer_existing_thrive_section" || decision === "prefer_existing_thrive_template" || decision === "prefer_existing_thrive_layout") {
+    return "thrive_content_template_reference";
+  }
+  if (decision === "staging_only_native_write_required") return "future_landing_page_candidate";
+  return "wordpress_page_content";
 }
 
 export function runBuildSpecAgent(
@@ -289,12 +277,13 @@ export function runBuildSpecAgent(
   const thriveIntelligence = options?.thriveIntelligence ?? null;
   const researchConfidence = inferResearchConfidence({ marketIntelligence, strategy });
   const appLike = isAppOrSaasSite(sitePlan);
-  const pages = sitePlan.pages.map((page) => {
+
+  const draftPages = sitePlan.pages.map((page) => {
     const content = contentPackage.pages.find((entry) => entry.pageId === page.id);
+    const role = pageRole(page.slug, sitePlan.homepageSlug);
 
     const sections = page.sections.map((section) => {
       const match = content?.sections.find((entry) => entry.sectionId === section.id);
-      const role = pageRole(page.slug, sitePlan.homepageSlug);
       const candidateType: NonNullable<BuildSpec["pages"][number]["sections"][number]["metadata"]>["symbolCandidateType"] =
         section.sectionType === "hero"
           ? "header"
@@ -336,13 +325,9 @@ export function runBuildSpecAgent(
           reusableSymbolCandidates: [],
           contentTemplateCandidates: [],
           thriveRefs: {
-            symbolRefCandidates: candidateSymbolIds({
-              intelligence: thriveIntelligence,
-              sectionType: section.sectionType,
-              strategy,
-            }),
-            templateRefCandidates: (thriveIntelligence?.templates ?? []).slice(0, 4).map((entry) => entry.id),
-            sectionRefCandidates: (thriveIntelligence?.sections ?? []).slice(0, 6).map((entry) => entry.id),
+            symbolRefCandidates: [],
+            templateRefCandidates: [],
+            sectionRefCandidates: [],
           },
           landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
           rendererMode: "wp_safe_mode" as const,
@@ -357,7 +342,6 @@ export function runBuildSpecAgent(
       };
     });
 
-    const role = pageRole(page.slug, sitePlan.homepageSlug);
     return {
       pageId: page.id,
       title: page.title,
@@ -374,9 +358,9 @@ export function runBuildSpecAgent(
         reusableSymbolCandidates: [],
         contentTemplateCandidates: [],
         thriveRefs: {
-          symbolRefCandidates: (thriveIntelligence?.symbolInventory ?? []).slice(0, 6).map((entry) => entry.id),
-          templateRefCandidates: (thriveIntelligence?.templates ?? []).slice(0, 4).map((entry) => entry.id),
-          sectionRefCandidates: (thriveIntelligence?.sections ?? []).slice(0, 6).map((entry) => entry.id),
+          symbolRefCandidates: [],
+          templateRefCandidates: [],
+          sectionRefCandidates: [],
         },
         landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
         rendererMode: "wp_safe_mode" as const,
@@ -387,14 +371,14 @@ export function runBuildSpecAgent(
     };
   });
 
-  return {
+  const draft: BuildSpec = {
     siteTitle: contentPackage.siteTitle,
     homepageSlug: sitePlan.homepageSlug,
     menu: sitePlan.navigation.map((label) => ({
       label,
-      slug: pages.find((page) => page.title === label)?.slug ?? "home",
+      slug: draftPages.find((page) => page.title === label)?.slug ?? "home",
     })),
-    pages,
+    pages: draftPages,
     metadata: {
       conversionFocus: "high",
       thriveAware: false,
@@ -418,5 +402,94 @@ export function runBuildSpecAgent(
       contractCaptureRef: null,
       createdAt: nowIso(),
     },
+  };
+
+  const composition = resolveThriveComposition({
+    buildSpec: draft,
+    researchIntelligence: marketIntelligence?.researchIntelligence ?? null,
+    websiteStrategy: strategy,
+    thriveIntelligence,
+    marketIntelligence,
+  });
+
+  const resolvedPages = draft.pages.map((page) => {
+    const pageResolution = composition.pages.find((entry) => entry.pageSlug === page.slug);
+
+    const updatedSections = page.sections.map((section) => {
+      const sectionResolution = pageResolution?.sections.find((entry) => entry.sectionId === section.id);
+      const renderDecision = sectionResolution?.render_target ?? "safe_wordpress_render_with_thrive_hints";
+      const preferredTarget = toPreferredRenderTarget(renderDecision);
+      const sectionRendererMode: "wp_safe_mode" | "thrive_intel_mode" | "staging_native_mode" =
+        sectionResolution?.render_target === "staging_only_native_write_required"
+          ? "staging_native_mode"
+          : sectionResolution?.render_target === "safe_wordpress_render_with_thrive_hints"
+            ? "wp_safe_mode"
+            : "thrive_intel_mode";
+
+      return {
+        ...section,
+        metadata: {
+          ...(section.metadata ?? {}),
+          renderTargetDecision: renderDecision,
+          fallbackReason: sectionResolution?.fallback_reason ?? null,
+          rendererMode: sectionRendererMode,
+          renderTarget: preferredTarget,
+          preferredRenderTarget: preferredTarget,
+          thriveRefs: {
+            symbolRefSelected: sectionResolution?.symbol_ref_selected ?? null,
+            symbolRefCandidates: sectionResolution?.symbol_ref_candidates ?? [],
+            templateRefSelected: sectionResolution?.template_ref_selected ?? null,
+            templateRefCandidates: sectionResolution?.template_ref_candidates ?? [],
+            layoutRefSelected: sectionResolution?.layout_ref_selected ?? null,
+            layoutRefCandidates: sectionResolution?.layout_ref_candidates ?? [],
+            sectionRefSelected: sectionResolution?.section_ref_selected ?? null,
+            sectionRefCandidates: sectionResolution?.section_ref_candidates ?? [],
+          },
+          trustStrategy: sectionResolution?.trust_strategy ?? "grounded_assurance_only",
+          ctaRhythmHint: sectionResolution?.cta_rhythm_hint ?? "hero_primary_then_final_cta",
+          mobileHierarchyHint: sectionResolution?.mobile_hierarchy_hint ?? "single_column_mobile_stack",
+          premiumVisualStructureHint:
+            sectionResolution?.visual_structure_hint ?? "clean_section_spacing_typography_hierarchy",
+          mockupStrategy:
+            sectionResolution?.mockup_strategy ??
+            "polished_neutral_visual_anchor_without_placeholder_labels",
+        },
+      };
+    });
+
+    const pageRenderDecision = pageResolution?.render_target ?? "safe_wordpress_render_with_thrive_hints";
+    return {
+      ...page,
+      metadata: {
+        ...page.metadata,
+        shellStrategy: pageResolution?.shell_strategy ?? page.metadata.shellStrategy,
+        shellLayoutCandidate:
+          pageResolution?.layout_ref_selected != null
+            ? (thriveIntelligence?.layouts ?? []).find((entry) => entry.id === pageResolution.layout_ref_selected)?.slug ?? page.metadata.shellLayoutCandidate
+            : page.metadata.shellLayoutCandidate,
+        renderTargetDecision: pageRenderDecision,
+        fallbackReason: pageResolution?.fallback_reason ?? null,
+        rendererMode: pageResolution?.render_mode ?? "wp_safe_mode",
+        preferredRenderTarget: toPreferredRenderTarget(pageRenderDecision),
+        thriveRefs: {
+          symbolRefSelected: pageResolution?.symbol_ref_selected ?? null,
+          symbolRefCandidates: pageResolution?.symbol_ref_candidates ?? [],
+          templateRefSelected: pageResolution?.template_ref_selected ?? null,
+          templateRefCandidates: pageResolution?.template_ref_candidates ?? [],
+          layoutRefSelected: pageResolution?.layout_ref_selected ?? null,
+          layoutRefCandidates: pageResolution?.layout_ref_candidates ?? [],
+          sectionRefSelected: pageResolution?.section_ref_selected ?? null,
+          sectionRefCandidates: pageResolution?.section_ref_candidates ?? [],
+        },
+        premiumCompositionSummary: pageResolution?.premium_composition_summary ?? null,
+        homepageSequenceHint: pageResolution?.homepage_sequence_hint ?? null,
+      },
+      sections: updatedSections,
+    };
+  });
+
+  return {
+    ...draft,
+    pages: resolvedPages,
   };
 }

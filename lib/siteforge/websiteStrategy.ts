@@ -70,13 +70,18 @@ function pageSetFor(siteType: WebsiteStrategy["siteType"], market: MarketIntelli
 
 function sectionBlueprint(siteType: WebsiteStrategy["siteType"], market: MarketIntelligenceBrief): WebsiteStrategy["homepageStrategy"]["sectionBlueprint"] {
   const patterns = (market.researchIntelligence?.recurringSectionPatterns ?? []).join(" ").toLowerCase();
-  if (patterns.includes("faq") && siteType === "app") {
-    return ["hero", "problem", "features", "solution", "testimonials", "faq", "cta"];
+  if (siteType === "app") {
+    return patterns.includes("faq")
+      ? ["hero", "features", "solution", "testimonials", "faq", "cta"]
+      : ["hero", "features", "solution", "testimonials", "cta"];
   }
   if (siteType === "service") {
-    return ["hero", "problem", "solution", "features", "testimonials", "cta", "contact"];
+    return ["hero", "solution", "features", "testimonials", "faq", "contact", "cta"];
   }
-  return ["hero", "problem", "solution", "features", "testimonials", "cta"];
+  if (siteType === "product") {
+    return ["hero", "features", "solution", "testimonials", "cta"];
+  }
+  return ["hero", "problem", "features", "solution", "testimonials", "faq", "cta"];
 }
 
 function keyMessages(brief: WebsiteBrief, market: MarketIntelligenceBrief): string[] {
@@ -117,6 +122,7 @@ function strategyTone(brief: WebsiteBrief): string {
 function preferredSymbolCategories(siteType: WebsiteStrategy["siteType"]): string[] {
   if (siteType === "app") return ["header", "cta", "faq", "marketing"];
   if (siteType === "product") return ["header", "cta", "marketing", "testimonial"];
+  if (siteType === "hybrid") return ["header", "cta", "marketing", "faq", "testimonial"];
   return ["header", "marketing", "testimonial", "cta"];
 }
 
