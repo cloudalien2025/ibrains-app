@@ -13,7 +13,6 @@ test.describe("SiteForge save+validate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Settings" }).click();
 
     const projectName = `iPetzo ${Date.now()}`;
     await page.getByTestId("siteforge-new-project-name-input").fill(projectName);
