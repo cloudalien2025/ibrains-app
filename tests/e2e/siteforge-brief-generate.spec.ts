@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("SiteForge brief + AI generate flow", () => {
-  test("submits structured brief and starts build", async ({ page }) => {
+test.describe("SiteForge 2050 describe + connect flow", () => {
+  test("creates direction from intent and starts preview build", async ({ page }) => {
     const projectId = "p1";
     const sessionId = "s1";
     let lastBuildBody: Record<string, unknown> | null = null;
@@ -140,27 +140,23 @@ test.describe("SiteForge brief + AI generate flow", () => {
       await route.fulfill({ status: 200, body: JSON.stringify({}) });
     });
 
+    const intent = "Build a high-converting homepage for my AI pet app.";
+
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.getByTestId("siteforge-intent-prompt").fill(intent);
+    await page.getByTestId("siteforge-create-direction-action").click();
+
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/WordPress application password/i).fill("app-pass");
-    await page.getByTestId("siteforge-validate-connection-action").click();
-
     await page.locator("#siteforge-ai-key").fill("sk-test");
-    await page.getByRole("button", { name: "Save API Keys" }).click();
 
-    await page.locator("#siteforge-brief-business-name").fill("Acme Labs");
-    await page.locator("#siteforge-brief-business-type").fill("SaaS");
-    await page.locator("#siteforge-brief-business-description").fill("Sales pipeline software");
-    await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
-    await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
-    await page.getByTestId("siteforge-business-continue-action").click();
-    await page.getByTestId("siteforge-generate-site-action").click();
+    await page.getByTestId("siteforge-connect-begin-action").click();
 
     await expect.poll(() => lastBuildBody).not.toBeNull();
     const websiteBrief = (lastBuildBody as Record<string, unknown>).websiteBrief as Record<string, unknown>;
-    expect(websiteBrief.businessName).toBe("Acme Labs");
-    expect(websiteBrief.mainOffer).toBe("Pipeline automation suite");
+    expect(websiteBrief.businessDescription).toBe(intent);
+    expect(websiteBrief.mainOffer).toBe("Primary offer with clear conversion path");
     expect((lastBuildBody as Record<string, unknown>).homepageStrategy).toBe("draft_only");
   });
 });
