@@ -511,12 +511,25 @@ async function discoverExistingSite(
 }
 
 function pageContentHtml(page: BuildSpec["pages"][number]): string {
-  const intro = `<div class="sf-wrap"><h1>${page.title}</h1><p>${page.purpose}</p>`;
+  const hasHero = page.sections.some((section) => section.type === "hero");
+  const intro = hasHero
+    ? `<div class="sf-wrap">`
+    : `<div class="sf-wrap"><header class="sf-page-head"><h1>${page.title}</h1><p>${page.purpose}</p></header>`;
   const sections = page.sections
     .map((section) =>
       sectionHtml(section.heading, section.body, section.cta, {
+        sectionType: section.type,
         visualPattern: section.metadata?.visualComposition?.visualPattern ?? null,
         sectionBandStyle: section.metadata?.visualComposition?.sectionBandStyle ?? null,
+        heroLayoutVariant: (section.metadata?.hero_layout_variant as string | null | undefined) ?? null,
+        heroVisualStrategy: (section.metadata?.hero_visual_strategy as string | null | undefined) ?? null,
+        sectionSpacingProfile: (section.metadata?.section_spacing_profile as string | null | undefined) ?? null,
+        typographyHierarchyProfile: (section.metadata?.typography_hierarchy_profile as string | null | undefined) ?? null,
+        ctaRhythmProfile: (section.metadata?.cta_rhythm_profile as string | null | undefined) ?? null,
+        trustRenderStrategy: (section.metadata?.trust_render_strategy as string | null | undefined) ?? null,
+        mockupRenderStrategy: (section.metadata?.mockup_render_strategy as string | null | undefined) ?? null,
+        mobileStackStrategy: (section.metadata?.mobile_stack_strategy as string | null | undefined) ?? null,
+        sectionTransitionStrategy: (section.metadata?.section_transition_strategy as string | null | undefined) ?? null,
       })
     )
     .join("\n");

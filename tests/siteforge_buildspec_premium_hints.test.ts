@@ -66,5 +66,9 @@ describe("siteforge buildspec premium hints", () => {
     expect(hero?.metadata?.premiumVisualStructureHint).toContain("premium_hero");
     expect(cta?.metadata?.ctaRhythmHint).toContain("hero");
     expect(hero?.metadata?.mockupStrategy).not.toContain("placeholder");
+    expect(page.metadata.thriveApplicationDecision?.path).toBe("safe_wordpress_render_with_premium_visual_hints");
+    expect(page.metadata.native_authoring_mode).toBe("safe_wordpress_render_with_premium_visual_hints");
+    expect(hero?.metadata?.thriveApplicationDecision?.path).toBe("safe_wordpress_render_with_premium_visual_hints");
+    expect(hero?.metadata?.native_authoring_mode).toBe("safe_wordpress_render_with_premium_visual_hints");
   });
 });

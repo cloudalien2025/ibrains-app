@@ -220,6 +220,24 @@ export type BuildSpecSection = {
     };
     renderTarget?: ThriveRenderTarget;
     researchConfidence?: "high" | "medium" | "low";
+    hero_visual_strategy?: string;
+    hero_layout_variant?: string;
+    section_spacing_profile?: string;
+    typography_hierarchy_profile?: string;
+    cta_rhythm_profile?: string;
+    trust_render_strategy?: string;
+    mockup_render_strategy?: string;
+    mobile_stack_strategy?: string;
+    section_transition_strategy?: string;
+    thriveApplicationDecision?: ThriveApplicationDecisionRecord;
+    native_authoring_mode?: ThriveNativeAuthoringMode;
+    native_authoring_requirements?: string[];
+    native_authoring_blockers?: string[];
+    staging_bundle_candidates?: string[];
+    design_pack_candidate?: string | null;
+    symbol_creation_candidate?: string | null;
+    template_creation_candidate?: string | null;
+    section_creation_candidate?: string | null;
     [key: string]: unknown;
   };
 };
@@ -259,6 +277,24 @@ export type BuildSpecPage = {
       sectionRefSelected?: number | null;
       sectionRefCandidates?: number[];
     };
+    hero_visual_strategy?: string;
+    hero_layout_variant?: string;
+    section_spacing_profile?: string;
+    typography_hierarchy_profile?: string;
+    cta_rhythm_profile?: string;
+    trust_render_strategy?: string;
+    mockup_render_strategy?: string;
+    mobile_stack_strategy?: string;
+    section_transition_strategy?: string;
+    thriveApplicationDecision?: ThriveApplicationDecisionRecord;
+    native_authoring_mode?: ThriveNativeAuthoringMode;
+    native_authoring_requirements?: string[];
+    native_authoring_blockers?: string[];
+    staging_bundle_candidates?: string[];
+    design_pack_candidate?: string | null;
+    symbol_creation_candidate?: string | null;
+    template_creation_candidate?: string | null;
+    section_creation_candidate?: string | null;
     [key: string]: unknown;
   };
 };
@@ -350,6 +386,36 @@ export type ThriveExecutionPathDecision =
   | "prefer_existing_thrive_layout"
   | "safe_wordpress_render_with_thrive_hints"
   | "staging_only_native_write_required";
+
+export type ThriveApplicationPath =
+  | "apply_existing_thrive_symbol"
+  | "apply_existing_thrive_section"
+  | "apply_existing_thrive_template"
+  | "apply_existing_thrive_layout"
+  | "safe_wordpress_render_with_thrive_hints"
+  | "safe_wordpress_render_with_premium_visual_hints"
+  | "staging_only_native_write_required";
+
+export type ThriveNativeAuthoringMode =
+  | "live_safe_native_reuse"
+  | "safe_wordpress_render_with_thrive_hints"
+  | "safe_wordpress_render_with_premium_visual_hints"
+  | "staging_only_native_write_required";
+
+export type ThriveApplicationDecisionRecord = {
+  path: ThriveApplicationPath;
+  reason: string;
+  confidenceScore: number;
+  fallbackReason: string | null;
+  native_authoring_mode: ThriveNativeAuthoringMode;
+  native_authoring_requirements: string[];
+  native_authoring_blockers: string[];
+  staging_bundle_candidates: string[];
+  design_pack_candidate: string | null;
+  symbol_creation_candidate: string | null;
+  template_creation_candidate: string | null;
+  section_creation_candidate: string | null;
+};
 
 export type QAWarning = {
   code: string;

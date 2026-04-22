@@ -224,16 +224,31 @@ function resolveSection(params: {
   if (renderTargetDecision) {
     const selected = renderTargetFromDecision(renderTargetDecision);
     const selectedSymbolId = typeof thriveRefs?.symbolRefSelected === "number" ? thriveRefs.symbolRefSelected : null;
-    const confidence = selectedSymbolId ? 0.9 : 0.5;
+    const selectedSectionId = typeof thriveRefs?.sectionRefSelected === "number" ? thriveRefs.sectionRefSelected : null;
+    const selectedTemplateId = typeof thriveRefs?.templateRefSelected === "number" ? thriveRefs.templateRefSelected : null;
+    const selectedLayoutId = typeof thriveRefs?.layoutRefSelected === "number" ? thriveRefs.layoutRefSelected : null;
+    const selectedContentRef =
+      renderTargetDecision === "prefer_existing_thrive_section"
+        ? selectedSectionId
+        : renderTargetDecision === "prefer_existing_thrive_template"
+          ? selectedTemplateId
+          : renderTargetDecision === "prefer_existing_thrive_layout"
+            ? selectedLayoutId
+            : selectedTemplateId ?? selectedSectionId ?? selectedLayoutId;
+    const confidence = selectedSymbolId ? 0.92 : selectedContentRef ? 0.84 : 0.46;
     return {
       metadata: {
         ...(params.section.metadata ?? {}),
         sectionIntent: params.sectionIntent,
         symbolCandidateType: params.symbolCandidateType,
-        thriveSymbolRoleCandidate: selectedSymbolId ? "section" : "unknown",
+        thriveSymbolRoleCandidate: selectedSymbolId ? "section" : params.symbolCandidateType === "header" ? "header" : "unknown",
         preferredRenderTarget: selected.preferredRenderTarget,
         reusableSymbolCandidates: thriveRefs?.symbolRefCandidates ?? [],
-        contentTemplateCandidates: thriveRefs?.templateRefCandidates ?? [],
+        contentTemplateCandidates: [
+          ...(thriveRefs?.templateRefCandidates ?? []),
+          ...(thriveRefs?.sectionRefCandidates ?? []),
+          ...(thriveRefs?.layoutRefCandidates ?? []),
+        ],
         visualPrimitiveSelection: {
           requestedPattern: visualPattern,
           selectedPrimitive: selectedSymbolId ? "thrive_template_symbol" : selectedVisualPrimitive,
@@ -275,10 +290,10 @@ function resolveSection(params: {
         designIntentSatisfied: renderTargetDecision !== "safe_wordpress_render_with_thrive_hints",
         fallbackReason: (params.section.metadata?.fallbackReason as string | null | undefined) ?? null,
         matchedSymbolId: selectedSymbolId,
-        matchedSymbolTitle: selectedSymbolId ? `symbol-${selectedSymbolId}` : null,
+        matchedSymbolTitle: selectedSymbolId ? `symbol-${selectedSymbolId}` : selectedContentRef ? `template-ref-${selectedContentRef}` : null,
         matchedRole: selectedSymbolId ? "section" : null,
         confidence,
-        reason: "resolver_guided_decision",
+        reason: "resolver_guided_decision_with_selected_refs",
         rejectedReasons: [],
       },
     };

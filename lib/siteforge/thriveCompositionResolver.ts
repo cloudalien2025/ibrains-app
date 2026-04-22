@@ -34,6 +34,15 @@ export type ResolvedSectionComposition = {
   mobile_hierarchy_hint: string;
   visual_structure_hint: string;
   mockup_strategy: string;
+  hero_visual_strategy: string;
+  hero_layout_variant: string;
+  section_spacing_profile: string;
+  typography_hierarchy_profile: string;
+  cta_rhythm_profile: string;
+  trust_render_strategy: string;
+  mockup_render_strategy: string;
+  mobile_stack_strategy: string;
+  section_transition_strategy: string;
 };
 
 export type ResolvedPageComposition = {
@@ -169,6 +178,20 @@ function ctaRhythmForIntent(intent: "app" | "service" | "product" | "hybrid"): s
   if (intent === "app") return "hero_primary_then_midpage_reinforcement_then_final_trial_cta";
   if (intent === "product") return "hero_offer_then_value_sections_then_repeated_buy_cta";
   return "hero_primary_then_midpoint_secondary_then_final_primary";
+}
+
+function heroVisualStrategyForIntent(intent: "app" | "service" | "product" | "hybrid"): string {
+  if (intent === "app") return "category_clarity_and_differentiated_promise_with_feature_chips";
+  if (intent === "service") return "audience_outcome_and_process_trust";
+  if (intent === "product") return "offer_and_use_case_framing_with_benefit_stack";
+  return "balanced_service_product_hierarchy";
+}
+
+function heroLayoutVariantForIntent(intent: "app" | "service" | "product" | "hybrid"): string {
+  if (intent === "app") return "split_with_framed_mockup";
+  if (intent === "service") return "split_with_outcome_stack";
+  if (intent === "product") return "split_with_offer_stack";
+  return "balanced_split_hybrid";
 }
 
 function decisionFromCandidates(params: {
@@ -372,6 +395,38 @@ export function resolveThriveComposition(params: {
           intent === "app"
             ? "polished_neutral_ui_card_or_framed_mockup_without_placeholder_labels"
             : "benefit_focused_visual_panels_without_fake_artifacts",
+        hero_visual_strategy: heroVisualStrategyForIntent(intent),
+        hero_layout_variant: heroLayoutVariantForIntent(intent),
+        section_spacing_profile:
+          section.type === "hero"
+            ? "premium_hero_spacious"
+            : section.type === "cta"
+              ? "conversion_band_compact"
+              : "balanced_section_spacing",
+        typography_hierarchy_profile:
+          section.type === "hero"
+            ? "hero_first_strong_hierarchy"
+            : section.type === "cta"
+              ? "cta_priority_hierarchy"
+              : "section_heading_subheading_hierarchy",
+        cta_rhythm_profile: ctaRhythmForIntent(intent),
+        trust_render_strategy: trustStrategyForIntent(intent),
+        mockup_render_strategy:
+          intent === "app"
+            ? "framed_product_visual_without_placeholder_copy"
+            : "benefit_visual_without_synthetic_artifacts",
+        mobile_stack_strategy:
+          section.type === "hero"
+            ? "headline_support_value_stack_cta_then_visual"
+            : section.type === "cta"
+              ? "stacked_primary_secondary_buttons"
+              : "single_column_scannable_content_groups",
+        section_transition_strategy:
+          section.type === "cta"
+            ? "high_contrast_closing_band"
+            : section.type === "hero"
+              ? "hero_to_value_transition"
+              : "alternating_band_progression",
       };
     });
 
