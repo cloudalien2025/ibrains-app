@@ -3,16 +3,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("siteforge agency flow and failure language contract", () => {
-  it("uses agency IA labels instead of the old simple-step model", () => {
+  it("uses simplified workspace labels and clear growth guidance", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Mission Control")).toBe(true);
-    expect(source.includes("Project Mission")).toBe(true);
-    expect(source.includes("Agency Team")).toBe(true);
-    expect(source.includes("Workstream Progress Board")).toBe(true);
-    expect(source.includes("Strategy Director")).toBe(true);
-    expect(source.includes("Publish Checklist")).toBe(true);
+    expect(source.includes("Site Health Summary")).toBe(true);
+    expect(source.includes("Opportunities")).toBe(true);
+    expect(source.includes("Content Gaps")).toBe(true);
+    expect(source.includes("Optimization")).toBe(true);
+    expect(source.includes("Run Recommendation")).toBe(true);
 
     expect(source.includes('label: "Connect Site"')).toBe(false);
     expect(source.includes('label: "Done"')).toBe(false);
