@@ -14,6 +14,7 @@ import {
   WebsiteStrategy,
 } from "@/lib/siteforge/contracts";
 import { resolveThriveComposition } from "@/lib/siteforge/thriveCompositionResolver";
+import { decidePageThriveApplication, decideSectionThriveApplication } from "@/lib/siteforge/thriveApplicationDecision";
 import { nowIso } from "@/lib/siteforge/utils";
 
 function templateForSlug(slug: string): BuildSpecPage["metadata"]["template"] {
@@ -263,6 +264,99 @@ function toPreferredRenderTarget(decision: ThriveExecutionPathDecision): ThriveR
   return "wordpress_page_content";
 }
 
+function premiumProfilesForSection(params: {
+  siteType: WebsiteStrategy["siteType"] | null;
+  sectionType: BuildSpec["pages"][number]["sections"][number]["type"];
+  pageRole: PageIntent;
+  sectionIndex: number;
+}): {
+  hero_visual_strategy: string;
+  hero_layout_variant: string;
+  section_spacing_profile: string;
+  typography_hierarchy_profile: string;
+  cta_rhythm_profile: string;
+  trust_render_strategy: string;
+  mockup_render_strategy: string;
+  mobile_stack_strategy: string;
+  section_transition_strategy: string;
+} {
+  const siteType = params.siteType ?? "hybrid";
+  const hero_visual_strategy =
+    siteType === "app"
+      ? "category_clarity_plus_differentiated_promise_plus_feature_chips"
+      : siteType === "service"
+        ? "audience_outcome_clarity_plus_process_assurance"
+        : siteType === "product"
+          ? "offer_clarity_plus_use_case_framing_plus_benefit_stack"
+          : "balanced_service_product_value_ladder";
+  const hero_layout_variant =
+    siteType === "app"
+      ? "split_value_stack_with_framed_product_visual"
+      : siteType === "service"
+        ? "outcome_lead_split_with_process_trust_strip"
+        : siteType === "product"
+          ? "offer_led_split_with_benefit_stack"
+          : "balanced_split_with_dual_value_columns";
+  const section_spacing_profile =
+    params.sectionType === "hero"
+      ? "premium_hero_spacious"
+      : params.sectionType === "cta"
+        ? "conversion_band_compact"
+        : params.sectionType === "testimonials"
+          ? "assurance_band_comfortable"
+          : params.sectionType === "faq"
+            ? "question_stack_compact"
+            : "alternating_content_spacious";
+  const typography_hierarchy_profile =
+    params.sectionType === "hero"
+      ? "hero_high_contrast_headline_stack"
+      : params.sectionType === "cta"
+        ? "cta_directive_headline_with_short_support"
+        : "section_heading_with_clear_supporting_copy";
+  const cta_rhythm_profile =
+    siteType === "service"
+      ? "hero_primary_then_mid_process_cta_then_final_consult_cta"
+      : siteType === "product"
+        ? "hero_offer_cta_then_value_cta_then_final_buy_cta"
+        : "hero_primary_then_midpage_reinforcement_then_final_primary";
+  const trust_render_strategy =
+    siteType === "service"
+      ? "process_rigor_scope_and_assurance_without_fabricated_reviews"
+      : siteType === "product"
+        ? "risk_reduction_and_purchase_clarity_without_fake_stats"
+        : "operational_clarity_and_assurance_without_fabricated_social_proof";
+  const mockup_render_strategy =
+    siteType === "app" || params.sectionType === "hero"
+      ? "framed_ui_mockup_with_value_callouts_without_placeholder_labels"
+      : "benefit_panels_without_synthetic_artifacts";
+  const mobile_stack_strategy =
+    params.sectionType === "hero"
+      ? "headline_then_subheadline_then_value_stack_then_primary_cta_then_secondary_cta_then_visual"
+      : params.sectionType === "cta"
+        ? "single_column_cta_group_with_stacked_buttons"
+        : "single_column_scannable_groups_with_short_copy_blocks";
+  const section_transition_strategy =
+    params.sectionIndex === 0
+      ? "hero_to_value_transition"
+      : params.sectionType === "cta"
+        ? "high_contrast_conversion_closure"
+        : params.pageRole === "homepage"
+          ? "alternating_surface_and_accent_bands"
+          : "calm_editorial_progression";
+
+  return {
+    hero_visual_strategy,
+    hero_layout_variant,
+    section_spacing_profile,
+    typography_hierarchy_profile,
+    cta_rhythm_profile,
+    trust_render_strategy,
+    mockup_render_strategy,
+    mobile_stack_strategy,
+    section_transition_strategy,
+  };
+}
+
 export function runBuildSpecAgent(
   sitePlan: SitePlan,
   contentPackage: ContentPackage,
@@ -282,7 +376,7 @@ export function runBuildSpecAgent(
     const content = contentPackage.pages.find((entry) => entry.pageId === page.id);
     const role = pageRole(page.slug, sitePlan.homepageSlug);
 
-    const sections = page.sections.map((section) => {
+    const sections = page.sections.map((section, sectionIndex) => {
       const match = content?.sections.find((entry) => entry.sectionId === section.id);
       const candidateType: NonNullable<BuildSpec["pages"][number]["sections"][number]["metadata"]>["symbolCandidateType"] =
         section.sectionType === "hero"
@@ -308,6 +402,12 @@ export function runBuildSpecAgent(
         appLike,
       });
       const visualComposition = compositionForPattern(visualPattern);
+      const premiumProfiles = premiumProfilesForSection({
+        siteType: strategy?.siteType ?? null,
+        sectionType: section.sectionType,
+        pageRole: role,
+        sectionIndex,
+      });
       return {
         id: section.id,
         type: section.sectionType,
@@ -338,6 +438,7 @@ export function runBuildSpecAgent(
           preferredRenderTarget: "wordpress_page_content" as const,
           thriveSymbolRoleCandidate,
           visualComposition,
+          ...premiumProfiles,
         },
       };
     });
@@ -414,8 +515,9 @@ export function runBuildSpecAgent(
 
   const resolvedPages = draft.pages.map((page) => {
     const pageResolution = composition.pages.find((entry) => entry.pageSlug === page.slug);
+    const pageRenderDecision = pageResolution?.render_target ?? "safe_wordpress_render_with_thrive_hints";
 
-    const updatedSections = page.sections.map((section) => {
+    const updatedSections = page.sections.map((section, sectionIndex) => {
       const sectionResolution = pageResolution?.sections.find((entry) => entry.sectionId === section.id);
       const renderDecision = sectionResolution?.render_target ?? "safe_wordpress_render_with_thrive_hints";
       const preferredTarget = toPreferredRenderTarget(renderDecision);
@@ -425,6 +527,20 @@ export function runBuildSpecAgent(
           : sectionResolution?.render_target === "safe_wordpress_render_with_thrive_hints"
             ? "wp_safe_mode"
             : "thrive_intel_mode";
+      const premiumProfiles = premiumProfilesForSection({
+        siteType: strategy?.siteType ?? null,
+        sectionType: section.type,
+        pageRole: (page.metadata.pageRole as PageIntent) ?? pageRole(page.slug, sitePlan.homepageSlug),
+        sectionIndex,
+      });
+      const sectionApplicationDecision = decideSectionThriveApplication({
+        page,
+        section,
+        decision: renderDecision,
+        fallbackReason: sectionResolution?.fallback_reason ?? null,
+        strategy,
+        thriveIntelligence,
+      });
 
       return {
         ...section,
@@ -453,11 +569,37 @@ export function runBuildSpecAgent(
           mockupStrategy:
             sectionResolution?.mockup_strategy ??
             "polished_neutral_visual_anchor_without_placeholder_labels",
+          hero_visual_strategy: sectionResolution?.hero_visual_strategy ?? premiumProfiles.hero_visual_strategy,
+          hero_layout_variant: sectionResolution?.hero_layout_variant ?? premiumProfiles.hero_layout_variant,
+          section_spacing_profile: sectionResolution?.section_spacing_profile ?? premiumProfiles.section_spacing_profile,
+          typography_hierarchy_profile:
+            sectionResolution?.typography_hierarchy_profile ?? premiumProfiles.typography_hierarchy_profile,
+          cta_rhythm_profile: sectionResolution?.cta_rhythm_profile ?? premiumProfiles.cta_rhythm_profile,
+          trust_render_strategy: sectionResolution?.trust_render_strategy ?? premiumProfiles.trust_render_strategy,
+          mockup_render_strategy: sectionResolution?.mockup_render_strategy ?? premiumProfiles.mockup_render_strategy,
+          mobile_stack_strategy: sectionResolution?.mobile_stack_strategy ?? premiumProfiles.mobile_stack_strategy,
+          section_transition_strategy:
+            sectionResolution?.section_transition_strategy ?? premiumProfiles.section_transition_strategy,
+          thriveApplicationDecision: sectionApplicationDecision,
+          native_authoring_mode: sectionApplicationDecision.native_authoring_mode,
+          native_authoring_requirements: sectionApplicationDecision.native_authoring_requirements,
+          native_authoring_blockers: sectionApplicationDecision.native_authoring_blockers,
+          staging_bundle_candidates: sectionApplicationDecision.staging_bundle_candidates,
+          design_pack_candidate: sectionApplicationDecision.design_pack_candidate,
+          symbol_creation_candidate: sectionApplicationDecision.symbol_creation_candidate,
+          template_creation_candidate: sectionApplicationDecision.template_creation_candidate,
+          section_creation_candidate: sectionApplicationDecision.section_creation_candidate,
         },
       };
     });
 
-    const pageRenderDecision = pageResolution?.render_target ?? "safe_wordpress_render_with_thrive_hints";
+    const pageApplicationDecision = decidePageThriveApplication({
+      page,
+      decision: pageRenderDecision,
+      fallbackReason: pageResolution?.fallback_reason ?? null,
+      strategy,
+      thriveIntelligence,
+    });
     return {
       ...page,
       metadata: {
@@ -483,6 +625,24 @@ export function runBuildSpecAgent(
         },
         premiumCompositionSummary: pageResolution?.premium_composition_summary ?? null,
         homepageSequenceHint: pageResolution?.homepage_sequence_hint ?? null,
+        hero_visual_strategy: updatedSections[0]?.metadata?.hero_visual_strategy ?? undefined,
+        hero_layout_variant: updatedSections[0]?.metadata?.hero_layout_variant ?? undefined,
+        section_spacing_profile: "alternating_dense_light_sections",
+        typography_hierarchy_profile: "premium_heading_scale_with_clear_subheads",
+        cta_rhythm_profile: updatedSections.find((section) => section.type === "cta")?.metadata?.cta_rhythm_profile ?? undefined,
+        trust_render_strategy: updatedSections.find((section) => section.type === "testimonials")?.metadata?.trust_render_strategy ?? undefined,
+        mockup_render_strategy: updatedSections.find((section) => section.type === "hero")?.metadata?.mockup_render_strategy ?? undefined,
+        mobile_stack_strategy: "mobile_first_single_column_scannable",
+        section_transition_strategy: "deliberate_section_band_progression",
+        thriveApplicationDecision: pageApplicationDecision,
+        native_authoring_mode: pageApplicationDecision.native_authoring_mode,
+        native_authoring_requirements: pageApplicationDecision.native_authoring_requirements,
+        native_authoring_blockers: pageApplicationDecision.native_authoring_blockers,
+        staging_bundle_candidates: pageApplicationDecision.staging_bundle_candidates,
+        design_pack_candidate: pageApplicationDecision.design_pack_candidate,
+        symbol_creation_candidate: pageApplicationDecision.symbol_creation_candidate,
+        template_creation_candidate: pageApplicationDecision.template_creation_candidate,
+        section_creation_candidate: pageApplicationDecision.section_creation_candidate,
       },
       sections: updatedSections,
     };

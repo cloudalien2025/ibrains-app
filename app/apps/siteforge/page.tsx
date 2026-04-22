@@ -1535,6 +1535,12 @@ export default function SiteForgeAppPage() {
         })
       )
     );
+    const premiumLayoutSelected = Boolean(
+      currentSession?.buildSpec?.pages.some((page) =>
+        typeof (page as { metadata?: { premiumCompositionSummary?: unknown } }).metadata?.premiumCompositionSummary === "string"
+      )
+    );
+    const strategyDrivenBuild = Boolean(currentSession?.websiteStrategy && currentSession?.marketIntelligence);
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
@@ -1570,6 +1576,8 @@ export default function SiteForgeAppPage() {
             <div className="mt-1">Active skin: {snapshot.thriveIntelligence.activeSkin.name}.</div>
           ) : null}
           {usingThriveAssets ? <div className="mt-1">Using Thrive assets: selected reusable primitives matched your strategy.</div> : null}
+          {premiumLayoutSelected ? <div className="mt-1">Premium layout selected: enhanced hero, CTA rhythm, trust rendering, and mobile hierarchy applied.</div> : null}
+          {strategyDrivenBuild ? <div className="mt-1">Strategy-driven build: research, strategy, and Thrive inventory were combined for composition decisions.</div> : null}
         </div>
 
         <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-4">
