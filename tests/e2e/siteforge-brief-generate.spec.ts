@@ -139,11 +139,11 @@ test.describe("SiteForge brief + AI generate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Settings" }).click();
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/WordPress application password/i).fill("app-pass");
     await page.getByTestId("siteforge-validate-connection-action").click();
-    await page.getByRole("button", { name: "Tell Us About Your Business" }).click();
 
     await page.locator("#siteforge-ai-key").fill("sk-test");
     await page.getByRole("button", { name: "Save API Keys" }).click();
@@ -153,6 +153,8 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.locator("#siteforge-brief-business-description").fill("Sales pipeline software");
     await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
     await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
+    await page.getByTestId("siteforge-business-continue-action").click();
+    await page.getByPlaceholder("Describe what you want to build or improve...").fill("Build my first draft website.");
     await page.getByTestId("siteforge-generate-site-action").click();
 
     await expect.poll(() => lastBuildBody).not.toBeNull();

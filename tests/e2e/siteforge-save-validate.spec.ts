@@ -13,9 +13,10 @@ test.describe("SiteForge save+validate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
+    await page.getByRole("button", { name: "Settings" }).click();
 
     const projectName = `iPetzo ${Date.now()}`;
-    await page.getByPlaceholder("e.g. iPetzo").fill(projectName);
+    await page.getByTestId("siteforge-new-project-name-input").fill(projectName);
     await page.getByRole("button", { name: "Create Project" }).click();
 
     const createdMessage = page.getByText(`Project created: ${projectName}`);
@@ -33,7 +34,7 @@ test.describe("SiteForge save+validate flow", () => {
       return;
     }
 
-    const projectSelect = page.locator("select").first();
+    const projectSelect = page.getByTestId("siteforge-project-select");
     const selectedProjectId = await projectSelect.inputValue();
     await expect(projectSelect).not.toHaveValue("");
     await expect(projectSelect.locator("option:checked")).toContainText(projectName);
