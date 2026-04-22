@@ -6,6 +6,7 @@ test.describe("SiteForge brief + AI generate flow", () => {
     const sessionId = "s1";
     let lastBuildBody: Record<string, unknown> | null = null;
     let connectionValidated = false;
+    let aiSaved = false;
 
     const workspace = (hasSavedAiSecret: boolean) => ({
       project: {
@@ -71,11 +72,12 @@ test.describe("SiteForge brief + AI generate flow", () => {
       }
 
       if (url.endsWith(`/api/siteforge/projects/${projectId}`) && method === "PATCH") {
-        await route.fulfill({ status: 200, body: JSON.stringify(workspace(false)) });
+        await route.fulfill({ status: 200, body: JSON.stringify(workspace(aiSaved)) });
         return;
       }
 
       if (url.endsWith(`/api/siteforge/projects/${projectId}/ai`) && method === "POST") {
+        aiSaved = true;
         await route.fulfill({
           status: 200,
           body: JSON.stringify({ workspace: workspace(true), ai: { provider: "openai", model: "gpt-4.1-mini", status: "saved" } }),
@@ -139,7 +141,6 @@ test.describe("SiteForge brief + AI generate flow", () => {
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByRole("button", { name: "Settings" }).click();
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/WordPress application password/i).fill("app-pass");
@@ -154,7 +155,6 @@ test.describe("SiteForge brief + AI generate flow", () => {
     await page.locator("#siteforge-brief-target-audience").fill("B2B sales leaders");
     await page.locator("#siteforge-brief-main-offer").fill("Pipeline automation suite");
     await page.getByTestId("siteforge-business-continue-action").click();
-    await page.getByPlaceholder("Describe what you want to build or improve...").fill("Build my first draft website.");
     await page.getByTestId("siteforge-generate-site-action").click();
 
     await expect.poll(() => lastBuildBody).not.toBeNull();

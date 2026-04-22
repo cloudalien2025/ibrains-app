@@ -18,19 +18,6 @@ import {
   SiteForgeSnapshotView as SiteForgeSnapshot,
   SiteForgeWorkspaceView as SiteForgeWorkspace,
 } from "@/lib/siteforge/workspaceShape";
-import {
-  AgentRosterEntry,
-  AgencyDeliverable,
-  AgencyStatus,
-  AgencyWorkstream,
-  ApprovalItem,
-  ConfidenceLevel,
-  ExperimentIdea,
-  PublishChecklistItem,
-  ReusableAsset,
-  createDefaultAgentRoster,
-} from "@/lib/siteforge/agencyWorkspace";
-import { ActionButton, SurfaceCard } from "@/components/siteforge/AgencyPrimitives";
 
 type CapabilityCheck = {
   connected: boolean;
@@ -64,24 +51,12 @@ type WebsiteBriefForm = {
 };
 
 type CreateStatus = "idle" | "creating" | "created" | "error";
+type PrimaryView = "setup" | "build" | "publish" | "settings";
+type BuildTab = "plan" | "pages" | "assets";
+
 type OpenProjectResult =
   | { ok: true }
   | { ok: false; reason: "superseded" | "failed"; message?: string };
-
-type WorkspaceView =
-  | "content"
-  | "growth"
-  | "pages"
-  | "settings"
-  | "mission-control"
-  | "strategy"
-  | "brand"
-  | "funnels"
-  | "page-studio"
-  | "global-assets"
-  | "thrive-intelligence"
-  | "experiments"
-  | "publish";
 
 type BuildDraftState = {
   canBuildDraft: boolean;
@@ -93,11 +68,16 @@ type SelectedPageApprovalState =
   | { kind: "needs_selection"; message: string }
   | { kind: "ready"; buttonLabel: string };
 
-const primaryNav: Array<{ id: WorkspaceView; label: string }> = [
+const primaryNav: Array<{ id: PrimaryView; label: string }> = [
+  { id: "setup", label: "Setup" },
+  { id: "build", label: "Build" },
+  { id: "publish", label: "Publish" },
+];
+
+const buildTabs: Array<{ id: BuildTab; label: string }> = [
+  { id: "plan", label: "Plan" },
   { id: "pages", label: "Pages" },
-  { id: "content", label: "Content" },
-  { id: "growth", label: "Growth" },
-  { id: "settings", label: "Settings" },
+  { id: "assets", label: "Assets" },
 ];
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -146,22 +126,6 @@ function resolveFriendlyError(raw: string, context: "load" | "connect" | "genera
   return raw;
 }
 
-function labelFromStatus(progress: number): AgencyStatus {
-  if (progress >= 100) return "Built";
-  if (progress >= 80) return "Approved";
-  if (progress >= 60) return "Awaiting approval";
-  if (progress >= 35) return "Drafting";
-  if (progress > 0) return "Researching";
-  return "Not started";
-}
-
-function confidenceFromNumber(value: number): ConfidenceLevel {
-  if (value >= 0.9) return "Verified";
-  if (value >= 0.75) return "High";
-  if (value >= 0.5) return "Medium";
-  return "Low";
-}
-
 export function normalizePageApprovalName(title: string): string {
   const trimmed = title.trim();
   if (!trimmed) return "Page";
@@ -202,7 +166,9 @@ export function getSelectedPageApprovalState({
 }
 
 export default function SiteForgeAppPage() {
-  const [activeView, setActiveView] = useState<WorkspaceView>("pages");
+  const [activeView, setActiveView] = useState<PrimaryView>("setup");
+  const [activeBuildTab, setActiveBuildTab] = useState<BuildTab>("plan");
+
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [sessions, setSessions] = useState<BuildSession[]>([]);
@@ -251,10 +217,6 @@ export default function SiteForgeAppPage() {
   const [approvedPageSlugs, setApprovedPageSlugs] = useState<string[]>([]);
   const [buildDraftStatus, setBuildDraftStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [buildDraftMessage, setBuildDraftMessage] = useState<string | null>(null);
-  const [contentFilter, setContentFilter] = useState<"all" | "draft" | "published">("all");
-  const [aiCommandPrompt, setAiCommandPrompt] = useState("");
-  const [aiCommandStatus, setAiCommandStatus] = useState<string | null>(null);
-  const aiCommandInputRef = useRef<HTMLInputElement | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -286,17 +248,14 @@ export default function SiteForgeAppPage() {
         pageType: index === 0 || page.slug === "home" ? "homepage" : "support",
         goal: page.title === "Home" || page.slug === "home" ? "Primary conversion" : "Support intent",
         shell: page.slug === "home" ? "thrive-homepage-canonical" : "thrive-standard-content",
-        contentStatus: index === 0 ? "Recommended" : "Drafting",
         buildStatus: currentSession.status === "completed" ? "Built" : "Awaiting approval",
         approvalStatus: approvedPageSlugs.includes(page.slug) ? "Approved" : "Awaiting approval",
-        ownerAgent: index === 0 ? "content-architect" : "copy-chief",
-        funnel: index < 3 ? "lead-gen" : "authority",
         sections: page.sections,
       })) ?? [],
     [approvedPageSlugs, currentSession]
   );
 
-  const selectedStudioPage = useMemo(
+  const selectedBuildPage = useMemo(
     () => pageRows.find((page) => page.slug === selectedPageSlug) ?? pageRows[0] ?? null,
     [pageRows, selectedPageSlug]
   );
@@ -335,14 +294,9 @@ export default function SiteForgeAppPage() {
     return true;
   }, [currentSession, isThriveDetected]);
 
-  const selectedReviewPage = useMemo(
-    () => pageRows.find((page) => page.slug === selectedPageSlug) ?? null,
-    [pageRows, selectedPageSlug]
-  );
-
   const pageApprovalState = useMemo(
-    () => getSelectedPageApprovalState({ pageRows, selectedPage: selectedReviewPage }),
-    [pageRows, selectedReviewPage]
+    () => getSelectedPageApprovalState({ pageRows, selectedPage: selectedBuildPage }),
+    [pageRows, selectedBuildPage]
   );
 
   const buildDraftState = useMemo(
@@ -368,292 +322,19 @@ export default function SiteForgeAppPage() {
         ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
         : "Persistent Postgres storage is healthy.";
 
-  const agents = useMemo<AgentRosterEntry[]>(() => {
-    const roster = createDefaultAgentRoster();
-    const blockers = currentSession?.executionResult?.errors ?? [];
-    return roster.map((entry) => {
-      if (entry.id === "qa-publish-agent" && blockers.length) {
-        return { ...entry, status: "Blocked", blockers };
-      }
-      return entry;
-    });
-  }, [currentSession]);
+  const publishChecklist = useMemo(
+    () => [
+      { id: "pub-1", label: "Website brief saved", done: hasBusinessInfo },
+      { id: "pub-2", label: "Connection validated", done: isConnected },
+      { id: "pub-3", label: "AI access configured", done: aiConfigured },
+      { id: "pub-4", label: "Plan generated", done: hasGeneratedSitePlan },
+      { id: "pub-5", label: "At least one page approved", done: approvedPageSlugs.length > 0 },
+      { id: "pub-6", label: "Build draft completed", done: hasCompletedBuild },
+    ],
+    [aiConfigured, approvedPageSlugs.length, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, isConnected]
+  );
 
-  const agentById = useMemo(() => {
-    const map = new Map<string, AgentRosterEntry>();
-    agents.forEach((agent) => map.set(agent.id, agent));
-    return map;
-  }, [agents]);
-
-  const approvals = useMemo<ApprovalItem[]>(() => {
-    const base: ApprovalItem[] = [
-      {
-        id: "ap-1",
-        level: "Directional approval",
-        itemName: "Homepage hero direction",
-        ownerAgentId: "strategy-director",
-        changeSummary: "Value proposition refined around speed-to-launch + Thrive continuity.",
-        confidence: "High",
-        affectedPages: ["Home"],
-        preview: "Direction memo v2",
-        status: "Awaiting approval",
-      },
-      {
-        id: "ap-2",
-        level: "Structural approval",
-        itemName: "Shell recommendation",
-        ownerAgentId: "theme-shell-architect",
-        changeSummary: "Homepage mapped to Shell Template candidate with lead-focused Layout System.",
-        confidence: "High",
-        affectedPages: ["Home", "Lead Magnet"],
-        preview: "Shell and layout mapping",
-        status: "Awaiting approval",
-      },
-      {
-        id: "ap-3",
-        level: "Content approval",
-        itemName: "CTA stack",
-        ownerAgentId: "copy-chief",
-        changeSummary: "Primary CTA moved to diagnostic call with segmented secondary action.",
-        confidence: "Medium",
-        affectedPages: ["Home", "Thank You"],
-        preview: "CTA variants",
-        status: "Needs revision",
-      },
-      {
-        id: "ap-4",
-        level: "Build approval",
-        itemName: "Lead magnet flow",
-        ownerAgentId: "builder-operations-agent",
-        changeSummary: "Flow dependencies are mapped and build-ready pending final legal review.",
-        confidence: "High",
-        affectedPages: ["Lead Magnet", "Opt-in Confirmation", "Thank You"],
-        preview: "Flow readiness report",
-        status: "Awaiting approval",
-      },
-    ];
-
-    if (pageApprovalState.kind === "ready" && selectedReviewPage) {
-      base.push({
-        id: `ap-page-${selectedReviewPage.slug}`,
-        level: "Content approval",
-        itemName: normalizePageApprovalName(selectedReviewPage.title),
-        ownerAgentId: "content-architect",
-        changeSummary: "Section stack and copy layer are ready for review.",
-        confidence: "High",
-        affectedPages: [selectedReviewPage.title],
-        preview: "Page brief preview",
-        status: approvedPageSlugs.includes(selectedReviewPage.slug) ? "Approved" : "Awaiting approval",
-      });
-    }
-
-    return base;
-  }, [approvedPageSlugs, pageApprovalState.kind, selectedReviewPage]);
-
-  const workstreams = useMemo<AgencyWorkstream[]>(() => {
-    const rows: AgencyWorkstream[] = [
-      {
-        id: "ws-positioning",
-        name: "Positioning",
-        ownerAgentId: "strategy-director",
-        progress: hasBusinessInfo ? 75 : 35,
-        nextMilestone: "Approve positioning statement",
-        blockerState: hasBusinessInfo ? "No blocker" : "Business brief incomplete",
-        status: hasBusinessInfo ? "Awaiting approval" : "Researching",
-        confidence: hasBusinessInfo ? "High" : "Medium",
-      },
-      {
-        id: "ws-shell",
-        name: "Site Shell",
-        ownerAgentId: "theme-shell-architect",
-        progress: isThriveDetected ? 70 : 50,
-        nextMilestone: "Approve shell template mapping",
-        blockerState: isThriveDetected ? "No blocker" : "Thrive signals pending",
-        status: "Awaiting approval",
-        confidence: isThriveDetected ? "Verified" : "Medium",
-      },
-      {
-        id: "ws-homepage",
-        name: "Homepage",
-        ownerAgentId: "content-architect",
-        progress: selectedStudioPage ? 78 : 42,
-        nextMilestone: "Approve hero, proof, and CTA sections",
-        blockerState: pageRows.length ? "No blocker" : "No generated page brief",
-        status: pageRows.length ? "Awaiting approval" : "Drafting",
-        confidence: pageRows.length ? "High" : "Medium",
-      },
-      {
-        id: "ws-lead-funnel",
-        name: "Lead Funnel",
-        ownerAgentId: "builder-operations-agent",
-        progress: hasGeneratedSitePlan ? 64 : 20,
-        nextMilestone: "Validate lead magnet flow dependencies",
-        blockerState: hasGeneratedSitePlan ? "Legal review pending" : "Generate site plan first",
-        status: hasGeneratedSitePlan ? "Drafting" : "Researching",
-        confidence: hasGeneratedSitePlan ? "High" : "Low",
-      },
-      {
-        id: "ws-blog",
-        name: "Blog Engine",
-        ownerAgentId: "content-architect",
-        progress: 35,
-        nextMilestone: "Finalize category architecture",
-        blockerState: "Awaiting editorial cadence input",
-        status: "Researching",
-        confidence: "Medium",
-      },
-      {
-        id: "ws-conversion",
-        name: "Conversion System",
-        ownerAgentId: "cro-analyst",
-        progress: hasGeneratedSitePlan ? 58 : 18,
-        nextMilestone: "Launch first two experiments",
-        blockerState: hasGeneratedSitePlan ? "Awaiting baseline evidence" : "Pages not generated",
-        status: hasGeneratedSitePlan ? "Drafting" : "Not started",
-        confidence: hasGeneratedSitePlan ? "Medium" : "Low",
-      },
-    ];
-
-    return rows.map((row) => ({ ...row, status: labelFromStatus(row.progress) }));
-  }, [hasBusinessInfo, hasGeneratedSitePlan, isThriveDetected, pageRows.length, selectedStudioPage]);
-
-  const latestDeliverables = useMemo<AgencyDeliverable[]>(() => {
-    const fromTimeline: AgencyDeliverable[] = (currentSession?.runState.timeline ?? []).slice(-4).reverse().map((entry, index) => ({
-      id: `dl-${index}-${entry.at}`,
-      title: entry.message,
-      ownerAgentId: index % 2 === 0 ? "builder-operations-agent" : "copy-chief",
-      status: (entry.level === "error" ? "Needs revision" : entry.level === "warning" ? "Awaiting approval" : "Recommended") as AgencyStatus,
-      confidence: (entry.level === "error" ? "Low" : "High") as ConfidenceLevel,
-      timestamp: entry.at,
-    }));
-
-    if (fromTimeline.length) return fromTimeline;
-
-    return [
-      {
-        id: "dl-seed-1",
-        title: "Homepage brief and section stack",
-        ownerAgentId: "content-architect",
-        status: "Awaiting approval",
-        confidence: "High",
-        timestamp: activeProject?.updatedAt ?? currentSession?.createdAt ?? "",
-      },
-      {
-        id: "dl-seed-2",
-        title: "Shell template recommendation",
-        ownerAgentId: "theme-shell-architect",
-        status: "Recommended",
-        confidence: "High",
-        timestamp: activeProject?.updatedAt ?? currentSession?.createdAt ?? "",
-      },
-    ];
-  }, [activeProject?.updatedAt, currentSession]);
-
-  const reusableAssets = useMemo<ReusableAsset[]>(() => {
-    const symbols = snapshot?.thriveIntelligence?.symbolInventory ?? [];
-    const mapped: ReusableAsset[] = symbols.slice(0, 8).map((symbol) => ({
-      id: `asset-symbol-${symbol.id}`,
-      name: symbol.title || "Untitled symbol",
-      type: (symbol.inferredRole === "header" ? "Header" : symbol.inferredRole === "footer" ? "Footer" : "Reusable Block"),
-      category: symbol.taxonomy.name ?? "Uncategorized",
-      usageCount: pageRows.length ? Math.max(1, Math.floor(pageRows.length / 2)) : 0,
-      source: "Thrive symbol inventory",
-      status: (symbol.reusable ? "Approved" : "Recommended") as AgencyStatus,
-      compatiblePageTypes: ["Homepage", "Landing", "Lead Magnet"],
-      fingerprint: symbol.contentHash ?? symbol.cssHash ?? null,
-      matchConfidence: symbol.keywords?.length ? 0.9 : 0.65,
-    }));
-
-    if (mapped.length) return mapped;
-
-    return [
-      {
-        id: "asset-header-1",
-        name: "Shapeshift Header Standard",
-        type: "Header",
-        category: "Global",
-        usageCount: 5,
-        source: "Safe seed",
-        status: "Approved",
-        compatiblePageTypes: ["Homepage", "Content", "Offer"],
-        fingerprint: null,
-        matchConfidence: 0.72,
-      },
-      {
-        id: "asset-cta-1",
-        name: "Lead Magnet CTA Band",
-        type: "CTA Block",
-        category: "Conversion",
-        usageCount: 3,
-        source: "Safe seed",
-        status: "Recommended",
-        compatiblePageTypes: ["Homepage", "Lead Magnet"],
-        fingerprint: null,
-        matchConfidence: 0.68,
-      },
-    ];
-  }, [pageRows.length, snapshot]);
-
-  const experiments = useMemo<ExperimentIdea[]>(() => {
-    return [
-      {
-        id: "exp-1",
-        variantName: "Hero message: speed promise",
-        rationale: "Early run logs show stronger engagement when outcomes are explicit in first fold.",
-        expectedGain: "+8% primary CTA clicks",
-        confidence: "Medium",
-        affectedPages: ["Home"],
-        status: "Recommended",
-      },
-      {
-        id: "exp-2",
-        variantName: "Two-step opt-in confirmation",
-        rationale: "Lead quality often improves with confirmation framing before thank-you routing.",
-        expectedGain: "+12% qualified lead completion",
-        confidence: "High",
-        affectedPages: ["Lead Magnet", "Opt-in Confirmation"],
-        status: "Drafting",
-      },
-    ];
-  }, []);
-
-  const publishChecklist = useMemo<PublishChecklistItem[]>(() => {
-    return [
-      { id: "pub-1", label: "Homepage assigned", done: Boolean(snapshot?.currentHomepageId), ownerAgentId: "qa-publish-agent" },
-      { id: "pub-2", label: "Core CTA working", done: approvedPageSlugs.length > 0, ownerAgentId: "copy-chief" },
-      { id: "pub-3", label: "Lead magnet connected", done: hasGeneratedSitePlan, ownerAgentId: "builder-operations-agent" },
-      { id: "pub-4", label: "Thank-you flow complete", done: hasGeneratedSitePlan, ownerAgentId: "builder-operations-agent" },
-      { id: "pub-5", label: "Header/footer approved", done: reusableAssets.some((asset) => asset.type === "Header"), ownerAgentId: "thrive-asset-librarian" },
-      { id: "pub-6", label: "Mobile review complete", done: false, ownerAgentId: "qa-publish-agent" },
-      { id: "pub-7", label: "Legal pages present", done: pageRows.some((page) => page.slug.includes("privacy") || page.slug.includes("terms")), ownerAgentId: "qa-publish-agent" },
-    ];
-  }, [approvedPageSlugs.length, hasGeneratedSitePlan, pageRows, reusableAssets, snapshot?.currentHomepageId]);
-
-  const contentRows = useMemo(() => {
-    const rows = pageRows.map((page) => {
-      const published = page.buildStatus === "Built";
-      const linked = (page.sections?.length ?? 0) > 0;
-      return {
-        ...page,
-        publicationStatus: published ? "Published" : "Draft",
-        linked,
-      };
-    });
-
-    if (contentFilter === "all") return rows;
-    if (contentFilter === "published") return rows.filter((row) => row.publicationStatus === "Published");
-    return rows.filter((row) => row.publicationStatus === "Draft");
-  }, [contentFilter, pageRows]);
-
-  const missionWarnings = useMemo(() => {
-    const warnings: string[] = [];
-    warnings.push(...(snapshot?.thriveIntelligence?.warnings ?? []));
-    warnings.push(...(currentSession?.executionResult?.warnings ?? []));
-    warnings.push(...(currentSession?.executionResult?.errors ?? []));
-    if (!isConnected) warnings.push("Connection is not validated.");
-    if (!aiConfigured) warnings.push("AI keys are not fully configured.");
-    return Array.from(new Set(warnings)).slice(0, 8);
-  }, [aiConfigured, currentSession, isConnected, snapshot]);
+  const setupReady = hasBusinessInfo && isConnected && aiConfigured;
 
   function setUserError(rawMessage: string, context: "load" | "connect" | "generate" | "build" | "save") {
     setTechnicalError(rawMessage);
@@ -1275,1017 +956,67 @@ export default function SiteForgeAppPage() {
     }
   }
 
-  function seedAiCommand(prompt: string) {
-    setAiCommandPrompt(prompt);
-    setAiCommandStatus(null);
-    aiCommandInputRef.current?.focus();
-  }
-
-  async function runAiCommand() {
-    const prompt = aiCommandPrompt.trim();
-    if (!prompt) {
-      setAiCommandStatus("Add a request before running.");
-      return;
-    }
-    if (!selectedProjectId) {
-      setAiCommandStatus("Create or select a project first.");
-      return;
-    }
-    if (!briefIsValid()) {
-      setAiCommandStatus("Complete business and SEO details in Settings first.");
-      return;
-    }
-    setAiCommandStatus("Run submitted. Generating next steps...");
-    await runSitePipeline("generate");
-  }
-
-  function renderMissionControl() {
-    const pulseEntries =
-      runLogs.slice(0, 6).length > 0
-        ? runLogs.slice(0, 6).map((log) => ({ at: log.timestamp, stage: log.stage, message: log.message }))
-        : (currentSession?.runState.timeline ?? []).slice(0, 6).map((entry) => ({
-            at: entry.at,
-            stage: entry.stage,
-            message: entry.message,
-          }));
-
+  function renderSetup() {
     return (
       <div className="space-y-4">
         <div className="grid gap-4 xl:grid-cols-2">
-          <SurfaceCard
-            title="Project Mission"
-            owner="Strategy Director"
-            status={hasBusinessInfo ? "Awaiting approval" : "Researching"}
-            confidence={hasBusinessInfo ? "High" : "Medium"}
-            actions={
-              <>
-                <ActionButton label="Edit Brief" onClick={() => setActiveView("strategy")} />
-                <ActionButton label="View Blueprint" onClick={() => setActiveView("pages")} />
-              </>
-            }
-          >
-            <dl className="grid grid-cols-2 gap-3 text-xs text-slate-200">
-              <div><dt className="text-slate-400">Site name</dt><dd>{activeProject?.name ?? "No project selected"}</dd></div>
-              <div><dt className="text-slate-400">Primary goal</dt><dd>{briefForm.websiteGoal}</dd></div>
-              <div><dt className="text-slate-400">Market / audience</dt><dd>{briefForm.targetAudience || "Not set"}</dd></div>
-              <div><dt className="text-slate-400">Main offer</dt><dd>{briefForm.mainOffer || "Not set"}</dd></div>
-              <div><dt className="text-slate-400">Funnel type</dt><dd>Lead generation</dd></div>
-              <div><dt className="text-slate-400">Thrive stack detected</dt><dd>{isThriveDetected ? "Yes" : "No"}</dd></div>
-              <div><dt className="text-slate-400">Current stage</dt><dd>{currentSession?.runState.currentStage ?? "planning"}</dd></div>
-            </dl>
-          </SurfaceCard>
-
-          <SurfaceCard
-            title="Agency Team"
-            owner="Operations"
-            status="Recommended"
-            confidence="Verified"
-            actions={<ActionButton label="Open Full Roster" onClick={() => setActiveView("strategy")} />}
-          >
-            <div className="space-y-2 text-xs">
-              {agents.slice(0, 5).map((agent) => (
-                <div key={agent.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white">{agent.displayName}</div>
-                  <div className="text-slate-300">{agent.specialty}</div>
-                  <div className="mt-1 text-slate-400">Current task: {agent.currentTask}</div>
-                  <div className="mt-1 text-slate-400">Status: {agent.status} | Confidence: {agent.confidence}</div>
-                </div>
-              ))}
-            </div>
-          </SurfaceCard>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[1.3fr_1fr]">
-          <SurfaceCard
-            title="Approval Queue"
-            owner="QA / Publish Agent"
-            status="Awaiting approval"
-            confidence="High"
-            actions={
-              <>
-                <ActionButton label="Review" tone="primary" />
-                <ActionButton
-                  label="Approve"
-                  onClick={() => {
-                    if (!selectedReviewPage) return;
-                    if (!approvedPageSlugs.includes(selectedReviewPage.slug)) {
-                      setApprovedPageSlugs((prev) => [...prev, selectedReviewPage.slug]);
-                    }
+          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <h2 className="text-lg font-semibold text-white">Project</h2>
+            <div className="mt-3 grid gap-3 text-xs text-slate-200">
+              <div>
+                <label className="text-slate-300">Current project</label>
+                <select
+                  data-testid="siteforge-project-select"
+                  value={selectedProjectId}
+                  onChange={(event) => {
+                    activeProjectIntentRef.current = event.target.value || null;
+                    void openProject(event.target.value, "user");
                   }}
-                />
-                <ActionButton label="Request Revision" tone="danger" />
-              </>
-            }
-          >
-            <div className="space-y-2 text-xs text-slate-200">
-              {approvals.slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white">{item.itemName}</div>
-                  <div className="mt-1 text-slate-400">{item.level} | Owner: {agentById.get(item.ownerAgentId)?.displayName ?? item.ownerAgentId}</div>
-                  <div className="mt-1 text-slate-300">{item.changeSummary}</div>
-                </div>
-              ))}
-            </div>
-          </SurfaceCard>
-
-          <SurfaceCard title="Thrive Snapshot" owner="Thrive Asset Librarian" status="Recommended" confidence="Verified">
-            <dl className="grid grid-cols-2 gap-3 text-xs text-slate-200">
-              <div><dt className="text-slate-400">Active skin</dt><dd>{snapshot?.thriveIntelligence?.activeSkin?.name ?? "Unknown"}</dd></div>
-              <div><dt className="text-slate-400">Homepage mapping</dt><dd>{snapshot?.currentHomepageTitle ?? "Not mapped"}</dd></div>
-              <div><dt className="text-slate-400">Template count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Layout count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveLayout ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Section count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveSection ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Symbol count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Warning count</dt><dd>{snapshot?.thriveIntelligence?.warnings.length ?? 0}</dd></div>
-            </dl>
-          </SurfaceCard>
-        </div>
-
-        <SurfaceCard title="Agency Intake Controls" owner="Builder Operations Agent" status="Drafting" confidence="High">
-          <div className="grid gap-3 md:grid-cols-2 text-xs text-slate-200">
-            <div>
-              <label className="text-slate-300">Project</label>
-              <select
-                value={selectedProjectId}
-                onChange={(event) => {
-                  activeProjectIntentRef.current = event.target.value || null;
-                  void openProject(event.target.value, "user");
-                }}
-                disabled={!projects.length || busy}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              >
-                {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
-                {!projects.length ? <option value="">No project selected</option> : null}
-                {projects.map((project) => (
-                  <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-slate-300">New Project Name</label>
-              <input
-                value={newProjectName}
-                onChange={(event) => setNewProjectName(event.target.value)}
-                placeholder="e.g. iPetzo"
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-              <button
-                type="button"
-                className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
-                onClick={createProject}
-                disabled={busy || !normalizeNewProjectName(newProjectName)}
-              >
-                {createStatus === "creating" ? "Creating..." : "Create Project"}
-              </button>
-            </div>
-            <div>
-              <label className="text-slate-300">WordPress URL</label>
-              <input
-                value={baseUrl}
-                onChange={(event) => setBaseUrl(event.target.value)}
-                placeholder="https://example.com"
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="text-slate-300">WordPress Username</label>
-              <input
-                value={username}
-                onChange={(event) => setUsername(event.target.value)}
-                placeholder="WordPress username"
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label className="text-slate-300">Application Password</label>
-              <input
-                type="password"
-                value={appPassword}
-                onChange={(event) => setAppPassword(event.target.value)}
-                placeholder="WordPress application password"
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="siteforge-ai-key" className="text-slate-300">OpenAI API key</label>
-              <input
-                id="siteforge-ai-key"
-                type="password"
-                value={aiApiKey}
-                onChange={(event) => setAiApiKey(event.target.value)}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="siteforge-brief-business-name" className="text-slate-300">Business name</label>
-              <input
-                id="siteforge-brief-business-name"
-                value={briefForm.businessName}
-                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="siteforge-brief-business-type" className="text-slate-300">Business type</label>
-              <input
-                id="siteforge-brief-business-type"
-                value={briefForm.businessType}
-                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessType: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="siteforge-brief-target-audience" className="text-slate-300">Target audience</label>
-              <input
-                id="siteforge-brief-target-audience"
-                value={briefForm.targetAudience}
-                onChange={(event) => setBriefForm((prev) => ({ ...prev, targetAudience: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div>
-              <label htmlFor="siteforge-brief-main-offer" className="text-slate-300">Main offer</label>
-              <input
-                id="siteforge-brief-main-offer"
-                value={briefForm.mainOffer}
-                onChange={(event) => setBriefForm((prev) => ({ ...prev, mainOffer: event.target.value }))}
-                className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <label htmlFor="siteforge-brief-business-description" className="text-slate-300">What does your business do?</label>
-              <textarea
-                id="siteforge-brief-business-description"
-                value={briefForm.businessDescription}
-                onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))}
-                className="mt-1 h-20 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-              />
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <button
-              type="button"
-              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
-              onClick={() => seedAiCommand("Tell us about your business and goals.")}
-            >
-              Tell Us About Your Business
-            </button>
-            <button
-              type="button"
-              data-testid="siteforge-validate-connection-action"
-              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100"
-              onClick={saveAndValidateConnection}
-              disabled={busy || !selectedProjectId}
-            >
-              Validate Connection
-            </button>
-            <button
-              type="button"
-              data-testid="siteforge-generate-site-action"
-              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100"
-              onClick={() => void runSitePipeline("generate")}
-              disabled={busy || !isConnected || !hasBusinessInfo || !aiConfigured}
-            >
-              Generate Site
-            </button>
-            <button
-              type="button"
-              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
-              onClick={() => void saveAiConfig("save")}
-              disabled={busy}
-            >
-              Save API Keys
-            </button>
-          </div>
-          {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
-        </SurfaceCard>
-
-        <SurfaceCard title="Workstream Progress Board" owner="Mission Control" status="Drafting" confidence="High">
-          <div className="overflow-auto">
-            <table className="min-w-full text-left text-xs text-slate-200">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="px-2 py-2">Workstream</th>
-                  <th className="px-2 py-2">Owner agent</th>
-                  <th className="px-2 py-2">Progress</th>
-                  <th className="px-2 py-2">Next milestone</th>
-                  <th className="px-2 py-2">Blocker state</th>
-                </tr>
-              </thead>
-              <tbody>
-                {workstreams.map((row) => (
-                  <tr key={row.id} className="border-t border-white/10">
-                    <td className="px-2 py-2">{row.name}</td>
-                    <td className="px-2 py-2">{agentById.get(row.ownerAgentId)?.displayName ?? row.ownerAgentId}</td>
-                    <td className="px-2 py-2">{row.progress}%</td>
-                    <td className="px-2 py-2">{row.nextMilestone}</td>
-                    <td className="px-2 py-2">{row.blockerState}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </SurfaceCard>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SurfaceCard
-            title="Latest Deliverables"
-            owner="Builder Operations Agent"
-            status="Awaiting approval"
-            confidence="High"
-            actions={
-              <>
-                <ActionButton label="Preview" onClick={() => setActiveView("page-studio")} />
-                <ActionButton label="Compare" />
-                <ActionButton label="Approve" />
-                <ActionButton label="Revise" tone="danger" />
-              </>
-            }
-          >
-            <div className="space-y-2 text-xs text-slate-200">
-              {latestDeliverables.map((deliverable) => (
-                <div key={deliverable.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white">{deliverable.title}</div>
-                  <div className="mt-1 text-slate-400">
-                    Owner: {agentById.get(deliverable.ownerAgentId)?.displayName ?? deliverable.ownerAgentId} | Status: {deliverable.status}
-                  </div>
-                  <div className="mt-1 text-slate-400">Timestamp: {formatDate(deliverable.timestamp)}</div>
-                </div>
-              ))}
-            </div>
-          </SurfaceCard>
-
-          <SurfaceCard title="Agency Pulse" owner="Mission Control" status="Drafting" confidence="High">
-            <ol className="space-y-2 text-xs text-slate-200">
-              {pulseEntries.map((entry, idx) => (
-                <li key={`${entry.at}-${idx}`} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="text-slate-400">{formatDate(entry.at)} · {entry.stage}</div>
-                  <div className="mt-1 text-white">{entry.message}</div>
-                </li>
-              ))}
-            </ol>
-          </SurfaceCard>
-        </div>
-
-        <SurfaceCard title="Risk / Warnings" owner="QA / Publish Agent" status={missionWarnings.length ? "Blocked" : "Approved"} confidence="Medium">
-          <ul className="list-disc pl-5 text-xs text-slate-200">
-            {missionWarnings.length ? missionWarnings.map((warning) => <li key={warning}>{warning}</li>) : <li>No blockers detected in current workspace.</li>}
-          </ul>
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderStrategy() {
-    return (
-      <div className="grid gap-4 xl:grid-cols-[1.1fr_1fr_320px]">
-        <SurfaceCard title="Business Brief" owner="Strategy Director" status={hasBusinessInfo ? "Drafting" : "Researching"} confidence="High">
-          <div className="space-y-2 text-xs text-slate-200">
-            <div>Business: {briefForm.businessName || "Not set"}</div>
-            <div>Type: {briefForm.businessType || "Not set"}</div>
-            <div>Description: {briefForm.businessDescription || "Not set"}</div>
-            <div>Main offer: {briefForm.mainOffer || "Not set"}</div>
-          </div>
-        </SurfaceCard>
-        <SurfaceCard title="ICP / Audience" owner="Strategy Director" status="Drafting" confidence="Medium">
-          <div className="text-xs text-slate-200">{briefForm.targetAudience || "Add audience details in Settings to improve targeting."}</div>
-        </SurfaceCard>
-        <SurfaceCard title="Strategy Director" owner="Strategy Director" status="Awaiting approval" confidence="High">
-          <div className="text-xs text-slate-200">Current task: {agentById.get("strategy-director")?.currentTask}</div>
-        </SurfaceCard>
-        <SurfaceCard title="Positioning" owner="Strategy Director" status="Awaiting approval" confidence="High">
-          <div className="text-xs text-slate-200">Draft angle: &quot;Your AI web agency for Thrive Themes&quot; with offer-focused differentiation.</div>
-        </SurfaceCard>
-        <SurfaceCard title="Sitemap Recommendation" owner="Content Architect" status="Recommended" confidence="High">
-          <div className="text-xs text-slate-200">Core pages: Homepage, Lead Magnet, Opt-in Confirmation, Thank You, Core Offer, Follow-up Content.</div>
-        </SurfaceCard>
-        <SurfaceCard title="Strategy Decisions" owner="Mission Control" status="Awaiting approval" confidence="Medium">
-          <ul className="list-disc pl-5 text-xs text-slate-200">
-            <li>Approve Direction</li>
-            <li>Confirm funnel type and audience clarity</li>
-            <li>Lock conversion promise before copy finalization</li>
-          </ul>
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderBrand() {
-    return (
-      <div className="grid gap-4 xl:grid-cols-2">
-        <SurfaceCard title="Brand Identity" owner="Brand Director" status="Drafting" confidence="Medium">
-          <div className="text-xs text-slate-200">Tone: {briefForm.brandTone}. Brand system is tuned for premium agency delivery and clarity-first hierarchy.</div>
-        </SurfaceCard>
-        <SurfaceCard title="Design Tokens" owner="Brand Director" status="Recommended" confidence="High">
-          <div className="text-xs text-slate-200">Token set covers typography, spacing, layered cards, and action color semantics for approvals and risk.</div>
-        </SurfaceCard>
-        <SurfaceCard title="Thrive Theme Mapping" owner="Theme Shell Architect" status="Recommended" confidence="High">
-          <div className="text-xs text-slate-200">Active skin: {snapshot?.thriveIntelligence?.activeSkin?.name ?? "Unknown"}. Mapping emphasizes Shell Template and Layout System compatibility.</div>
-        </SurfaceCard>
-        <SurfaceCard title="Brand Rules" owner="Brand Director" status="Awaiting approval" confidence="Medium">
-          <ul className="list-disc pl-5 text-xs text-slate-200">
-            <li>No conflicting CTA tones per page</li>
-            <li>Keep claims precise and evidence-backed</li>
-            <li>Maintain reusable block naming standards</li>
-          </ul>
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderFunnels() {
-    const nodes = ["Homepage", "Lead Magnet", "Opt-in Confirmation", "Thank You", "Core Offer", "Follow-up Content"];
-    return (
-      <div className="space-y-4">
-        <SurfaceCard title="Funnel Overview Board" owner="Builder Operations Agent" status="Drafting" confidence="High">
-          <div className="grid gap-2 md:grid-cols-3">
-            {nodes.map((node) => (
-              <div key={node} className="rounded-xl border border-white/10 bg-white/5 p-3 text-xs text-slate-200">{node}</div>
-            ))}
-          </div>
-        </SurfaceCard>
-        <div className="grid gap-4 xl:grid-cols-3">
-          <SurfaceCard title="Funnel Logic" owner="Strategy Director" status="Awaiting approval" confidence="High">
-            <div className="text-xs text-slate-200">Sequence is configured for lead qualification before core offer promotion.</div>
-          </SurfaceCard>
-          <SurfaceCard title="Offer Stack" owner="Copy Chief" status="Drafting" confidence="Medium">
-            <div className="text-xs text-slate-200">Main offer: {briefForm.mainOffer || "Not set"} with diagnostic call and follow-up nurture stack.</div>
-          </SurfaceCard>
-          <SurfaceCard title="Conversion Recommendations" owner="CRO Analyst" status="Recommended" confidence="Medium">
-            <div className="text-xs text-slate-200">Prioritize friction reduction on opt-in confirmation and CTA consistency across first three steps.</div>
-          </SurfaceCard>
-        </div>
-      </div>
-    );
-  }
-
-  function renderPagesIndex() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-white">Pages</h2>
-          <button
-            type="button"
-            className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-sm text-cyan-100"
-            onClick={() => seedAiCommand("Create a new page for this site structure.")}
-          >
-            + New Page
-          </button>
-        </div>
-        <SurfaceCard title="Page List" owner="Content Architect" status="Drafting" confidence="High">
-          <div className="space-y-2 text-sm">
-            {pageRows.map((page) => (
-              <button
-                key={page.slug}
-                type="button"
-                className="w-full rounded-xl border border-white/12 bg-white/5 px-3 py-3 text-left transition hover:bg-white/10"
-                onClick={() => setSelectedPageSlug(page.slug)}
-              >
-                <div className="font-medium text-white">{page.title}</div>
-                <div className="mt-1 text-xs text-slate-300">
-                  {page.pageType} · {page.goal} · {page.buildStatus}
-                </div>
-              </button>
-            ))}
-            {!pageRows.length ? <div className="rounded-xl border border-white/12 bg-white/5 px-3 py-4 text-slate-300">No pages yet.</div> : null}
-          </div>
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderContentWorkspace() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-white">Content</h2>
-          <button
-            type="button"
-            className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-sm text-cyan-100"
-            onClick={() => seedAiCommand("Create content for one of my high-priority pages.")}
-          >
-            + Create Content
-          </button>
-        </div>
-        <div className="flex flex-wrap gap-2 text-xs">
-          {(["all", "draft", "published"] as const).map((filter) => (
-            <button
-              key={filter}
-              type="button"
-              onClick={() => setContentFilter(filter)}
-              className={`rounded-full border px-3 py-1.5 ${
-                contentFilter === filter
-                  ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
-                  : "border-white/15 bg-white/5 text-slate-200"
-              }`}
-            >
-              {filter === "all" ? "All" : filter === "draft" ? "Draft" : "Published"}
-            </button>
-          ))}
-        </div>
-        <div className="grid gap-3">
-          {contentRows.map((page) => (
-            <div key={page.slug} className="rounded-xl border border-white/12 bg-white/5 p-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-medium text-white">{page.title}</div>
-                  <div className="mt-1 text-xs text-slate-300">{page.goal}</div>
-                </div>
-                <div className="flex flex-wrap gap-2 text-[11px]">
-                  <span
-                    className={`rounded-full border px-2 py-1 ${
-                      page.publicationStatus === "Published"
-                        ? "border-emerald-300/50 bg-emerald-500/15 text-emerald-100"
-                        : "border-rose-300/50 bg-rose-500/15 text-rose-100"
-                    }`}
-                  >
-                    {page.publicationStatus}
-                  </span>
-                  {page.linked ? (
-                    <span className="rounded-full border border-sky-300/50 bg-sky-500/15 px-2 py-1 text-sky-100">Linked</span>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-          ))}
-          {!contentRows.length ? <div className="rounded-xl border border-white/12 bg-white/5 px-4 py-5 text-sm text-slate-300">No content items found for this filter.</div> : null}
-        </div>
-      </div>
-    );
-  }
-
-  function renderPageStudio() {
-    const sections = selectedStudioPage?.sections ?? [];
-    const variantSeed = ["Hero", "Proof", "Benefits", "CTA", "FAQ", "Testimonials", "Final CTA"];
-    const studioSections = sections.length ? sections.map((section) => section.heading || "Section") : variantSeed;
-
-    return (
-      <div className="grid gap-4 2xl:grid-cols-[300px_minmax(0,1fr)_300px]">
-        <SurfaceCard title="Page Overview" owner="Content Architect" status="Drafting" confidence="High">
-          <div className="space-y-3 text-xs text-slate-200">
-            <div>Page: {selectedStudioPage?.title ?? "No page selected"}</div>
-            <div>Goal: {selectedStudioPage?.goal ?? "Not available"}</div>
-            <div>Dependencies: Shell template, CTA blocks, legal references</div>
-            <div>Linked funnel steps: Homepage to Lead Magnet to Thank You</div>
-            <div>Reusable assets used: {reusableAssets.slice(0, 3).map((asset) => asset.name).join(", ") || "None"}</div>
-            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
-              <div className="font-medium text-white">Section Navigator</div>
-              <div className="mt-2 space-y-1">
-                {studioSections.map((name, idx) => (
-                  <div key={`${name}-${idx}`} className="rounded-md border border-white/10 px-2 py-1">{String(name)}</div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </SurfaceCard>
-
-        <div className="space-y-4">
-          <SurfaceCard title="Page Brief" owner="Strategy Director" status="Awaiting approval" confidence="High">
-            <div className="text-xs text-slate-200">This page is positioned to convert cold Thrive traffic into qualified lead actions.</div>
-          </SurfaceCard>
-          <SurfaceCard title="Shell Recommendation" owner="Theme Shell Architect" status="Recommended" confidence="High">
-            <div className="text-xs text-slate-200">Recommended Shell Template: {selectedStudioPage?.shell ?? "thrive-homepage-canonical"}</div>
-          </SurfaceCard>
-
-          <div className="space-y-3">
-            {studioSections.map((section, index) => {
-              const matchedAsset = reusableAssets[index % Math.max(reusableAssets.length, 1)];
-              const owner = index % 2 === 0 ? "copy-chief" : "content-architect";
-              return (
-                <SurfaceCard
-                  key={`${section}-${index}`}
-                  title={`${String(section)} Section`}
-                  owner={agentById.get(owner)?.displayName ?? owner}
-                  status={index < 2 ? "Awaiting approval" : "Drafting"}
-                  confidence={index < 2 ? "High" : "Medium"}
-                  actions={
-                    <>
-                      <ActionButton label="Preview" />
-                      <ActionButton label="Swap Variant" />
-                      <ActionButton
-                        label="Approve"
-                        onClick={() => {
-                          if (!selectedStudioPage) return;
-                          setApprovedPageSlugs((prev) => prev.includes(selectedStudioPage.slug) ? prev : [...prev, selectedStudioPage.slug]);
-                        }}
-                      />
-                      <ActionButton label="Request Revision" tone="danger" />
-                      <ActionButton label="Lock Section" />
-                    </>
-                  }
+                  disabled={!projects.length || busy}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
                 >
-                  <div className="grid gap-2 text-xs text-slate-200 md:grid-cols-2">
-                    <div>Purpose: conversion-focused narrative layer</div>
-                    <div>Content summary: concise claim + proof + CTA progression</div>
-                    <div>Recommended Thrive asset type: {index % 2 === 0 ? "Reusable Block" : "Section Asset"}</div>
-                    <div>Matched reusable asset: {matchedAsset?.name ?? "No match"}</div>
-                  </div>
-                </SurfaceCard>
-              );
-            })}
-          </div>
-
-          <SurfaceCard title="Copy Layer" owner="Copy Chief" status="Drafting" confidence="Medium">
-            <div className="text-xs text-slate-200">Primary copy variants are tracked per section with evidence notes and approval history.</div>
-          </SurfaceCard>
-          <SurfaceCard title="Build Readiness" owner="Builder Operations Agent" status={buildDraftState.canBuildDraft ? "Awaiting approval" : "Blocked"} confidence="High">
-            <div className="text-xs text-slate-200">{buildDraftState.canBuildDraft ? "Ready for Build" : buildDraftState.blockers.join(" ")}</div>
-          </SurfaceCard>
-        </div>
-
-        <div className="space-y-4">
-          <SurfaceCard title="Agent Collaboration" owner="Mission Control" status="Drafting" confidence="High">
-            <div className="space-y-2 text-xs text-slate-200">
-              {agents.slice(0, 4).map((agent) => (
-                <div key={agent.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white">{agent.displayName}</div>
-                  <div className="text-slate-400">{agent.currentTask}</div>
-                </div>
-              ))}
-            </div>
-          </SurfaceCard>
-          <SurfaceCard title="Version History" owner="Builder Operations Agent" status="Recommended" confidence="High">
-            <div className="space-y-2 text-xs text-slate-200">
-              {latestDeliverables.slice(0, 4).map((item) => (
-                <div key={item.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                  <div className="font-medium text-white">{item.title}</div>
-                  <div className="text-slate-400">{formatDate(item.timestamp)}</div>
-                </div>
-              ))}
-            </div>
-          </SurfaceCard>
-        </div>
-      </div>
-    );
-  }
-
-  function renderGlobalAssets() {
-    const tabs = [
-      "Headers",
-      "Footers",
-      "Symbols / Reusable Blocks",
-      "Sections",
-      "Templates / Shell Templates",
-      "Layouts / Layout Systems",
-      "CTA Blocks",
-      "FAQs",
-      "Testimonials",
-    ];
-
-    return (
-      <div className="space-y-4">
-        <SurfaceCard title="Global Asset Library" owner="Thrive Asset Librarian" status="Recommended" confidence="Verified">
-          <div className="flex flex-wrap gap-2 text-xs text-slate-200">
-            {tabs.map((tab) => (
-              <span key={tab} className="rounded-full border border-white/15 bg-white/5 px-3 py-1">{tab}</span>
-            ))}
-          </div>
-        </SurfaceCard>
-
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {reusableAssets.map((asset) => (
-            <SurfaceCard
-              key={asset.id}
-              title={asset.name}
-              owner="Thrive Asset Librarian"
-              status={asset.status}
-              confidence={confidenceFromNumber(asset.matchConfidence ?? 0.6)}
-              actions={
-                <>
-                  <ActionButton label="Preview" />
-                  <ActionButton label="Reuse" />
-                  <ActionButton label="Recommend for page" onClick={() => setActiveView("page-studio")} />
-                  <ActionButton label="Mark preferred" />
-                  <ActionButton label="Mark deprecated" tone="danger" />
-                </>
-              }
-            >
-              <div className="space-y-1 text-xs text-slate-200">
-                <div>Type: {asset.type}</div>
-                <div>Category: {asset.category}</div>
-                <div>Usage count: {asset.usageCount}</div>
-                <div>Source: {asset.source}</div>
-                <div>Compatible page types: {asset.compatiblePageTypes.join(", ")}</div>
-                <div>Fingerprint / match confidence: {asset.fingerprint ?? "n/a"} / {asset.matchConfidence?.toFixed(2) ?? "n/a"}</div>
-              </div>
-            </SurfaceCard>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  function renderThriveIntelligence() {
-    const symbolInventory = snapshot?.thriveIntelligence?.symbolInventory ?? [];
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SurfaceCard title="Environment Snapshot" owner="Thrive Asset Librarian" status="Recommended" confidence="Verified">
-            <dl className="grid grid-cols-2 gap-2 text-xs text-slate-200">
-              <div><dt className="text-slate-400">Thrive detected</dt><dd>{isThriveDetected ? "Yes" : "No"}</dd></div>
-              <div><dt className="text-slate-400">Active skin</dt><dd>{snapshot?.thriveIntelligence?.activeSkin?.name ?? "Unknown"}</dd></div>
-              <div><dt className="text-slate-400">Homepage page ID / mapping</dt><dd>{snapshot?.currentHomepageId ?? "n/a"} / {snapshot?.currentHomepageTitle ?? "n/a"}</dd></div>
-              <div><dt className="text-slate-400">page_for_posts</dt><dd>{snapshot?.knownPages.find((entry) => entry.slug.includes("blog"))?.id ?? "n/a"}</dd></div>
-              <div><dt className="text-slate-400">Connection state</dt><dd>{connectionResult?.message ?? "Not validated"}</dd></div>
-              <div><dt className="text-slate-400">Last inventory refresh</dt><dd>{formatDate(snapshot?.thriveIntelligence?.collectedAt)}</dd></div>
-            </dl>
-          </SurfaceCard>
-          <SurfaceCard title="Inventory Summary" owner="Thrive Asset Librarian" status="Recommended" confidence="Verified">
-            <dl className="grid grid-cols-2 gap-2 text-xs text-slate-200">
-              <div><dt className="text-slate-400">Template count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Layout count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveLayout ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Section count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveSection ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Symbol count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0}</dd></div>
-              <div><dt className="text-slate-400">Category counts</dt><dd>{new Set(symbolInventory.map((symbol) => symbol.taxonomy.slug ?? "uncategorized")).size}</dd></div>
-              <div><dt className="text-slate-400">Header/footer counts</dt><dd>{snapshot?.thriveIntelligence?.symbolSummary.headers ?? 0} / {snapshot?.thriveIntelligence?.symbolSummary.footers ?? 0}</dd></div>
-            </dl>
-          </SurfaceCard>
-        </div>
-
-        <SurfaceCard title="Symbol Intelligence" owner="Thrive Asset Librarian" status="Recommended" confidence="Verified">
-          <div className="overflow-auto">
-            <table className="min-w-full text-left text-xs text-slate-200">
-              <thead className="text-slate-400">
-                <tr>
-                  <th className="px-2 py-2">ID</th>
-                  <th className="px-2 py-2">Title</th>
-                  <th className="px-2 py-2">Category</th>
-                  <th className="px-2 py-2">Builder payload present</th>
-                  <th className="px-2 py-2">CSS present</th>
-                  <th className="px-2 py-2">Fingerprint hash</th>
-                  <th className="px-2 py-2">Recommended use cases</th>
-                </tr>
-              </thead>
-              <tbody>
-                {symbolInventory.slice(0, 10).map((symbol) => (
-                  <tr key={symbol.id} className="border-t border-white/10">
-                    <td className="px-2 py-2">{symbol.id}</td>
-                    <td className="px-2 py-2">{symbol.title}</td>
-                    <td className="px-2 py-2">{symbol.taxonomy.name ?? "Uncategorized"}</td>
-                    <td className="px-2 py-2">{symbol.hasBuilderContent ? "Yes" : "No"}</td>
-                    <td className="px-2 py-2">{symbol.hasCustomCss ? "Yes" : "No"}</td>
-                    <td className="px-2 py-2">{symbol.contentHash ?? symbol.cssHash ?? "n/a"}</td>
-                    <td className="px-2 py-2">{symbol.inferredRole === "header" ? "Global navigation" : symbol.inferredRole === "footer" ? "Global footer" : "Section composition"}</td>
-                  </tr>
-                ))}
-                {!symbolInventory.length ? <tr><td colSpan={7} className="px-2 py-3 text-slate-400">No symbol inventory available yet.</td></tr> : null}
-              </tbody>
-            </table>
-          </div>
-        </SurfaceCard>
-
-        <div className="grid gap-4 xl:grid-cols-3">
-          <SurfaceCard title="Template Intelligence" owner="Theme Shell Architect" status="Recommended" confidence="High">
-            <ul className="list-disc pl-5 text-xs text-slate-200">
-              <li>Homepage candidate: {snapshot?.currentHomepageTitle ?? "Not mapped"}</li>
-              <li>Page candidate: {snapshot?.thriveIntelligence?.activeSkin?.slug ?? "Not mapped"}</li>
-              <li>Post/archive candidates: {snapshot?.knownPages.filter((page) => page.slug.includes("blog")).length || 0}</li>
-              <li>Mapped use cases: homepage shell, lead flow pages, content support pages</li>
-            </ul>
-          </SurfaceCard>
-          <SurfaceCard title="Risk / Safety" owner="QA / Publish Agent" status={canUseThriveNative ? "Awaiting approval" : "Blocked"} confidence="High">
-            <ul className="list-disc pl-5 text-xs text-slate-200">
-              <li>Blocked endpoints: none added in this UI lane</li>
-              <li>Read-only mode: true for intelligence surfaces</li>
-              <li>Unresolved mappings: {snapshot?.thriveSectionResolutions.filter((r) => r.matchedSymbolId === null).length ?? 0}</li>
-              <li>Staging required flags: {canUseThriveNative ? "No" : "Yes"}</li>
-            </ul>
-          </SurfaceCard>
-          <SurfaceCard
-            title="Refresh / Manifest"
-            owner="Thrive Asset Librarian"
-            status="Recommended"
-            confidence="High"
-            actions={
-              <>
-                <ActionButton label="Refresh inventory" onClick={() => void revalidateConnection()} />
-                <ActionButton label="Compare previous snapshot" />
-                <ActionButton label="Export manifest" />
-                <ActionButton label="View discovery log" />
-              </>
-            }
-          >
-            <div className="text-xs text-slate-200">This panel only surfaces existing intelligence data and safe discovery logs.</div>
-          </SurfaceCard>
-        </div>
-
-        <SurfaceCard title="Thrive Translation" owner="Mission Control" status="Recommended" confidence="Verified">
-          <div className="grid gap-2 text-xs text-slate-200 md:grid-cols-2">
-            <div>`thrive_template` maps to Shell Template</div>
-            <div>`thrive_layout` maps to Layout System</div>
-            <div>`tcb_symbol` maps to Reusable Block</div>
-            <div>`thrive_section` maps to Section Asset</div>
-          </div>
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderGrowthWorkspace() {
-    const recommendedAction = experiments[0]?.variantName ?? "Homepage optimization recommendation";
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-white">Growth</h2>
-          <button
-            type="button"
-            className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-sm text-cyan-100"
-            onClick={() => {
-              seedAiCommand(`Run recommendation: ${recommendedAction}`);
-              void runAiCommand();
-            }}
-          >
-            Run Recommendation
-          </button>
-        </div>
-        <SurfaceCard title="Site Health Summary" owner="CRO Analyst" status="Recommended" confidence="High">
-          <div className="grid gap-2 text-sm md:grid-cols-2">
-            <div className="rounded-lg border border-white/12 bg-white/5 px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Connection</div>
-              <div className="mt-1 text-slate-100">{isConnected ? "Healthy" : "Needs attention"}</div>
-            </div>
-            <div className="rounded-lg border border-white/12 bg-white/5 px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">AI Configuration</div>
-              <div className="mt-1 text-slate-100">{aiConfigured ? "Configured" : "Missing API keys"}</div>
-            </div>
-            <div className="rounded-lg border border-white/12 bg-white/5 px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Business Brief</div>
-              <div className="mt-1 text-slate-100">{hasBusinessInfo ? "Complete" : "Incomplete"}</div>
-            </div>
-            <div className="rounded-lg border border-white/12 bg-white/5 px-3 py-2">
-              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Warnings</div>
-              <div className="mt-1 text-slate-100">{missionWarnings.length ? `${missionWarnings.length} flagged` : "None"}</div>
-            </div>
-          </div>
-        </SurfaceCard>
-        <SurfaceCard title="Opportunities" owner="CRO Analyst" status="Drafting" confidence="Medium">
-          <div className="space-y-2 text-xs text-slate-200">
-            {experiments.map((exp) => (
-              <div key={exp.id} className="rounded-xl border border-white/10 bg-white/5 p-3">
-                <div className="font-medium text-white">{exp.variantName}</div>
-                <div className="mt-1">Rationale: {exp.rationale}</div>
-                <div className="mt-1">Expected gain: {exp.expectedGain}</div>
-                <div className="mt-1">Confidence: {exp.confidence}</div>
-                <div className="mt-1">Affected pages: {exp.affectedPages.join(", ")}</div>
-                <button
-                  type="button"
-                  className="mt-2 rounded-md border border-white/20 bg-white/10 px-2 py-1 text-[11px] text-slate-100"
-                  onClick={() => seedAiCommand(`Run recommendation: ${exp.variantName}`)}
-                >
-                  Run Recommendation
-                </button>
-              </div>
-            ))}
-          </div>
-        </SurfaceCard>
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SurfaceCard title="Content Gaps" owner="Content Architect" status="Recommended" confidence="Medium">
-            <ul className="list-disc pl-5 text-xs text-slate-200">
-              <li>Add supporting article variants for priority funnel pages.</li>
-              <li>Expand proof-oriented sections for low-confidence pages.</li>
-              <li>Cover FAQ intent gaps for mobile-first visitors.</li>
-            </ul>
-          </SurfaceCard>
-          <SurfaceCard title="Optimization" owner="CRO Analyst" status="Researching" confidence="Medium">
-            <div className="text-xs text-slate-200">Focus next on homepage CTA hierarchy and evidence sequencing.</div>
-          </SurfaceCard>
-        </div>
-      </div>
-    );
-  }
-
-  function renderExperiments() {
-    return renderGrowthWorkspace();
-  }
-
-  function renderPublish() {
-    const readyCount = publishChecklist.filter((item) => item.done).length;
-    const totalCount = publishChecklist.length;
-
-    return (
-      <div className="space-y-4">
-        <div className="grid gap-4 xl:grid-cols-3">
-          <SurfaceCard title="Readiness Summary" owner="QA / Publish Agent" status={readyCount === totalCount ? "Approved" : "Awaiting approval"} confidence="High">
-            <div className="text-xs text-slate-200">{readyCount}/{totalCount} checklist items complete.</div>
-            <div className="mt-2 text-xs text-slate-300">Build mode used: {buildModeUsed ?? "not run"}</div>
-            <div className="mt-2 text-xs text-slate-300">Native path available: {canUseThriveNative ? "yes" : "no"}</div>
-          </SurfaceCard>
-          <SurfaceCard title="Publish Actions" owner="Builder Operations Agent" status="Awaiting approval" confidence="High">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                data-testid="siteforge-build-draft-action"
-                className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100 ${busy || !buildDraftState.canBuildDraft ? "cursor-not-allowed opacity-60" : ""}`}
-                onClick={() => void runSitePipeline("build")}
-                disabled={busy || !buildDraftState.canBuildDraft}
-              >
-                {buildDraftStatus === "running" ? "Building Draft..." : buildDraftState.canBuildDraft ? "Build Draft" : "Fix Required Items"}
-              </button>
-              <ActionButton label="Promote to Publish" tone="primary" disabled={!hasCompletedBuild} />
-              <ActionButton label="Review Deliverable" onClick={() => setActiveView("mission-control")} />
-            </div>
-            {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
-            {!canUseThriveNative ? (
-              <div className="mt-2 text-xs text-amber-200">Thrive was detected, but the native build path is currently blocked.</div>
-            ) : null}
-          </SurfaceCard>
-          <SurfaceCard title="Audit Log" owner="QA / Publish Agent" status="Drafting" confidence="Medium">
-            <div className="space-y-1 text-xs text-slate-200">
-              {runLogs.slice(0, 6).map((log) => (
-                <div key={log.logId}>{formatDate(log.timestamp)} · {log.stage} · {log.message}</div>
-              ))}
-              {!runLogs.length ? <div>No audit entries yet.</div> : null}
-            </div>
-          </SurfaceCard>
-        </div>
-
-        <SurfaceCard title="Publish Checklist" owner="QA / Publish Agent" status="Awaiting approval" confidence="High">
-          <ul className="space-y-2 text-xs text-slate-200">
-            {publishChecklist.map((item) => (
-              <li key={item.id} className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
-                {item.done ? "[x]" : "[ ]"} {item.label} · Owner: {agentById.get(item.ownerAgentId)?.displayName ?? item.ownerAgentId}
-              </li>
-            ))}
-          </ul>
-          {!buildDraftState.canBuildDraft ? (
-            <div className="mt-3 rounded-xl border border-amber-300/30 bg-amber-500/10 p-3 text-xs text-amber-100">
-              <div>Complete the missing items before building your draft.</div>
-              <ul className="mt-2 list-disc pl-4">
-                {buildDraftState.blockers.map((blocker) => (
-                  <li key={blocker}>{blocker}</li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
-        </SurfaceCard>
-      </div>
-    );
-  }
-
-  function renderSettings() {
-    return (
-      <div className="space-y-4">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-2xl font-semibold text-white">Settings</h2>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-2">
-          <SurfaceCard title="Domain" owner="Builder Operations Agent" status="Drafting" confidence="High">
-            <div className="grid gap-3 text-xs text-slate-200">
-              <div>
-                <label className="text-slate-300">Connection Label</label>
-                <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label className="text-slate-300">WordPress URL</label>
-                <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-            </div>
-          </SurfaceCard>
-
-          <SurfaceCard title="Integrations" owner="Builder Operations Agent" status="Drafting" confidence="High">
-            <div className="grid gap-3 text-xs text-slate-200">
-              <div>
-                <label className="text-slate-300">WordPress Username</label>
-                <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label className="text-slate-300">Application Password</label>
-                <input type="password" placeholder="WordPress application password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2">
-                <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} /> Thrive already installed
-              </label>
-              <div>
-                <label htmlFor="siteforge-ai-key">OpenAI API key</label>
-                <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-serpapi-key">SerpApi API key (optional)</label>
-                <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-              </div>
-              <div>
-                <label htmlFor="siteforge-ai-model">AI model</label>
-                <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2">
-                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                  <option value="gpt-4.1">gpt-4.1</option>
-                  <option value="gpt-5-mini">gpt-5-mini</option>
+                  {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
+                  {!projects.length ? <option value="">No project selected</option> : null}
+                  {projects.map((project) => (
+                    <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
+                  ))}
                 </select>
               </div>
+              <div>
+                <label className="text-slate-300">New project name</label>
+                <input
+                  data-testid="siteforge-new-project-name-input"
+                  placeholder="e.g. iPetzo"
+                  value={newProjectName}
+                  onChange={(event) => setNewProjectName(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+                />
+                <button
+                  type="button"
+                  className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
+                  onClick={createProject}
+                  disabled={busy || !normalizeNewProjectName(newProjectName)}
+                >
+                  {createStatus === "creating" ? "Creating..." : "Create Project"}
+                </button>
+              </div>
+              <div>
+                <label className="text-slate-300">Rename current project</label>
+                <input
+                  id="siteforge-project-name"
+                  value={projectName}
+                  onChange={(event) => setProjectName(event.target.value)}
+                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
+                />
+                <div className="mt-1 text-slate-400">Rename state: {projectNameSaveState}</div>
+              </div>
+              {createStatusMessage ? <div className="text-slate-300">{createStatusMessage}</div> : null}
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" data-testid="siteforge-validate-connection-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100" onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Validate Connection</button>
-              {savedConnection ? (
-                <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs" onClick={revalidateConnection} disabled={busy || !selectedProjectId}>Recheck Connection</button>
-              ) : null}
-              <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs" onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
-              <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs" onClick={removeAiKey} disabled={busy || (!activeProject?.hasSavedAiSecret && !activeProject?.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
-            </div>
-            <div className="mt-2 text-xs text-slate-300">AI status: {aiStatusMessage ?? "not configured"}</div>
-          </SurfaceCard>
+          </section>
 
-          <SurfaceCard title="SEO Settings" owner="Strategy Director" status="Drafting" confidence="High">
-            <div className="grid gap-2 md:grid-cols-2 text-xs text-slate-200">
+          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <h2 className="text-lg font-semibold text-white">About your website</h2>
+            <div className="mt-3 grid gap-3 text-xs text-slate-200 md:grid-cols-2">
               <div>
                 <label htmlFor="siteforge-brief-business-name">Business name</label>
                 <input id="siteforge-brief-business-name" value={briefForm.businessName} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessName: event.target.value }))} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
@@ -2307,72 +1038,343 @@ export default function SiteForgeAppPage() {
                 <textarea id="siteforge-brief-business-description" value={briefForm.businessDescription} onChange={(event) => setBriefForm((prev) => ({ ...prev, businessDescription: event.target.value }))} className="mt-1 h-24 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
               </div>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <button type="button" data-testid="siteforge-business-continue-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-xs text-cyan-100" onClick={saveWebsiteBrief} disabled={busy || !selectedProjectId}>Save SEO Settings</button>
+            <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+              <div className="text-slate-300">Save state: {briefSaveState}</div>
+              <button type="button" data-testid="siteforge-business-continue-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100" onClick={saveWebsiteBrief} disabled={busy || !selectedProjectId}>Save Website Brief</button>
             </div>
-            <div className="mt-2 text-xs text-slate-300">Save state: {briefSaveState}</div>
-          </SurfaceCard>
+          </section>
 
-          <SurfaceCard title="Account" owner="Builder Operations Agent" status="Drafting" confidence="High">
-            <div className="grid gap-3 text-xs text-slate-200">
+          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <h2 className="text-lg font-semibold text-white">Connect your site</h2>
+            <div className="mt-3 grid gap-3 text-xs text-slate-200">
               <div>
-                <label className="text-slate-300">Project</label>
-                <select
-                  data-testid="siteforge-project-select"
-                  value={selectedProjectId}
-                  onChange={(event) => {
-                    activeProjectIntentRef.current = event.target.value || null;
-                    void openProject(event.target.value, "user");
-                  }}
-                  disabled={!projects.length || busy}
-                  className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2"
-                >
-                  {selectedProjectId && !selectedProjectInOptions ? <option value={selectedProjectId}>Loading selected project...</option> : null}
-                  {!projects.length ? <option value="">No project selected</option> : null}
-                  {projects.map((project) => (
-                    <option key={project.id} value={project.id}>{project.name} · {project.status}</option>
-                  ))}
+                <label className="text-slate-300">Connection label</label>
+                <input value={connectionLabel} onChange={(event) => setConnectionLabel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <div>
+                <label className="text-slate-300">WordPress URL</label>
+                <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <div>
+                <label className="text-slate-300">WordPress username</label>
+                <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <div>
+                <label className="text-slate-300">Application password</label>
+                <input type="password" placeholder="WordPress application password" value={appPassword} onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <label className="flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2">
+                <input type="checkbox" checked={hasThriveHint} onChange={(event) => setHasThriveHint(event.target.checked)} /> Thrive already installed
+              </label>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+              <div className="text-slate-300">{connectionResult?.message ?? "Connection not validated yet."}</div>
+              <div className="flex gap-2">
+                <button type="button" data-testid="siteforge-validate-connection-action" className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100" onClick={saveAndValidateConnection} disabled={busy || !selectedProjectId}>Validate Connection</button>
+                {savedConnection ? (
+                  <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={revalidateConnection} disabled={busy || !selectedProjectId}>Recheck</button>
+                ) : null}
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+            <h2 className="text-lg font-semibold text-white">AI access</h2>
+            <div className="mt-3 grid gap-3 text-xs text-slate-200">
+              <div>
+                <label htmlFor="siteforge-ai-key">OpenAI API key</label>
+                <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <div>
+                <label htmlFor="siteforge-serpapi-key">SerpApi API key (optional)</label>
+                <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+              </div>
+              <div>
+                <label htmlFor="siteforge-ai-model">AI model</label>
+                <select id="siteforge-ai-model" value={aiModel} onChange={(event) => setAiModel(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2">
+                  <option value="gpt-4.1-mini">gpt-4.1-mini</option>
+                  <option value="gpt-4.1">gpt-4.1</option>
+                  <option value="gpt-5-mini">gpt-5-mini</option>
                 </select>
               </div>
-              <div>
-                <label className="text-slate-300">New Project Name</label>
-                <input data-testid="siteforge-new-project-name-input" placeholder="e.g. iPetzo" value={newProjectName} onChange={(event) => setNewProjectName(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-                <button type="button" className="mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs" onClick={createProject} disabled={busy || !normalizeNewProjectName(newProjectName)}>{createStatus === "creating" ? "Creating..." : "Create Project"}</button>
-              </div>
-              <div>
-                <label className="text-slate-300">Rename Current Project</label>
-                <input id="siteforge-project-name" value={projectName} onChange={(event) => setProjectName(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
-                <div className="mt-1 text-slate-400">Rename state: {projectNameSaveState}</div>
+            </div>
+            <div className="mt-3 flex items-center justify-between gap-2 text-xs">
+              <div className="text-slate-300">AI status: {aiStatusMessage ?? "not configured"}</div>
+              <div className="flex gap-2">
+                <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={() => saveAiConfig("save")} disabled={busy}>Save API Keys</button>
+                <button type="button" className="rounded-lg border border-white/20 bg-white/10 px-3 py-2" onClick={removeAiKey} disabled={busy || (!activeProject?.hasSavedAiSecret && !activeProject?.hasSavedSerpApiSecret)}>Remove Saved Keys</button>
               </div>
             </div>
-            {createStatusMessage ? <div className="mt-2 text-xs text-slate-300">{createStatusMessage}</div> : null}
-          </SurfaceCard>
+          </section>
         </div>
 
-        <SurfaceCard title="Diagnostics" owner="QA / Publish Agent" status="Recommended" confidence="High">
-          <div className="text-xs text-slate-200">Storage mode: {storageSummary?.storageMode ?? "unknown"}</div>
-          <div className="text-xs text-slate-200">Persistence health: {storageSummary?.persistenceHealth ?? "unknown"}</div>
-          <div className="text-xs text-slate-200">Memory fallback active: {storageSummary?.fallbackActive ? "yes" : "no"}</div>
-          <div className="mt-1 text-xs text-slate-300">{storageStatusMessage}</div>
-          <div className="mt-3 text-xs text-slate-300">Raw Errors: {technicalError ?? "None"}</div>
-          <div className="text-xs text-slate-300">Diagnostics: execution mode {currentSession?.executionResult?.thrive.executionMode ?? "unknown"}</div>
-        </SurfaceCard>
+        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
+              <p className="mt-1 text-xs text-slate-300">Generate your initial plan after Setup is complete.</p>
+            </div>
+            <button
+              type="button"
+              data-testid="siteforge-generate-site-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !setupReady ? "cursor-not-allowed opacity-60" : ""}`}
+              onClick={() => void runSitePipeline("generate")}
+              disabled={busy || !setupReady}
+            >
+              Generate Plan
+            </button>
+          </div>
+          {!setupReady ? (
+            <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
+              {!hasBusinessInfo ? <li>Complete your website brief.</li> : null}
+              {!isConnected ? <li>Validate your WordPress connection.</li> : null}
+              {!aiConfigured ? <li>Save at least one API key.</li> : null}
+            </ul>
+          ) : null}
+        </section>
       </div>
     );
   }
 
-  function renderContent() {
-    if (activeView === "content") return renderContentWorkspace();
-    if (activeView === "growth") return renderGrowthWorkspace();
-    if (activeView === "mission-control") return renderMissionControl();
-    if (activeView === "strategy") return renderStrategy();
-    if (activeView === "brand") return renderBrand();
-    if (activeView === "funnels") return renderFunnels();
-    if (activeView === "pages") return renderPagesIndex();
-    if (activeView === "page-studio") return renderPageStudio();
-    if (activeView === "global-assets") return renderGlobalAssets();
-    if (activeView === "thrive-intelligence") return renderThriveIntelligence();
-    if (activeView === "experiments") return renderExperiments();
+  function renderBuildPlan() {
+    return (
+      <div className="space-y-4">
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Plan readiness</h3>
+          <div className="mt-3 grid gap-3 text-xs text-slate-200 md:grid-cols-2">
+            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Project selected: {selectedProjectId ? "yes" : "no"}</div>
+            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Connection validated: {isConnected ? "yes" : "no"}</div>
+            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Plan generated: {hasGeneratedSitePlan ? "yes" : "no"}</div>
+            <div className="rounded-lg border border-white/12 bg-slate-900/60 px-3 py-2">Approved pages: {approvedPageSlugs.length}</div>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
+              <p className="mt-1 text-xs text-slate-300">Build a draft after required items are complete.</p>
+            </div>
+            <button
+              type="button"
+              data-testid="siteforge-build-draft-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !buildDraftState.canBuildDraft ? "cursor-not-allowed opacity-60" : ""}`}
+              onClick={() => void runSitePipeline("build")}
+              disabled={busy || !buildDraftState.canBuildDraft}
+            >
+              {buildDraftStatus === "running" ? "Building Draft..." : buildDraftState.canBuildDraft ? "Build Draft" : "Fix Required Items"}
+            </button>
+          </div>
+          {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
+          {!buildDraftState.canBuildDraft ? (
+            <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
+              {buildDraftState.blockers.map((blocker) => (
+                <li key={blocker}>{blocker}</li>
+              ))}
+            </ul>
+          ) : null}
+          {!canUseThriveNative ? (
+            <div className="mt-3 text-xs text-amber-200">Thrive was detected, but the native build path is currently blocked.</div>
+          ) : null}
+        </section>
+      </div>
+    );
+  }
+
+  function renderBuildPages() {
+    return (
+      <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Pages</h3>
+          <div className="mt-3 space-y-2 text-sm">
+            {pageRows.map((page) => (
+              <button
+                key={page.slug}
+                type="button"
+                className="w-full rounded-xl border border-white/12 bg-slate-900/60 px-3 py-3 text-left transition hover:bg-slate-900/80"
+                onClick={() => setSelectedPageSlug(page.slug)}
+              >
+                <div className="font-medium text-white">{page.title}</div>
+                <div className="mt-1 text-xs text-slate-300">{page.pageType} · {page.goal}</div>
+                <div className="mt-1 text-xs text-slate-400">Build: {page.buildStatus} · Approval: {page.approvalStatus}</div>
+              </button>
+            ))}
+            {!pageRows.length ? <div className="rounded-xl border border-white/12 bg-slate-900/60 px-3 py-4 text-slate-300">No pages yet.</div> : null}
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Page details</h3>
+          {selectedBuildPage ? (
+            <div className="mt-3 space-y-3 text-xs text-slate-200">
+              <div>Selected page: {selectedBuildPage.title}</div>
+              <div>Shell template: {selectedBuildPage.shell}</div>
+              <div>Sections: {(selectedBuildPage.sections ?? []).length}</div>
+              <div>Approval state: {pageApprovalState.kind === "ready" ? "ready" : pageApprovalState.kind}</div>
+              <button
+                type="button"
+                className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
+                onClick={() => {
+                  setApprovedPageSlugs((prev) => (prev.includes(selectedBuildPage.slug) ? prev : [...prev, selectedBuildPage.slug]));
+                }}
+              >
+                {pageApprovalState.kind === "ready" ? pageApprovalState.buttonLabel : "Approve selected page"}
+              </button>
+            </div>
+          ) : (
+            <div className="mt-3 text-xs text-slate-300">No pages are ready for review yet.</div>
+          )}
+        </section>
+      </div>
+    );
+  }
+
+  function renderBuildAssets() {
+    const symbolInventory = snapshot?.thriveIntelligence?.symbolInventory ?? [];
+    const warnings = [
+      ...(snapshot?.thriveIntelligence?.warnings ?? []),
+      ...(currentSession?.executionResult?.warnings ?? []),
+      ...(currentSession?.executionResult?.errors ?? []),
+    ];
+
+    return (
+      <div className="space-y-4">
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Asset intelligence</h3>
+          <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-200 md:grid-cols-4">
+            <div><dt className="text-slate-400">Thrive detected</dt><dd>{isThriveDetected ? "Yes" : "No"}</dd></div>
+            <div><dt className="text-slate-400">Template count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0}</dd></div>
+            <div><dt className="text-slate-400">Layout count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.thriveLayout ?? 0}</dd></div>
+            <div><dt className="text-slate-400">Symbol count</dt><dd>{snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0}</dd></div>
+          </dl>
+        </section>
+
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Top symbols</h3>
+          <div className="mt-3 overflow-auto">
+            <table className="min-w-full text-left text-xs text-slate-200">
+              <thead className="text-slate-400">
+                <tr>
+                  <th className="px-2 py-2">ID</th>
+                  <th className="px-2 py-2">Title</th>
+                  <th className="px-2 py-2">Category</th>
+                  <th className="px-2 py-2">Builder payload present</th>
+                </tr>
+              </thead>
+              <tbody>
+                {symbolInventory.slice(0, 8).map((symbol) => (
+                  <tr key={symbol.id} className="border-t border-white/10">
+                    <td className="px-2 py-2">{symbol.id}</td>
+                    <td className="px-2 py-2">{symbol.title || "Untitled"}</td>
+                    <td className="px-2 py-2">{symbol.taxonomy.name ?? "Uncategorized"}</td>
+                    <td className="px-2 py-2">{symbol.hasBuilderContent ? "Yes" : "No"}</td>
+                  </tr>
+                ))}
+                {!symbolInventory.length ? <tr><td colSpan={4} className="px-2 py-3 text-slate-400">No symbol inventory available yet.</td></tr> : null}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Warnings</h3>
+          <ul className="mt-3 list-disc pl-5 text-xs text-slate-200">
+            {warnings.length ? warnings.slice(0, 8).map((warning) => <li key={warning}>{warning}</li>) : <li>No warnings detected.</li>}
+          </ul>
+        </section>
+      </div>
+    );
+  }
+
+  function renderBuild() {
+    return (
+      <div className="space-y-4">
+        <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3">
+          {buildTabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveBuildTab(tab.id)}
+              className={`rounded-full border px-4 py-2 text-sm transition ${
+                activeBuildTab === tab.id
+                  ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
+                  : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+        {activeBuildTab === "plan" ? renderBuildPlan() : null}
+        {activeBuildTab === "pages" ? renderBuildPages() : null}
+        {activeBuildTab === "assets" ? renderBuildAssets() : null}
+      </div>
+    );
+  }
+
+  function renderPublish() {
+    const readyCount = publishChecklist.filter((item) => item.done).length;
+    const totalCount = publishChecklist.length;
+
+    return (
+      <div className="space-y-4">
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h2 className="text-lg font-semibold text-white">Readiness</h2>
+          <div className="mt-3 text-sm text-slate-200">{readyCount}/{totalCount} checklist items complete.</div>
+          <div className="mt-2 text-xs text-slate-300">Build mode used: {buildModeUsed ?? "not run"}</div>
+          <div className="mt-1 text-xs text-slate-300">Native path available: {canUseThriveNative ? "yes" : "no"}</div>
+        </section>
+
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h3 className="text-base font-semibold text-white">Checklist</h3>
+          <ul className="mt-3 space-y-2 text-xs text-slate-200">
+            {publishChecklist.map((item) => (
+              <li key={item.id} className="rounded-xl border border-white/10 bg-slate-900/60 px-3 py-2">
+                {item.done ? "[x]" : "[ ]"} {item.label}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-base font-semibold text-cyan-100">Primary action</h3>
+              <p className="mt-1 text-xs text-slate-300">Promote only after Build draft succeeds.</p>
+            </div>
+            <button
+              type="button"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${!hasCompletedBuild ? "cursor-not-allowed opacity-60" : ""}`}
+              disabled={!hasCompletedBuild}
+            >
+              Promote to Publish
+            </button>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderSettings() {
+    return (
+      <div className="space-y-4">
+        <section className="rounded-xl border border-white/12 bg-white/5 p-4">
+          <h2 className="text-lg font-semibold text-white">Diagnostics</h2>
+          <div className="mt-3 text-xs text-slate-200">Storage mode: {storageSummary?.storageMode ?? "unknown"}</div>
+          <div className="text-xs text-slate-200">Persistence health: {storageSummary?.persistenceHealth ?? "unknown"}</div>
+          <div className="text-xs text-slate-200">Memory fallback active: {storageSummary?.fallbackActive ? "yes" : "no"}</div>
+          <div className="mt-1 text-xs text-slate-300">{storageStatusMessage}</div>
+          <div className="mt-3 text-xs text-slate-300">Raw Errors: {technicalError ?? "None"}</div>
+          <div className="text-xs text-slate-300">Last run: {currentSession?.id ?? "none"}</div>
+          <div className="text-xs text-slate-300">Last log: {runLogs[0] ? `${formatDate(runLogs[0].timestamp)} · ${runLogs[0].stage}` : "none"}</div>
+        </section>
+      </div>
+    );
+  }
+
+  function renderView() {
+    if (activeView === "setup") return renderSetup();
+    if (activeView === "build") return renderBuild();
     if (activeView === "publish") return renderPublish();
     return renderSettings();
   }
@@ -2387,12 +1389,25 @@ export default function SiteForgeAppPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">SiteForge</div>
               <h1 className="mt-2 text-3xl font-semibold text-white">SiteForge</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-300">Build and grow your site with a simple workflow.</p>
+              <p className="mt-2 max-w-3xl text-sm text-slate-300">Setup, build, and publish your site with a focused workflow.</p>
             </div>
-            <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
-              <div>Project: {activeProject?.name ?? "No project selected"}</div>
-              <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
-              <div className="mt-1">Connected: {isConnected ? "yes" : "no"}</div>
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
+                <div>Project: {activeProject?.name ?? "No project selected"}</div>
+                <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
+                <div className="mt-1">Connected: {isConnected ? "yes" : "no"}</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveView("settings")}
+                className={`rounded-full border px-4 py-2 text-sm transition ${
+                  activeView === "settings"
+                    ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
+                    : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
+                }`}
+              >
+                Settings
+              </button>
             </div>
           </div>
           <div className="mt-5 flex flex-wrap gap-2 border-b border-white/10 pb-3">
@@ -2411,48 +1426,12 @@ export default function SiteForgeAppPage() {
               </button>
             ))}
           </div>
-          <div className="mt-4 rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-            <div className="text-sm font-medium text-cyan-100">What do you want to build or improve?</div>
-            <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-              <input
-                ref={aiCommandInputRef}
-                value={aiCommandPrompt}
-                onChange={(event) => setAiCommandPrompt(event.target.value)}
-                placeholder="Describe what you want to build or improve..."
-                className="w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2 text-sm text-slate-100"
-              />
-              <button
-                type="button"
-                data-testid="siteforge-generate-site-action"
-                className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
-                onClick={() => void runAiCommand()}
-                disabled={busy}
-              >
-                Run
-              </button>
-            </div>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-300">
-              <button type="button" className="rounded-full border border-white/15 px-2 py-1" onClick={() => seedAiCommand("Create a real estate website with lead capture pages.")}>Real estate website</button>
-              <button type="button" className="rounded-full border border-white/15 px-2 py-1" onClick={() => seedAiCommand("Create an AI blog with a clean publishing flow.")}>AI blog</button>
-              <button type="button" className="rounded-full border border-white/15 px-2 py-1" onClick={() => seedAiCommand("Create a supplement store with high-converting product content.")}>Supplement store</button>
-            </div>
-            {aiCommandStatus ? <div className="mt-2 text-xs text-cyan-100">{aiCommandStatus}</div> : null}
-          </div>
           {error ? <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{error}</div> : null}
         </section>
 
-        {storageSummary && (storageSummary.persistenceHealth !== "healthy" || storageSummary.fallbackActive) ? (
-          <section
-            className={`mt-4 rounded-xl px-4 py-3 text-sm ${
-              storageSummary.persistenceHealth === "healthy"
-                ? "border border-emerald-300/35 bg-emerald-500/10 text-emerald-100"
-                : "border border-amber-300/35 bg-amber-500/10 text-amber-100"
-            }`}
-          >
+        {storageSummary && storageSummary.persistenceHealth === "unavailable" ? (
+          <section className="mt-4 rounded-xl border border-amber-300/35 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">
             <div className="font-medium">Storage mode: {storageSummary.storageMode}</div>
-            <div className="mt-1">
-              Persistence health: {storageSummary.persistenceHealth} | Memory fallback active: {storageSummary.fallbackActive ? "yes" : "no"}
-            </div>
             <div className="mt-1">{storageStatusMessage}</div>
           </section>
         ) : null}
@@ -2460,11 +1439,11 @@ export default function SiteForgeAppPage() {
         {isFirstTimeExperience ? (
           <section className="mt-4 rounded-2xl border border-white/12 bg-slate-900/60 p-5">
             <h2 className="text-xl font-semibold text-white">Welcome to SiteForge</h2>
-            <p className="mt-2 text-sm text-slate-300">What do you want to build? Start with the AI command bar above or open Settings to configure your project.</p>
+            <p className="mt-2 text-sm text-slate-300">Start in Setup. Once ready, use Build tabs (Plan, Pages, Assets), then Publish.</p>
           </section>
         ) : null}
 
-        <section className="mt-4">{renderContent()}</section>
+        <section className="mt-4">{renderView()}</section>
       </main>
     </div>
   );
