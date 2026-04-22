@@ -15,6 +15,7 @@ import { runQaAgent } from "@/lib/siteforge/agents/qa";
 import { runMarketIntelligenceAgent } from "@/lib/siteforge/agents/marketIntelligence";
 import { applyThriveMappings, detectThriveCapability } from "@/lib/siteforge/thrive";
 import { discoverThriveIntelligence } from "@/lib/siteforge/thriveIntelligence";
+import { synthesizeWebsiteStrategy } from "@/lib/siteforge/websiteStrategy";
 import {
   evaluateThriveNativeGuard,
   getThriveExecutionRuntime,
@@ -128,11 +129,19 @@ export async function runBuildPipeline(params: {
     );
 
     await updateStage(repo, sessionId, "planning", "Planning your site structure");
+    const websiteStrategy = synthesizeWebsiteStrategy({
+      brief: params.websiteBrief,
+      marketIntelligence,
+      thriveIntelligence: null,
+    });
+    await repo.updateSession(sessionId, { websiteStrategy });
+    await updateStage(repo, sessionId, "planning", `Strategy synthesized: ${websiteStrategy.siteType} · ${websiteStrategy.primaryConversionGoal}`);
     const sitePlan = await runPlannerAgent({
       brief: params.websiteBrief,
       model: params.aiModel,
       apiKey: params.apiKey,
       marketIntelligence,
+      websiteStrategy,
     });
     await repo.updateSession(sessionId, { sitePlan, status: "running" });
     await updateStage(
@@ -153,7 +162,11 @@ export async function runBuildPipeline(params: {
     await repo.updateSession(sessionId, { contentPackage });
 
     await updateStage(repo, sessionId, "building", "Designing your layout");
-    const buildSpec = runBuildSpecAgent(sitePlan, contentPackage);
+    const buildSpec = runBuildSpecAgent(sitePlan, contentPackage, {
+      websiteStrategy,
+      marketIntelligence,
+      thriveIntelligence: null,
+    });
     await repo.updateSession(sessionId, { buildSpec });
     await updateStage(repo, sessionId, "building", "Building technical page specification");
 
@@ -191,7 +204,17 @@ export async function runBuildPipeline(params: {
         const runtime = getThriveExecutionRuntime({
           thriveIntelligenceAvailable: Boolean(thriveIntelligence),
         });
-        const translated = applyThriveMappings(buildSpec, thriveEnabled, thriveIntelligence);
+        const strategyWithThrive = synthesizeWebsiteStrategy({
+          brief: params.websiteBrief,
+          marketIntelligence,
+          thriveIntelligence,
+        });
+        const buildSpecWithThrive = runBuildSpecAgent(sitePlan, contentPackage, {
+          websiteStrategy: strategyWithThrive,
+          marketIntelligence,
+          thriveIntelligence,
+        });
+        const translated = applyThriveMappings(buildSpecWithThrive, thriveEnabled, thriveIntelligence);
         const prefersThriveNative = thriveEnabled && runtime.stagingNativeMode;
         await updateStage(
           repo,

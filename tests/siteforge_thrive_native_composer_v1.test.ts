@@ -57,7 +57,7 @@ const intelligence: ThriveIntelligence = {
   source: "wordpress_rest_get",
   collectedAt: "2026-04-20T00:00:00.000Z",
   mode: "wp_safe_mode",
-  activeSkin: { id: 8, name: "Shapeshift", slug: "shapeshift", tag: "q1" },
+  activeSkin: { id: 8, name: "Shapeshift", slug: "shapeshift", tag: "q1", isActive: true },
   symbolInventory: [],
   symbolSummary: { total: 0, headers: 0, footers: 0, sections: 0, unknown: 0 },
   primitiveCounts: { thriveTemplate: 1, thriveLayout: 1, thriveSection: 1, tcbSymbol: 0 },

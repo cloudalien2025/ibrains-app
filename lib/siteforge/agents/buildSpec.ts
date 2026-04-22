@@ -2,11 +2,14 @@ import {
   BuildSpec,
   BuildSpecPage,
   ContentPackage,
+  MarketIntelligenceBrief,
   PageIntent,
   SitePlan,
   SiteForgeVisualDesignTokens,
+  ThriveIntelligence,
   VisualPattern,
   VisualSectionComposition,
+  WebsiteStrategy,
 } from "@/lib/siteforge/contracts";
 import { nowIso } from "@/lib/siteforge/utils";
 
@@ -239,7 +242,52 @@ function visualTokens(appLike: boolean): SiteForgeVisualDesignTokens {
   };
 }
 
-export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPackage): BuildSpec {
+function inferResearchConfidence(params: {
+  marketIntelligence: MarketIntelligenceBrief | null;
+  strategy: WebsiteStrategy | null;
+}): "high" | "medium" | "low" {
+  if (params.marketIntelligence?.status === "used" && (params.marketIntelligence.researchIntelligence?.sourceSnapshots.length ?? 0) >= 6) return "high";
+  if (params.marketIntelligence?.status === "used" || params.strategy) return "medium";
+  return "low";
+}
+
+function candidateSymbolIds(params: {
+  intelligence: ThriveIntelligence | null;
+  sectionType: BuildSpec["pages"][number]["sections"][number]["type"];
+  strategy: WebsiteStrategy | null;
+}): number[] {
+  const inventory = params.intelligence?.symbolInventory ?? [];
+  if (!inventory.length) return [];
+  const preferredCategories = new Set((params.strategy?.thriveExecutionHints.preferredSymbolCategories ?? []).map((entry) => entry.toLowerCase()));
+
+  return inventory
+    .filter((symbol) => {
+      if (params.sectionType === "hero") return symbol.inferredRole === "header";
+      if (params.sectionType === "contact") return symbol.inferredRole === "footer";
+      if (params.sectionType === "faq") return symbol.keywords?.some((entry) => entry.includes("faq")) ?? false;
+      if (params.sectionType === "cta") return symbol.keywords?.some((entry) => entry.includes("cta") || entry.includes("action")) ?? false;
+      if (preferredCategories.has("testimonial") && params.sectionType === "testimonials") {
+        return symbol.keywords?.some((entry) => entry.includes("testimonial") || entry.includes("review")) ?? false;
+      }
+      return symbol.inferredRole === "section";
+    })
+    .slice(0, 6)
+    .map((entry) => entry.id);
+}
+
+export function runBuildSpecAgent(
+  sitePlan: SitePlan,
+  contentPackage: ContentPackage,
+  options?: {
+    websiteStrategy?: WebsiteStrategy | null;
+    marketIntelligence?: MarketIntelligenceBrief | null;
+    thriveIntelligence?: ThriveIntelligence | null;
+  }
+): BuildSpec {
+  const strategy = options?.websiteStrategy ?? null;
+  const marketIntelligence = options?.marketIntelligence ?? null;
+  const thriveIntelligence = options?.thriveIntelligence ?? null;
+  const researchConfidence = inferResearchConfidence({ marketIntelligence, strategy });
   const appLike = isAppOrSaasSite(sitePlan);
   const pages = sitePlan.pages.map((page) => {
     const content = contentPackage.pages.find((entry) => entry.pageId === page.id);
@@ -287,10 +335,21 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
           symbolCandidateType: candidateType,
           reusableSymbolCandidates: [],
           contentTemplateCandidates: [],
+          thriveRefs: {
+            symbolRefCandidates: candidateSymbolIds({
+              intelligence: thriveIntelligence,
+              sectionType: section.sectionType,
+              strategy,
+            }),
+            templateRefCandidates: (thriveIntelligence?.templates ?? []).slice(0, 4).map((entry) => entry.id),
+            sectionRefCandidates: (thriveIntelligence?.sections ?? []).slice(0, 6).map((entry) => entry.id),
+          },
           landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
           rendererMode: "wp_safe_mode" as const,
           contractCaptureRef: null,
           sectionIntent: sectionIntent(section.sectionType),
+          renderTarget: "wordpress_page_content" as const,
+          researchConfidence,
           preferredRenderTarget: "wordpress_page_content" as const,
           thriveSymbolRoleCandidate,
           visualComposition,
@@ -311,11 +370,18 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
         shellRole: shellRoleForPage(role),
         shellTemplateGroupCandidate: role === "homepage" ? "homepage" : "content",
         shellLayoutCandidate: role === "homepage" ? "thrive-homepage-canonical" : "thrive-standard-content",
+        shellStrategy: strategy?.thriveExecutionHints.preferredShellType ?? null,
         reusableSymbolCandidates: [],
         contentTemplateCandidates: [],
+        thriveRefs: {
+          symbolRefCandidates: (thriveIntelligence?.symbolInventory ?? []).slice(0, 6).map((entry) => entry.id),
+          templateRefCandidates: (thriveIntelligence?.templates ?? []).slice(0, 4).map((entry) => entry.id),
+          sectionRefCandidates: (thriveIntelligence?.sections ?? []).slice(0, 6).map((entry) => entry.id),
+        },
         landingPageCandidate: role === "homepage" ? `${page.slug}-landing` : null,
         rendererMode: "wp_safe_mode" as const,
         contractCaptureRef: null,
+        researchConfidence,
         preferredRenderTarget: "wordpress_page_content" as const,
       },
     };
@@ -335,6 +401,14 @@ export function runBuildSpecAgent(sitePlan: SitePlan, contentPackage: ContentPac
       thriveMode: "wp_safe_mode",
       thriveExecutionMode: "wp_safe_mode",
       thriveIntelligenceUsed: false,
+      researchConfidence,
+      strategySignals: strategy
+        ? {
+            siteType: strategy.siteType,
+            primaryConversionGoal: strategy.primaryConversionGoal,
+            trustModel: strategy.positioning.trustModel,
+          }
+        : undefined,
       designSystemVersion: "siteforge_visual_v1",
       visualDesignTokens: visualTokens(appLike),
       themeArtifactRef: null,

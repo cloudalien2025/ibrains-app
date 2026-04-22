@@ -75,15 +75,23 @@ describe("siteforge thrive intelligence inventory", () => {
     const intel = await discoverThriveIntelligence(connection);
 
     expect(intel).toBeTruthy();
+    expect(intel?.storageMode).toBe("wordpress-rest-readonly");
+    expect(intel?.namespaces).toEqual([]);
     expect(intel?.mode).toBe("wp_safe_mode");
+    expect(intel?.homepage.showOnFront).toBe("page");
+    expect(intel?.homepage.pageOnFront).toBe(65);
     expect(intel?.activeSkin?.id).toBe(8);
     expect(intel?.symbolSummary).toEqual({ total: 2, headers: 1, footers: 1, sections: 0, unknown: 0 });
+    expect(intel?.templates.length).toBe(1);
+    expect(intel?.layouts.length).toBe(1);
+    expect(intel?.sections.length).toBe(1);
     expect(intel?.primitiveCounts).toEqual({
       thriveTemplate: 19,
       thriveLayout: 5,
       thriveSection: 1,
       tcbSymbol: 2,
     });
+    expect(intel?.discoveredCapabilities.hasTtbNamespace).toBe(false);
     expect(intel?.safeHints.frontPageUsesWpSettings).toBe(true);
     expect(intel?.symbolInventory[0]?.hasBuilderContent).toBe(true);
     expect(intel?.symbolInventory[0]?.contentHash).toBeTruthy();

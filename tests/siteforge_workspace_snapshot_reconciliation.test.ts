@@ -158,7 +158,7 @@ describe("siteforge snapshot persistence reconciliation", () => {
           source: "wordpress_rest_get",
           collectedAt: "2026-04-19T00:00:00.000Z",
           mode: "wp_safe_mode",
-          activeSkin: { id: 8, name: "Shapeshift Theme", slug: "shapeshift-theme", tag: "q1qj01" },
+          activeSkin: { id: 8, name: "Shapeshift Theme", slug: "shapeshift-theme", tag: "q1qj01", isActive: true },
           symbolInventory: [
             {
               id: 57,
