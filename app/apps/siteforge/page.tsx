@@ -51,7 +51,7 @@ type WebsiteBriefForm = {
 };
 
 type CreateStatus = "idle" | "creating" | "created" | "error";
-type JourneyPhase = "describe" | "connect" | "preview" | "approve" | "build" | "launch";
+type JourneyPhase = "connect" | "describe" | "launch";
 
 type OpenProjectResult =
   | { ok: true }
@@ -77,12 +77,25 @@ type IntentAssumptions = {
   pageSet: string[];
 };
 
+type InlineApprovalState = {
+  nextAction: "home" | "pageset" | "cta" | "reuse" | "complete";
+  buttonLabel: string | null;
+  hint: string;
+};
+
+type ResearchAvailabilityState = {
+  usingMarketResearch: boolean;
+  summary: string;
+};
+
+type LaunchExperienceState = {
+  stage: "Researching" | "Planning" | "Building" | "Verifying" | "Ready" | "Needs your input";
+  detail: string;
+};
+
 const journeyFlow: Array<{ id: JourneyPhase; label: string }> = [
-  { id: "describe", label: "Describe" },
   { id: "connect", label: "Connect" },
-  { id: "preview", label: "Preview" },
-  { id: "approve", label: "Approve" },
-  { id: "build", label: "Build" },
+  { id: "describe", label: "Describe" },
   { id: "launch", label: "Launch" },
 ];
 
@@ -212,9 +225,9 @@ export function getBuildDraftState({
 }): BuildDraftState {
   const blockers: string[] = [];
   if (!projectSelected) blockers.push("Select a project first.");
-  if (!isConnected) blockers.push("Validate your WordPress connection.");
-  if (pageCount === 0) blockers.push("Generate pages before publishing.");
-  if (approvedPageCount === 0) blockers.push("Approve at least one page before building your draft.");
+  if (!isConnected) blockers.push("Connect your website first.");
+  if (pageCount === 0) blockers.push("Create your website plan first.");
+  if (approvedPageCount === 0) blockers.push("Approve your homepage.");
   return { canBuildDraft: blockers.length === 0, blockers };
 }
 
@@ -230,8 +243,119 @@ export function getSelectedPageApprovalState({
   return { kind: "ready", buttonLabel: `Approve ${normalizePageApprovalName(selectedPage.title)}` };
 }
 
+export function getInlineApprovalState({
+  hasHomepage,
+  homeApproved,
+  approvedPageSet,
+  approvedCtaStyle,
+  isThriveDetected,
+  approvedReuseDecision,
+}: {
+  hasHomepage: boolean;
+  homeApproved: boolean;
+  approvedPageSet: boolean;
+  approvedCtaStyle: boolean;
+  isThriveDetected: boolean;
+  approvedReuseDecision: boolean;
+}): InlineApprovalState {
+  if (!hasHomepage) {
+    return { nextAction: "complete", buttonLabel: null, hint: "Create your website plan to review it." };
+  }
+  if (!homeApproved) {
+    return { nextAction: "home", buttonLabel: "Approve Homepage", hint: "Review the homepage preview, then approve it." };
+  }
+  if (!approvedPageSet) {
+    return { nextAction: "pageset", buttonLabel: "Use this page set", hint: "Confirm the proposed page set." };
+  }
+  if (!approvedCtaStyle) {
+    return { nextAction: "cta", buttonLabel: "Use this CTA style", hint: "Confirm the recommended CTA style." };
+  }
+  if (isThriveDetected && !approvedReuseDecision) {
+    return { nextAction: "reuse", buttonLabel: "Approve reuse decisions", hint: "Confirm where to reuse or replace Thrive assets." };
+  }
+  return { nextAction: "complete", buttonLabel: null, hint: "All approvals are complete." };
+}
+
+export function getResearchAvailabilityState({ hasSerpApiKey }: { hasSerpApiKey: boolean }): ResearchAvailabilityState {
+  if (hasSerpApiKey) {
+    return {
+      usingMarketResearch: true,
+      summary: "Using market research",
+    };
+  }
+  return {
+    usingMarketResearch: false,
+    summary: "Building from your intent and current site",
+  };
+}
+
+export function getLaunchExperienceState({
+  hasCompletedBuild,
+  buildDraftCanRun,
+  buildDraftBlockers,
+  currentSession,
+  isThriveDetected,
+  hasSerpApiKey,
+  hasAiAccess,
+  homeApproved,
+  approvedPageSet,
+}: {
+  hasCompletedBuild: boolean;
+  buildDraftCanRun: boolean;
+  buildDraftBlockers: string[];
+  currentSession: BuildSession | null;
+  isThriveDetected: boolean;
+  hasSerpApiKey: boolean;
+  hasAiAccess: boolean;
+  homeApproved: boolean;
+  approvedPageSet: boolean;
+}): LaunchExperienceState {
+  if (!hasAiAccess) {
+    return { stage: "Needs your input", detail: "Add your AI key" };
+  }
+  if (!homeApproved) {
+    return { stage: "Needs your input", detail: "Approve your homepage" };
+  }
+  if (!approvedPageSet) {
+    return { stage: "Needs your input", detail: "Confirm your page set" };
+  }
+  if (!buildDraftCanRun) {
+    return { stage: "Needs your input", detail: buildDraftBlockers[0] ?? "Connect your website first" };
+  }
+  if (hasCompletedBuild) {
+    return { stage: "Ready", detail: "Your draft is ready" };
+  }
+
+  const stage = String(currentSession?.runState.currentStage ?? "").toLowerCase();
+  if (currentSession?.status === "queued") {
+    if (hasSerpApiKey) return { stage: "Researching", detail: "Researching what works in your market" };
+    return { stage: "Planning", detail: "Creating your homepage and page set" };
+  }
+
+  if (currentSession?.status === "running") {
+    if (stage.includes("research")) {
+      return { stage: "Researching", detail: "Researching what works in your market" };
+    }
+    if (stage.includes("plan") || stage.includes("brief") || stage.includes("content") || stage.includes("spec")) {
+      return { stage: "Planning", detail: "Creating your homepage and page set" };
+    }
+    if (stage.includes("qa") || stage.includes("verify")) {
+      return { stage: "Verifying", detail: "Verifying your draft" };
+    }
+    return {
+      stage: "Building",
+      detail: isThriveDetected ? "Building directly in Thrive" : "Using your existing site shell",
+    };
+  }
+
+  if (hasSerpApiKey) {
+    return { stage: "Researching", detail: "Researching what works in your market" };
+  }
+  return { stage: "Planning", detail: "Creating your homepage and page set" };
+}
+
 export default function SiteForgeAppPage() {
-  const [activePhase, setActivePhase] = useState<JourneyPhase>("describe");
+  const [activePhase, setActivePhase] = useState<JourneyPhase>("connect");
 
   const [projects, setProjects] = useState<SiteForgeProject[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
@@ -290,7 +414,6 @@ export default function SiteForgeAppPage() {
 
   const [buildDraftStatus, setBuildDraftStatus] = useState<"idle" | "running" | "success" | "error">("idle");
   const [buildDraftMessage, setBuildDraftMessage] = useState<string | null>(null);
-  const [launchMessage, setLaunchMessage] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -330,7 +453,7 @@ export default function SiteForgeAppPage() {
   );
 
   const selectedBuildPage = useMemo(
-    () => pageRows.find((page) => page.slug === selectedPageSlug) ?? pageRows[0] ?? null,
+    () => pageRows.find((page) => page.slug === selectedPageSlug) ?? pageRows.find((page) => page.slug === "home") ?? pageRows[0] ?? null,
     [pageRows, selectedPageSlug]
   );
 
@@ -339,7 +462,8 @@ export default function SiteForgeAppPage() {
 
   const isConnected = Boolean(connectionResult?.connected || savedConnection?.lastValidationStatus === "valid");
   const isThriveDetected = Boolean(connectionResult?.thriveDetected || savedConnection?.thriveDetected || snapshot?.thriveDetected);
-  const aiConfigured = Boolean(activeProject?.hasSavedAiSecret || activeProject?.hasSavedSerpApiSecret);
+  const hasAiAccess = Boolean(activeProject?.hasSavedAiSecret);
+  const hasSerpApiAccess = Boolean(activeProject?.hasSavedSerpApiSecret);
 
   const hasBusinessInfo = useMemo(() => {
     const payload = {
@@ -371,6 +495,43 @@ export default function SiteForgeAppPage() {
     [approvedPageSlugs.length, isConnected, pageRows.length, selectedProjectId]
   );
 
+  const inlineApprovalState = useMemo(
+    () =>
+      getInlineApprovalState({
+        hasHomepage: Boolean(homePage),
+        homeApproved,
+        approvedPageSet,
+        approvedCtaStyle,
+        isThriveDetected,
+        approvedReuseDecision,
+      }),
+    [approvedCtaStyle, approvedPageSet, approvedReuseDecision, homeApproved, homePage, isThriveDetected]
+  );
+
+  const researchAvailability = useMemo(
+    () => getResearchAvailabilityState({ hasSerpApiKey: hasSerpApiAccess }),
+    [hasSerpApiAccess]
+  );
+
+  const launchExperienceState = useMemo(
+    () =>
+      getLaunchExperienceState({
+        hasCompletedBuild,
+        buildDraftCanRun: buildDraftState.canBuildDraft,
+        buildDraftBlockers: buildDraftState.blockers,
+        currentSession,
+        isThriveDetected,
+        hasSerpApiKey: hasSerpApiAccess,
+        hasAiAccess,
+        homeApproved,
+        approvedPageSet,
+      }),
+    [approvedPageSet, buildDraftState.blockers, buildDraftState.canBuildDraft, currentSession, hasAiAccess, hasCompletedBuild, hasSerpApiAccess, homeApproved, isThriveDetected]
+  );
+
+  const allApprovalMomentsComplete =
+    homeApproved && approvedPageSet && approvedCtaStyle && (!isThriveDetected || approvedReuseDecision);
+
   const selectedProjectInOptions = useMemo(
     () => (selectedProjectId ? projects.some((entry) => entry.id === selectedProjectId) : true),
     [projects, selectedProjectId]
@@ -383,27 +544,9 @@ export default function SiteForgeAppPage() {
         ? "SiteForge is running in memory mode (development/test only). Projects are not durable."
         : "Persistent Postgres storage is healthy.";
 
-  const publishChecklist = useMemo(
-    () => [
-      { id: "pub-1", label: "Website brief saved", done: hasBusinessInfo },
-      { id: "pub-2", label: "Connection validated", done: isConnected },
-      { id: "pub-3", label: "AI access configured", done: aiConfigured },
-      { id: "pub-4", label: "Plan generated", done: hasGeneratedSitePlan },
-      { id: "pub-5", label: "At least one page approved", done: approvedPageSlugs.length > 0 },
-      { id: "pub-6", label: "Build draft completed", done: hasCompletedBuild },
-    ],
-    [aiConfigured, approvedPageSlugs.length, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, isConnected]
-  );
-
-  const allApprovalMomentsComplete =
-    homeApproved && approvedPageSet && approvedCtaStyle && (!isThriveDetected || approvedReuseDecision);
-
   function recommendedPhase(): JourneyPhase {
-    if (!hasBusinessInfo) return "describe";
-    if (!isConnected || !aiConfigured) return "connect";
-    if (!hasGeneratedSitePlan) return "preview";
-    if (!allApprovalMomentsComplete) return "approve";
-    if (!hasCompletedBuild) return "build";
+    if (!isConnected || !hasAiAccess) return "connect";
+    if (!hasGeneratedSitePlan || !allApprovalMomentsComplete) return "describe";
     return "launch";
   }
 
@@ -418,7 +561,7 @@ export default function SiteForgeAppPage() {
     const current = phaseIndex.get(activePhase) ?? 0;
     const suggestedIndex = phaseIndex.get(suggested) ?? 0;
     if (suggestedIndex > current) setActivePhase(suggested);
-  }, [activePhase, aiConfigured, allApprovalMomentsComplete, hasBusinessInfo, hasCompletedBuild, hasGeneratedSitePlan, isConnected, phaseIndex]);
+  }, [activePhase, allApprovalMomentsComplete, hasAiAccess, hasGeneratedSitePlan, isConnected, phaseIndex]);
 
   useEffect(() => {
     if (!pageRows.length) {
@@ -498,6 +641,12 @@ export default function SiteForgeAppPage() {
     setIntentAssumptions(null);
     setIntentStatusMessage(null);
     setConnectStatusMessage(null);
+    setApprovedPageSlugs([]);
+    setApprovedPageSet(false);
+    setApprovedCtaStyle(false);
+    setApprovedReuseDecision(false);
+    setBuildDraftStatus("idle");
+    setBuildDraftMessage(null);
   }
 
   async function applyWorkspace(workspace: SiteForgeWorkspace) {
@@ -816,7 +965,7 @@ export default function SiteForgeAppPage() {
 
   useEffect(() => {
     setApprovedPageSlugs((prev) => prev.filter((slug) => pageRows.some((page) => page.slug === slug)));
-    setSelectedPageSlug((prev) => (prev && pageRows.some((page) => page.slug === prev) ? prev : pageRows[0]?.slug ?? null));
+    setSelectedPageSlug((prev) => (prev && pageRows.some((page) => page.slug === prev) ? prev : pageRows.find((page) => page.slug === "home")?.slug ?? pageRows[0]?.slug ?? null));
   }, [pageRows]);
 
   async function createProject() {
@@ -1031,6 +1180,13 @@ export default function SiteForgeAppPage() {
       return;
     }
 
+    if (mode === "build" && !buildDraftState.canBuildDraft) {
+      const blocker = buildDraftState.blockers[0] ?? "Connect your website first.";
+      setBuildDraftStatus("error");
+      setBuildDraftMessage(blocker);
+      return;
+    }
+
     const targetProjectId = await ensureCanonicalActiveProjectId();
     if (!targetProjectId) return;
 
@@ -1038,7 +1194,7 @@ export default function SiteForgeAppPage() {
     clearErrors();
     if (mode === "build") {
       setBuildDraftStatus("running");
-      setBuildDraftMessage("Building draft…");
+      setBuildDraftMessage("Building website...");
     }
 
     try {
@@ -1065,7 +1221,7 @@ export default function SiteForgeAppPage() {
       await openProject(targetProjectId, "workspace");
       if (mode === "build") {
         setBuildDraftStatus("success");
-        setBuildDraftMessage("Draft build completed successfully.");
+        setBuildDraftMessage("Website build started.");
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : mode === "generate" ? "Failed to generate site." : "Build failed.";
@@ -1082,11 +1238,23 @@ export default function SiteForgeAppPage() {
   async function createFirstDirection() {
     const prompt = intentPrompt.trim();
     if (!prompt) {
-      setIntentStatusMessage("Add your intent before creating direction.");
+      setIntentStatusMessage("Describe the homepage and additional pages you want created.");
       return;
     }
 
-    setIntentStatusMessage("Creating first direction...");
+    if (!isConnected) {
+      setIntentStatusMessage("Connect your website first.");
+      setActivePhase("connect");
+      return;
+    }
+
+    if (!hasAiAccess && !aiApiKey.trim()) {
+      setIntentStatusMessage("Add your AI key.");
+      setActivePhase("connect");
+      return;
+    }
+
+    setIntentStatusMessage("Creating your website plan...");
     clearErrors();
 
     try {
@@ -1112,14 +1280,17 @@ export default function SiteForgeAppPage() {
         competitors: inferred.competitors.trim(),
         differentiators: inferred.differentiators.trim(),
       });
+      // Keep intent-derived brief in local state before generation if workspace payload omits websiteBrief.
+      setBriefForm(inferred);
       setBriefSaveState("saved");
-      setIntentStatusMessage("Direction created. Review assumptions and continue.");
-      setActivePhase("connect");
+      await runSitePipeline("generate");
+      setIntentStatusMessage("Website plan ready.");
+      setActivePhase("describe");
     } catch (err: unknown) {
       setBriefSaveState("error");
       const message = err instanceof Error ? err.message : "Failed to create first direction.";
       setUserError(message, "save");
-      setIntentStatusMessage("We could not create direction yet.");
+      setIntentStatusMessage("We could not create your website plan yet.");
     } finally {
       setBusy(false);
     }
@@ -1127,37 +1298,33 @@ export default function SiteForgeAppPage() {
 
   async function connectAndBegin() {
     clearErrors();
-    setConnectStatusMessage("Preparing connection...");
+    setConnectStatusMessage("Connecting your website...");
 
     try {
-      const targetProjectId = await ensureCanonicalActiveProjectId();
+      let targetProjectId = await ensureCanonicalActiveProjectId();
+      if (!targetProjectId) {
+        targetProjectId = await ensureProjectForIntent(intentPrompt.trim() || "SiteForge project");
+      }
       if (!targetProjectId) return;
-      if (!briefIsValid()) {
-        setConnectStatusMessage("Your direction needs more detail before connecting.");
-        setActivePhase("describe");
+
+      if (!aiApiKey.trim() && !hasAiAccess) {
+        setConnectStatusMessage("Add your AI key.");
         return;
       }
 
       if (aiApiKey.trim() || serpApiKey.trim()) {
-        setConnectStatusMessage("Saving AI access...");
+        setConnectStatusMessage("Saving AI and research access...");
         await saveAiConfig("save");
-      } else if (!aiConfigured) {
-        setConnectStatusMessage("Add an AI key to begin.");
-        return;
       }
 
-      setConnectStatusMessage("Connecting to WordPress...");
+      setConnectStatusMessage("Validating WordPress access...");
       await saveAndValidateConnection();
-
-      setConnectStatusMessage("Creating your first preview...");
-      await runSitePipeline("generate");
-
-      setConnectStatusMessage("Connected and preview ready.");
-      setActivePhase("preview");
+      setConnectStatusMessage("Connected");
+      setActivePhase("describe");
     } catch (err: unknown) {
-      const message = err instanceof Error ? err.message : "Connect and begin failed.";
+      const message = err instanceof Error ? err.message : "Connect website failed.";
       setUserError(message, "connect");
-      setConnectStatusMessage("We could not connect and begin yet.");
+      setConnectStatusMessage("We could not connect your website yet.");
     }
   }
 
@@ -1167,121 +1334,33 @@ export default function SiteForgeAppPage() {
     return ["Home", "Offer", "About", "Contact"];
   }
 
-  function resolveBuildExperienceStatus(): { stage: "Preparing" | "Building" | "Verifying" | "Ready" | "Needs your input"; detail: string } {
-    if (hasCompletedBuild) {
-      return { stage: "Ready", detail: "Your draft is ready for launch review." };
+  function handleInlineApproval() {
+    if (!homePage) return;
+    if (inlineApprovalState.nextAction === "home") {
+      setApprovedPageSlugs((prev) => (prev.includes(homePage.slug) ? prev : [...prev, homePage.slug]));
+      return;
     }
-
-    if (!buildDraftState.canBuildDraft && (buildDraftStatus === "error" || approvedPageSlugs.length > 0)) {
-      return { stage: "Needs your input", detail: buildDraftState.blockers[0] ?? "A required input is missing." };
+    if (inlineApprovalState.nextAction === "pageset") {
+      setApprovedPageSet(true);
+      return;
     }
-
-    if (buildDraftStatus === "running") {
-      return { stage: "Building", detail: "Building a draft safely before publishing." };
+    if (inlineApprovalState.nextAction === "cta") {
+      setApprovedCtaStyle(true);
+      return;
     }
-
-    const stage = String(currentSession?.runState.currentStage ?? "");
-    if (currentSession?.status === "queued") {
-      return { stage: "Preparing", detail: "Preparing your build sequence." };
+    if (inlineApprovalState.nextAction === "reuse") {
+      setApprovedReuseDecision(true);
     }
-    if (currentSession?.status === "running") {
-      if (stage.includes("qa") || stage.includes("verif")) {
-        return { stage: "Verifying", detail: "Verifying layout and content for launch readiness." };
-      }
-      return { stage: "Building", detail: isThriveDetected ? "Building directly in Thrive." : "Building your draft safely before publishing." };
-    }
-
-    if (!buildDraftState.canBuildDraft) {
-      return { stage: "Needs your input", detail: buildDraftState.blockers[0] ?? "A required input is missing." };
-    }
-
-    return { stage: "Preparing", detail: "Build is ready when you confirm." };
   }
 
-  function advanceTo(phase: JourneyPhase) {
-    setActivePhase(phase);
-    if (phase === "build") setLaunchMessage(null);
-  }
-
-  function renderIntentScreen() {
-    const examples = [
-      "Build a high-converting homepage for my AI pet app.",
-      "Create a trusted local service website that gets calls.",
-      "Build a boutique brand site with storytelling and email capture.",
-    ];
-
-    return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Describe</h2>
-        <p className="text-sm text-slate-300">What kind of website do you want me to build?</p>
-        <textarea
-          data-testid="siteforge-intent-prompt"
-          value={intentPrompt}
-          onChange={(event) => setIntentPrompt(event.target.value)}
-          placeholder="Describe the site outcome you want..."
-          className="h-32 w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-slate-100"
-        />
-        <div className="flex flex-wrap gap-2 text-xs">
-          {examples.map((example) => (
-            <button
-              key={example}
-              type="button"
-              onClick={() => setIntentPrompt(example)}
-              className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-slate-200"
-            >
-              {example}
-            </button>
-          ))}
-        </div>
-
-        {intentAssumptions ? (
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">AI assumptions</div>
-            <div className="mt-2 grid gap-2 md:grid-cols-2">
-              <div>Business type: {intentAssumptions.businessType}</div>
-              <div>Audience: {intentAssumptions.audience}</div>
-              <div>Offer: {intentAssumptions.offer}</div>
-              <div>Tone: {intentAssumptions.tone}</div>
-              <div>Site archetype: {intentAssumptions.siteArchetype}</div>
-              <div>CTA style: {intentAssumptions.ctaStrategy}</div>
-            </div>
-            <button
-              type="button"
-              className="mt-3 rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-xs"
-              onClick={() => setActivePhase("connect")}
-            >
-              Refine assumptions
-            </button>
-          </div>
-        ) : null}
-
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-slate-200">Primary action</div>
-            <button
-              type="button"
-              data-testid="siteforge-create-direction-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
-              onClick={() => void createFirstDirection()}
-              disabled={busy}
-            >
-              Create first direction
-            </button>
-          </div>
-          {intentStatusMessage ? <div className="mt-2 text-xs text-slate-300">{intentStatusMessage}</div> : null}
-        </div>
-      </section>
-    );
-  }
-
-  function renderConnectScreen() {
+  function renderConnectStep() {
     const symbolCount = snapshot?.thriveIntelligence?.primitiveCounts.tcbSymbol ?? 0;
     const templateCount = snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0;
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
         <h2 className="text-xl font-semibold text-white">Connect</h2>
-        <p className="text-sm text-slate-300">Connect your site and access keys once. I will handle the rest.</p>
+        <p className="text-sm text-slate-300">Connect your site and required keys once.</p>
 
         <div className="grid gap-3 text-sm text-slate-200 md:grid-cols-2">
           <div>
@@ -1297,11 +1376,11 @@ export default function SiteForgeAppPage() {
             <input type="password" value={appPassword} placeholder="WordPress application password" onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
           </div>
           <div>
-            <label htmlFor="siteforge-ai-key" className="text-slate-300">AI key</label>
+            <label htmlFor="siteforge-ai-key" className="text-slate-300">OpenAI key</label>
             <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
           </div>
           <div className="md:col-span-2">
-            <label htmlFor="siteforge-serpapi-key" className="text-slate-300">Research key (optional)</label>
+            <label htmlFor="siteforge-serpapi-key" className="text-slate-300">SerpAPI key</label>
             <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
           </div>
         </div>
@@ -1311,186 +1390,158 @@ export default function SiteForgeAppPage() {
             <div className="text-sm text-slate-200">Primary action</div>
             <button
               type="button"
-              data-testid="siteforge-connect-begin-action"
+              data-testid="siteforge-connect-website-action"
               className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
               onClick={() => void connectAndBegin()}
               disabled={busy}
             >
-              Connect and begin
+              Connect Website
             </button>
           </div>
           {connectStatusMessage ? <div className="mt-2 text-xs text-slate-300">{connectStatusMessage}</div> : null}
+          {aiStatusMessage ? <div className="mt-1 text-xs text-slate-400">{aiStatusMessage}</div> : null}
         </div>
 
         {(isConnected || snapshot) ? (
           <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div>Connected to WordPress: {isConnected ? "yes" : "not yet"}</div>
+            <div>Connected: {isConnected ? "yes" : "not yet"}</div>
             <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
             <div className="mt-1">Reusable assets found: {symbolCount}</div>
-            <div className="mt-1">Existing shell opportunities found: {templateCount > 0 ? "yes" : "not yet"}</div>
+            <div className="mt-1">Direct Thrive build: {isThriveDetected ? "possible" : "safe fallback likely"}</div>
+            <div className="mt-1">Shell opportunities: {templateCount > 0 ? "found" : "not yet"}</div>
           </div>
         ) : null}
       </section>
     );
   }
 
-  function renderPreviewScreen() {
+  function renderDescribeStep() {
     const pages = previewPages();
-    const reuseSummary = isThriveDetected
-      ? "I can reuse your existing Thrive shell and blocks where it improves speed."
-      : "No Thrive shell detected yet. I will build a safe draft structure first.";
+    const homepageSections = homePage?.sections ?? [];
+    const examplePrompt =
+      "Build a homepage for iPetzo that quickly builds trust with dog and cat owners, explains the app clearly, and pushes them to start a trial. Also create an About page, FAQ page, and Contact page.";
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Preview</h2>
-        <p className="text-sm text-slate-300">Here is the site I think you need.</p>
+        <h2 className="text-xl font-semibold text-white">Describe</h2>
+        <p className="text-sm text-slate-300">Describe the homepage and additional pages you want created.</p>
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr_0.9fr]">
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">AI reasoning summary</div>
-            <ul className="mt-2 list-disc space-y-1 pl-4">
-              <li>Direction: {intentAssumptions?.siteArchetype ?? "Conversion-focused growth site"}</li>
-              <li>Audience: {briefForm.targetAudience || intentAssumptions?.audience || "Defined from your prompt"}</li>
-              <li>Offer: {briefForm.mainOffer || intentAssumptions?.offer || "Primary offer will be clarified"}</li>
-              <li>CTA style: {intentAssumptions?.ctaStrategy ?? "Lead capture first, conversion second"}</li>
-              <li>{reuseSummary}</li>
-            </ul>
-          </div>
+        <textarea
+          data-testid="siteforge-intent-prompt"
+          value={intentPrompt}
+          onChange={(event) => setIntentPrompt(event.target.value)}
+          placeholder="Describe the homepage and additional pages you want created."
+          className="h-36 w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-slate-100"
+        />
 
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">Live site blueprint</div>
-            <div className="mt-2">Homepage approach: {homePage?.title ?? "Conversion-first homepage with strong proof and CTA"}</div>
-            <div className="mt-2">Proposed page set:</div>
-            <ul className="mt-1 list-disc pl-4">
-              {pages.map((page) => (
-                <li key={page}>{page}</li>
-              ))}
-            </ul>
-            <div className="mt-2">CTA style: {intentAssumptions?.ctaStrategy ?? "Focused primary CTA with one supporting CTA"}</div>
-            <div className="mt-2">Reuse decision: {isThriveDetected ? "Reuse where quality is high, replace where needed." : "Create new safe draft assets."}</div>
-          </div>
+        <button
+          type="button"
+          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200"
+          onClick={() => setIntentPrompt(examplePrompt)}
+        >
+          {examplePrompt}
+        </button>
 
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">Active decision</div>
-            {hasGeneratedSitePlan ? (
-              <>
-                <div className="mt-2">Your first draft direction is ready for approval.</div>
-                <button
-                  type="button"
-                  className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
-                  onClick={() => advanceTo("approve")}
-                >
-                  Review approvals
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="mt-2">I need a connected setup before I can render a full preview.</div>
-                <button
-                  type="button"
-                  className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-3 py-2 text-cyan-100"
-                  onClick={() => advanceTo("connect")}
-                >
-                  Go to Connect
-                </button>
-              </>
-            )}
+        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-sm text-slate-200">Primary action</div>
+            <button
+              type="button"
+              data-testid="siteforge-create-plan-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+              onClick={() => void createFirstDirection()}
+              disabled={busy}
+            >
+              Create Website Plan
+            </button>
           </div>
+          {intentStatusMessage ? <div className="mt-2 text-xs text-slate-300">{intentStatusMessage}</div> : null}
         </div>
-      </section>
-    );
-  }
 
-  function renderApproveScreen() {
-    if (!pageRows.length) {
-      return (
-        <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-          <h2 className="text-xl font-semibold text-white">Approve</h2>
-          <p className="text-sm text-slate-300">No pages are ready to approve yet.</p>
-          <button
-            type="button"
-            className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
-            onClick={() => advanceTo("preview")}
-          >
-            Review preview
-          </button>
-        </section>
-      );
-    }
+        {hasGeneratedSitePlan ? (
+          <>
+            <div className="grid gap-4 lg:grid-cols-[1.1fr_1fr]">
+              <section className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+                <div className="font-medium text-white">Homepage preview</div>
+                <div className="mt-2">{homePage?.title ?? "Homepage"}</div>
+                <div className="mt-2 text-slate-300">{briefForm.businessDescription || "Conversion-first homepage based on your intent."}</div>
+                {homepageSections.length ? (
+                  <ul className="mt-2 list-disc pl-4 text-slate-300">
+                    {homepageSections.slice(0, 6).map((section, index) => (
+                      <li key={`${homePage?.slug}-${index}`}>{section.heading || section.body || "Section"}</li>
+                    ))}
+                  </ul>
+                ) : null}
+              </section>
 
-    const activeApproval = !homeApproved
-      ? { key: "home", label: "Approve Homepage", action: () => homePage && setApprovedPageSlugs((prev) => (prev.includes(homePage.slug) ? prev : [...prev, homePage.slug])) }
-      : !approvedPageSet
-        ? { key: "pageset", label: "Use this page set", action: () => setApprovedPageSet(true) }
-        : !approvedCtaStyle
-          ? { key: "cta", label: "Use this CTA style", action: () => setApprovedCtaStyle(true) }
-          : isThriveDetected && !approvedReuseDecision
-            ? { key: "reuse", label: "Approve reuse decisions", action: () => setApprovedReuseDecision(true) }
-            : null;
+              <section className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+                <div className="font-medium text-white">Proposed page set</div>
+                <ul className="mt-2 list-disc pl-4 text-slate-300">
+                  {pages.map((page) => (
+                    <li key={page}>{page}</li>
+                  ))}
+                </ul>
+              </section>
+            </div>
 
-    return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Approve</h2>
-        <p className="text-sm text-slate-300">Confirm meaning, direction, and decisions before build.</p>
+            <div className="grid gap-4 lg:grid-cols-[1fr_1fr]">
+              <section className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+                <div className="font-medium text-white">CTA style recommendation</div>
+                <div className="mt-2">{intentAssumptions?.ctaStrategy ?? "Lead capture first, conversion second"}</div>
+              </section>
 
-        <div className="grid gap-4 lg:grid-cols-[1.2fr_0.9fr]">
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">Approval moments</div>
-            <ul className="mt-2 space-y-2">
-              <li className="rounded-lg border border-white/12 px-3 py-2">{homeApproved ? "[x]" : "[ ]"} Homepage direction</li>
-              <li className="rounded-lg border border-white/12 px-3 py-2">{approvedPageSet ? "[x]" : "[ ]"} Page set</li>
-              <li className="rounded-lg border border-white/12 px-3 py-2">{approvedCtaStyle ? "[x]" : "[ ]"} CTA style</li>
-              {isThriveDetected ? (
-                <li className="rounded-lg border border-white/12 px-3 py-2">{approvedReuseDecision ? "[x]" : "[ ]"} Reuse / replace decision</li>
+              <section className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+                <div className="font-medium text-white">Reuse recommendation</div>
+                <div className="mt-2">
+                  {isThriveDetected
+                    ? "Use existing Thrive assets where quality is high and replace weak sections."
+                    : "No Thrive assets detected. Build new sections using your current site shell."}
+                </div>
+              </section>
+            </div>
+
+            <section className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4 text-xs text-slate-200">
+              <div className="font-medium text-cyan-100">Inline approvals</div>
+              <div className="mt-2">{inlineApprovalState.hint}</div>
+              {inlineApprovalState.buttonLabel ? (
+                <button
+                  type="button"
+                  data-testid="siteforge-inline-approval-action"
+                  className="mt-3 rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
+                  onClick={handleInlineApproval}
+                >
+                  {inlineApprovalState.buttonLabel}
+                </button>
               ) : null}
-            </ul>
-          </div>
-
-          <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4 text-xs text-slate-200">
-            <div className="font-medium text-cyan-100">Primary action</div>
-            {activeApproval ? (
-              <button
-                type="button"
-                data-testid="siteforge-approve-active-action"
-                className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
-                onClick={activeApproval.action}
-              >
-                {activeApproval.label}
-              </button>
-            ) : (
-              <button
-                type="button"
-                data-testid="siteforge-approve-active-action"
-                className="mt-3 w-full rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
-                onClick={() => advanceTo("build")}
-              >
-                Move to Build
-              </button>
-            )}
-            <div className="mt-3">Selected page: {selectedBuildPage?.title ?? "None"}</div>
-            <div className="mt-1">Approval hint: {pageApprovalState.kind === "ready" ? pageApprovalState.buttonLabel : pageApprovalState.message}</div>
-          </div>
-        </div>
+              <div className="mt-3 text-slate-300">Selected page: {selectedBuildPage?.title ?? "None"}</div>
+              <div className="mt-1 text-slate-300">Approval hint: {pageApprovalState.kind === "ready" ? pageApprovalState.buttonLabel : pageApprovalState.message}</div>
+            </section>
+          </>
+        ) : null}
       </section>
     );
   }
 
-  function renderBuildScreen() {
-    const experience = resolveBuildExperienceStatus();
+  function renderLaunchStep() {
+    const canBuild =
+      buildDraftState.canBuildDraft &&
+      hasAiAccess &&
+      homeApproved &&
+      approvedPageSet;
 
     return (
       <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Build</h2>
-        <p className="text-sm text-slate-300">I will build the approved draft safely before publishing.</p>
+        <h2 className="text-xl font-semibold text-white">Launch</h2>
+        <p className="text-sm text-slate-300">Build your website draft when ready.</p>
 
         <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-sm text-slate-200">
           <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Status</div>
-          <div className="mt-2 text-xl font-semibold text-white">{experience.stage}</div>
-          <div className="mt-2 text-sm text-slate-300">{experience.detail}</div>
+          <div className="mt-2 text-xl font-semibold text-white">{launchExperienceState.stage}</div>
+          <div className="mt-2 text-sm text-slate-300">{launchExperienceState.detail}</div>
           <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
-            <li>{isThriveDetected ? "Building directly in Thrive when safe." : "Building a safe draft structure first."}</li>
-            <li>{snapshot?.thriveIntelligence?.symbolInventory?.length ? "Reusing existing assets where quality is high." : "Creating reusable assets from approved direction."}</li>
-            <li>Verifying before launch review.</li>
+            <li>{researchAvailability.summary}</li>
+            <li>{isThriveDetected ? "Building directly in Thrive" : "Using your existing site shell"}</li>
+            <li>Verifying your draft</li>
           </ul>
         </div>
 
@@ -1499,71 +1550,15 @@ export default function SiteForgeAppPage() {
             <div className="text-sm text-slate-200">Primary action</div>
             <button
               type="button"
-              data-testid="siteforge-build-primary-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !buildDraftState.canBuildDraft ? "cursor-not-allowed opacity-60" : ""}`}
+              data-testid="siteforge-build-website-action"
+              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !canBuild || hasCompletedBuild ? "cursor-not-allowed opacity-60" : ""}`}
               onClick={() => void runSitePipeline("build")}
-              disabled={busy || !buildDraftState.canBuildDraft}
+              disabled={busy || !canBuild || hasCompletedBuild}
             >
-              {buildDraftStatus === "running" ? "Building..." : "Build this in Thrive"}
+              {buildDraftStatus === "running" ? "Building..." : "Build Website"}
             </button>
           </div>
           {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
-        </div>
-      </section>
-    );
-  }
-
-  function renderLaunchScreen() {
-    const launchReady = hasCompletedBuild;
-    const title = launchReady ? "Ready to go live" : "One thing left";
-
-    let actionLabel = "Review build";
-    let action: () => void = () => advanceTo("build");
-    if (!hasGeneratedSitePlan) {
-      actionLabel = "Review preview";
-      action = () => advanceTo("preview");
-    } else if (!allApprovalMomentsComplete) {
-      actionLabel = "Review approvals";
-      action = () => advanceTo("approve");
-    } else if (launchReady && baseUrl) {
-      actionLabel = "Publish draft";
-      action = () => {
-        const target = `${baseUrl.replace(/\/$/, "")}/wp-admin/edit.php?post_type=page`;
-        window.open(target, "_blank", "noopener,noreferrer");
-        setLaunchMessage("Opened your WordPress publishing view in a new tab.");
-      };
-    } else if (launchReady) {
-      actionLabel = "Publish draft";
-      action = () => setLaunchMessage("Add your WordPress URL in Connect so I can open your publishing view.");
-    }
-
-    const readyCount = publishChecklist.filter((item) => item.done).length;
-
-    return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-        <p className="text-sm text-slate-300">{launchReady ? "Your draft passed build checks and is ready for final publishing." : "I still need one approval or build step before launch."}</p>
-
-        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-          <div>Progress: {readyCount}/{publishChecklist.length} launch signals complete.</div>
-          <div className="mt-2">Homepage ready: {homeApproved ? "yes" : "no"}</div>
-          <div className="mt-1">Page set confirmed: {approvedPageSet ? "yes" : "no"}</div>
-          <div className="mt-1">Build complete: {hasCompletedBuild ? "yes" : "no"}</div>
-        </div>
-
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-slate-200">Primary action</div>
-            <button
-              type="button"
-              data-testid="siteforge-launch-primary-action"
-              className="rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100"
-              onClick={action}
-            >
-              {actionLabel}
-            </button>
-          </div>
-          {launchMessage ? <div className="mt-2 text-xs text-slate-300">{launchMessage}</div> : null}
         </div>
       </section>
     );
@@ -1654,6 +1649,14 @@ export default function SiteForgeAppPage() {
             >
               Remove Saved Keys
             </button>
+            <button
+              type="button"
+              className="ml-2 mt-2 rounded-lg border border-white/20 bg-white/10 px-3 py-2"
+              onClick={() => void saveWebsiteBrief()}
+              disabled={busy || !selectedProjectId}
+            >
+              Save Brief
+            </button>
           </section>
 
           <section className="rounded-xl border border-white/12 bg-white/5 p-3">
@@ -1671,12 +1674,9 @@ export default function SiteForgeAppPage() {
   }
 
   function renderPhase() {
-    if (activePhase === "describe") return renderIntentScreen();
-    if (activePhase === "connect") return renderConnectScreen();
-    if (activePhase === "preview") return renderPreviewScreen();
-    if (activePhase === "approve") return renderApproveScreen();
-    if (activePhase === "build") return renderBuildScreen();
-    return renderLaunchScreen();
+    if (activePhase === "connect") return renderConnectStep();
+    if (activePhase === "describe") return renderDescribeStep();
+    return renderLaunchStep();
   }
 
   return (
@@ -1687,7 +1687,7 @@ export default function SiteForgeAppPage() {
             <div>
               <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">SiteForge 2050</div>
               <h1 className="mt-2 text-3xl font-semibold text-white">Your AI website partner</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-300">From intent to launch: one decision at a time.</p>
+              <p className="mt-2 max-w-3xl text-sm text-slate-300">Connect once, describe what you want, and launch.</p>
             </div>
             <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
               <div>Project: {activeProject?.name ?? "No project selected"}</div>

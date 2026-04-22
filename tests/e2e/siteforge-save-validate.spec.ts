@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 test.describe("SiteForge project binding + connect flow", () => {
-  test("advanced project controls keep stable identity through connect-and-begin", async ({ page }) => {
+  test("advanced project controls keep stable identity through connect website", async ({ page }) => {
     const consoleErrors: string[] = [];
     page.on("pageerror", (error) => {
       consoleErrors.push(String(error));
@@ -39,13 +39,6 @@ test.describe("SiteForge project binding + connect flow", () => {
     await expect(projectSelect).not.toHaveValue("");
     await expect(projectSelect.locator("option:checked")).toContainText(projectName);
 
-    await page.getByRole("button", { name: "Describe" }).click();
-    const intentPrompt = page.getByTestId("siteforge-intent-prompt");
-    if ((await intentPrompt.count()) > 0 && (await intentPrompt.isVisible().catch(() => false))) {
-      await intentPrompt.fill("Create a trusted local service website that gets calls.");
-      await page.getByTestId("siteforge-create-direction-action").click();
-    }
-
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
     await page.getByPlaceholder(/application password/i).fill("app-pass");
@@ -58,7 +51,7 @@ test.describe("SiteForge project binding + connect flow", () => {
       );
     });
 
-    await page.getByTestId("siteforge-connect-begin-action").click();
+    await page.getByTestId("siteforge-connect-website-action").click();
     const connectResponse = await connectResponsePromise;
 
     expect(connectResponse.status()).toBe(200);
