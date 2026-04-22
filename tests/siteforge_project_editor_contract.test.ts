@@ -45,12 +45,12 @@ describe("siteforge project editor contract", () => {
     expect(source.includes("Save Project")).toBe(false);
   });
 
-  it("renders rename editor only for active project and not as a create field", () => {
+  it("keeps rename/create project controls out of default user shell", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Rename current project")).toBe(true);
-    expect(source.includes("New project name")).toBe(true);
-    expect(source.includes("Loading selected project...")).toBe(true);
+    expect(source.includes("Rename current project")).toBe(false);
+    expect(source.includes("New project name")).toBe(false);
+    expect(source.includes("Loading selected project...")).toBe(false);
   });
 });

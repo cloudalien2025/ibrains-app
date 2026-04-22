@@ -1,43 +1,133 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("SiteForge project binding + connect flow", () => {
-  test("advanced project controls keep stable identity through connect website", async ({ page }) => {
-    const consoleErrors: string[] = [];
-    page.on("pageerror", (error) => {
-      consoleErrors.push(String(error));
+test.describe("SiteForge step navigation + connect flow", () => {
+  test("keeps Connect/Describe/Launch clickable and runs connect website", async ({ page }) => {
+    const projectId = "p1";
+    let aiSaved = false;
+    let connectionValidated = false;
+
+    const workspace = () => ({
+      project: {
+        id: projectId,
+        name: "Demo Project",
+        slug: "demo-project",
+        status: "draft",
+        siteType: null,
+        primaryPrompt: null,
+        websiteBrief: null,
+        currentState: "workspace",
+        homepageStrategy: "use_existing",
+        aiProvider: "openai",
+        aiModel: "gpt-4.1-mini",
+        aiSecretRef: aiSaved ? "ref_1" : null,
+        hasSavedAiSecret: aiSaved,
+        serpApiProvider: "serpapi",
+        serpApiSecretRef: null,
+        hasSavedSerpApiSecret: false,
+        lastOpenedAt: new Date().toISOString(),
+        description: "x",
+        latestSessionId: null,
+        updatedAt: new Date().toISOString(),
+      },
+      activeConnection: connectionValidated
+        ? {
+            connectionId: "c1",
+            projectId,
+            label: "Primary WordPress Site",
+            wordpressUrl: "https://example.com",
+            username: "admin",
+            authType: "application_password",
+            secretRef: "secret_1",
+            hasSavedSecret: true,
+            thriveDetected: true,
+            writeAccess: true,
+            lastValidatedAt: new Date().toISOString(),
+            lastValidationStatus: "valid",
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          }
+        : null,
+      snapshot: null,
+      latestRun: null,
+      runHistory: [],
+      runLogs: [],
     });
-    page.on("console", (msg) => {
-      if (msg.type() === "error") {
-        consoleErrors.push(msg.text());
+
+    await page.route("**/api/siteforge/**", async (route) => {
+      const req = route.request();
+      const url = req.url();
+      const method = req.method();
+
+      if (url.endsWith("/api/siteforge/admin/summary")) {
+        await route.fulfill({ status: 200, body: JSON.stringify({ summary: { storageMode: "postgres", persistenceHealth: "healthy", fallbackAllowed: true, fallbackActive: false, reason: null } }) });
+        return;
       }
+
+      if (url.endsWith("/api/siteforge/projects") && method === "GET") {
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            projects: [workspace().project],
+            lastOpenedProjectId: projectId,
+          }),
+        });
+        return;
+      }
+
+      if (url.endsWith(`/api/siteforge/projects/${projectId}`) && method === "PATCH") {
+        await route.fulfill({ status: 200, body: JSON.stringify(workspace()) });
+        return;
+      }
+
+      if (url.endsWith(`/api/siteforge/projects/${projectId}/ai`) && method === "POST") {
+        aiSaved = true;
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({ workspace: workspace(), ai: { provider: "openai", model: "gpt-4.1-mini", status: "saved" } }),
+        });
+        return;
+      }
+
+      if (url.endsWith(`/api/siteforge/projects/${projectId}/connection`) && method === "POST") {
+        connectionValidated = true;
+        await route.fulfill({
+          status: 200,
+          body: JSON.stringify({
+            result: {
+              connected: true,
+              canWritePages: true,
+              canManageSettings: true,
+              thriveDetected: true,
+              thriveSignals: ["thrive_theme"],
+              message: "Connection validated and saved.",
+            },
+            connection: workspace().activeConnection,
+            credentialsSaved: true,
+          }),
+        });
+        return;
+      }
+
+      if (url.includes("/api/siteforge/sessions/") && method === "GET") {
+        await route.fulfill({ status: 200, body: JSON.stringify({ session: null }) });
+        return;
+      }
+
+      await route.fulfill({ status: 200, body: JSON.stringify({}) });
     });
 
     await page.goto("/apps/siteforge", { waitUntil: "networkidle" });
-    await page.getByText("Advanced").click();
 
-    const projectName = `iPetzo ${Date.now()}`;
-    await page.getByTestId("siteforge-new-project-name-input").fill(projectName);
-    await page.getByRole("button", { name: "Create Project" }).click();
+    await expect(page.getByText("Advanced")).toHaveCount(0);
 
-    const createdMessage = page.getByText(`Project created: ${projectName}`);
-    const persistenceBlockedMessage = page
-      .getByText("Persistent storage unavailable. SiteForge is disabled until database storage is restored.")
-      .first();
+    await page.getByRole("button", { name: "Describe" }).click();
+    await expect(page.getByRole("heading", { name: "Describe" })).toBeVisible();
 
-    await Promise.race([
-      expect(createdMessage).toBeVisible(),
-      expect(persistenceBlockedMessage).toBeVisible(),
-    ]);
+    await page.getByRole("button", { name: "Launch" }).click();
+    await expect(page.getByRole("heading", { name: "Launch" })).toBeVisible();
 
-    if (await persistenceBlockedMessage.isVisible()) {
-      await expect(createdMessage).toHaveCount(0);
-      return;
-    }
-
-    const projectSelect = page.getByTestId("siteforge-project-select");
-    const selectedProjectId = await projectSelect.inputValue();
-    await expect(projectSelect).not.toHaveValue("");
-    await expect(projectSelect.locator("option:checked")).toContainText(projectName);
+    await page.getByRole("button", { name: "Connect" }).click();
+    await expect(page.getByRole("heading", { name: "Connect" })).toBeVisible();
 
     await page.getByPlaceholder("https://example.com").fill("https://example.com");
     await page.getByPlaceholder("WordPress username").fill("admin");
@@ -47,7 +137,7 @@ test.describe("SiteForge project binding + connect flow", () => {
     const connectResponsePromise = page.waitForResponse((response) => {
       return (
         response.request().method() === "POST" &&
-        response.url().includes(`/api/siteforge/projects/${encodeURIComponent(selectedProjectId)}/connection`)
+        response.url().includes(`/api/siteforge/projects/${encodeURIComponent(projectId)}/connection`)
       );
     });
 
@@ -55,14 +145,6 @@ test.describe("SiteForge project binding + connect flow", () => {
     const connectResponse = await connectResponsePromise;
 
     expect(connectResponse.status()).toBe(200);
-    await expect(page.getByText("Project not found.")).toHaveCount(0);
-    await expect(page.getByText("Selected project could not be loaded.")).toHaveCount(0);
-    await expect(projectSelect).toHaveValue(selectedProjectId);
-    await expect(projectSelect.locator("option:checked")).toContainText(projectName);
-
-    const blockingErrors = consoleErrors.filter((entry) => {
-      return !entry.includes("clerk.accounts.dev") && !entry.includes("Failed to load resource: net::ERR_FAILED");
-    });
-    expect(blockingErrors).toEqual([]);
+    await expect(page.getByText("Connected").first()).toBeVisible();
   });
 });

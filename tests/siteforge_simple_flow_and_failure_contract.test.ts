@@ -19,12 +19,14 @@ describe("siteforge 2050 flow and failure language contract", () => {
     const sourcePath = path.join(process.cwd(), "app/apps/siteforge/page.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("Researching")).toBe(true);
-    expect(source.includes("Planning")).toBe(true);
-    expect(source.includes("Building")).toBe(true);
-    expect(source.includes("Verifying")).toBe(true);
-    expect(source.includes("Ready")).toBe(true);
-    expect(source.includes("Needs your input")).toBe(true);
+    expect(source.includes("Researching your market")).toBe(true);
+    expect(source.includes("Planning your pages")).toBe(true);
+    expect(source.includes("Building in Thrive")).toBe(true);
+    expect(source.includes("Verifying your draft")).toBe(true);
+    expect(source.includes("Ready to build")).toBe(true);
+    expect(source.includes("Draft ready")).toBe(true);
+    expect(source.includes("Needs your input")).toBe(false);
+    expect(source.includes("Approve your homepage")).toBe(false);
 
     expect(source.includes("We couldn’t generate your site yet.")).toBe(true);
     expect(source.includes("Your WordPress site connected, but the build failed.")).toBe(true);
