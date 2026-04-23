@@ -16,15 +16,16 @@ describe("directoryiq signal-sources ux contract", () => {
     expect(source.includes("Blog Post Type ID (optional override)")).toBe(true);
   });
 
-  it("marks unsupported non-BD connectors as unavailable and disables save flows", () => {
+  it("uses backend-readiness messaging for non-BD connectors and keeps save gating tied to readiness", () => {
     const filePath = path.join(
       process.cwd(),
       "app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client.tsx"
     );
     const source = fs.readFileSync(filePath, "utf8");
 
-    expect(source.includes("Not yet available in this environment")).toBe(true);
-    expect(source.includes("Coming soon for this environment. Save and Delete are disabled.")).toBe(true);
+    expect(source.includes("Credential storage backend is currently unavailable")).toBe(true);
+    expect(source.includes("Save and Delete are disabled until credential storage is available.")).toBe(true);
+    expect(source.includes("Coming soon for this environment. Save and Delete are disabled.")).toBe(false);
     expect(source.includes("disabled={saving === connectorId || !connectorReady}")).toBe(true);
     expect(source.includes("disabled={saving === connectorId || !state.connected || !connectorReady}")).toBe(true);
   });

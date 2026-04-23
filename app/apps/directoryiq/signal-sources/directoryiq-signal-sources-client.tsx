@@ -45,9 +45,9 @@ const defaultConnectorSupport: Record<DirectoryIqConnector, boolean> = {
 };
 
 function unsupportedConnectorMessage(connectorId: "openai" | "serpapi" | "ga4"): string {
-  if (connectorId === "openai") return "OpenAI API credential persistence is not available in this environment yet.";
-  if (connectorId === "serpapi") return "SerpAPI credential persistence is not available in this environment yet.";
-  return "GA4 credential persistence is not available in this environment yet.";
+  if (connectorId === "openai") return "OpenAI API credential persistence is currently unavailable in this environment.";
+  if (connectorId === "serpapi") return "SerpAPI credential persistence is currently unavailable in this environment.";
+  return "GA4 credential persistence is currently unavailable in this environment.";
 }
 
 type IngestRun = {
@@ -940,13 +940,13 @@ export default function DirectoryIqSignalSourcesClient() {
                 <h3 className="text-sm font-semibold text-[#0F172A]">{connectorMeta[connectorId].name}</h3>
                 <p className="text-xs text-slate-400">
                   {!connectorReady
-                    ? "Not yet available in this environment"
+                    ? "Credential storage backend is currently unavailable"
                     : state.connected
                     ? `Credential saved (${state.masked_secret})${state.updated_at ? ` · Saved ${new Date(state.updated_at).toLocaleString()}` : ""}`
                     : "Credential not configured"}
                 </p>
                 {!connectorReady ? (
-                  <p className="text-xs text-amber-200">Coming soon for this environment. Save and Delete are disabled.</p>
+                  <p className="text-xs text-amber-200">Save and Delete are disabled until credential storage is available.</p>
                 ) : null}
                 {state.label ? <p className="text-xs text-slate-500">Label: {state.label}</p> : null}
               </div>
