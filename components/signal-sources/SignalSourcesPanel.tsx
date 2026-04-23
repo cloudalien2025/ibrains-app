@@ -14,7 +14,7 @@ function statusPill(status: SignalSource["status"]): { label: string; className:
   if (status === "connected") {
     return {
       label: "Connected",
-      className: "border-emerald-300/35 bg-emerald-400/10 text-emerald-100",
+      className: "border-emerald-300/55 bg-emerald-100 text-emerald-700",
       Icon: CheckCircle2,
     };
   }
@@ -22,25 +22,25 @@ function statusPill(status: SignalSource["status"]): { label: string; className:
   if (status === "locked") {
     return {
       label: "Locked",
-      className: "border-amber-300/35 bg-amber-400/15 text-amber-100",
+      className: "border-amber-300/55 bg-amber-100 text-amber-700",
       Icon: Lock,
     };
   }
 
   return {
     label: "Disconnected",
-    className: "border-white/20 bg-white/5 text-slate-200",
+    className: "border-[#D9E4F0] bg-white text-[#334155]",
     Icon: CircleDot,
   };
 }
 
 export default function SignalSourcesPanel({ title, subtitle, connectors }: SignalSourcesPanelProps) {
   return (
-    <section className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-6 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(148,163,184,0.14),0_24px_50px_rgba(2,6,23,0.7),0_0_36px_rgba(34,211,238,0.08)]">
-      <header className="mb-4 border-b border-cyan-300/15 pb-4">
-        <div className="text-xs uppercase tracking-[0.18em] text-cyan-300/80">Signal Sources</div>
-        <h2 className="mt-2 text-xl font-semibold text-white">{title}</h2>
-        <p className="mt-1 text-sm text-slate-300">{subtitle}</p>
+    <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 backdrop-blur-md shadow-[0_16px_42px_rgba(15,23,42,0.08)]">
+      <header className="mb-4 border-b border-[#D9E4F0] pb-4">
+        <div className="text-xs uppercase tracking-[0.18em] text-[#2563EB]">Signal Sources</div>
+        <h2 className="mt-2 text-xl font-semibold text-[#0F172A]">{title}</h2>
+        <p className="mt-1 text-sm text-[#334155]">{subtitle}</p>
       </header>
 
       <div className="space-y-5">
@@ -50,7 +50,7 @@ export default function SignalSourcesPanel({ title, subtitle, connectors }: Sign
 
           return (
             <div key={category}>
-              <div className="mb-2 text-xs uppercase tracking-[0.16em] text-slate-400">{category}</div>
+              <div className="mb-2 text-xs uppercase tracking-[0.16em] text-[#64748B]">{category}</div>
               <div className="space-y-2">
                 {items.map((connector) => {
                   const pill = statusPill(connector.status);
@@ -59,12 +59,12 @@ export default function SignalSourcesPanel({ title, subtitle, connectors }: Sign
                   return (
                     <article
                       key={connector.id}
-                      className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3"
+                      className="flex flex-wrap items-start justify-between gap-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] px-4 py-3"
                     >
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-100">
-                            <Cable className="h-4 w-4 text-cyan-200" />
+                          <div className="inline-flex items-center gap-2 text-sm font-semibold text-[#0F172A]">
+                            <Cable className="h-4 w-4 text-[#2563EB]" />
                             {connector.name}
                           </div>
                           <span
@@ -74,16 +74,16 @@ export default function SignalSourcesPanel({ title, subtitle, connectors }: Sign
                             {pill.label}
                           </span>
                         </div>
-                        <p className="mt-1 text-sm text-slate-300">{connector.description}</p>
+                        <p className="mt-1 text-sm text-[#334155]">{connector.description}</p>
                         {connector.disabledReason ? (
-                          <p className="mt-1 text-xs text-slate-400">{connector.disabledReason}</p>
+                          <p className="mt-1 text-xs text-[#64748B]">{connector.disabledReason}</p>
                         ) : null}
                       </div>
 
                       {connector.actionHref ? (
                         <Link
                           href={connector.actionHref}
-                          className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-100 transition hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/60"
+                          className="inline-flex items-center rounded-xl border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs font-medium text-[#0F172A] transition hover:bg-[#F8FBFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#22D3EE]/60"
                         >
                           {connector.actionLabel}
                         </Link>
@@ -92,7 +92,7 @@ export default function SignalSourcesPanel({ title, subtitle, connectors }: Sign
                           type="button"
                           disabled
                           title={connector.disabledReason ?? connector.actionLabel}
-                          className="inline-flex cursor-not-allowed items-center rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-medium text-slate-400"
+                          className="inline-flex cursor-not-allowed items-center rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/70 px-3 py-1.5 text-xs font-medium text-[#64748B]"
                         >
                           {connector.actionLabel}
                         </button>

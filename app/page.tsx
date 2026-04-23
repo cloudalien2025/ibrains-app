@@ -116,20 +116,20 @@ export default function Home() {
   const badge = (() => {
     if (state.phase === "loading" || state.phase === "idle") {
       return (
-        <span className="inline-flex items-center rounded-full bg-zinc-800 px-3 py-1 text-xs font-medium text-zinc-200 ring-1 ring-inset ring-zinc-700">
+        <span className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-1 text-xs font-medium text-[#334155]">
           Checking worker…
         </span>
       );
     }
     if (state.phase === "ok") {
       return (
-        <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-200 ring-1 ring-inset ring-emerald-500/25">
+        <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-700">
           ✅ Worker online · {state.ms}ms
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center rounded-full bg-rose-500/10 px-3 py-1 text-xs font-medium text-rose-200 ring-1 ring-inset ring-rose-500/25">
+      <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-100 px-3 py-1 text-xs font-medium text-rose-700">
         ❌ Worker error
       </span>
     );
@@ -152,11 +152,11 @@ export default function Home() {
   })();
 
   return (
-    <div className="min-h-screen bg-[#070a12] text-zinc-100">
+    <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-5xl px-6 py-16">
         <div className="mb-10 flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex items-center gap-3">
-            <span className="inline-flex items-center rounded-full bg-indigo-500/10 px-3 py-1 text-xs font-medium text-indigo-200 ring-1 ring-inset ring-indigo-500/25">
+            <span className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-white px-3 py-1 text-xs font-medium text-[#2563EB]">
               Platform Intelligence Engine
             </span>
             {badge}
@@ -166,19 +166,19 @@ export default function Home() {
               <>
                 <Link
                   href="/apps/siteforge"
-                  className="rounded-full border border-cyan-400/35 bg-cyan-400/15 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/25"
+                  className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
                 >
                   Open SiteForge
                 </Link>
                 <Link
                   href="/sign-in"
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
                 >
                   Sign in
                 </Link>
                 <Link
                   href="/sign-up"
-                  className="rounded-full border border-emerald-400/30 bg-emerald-400/15 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-400/25"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
                 >
                   Create account
                 </Link>
@@ -187,13 +187,13 @@ export default function Home() {
               <>
                 <Link
                   href="/apps/siteforge"
-                  className="rounded-full border border-cyan-400/35 bg-cyan-400/15 px-4 py-2 text-sm text-cyan-100 transition hover:bg-cyan-400/25"
+                  className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
                 >
                   Open SiteForge
                 </Link>
                 <Link
                   href="/brains"
-                  className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
                 >
                   Open console
                 </Link>
@@ -203,29 +203,31 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-white/10 bg-white/5 p-10 shadow-2xl shadow-black/40">
-          <h1 className="text-4xl font-semibold tracking-tight">iBrains</h1>
+        <div className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-10 shadow-[0_24px_56px_rgba(15,23,42,0.09)]">
+          <div className="rounded-2xl bg-[linear-gradient(135deg,rgba(37,99,235,0.10)_0%,rgba(34,211,238,0.08)_45%,rgba(255,255,255,0)_100%)] p-6">
+            <h1 className="text-4xl font-semibold tracking-tight text-[#0F172A]">iBrains</h1>
 
-          <p className="mt-4 max-w-2xl text-base leading-relaxed text-zinc-300">
-            iBrains is building the intelligence layer for complex platforms.
-            First specialization: <span className="font-semibold text-zinc-100">Brilliant Directories Brain</span>.
-          </p>
+            <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#334155]">
+              iBrains is building the intelligence layer for complex platforms.
+              First specialization: <span className="font-semibold text-[#0F172A]">Brilliant Directories Brain</span>.
+            </p>
+          </div>
 
           <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-              <div className="text-xs text-zinc-400">API</div>
-              <div className="mt-1 text-sm font-medium">{workerUrl}</div>
-              <div className="mt-2 text-xs text-zinc-400">Health</div>
-              <div className="mt-1 text-sm font-medium">{healthUrl}</div>
+            <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+              <div className="text-xs text-[#64748B]">API</div>
+              <div className="mt-1 text-sm font-medium text-[#0F172A]">{workerUrl}</div>
+              <div className="mt-2 text-xs text-[#64748B]">Health</div>
+              <div className="mt-1 text-sm font-medium text-[#0F172A]">{healthUrl}</div>
             </div>
 
-            <div className="rounded-2xl border border-white/10 bg-black/20 p-5">
-              <div className="text-xs text-zinc-400">Actions</div>
+            <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+              <div className="text-xs text-[#64748B]">Actions</div>
               <div className="mt-3 flex flex-wrap gap-3">
                 <button
                   onClick={() => void checkHealth()}
                   disabled={state.phase === "loading"}
-                  className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 ring-1 ring-inset ring-white/10 hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60"
+                  className="rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   Refresh status
                 </button>
@@ -234,22 +236,22 @@ export default function Home() {
                   href={healthUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-xl bg-white/10 px-4 py-2 text-sm font-medium text-zinc-100 ring-1 ring-inset ring-white/10 hover:bg-white/15"
+                  className="rounded-xl border border-[#D9E4F0] bg-white px-4 py-2 text-sm font-medium text-[#0F172A] transition hover:bg-[#F8FBFF]"
                 >
                   Open /api/health
                 </a>
               </div>
-              <p className="mt-3 text-xs text-zinc-400">
+              <p className="mt-3 text-xs text-[#64748B]">
                 Tip: set <span className="font-mono">NEXT_PUBLIC_WORKER_URL</span> in the app environment if you ever change the API host.
               </p>
               {state.phase === "error" ? (
-                <div className="mt-4 rounded-xl border border-rose-500/20 bg-rose-500/10 p-3 text-xs text-rose-100">
-                  <div className="text-[11px] uppercase tracking-wide text-rose-200/80">
+                <div className="mt-4 rounded-xl border border-rose-200 bg-rose-100 p-3 text-xs text-rose-700">
+                  <div className="text-[11px] uppercase tracking-wide text-rose-500/90">
                     Health Error
                   </div>
-                  <div className="mt-1 text-sm text-rose-50">{state.message}</div>
+                  <div className="mt-1 text-sm text-rose-700">{state.message}</div>
                   {state.requestId ? (
-                    <div className="mt-1 text-[11px] text-rose-200/80">
+                    <div className="mt-1 text-[11px] text-rose-600">
                       Request ID: <span className="font-mono">{state.requestId}</span>
                     </div>
                   ) : null}
@@ -258,16 +260,16 @@ export default function Home() {
             </div>
           </div>
 
-          <details className="mt-8 rounded-2xl border border-white/10 bg-black/20 p-5">
-            <summary className="cursor-pointer select-none text-sm font-medium text-zinc-100">
+          <details className="mt-8 rounded-2xl border border-[#D9E4F0] bg-[#F8FBFF] p-5">
+            <summary className="cursor-pointer select-none text-sm font-medium text-[#0F172A]">
               Raw Health JSON
             </summary>
-            <pre className="mt-4 overflow-x-auto rounded-xl bg-black/40 p-4 text-xs leading-relaxed text-zinc-200 ring-1 ring-inset ring-white/10">
+            <pre className="mt-4 overflow-x-auto rounded-xl bg-white p-4 text-xs leading-relaxed text-[#334155] ring-1 ring-inset ring-[#D9E4F0]">
               {jsonBlock}
             </pre>
           </details>
 
-          <div className="mt-10 text-xs text-zinc-500">© iBrains</div>
+          <div className="mt-10 text-xs text-[#64748B]">© iBrains</div>
         </div>
       </div>
     </div>

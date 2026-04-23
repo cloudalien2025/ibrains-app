@@ -28,7 +28,7 @@ export default function CopyButton({ value, label = "Copy", className }: CopyBut
       onClick={handleCopy}
       className={
         className ||
-        "rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-white transition hover:bg-white/10"
+        "rounded-full border border-[#D9E4F0] bg-white px-3 py-1 text-xs font-medium text-[#0F172A] transition hover:bg-[#F8FBFF]"
       }
     >
       {copied ? "Copied" : label}

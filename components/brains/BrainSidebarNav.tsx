@@ -27,12 +27,12 @@ export default function BrainSidebarNav({ items }: BrainSidebarNavProps) {
             prefetch={disablePrefetch ? false : undefined}
             className={`group flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition ${
               isActive
-                ? "border-cyan-300/45 bg-cyan-400/18 text-cyan-100 shadow-[0_0_22px_rgba(34,211,238,0.22)]"
-                : "border-transparent text-slate-300 hover:border-white/10 hover:bg-white/8 hover:text-white"
+                ? "border-[#22D3EE]/40 bg-[#22D3EE]/12 text-[#0F172A] shadow-[0_0_20px_rgba(34,211,238,0.2)]"
+                : "border-transparent text-[#334155] hover:border-[#D9E4F0] hover:bg-white/80 hover:text-[#0F172A]"
             }`}
           >
             <span>{item.label}</span>
-            <span className={`h-2 w-2 rounded-full ${isActive ? "bg-cyan-300 shadow-[0_0_10px_rgba(34,211,238,0.8)]" : "bg-white/15"}`} />
+            <span className={`h-2 w-2 rounded-full ${isActive ? "bg-[#22D3EE] shadow-[0_0_10px_rgba(34,211,238,0.55)]" : "bg-[#D9E4F0]"}`} />
           </Link>
         );
       })}

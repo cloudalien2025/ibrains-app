@@ -47,13 +47,13 @@ const CHECKS: CheckItem[] = [
 function statusTone(status: CheckStatus) {
   switch (status) {
     case "ok":
-      return "bg-emerald-400/15 text-emerald-200";
+      return "bg-emerald-100 text-emerald-700";
     case "fail":
-      return "bg-rose-500/15 text-rose-200";
+      return "bg-rose-100 text-rose-700";
     case "running":
-      return "bg-amber-400/15 text-amber-200";
+      return "bg-amber-100 text-amber-700";
     default:
-      return "bg-white/10 text-slate-200";
+      return "bg-[#EAF1F8] text-[#334155]";
   }
 }
 
@@ -115,19 +115,19 @@ export default function MissionControlClient() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-white/10 bg-white/5 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-4 rounded-[24px] border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_14px_34px_rgba(15,23,42,0.07)]">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
+          <div className="text-xs uppercase tracking-[0.2em] text-[#64748B]">
             Checklist
           </div>
-          <p className="mt-2 text-sm text-slate-300">
+          <p className="mt-2 text-sm text-[#334155]">
             Run checks to validate live production readiness.
           </p>
         </div>
         <button
           type="button"
           onClick={runAll}
-          className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+          className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
         >
           Run all checks
         </button>
@@ -139,7 +139,7 @@ export default function MissionControlClient() {
           return (
             <div
               key={check.key}
-              className="rounded-[24px] border border-white/10 bg-white/5 p-5"
+              className="rounded-[24px] border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_12px_30px_rgba(15,23,42,0.06)]"
             >
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -155,15 +155,15 @@ export default function MissionControlClient() {
                         ? "Passed"
                         : "Failed"}
                     </span>
-                    <h3 className="text-lg font-semibold text-white">
+                    <h3 className="text-lg font-semibold text-[#0F172A]">
                       {check.title}
                     </h3>
                   </div>
-                  <p className="mt-2 text-sm text-slate-300">
+                  <p className="mt-2 text-sm text-[#334155]">
                     {check.description}
                   </p>
                   {result.message ? (
-                    <p className="mt-2 text-xs text-slate-400">
+                    <p className="mt-2 text-xs text-[#64748B]">
                       {result.message}
                     </p>
                   ) : null}
@@ -172,12 +172,12 @@ export default function MissionControlClient() {
                   <button
                     type="button"
                     onClick={() => runCheck(check.key)}
-                    className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+                    className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
                   >
                     Run check
                   </button>
                   {result.lastRun ? (
-                    <div className="text-xs text-slate-400">
+                    <div className="text-xs text-[#64748B]">
                       Last run {result.lastRun}
                     </div>
                   ) : null}

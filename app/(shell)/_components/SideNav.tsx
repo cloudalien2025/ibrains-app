@@ -22,14 +22,14 @@ export default function SideNav() {
             href={item.href}
             className={`group flex items-center justify-between rounded-2xl px-4 py-3 text-sm font-medium transition ${
               isActive
-                ? "bg-white/12 text-white shadow-[0_10px_30px_rgba(15,23,42,0.45)]"
-                : "text-slate-300 hover:bg-white/5 hover:text-white"
+                ? "bg-[#EAF1F8] text-[#0F172A] shadow-[0_10px_28px_rgba(15,23,42,0.08)]"
+                : "text-[#334155] hover:bg-white/80 hover:text-[#0F172A]"
             }`}
           >
             <span>{item.label}</span>
             <span
               className={`h-2 w-2 rounded-full ${
-                isActive ? "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.6)]" : "bg-white/15"
+                isActive ? "bg-[#22D3EE] shadow-[0_0_12px_rgba(34,211,238,0.45)]" : "bg-[#D9E4F0]"
               }`}
             />
           </Link>

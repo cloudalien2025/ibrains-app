@@ -114,14 +114,14 @@ export default async function BrainsPage() {
 
   return (
     <div className="space-y-6">
-      <section className="rounded-[28px] border border-white/10 bg-white/5 p-8 shadow-[0_30px_70px_rgba(2,6,23,0.5)]">
+      <section className="rounded-[28px] border border-[#D9E4F0] bg-white/95 p-8 shadow-[0_18px_44px_rgba(15,23,42,0.08)]">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <div className="text-xs uppercase tracking-[0.2em] text-slate-300/70">
+            <div className="text-xs uppercase tracking-[0.2em] text-[#64748B]">
               Brain Operations
             </div>
-            <h2 className="mt-2 text-3xl font-semibold text-white">Manage Brains</h2>
-            <p className="mt-2 max-w-2xl text-sm text-slate-300">
+            <h2 className="mt-2 text-3xl font-semibold text-[#0F172A]">Manage Brains</h2>
+            <p className="mt-2 max-w-2xl text-sm text-[#334155]">
               Open each brain console, monitor knowledge readiness, and run discovery,
               ingest, retrieval, and answering workflows from one operational surface.
             </p>
@@ -129,7 +129,7 @@ export default async function BrainsPage() {
           <CreateBrainDialog />
           <Link
             href="/runs"
-            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm text-white transition hover:bg-white/10"
+            className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
           >
             View latest runs
           </Link>
@@ -143,7 +143,7 @@ export default async function BrainsPage() {
           action={
             <Link
               href="/"
-              className="inline-flex items-center rounded-full bg-white/10 px-4 py-2 text-sm font-medium text-white ring-1 ring-inset ring-white/15 transition hover:bg-white/15"
+              className="inline-flex items-center rounded-full bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1D4ED8]"
             >
               Review system health
             </Link>
@@ -156,7 +156,7 @@ export default async function BrainsPage() {
           action={
             <Link
               href="/"
-              className="inline-flex items-center rounded-full bg-emerald-400/10 px-4 py-2 text-sm font-medium text-emerald-200 ring-1 ring-inset ring-emerald-400/30 transition hover:bg-emerald-400/20"
+              className="inline-flex items-center rounded-full bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#1D4ED8]"
             >
               Review system health
             </Link>

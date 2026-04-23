@@ -18,10 +18,10 @@ type BrainsTableProps = {
 export default function BrainsTable({ brains }: BrainsTableProps) {
   return (
     <div className="space-y-6">
-      <section className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-6 backdrop-blur-xl shadow-[inset_0_1px_0_rgba(148,163,184,0.14),0_24px_50px_rgba(2,6,23,0.7),0_0_36px_rgba(34,211,238,0.08)]">
-        <div className="text-xs uppercase tracking-[0.2em] text-cyan-300/80">{brainsDockCopy.eyebrow}</div>
-        <h2 className="mt-2 text-3xl font-semibold text-white">{brainsDockCopy.title}</h2>
-        <p className="mt-2 max-w-3xl text-sm text-slate-300">
+      <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_16px_42px_rgba(15,23,42,0.08)]">
+        <div className="text-xs uppercase tracking-[0.2em] text-[#2563EB]">{brainsDockCopy.eyebrow}</div>
+        <h2 className="mt-2 text-3xl font-semibold text-[#0F172A]">{brainsDockCopy.title}</h2>
+        <p className="mt-2 max-w-3xl text-sm text-[#334155]">
           {brainsDockCopy.subtitle}
         </p>
       </section>
