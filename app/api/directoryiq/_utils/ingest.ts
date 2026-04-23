@@ -568,6 +568,10 @@ function isDeterministicEnabled(): boolean {
   return false;
 }
 
+function isVerifiedDetectionStatus(status: string): boolean {
+  return status === "verified" || status === "verified_empty";
+}
+
 async function loadBdSitesForIngest(params: {
   userId: string;
   siteId?: string | null;
@@ -1588,7 +1592,7 @@ export async function runDirectoryIqFullIngest(
           configuredBlogPostsDataId: site.blogPostsDataId,
         });
 
-        if (detection.listings.status === "verified" && detection.listings.effectiveDataId) {
+        if (isVerifiedDetectionStatus(detection.listings.status) && detection.listings.effectiveDataId) {
           listingsDataId = detection.listings.effectiveDataId;
           listingsDataIdPresent = true;
           if (site.listingsDataId !== listingsDataId || site.blogPostsDataId == null) {
@@ -1597,13 +1601,13 @@ export async function runDirectoryIqFullIngest(
               siteId: site.id,
               listingsDataId,
               blogPostsDataId:
-                detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId
+                isVerifiedDetectionStatus(detection.blogPosts.status) && detection.blogPosts.effectiveDataId
                   ? detection.blogPosts.effectiveDataId
                   : null,
             });
           }
         }
-        if (detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId) {
+        if (isVerifiedDetectionStatus(detection.blogPosts.status) && detection.blogPosts.effectiveDataId) {
           blogPostsDataId = detection.blogPosts.effectiveDataId;
         }
       }

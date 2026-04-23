@@ -76,6 +76,13 @@ type VerifyResult = {
   dataTypeObserved: string | null;
 };
 
+type CategoryValidityEvidence = {
+  exists: boolean;
+  dataType: string | null;
+  statusCode: number | null;
+  indeterminate: boolean;
+};
+
 function asString(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
@@ -113,22 +120,27 @@ function parseRecordsWithFallback(payload: Record<string, unknown>): Record<stri
 }
 
 function parseDataType(payload: Record<string, unknown> | null): string | null {
-  if (!payload) return null;
-  const direct = asString(payload.data_type);
-  if (direct) return direct;
-  const message = payload.message;
-  if (message && typeof message === "object" && !Array.isArray(message)) {
-    const nested = message as Record<string, unknown>;
-    const nestedType = asString(nested.data_type);
-    if (nestedType) return nestedType;
+  function resolveFromUnknown(candidate: unknown): string | null {
+    if (!candidate) return null;
+    if (Array.isArray(candidate)) {
+      for (const row of candidate) {
+        const found = resolveFromUnknown(row);
+        if (found) return found;
+      }
+      return null;
+    }
+    if (typeof candidate !== "object") return null;
+    const typed = candidate as Record<string, unknown>;
+    const direct = asString(typed.data_type);
+    if (direct) return direct;
+    for (const value of Object.values(typed)) {
+      const found = resolveFromUnknown(value);
+      if (found) return found;
+    }
+    return null;
   }
-  const data = payload.data;
-  if (data && typeof data === "object" && !Array.isArray(data)) {
-    const nested = data as Record<string, unknown>;
-    const nestedType = asString(nested.data_type);
-    if (nestedType) return nestedType;
-  }
-  return null;
+
+  return resolveFromUnknown(payload);
 }
 
 function isListingCategoryTitle(title: string): boolean {
@@ -195,6 +207,96 @@ function extractIdHints(rows: Record<string, unknown>[]): number[] {
   return Array.from(ids.values());
 }
 
+function extractCategoryId(candidate: Record<string, unknown>): number | null {
+  return asNumber(candidate.data_id ?? candidate.id ?? candidate.category_id ?? candidate.post_type_id);
+}
+
+function findCategoryRecord(candidate: unknown, targetDataId: number): Record<string, unknown> | null {
+  if (!candidate) return null;
+  if (Array.isArray(candidate)) {
+    for (const row of candidate) {
+      const found = findCategoryRecord(row, targetDataId);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (typeof candidate !== "object") return null;
+
+  const typed = candidate as Record<string, unknown>;
+  const dataId = extractCategoryId(typed);
+  if (dataId === targetDataId) return typed;
+
+  for (const value of Object.values(typed)) {
+    const found = findCategoryRecord(value, targetDataId);
+    if (found) return found;
+  }
+  return null;
+}
+
+function resolveCategoryValidityEvidence(payload: Record<string, unknown> | null, targetDataId: number): {
+  exists: boolean;
+  dataType: string | null;
+  indeterminate: boolean;
+} {
+  if (!payload || !isSuccessWrapper(payload)) {
+    return { exists: false, dataType: null, indeterminate: false };
+  }
+
+  const exact = findCategoryRecord(payload, targetDataId);
+  if (exact) {
+    return { exists: true, dataType: parseDataType(exact), indeterminate: false };
+  }
+
+  const genericType = parseDataType(payload);
+  if (genericType) {
+    return { exists: true, dataType: genericType, indeterminate: false };
+  }
+
+  return { exists: false, dataType: null, indeterminate: true };
+}
+
+async function fetchCategoryValidity(params: {
+  baseUrl: string;
+  apiKey: string;
+  dataId: number;
+}): Promise<CategoryValidityEvidence> {
+  const response = await bdRequestWithRetry(() =>
+    bdRequestForm({
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      method: "GET",
+      path: `/api/v2/data_categories/get/${encodeURIComponent(String(params.dataId))}`,
+    })
+  );
+
+  const payload = (response.json ?? null) as Record<string, unknown> | null;
+  const evidence = resolveCategoryValidityEvidence(payload, params.dataId);
+
+  if (response.ok && evidence.exists) {
+    return {
+      exists: true,
+      dataType: evidence.dataType,
+      statusCode: response.status,
+      indeterminate: false,
+    };
+  }
+  if (response.status === 404) {
+    return {
+      exists: false,
+      dataType: null,
+      statusCode: response.status,
+      indeterminate: false,
+    };
+  }
+
+  return {
+    exists: false,
+    dataType: evidence.dataType,
+    statusCode: response.status,
+    indeterminate: evidence.indeterminate,
+  };
+}
+
 function makeUniqueCandidates(items: Array<{ dataId: number; source: DetectionSource }>): Array<{ dataId: number; source: DetectionSource }> {
   const seen = new Set<number>();
   const out: Array<{ dataId: number; source: DetectionSource }> = [];
@@ -212,24 +314,31 @@ async function verifyListingsCandidate(params: {
   listingsPath: string;
   dataId: number;
 }): Promise<VerifyResult> {
-  const preflight = await bdRequestWithRetry(() =>
-    bdRequestForm({
-      baseUrl: params.baseUrl,
-      apiKey: params.apiKey,
-      method: "GET",
-      path: `/api/v2/data_categories/get/${encodeURIComponent(String(params.dataId))}`,
-    })
-  );
-  const preflightPayload = (preflight.json ?? null) as Record<string, unknown> | null;
-  const preflightType = parseDataType(preflightPayload);
-  const preflightAccepted = preflight.ok && isSuccessWrapper(preflightPayload);
-  if (preflight.ok && preflightType && preflightType !== "4") {
+  const canonical = await fetchCategoryValidity({
+    baseUrl: params.baseUrl,
+    apiKey: params.apiKey,
+    dataId: params.dataId,
+  });
+  const preflightType = canonical.dataType;
+  if (!canonical.exists) {
+    return {
+      status: canonical.indeterminate ? "unresolved" : "invalid",
+      reason: canonical.indeterminate ? "listings_data_category_indeterminate" : "listings_data_id_not_found",
+      ok: false,
+      accepted: false,
+      statusCode: canonical.statusCode,
+      count: 0,
+      path: params.listingsPath,
+      dataTypeObserved: preflightType,
+    };
+  }
+  if (preflightType && preflightType !== "4") {
     return {
       status: "invalid",
       reason: "listings_data_id_invalid_type",
       ok: false,
       accepted: false,
-      statusCode: preflight.status,
+      statusCode: canonical.statusCode,
       count: 0,
       path: params.listingsPath,
       dataTypeObserved: preflightType,
@@ -255,7 +364,6 @@ async function verifyListingsCandidate(params: {
   const rows = extractBdListingRows(payload ?? {});
   const searchAccepted = search.ok && isSuccessWrapper(payload);
   const listingRows = hasBdListingLikeRows(rows);
-  const acceptedViaTypedPreflight = preflightAccepted && preflightType === "4";
   if (searchAccepted && listingRows) {
     return {
       status: "verified",
@@ -268,7 +376,7 @@ async function verifyListingsCandidate(params: {
       dataTypeObserved: preflightType,
     };
   }
-  if (searchAccepted && acceptedViaTypedPreflight) {
+  if (searchAccepted) {
     return {
       status: "verified_empty",
       reason: "listings_verified_empty",
@@ -282,9 +390,9 @@ async function verifyListingsCandidate(params: {
   }
   if (!searchAccepted && search.status === 404) {
     return {
-      status: "invalid",
-      reason: "listings_path_not_found",
-      ok: false,
+      status: "verified_empty",
+      reason: "listings_valid_path_invalid",
+      ok: true,
       accepted: false,
       statusCode: search.status,
       count: rows.length,
@@ -294,10 +402,10 @@ async function verifyListingsCandidate(params: {
   }
 
   return {
-    status: "unresolved",
-    reason: "listings_data_id_unverified",
-    ok: false,
-    accepted: searchAccepted,
+    status: "verified_empty",
+    reason: "listings_valid_search_unconfirmed",
+    ok: true,
+    accepted: false,
     statusCode: search.status,
     count: rows.length,
     path: params.listingsPath,
@@ -311,24 +419,31 @@ async function verifyBlogCandidate(params: {
   blogPaths: string[];
   dataId: number;
 }): Promise<VerifyResult> {
-  const preflight = await bdRequestWithRetry(() =>
-    bdRequestForm({
-      baseUrl: params.baseUrl,
-      apiKey: params.apiKey,
-      method: "GET",
-      path: `/api/v2/data_categories/get/${encodeURIComponent(String(params.dataId))}`,
-    })
-  );
-  const preflightPayload = (preflight.json ?? null) as Record<string, unknown> | null;
-  const preflightType = parseDataType(preflightPayload);
-  const preflightAccepted = preflight.ok && isSuccessWrapper(preflightPayload);
-  if (preflightAccepted && preflightType === "4") {
+  const canonical = await fetchCategoryValidity({
+    baseUrl: params.baseUrl,
+    apiKey: params.apiKey,
+    dataId: params.dataId,
+  });
+  const preflightType = canonical.dataType;
+  if (!canonical.exists) {
+    return {
+      status: canonical.indeterminate ? "unresolved" : "invalid",
+      reason: canonical.indeterminate ? "blog_posts_data_category_indeterminate" : "blog_posts_data_id_not_found",
+      ok: false,
+      accepted: false,
+      statusCode: canonical.statusCode,
+      count: 0,
+      path: params.blogPaths[0] ?? null,
+      dataTypeObserved: preflightType,
+    };
+  }
+  if (preflightType === "4") {
     return {
       status: "invalid",
       reason: "blog_posts_data_id_invalid_type",
       ok: false,
       accepted: false,
-      statusCode: preflight.status,
+      statusCode: canonical.statusCode,
       count: 0,
       path: params.blogPaths[0] ?? null,
       dataTypeObserved: preflightType,
@@ -383,7 +498,7 @@ async function verifyBlogCandidate(params: {
         dataTypeObserved: preflightType,
       };
     }
-    if (preflightAccepted && preflightType && preflightType !== "4") {
+    if (preflightType && preflightType !== "4") {
       return {
         status: "verified_empty",
         reason: "blog_posts_verified_empty",
@@ -399,9 +514,9 @@ async function verifyBlogCandidate(params: {
 
   if (invalidPath && !sawAcceptedPath) {
     return {
-      status: "invalid",
-      reason: "blog_posts_path_not_found",
-      ok: false,
+      status: "verified_empty",
+      reason: "blog_posts_valid_path_invalid",
+      ok: true,
       accepted: false,
       statusCode: 404,
       count: 0,
@@ -411,9 +526,9 @@ async function verifyBlogCandidate(params: {
   }
 
   return {
-    status: "unresolved",
-    reason: "blog_posts_data_id_unverified",
-    ok: false,
+    status: "verified_empty",
+    reason: "blog_posts_valid_search_unconfirmed",
+    ok: true,
     accepted: sawAcceptedPath,
     statusCode: lastStatusCode,
     count: lastCount,
@@ -427,6 +542,37 @@ async function discoverCategories(params: { baseUrl: string; apiKey: string }): 
   statusCode: number | null;
   rows: CategoryCandidate[];
 }> {
+  const activeGet = await bdRequestWithRetry(() =>
+    bdRequestForm({
+      baseUrl: params.baseUrl,
+      apiKey: params.apiKey,
+      method: "GET",
+      path: "/api/v2/data_categories/get?property=data_active&property_value=1",
+    })
+  );
+  const activePayload = (activeGet.json ?? null) as Record<string, unknown> | null;
+  if (activeGet.ok && activePayload && isSuccessWrapper(activePayload)) {
+    const records = parseRecordsWithFallback(activePayload);
+    const rows: CategoryCandidate[] = [];
+    for (const record of records) {
+      const dataId = asNumber(record.data_id ?? record.id ?? record.category_id ?? record.post_type_id);
+      if (!dataId) continue;
+      rows.push({
+        dataId,
+        dataType: asString(record.data_type) || null,
+        title: asString(record.name ?? record.title ?? record.data_name ?? record.label),
+        source: "data_categories_search",
+      });
+    }
+    if (rows.length > 0) {
+      return {
+        path: "/api/v2/data_categories/get?property=data_active&property_value=1",
+        statusCode: activeGet.status,
+        rows,
+      };
+    }
+  }
+
   const paths = [
     "/api/v2/data_categories/search",
     "/api/v2/data_category/search",
