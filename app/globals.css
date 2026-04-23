@@ -95,6 +95,125 @@ body {
   background: #ffffff;
 }
 
+/* DirectoryIQ full-app palette normalization (scoped to /apps/directoryiq only). */
+.directoryiq-app-theme [class*="text-slate-100"] {
+  color: #0f172a !important;
+}
+
+.directoryiq-app-theme [class*="text-slate-200"] {
+  color: #1e293b !important;
+}
+
+.directoryiq-app-theme [class*="text-slate-300"] {
+  color: #334155 !important;
+}
+
+.directoryiq-app-theme [class*="text-slate-400"],
+.directoryiq-app-theme [class*="text-slate-500"] {
+  color: #64748b !important;
+}
+
+.directoryiq-app-theme [class*="text-cyan-100"],
+.directoryiq-app-theme [class*="text-cyan-200"],
+.directoryiq-app-theme [class*="text-indigo-100"] {
+  color: #1d4ed8 !important;
+}
+
+.directoryiq-app-theme [class*="text-emerald-100"],
+.directoryiq-app-theme [class*="text-emerald-200"] {
+  color: #047857 !important;
+}
+
+.directoryiq-app-theme [class*="text-rose-100"],
+.directoryiq-app-theme [class*="text-rose-200"] {
+  color: #be123c !important;
+}
+
+.directoryiq-app-theme [class*="text-amber-100"],
+.directoryiq-app-theme [class*="text-amber-200"],
+.directoryiq-app-theme [class*="text-orange-100"] {
+  color: #a16207 !important;
+}
+
+.directoryiq-app-theme [class*="border-white/"],
+.directoryiq-app-theme [class*="border-slate-300/25"],
+.directoryiq-app-theme [class*="border-white/5"] {
+  border-color: var(--hairline) !important;
+}
+
+.directoryiq-app-theme .bg-slate-950,
+.directoryiq-app-theme .bg-slate-900,
+.directoryiq-app-theme .bg-slate-900\/60,
+.directoryiq-app-theme .bg-slate-900\/70,
+.directoryiq-app-theme .bg-slate-900\/80,
+.directoryiq-app-theme .bg-slate-950\/70,
+.directoryiq-app-theme .bg-slate-950\/65 {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+}
+
+.directoryiq-app-theme .bg-black\/10,
+.directoryiq-app-theme .bg-black\/20,
+.directoryiq-app-theme .bg-black\/25 {
+  background-color: rgba(15, 23, 42, 0.03) !important;
+}
+
+.directoryiq-app-theme .bg-white\/5,
+.directoryiq-app-theme .bg-white\/\[0\.02\],
+.directoryiq-app-theme .bg-white\/\[0\.03\],
+.directoryiq-app-theme .bg-white\/\[0\.04\] {
+  background-color: rgba(248, 251, 255, 0.92) !important;
+}
+
+.directoryiq-app-theme .bg-cyan-400\/8,
+.directoryiq-app-theme .bg-cyan-400\/10,
+.directoryiq-app-theme .bg-cyan-400\/15,
+.directoryiq-app-theme .bg-cyan-400\/20 {
+  background-color: rgba(37, 99, 235, 0.08) !important;
+}
+
+.directoryiq-app-theme .bg-emerald-400\/10,
+.directoryiq-app-theme .bg-emerald-400\/15,
+.directoryiq-app-theme .bg-emerald-400\/20 {
+  background-color: rgba(16, 185, 129, 0.11) !important;
+}
+
+.directoryiq-app-theme .bg-rose-400\/10,
+.directoryiq-app-theme .bg-rose-400\/15 {
+  background-color: rgba(244, 63, 94, 0.1) !important;
+}
+
+.directoryiq-app-theme .bg-amber-400\/10,
+.directoryiq-app-theme .bg-amber-400\/15,
+.directoryiq-app-theme .bg-amber-400\/20,
+.directoryiq-app-theme .bg-orange-400\/20 {
+  background-color: rgba(245, 158, 11, 0.12) !important;
+}
+
+.directoryiq-app-theme .bg-indigo-400\/15 {
+  background-color: rgba(99, 102, 241, 0.12) !important;
+}
+
+.directoryiq-app-theme [class*="ring-cyan-300/40"] {
+  --tw-ring-color: rgba(37, 99, 235, 0.32) !important;
+}
+
+.directoryiq-app-theme .from-slate-950\/90,
+.directoryiq-app-theme .from-black\/45 {
+  --tw-gradient-from: rgba(255, 255, 255, 0.92) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position) !important;
+}
+
+.directoryiq-app-theme .via-slate-950\/35,
+.directoryiq-app-theme .via-black\/10 {
+  --tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(241, 245, 249, 0.85) var(--tw-gradient-via-position), var(--tw-gradient-to) !important;
+}
+
+.directoryiq-app-theme .to-slate-900\/15,
+.directoryiq-app-theme .to-transparent {
+  --tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position) !important;
+}
+
 /* Legacy class kept for existing wrappers; now uses the light global direction. */
 .ecomviper-hud {
   background-color: var(--background);
