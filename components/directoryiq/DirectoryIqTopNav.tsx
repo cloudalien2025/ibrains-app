@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Building2, RefreshCw } from "lucide-react";
 import NeonButton from "@/components/ecomviper/NeonButton";
 
@@ -32,6 +33,7 @@ export default function DirectoryIqTopNav({
   onVerticalOverride,
 }: Props) {
   const [busy, setBusy] = useState(false);
+  const connectionHref = "/apps/directoryiq/signal-sources?connector=brilliant-directories";
 
   async function handleRefresh() {
     if (!onRefresh) return;
@@ -64,6 +66,12 @@ export default function DirectoryIqTopNav({
           <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${connected ? "border-emerald-200 bg-emerald-100 text-emerald-700" : "border-amber-200 bg-amber-100 text-amber-700"}`}>
             {connected ? "Website Connected" : "Website Not Connected"}
           </span>
+          <Link
+            href={connectionHref}
+            className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-2.5 py-1 text-xs font-medium text-[#2563EB] hover:bg-[#DBEAFE]"
+          >
+            {connected ? "Manage Website Connection" : "Connect Website"}
+          </Link>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
