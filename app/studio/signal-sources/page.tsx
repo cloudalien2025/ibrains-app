@@ -20,7 +20,7 @@ export default async function StudioSignalSourcesPage() {
   }
 
   return (
-    <div className="ecomviper-hud min-h-screen text-slate-100">
+    <div className="ecomviper-hud min-h-screen text-[#0F172A]">
       <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
       <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-35" />
 
@@ -32,14 +32,14 @@ export default async function StudioSignalSourcesPage() {
         />
 
         <section className={`${brainTheme.glassCard} mt-6 p-6`}>
-          <h2 className="text-lg font-semibold text-white">Studio Credential Registry</h2>
-          <p id="credentials" className="mt-2 text-sm text-slate-300">
+          <h2 className="text-lg font-semibold text-[#0F172A]">Studio Credential Registry</h2>
+          <p id="credentials" className="mt-2 text-sm text-[#334155]">
             This registry is Studio-scoped and intentionally separated from EcomViper credential settings in this phase.
           </p>
           <div className="mt-4">
             <Link
               href="/studio"
-              className="inline-flex items-center rounded-xl border border-white/15 bg-white/5 px-3 py-2 text-sm text-slate-100 transition hover:bg-white/10"
+              className="inline-flex items-center rounded-xl border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
             >
               Back to Studio
             </Link>

@@ -39,21 +39,21 @@ export default function BrainDockCard({
   return (
     <article
       className={`${brainTheme.glassCard} relative p-5 transition ${
-        entitled ? "hover:border-cyan-200/35" : "opacity-85 hover:opacity-100"
+        entitled ? "hover:border-[#22D3EE]/40" : "opacity-90 hover:opacity-100"
       }`}
     >
       {!entitled ? (
-        <div className="pointer-events-none absolute inset-0 rounded-2xl border border-amber-300/20 bg-gradient-to-br from-amber-300/10 via-transparent to-transparent" />
+        <div className="pointer-events-none absolute inset-0 rounded-2xl border border-amber-300/40 bg-gradient-to-br from-amber-100 via-transparent to-transparent" />
       ) : null}
 
       <header className="flex items-start justify-between gap-4">
         <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-slate-400">Brain</div>
-          <h3 className="mt-2 flex items-center gap-2 text-xl font-semibold text-slate-100">
-            <Icon className="h-5 w-5 text-cyan-200" />
+          <div className="text-xs uppercase tracking-[0.2em] text-[#64748B]">Brain</div>
+          <h3 className="mt-2 flex items-center gap-2 text-xl font-semibold text-[#0F172A]">
+            <Icon className="h-5 w-5 text-[#2563EB]" />
             {brain.name}
           </h3>
-          <p className="mt-2 text-sm text-slate-300">{brain.shortDescription}</p>
+          <p className="mt-2 text-sm text-[#334155]">{brain.shortDescription}</p>
         </div>
 
         {entitled ? (
@@ -68,23 +68,23 @@ export default function BrainDockCard({
 
       <div className="mt-4 flex flex-wrap gap-2">
         {brain.tags.map((tag) => (
-          <span key={tag} className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs text-slate-300">
+          <span key={tag} className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#64748B]">
             {tag}
           </span>
         ))}
       </div>
 
-      <div className="mt-4 text-xs text-slate-400">
-        Last signal sync: <span className="text-slate-200">{lastUpdated || "Not reported"}</span>
+      <div className="mt-4 text-xs text-[#64748B]">
+        Last signal sync: <span className="text-[#0F172A]">{lastUpdated || "Not reported"}</span>
       </div>
 
-      <section className="mt-4 rounded-2xl border border-cyan-300/20 bg-slate-950/50 p-3">
+      <section className="mt-4 rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/70 p-3">
         <div className="flex items-center justify-between">
-          <div className="text-xs uppercase tracking-[0.16em] text-cyan-200/80">Signal reservoir</div>
-          <div className="text-xs font-semibold text-cyan-100">{displayReadiness}</div>
+          <div className="text-xs uppercase tracking-[0.16em] text-[#2563EB]">Signal reservoir</div>
+          <div className="text-xs font-semibold text-[#1D4ED8]">{displayReadiness}</div>
         </div>
         <div className="mt-3 flex items-end gap-3">
-          <div className="relative h-16 w-10 overflow-hidden rounded-[999px] border border-cyan-200/30 bg-slate-900/80 p-1.5 shadow-[inset_0_0_16px_rgba(34,211,238,0.2)]">
+          <div className="relative h-16 w-10 overflow-hidden rounded-[999px] border border-[#22D3EE]/45 bg-white p-1.5 shadow-[inset_0_0_16px_rgba(34,211,238,0.18)]">
             <div
               className="absolute inset-x-1.5 top-1.5 h-1.5 rounded-full blur-[1px]"
               style={{
@@ -123,18 +123,18 @@ export default function BrainDockCard({
             />
           </div>
           <div className="space-y-1 text-xs">
-            <div className="text-slate-300">
-              Readiness: <span className="font-medium text-white">{displayReadiness}</span>
+            <div className="text-[#334155]">
+              Readiness: <span className="font-medium text-[#0F172A]">{displayReadiness}</span>
             </div>
-            <div className="text-slate-300">
-              Items: <span className="font-medium text-white">{totalItemsLabel}</span>
+            <div className="text-[#334155]">
+              Items: <span className="font-medium text-[#0F172A]">{totalItemsLabel}</span>
             </div>
           </div>
         </div>
       </section>
 
       {!entitled ? (
-        <p className="mt-3 text-sm text-amber-100/90">{brain.upsellMessage}</p>
+        <p className="mt-3 text-sm text-amber-700">{brain.upsellMessage}</p>
       ) : null}
 
       <div className="mt-5 flex flex-wrap items-center gap-2">

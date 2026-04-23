@@ -3,16 +3,16 @@ type RunStatusBadgeProps = {
 };
 
 const toneMap: Record<string, { bg: string; text: string }> = {
-  running: { bg: "bg-amber-400/15", text: "text-amber-200" },
-  queued: { bg: "bg-sky-400/15", text: "text-sky-200" },
-  completed: { bg: "bg-emerald-400/15", text: "text-emerald-200" },
-  failed: { bg: "bg-rose-400/15", text: "text-rose-200" },
-  cancelled: { bg: "bg-zinc-400/20", text: "text-zinc-200" },
+  running: { bg: "bg-amber-100", text: "text-amber-700" },
+  queued: { bg: "bg-sky-100", text: "text-sky-700" },
+  completed: { bg: "bg-emerald-100", text: "text-emerald-700" },
+  failed: { bg: "bg-rose-100", text: "text-rose-700" },
+  cancelled: { bg: "bg-slate-100", text: "text-slate-700" },
 };
 
 export default function RunStatusBadge({ status }: RunStatusBadgeProps) {
   const key = (status || "unknown").toLowerCase();
-  const tone = toneMap[key] || { bg: "bg-white/10", text: "text-slate-200" };
+  const tone = toneMap[key] || { bg: "bg-[#EAF1F8]", text: "text-[#334155]" };
 
   return (
     <span
