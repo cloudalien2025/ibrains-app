@@ -43,7 +43,7 @@ function connectorDisplayName(connector: DirectoryIqConnector): string {
 }
 
 function nonBdStorageUnavailableMessage(connector: "openai" | "serpapi" | "ga4"): string {
-  return `${connectorDisplayName(connector)} credential persistence is not available in this environment yet.`;
+  return `${connectorDisplayName(connector)} credential persistence is currently unavailable in this environment.`;
 }
 
 function relationErrorMessageForConnector(connector: DirectoryIqConnector | null): string {

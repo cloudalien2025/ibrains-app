@@ -58,6 +58,38 @@ describe("directoryiq signal-sources non-BD persistence route", () => {
       savedAt: "2026-01-01T00:00:00.000Z",
       meta: {},
     });
+    mocks.listDirectoryIqIntegrations.mockResolvedValue([
+      {
+        provider: "brilliant_directories",
+        status: "disconnected",
+        masked: "",
+        savedAt: null,
+        meta: {},
+      },
+      {
+        provider: "openai",
+        status: "connected",
+        masked: "********1234",
+        savedAt: "2026-01-01T00:00:00.000Z",
+        meta: {},
+      },
+      {
+        provider: "serpapi",
+        status: "connected",
+        masked: "********5678",
+        savedAt: "2026-01-01T00:00:00.000Z",
+        meta: {},
+      },
+      {
+        provider: "ga4",
+        status: "connected",
+        masked: "********9012",
+        savedAt: "2026-01-01T00:00:00.000Z",
+        meta: {},
+      },
+    ]);
+    mocks.listBdSites.mockResolvedValue([]);
+    mocks.hasCanonicalDirectoryIqConnection.mockReturnValue(false);
   });
 
   it.each([
@@ -92,9 +124,9 @@ describe("directoryiq signal-sources non-BD persistence route", () => {
   });
 
   it.each([
-    { connectorId: "openai", expected: "OpenAI API credential persistence is not available in this environment yet." },
-    { connectorId: "serpapi", expected: "SerpAPI credential persistence is not available in this environment yet." },
-    { connectorId: "ga4", expected: "GA4 credential persistence is not available in this environment yet." },
+    { connectorId: "openai", expected: "OpenAI API credential persistence is currently unavailable in this environment." },
+    { connectorId: "serpapi", expected: "SerpAPI credential persistence is currently unavailable in this environment." },
+    { connectorId: "ga4", expected: "GA4 credential persistence is currently unavailable in this environment." },
   ])("returns connector-specific unavailability when storage is unsupported for $connectorId", async ({ connectorId, expected }) => {
     mocks.isDirectoryIqCredentialStoreAvailable.mockResolvedValue(false);
 
@@ -118,12 +150,12 @@ describe("directoryiq signal-sources non-BD persistence route", () => {
   });
 
   it.each([
-    { connectorId: "openai", expected: "OpenAI API credential persistence is not available in this environment yet." },
-    { connectorId: "serpapi", expected: "SerpAPI credential persistence is not available in this environment yet." },
-    { connectorId: "ga4", expected: "GA4 credential persistence is not available in this environment yet." },
+    { connectorId: "openai", expected: "OpenAI API credential persistence is currently unavailable in this environment." },
+    { connectorId: "serpapi", expected: "SerpAPI credential persistence is currently unavailable in this environment." },
+    { connectorId: "ga4", expected: "GA4 credential persistence is currently unavailable in this environment." },
   ])("maps legacy relation errors to connector-specific copy for $connectorId", async ({ connectorId, expected }) => {
     mocks.saveDirectoryIqIntegration.mockRejectedValue(
-      new Error('relation "public.integrations_credentials" does not exist')
+      new Error('relation "public.directoryiq_signal_source_credentials" does not exist')
     );
 
     const { POST } = await import("@/app/api/directoryiq/signal-sources/route");
@@ -142,5 +174,43 @@ describe("directoryiq signal-sources non-BD persistence route", () => {
     expect(res.status).toBe(500);
     expect(body.error).toBe(expected);
     expect(body.error?.toLowerCase()).not.toContain("brilliant directories");
+  });
+
+  it("reports non-BD connector support as enabled when canonical store is available", async () => {
+    const { GET } = await import("@/app/api/directoryiq/signal-sources/route");
+    const req = new NextRequest("http://localhost/api/directoryiq/signal-sources", {
+      method: "GET",
+    });
+
+    const res = await GET(req);
+    const body = (await res.json()) as {
+      connector_support?: Record<string, boolean>;
+    };
+
+    expect(res.status).toBe(200);
+    expect(body.connector_support).toMatchObject({
+      openai: true,
+      serpapi: true,
+      ga4: true,
+      brilliant_directories_api: true,
+    });
+  });
+
+  it.each([
+    { connectorId: "openai", provider: "openai" },
+    { connectorId: "serpapi", provider: "serpapi" },
+    { connectorId: "ga4", provider: "ga4" },
+  ])("deletes $connectorId through canonical integration store", async ({ connectorId, provider }) => {
+    const { DELETE } = await import("@/app/api/directoryiq/signal-sources/route");
+    const req = new NextRequest(`http://localhost/api/directoryiq/signal-sources?connector_id=${connectorId}`, {
+      method: "DELETE",
+    });
+
+    const res = await DELETE(req);
+    const body = (await res.json()) as { ok?: boolean };
+
+    expect(res.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(mocks.deleteDirectoryIqIntegration).toHaveBeenCalledWith("user_1", provider);
   });
 });
