@@ -26,7 +26,7 @@
   gh run list --limit 5
   gh run view <RUN_ID> --log-failed
 
-- If Vercel fails, verify `vercel.json` schema.
+- If deploy fails, check CI/deploy logs and deployment secrets first.
 
 ## Auto-merge behavior
 - Eligible PRs automatically enable auto-merge when checks are green.

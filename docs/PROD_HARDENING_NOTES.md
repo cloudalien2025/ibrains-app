@@ -18,7 +18,6 @@ Date: 2026-02-27
 - Public IP: 104.236.44.185
 - Domain: app.ibrains.ai
 - DNS A record for app.ibrains.ai currently resolves to:
-  - c7000cff8e3f7577.vercel-dns-017.com
   - 216.198.79.65
   - 64.29.17.65
 - DNS is NOT pointing to this droplet yet, so HTTPS/certbot must wait.

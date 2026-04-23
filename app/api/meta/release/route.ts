@@ -38,13 +38,13 @@ export async function GET() {
     const fileService = cleanValue(releaseFile?.service);
     const service = envService || fileService || "ibrains";
 
-    const envEnvironmentExplicit = cleanValue(env.APP_ENV) || cleanValue(env.VERCEL_ENV);
+    const envEnvironmentExplicit = cleanValue(env.APP_ENV);
     const envEnvironmentFallback = cleanValue(env.NODE_ENV);
     const fileEnvironment = cleanValue(releaseFile?.environment);
     const environment = envEnvironmentExplicit || fileEnvironment || envEnvironmentFallback || "local";
 
     const envGitSha =
-      cleanValue(env.RELEASE_GIT_SHA) || cleanValue(env.GIT_SHA) || cleanValue(env.VERCEL_GIT_COMMIT_SHA);
+      cleanValue(env.RELEASE_GIT_SHA) || cleanValue(env.GIT_SHA) || cleanValue(env.GITHUB_SHA);
     const fileGitSha = cleanValue(releaseFile?.git_sha);
     const gitSha = envGitSha || fileGitSha;
 

@@ -6,10 +6,11 @@ export type DirectoryIqRuntimeStamp = {
 function resolveReleaseStamp(): string {
   const candidates = [
     process.env.DIRECTORYIQ_RELEASE_STAMP,
-    process.env.VERCEL_GIT_COMMIT_SHA,
-    process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA,
+    process.env.RELEASE_GIT_SHA,
+    process.env.GIT_SHA,
     process.env.RAILWAY_GIT_COMMIT_SHA,
     process.env.RENDER_GIT_COMMIT,
+    process.env.GITHUB_SHA,
   ];
   for (const candidate of candidates) {
     if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
