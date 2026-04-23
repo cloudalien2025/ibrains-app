@@ -1,7 +1,7 @@
 import { bdRequestForm, bdRequestWithRetry, parseBdRecords } from "@/app/api/directoryiq/_utils/bdApi";
 import { extractBdListingRows, hasBdListingLikeRows } from "@/app/api/directoryiq/_utils/listingResponse";
 
-type DetectionStatus = "verified" | "unresolved";
+type DetectionStatus = "verified" | "verified_empty" | "invalid" | "unresolved";
 
 type DetectionSource =
   | "configured"
@@ -66,7 +66,10 @@ type CategoryCandidate = {
 };
 
 type VerifyResult = {
+  status: DetectionStatus;
+  reason: string | null;
   ok: boolean;
+  accepted: boolean;
   statusCode: number | null;
   count: number;
   path: string | null;
@@ -219,9 +222,13 @@ async function verifyListingsCandidate(params: {
   );
   const preflightPayload = (preflight.json ?? null) as Record<string, unknown> | null;
   const preflightType = parseDataType(preflightPayload);
+  const preflightAccepted = preflight.ok && isSuccessWrapper(preflightPayload);
   if (preflight.ok && preflightType && preflightType !== "4") {
     return {
+      status: "invalid",
+      reason: "listings_data_id_invalid_type",
       ok: false,
+      accepted: false,
       statusCode: preflight.status,
       count: 0,
       path: params.listingsPath,
@@ -246,10 +253,51 @@ async function verifyListingsCandidate(params: {
   );
   const payload = (search.json ?? null) as Record<string, unknown> | null;
   const rows = extractBdListingRows(payload ?? {});
-  const ok = search.ok && isSuccessWrapper(payload) && hasBdListingLikeRows(rows);
+  const searchAccepted = search.ok && isSuccessWrapper(payload);
+  const listingRows = hasBdListingLikeRows(rows);
+  const acceptedViaTypedPreflight = preflightAccepted && preflightType === "4";
+  if (searchAccepted && listingRows) {
+    return {
+      status: "verified",
+      reason: null,
+      ok: true,
+      accepted: true,
+      statusCode: search.status,
+      count: rows.length,
+      path: params.listingsPath,
+      dataTypeObserved: preflightType,
+    };
+  }
+  if (searchAccepted && acceptedViaTypedPreflight) {
+    return {
+      status: "verified_empty",
+      reason: "listings_verified_empty",
+      ok: true,
+      accepted: true,
+      statusCode: search.status,
+      count: rows.length,
+      path: params.listingsPath,
+      dataTypeObserved: preflightType,
+    };
+  }
+  if (!searchAccepted && search.status === 404) {
+    return {
+      status: "invalid",
+      reason: "listings_path_not_found",
+      ok: false,
+      accepted: false,
+      statusCode: search.status,
+      count: rows.length,
+      path: params.listingsPath,
+      dataTypeObserved: preflightType,
+    };
+  }
 
   return {
-    ok,
+    status: "unresolved",
+    reason: "listings_data_id_unverified",
+    ok: false,
+    accepted: searchAccepted,
     statusCode: search.status,
     count: rows.length,
     path: params.listingsPath,
@@ -273,6 +321,25 @@ async function verifyBlogCandidate(params: {
   );
   const preflightPayload = (preflight.json ?? null) as Record<string, unknown> | null;
   const preflightType = parseDataType(preflightPayload);
+  const preflightAccepted = preflight.ok && isSuccessWrapper(preflightPayload);
+  if (preflightAccepted && preflightType === "4") {
+    return {
+      status: "invalid",
+      reason: "blog_posts_data_id_invalid_type",
+      ok: false,
+      accepted: false,
+      statusCode: preflight.status,
+      count: 0,
+      path: params.blogPaths[0] ?? null,
+      dataTypeObserved: preflightType,
+    };
+  }
+
+  let sawAcceptedPath = false;
+  let lastStatusCode: number | null = null;
+  let lastCount = 0;
+  let invalidPath = false;
+  let invalidPathValue: string | null = null;
 
   for (const path of params.blogPaths) {
     const search = await bdRequestWithRetry(() =>
@@ -292,15 +359,36 @@ async function verifyBlogCandidate(params: {
     );
     const payload = (search.json ?? null) as Record<string, unknown> | null;
     const rows = extractBdListingRows(payload ?? {});
+    lastStatusCode = search.status;
+    lastCount = rows.length;
+    const searchAccepted = search.ok && isSuccessWrapper(payload);
+    if (search.status === 404) {
+      invalidPath = true;
+      invalidPathValue = path;
+      continue;
+    }
+    if (!searchAccepted) continue;
+
+    sawAcceptedPath = true;
     const looksLikeBlog = hasBlogLikeRow(rows) && !hasBdListingLikeRows(rows);
-    const ok =
-      search.ok &&
-      isSuccessWrapper(payload) &&
-      looksLikeBlog &&
-      (preflightType == null || preflightType !== "4");
-    if (ok) {
+    if (looksLikeBlog) {
       return {
+        status: "verified",
+        reason: null,
         ok: true,
+        accepted: true,
+        statusCode: search.status,
+        count: rows.length,
+        path,
+        dataTypeObserved: preflightType,
+      };
+    }
+    if (preflightAccepted && preflightType && preflightType !== "4") {
+      return {
+        status: "verified_empty",
+        reason: "blog_posts_verified_empty",
+        ok: true,
+        accepted: true,
         statusCode: search.status,
         count: rows.length,
         path,
@@ -309,10 +397,26 @@ async function verifyBlogCandidate(params: {
     }
   }
 
+  if (invalidPath && !sawAcceptedPath) {
+    return {
+      status: "invalid",
+      reason: "blog_posts_path_not_found",
+      ok: false,
+      accepted: false,
+      statusCode: 404,
+      count: 0,
+      path: invalidPathValue,
+      dataTypeObserved: preflightType,
+    };
+  }
+
   return {
+    status: "unresolved",
+    reason: "blog_posts_data_id_unverified",
     ok: false,
-    statusCode: null,
-    count: 0,
+    accepted: sawAcceptedPath,
+    statusCode: lastStatusCode,
+    count: lastCount,
     path: params.blogPaths[0] ?? null,
     dataTypeObserved: preflightType,
   };
@@ -481,18 +585,35 @@ export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Prom
       path: verified.path,
       dataTypeObserved: verified.dataTypeObserved,
     });
-    if (!verified.ok) continue;
+    if (!verified.ok) {
+      if (candidate.source === "configured" && verified.status === "invalid") {
+        listingsBranch = {
+          ...listingsBranch,
+          status: "invalid",
+          reason: verified.reason,
+          dataTypeObserved: verified.dataTypeObserved,
+          search: {
+            ok: verified.accepted,
+            status: verified.statusCode,
+            count: verified.count,
+            path: verified.path,
+            triedPaths: [listingsPath],
+          },
+        };
+      }
+      continue;
+    }
     const configuredMatches = input.configuredListingsDataId === candidate.dataId;
     listingsBranch = {
       configuredDataId: input.configuredListingsDataId,
       effectiveDataId: candidate.dataId,
       autoDetected: !configuredMatches,
-      status: "verified",
-      reason: null,
+      status: verified.status,
+      reason: verified.reason,
       detectedFrom: candidate.source,
       dataTypeObserved: verified.dataTypeObserved,
       search: {
-        ok: true,
+        ok: verified.accepted,
         status: verified.statusCode,
         count: verified.count,
         path: listingsPath,
@@ -547,18 +668,35 @@ export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Prom
       path: verified.path,
       dataTypeObserved: verified.dataTypeObserved,
     });
-    if (!verified.ok) continue;
+    if (!verified.ok) {
+      if (candidate.source === "configured" && verified.status === "invalid") {
+        blogBranch = {
+          ...blogBranch,
+          status: "invalid",
+          reason: verified.reason,
+          dataTypeObserved: verified.dataTypeObserved,
+          search: {
+            ok: verified.accepted,
+            status: verified.statusCode,
+            count: verified.count,
+            path: verified.path,
+            triedPaths: blogPaths,
+          },
+        };
+      }
+      continue;
+    }
     const configuredMatches = input.configuredBlogPostsDataId === candidate.dataId;
     blogBranch = {
       configuredDataId: input.configuredBlogPostsDataId,
       effectiveDataId: candidate.dataId,
       autoDetected: !configuredMatches,
-      status: "verified",
-      reason: null,
+      status: verified.status,
+      reason: verified.reason,
       detectedFrom: candidate.source,
       dataTypeObserved: verified.dataTypeObserved,
       search: {
-        ok: true,
+        ok: verified.accepted,
         status: verified.statusCode,
         count: verified.count,
         path: verified.path,
