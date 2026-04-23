@@ -4,6 +4,10 @@ import {
   parseBdRecords,
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
+import {
+  fetchBdWithMethodPreserved,
+  resolveBdRequestMethod,
+} from "@/app/api/directoryiq/_utils/bdRequestMethod";
 import { extractBdListingRows, isBdListingLikeRow } from "@/app/api/directoryiq/_utils/listingResponse";
 import { detectBdPostTypeIds } from "@/app/api/directoryiq/_utils/bdPostTypeDetection";
 import {
@@ -119,7 +123,7 @@ async function bdRequestFormXApiKey(input: {
   form?: Record<string, unknown>;
 }): Promise<LocalBdResponse> {
   try {
-    const method = (input.method ?? "POST").toUpperCase();
+    const method = resolveBdRequestMethod(input.path, input.method);
     const headers: Record<string, string> = {
       "Content-Type": "application/x-www-form-urlencoded",
       "X-Api-Key": input.apiKey,
@@ -159,11 +163,11 @@ async function bdRequestFormXApiKey(input: {
           ).toString()}`
         : "";
 
-    const response = await fetch(`${normalizeBdBaseUrl(input.baseUrl)}${input.path}${query}`, {
+    const response = await fetchBdWithMethodPreserved({
+      url: `${normalizeBdBaseUrl(input.baseUrl)}${input.path}${query}`,
       method,
       headers,
-      body: method === "GET" ? undefined : body,
-      cache: "no-store",
+      body,
     });
 
     const text = await response.text();

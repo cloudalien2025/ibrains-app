@@ -1,3 +1,8 @@
+import {
+  fetchBdWithMethodPreserved,
+  resolveBdRequestMethod,
+} from "@/app/api/directoryiq/_utils/bdRequestMethod";
+
 export async function bdGet(): Promise<any> {
   return { ok: true };
 }
@@ -31,7 +36,7 @@ export async function bdRequestForm(input: {
   form?: Record<string, unknown>;
 }): Promise<BdResponse> {
   try {
-    const method = (input.method ?? "POST").toUpperCase();
+    const method = resolveBdRequestMethod(input.path, input.method);
     const headers: Record<string, string> = {
       "X-Api-Key": input.apiKey,
       Accept: "application/json",
@@ -45,11 +50,11 @@ export async function bdRequestForm(input: {
       body.set(key, String(value));
     }
 
-    const response = await fetch(`${normalizeBdBaseUrl(input.baseUrl)}${input.path}`, {
+    const response = await fetchBdWithMethodPreserved({
+      url: `${normalizeBdBaseUrl(input.baseUrl)}${input.path}`,
       method,
       headers,
-      body: method === "GET" ? undefined : body,
-      cache: "no-store",
+      body,
     });
 
     const text = await response.text();
