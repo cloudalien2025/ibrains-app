@@ -2,6 +2,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { BdIngestError, runDirectoryIqFullIngest } from "@/app/api/directoryiq/_utils/ingest";
+import { classifyBdIngestFailure } from "@/app/api/directoryiq/_utils/bdIngestErrorMessaging";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
@@ -39,9 +40,12 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     if (error instanceof BdIngestError) {
+      const classification = classifyBdIngestFailure(error);
       return NextResponse.json(
         {
           error: error.code,
+          error_classification: classification.family,
+          user_message: classification.userMessage,
           baseUrl_present: error.baseUrlPresent,
           apiKey_present: error.apiKeyPresent,
           listingsPath_present: error.listingsPathPresent,

@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { formatSiteResponse, getBdSite, updateBdSite, deleteBdSite, isAdminRequest } from "@/app/api/directoryiq/_utils/bdSites";
+import { isRawRelationLeakMessage } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -43,6 +44,9 @@ export async function GET(
     return NextResponse.json({ site: formatSiteResponse(site), is_admin: isAdminRequest(req) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD site error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -94,6 +98,9 @@ export async function PUT(
     return NextResponse.json({ ok: true, site: formatSiteResponse(updated) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD site update error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -111,6 +118,9 @@ export async function DELETE(
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD site delete error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

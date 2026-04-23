@@ -5,6 +5,7 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { decryptBdSiteKey, getBdSite } from "@/app/api/directoryiq/_utils/bdSites";
 import { normalizeBdBaseUrl } from "@/app/api/directoryiq/_utils/bdApi";
 import { extractBdListingRows, hasBdListingLikeRows } from "@/app/api/directoryiq/_utils/listingResponse";
+import { isRawRelationLeakMessage } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -223,6 +224,9 @@ export async function POST(
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD test error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

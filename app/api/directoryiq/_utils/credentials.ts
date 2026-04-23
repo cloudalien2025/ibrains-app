@@ -1,5 +1,6 @@
 import { decryptSecret, encryptSecret } from "@/app/api/ecomviper/_utils/crypto";
 import { query } from "@/app/api/ecomviper/_utils/db";
+import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 export const DIRECTORYIQ_PRODUCT = "directoryiq" as const;
 export const DIRECTORYIQ_PROVIDERS = ["brilliant_directories", "openai", "serpapi", "ga4"] as const;
@@ -17,11 +18,6 @@ type CredentialRow = {
   saved_at: string;
   updated_at: string;
 };
-
-function isUndefinedRelationError(error: unknown, relationName: string): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message.toLowerCase().includes(`relation "${relationName.toLowerCase()}" does not exist`);
-}
 
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};

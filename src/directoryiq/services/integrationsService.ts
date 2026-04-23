@@ -1,5 +1,6 @@
 import { queryDb } from "@/src/directoryiq/repositories/db";
 import { decryptSecret } from "@/src/directoryiq/repositories/secretCodec";
+import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 type IntegrationStatusRow = {
   provider: string;
@@ -37,14 +38,21 @@ function asString(value: unknown): string {
 
 async function loadDirectoryIqIntegrationRows(userId: string): Promise<IntegrationStatusRow[]> {
   if (!process.env.DATABASE_URL) return [];
-  return queryDb<IntegrationStatusRow>(
-    `
-    SELECT provider, secret_ciphertext, meta_json
-    FROM integrations_credentials
-    WHERE user_id = $1 AND product = 'directoryiq'
-    `,
-    [userId]
-  );
+  try {
+    return await queryDb<IntegrationStatusRow>(
+      `
+      SELECT provider, secret_ciphertext, meta_json
+      FROM integrations_credentials
+      WHERE user_id = $1 AND product = 'directoryiq'
+      `,
+      [userId]
+    );
+  } catch (error) {
+    if (isUndefinedRelationError(error, "integrations_credentials")) {
+      return [];
+    }
+    throw error;
+  }
 }
 
 async function loadBdSites(userId: string): Promise<BdSiteRow[]> {
