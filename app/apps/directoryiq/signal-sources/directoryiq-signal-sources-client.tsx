@@ -453,7 +453,7 @@ export default function DirectoryIqSignalSourcesClient() {
       <article className="rounded-xl border border-cyan-300/25 bg-cyan-400/8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Brilliant Directories Sites</h3>
+            <h3 className="text-sm font-semibold text-[#0F172A]">Brilliant Directories Sites</h3>
             <p className="text-xs text-slate-300">
               Add each BD site with its own Post Type IDs. Multi-site listings can be ingested per site or across all sites.
             </p>
@@ -632,7 +632,7 @@ export default function DirectoryIqSignalSourcesClient() {
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <h3 className="text-sm font-semibold text-white">{connectorMeta[connectorId].name}</h3>
+                <h3 className="text-sm font-semibold text-[#0F172A]">{connectorMeta[connectorId].name}</h3>
                 <p className="text-xs text-slate-400">
                   {state.connected
                     ? `Credential saved (${state.masked_secret})${state.updated_at ? ` · Saved ${new Date(state.updated_at).toLocaleString()}` : ""}`
@@ -677,7 +677,7 @@ export default function DirectoryIqSignalSourcesClient() {
       <article className="rounded-xl border border-cyan-300/25 bg-cyan-400/8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-white">Ingest History</h3>
+            <h3 className="text-sm font-semibold text-[#0F172A]">Ingest History</h3>
             <p className="text-xs text-slate-300">
               Recent ingest runs across DirectoryIQ sites.
             </p>
