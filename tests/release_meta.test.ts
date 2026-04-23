@@ -18,7 +18,6 @@ describe("GET /api/meta/release", () => {
 
   it("returns deterministic values from env when provided", async () => {
     delete process.env.SERVICE_NAME;
-    delete process.env.VERCEL_ENV;
     process.env.APP_NAME = "ibrains";
     process.env.APP_ENV = "staging";
     process.env.RELEASE_GIT_SHA = "abc1234567890defabc1234567890defabc12345";
@@ -50,10 +49,9 @@ describe("GET /api/meta/release", () => {
     delete process.env.APP_NAME;
     delete process.env.SERVICE_NAME;
     delete process.env.APP_ENV;
-    delete process.env.VERCEL_ENV;
     delete process.env.RELEASE_GIT_SHA;
     delete process.env.GIT_SHA;
-    delete process.env.VERCEL_GIT_COMMIT_SHA;
+    delete process.env.GITHUB_SHA;
     delete process.env.RELEASE_BUILD_TIMESTAMP;
     delete process.env.BUILD_TIMESTAMP;
     delete process.env.RELEASE_BUILD_ID;
