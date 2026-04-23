@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 
 export default function DirectoryIqLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-[1200px] px-4 py-4 sm:px-6">
+    <div className="directoryiq-app-theme ibrains-shell min-h-screen text-[#0F172A]">
+      <div className="mx-auto max-w-[1280px] px-4 py-4 sm:px-6">
         <DirectoryIqMobileNav items={directoryIqNavItems} />
         {children}
       </div>

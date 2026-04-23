@@ -51,12 +51,12 @@ function humanizeState(value: string): string {
 function PillarBar({ label, value }: { label: string; value: number }) {
   return (
     <div>
-      <div className="mb-1 flex items-center justify-between text-xs text-slate-300">
+      <div className="mb-1 flex items-center justify-between text-xs text-[#64748B]">
         <span>{label}</span>
         <span>{value}</span>
       </div>
-      <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full rounded-full bg-cyan-300/80" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+      <div className="h-2 overflow-hidden rounded-full bg-[#EAF1F8]">
+        <div className="h-full rounded-full bg-[#22D3EE]" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
       </div>
     </div>
   );
@@ -144,9 +144,9 @@ export default function DirectoryIqDashboardClient() {
 
   return (
     <>
-      <section className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-        <h1 className="text-xl font-semibold text-slate-100">AI Visibility Dashboard</h1>
-        <p className="mt-1 text-sm text-slate-300">
+      <section className="rounded-xl border border-[#D9E4F0] bg-white/95 px-4 py-3 shadow-[0_10px_22px_rgba(15,23,42,0.06)]">
+        <h1 className="text-xl font-semibold text-[#0F172A]">AI Visibility Dashboard</h1>
+        <p className="mt-1 text-sm text-[#334155]">
           Monitor site readiness and move one listing at a time into optimization.
         </p>
       </section>
@@ -165,10 +165,10 @@ export default function DirectoryIqDashboardClient() {
       <HudCard title="AI Selection Readiness" subtitle="Site-level snapshot">
         {uiState.showReadinessMetrics && data ? (
           <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
-            <div className="rounded-xl border border-cyan-300/20 bg-slate-900/60 p-4 text-center">
-              <div className="text-xs uppercase tracking-[0.14em] text-slate-400">Readiness Score</div>
-              <div className="mt-3 text-5xl font-semibold text-cyan-100">{data.readiness}</div>
-              <div className="mt-1 text-xs text-slate-400">0-100</div>
+            <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8] p-4 text-center">
+              <div className="text-xs uppercase tracking-[0.14em] text-[#64748B]">Readiness Score</div>
+              <div className="mt-3 text-5xl font-semibold text-[#0F172A]">{data.readiness}</div>
+              <div className="mt-1 text-xs text-[#64748B]">0-100</div>
             </div>
 
             <div className="space-y-3">
@@ -181,18 +181,18 @@ export default function DirectoryIqDashboardClient() {
           </div>
         ) : null}
 
-        {uiState.showLoading ? <div className="mt-4 text-sm text-cyan-200">{progressLabel}</div> : null}
-        {uiState.showError ? <div className="mt-4 text-sm text-rose-200">{error}</div> : null}
+        {uiState.showLoading ? <div className="mt-4 text-sm text-[#2563EB]">{progressLabel}</div> : null}
+        {uiState.showError ? <div className="mt-4 text-sm text-rose-600">{error}</div> : null}
       </HudCard>
 
       <HudCard title="Listings" subtitle="Improve AI visibility one listing at a time.">
         {uiState.showListingsZeroState ? (
-          <div className="text-sm text-slate-300">No listings found yet. Connect and refresh analysis.</div>
+          <div className="text-sm text-[#334155]">No listings found yet. Connect and refresh analysis.</div>
         ) : null}
         {uiState.showListingsTable && data ? (
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-[0.08em] text-slate-400">
+              <thead className="text-xs uppercase tracking-[0.08em] text-[#64748B]">
                 <tr>
                   <th className="py-2 pr-3" aria-sort={renderAriaSort("listing")}>
                     <button type="button" className="inline-flex items-center gap-1" onClick={() => handleSort("listing")}>
@@ -225,8 +225,8 @@ export default function DirectoryIqDashboardClient() {
               </thead>
               <tbody>
                 {visibleListings.map((listing) => (
-                  <tr key={listing.listing_row_id ?? listing.listing_source_id ?? listing.listing_id} className="border-t border-white/10">
-                    <td className="py-2 pr-3 text-slate-100">{listing.listing_name}</td>
+                  <tr key={listing.listing_row_id ?? listing.listing_source_id ?? listing.listing_id} className="border-t border-[#E2E8F0]">
+                    <td className="py-2 pr-3 text-[#0F172A]">{listing.listing_name}</td>
                     <td className="py-2 pr-3">{resolveDashboardListingCategory(listing) ?? "-"}</td>
                     <td className="py-2 pr-3">{listing.score}</td>
                     <td className="py-2 pr-3">{humanizeState(listing.authority_status)}</td>
@@ -235,7 +235,7 @@ export default function DirectoryIqDashboardClient() {
                     <td className="py-2 pr-3">
                       <Link
                         href={`/apps/directoryiq/listings/${encodeURIComponent(listing.listing_id)}`}
-                        className="rounded-lg border border-cyan-300/30 bg-cyan-400/10 px-3 py-1.5 text-xs text-cyan-100"
+                        className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-3 py-1.5 text-xs text-[#2563EB]"
                       >
                           Improve
                         </Link>
@@ -246,7 +246,7 @@ export default function DirectoryIqDashboardClient() {
             </table>
           </div>
         ) : null}
-        {uiState.showError && !data ? <div className="text-sm text-rose-200">{error}</div> : null}
+        {uiState.showError && !data ? <div className="text-sm text-rose-600">{error}</div> : null}
       </HudCard>
     </>
   );

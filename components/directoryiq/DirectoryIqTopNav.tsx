@@ -54,24 +54,24 @@ export default function DirectoryIqTopNav({
   }
 
   return (
-    <section className="rounded-2xl border border-cyan-300/20 bg-slate-950/55 p-4 backdrop-blur-xl shadow-[0_20px_45px_rgba(2,6,23,0.75)]">
+    <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-400/10 px-3 py-2 text-sm font-semibold text-cyan-100">
+          <div className="inline-flex items-center gap-2 rounded-xl border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-2 text-sm font-semibold text-[#0F172A]">
             <Building2 className="h-4 w-4" />
             DirectoryIQ
           </div>
-          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${connected ? "border-emerald-300/40 bg-emerald-400/10 text-emerald-100" : "border-amber-300/40 bg-amber-400/10 text-amber-100"}`}>
+          <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${connected ? "border-emerald-200 bg-emerald-100 text-emerald-700" : "border-amber-200 bg-amber-100 text-amber-700"}`}>
             {connected ? "Website Connected" : "Website Not Connected"}
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 text-xs text-slate-300">
-          <span>Detected Vertical: <span className="text-slate-100">{verticalDetected}</span></span>
+        <div className="flex flex-wrap items-center gap-2 text-xs text-[#64748B]">
+          <span>Detected Vertical: <span className="text-[#0F172A]">{verticalDetected}</span></span>
           <select
             value={verticalOverride ?? ""}
             onChange={(event) => void handleOverride(event.target.value)}
-            className="rounded-lg border border-white/15 bg-white/[0.04] px-2 py-1 text-xs text-slate-100"
+            className="rounded-lg border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A]"
           >
             {VERTICALS.map((vertical) => (
               <option key={vertical.label} value={vertical.value}>
