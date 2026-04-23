@@ -33,6 +33,10 @@ export function isStep2ResearchReady(state: Step2ResearchState): boolean {
   return state === "ready_grounded";
 }
 
+export function canCreateStep2FromResearch(state: Step2ResearchState): boolean {
+  return state === "ready_grounded" || state === "ready_thin";
+}
+
 /**
  * Returns true when research is currently queued or actively running.
  * Use to guard against launching a duplicate research job.

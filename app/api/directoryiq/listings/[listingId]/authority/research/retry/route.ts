@@ -32,6 +32,7 @@ import {
   isDossierBackedResearchArtifact,
   type DossierBackedStep2Contract,
 } from "@/lib/directoryiq/step2ResearchDossierEngine";
+import { classifyStep2ResearchOutcome } from "@/lib/directoryiq/step2ResearchResilience";
 import {
   classifyStep2ResearchReadiness,
   hasUsableStep2ResearchArtifact,
@@ -187,14 +188,6 @@ function diagnosticsFromDossier(input: {
     serp_enrichment_status: input.dossier.research_metadata?.enrichment_status ?? "unknown",
     serp_error: input.dossier.research_metadata?.serp_error ?? null,
   };
-}
-
-function hasGroundedSerpTop10(dossier: {
-  serp_results?: unknown[];
-  research_metadata?: { enrichment_status?: string };
-}): boolean {
-  const serpResultsCount = Array.isArray(dossier.serp_results) ? dossier.serp_results.length : 0;
-  return dossier.research_metadata?.enrichment_status === "ready" && serpResultsCount >= 10;
 }
 
 /**
@@ -460,31 +453,29 @@ export async function POST(
         usableContractsCount: usableContracts.length,
         dossier: dossierBundle.dossier,
       });
-      if (!hasGroundedSerpTop10(dossierBundle.dossier)) {
+      const outcome = classifyStep2ResearchOutcome({
+        listingUrl: listingUrlForResearch,
+        slotsRequested: normalizedSlots.length,
+        usableContractsCount: usableContracts.length,
+        dossier: dossierBundle.dossier,
+        contracts: dossierBundle.contracts,
+      });
+      const diagnosticsWithQuality = {
+        ...diagnostics,
+        research_quality_reason: outcome.qualityReason,
+      };
+      if (outcome.state === "failed") {
         for (const entry of normalizedSlots) {
           await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
             contract: null,
             state: "failed",
-            errorCode: "SERP_GROUNDED_RESEARCH_REQUIRED",
-            errorMessage: "SerpAPI did not return a usable top-10 result set for this listing.",
-            diagnostics,
+            errorCode: outcome.errorCode,
+            errorMessage: outcome.errorMessage,
+            diagnostics: diagnosticsWithQuality,
             missionPlanSlot: entry.mission_plan_slot,
           });
         }
-        return { ok: false, reqId, state: "failed", contracts: [], diagnostics };
-      }
-      if (!usableContracts.length) {
-        for (const entry of normalizedSlots) {
-          await upsertAuthorityStep2ResearchContract(userId, listingSourceId, entry.slot, {
-            contract: null,
-            state: "failed",
-            errorCode: "DOSSIER_EMPTY",
-            errorMessage: "Research dossier could not produce a usable listing-backed artifact.",
-            diagnostics,
-            missionPlanSlot: entry.mission_plan_slot,
-          });
-        }
-        return { ok: false, reqId, state: "failed", contracts: [], diagnostics };
+        return { ok: false, reqId, state: "failed", contracts: [], diagnostics: diagnosticsWithQuality };
       }
 
       await setStage("persisting");
@@ -495,7 +486,7 @@ export async function POST(
           state: readyState,
           errorCode: null,
           errorMessage: null,
-          diagnostics,
+          diagnostics: diagnosticsWithQuality,
         });
       }
 
@@ -503,7 +494,9 @@ export async function POST(
         (entry) => derivePersistedReadyState(entry.step2_contract as Record<string, unknown>) === "ready_grounded"
       )
         ? "ready_grounded"
-        : "ready_thin";
+        : outcome.state === "ready_grounded"
+          ? "ready_grounded"
+          : "ready_thin";
 
       return {
         ok: true,
@@ -513,7 +506,7 @@ export async function POST(
           slot: entry.slot,
           step2_contract: entry.step2_contract,
         })),
-        diagnostics,
+        diagnostics: diagnosticsWithQuality,
       };
     },
   });

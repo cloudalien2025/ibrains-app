@@ -57,12 +57,17 @@ import {
 import {
   STEP2_RESEARCH_REQUIRED_CODE,
   STEP2_RESEARCH_REQUIRED_MESSAGE,
+  canCreateStep2FromResearch,
   canRetryStep2Research,
   deriveStep2ResearchState,
   hasUsableStep2ResearchArtifact,
-  isStep2ResearchReady,
   type Step2ResearchState,
 } from "@/lib/directoryiq/step2ResearchGateContract";
+import {
+  deriveStep2ResearchFailureMessage,
+  deriveStep2ThinResearchMessage,
+  type Step2ResearchOutcome,
+} from "@/lib/directoryiq/step2ResearchResilience";
 
 type UiState = "idle" | "generating" | "generated" | "previewing" | "ready_to_push" | "pushing" | "done";
 type LifecycleState = "Detected" | "Recommended" | "Generated" | "Approved" | "Published";
@@ -758,6 +763,17 @@ function asRuntime(value: unknown): Step2ParityRuntime {
   return { runtimeOwner, releaseStamp };
 }
 
+function getThinResearchReasonFromDossier(value: Record<string, unknown> | null): Step2ResearchOutcome["qualityReason"] {
+  const dossier = asRecord(value);
+  const metadata = asRecord(dossier.research_metadata);
+  const provider = normalizeText(typeof metadata.enrichment_provider === "string" ? metadata.enrichment_provider : "");
+  const status = normalizeText(typeof metadata.enrichment_status === "string" ? metadata.enrichment_status : "");
+  if (provider === "disabled_phase1" || status === "not_attempted") return "serp_api_missing";
+  if (status === "failed") return "serp_enrichment_failed";
+  if (provider === "serpapi" && status !== "ready") return "serp_grounding_incomplete";
+  return "fallback_evidence_only";
+}
+
 function normalizeResearchState(value: unknown, fallback: Step2ResearchState = "not_started"): Step2ResearchState {
   if (
     value === "not_started" ||
@@ -979,6 +995,9 @@ const STEP2_RESEARCH_EXPLAINER = "Build the intelligence layer that makes this l
 function translateStep2ErrorMessage(raw: string | null | undefined, code?: string | null | undefined): string {
   if (normalizeText(code).toUpperCase() === STEP2_RESEARCH_REQUIRED_CODE) {
     return STEP2_RESEARCH_REQUIRED_MESSAGE;
+  }
+  if (normalizeText(code).toUpperCase() === "FALLBACK_RESEARCH_UNUSABLE" || normalizeText(code).toUpperCase() === "DOSSIER_EMPTY") {
+    return deriveStep2ResearchFailureMessage({ code, fallbackMessage: raw });
   }
   return deriveSafeStep2BlockerMessage({ message: raw, code });
 }
@@ -2217,8 +2236,11 @@ export default function ListingOptimizationClient({
       }),
     [step2HasUsableResearch, step2ResearchRequestedState]
   );
-  const step2ResearchReady = isStep2ResearchReady(step2ResearchState);
-  const step2ResearchActionReady = step2ResearchReady || step2ResearchState === "ready_thin";
+  const step2ResearchActionReady = canCreateStep2FromResearch(step2ResearchState);
+  const step2ThinResearchReason = useMemo(() => {
+    const runtimeWithDossier = Object.values(step2Runtime).find((runtime) => runtime.researchDossier);
+    return getThinResearchReasonFromDossier(runtimeWithDossier?.researchDossier ?? null);
+  }, [step2Runtime]);
   const step2ResearchDiagnostic = useMemo(() => {
     if (step2ResearchState === "ready_grounded") {
       return {
@@ -2230,8 +2252,8 @@ export default function ListingOptimizationClient({
     if (step2ResearchState === "ready_thin") {
       return {
         tone: "amber" as const,
-        label: "Research thin",
-        message: "Research exists, but the dossier is still thin. Generate carefully and expect stricter quality blocking.",
+        label: "Research fallback",
+        message: deriveStep2ThinResearchMessage(step2ThinResearchReason),
       };
     }
     if (step2ResearchState === "researching" || step2ResearchState === "queued") {
@@ -2245,7 +2267,10 @@ export default function ListingOptimizationClient({
       return {
         tone: "rose" as const,
         label: "Research failed",
-        message: STEP2_RESEARCH_REQUIRED_MESSAGE,
+        message: deriveStep2ResearchFailureMessage({
+          code: step2ResearchFailureCode,
+          fallbackMessage: step2ResearchFailureMessage,
+        }),
       };
     }
     return {
@@ -2253,7 +2278,7 @@ export default function ListingOptimizationClient({
       label: "Research not started",
       message: STEP2_RESEARCH_EXPLAINER,
     };
-  }, [step2ResearchState]);
+  }, [step2ResearchFailureCode, step2ResearchFailureMessage, step2ResearchState, step2ThinResearchReason]);
   const step2ParityMismatch = useMemo(() => {
     if (!step2ReadRuntime || !step2WriteRuntime) return false;
     return (
@@ -3184,7 +3209,12 @@ export default function ListingOptimizationClient({
       return;
     }
     if (!step2ResearchActionReady) {
-      setError({ message: STEP2_RESEARCH_REQUIRED_MESSAGE });
+      setError({
+        message: deriveStep2ResearchFailureMessage({
+          code: step2ResearchFailureCode,
+          fallbackMessage: step2ResearchFailureMessage || STEP2_RESEARCH_REQUIRED_MESSAGE,
+        }),
+      });
       return;
     }
     if (step2OpenAiSetupBlocked) {
@@ -3918,7 +3948,10 @@ export default function ListingOptimizationClient({
                     </div>
                     <div className="mt-1 text-sm text-slate-200">
                       {step2ResearchState === "failed"
-                        ? (step2ResearchFailureMessage || STEP2_RESEARCH_REQUIRED_MESSAGE)
+                        ? deriveStep2ResearchFailureMessage({
+                            code: step2ResearchFailureCode,
+                            fallbackMessage: step2ResearchFailureMessage || STEP2_RESEARCH_REQUIRED_MESSAGE,
+                          })
                         : STEP2_RESEARCH_EXPLAINER}
                     </div>
                     {step2ResearchFailureCode ? (
@@ -4150,11 +4183,14 @@ export default function ListingOptimizationClient({
                       ) : null}
                       {!step2ResearchActionReady ? (
                         <div className="mt-2 text-xs text-slate-300" data-testid={`step2-slot-research-locked-${missionSlot.slot_id}`}>
-                          {STEP2_RESEARCH_REQUIRED_MESSAGE}
+                          {deriveStep2ResearchFailureMessage({
+                            code: step2ResearchFailureCode,
+                            fallbackMessage: step2ResearchFailureMessage || STEP2_RESEARCH_REQUIRED_MESSAGE,
+                          })}
                         </div>
                       ) : null}
 
-                      {step2ResearchReady && selectedStep2PreviewSlotId === missionSlot.slot_id ? (
+                      {step2ResearchActionReady && selectedStep2PreviewSlotId === missionSlot.slot_id ? (
                         <div className="mt-3 rounded-lg border border-white/10 bg-black/20 p-3 text-xs text-slate-200" data-testid={`step2-slot-preview-surface-${missionSlot.slot_id}`}>
                           <div className="text-sm font-semibold text-slate-100">{asset.title || normalizeText(item.title)}</div>
                           <div className="mt-2 text-slate-300">Listing: {displayName}</div>
