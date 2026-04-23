@@ -165,10 +165,10 @@ export default function Home() {
             {!isSignedIn ? (
               <>
                 <Link
-                  href="/apps/siteforge"
+                  href="/apps"
                   className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
                 >
-                  Open SiteForge
+                  Open Apps
                 </Link>
                 <Link
                   href="/sign-in"
@@ -186,10 +186,10 @@ export default function Home() {
             ) : (
               <>
                 <Link
-                  href="/apps/siteforge"
+                  href="/apps"
                   className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
                 >
-                  Open SiteForge
+                  Open Apps
                 </Link>
                 <Link
                   href="/brains"
@@ -213,11 +213,31 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="mt-8 grid gap-4 sm:grid-cols-2">
-            <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
-              <div className="text-xs text-[#64748B]">API</div>
-              <div className="mt-1 text-sm font-medium text-[#0F172A]">{workerUrl}</div>
-              <div className="mt-2 text-xs text-[#64748B]">Health</div>
+        <div className="mt-8 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+            <div className="text-xs text-[#64748B]">Apps</div>
+            <div className="mt-1 text-sm font-medium text-[#0F172A]">DirectoryIQ + SiteForge</div>
+            <div className="mt-2 text-xs text-[#64748B]">Integrated under the iBrains app launcher.</div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Link
+                href="/apps/directoryiq"
+                className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
+              >
+                Open DirectoryIQ
+              </Link>
+              <Link
+                href="/apps/siteforge"
+                className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
+              >
+                Open SiteForge
+              </Link>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+            <div className="text-xs text-[#64748B]">API</div>
+            <div className="mt-1 text-sm font-medium text-[#0F172A]">{workerUrl}</div>
+            <div className="mt-2 text-xs text-[#64748B]">Health</div>
               <div className="mt-1 text-sm font-medium text-[#0F172A]">{healthUrl}</div>
             </div>
 

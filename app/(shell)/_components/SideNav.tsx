@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const navItems = [
+  { href: "/apps", label: "Apps" },
   { href: "/brains", label: "Brains" },
   { href: "/runs", label: "Runs" },
   { href: "/mission-control", label: "Mission Control" },
