@@ -3,12 +3,15 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 
 describe("clerk layout env contract", () => {
-  it("uses NEXT_PUBLIC or server publishable key for ClerkProvider", () => {
+  it("uses shared clerk runtime contract and fails truthfully when production env is broken", () => {
     const sourcePath = path.join(process.cwd(), "app/layout.tsx");
     const source = fs.readFileSync(sourcePath, "utf8");
 
-    expect(source.includes("process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY")).toBe(true);
-    expect(source.includes("pk_test_ibrains_missing_publishable_key")).toBe(true);
-    expect(source.includes("<ClerkProvider publishableKey={effectivePublishableKey}>")).toBe(true);
+    expect(source.includes("resolveClerkRuntimeContract")).toBe(true);
+    expect(source.includes("resolveClerkRouteContract")).toBe(true);
+    expect(source.includes("if (runtimeContract.hasProductionConfigError && !isProductionBuildPhase)")).toBe(true);
+    expect(source.includes("throw new Error(buildClerkProductionConfigError(runtimeContract));")).toBe(true);
+    expect(source.includes("DEV_PUBLISHABLE_KEY_FALLBACK")).toBe(true);
+    expect(source.includes("signInFallbackRedirectUrl={routeContract.signInFallbackRedirectUrl}")).toBe(true);
   });
 });

@@ -1,8 +1,11 @@
 import { SignUp } from "@clerk/nextjs";
+import { resolveClerkRouteContract, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
 
 export default function SignUpPage() {
-  const publishableKey = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY;
-  if (!publishableKey) {
+  const runtimeContract = resolveClerkRuntimeContract();
+  const routeContract = resolveClerkRouteContract();
+
+  if (!runtimeContract.publishableKey) {
     return (
       <div className="ibrains-shell flex min-h-screen items-center justify-center p-6 text-[#334155]">
         <div className="w-full max-w-lg rounded-xl border border-amber-300/50 bg-amber-100 p-5 text-sm text-amber-700">
@@ -14,7 +17,12 @@ export default function SignUpPage() {
 
   return (
     <div className="ibrains-shell flex min-h-screen items-center justify-center p-6">
-      <SignUp routing="path" path="/sign-up" signInUrl="/sign-in" />
+      <SignUp
+        fallbackRedirectUrl={routeContract.signUpFallbackRedirectUrl}
+        path={routeContract.signUpUrl}
+        routing="path"
+        signInUrl={routeContract.signInUrl}
+      />
     </div>
   );
 }
