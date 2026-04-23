@@ -321,6 +321,40 @@ export async function updateBdSite(params: {
   }
 }
 
+export async function updateBdSiteDetectedDataIds(params: {
+  userId: string;
+  siteId: string;
+  listingsDataId?: number | null;
+  blogPostsDataId?: number | null;
+}): Promise<void> {
+  const updates: string[] = [];
+  const values: Array<string | number | null> = [params.userId, params.siteId];
+  let idx = values.length + 1;
+
+  if (typeof params.listingsDataId === "number") {
+    updates.push(`listings_data_id = $${idx}`);
+    values.push(params.listingsDataId);
+    idx += 1;
+  }
+  if (typeof params.blogPostsDataId === "number") {
+    updates.push(`blog_posts_data_id = $${idx}`);
+    values.push(params.blogPostsDataId);
+    idx += 1;
+  }
+  if (updates.length === 0) return;
+
+  updates.push("updated_at = now()");
+
+  await query(
+    `
+    UPDATE directoryiq_bd_sites
+    SET ${updates.join(", ")}
+    WHERE user_id = $1 AND id = $2
+    `,
+    values
+  );
+}
+
 export async function deleteBdSite(userId: string, siteId: string): Promise<void> {
   await query(`DELETE FROM directoryiq_bd_sites WHERE user_id = $1 AND id = $2`, [userId, siteId]);
 }

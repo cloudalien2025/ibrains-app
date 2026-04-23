@@ -5,12 +5,14 @@ import {
   parseBdTotals,
 } from "@/app/api/directoryiq/_utils/bdApi";
 import { extractBdListingRows, isBdListingLikeRow } from "@/app/api/directoryiq/_utils/listingResponse";
+import { detectBdPostTypeIds } from "@/app/api/directoryiq/_utils/bdPostTypeDetection";
 import {
   BdSiteRow,
   decryptBdSiteKey,
   ensureLegacyBdSite,
   getBdSite,
   listBdSiteRows,
+  updateBdSiteDetectedDataIds,
 } from "@/app/api/directoryiq/_utils/bdSites";
 
 type DirectoryIqNode = {
@@ -1292,9 +1294,8 @@ export async function runDirectoryIqFullIngest(
       const listingsPath = normalizeBdPath(listingsPathRaw || "/api/v2/users_portfolio_groups/search");
       const listingsPathPresentLocal = Boolean(listingsPathRaw);
 
-      const listingsDataId = site.listingsDataId ?? asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID);
-
-      const listingsDataIdPresent = typeof listingsDataId === "number";
+      let listingsDataId = site.listingsDataId ?? asNumber(process.env.DIRECTORYIQ_LISTINGS_DATA_ID);
+      let listingsDataIdPresent = typeof listingsDataId === "number";
       const listingsLimit =
         asNumber(process.env.DIRECTORYIQ_LISTINGS_LIMIT) ??
         5;
@@ -1324,13 +1325,13 @@ export async function runDirectoryIqFullIngest(
         `[directoryiq-ingest] site_start base=${baseHost} path=${listingsPath} label=${site.label ?? ""} site_id=${site.id}`
       );
 
-      if (!listingsDataIdPresent) {
+      if (typeof listingsDataId !== "number") {
         throw new BdIngestError({
           code: "bd_integration_missing",
           baseUrlPresent,
           apiKeyPresent,
           listingsPathPresent: listingsPathPresentLocal,
-          listingsDataIdPresent,
+          listingsDataIdPresent: false,
           listingsDataIdValue: null,
           endpoint: listingsPath,
         });
@@ -1572,11 +1573,40 @@ export async function runDirectoryIqFullIngest(
 
       let siteBlogPosts = 0;
       const blogPostsPath = dataPostsPath;
-
-      const blogPostsDataId =
+      let blogPostsDataId =
         site.blogPostsDataId ??
         asNumber(process.env.DIRECTORYIQ_BLOG_POSTS_DATA_ID) ??
         14;
+
+      if (!listingsDataIdPresent) {
+        const detection = await detectBdPostTypeIds({
+          baseUrl,
+          apiKey,
+          listingsPath,
+          blogPostsPath,
+          configuredListingsDataId: listingsDataId,
+          configuredBlogPostsDataId: site.blogPostsDataId,
+        });
+
+        if (detection.listings.status === "verified" && detection.listings.effectiveDataId) {
+          listingsDataId = detection.listings.effectiveDataId;
+          listingsDataIdPresent = true;
+          if (site.listingsDataId !== listingsDataId || site.blogPostsDataId == null) {
+            await updateBdSiteDetectedDataIds({
+              userId,
+              siteId: site.id,
+              listingsDataId,
+              blogPostsDataId:
+                detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId
+                  ? detection.blogPosts.effectiveDataId
+                  : null,
+            });
+          }
+        }
+        if (detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId) {
+          blogPostsDataId = detection.blogPosts.effectiveDataId;
+        }
+      }
 
       try {
         const dataPostsSearchPath = await discoverDataPostsSearchPath({

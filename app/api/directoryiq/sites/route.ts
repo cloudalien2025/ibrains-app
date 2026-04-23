@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { createBdSite, isAdminRequest, listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
+import { detectBdPostTypeIds } from "@/app/api/directoryiq/_utils/bdPostTypeDetection";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 import { isRawRelationLeakMessage } from "@/app/api/directoryiq/_utils/sqlErrors";
@@ -79,8 +80,42 @@ export async function POST(req: NextRequest) {
     if (!apiKey) {
       return NextResponse.json({ error: "api_key is required" }, { status: 400 });
     }
-    if (listingsDataId == null) {
-      return NextResponse.json({ error: "listings_data_id is required" }, { status: 400 });
+    let resolvedListingsDataId = listingsDataId;
+    let resolvedBlogPostsDataId = blogPostsDataId;
+    let autodetect: Record<string, unknown> | null = null;
+
+    const shouldDetect = resolvedListingsDataId == null || resolvedBlogPostsDataId == null;
+    if (shouldDetect) {
+      const detection = await detectBdPostTypeIds({
+        baseUrl,
+        apiKey,
+        listingsPath,
+        blogPostsPath,
+        configuredListingsDataId: resolvedListingsDataId,
+        configuredBlogPostsDataId: resolvedBlogPostsDataId,
+      });
+      if (resolvedListingsDataId == null && detection.listings.status === "verified" && detection.listings.effectiveDataId) {
+        resolvedListingsDataId = detection.listings.effectiveDataId;
+      }
+      if (resolvedBlogPostsDataId == null && detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId) {
+        resolvedBlogPostsDataId = detection.blogPosts.effectiveDataId;
+      }
+      autodetect = {
+        listings: {
+          status: detection.listings.status,
+          effective_data_id: detection.listings.effectiveDataId,
+          auto_detected: detection.listings.autoDetected,
+          detected_from: detection.listings.detectedFrom,
+          reason: detection.listings.reason,
+        },
+        blog_posts: {
+          status: detection.blogPosts.status,
+          effective_data_id: detection.blogPosts.effectiveDataId,
+          auto_detected: detection.blogPosts.autoDetected,
+          detected_from: detection.blogPosts.detectedFrom,
+          reason: detection.blogPosts.reason,
+        },
+      };
     }
 
     const isAdmin = isAdminRequest(req);
@@ -91,15 +126,15 @@ export async function POST(req: NextRequest) {
       label,
       baseUrl,
       apiKey,
-      listingsDataId,
-      blogPostsDataId,
+      listingsDataId: resolvedListingsDataId,
+      blogPostsDataId: resolvedBlogPostsDataId,
       listingsPath,
       blogPostsPath,
       enabled,
       limit,
     });
 
-    return NextResponse.json({ ok: true, site });
+    return NextResponse.json({ ok: true, site, autodetect });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD site create error";
     if (message === "bd_site_limit_reached") {

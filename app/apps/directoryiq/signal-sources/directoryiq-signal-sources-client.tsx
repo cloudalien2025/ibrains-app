@@ -63,6 +63,7 @@ type BdSite = {
 type BdSiteVerificationState = {
   testedAt: string;
   verification: BdSiteVerificationSnapshot;
+  detectedSummary: string | null;
 };
 
 type IngestErrorResponse = {
@@ -74,15 +75,30 @@ type IngestErrorResponse = {
 
 type BdTestResponse = {
   error?: string;
+  autodetect?: {
+    persisted?: {
+      listings_data_id?: number;
+      blog_posts_data_id?: number;
+    } | null;
+    diagnostics?: {
+      notes?: string[];
+    } | null;
+  } | null;
   verification?: {
     listings?: {
       status?: string;
       reason?: string | null;
+      effective_data_id?: number | null;
+      auto_detected?: boolean;
+      detected_from?: string | null;
       search?: { status?: number | null; path?: string | null } | null;
     } | null;
     blog_posts?: {
       status?: string;
       reason?: string | null;
+      effective_data_id?: number | null;
+      auto_detected?: boolean;
+      detected_from?: string | null;
     } | null;
   } | null;
 };
@@ -116,21 +132,23 @@ function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
   const listings = payload.verification?.listings;
   const listingsReason = listings?.reason ?? null;
   if (listingsReason === "listings_data_id_missing") {
-    return "Listings Post Type ID is missing. Add it in Brilliant Directories Sites.";
+    return "Listings Post Type ID was not detected. Enter it manually or confirm API permissions.";
   }
   if (listingsReason === "listings_data_id_unverified") {
     if (listings?.search?.status === 404) {
       return `Listings path is invalid or unreachable (${listings.search.path ?? "unknown path"}).`;
     }
-    return "Listings Post Type ID could not be verified for this site. Confirm the Post Type ID and API key.";
+    return "Listings Post Type ID could not be verified. Try Auto-detect IDs, or enter it manually.";
   }
   const blogReason = payload.verification?.blog_posts?.reason ?? null;
   if (blogReason === "blog_posts_data_id_missing") {
-    return "Blog Posts Post Type ID is missing. Add it in Brilliant Directories Sites.";
+    return "Blog Post Type ID was not confidently detected. You can enter it manually.";
   }
   if (blogReason === "blog_posts_data_id_unverified") {
-    return "Blog Posts Post Type ID could not be verified. Confirm BD endpoint/data ID configuration.";
+    return "Blog Post Type ID could not be verified. Confirm endpoint/data ID or enter it manually.";
   }
+  const note = payload.autodetect?.diagnostics?.notes?.[0];
+  if (note) return `Site test is unresolved. ${note}.`;
   return "Site test is unresolved. Verify base URL, API key, listings path, and Post Type IDs.";
 }
 
@@ -428,11 +446,24 @@ export default function DirectoryIqSignalSourcesClient() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        error?: string;
+        autodetect?: {
+          listings?: { status?: string; effective_data_id?: number | null; auto_detected?: boolean } | null;
+          blog_posts?: { status?: string; effective_data_id?: number | null; auto_detected?: boolean } | null;
+        } | null;
+      };
       if (!response.ok) throw new Error(json.error ?? "Failed to save BD site");
       await loadSites();
       resetBdForm();
-      setBdSiteNotice("BD site saved.");
+      const detectedLabels: string[] = [];
+      if (json.autodetect?.listings?.auto_detected && typeof json.autodetect.listings.effective_data_id === "number") {
+        detectedLabels.push(`Listings ${json.autodetect.listings.effective_data_id}`);
+      }
+      if (json.autodetect?.blog_posts?.auto_detected && typeof json.autodetect.blog_posts.effective_data_id === "number") {
+        detectedLabels.push(`Blog ${json.autodetect.blog_posts.effective_data_id}`);
+      }
+      setBdSiteNotice(detectedLabels.length > 0 ? `BD site saved. Auto-detected: ${detectedLabels.join(" · ")}.` : "BD site saved.");
     } catch (e) {
       setBdSiteError(e instanceof Error ? e.message : "Unknown BD site save error");
     } finally {
@@ -458,7 +489,7 @@ export default function DirectoryIqSignalSourcesClient() {
     }
   }
 
-  async function testSite(siteId: string) {
+  async function testSite(siteId: string, intent: "test" | "detect" = "test") {
     setBdTesting(siteId);
     setBdSiteError(null);
     setBdSiteNotice(null);
@@ -468,9 +499,29 @@ export default function DirectoryIqSignalSourcesClient() {
       if (!response.ok) throw new Error(json.error ?? "Test failed");
       const verification = normalizeBdSiteTestVerification(json);
       const testedAt = new Date().toISOString();
-      setBdSiteVerificationById((prev) => ({ ...prev, [siteId]: { testedAt, verification } }));
+      const detectedParts: string[] = [];
+      if (json.verification?.listings?.auto_detected && typeof json.verification?.listings?.effective_data_id === "number") {
+        detectedParts.push(`Listings ${json.verification.listings.effective_data_id}`);
+      }
+      if (json.verification?.blog_posts?.auto_detected && typeof json.verification?.blog_posts?.effective_data_id === "number") {
+        detectedParts.push(`Blog ${json.verification.blog_posts.effective_data_id}`);
+      }
+      const detectedSummary = detectedParts.length > 0 ? `Auto-detected: ${detectedParts.join(" · ")}` : null;
+      setBdSiteVerificationById((prev) => ({ ...prev, [siteId]: { testedAt, verification, detectedSummary } }));
+      const persisted = json.autodetect?.persisted ?? null;
+      const persistedListings = typeof persisted?.listings_data_id === "number" ? persisted.listings_data_id : null;
+      const persistedBlog = typeof persisted?.blog_posts_data_id === "number" ? persisted.blog_posts_data_id : null;
+      if (persistedListings != null || persistedBlog != null) {
+        await loadSites();
+      }
       if (verification.overall === "verified") {
-        setBdSiteNotice(`Tested ${siteId}: verified`);
+        if (persistedListings != null || persistedBlog != null || intent === "detect") {
+          setBdSiteNotice(
+            `Detected IDs${persistedListings != null ? ` · Listings ${persistedListings}` : ""}${persistedBlog != null ? ` · Blog ${persistedBlog}` : ""}.`
+          );
+        } else {
+          setBdSiteNotice(`Tested ${siteId}: verified`);
+        }
       } else {
         setBdSiteError(buildBdTestUnresolvedMessage(json));
       }
@@ -643,6 +694,7 @@ export default function DirectoryIqSignalSourcesClient() {
               bdSites.map((site) => {
                 const testState = bdSiteVerificationById[site.id];
                 const verification = testState?.verification ?? null;
+                const detectedSummary = testState?.detectedSummary ?? null;
                 const testedAtText = testState ? new Date(testState.testedAt).toLocaleTimeString() : null;
                 const statusClass = verification?.overall === "verified" ? "text-emerald-200" : "text-amber-200";
                 const listingsCountText =
@@ -671,12 +723,16 @@ export default function DirectoryIqSignalSourcesClient() {
                             {testedAtText ? ` · Tested ${testedAtText}` : ""}
                           </div>
                         ) : null}
+                        {detectedSummary ? <div className="mt-1 text-xs text-cyan-200">{detectedSummary}</div> : null}
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <NeonButton variant="secondary" onClick={() => startEditSite(site)}>
                           Edit
                         </NeonButton>
-                        <NeonButton variant="secondary" onClick={() => void testSite(site.id)} disabled={bdTesting === site.id}>
+                        <NeonButton variant="secondary" onClick={() => void testSite(site.id, "detect")} disabled={bdTesting === site.id}>
+                          {bdTesting === site.id ? "Detecting..." : "Auto-detect IDs"}
+                        </NeonButton>
+                        <NeonButton variant="secondary" onClick={() => void testSite(site.id, "test")} disabled={bdTesting === site.id}>
                           {bdTesting === site.id ? "Testing..." : "Test"}
                         </NeonButton>
                         <NeonButton variant="secondary" onClick={() => void deleteSite(site.id)} disabled={bdSaving}>
