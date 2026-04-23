@@ -18,6 +18,11 @@ type CredentialRow = {
   updated_at: string;
 };
 
+function isUndefinedRelationError(error: unknown, relationName: string): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.toLowerCase().includes(`relation "${relationName.toLowerCase()}" does not exist`);
+}
+
 function asObject(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
 }
@@ -62,15 +67,22 @@ export type DirectoryIqIntegrationStatus = {
 };
 
 export async function listDirectoryIqIntegrations(userId: string): Promise<DirectoryIqIntegrationStatus[]> {
-  const rows = await query<CredentialRow>(
-    `
-    SELECT provider, status, secret_last4, meta_json, saved_at, updated_at, secret_ciphertext, secret_iv, secret_tag
-    FROM integrations_credentials
-    WHERE user_id = $1 AND product = $2
-    ORDER BY provider ASC
-    `,
-    [userId, DIRECTORYIQ_PRODUCT]
-  );
+  let rows: CredentialRow[] = [];
+  try {
+    rows = await query<CredentialRow>(
+      `
+      SELECT provider, status, secret_last4, meta_json, saved_at, updated_at, secret_ciphertext, secret_iv, secret_tag
+      FROM integrations_credentials
+      WHERE user_id = $1 AND product = $2
+      ORDER BY provider ASC
+      `,
+      [userId, DIRECTORYIQ_PRODUCT]
+    );
+  } catch (error) {
+    if (!isUndefinedRelationError(error, "integrations_credentials")) {
+      throw error;
+    }
+  }
 
   const byProvider = new Map(rows.map((row) => [row.provider, row]));
   return DIRECTORYIQ_PROVIDERS.map((provider) => {
@@ -86,15 +98,22 @@ export async function listDirectoryIqIntegrations(userId: string): Promise<Direc
 }
 
 export async function getDirectoryIqIntegration(userId: string, provider: DirectoryIqProvider): Promise<DirectoryIqIntegrationStatus> {
-  const rows = await query<CredentialRow>(
-    `
-    SELECT provider, status, secret_last4, meta_json, saved_at, updated_at, secret_ciphertext, secret_iv, secret_tag
-    FROM integrations_credentials
-    WHERE user_id = $1 AND product = $2 AND provider = $3
-    LIMIT 1
-    `,
-    [userId, DIRECTORYIQ_PRODUCT, provider]
-  );
+  let rows: CredentialRow[] = [];
+  try {
+    rows = await query<CredentialRow>(
+      `
+      SELECT provider, status, secret_last4, meta_json, saved_at, updated_at, secret_ciphertext, secret_iv, secret_tag
+      FROM integrations_credentials
+      WHERE user_id = $1 AND product = $2 AND provider = $3
+      LIMIT 1
+      `,
+      [userId, DIRECTORYIQ_PRODUCT, provider]
+    );
+  } catch (error) {
+    if (!isUndefinedRelationError(error, "integrations_credentials")) {
+      throw error;
+    }
+  }
   const row = rows[0];
   return {
     provider,
@@ -158,15 +177,21 @@ export async function getDirectoryIqIntegrationSecret(
   userId: string,
   provider: DirectoryIqProvider
 ): Promise<{ secret: string; meta: Record<string, unknown> } | null> {
-  const rows = await query<CredentialRow>(
-    `
-    SELECT secret_ciphertext, meta_json
-    FROM integrations_credentials
-    WHERE user_id = $1 AND product = $2 AND provider = $3
-    LIMIT 1
-    `,
-    [userId, DIRECTORYIQ_PRODUCT, provider]
-  );
+  let rows: CredentialRow[] = [];
+  try {
+    rows = await query<CredentialRow>(
+      `
+      SELECT secret_ciphertext, meta_json
+      FROM integrations_credentials
+      WHERE user_id = $1 AND product = $2 AND provider = $3
+      LIMIT 1
+      `,
+      [userId, DIRECTORYIQ_PRODUCT, provider]
+    );
+  } catch (error) {
+    if (isUndefinedRelationError(error, "integrations_credentials")) return null;
+    throw error;
+  }
   const row = rows[0];
   if (!row?.secret_ciphertext) return null;
   const secret = decryptSecret(row.secret_ciphertext, `${userId}:directoryiq:${provider}`);

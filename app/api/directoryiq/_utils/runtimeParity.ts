@@ -1,6 +1,8 @@
 import { NextRequest } from "next/server";
 
 const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+const DIRECTORYIQ_RUNTIME_MODE_LOCAL = "local";
+const DIRECTORYIQ_RUNTIME_MODE_PROXY = "proxy";
 
 function resolveDirectoryIqApiBase(): string {
   const raw = (
@@ -42,6 +44,17 @@ function targetHost(): string {
   return normalizeHost(new URL(resolveDirectoryIqApiBase()).host);
 }
 
+function shouldProxyByRuntimeMode(): boolean {
+  const runtimeMode = (process.env.DIRECTORYIQ_RUNTIME_MODE ?? "").trim().toLowerCase();
+  if (runtimeMode === DIRECTORYIQ_RUNTIME_MODE_PROXY) return true;
+  if (runtimeMode === DIRECTORYIQ_RUNTIME_MODE_LOCAL) return false;
+
+  const legacyProxyMode = (process.env.DIRECTORYIQ_PROXY_MODE ?? "").trim().toLowerCase();
+  return legacyProxyMode === "external" || legacyProxyMode === DIRECTORYIQ_RUNTIME_MODE_PROXY;
+}
+
 export function shouldServeDirectoryIqLocally(req: NextRequest): boolean {
+  // Monorepo default is local-first. External proxy mode must be explicitly enabled.
+  if (!shouldProxyByRuntimeMode()) return true;
   return requestHost(req) === targetHost();
 }

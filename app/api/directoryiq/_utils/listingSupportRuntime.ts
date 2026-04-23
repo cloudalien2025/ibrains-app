@@ -5,8 +5,8 @@ import { proxyDirectoryIqRead } from "@/app/api/directoryiq/_utils/externalReadP
 import { getListingCurrentSupport, type ListingSupportModel } from "@/src/directoryiq/services/listingSupportService";
 import { hasMaterialSupportSignals } from "@/src/directoryiq/services/listingSupportQuality";
 import { resolveCanonicalListingUrl } from "@/app/api/directoryiq/_utils/canonicalListingUrl";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 
-const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 const DEFAULT_AUTHORITY_TENANT_ID = "default";
 
 export type SupportResolution = {
@@ -16,46 +16,6 @@ export type SupportResolution = {
   dataStatus: "supported" | "no_support_data";
   upstreamStatus?: number;
 };
-
-function resolveDirectoryIqApiBase(): string {
-  const raw = (
-    process.env.DIRECTORYIQ_API_BASE ??
-    process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ??
-    DEFAULT_DIRECTORYIQ_API_BASE
-  )
-    .trim()
-    .replace(/\/+$/, "");
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw new Error("DIRECTORYIQ_API_BASE must use http or https");
-    }
-    return parsed.toString().replace(/\/+$/, "");
-  } catch (error) {
-    throw new Error(
-      error instanceof Error
-        ? `Invalid DIRECTORYIQ_API_BASE: ${error.message}`
-        : "Invalid DIRECTORYIQ_API_BASE"
-    );
-  }
-}
-
-function normalizeHost(host: string): string {
-  return host.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-}
-
-function requestHost(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-host");
-  if (forwarded && forwarded.trim()) return normalizeHost(forwarded);
-  const hostHeader = req.headers.get("host");
-  if (hostHeader && hostHeader.trim()) return normalizeHost(hostHeader);
-  return normalizeHost(req.nextUrl.host);
-}
-
-function targetHost(): string {
-  return normalizeHost(new URL(resolveDirectoryIqApiBase()).host);
-}
 
 function resolveSiteId(req: NextRequest): string | null {
   const siteId = req.nextUrl.searchParams.get("site_id");
@@ -208,7 +168,7 @@ export async function resolveListingSupportModel(
   listingId: string
 ): Promise<SupportResolution> {
   const resolvedListingId = decodeURIComponent(listingId);
-  if (requestHost(req) !== targetHost()) {
+  if (!shouldServeDirectoryIqLocally(req)) {
     const upstreamListingId = encodeURIComponent(resolvedListingId);
     const supportRes = await proxyDirectoryIqRead(req, `/api/directoryiq/listings/${upstreamListingId}/support`);
     const supportJson = (await supportRes.clone().json().catch(() => null)) as UpstreamSupportResponse | null;

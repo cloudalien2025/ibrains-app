@@ -11,8 +11,7 @@ import {
   hasUsableStep2ResearchArtifact,
   type Step2ResearchState,
 } from "@/lib/directoryiq/step2ResearchGateContract";
-
-const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 
 type ListingDetailPayload = {
   listing: {
@@ -83,46 +82,6 @@ function normalizePersistedResearchState(input: {
     hasUsableResearchArtifact: hasUsableStep2ResearchArtifact(input.step2Contract.research_artifact),
     researchArtifact: input.step2Contract.research_artifact,
   });
-}
-
-function resolveDirectoryIqApiBase(): string {
-  const raw = (
-    process.env.DIRECTORYIQ_API_BASE ??
-    process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ??
-    DEFAULT_DIRECTORYIQ_API_BASE
-  )
-    .trim()
-    .replace(/\/+$/, "");
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw new Error("DIRECTORYIQ_API_BASE must use http or https");
-    }
-    return parsed.toString().replace(/\/+$/, "");
-  } catch (error) {
-    throw new Error(
-      error instanceof Error
-        ? `Invalid DIRECTORYIQ_API_BASE: ${error.message}`
-        : "Invalid DIRECTORYIQ_API_BASE"
-    );
-  }
-}
-
-function normalizeHost(host: string): string {
-  return host.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-}
-
-function requestHost(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-host");
-  if (forwarded && forwarded.trim()) return normalizeHost(forwarded);
-  const hostHeader = req.headers.get("host");
-  if (hostHeader && hostHeader.trim()) return normalizeHost(hostHeader);
-  return normalizeHost(req.nextUrl.host);
-}
-
-function targetHost(): string {
-  return normalizeHost(new URL(resolveDirectoryIqApiBase()).host);
 }
 
 function imageFromRaw(raw: Record<string, unknown>): string | null {
@@ -292,7 +251,7 @@ export async function GET(
   const decodedListingId = decodeURIComponent(listingId);
   const upstreamListingId = encodeURIComponent(decodedListingId);
 
-  if (requestHost(req) === targetHost()) {
+  if (shouldServeDirectoryIqLocally(req)) {
     const payload = await resolveLocalListingDetail(req, decodedListingId);
     return NextResponse.json(payload, { status: 200 });
   }

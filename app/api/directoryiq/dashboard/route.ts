@@ -9,8 +9,8 @@ import { listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { hasCanonicalDirectoryIqConnection } from "@/app/api/directoryiq/_utils/connectedState";
 import { scheduleSnapshotRefresh } from "@/app/api/_utils/snapshots";
 import { normalizeDashboardListingsContract } from "@/app/api/directoryiq/_utils/dashboardListingsContract";
+import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
 
-const DEFAULT_DIRECTORYIQ_API_BASE = "https://directoryiq-api.ibrains.ai";
 const DASHBOARD_PATH = "/api/directoryiq/dashboard";
 
 type DashboardListing = {
@@ -30,46 +30,6 @@ type DashboardListing = {
 type LastRunRow = {
   finished_at: string | null;
 };
-
-function resolveDirectoryIqApiBase(): string {
-  const raw = (
-    process.env.DIRECTORYIQ_API_BASE ??
-    process.env.NEXT_PUBLIC_DIRECTORYIQ_API_BASE ??
-    DEFAULT_DIRECTORYIQ_API_BASE
-  )
-    .trim()
-    .replace(/\/+$/, "");
-
-  try {
-    const parsed = new URL(raw);
-    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw new Error("DIRECTORYIQ_API_BASE must use http or https");
-    }
-    return parsed.toString().replace(/\/+$/, "");
-  } catch (error) {
-    throw new Error(
-      error instanceof Error
-        ? `Invalid DIRECTORYIQ_API_BASE: ${error.message}`
-        : "Invalid DIRECTORYIQ_API_BASE"
-    );
-  }
-}
-
-function normalizeHost(host: string): string {
-  return host.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/\/+$/, "");
-}
-
-function requestHost(req: NextRequest): string {
-  const forwarded = req.headers.get("x-forwarded-host");
-  if (forwarded && forwarded.trim()) return normalizeHost(forwarded);
-  const hostHeader = req.headers.get("host");
-  if (hostHeader && hostHeader.trim()) return normalizeHost(hostHeader);
-  return normalizeHost(req.nextUrl.host);
-}
-
-function targetHost(): string {
-  return normalizeHost(new URL(resolveDirectoryIqApiBase()).host);
-}
 
 async function loadDashboard(userId: string) {
   const [sites, listingEval, settings, latestRunRows] = await Promise.all([
@@ -148,7 +108,7 @@ async function normalizeProxyDashboardResponse(response: NextResponse): Promise<
 }
 
 export async function GET(req: NextRequest) {
-  if (requestHost(req) === targetHost()) {
+  if (shouldServeDirectoryIqLocally(req)) {
     try {
       const userId = resolveUserId(req);
       await ensureUser(userId);
@@ -165,7 +125,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (requestHost(req) === targetHost()) {
+  if (shouldServeDirectoryIqLocally(req)) {
     try {
       const userId = resolveUserId(req);
       await ensureUser(userId);

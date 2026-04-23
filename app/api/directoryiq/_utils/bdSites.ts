@@ -37,6 +37,11 @@ export type BdSite = {
 
 const DEFAULT_DIRECTORYIQ_USER_ID = "00000000-0000-4000-8000-000000000001";
 
+function isUndefinedRelationError(error: unknown, relationName: string): boolean {
+  if (!(error instanceof Error)) return false;
+  return error.message.toLowerCase().includes(`relation "${relationName.toLowerCase()}" does not exist`);
+}
+
 export function isAdminRequest(req: NextRequest): boolean {
   const rawUserId = req.headers.get("x-user-id");
   if (rawUserId === "1") return true;
@@ -59,22 +64,35 @@ export async function ensureLegacyBdSite(userId: string): Promise<void> {
   );
   if ((existing[0]?.count ?? 0) > 0) return;
 
-  const rows = await query<{
+  let rows: Array<{
     id: string;
     user_id: string | null;
     secret_ciphertext: string | null;
     meta_json: Record<string, unknown> | null;
-  }>(
-    `
-    SELECT id, user_id, secret_ciphertext, meta_json
-    FROM integrations_credentials
-    WHERE product = 'directoryiq' AND provider = 'brilliant_directories'
-      AND (user_id = $1 OR user_id = $2 OR user_id IS NULL)
-    ORDER BY saved_at DESC
-    LIMIT 1
-    `,
-    [userId, DEFAULT_DIRECTORYIQ_USER_ID]
-  );
+  }> = [];
+  try {
+    rows = await query<{
+      id: string;
+      user_id: string | null;
+      secret_ciphertext: string | null;
+      meta_json: Record<string, unknown> | null;
+    }>(
+      `
+      SELECT id, user_id, secret_ciphertext, meta_json
+      FROM integrations_credentials
+      WHERE product = 'directoryiq' AND provider = 'brilliant_directories'
+        AND (user_id = $1 OR user_id = $2 OR user_id IS NULL)
+      ORDER BY saved_at DESC
+      LIMIT 1
+      `,
+      [userId, DEFAULT_DIRECTORYIQ_USER_ID]
+    );
+  } catch (error) {
+    if (isUndefinedRelationError(error, "integrations_credentials")) {
+      return;
+    }
+    throw error;
+  }
   const legacy = rows[0];
   if (!legacy || !legacy.secret_ciphertext) return;
   const meta = legacy.meta_json ?? {};
