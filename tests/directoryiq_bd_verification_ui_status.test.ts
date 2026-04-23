@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildBdTestUnresolvedMessage,
+  formatRoleLabel,
   formatVerificationStatus,
 } from "@/app/apps/directoryiq/signal-sources/directoryiq-signal-sources-client";
 
@@ -29,5 +30,12 @@ describe("directoryiq bd verification ui status mapping", () => {
       },
     });
     expect(blogPath.toLowerCase()).toContain("blog posts path is invalid");
+  });
+
+  it("maps discovered roles to human-readable labels", () => {
+    expect(formatRoleLabel("primary_listing")).toBe("Listings");
+    expect(formatRoleLabel("article_or_blog")).toBe("Blog Articles");
+    expect(formatRoleLabel("video")).toBe("Videos");
+    expect(formatRoleLabel("coupon")).toBe("Coupons");
   });
 });

@@ -113,6 +113,19 @@ export async function POST(
         persisted,
         diagnostics: detection.diagnostics,
       },
+      discovery: {
+        selected: detection.discovery.selected,
+        optional: detection.discovery.optional,
+        inventory: detection.discovery.inventory.map((item) => ({
+          data_id: item.dataId,
+          name: item.name,
+          role: item.role,
+          confidence: item.confidence,
+          auto_enabled: item.autoEnabled,
+          sample_count: item.sampleCount,
+          endpoint_family: item.endpointFamily,
+        })),
+      },
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD test error";

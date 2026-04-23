@@ -3,6 +3,22 @@ import { extractBdListingRows, hasBdListingLikeRows } from "@/app/api/directoryi
 
 type DetectionStatus = "verified" | "verified_empty" | "invalid" | "unresolved";
 
+export type BdPostTypeRole =
+  | "primary_listing"
+  | "article_or_blog"
+  | "video"
+  | "property"
+  | "coupon"
+  | "event"
+  | "product"
+  | "discussion"
+  | "review"
+  | "photo_album"
+  | "other_structured_content"
+  | "unknown";
+
+export type BdEndpointFamily = "users_portfolio_groups" | "data_posts";
+
 type DetectionSource =
   | "configured"
   | "data_categories_search"
@@ -41,6 +57,7 @@ export type BdPostTypeDetectionBranch = {
 export type BdPostTypeDetectionResult = {
   listings: BdPostTypeDetectionBranch;
   blogPosts: BdPostTypeDetectionBranch;
+  discovery: BdPostTypeDiscoveryResult;
   diagnostics: {
     categoryCandidatesCount: number;
     categorySearchPath: string | null;
@@ -62,7 +79,59 @@ type CategoryCandidate = {
   dataId: number;
   dataType: string | null;
   title: string;
+  permalink: string | null;
+  raw: Record<string, unknown>;
   source: DetectionSource;
+};
+
+type EndpointProbe = {
+  family: BdEndpointFamily;
+  path: string;
+  ok: boolean;
+  accepted: boolean;
+  statusCode: number | null;
+  count: number;
+  sampleRows: Record<string, unknown>[];
+};
+
+export type BdDiscoveredPostType = {
+  dataId: number;
+  name: string;
+  permalink: string | null;
+  rawMetadata: Record<string, unknown>;
+  canonicalValid: boolean;
+  canonicalDataType: string | null;
+  canonicalStatusCode: number | null;
+  endpointFamily: BdEndpointFamily | null;
+  searchPath: string | null;
+  sampleCount: number;
+  role: BdPostTypeRole;
+  confidence: number;
+  autoEnabled: boolean;
+  evidence: string[];
+  probes: EndpointProbe[];
+};
+
+export type BdPostTypeDiscoveryResult = {
+  inventory: BdDiscoveredPostType[];
+  selected: {
+    primaryListingDataId: number | null;
+    primaryListingPath: string | null;
+    articleOrBlogDataId: number | null;
+    articleOrBlogPath: string | null;
+  };
+  optional: Array<{
+    dataId: number;
+    role: BdPostTypeRole;
+    confidence: number;
+    name: string;
+  }>;
+  compatibility: {
+    listingsDataId: number | null;
+    listingsPath: string | null;
+    blogPostsDataId: number | null;
+    blogPostsPath: string | null;
+  };
 };
 
 type VerifyResult = {
@@ -561,6 +630,8 @@ async function discoverCategories(params: { baseUrl: string; apiKey: string }): 
         dataId,
         dataType: asString(record.data_type) || null,
         title: asString(record.name ?? record.title ?? record.data_name ?? record.label),
+        permalink: asString(record.permalink ?? record.slug ?? record.route ?? record.path) || null,
+        raw: record,
         source: "data_categories_search",
       });
     }
@@ -608,6 +679,8 @@ async function discoverCategories(params: { baseUrl: string; apiKey: string }): 
         dataId,
         dataType: asString(record.data_type) || null,
         title: asString(record.name ?? record.title ?? record.data_name ?? record.label),
+        permalink: asString(record.permalink ?? record.slug ?? record.route ?? record.path) || null,
+        raw: record,
         source: "data_categories_search",
       });
     }
@@ -673,6 +746,260 @@ async function discoverHintIdsFromSearch(params: {
   return { listingHintIds, blogHintIds };
 }
 
+function roundConfidence(value: number): number {
+  const bounded = Math.max(0, Math.min(1, value));
+  return Math.round(bounded * 100) / 100;
+}
+
+function classifyDiscoveredPostType(input: {
+  name: string;
+  permalink: string | null;
+  canonicalDataType: string | null;
+  probes: EndpointProbe[];
+}): { role: BdPostTypeRole; confidence: number; evidence: string[] } {
+  const text = `${input.name} ${input.permalink ?? ""}`.toLowerCase();
+  const scores: Record<BdPostTypeRole, number> = {
+    primary_listing: 0,
+    article_or_blog: 0,
+    video: 0,
+    property: 0,
+    coupon: 0,
+    event: 0,
+    product: 0,
+    discussion: 0,
+    review: 0,
+    photo_album: 0,
+    other_structured_content: 0,
+    unknown: 0,
+  };
+  const evidence: string[] = [];
+  const add = (role: BdPostTypeRole, value: number, note: string) => {
+    scores[role] += value;
+    evidence.push(note);
+  };
+
+  if (input.canonicalDataType === "4") add("primary_listing", 70, "canonical data_type=4");
+
+  const usersProbe = input.probes.find((probe) => probe.family === "users_portfolio_groups");
+  const dataPostsProbe = input.probes.find((probe) => probe.family === "data_posts");
+  if (usersProbe?.accepted) add("primary_listing", 25, "users_portfolio_groups/search accepted");
+  if (dataPostsProbe?.accepted) add("article_or_blog", 15, "data_posts/search accepted");
+  if ((usersProbe?.count ?? 0) > 0) add("primary_listing", 10, "users_portfolio_groups returned rows");
+  if ((dataPostsProbe?.count ?? 0) > 0) add("article_or_blog", 10, "data_posts returned rows");
+
+  if (/\b(listing|business listing|member listing|directory|company)\b/.test(text)) {
+    add("primary_listing", 35, "name/permalink indicates listing");
+  }
+  if (/\b(blog|article|news|post)\b/.test(text)) add("article_or_blog", 40, "name/permalink indicates article/blog");
+  if (/\b(video|videos)\b/.test(text)) add("video", 45, "name/permalink indicates video");
+  if (/\b(property|properties|real estate)\b/.test(text)) add("property", 45, "name/permalink indicates property");
+  if (/\b(coupon|coupons|deal|deals)\b/.test(text)) add("coupon", 45, "name/permalink indicates coupon");
+  if (/\b(event|events|calendar)\b/.test(text)) add("event", 40, "name/permalink indicates event");
+  if (/\b(product|products|shop|store)\b/.test(text)) add("product", 40, "name/permalink indicates product");
+  if (/\b(discussion|forum|thread|threads)\b/.test(text)) add("discussion", 40, "name/permalink indicates discussion");
+  if (/\b(review|reviews|testimonial|testimonials)\b/.test(text)) add("review", 40, "name/permalink indicates review");
+  if (/\b(photo|photos|album|albums|gallery|galleries)\b/.test(text)) {
+    add("photo_album", 40, "name/permalink indicates photo album");
+  }
+
+  let bestRole: BdPostTypeRole = "unknown";
+  let bestScore = 0;
+  for (const [role, score] of Object.entries(scores) as Array<[BdPostTypeRole, number]>) {
+    if (role === "unknown") continue;
+    if (score > bestScore) {
+      bestScore = score;
+      bestRole = role;
+    }
+  }
+
+  if (bestScore < 25) {
+    const acceptedProbe = input.probes.find((probe) => probe.accepted);
+    if (acceptedProbe) {
+      return {
+        role: "other_structured_content",
+        confidence: roundConfidence(0.35),
+        evidence: [...evidence, `${acceptedProbe.family} accepted with weak keyword evidence`],
+      };
+    }
+    return { role: "unknown", confidence: 0.2, evidence: evidence.length > 0 ? evidence : ["insufficient evidence"] };
+  }
+
+  return {
+    role: bestRole,
+    confidence: roundConfidence(bestScore / 100),
+    evidence,
+  };
+}
+
+async function probeEndpoint(input: {
+  baseUrl: string;
+  apiKey: string;
+  dataId: number;
+  family: BdEndpointFamily;
+  path: string;
+}): Promise<EndpointProbe> {
+  const response = await bdRequestWithRetry(() =>
+    bdRequestForm({
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      method: "POST",
+      path: input.path,
+      form: {
+        action: "search",
+        output_type: "array",
+        data_id: input.dataId,
+        limit: 5,
+        page: 1,
+      },
+    })
+  );
+  const payload = (response.json ?? null) as Record<string, unknown> | null;
+  const rows = extractBdListingRows(payload ?? {});
+  return {
+    family: input.family,
+    path: input.path,
+    ok: response.ok,
+    accepted: response.ok && isSuccessWrapper(payload),
+    statusCode: response.status,
+    count: rows.length,
+    sampleRows: rows.slice(0, 2),
+  };
+}
+
+function selectBestProbe(probes: EndpointProbe[]): EndpointProbe | null {
+  const accepted = probes.filter((probe) => probe.accepted);
+  if (accepted.length === 0) return null;
+  accepted.sort((a, b) => b.count - a.count);
+  return accepted[0] ?? null;
+}
+
+async function discoverBdPostTypes(input: {
+  baseUrl: string;
+  apiKey: string;
+  listingsPath: string;
+  blogPaths: string[];
+  categoryRows: CategoryCandidate[];
+  listingHintIds: number[];
+  blogHintIds: number[];
+  configuredListingsDataId: number | null;
+  configuredBlogPostsDataId: number | null;
+}): Promise<BdPostTypeDiscoveryResult> {
+  const categoriesById = new Map<number, CategoryCandidate>();
+  for (const row of input.categoryRows) {
+    categoriesById.set(row.dataId, row);
+  }
+  const candidateIds = makeUniqueCandidates([
+    ...(input.configuredListingsDataId ? [{ dataId: input.configuredListingsDataId, source: "configured" as const }] : []),
+    ...(input.configuredBlogPostsDataId ? [{ dataId: input.configuredBlogPostsDataId, source: "configured" as const }] : []),
+    ...input.categoryRows.map((row) => ({ dataId: row.dataId, source: row.source })),
+    ...input.listingHintIds.map((dataId) => ({ dataId, source: "listings_payload_hint" as const })),
+    ...input.blogHintIds.map((dataId) => ({ dataId, source: "blog_payload_hint" as const })),
+    { dataId: 75, source: "default_probe" as const },
+    { dataId: 14, source: "default_probe" as const },
+  ])
+    .map((item) => item.dataId)
+    .slice(0, 30);
+
+  const usersPath =
+    input.listingsPath.includes("/users_portfolio_groups/") ? input.listingsPath : "/api/v2/users_portfolio_groups/search";
+  const dataPostsPath = input.blogPaths[0] ?? "/api/v2/data_posts/search";
+
+  const inventory: BdDiscoveredPostType[] = [];
+  for (const dataId of candidateIds) {
+    const canonical = await fetchCategoryValidity({
+      baseUrl: input.baseUrl,
+      apiKey: input.apiKey,
+      dataId,
+    });
+    if (!canonical.exists && !canonical.indeterminate) continue;
+
+    const category = categoriesById.get(dataId);
+    const name = category?.title || `Post Type ${dataId}`;
+    const permalink = category?.permalink ?? null;
+    const rawMetadata = category?.raw ?? {};
+    const probes = await Promise.all([
+      probeEndpoint({
+        baseUrl: input.baseUrl,
+        apiKey: input.apiKey,
+        dataId,
+        family: "users_portfolio_groups",
+        path: usersPath,
+      }),
+      probeEndpoint({
+        baseUrl: input.baseUrl,
+        apiKey: input.apiKey,
+        dataId,
+        family: "data_posts",
+        path: dataPostsPath,
+      }),
+    ]);
+    const selectedProbe = selectBestProbe(probes);
+    const classification = classifyDiscoveredPostType({
+      name,
+      permalink,
+      canonicalDataType: canonical.dataType,
+      probes,
+    });
+    inventory.push({
+      dataId,
+      name,
+      permalink,
+      rawMetadata,
+      canonicalValid: canonical.exists,
+      canonicalDataType: canonical.dataType,
+      canonicalStatusCode: canonical.statusCode,
+      endpointFamily: selectedProbe?.family ?? null,
+      searchPath: selectedProbe?.path ?? null,
+      sampleCount: selectedProbe?.count ?? 0,
+      role: classification.role,
+      confidence: classification.confidence,
+      autoEnabled: false,
+      evidence: classification.evidence,
+      probes,
+    });
+  }
+
+  const byScore = (role: BdPostTypeRole) =>
+    inventory
+      .filter((item) => item.canonicalValid && item.role === role)
+      .sort((a, b) => b.confidence - a.confidence || b.sampleCount - a.sampleCount);
+
+  const listingPick = byScore("primary_listing")[0] ?? null;
+  const blogPick = byScore("article_or_blog").find((item) => item.dataId !== listingPick?.dataId) ?? null;
+
+  for (const item of inventory) {
+    if (item.dataId === listingPick?.dataId || item.dataId === blogPick?.dataId) {
+      item.autoEnabled = true;
+    }
+  }
+
+  const optional = inventory
+    .filter((item) => !item.autoEnabled)
+    .map((item) => ({
+      dataId: item.dataId,
+      role: item.role,
+      confidence: item.confidence,
+      name: item.name,
+    }));
+
+  return {
+    inventory,
+    selected: {
+      primaryListingDataId: listingPick?.dataId ?? null,
+      primaryListingPath: listingPick?.searchPath ?? usersPath,
+      articleOrBlogDataId: blogPick?.dataId ?? null,
+      articleOrBlogPath: blogPick?.searchPath ?? dataPostsPath,
+    },
+    optional,
+    compatibility: {
+      listingsDataId: listingPick?.dataId ?? null,
+      listingsPath: listingPick?.searchPath ?? usersPath,
+      blogPostsDataId: blogPick?.dataId ?? null,
+      blogPostsPath: blogPick?.searchPath ?? dataPostsPath,
+    },
+  };
+}
+
 export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Promise<BdPostTypeDetectionResult> {
   const listingsPath = normalizePath(input.listingsPath || "/api/v2/users_portfolio_groups/search");
   const blogPaths = collectDataPostsSearchPaths(input.blogPostsPath);
@@ -692,9 +1019,23 @@ export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Prom
     listingsPath,
     blogPaths,
   });
+  const discovery = await discoverBdPostTypes({
+    baseUrl: input.baseUrl,
+    apiKey: input.apiKey,
+    listingsPath,
+    blogPaths,
+    categoryRows: categoryDiscovery.rows,
+    listingHintIds,
+    blogHintIds,
+    configuredListingsDataId: input.configuredListingsDataId,
+    configuredBlogPostsDataId: input.configuredBlogPostsDataId,
+  });
 
   const listingCandidates = makeUniqueCandidates([
     ...(input.configuredListingsDataId ? [{ dataId: input.configuredListingsDataId, source: "configured" as const }] : []),
+    ...(typeof discovery.selected.primaryListingDataId === "number"
+      ? [{ dataId: discovery.selected.primaryListingDataId, source: "data_categories_search" as const }]
+      : []),
     ...categoryDiscovery.rows
       .filter((row) => row.dataType === "4" || isListingCategoryTitle(row.title))
       .map((row) => ({ dataId: row.dataId, source: row.source })),
@@ -772,6 +1113,9 @@ export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Prom
 
   const blogCandidates = makeUniqueCandidates([
     ...(input.configuredBlogPostsDataId ? [{ dataId: input.configuredBlogPostsDataId, source: "configured" as const }] : []),
+    ...(typeof discovery.selected.articleOrBlogDataId === "number"
+      ? [{ dataId: discovery.selected.articleOrBlogDataId, source: "data_categories_search" as const }]
+      : []),
     ...categoryDiscovery.rows
       .filter((row) => isBlogCategoryTitle(row.title) && row.dataType !== "4")
       .map((row) => ({ dataId: row.dataId, source: row.source })),
@@ -856,6 +1200,7 @@ export async function detectBdPostTypeIds(input: BdPostTypeDetectionInput): Prom
   return {
     listings: listingsBranch,
     blogPosts: blogBranch,
+    discovery,
     diagnostics: {
       categoryCandidatesCount: categoryDiscovery.rows.length,
       categorySearchPath: categoryDiscovery.path,
