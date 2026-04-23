@@ -162,7 +162,26 @@ export default function DirectoryIqDashboardClient() {
         />
       ) : null}
 
-      <HudCard title="AI Selection Readiness" subtitle="Site-level snapshot">
+      <HudCard
+        title="AI Selection Readiness"
+        subtitle="Site-level snapshot"
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href="/apps/directoryiq/authority"
+              className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-3 py-1.5 text-xs font-medium text-[#2563EB]"
+            >
+              Open Authority Workflows
+            </Link>
+            <Link
+              href="/apps/directoryiq/graph-integrity"
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs font-medium text-[#0F172A]"
+            >
+              Review Graph Integrity
+            </Link>
+          </div>
+        }
+      >
         {uiState.showReadinessMetrics && data ? (
           <div className="grid gap-5 lg:grid-cols-[300px_1fr]">
             <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8] p-4 text-center">
@@ -182,12 +201,63 @@ export default function DirectoryIqDashboardClient() {
         ) : null}
 
         {uiState.showLoading ? <div className="mt-4 text-sm text-[#2563EB]">{progressLabel}</div> : null}
-        {uiState.showError ? <div className="mt-4 text-sm text-rose-600">{error}</div> : null}
+        {uiState.showError ? (
+          <div className="mt-4 space-y-2 text-sm">
+            <div className="text-rose-600">{error}</div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/apps/directoryiq/signal-sources"
+                className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-2.5 py-1 text-xs font-medium text-[#2563EB]"
+              >
+                Configure Sources
+              </Link>
+              <Link
+                href="/apps/directoryiq/settings"
+                className="rounded-lg border border-[#D9E4F0] bg-white px-2.5 py-1 text-xs font-medium text-[#0F172A]"
+              >
+                Open Settings
+              </Link>
+            </div>
+          </div>
+        ) : null}
       </HudCard>
 
-      <HudCard title="Listings" subtitle="Improve AI visibility one listing at a time.">
+      <HudCard
+        title="Listings"
+        subtitle="Improve AI visibility one listing at a time."
+        actions={
+          <Link
+            href="/apps/directoryiq/listings"
+            className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-3 py-1.5 text-xs font-medium text-[#2563EB]"
+          >
+            Review Listings
+          </Link>
+        }
+      >
         {uiState.showListingsZeroState ? (
-          <div className="text-sm text-[#334155]">No listings found yet. Connect and refresh analysis.</div>
+          <div className="space-y-2 text-sm text-[#334155]">
+            <div>No listings found yet. Connect a source, then run ingestion to populate listings.</div>
+            <div className="flex flex-wrap gap-2">
+              <Link
+                href="/apps/directoryiq/signal-sources?connector=brilliant-directories"
+                className="rounded-lg border border-[#93C5FD] bg-[#EAF1F8] px-2.5 py-1 text-xs font-medium text-[#2563EB]"
+              >
+                Connect Website
+              </Link>
+              <Link
+                href="/apps/directoryiq/signal-sources"
+                className="rounded-lg border border-[#D9E4F0] bg-white px-2.5 py-1 text-xs font-medium text-[#0F172A]"
+              >
+                Open Signal Sources
+              </Link>
+              <Link
+                href="/apps/directoryiq/listings"
+                className="rounded-lg border border-[#D9E4F0] bg-white px-2.5 py-1 text-xs font-medium text-[#0F172A]"
+              >
+                Open Listings
+              </Link>
+            </div>
+          </div>
         ) : null}
         {uiState.showListingsTable && data ? (
           <div className="overflow-x-auto">
