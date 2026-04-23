@@ -37,6 +37,19 @@ const idAlias: Record<string, DirectoryIqConnector> = {
   ga4: "ga4",
 };
 
+const defaultConnectorSupport: Record<DirectoryIqConnector, boolean> = {
+  brilliant_directories_api: true,
+  openai: true,
+  serpapi: true,
+  ga4: true,
+};
+
+function unsupportedConnectorMessage(connectorId: "openai" | "serpapi" | "ga4"): string {
+  if (connectorId === "openai") return "OpenAI API credential persistence is not available in this environment yet.";
+  if (connectorId === "serpapi") return "SerpAPI credential persistence is not available in this environment yet.";
+  return "GA4 credential persistence is not available in this environment yet.";
+}
+
 type IngestRun = {
   id: string;
   status: string;
@@ -266,6 +279,7 @@ export default function DirectoryIqSignalSourcesClient() {
   const [bdSaving, setBdSaving] = useState(false);
   const [bdTesting, setBdTesting] = useState<string | null>(null);
   const [bdSiteVerificationById, setBdSiteVerificationById] = useState<Record<string, BdSiteVerificationState>>({});
+  const [connectorSupport, setConnectorSupport] = useState<Record<DirectoryIqConnector, boolean>>(defaultConnectorSupport);
   const [bdForm, setBdForm] = useState({
     label: "",
     baseUrl: "",
@@ -293,6 +307,7 @@ export default function DirectoryIqSignalSourcesClient() {
       const response = await fetch("/api/directoryiq/signal-sources", { cache: "no-store" });
       const json = (await response.json()) as {
         connectors?: DirectoryIqCredentialStatus[];
+        connector_support?: Partial<Record<DirectoryIqConnector, boolean>>;
         error?: string;
       };
 
@@ -311,6 +326,13 @@ export default function DirectoryIqSignalSourcesClient() {
         }
         return updated;
       });
+
+      const support = { ...defaultConnectorSupport };
+      for (const connectorId of ["brilliant_directories_api", "openai", "serpapi", "ga4"] as const) {
+        const resolved = json.connector_support?.[connectorId];
+        if (typeof resolved === "boolean") support[connectorId] = resolved;
+      }
+      setConnectorSupport(support);
     } catch (e) {
       const message = e instanceof Error ? e.message : "Unknown load error";
       setError(message);
@@ -356,6 +378,10 @@ export default function DirectoryIqSignalSourcesClient() {
   }, []);
 
   async function save(connectorId: DirectoryIqConnector) {
+    if (connectorId !== "brilliant_directories_api" && !connectorSupport[connectorId]) {
+      setError(unsupportedConnectorMessage(connectorId));
+      return;
+    }
     const secret = values[connectorId].trim();
     if (!secret) {
       setError(`Enter a value for ${connectorMeta[connectorId].name}.`);
@@ -656,6 +682,10 @@ export default function DirectoryIqSignalSourcesClient() {
   }
 
   async function remove(connectorId: DirectoryIqConnector) {
+    if (connectorId !== "brilliant_directories_api" && !connectorSupport[connectorId]) {
+      setError(unsupportedConnectorMessage(connectorId));
+      return;
+    }
     setSaving(connectorId);
     setError(null);
     setNotice(null);
@@ -893,6 +923,7 @@ export default function DirectoryIqSignalSourcesClient() {
 
       {orderedConnectors.map((connectorId) => {
         const state = states[connectorId];
+        const connectorReady = connectorSupport[connectorId];
         const isActive = selectedConnector === connectorId;
 
         return (
@@ -908,10 +939,15 @@ export default function DirectoryIqSignalSourcesClient() {
               <div>
                 <h3 className="text-sm font-semibold text-[#0F172A]">{connectorMeta[connectorId].name}</h3>
                 <p className="text-xs text-slate-400">
-                  {state.connected
+                  {!connectorReady
+                    ? "Not yet available in this environment"
+                    : state.connected
                     ? `Credential saved (${state.masked_secret})${state.updated_at ? ` · Saved ${new Date(state.updated_at).toLocaleString()}` : ""}`
                     : "Credential not configured"}
                 </p>
+                {!connectorReady ? (
+                  <p className="text-xs text-amber-200">Coming soon for this environment. Save and Delete are disabled.</p>
+                ) : null}
                 {state.label ? <p className="text-xs text-slate-500">Label: {state.label}</p> : null}
               </div>
             </div>
@@ -922,6 +958,7 @@ export default function DirectoryIqSignalSourcesClient() {
                 onChange={(event) =>
                   setValues((prev) => ({ ...prev, [connectorId]: event.target.value }))
                 }
+                disabled={!connectorReady}
                 placeholder={connectorMeta[connectorId].placeholder}
                 className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
               />
@@ -930,16 +967,17 @@ export default function DirectoryIqSignalSourcesClient() {
                 onChange={(event) =>
                   setLabels((prev) => ({ ...prev, [connectorId]: event.target.value }))
                 }
+                disabled={!connectorReady}
                 placeholder="Optional label"
                 className="rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
               />
-              <NeonButton onClick={() => save(connectorId)} disabled={saving === connectorId}>
+              <NeonButton onClick={() => save(connectorId)} disabled={saving === connectorId || !connectorReady}>
                 {saving === connectorId ? "Saving..." : "Save"}
               </NeonButton>
               <NeonButton
                 variant="secondary"
                 onClick={() => remove(connectorId)}
-                disabled={saving === connectorId || !state.connected}
+                disabled={saving === connectorId || !state.connected || !connectorReady}
               >
                 Delete
               </NeonButton>
