@@ -1,6 +1,7 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { decryptSecret, encryptSecret, maskSecret } from "@/app/api/ecomviper/_utils/crypto";
 import { resolveUserId } from "@/app/api/ecomviper/_utils/user";
+import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
 import type { NextRequest } from "next/server";
 
 export type BdSiteRow = {
@@ -36,11 +37,6 @@ export type BdSite = {
 };
 
 const DEFAULT_DIRECTORYIQ_USER_ID = "00000000-0000-4000-8000-000000000001";
-
-function isUndefinedRelationError(error: unknown, relationName: string): boolean {
-  if (!(error instanceof Error)) return false;
-  return error.message.toLowerCase().includes(`relation "${relationName.toLowerCase()}" does not exist`);
-}
 
 export function isAdminRequest(req: NextRequest): boolean {
   const rawUserId = req.headers.get("x-user-id");

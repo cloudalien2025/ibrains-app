@@ -17,6 +17,7 @@ import {
   listDirectoryIqIntegrations,
   saveDirectoryIqIntegration,
 } from "@/app/api/directoryiq/_utils/credentials";
+import { isRawRelationLeakMessage } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 function connectorToProvider(connector: DirectoryIqConnector): "brilliant_directories" | "openai" | "serpapi" | "ga4" {
   if (connector === "brilliant_directories_api") return "brilliant_directories";
@@ -74,6 +75,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connectors });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ signal-source error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json(
+        { error: "DirectoryIQ signal-source credentials are unavailable in this environment. Use site-level configuration under Brilliant Directories Sites." },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -143,6 +150,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, connector_id: connectorId, connected: true, saved_at: saved.savedAt });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ credential save error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json(
+        { error: "DirectoryIQ legacy credential storage is unavailable. Configure Brilliant Directories using the site form below." },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -166,6 +179,12 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ credential delete error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json(
+        { error: "DirectoryIQ legacy credential storage is unavailable in this environment." },
+        { status: 500 }
+      );
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

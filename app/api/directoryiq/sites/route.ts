@@ -5,6 +5,7 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { createBdSite, isAdminRequest, listBdSites } from "@/app/api/directoryiq/_utils/bdSites";
 import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalReadProxy";
 import { shouldServeDirectoryIqLocally } from "@/app/api/directoryiq/_utils/runtimeParity";
+import { isRawRelationLeakMessage } from "@/app/api/directoryiq/_utils/sqlErrors";
 
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -45,6 +46,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ sites, is_admin: isAdmin, limit });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown BD sites error";
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
@@ -100,6 +104,9 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown BD site create error";
     if (message === "bd_site_limit_reached") {
       return NextResponse.json({ error: "bd_site_limit_reached" }, { status: 403 });
+    }
+    if (isRawRelationLeakMessage(message)) {
+      return NextResponse.json({ error: "DirectoryIQ site storage is unavailable in this environment." }, { status: 500 });
     }
     return NextResponse.json({ error: message }, { status: 500 });
   }

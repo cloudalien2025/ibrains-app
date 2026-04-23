@@ -93,6 +93,22 @@ function stripHtml(value: string): string {
   return value.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 }
 
+function summarizeBdErrorSnippet(payload: Record<string, unknown>, fallbackText?: string | null): string | null {
+  const status = typeof payload.status === "string" ? payload.status : "";
+  const message = payload.message;
+  const direct =
+    (typeof message === "string" && message) ||
+    (message && typeof message === "object" && typeof (message as Record<string, unknown>).error === "string"
+      ? ((message as Record<string, unknown>).error as string)
+      : "") ||
+    (typeof payload.error === "string" ? payload.error : "") ||
+    (fallbackText ?? "");
+
+  const compact = stripHtml(String(direct || status || "")).trim();
+  if (!compact) return null;
+  return compact.length > 200 ? `${compact.slice(0, 200)}...` : compact;
+}
+
 async function bdRequestFormXApiKey(input: {
   baseUrl: string;
   apiKey: string;
@@ -1354,6 +1370,10 @@ export async function runDirectoryIqFullIngest(
             : preflightResponse.status >= 500
               ? "bd_request_failed"
               : "bd_integration_invalid";
+        const preflightSnippet = summarizeBdErrorSnippet(
+          preflightPayload,
+          typeof preflightResponse.text === "string" ? preflightResponse.text : null
+        );
         throw new BdIngestError({
           code: preflightCode,
           baseUrlPresent,
@@ -1364,10 +1384,12 @@ export async function runDirectoryIqFullIngest(
           dataTypeObserved,
           statusCode: preflightResponse.status,
           endpoint: preflightPath,
+          messageSnippet: preflightSnippet,
         });
       }
 
       if (dataTypeObserved && dataTypeObserved !== "4") {
+        const mismatchSnippet = `Unexpected data_type=${dataTypeObserved} for listings_data_id=${String(listingsDataId)}. Expected data_type=4.`;
         throw new BdIngestError({
           code: "bd_post_type_invalid",
           baseUrlPresent,
@@ -1378,6 +1400,7 @@ export async function runDirectoryIqFullIngest(
           dataTypeObserved,
           statusCode: preflightResponse.status,
           endpoint: preflightPath,
+          messageSnippet: mismatchSnippet,
         });
       }
 

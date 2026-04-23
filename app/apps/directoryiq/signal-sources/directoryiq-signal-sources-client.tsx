@@ -65,6 +65,75 @@ type BdSiteVerificationState = {
   verification: BdSiteVerificationSnapshot;
 };
 
+type IngestErrorResponse = {
+  error?: string;
+  user_message?: string;
+  error_classification?: string;
+  error_message?: string | null;
+};
+
+type BdTestResponse = {
+  error?: string;
+  verification?: {
+    listings?: {
+      status?: string;
+      reason?: string | null;
+      search?: { status?: number | null; path?: string | null } | null;
+    } | null;
+    blog_posts?: {
+      status?: string;
+      reason?: string | null;
+    } | null;
+  } | null;
+};
+
+function readIngestErrorMessage(payload: IngestErrorResponse | null | undefined): string {
+  if (!payload) return "DirectoryIQ ingest failed";
+  if (payload.error_classification === "invalid_api_key") {
+    return "Brilliant Directories API key is missing or invalid. Update the API key and retry.";
+  }
+  if (payload.error_classification === "invalid_listings_path") {
+    return "Listings path is invalid or unreachable. Update the listings endpoint path and retry.";
+  }
+  if (payload.error_classification === "invalid_listings_data_id") {
+    return "Listings Post Type ID is invalid for this site. Verify the Post Type ID in Brilliant Directories.";
+  }
+  if (payload.error_classification === "missing_or_invalid_site_fields") {
+    return "Site configuration is incomplete. Add base URL, API key, listings path, and listings Post Type ID.";
+  }
+  if (payload.error === "bd_integration_invalid") {
+    return "Brilliant Directories integration is invalid. Verify API key, listings path, and Post Type ID.";
+  }
+  return (
+    payload.user_message ||
+    payload.error_message ||
+    payload.error ||
+    "DirectoryIQ ingest failed"
+  );
+}
+
+function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
+  const listings = payload.verification?.listings;
+  const listingsReason = listings?.reason ?? null;
+  if (listingsReason === "listings_data_id_missing") {
+    return "Listings Post Type ID is missing. Add it in Brilliant Directories Sites.";
+  }
+  if (listingsReason === "listings_data_id_unverified") {
+    if (listings?.search?.status === 404) {
+      return `Listings path is invalid or unreachable (${listings.search.path ?? "unknown path"}).`;
+    }
+    return "Listings Post Type ID could not be verified for this site. Confirm the Post Type ID and API key.";
+  }
+  const blogReason = payload.verification?.blog_posts?.reason ?? null;
+  if (blogReason === "blog_posts_data_id_missing") {
+    return "Blog Posts Post Type ID is missing. Add it in Brilliant Directories Sites.";
+  }
+  if (blogReason === "blog_posts_data_id_unverified") {
+    return "Blog Posts Post Type ID could not be verified. Confirm BD endpoint/data ID configuration.";
+  }
+  return "Site test is unresolved. Verify base URL, API key, listings path, and Post Type IDs.";
+}
+
 export default function DirectoryIqSignalSourcesClient() {
   const searchParams = useSearchParams();
   const selectedConnector = idAlias[(searchParams.get("connector") ?? "").toLowerCase()] ?? null;
@@ -251,13 +320,15 @@ export default function DirectoryIqSignalSourcesClient() {
         status?: string;
         counts?: { listings: number; blogPosts: number };
         error?: string;
+        user_message?: string;
+        error_classification?: string;
         error_message?: string | null;
       };
 
-      if (!response.ok) throw new Error(json.error ?? json.error_message ?? "DirectoryIQ ingest failed");
+      if (!response.ok) throw new Error(readIngestErrorMessage(json));
 
       if (json.status === "failed") {
-        throw new Error(json.error_message ?? "DirectoryIQ ingest failed");
+        throw new Error(readIngestErrorMessage(json));
       }
 
       setNotice(
@@ -286,11 +357,13 @@ export default function DirectoryIqSignalSourcesClient() {
         status?: string;
         counts?: { listings: number; blogPosts: number };
         error?: string;
+        user_message?: string;
+        error_classification?: string;
         error_message?: string | null;
       };
-      if (!response.ok) throw new Error(json.error ?? json.error_message ?? "DirectoryIQ ingest failed");
+      if (!response.ok) throw new Error(readIngestErrorMessage(json));
       if (json.status === "failed") {
-        throw new Error(json.error_message ?? "DirectoryIQ ingest failed");
+        throw new Error(readIngestErrorMessage(json));
       }
       setBdSiteNotice(
         `Ingest completed. Listings: ${json.counts?.listings ?? 0}, Blog posts: ${json.counts?.blogPosts ?? 0}.`
@@ -391,14 +464,16 @@ export default function DirectoryIqSignalSourcesClient() {
     setBdSiteNotice(null);
     try {
       const response = await fetch(`/api/directoryiq/sites/${siteId}/test`, { method: "POST" });
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as BdTestResponse;
       if (!response.ok) throw new Error(json.error ?? "Test failed");
       const verification = normalizeBdSiteTestVerification(json);
       const testedAt = new Date().toISOString();
       setBdSiteVerificationById((prev) => ({ ...prev, [siteId]: { testedAt, verification } }));
-      setBdSiteNotice(
-        `Tested ${siteId}: ${verification.overall === "verified" ? "verified" : "unresolved"}`
-      );
+      if (verification.overall === "verified") {
+        setBdSiteNotice(`Tested ${siteId}: verified`);
+      } else {
+        setBdSiteError(buildBdTestUnresolvedMessage(json));
+      }
     } catch (e) {
       setBdSiteError(e instanceof Error ? e.message : "Unknown test error");
     } finally {
