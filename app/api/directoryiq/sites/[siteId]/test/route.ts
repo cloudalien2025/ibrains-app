@@ -10,6 +10,10 @@ function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isVerifiedStatus(status: string): boolean {
+  return status === "verified" || status === "verified_empty";
+}
+
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> | { siteId: string } }
@@ -69,7 +73,7 @@ export async function POST(
       status: detection.listings.status,
       reason: detection.listings.reason,
       preflight: {
-        ok: detection.listings.status === "verified",
+        ok: isVerifiedStatus(detection.listings.status),
         status: detection.listings.search.status,
         wrapper_status: detection.listings.search.ok ? "success" : null,
         data_type_observed: detection.listings.dataTypeObserved,
@@ -100,7 +104,7 @@ export async function POST(
     };
 
     return NextResponse.json({
-      ok: listings.status === "verified",
+      ok: isVerifiedStatus(listings.status),
       verification: {
         listings,
         blog_posts: blog,

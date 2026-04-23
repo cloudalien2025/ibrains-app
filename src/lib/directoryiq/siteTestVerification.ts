@@ -1,4 +1,4 @@
-export type BdSiteVerificationStatus = "verified" | "unresolved";
+export type BdSiteVerificationStatus = "verified" | "verified_empty" | "invalid" | "unresolved";
 
 export type BdSiteVerificationSnapshot = {
   overall: BdSiteVerificationStatus;
@@ -28,7 +28,12 @@ type V2Response = {
 };
 
 function asStatus(value: unknown): BdSiteVerificationStatus {
-  return value === "verified" ? "verified" : "unresolved";
+  if (value === "verified" || value === "verified_empty" || value === "invalid") return value;
+  return "unresolved";
+}
+
+function isVerifiedStatus(status: BdSiteVerificationStatus): boolean {
+  return status === "verified" || status === "verified_empty";
 }
 
 function asCount(value: unknown): number | null {
@@ -44,7 +49,7 @@ export function normalizeBdSiteTestVerification(input: unknown): BdSiteVerificat
     const listings = asStatus(verification.listings?.status);
     const blogPosts = asStatus(verification.blog_posts?.status);
     const overall =
-      payload.ok === true || (listings === "verified" && blogPosts === "verified") ? "verified" : "unresolved";
+      payload.ok === true || (isVerifiedStatus(listings) && isVerifiedStatus(blogPosts)) ? "verified" : "unresolved";
 
     return {
       overall,

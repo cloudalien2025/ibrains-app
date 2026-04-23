@@ -6,6 +6,7 @@ import NeonButton from "@/components/ecomviper/NeonButton";
 import type { DirectoryIqConnector, DirectoryIqCredentialStatus } from "@/lib/directoryiq/signalSourceCredentials";
 import {
   normalizeBdSiteTestVerification,
+  type BdSiteVerificationStatus,
   type BdSiteVerificationSnapshot,
 } from "@/src/lib/directoryiq/siteTestVerification";
 
@@ -131,6 +132,12 @@ function readIngestErrorMessage(payload: IngestErrorResponse | null | undefined)
 function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
   const listings = payload.verification?.listings;
   const listingsReason = listings?.reason ?? null;
+  if (listingsReason === "listings_path_not_found") {
+    return `Listings path is invalid or unreachable (${listings?.search?.path ?? "unknown path"}).`;
+  }
+  if (listingsReason === "listings_data_id_invalid_type") {
+    return "Listings Post Type ID is invalid for listings content on this BD site.";
+  }
   if (listingsReason === "listings_data_id_missing") {
     return "Listings Post Type ID was not detected. Enter it manually or confirm API permissions.";
   }
@@ -141,6 +148,12 @@ function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
     return "Listings Post Type ID could not be verified. Try Auto-detect IDs, or enter it manually.";
   }
   const blogReason = payload.verification?.blog_posts?.reason ?? null;
+  if (blogReason === "blog_posts_path_not_found") {
+    return "Blog posts path is invalid or unreachable.";
+  }
+  if (blogReason === "blog_posts_data_id_invalid_type") {
+    return "Blog Post Type ID appears to be a listings type. Use a blog/article data type ID.";
+  }
   if (blogReason === "blog_posts_data_id_missing") {
     return "Blog Post Type ID was not confidently detected. You can enter it manually.";
   }
@@ -150,6 +163,13 @@ function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
   const note = payload.autodetect?.diagnostics?.notes?.[0];
   if (note) return `Site test is unresolved. ${note}.`;
   return "Site test is unresolved. Verify base URL, API key, listings path, and Post Type IDs.";
+}
+
+function formatVerificationStatus(status: BdSiteVerificationStatus, count: number | null): string {
+  if (status === "verified") return count == null ? "verified" : `verified (${count})`;
+  if (status === "verified_empty") return "verified, 0 rows returned";
+  if (status === "invalid") return "invalid";
+  return count == null ? "unresolved" : `unresolved (${count})`;
 }
 
 export default function DirectoryIqSignalSourcesClient() {
@@ -697,10 +717,6 @@ export default function DirectoryIqSignalSourcesClient() {
                 const detectedSummary = testState?.detectedSummary ?? null;
                 const testedAtText = testState ? new Date(testState.testedAt).toLocaleTimeString() : null;
                 const statusClass = verification?.overall === "verified" ? "text-emerald-200" : "text-amber-200";
-                const listingsCountText =
-                  verification?.listingsCount != null ? ` (${verification.listingsCount})` : "";
-                const blogCountText =
-                  verification?.blogPostsCount != null ? ` (${verification.blogPostsCount})` : "";
 
                 return (
                   <div key={site.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
@@ -717,9 +733,8 @@ export default function DirectoryIqSignalSourcesClient() {
                         {verification ? (
                           <div className={`mt-1 text-xs ${statusClass}`}>
                             Verification: {verification.overall === "verified" ? "Verified" : "Unresolved"} · Listings{" "}
-                            {verification.listings}
-                            {listingsCountText} · Blog {verification.blogPosts}
-                            {blogCountText}
+                            {formatVerificationStatus(verification.listings, verification.listingsCount)} · Blog{" "}
+                            {formatVerificationStatus(verification.blogPosts, verification.blogPostsCount)}
                             {testedAtText ? ` · Tested ${testedAtText}` : ""}
                           </div>
                         ) : null}
