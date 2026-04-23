@@ -140,6 +140,13 @@ const journeyFlow: Array<{ id: JourneyPhase; label: string }> = [
   { id: "launch", label: "Launch" },
 ];
 
+const sfSurfaceCardClass = "space-y-4 rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 md:p-6 shadow-[0_16px_40px_rgba(15,23,42,0.08)]";
+const sfLabelClass = "text-[#334155]";
+const sfInputClass = "mt-1 w-full rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-[#0F172A] placeholder:text-[#94A3B8]";
+const sfInfoPanelClass = "rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/70 p-4";
+const sfPrimaryButtonClass = "rounded-lg border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]";
+const sfSecondaryButtonClass = "rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]";
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     ...init,
@@ -1384,52 +1391,52 @@ export default function SiteForgeAppPage() {
     const templateCount = snapshot?.thriveIntelligence?.primitiveCounts.thriveTemplate ?? 0;
 
     return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Connect</h2>
-        <p className="text-sm text-slate-300">Connect your site and required keys once.</p>
+      <section className={sfSurfaceCardClass}>
+        <h2 className="text-xl font-semibold text-[#0F172A]">Connect</h2>
+        <p className="text-sm text-[#334155]">Connect your site and required keys once.</p>
 
-        <div className="grid gap-3 text-sm text-slate-200 md:grid-cols-2">
+        <div className="grid gap-3 text-sm text-[#334155] md:grid-cols-2">
           <div>
-            <label className="text-slate-300">WordPress URL</label>
-            <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+            <label className={sfLabelClass}>WordPress URL</label>
+            <input value={baseUrl} placeholder="https://example.com" onChange={(event) => setBaseUrl(event.target.value)} className={sfInputClass} />
           </div>
           <div>
-            <label className="text-slate-300">Username</label>
-            <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+            <label className={sfLabelClass}>Username</label>
+            <input value={username} placeholder="WordPress username" onChange={(event) => setUsername(event.target.value)} className={sfInputClass} />
           </div>
           <div>
-            <label className="text-slate-300">App password</label>
-            <input type="password" value={appPassword} placeholder="WordPress application password" onChange={(event) => setAppPassword(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+            <label className={sfLabelClass}>App password</label>
+            <input type="password" value={appPassword} placeholder="WordPress application password" onChange={(event) => setAppPassword(event.target.value)} className={sfInputClass} />
           </div>
           <div>
-            <label htmlFor="siteforge-ai-key" className="text-slate-300">OpenAI key</label>
-            <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+            <label htmlFor="siteforge-ai-key" className={sfLabelClass}>OpenAI key</label>
+            <input id="siteforge-ai-key" type="password" value={aiApiKey} onChange={(event) => setAiApiKey(event.target.value)} className={sfInputClass} />
           </div>
           <div className="md:col-span-2">
-            <label htmlFor="siteforge-serpapi-key" className="text-slate-300">SerpAPI key</label>
-            <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className="mt-1 w-full rounded-lg border border-white/15 bg-slate-900/70 px-3 py-2" />
+            <label htmlFor="siteforge-serpapi-key" className={sfLabelClass}>SerpAPI key</label>
+            <input id="siteforge-serpapi-key" type="password" value={serpApiKey} onChange={(event) => setSerpApiKey(event.target.value)} className={sfInputClass} />
           </div>
         </div>
 
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+        <div className="rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-slate-200">Primary action</div>
+            <div className="text-sm text-[#334155]">Primary action</div>
             <button
               type="button"
               data-testid="siteforge-connect-website-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`${sfPrimaryButtonClass} ${busy ? "cursor-not-allowed opacity-60" : ""}`}
               onClick={() => void connectAndBegin()}
               disabled={busy}
             >
               Connect Website
             </button>
           </div>
-          {connectStatusMessage ? <div className="mt-2 text-xs text-slate-300">{connectStatusMessage}</div> : null}
-          {aiStatusMessage ? <div className="mt-1 text-xs text-slate-400">{aiStatusMessage}</div> : null}
+          {connectStatusMessage ? <div className="mt-2 text-xs text-[#334155]">{connectStatusMessage}</div> : null}
+          {aiStatusMessage ? <div className="mt-1 text-xs text-[#64748B]">{aiStatusMessage}</div> : null}
         </div>
 
         {(isConnected || snapshot) ? (
-          <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
+          <div className={`${sfInfoPanelClass} text-xs text-[#334155]`}>
             <div>Connected: {isConnected ? "yes" : "not yet"}</div>
             <div className="mt-1">Thrive detected: {isThriveDetected ? "yes" : "no"}</div>
             <div className="mt-1">Reusable assets found: {symbolCount}</div>
@@ -1452,54 +1459,54 @@ export default function SiteForgeAppPage() {
     const homepageGoal = homePage?.goal ?? "Primary conversion";
 
     return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Describe</h2>
-        <p className="text-sm text-slate-300">Describe the homepage and additional pages you want created.</p>
+      <section className={sfSurfaceCardClass}>
+        <h2 className="text-xl font-semibold text-[#0F172A]">Describe</h2>
+        <p className="text-sm text-[#334155]">Describe the homepage and additional pages you want created.</p>
 
         <textarea
           data-testid="siteforge-intent-prompt"
           value={intentPrompt}
           onChange={(event) => setIntentPrompt(event.target.value)}
           placeholder="Describe the homepage and additional pages you want created."
-          className="h-36 w-full rounded-xl border border-white/15 bg-slate-900/70 px-4 py-3 text-sm text-slate-100"
+          className="h-36 w-full rounded-xl border border-[#D9E4F0] bg-white px-4 py-3 text-sm text-[#0F172A] placeholder:text-[#94A3B8]"
         />
 
         <button
           type="button"
-          className="rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-xs text-slate-200"
+          className={sfSecondaryButtonClass}
           onClick={() => setIntentPrompt(examplePrompt)}
         >
           {examplePrompt}
         </button>
 
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+        <div className="rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-slate-200">Primary action</div>
+            <div className="text-sm text-[#334155]">Primary action</div>
             <button
               type="button"
               data-testid="siteforge-create-plan-action"
-              className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy ? "cursor-not-allowed opacity-60" : ""}`}
+              className={`${sfPrimaryButtonClass} ${busy ? "cursor-not-allowed opacity-60" : ""}`}
               onClick={() => void createFirstDirection()}
               disabled={busy}
             >
               Create Website Plan
             </button>
           </div>
-          {intentStatusMessage ? <div className="mt-2 text-xs text-slate-300">{intentStatusMessage}</div> : null}
+          {intentStatusMessage ? <div className="mt-2 text-xs text-[#334155]">{intentStatusMessage}</div> : null}
         </div>
 
         {hasGeneratedSitePlan ? (
-          <section className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-            <div className="font-medium text-white">Plan summary</div>
+          <section className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/70 p-4 text-xs text-[#334155]">
+            <div className="font-medium text-[#0F172A]">Plan summary</div>
             <div className="mt-3">Homepage goal: {homepageGoal}</div>
             <div className="mt-3">Key messages:</div>
-            <ul className="mt-1 list-disc pl-4 text-slate-300">
+            <ul className="mt-1 list-disc pl-4 text-[#334155]">
               {(keyMessages.length ? keyMessages : ["Conversion-first messaging based on your intent."]).map((message) => (
                 <li key={message}>{message}</li>
               ))}
             </ul>
             <div className="mt-3">Proposed pages:</div>
-            <ul className="mt-1 list-disc pl-4 text-slate-300">
+            <ul className="mt-1 list-disc pl-4 text-[#334155]">
               {pages.map((page) => (
                 <li key={page}>{page}</li>
               ))}
@@ -1543,23 +1550,23 @@ export default function SiteForgeAppPage() {
     const strategyDrivenBuild = Boolean(currentSession?.websiteStrategy && currentSession?.marketIntelligence);
 
     return (
-      <section className="space-y-4 rounded-2xl border border-white/12 bg-white/5 p-5 md:p-6">
-        <h2 className="text-xl font-semibold text-white">Launch</h2>
-        <p className="text-sm text-slate-300">Build your website draft from your description and connected site.</p>
+      <section className={sfSurfaceCardClass}>
+        <h2 className="text-xl font-semibold text-[#0F172A]">Launch</h2>
+        <p className="text-sm text-[#334155]">Build your website draft from your description and connected site.</p>
 
-        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-sm text-slate-200">
-          <div className="text-xs uppercase tracking-[0.18em] text-slate-400">Status</div>
-          <div className="mt-2 text-xl font-semibold text-white">{launchExperienceState.stage}</div>
-          <div className="mt-2 text-sm text-slate-300">{launchExperienceState.detail}</div>
-          <ul className="mt-3 list-disc pl-5 text-xs text-slate-300">
+        <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/70 p-4 text-sm text-[#334155]">
+          <div className="text-xs uppercase tracking-[0.18em] text-[#64748B]">Status</div>
+          <div className="mt-2 text-xl font-semibold text-[#0F172A]">{launchExperienceState.stage}</div>
+          <div className="mt-2 text-sm text-[#334155]">{launchExperienceState.detail}</div>
+          <ul className="mt-3 list-disc pl-5 text-xs text-[#334155]">
             <li>{researchAvailability.summary}</li>
             <li>{isThriveDetected ? "Building in Thrive" : "Building with your current site shell"}</li>
             <li>Verifying your draft</li>
           </ul>
         </div>
 
-        <div className="rounded-xl border border-white/12 bg-slate-900/60 p-4 text-xs text-slate-200">
-          <div className="font-medium text-white">Intelligence summary</div>
+        <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/70 p-4 text-xs text-[#334155]">
+          <div className="font-medium text-[#0F172A]">Intelligence summary</div>
           <div className="mt-2">Research mode: {hasSerpApiAccess ? "SerpAPI pattern synthesis" : "Brief + connected site fallback"}.</div>
           <div className="mt-1">Research confidence: {researchConfidence}.</div>
           {researchSignal?.niche ? <div className="mt-1">Detected niche: {researchSignal.niche}.</div> : null}
@@ -1580,18 +1587,18 @@ export default function SiteForgeAppPage() {
           {strategyDrivenBuild ? <div className="mt-1">Strategy-driven build: research, strategy, and Thrive inventory were combined for composition decisions.</div> : null}
         </div>
 
-        <div className="rounded-xl border border-cyan-300/20 bg-slate-950/60 p-4">
+        <div className="rounded-xl border border-[#22D3EE]/30 bg-white p-4 shadow-[0_0_24px_rgba(34,211,238,0.14)]">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="text-xs uppercase tracking-[0.16em] text-cyan-200/90">Build progress</div>
-              <div className="mt-1 text-base font-semibold text-white">{launchProgressState.currentStageLabel}</div>
-              <div className="mt-1 text-xs text-slate-300">{launchProgressState.currentStageDescription}</div>
+              <div className="text-xs uppercase tracking-[0.16em] text-[#2563EB]">Build progress</div>
+              <div className="mt-1 text-base font-semibold text-[#0F172A]">{launchProgressState.currentStageLabel}</div>
+              <div className="mt-1 text-xs text-[#334155]">{launchProgressState.currentStageDescription}</div>
             </div>
-            <div className="text-sm font-semibold text-cyan-100">{launchProgressState.percentage}%</div>
+            <div className="text-sm font-semibold text-[#1D4ED8]">{launchProgressState.percentage}%</div>
           </div>
-          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-slate-800/90">
+          <div className="mt-3 h-2 w-full overflow-hidden rounded-full bg-[#EAF1F8]">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-cyan-300 to-emerald-300 transition-all duration-500"
+              className="h-full rounded-full bg-gradient-to-r from-[#2563EB] via-[#3B82F6] to-[#22D3EE] transition-all duration-500"
               style={{ width: `${launchProgressState.percentage}%` }}
               aria-label="Build progress bar"
               data-testid="siteforge-build-progress-bar"
@@ -1603,10 +1610,10 @@ export default function SiteForgeAppPage() {
                 key={stage.id}
                 className={`rounded-lg border px-2.5 py-2 text-xs ${
                   stage.status === "completed"
-                    ? "border-emerald-300/40 bg-emerald-500/10 text-emerald-100"
+                    ? "border-emerald-200 bg-emerald-100 text-emerald-700"
                     : stage.status === "current"
-                      ? "border-cyan-300/50 bg-cyan-500/10 text-cyan-100"
-                      : "border-white/10 bg-white/5 text-slate-300"
+                      ? "border-[#22D3EE]/35 bg-[#22D3EE]/12 text-[#0F172A]"
+                      : "border-[#D9E4F0] bg-[#F8FBFF] text-[#334155]"
                 }`}
               >
                 <div className="font-medium">{stage.label}</div>
@@ -1616,23 +1623,23 @@ export default function SiteForgeAppPage() {
           </ul>
         </div>
 
-        <div className="rounded-xl border border-cyan-300/25 bg-cyan-500/5 p-4">
+        <div className="rounded-xl border border-[#22D3EE]/30 bg-[#22D3EE]/10 p-4">
           <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-slate-200">Primary action</div>
+            <div className="text-sm text-[#334155]">Primary action</div>
             {hasCompletedBuild ? (
               homepageUrl ? (
                 <a
                   href={homepageUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="rounded-lg border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-100"
+                  className={sfPrimaryButtonClass}
                 >
                   View Draft in Thrive
                 </a>
               ) : (
                 <button
                   type="button"
-                  className="rounded-lg border border-emerald-300/40 bg-emerald-500/20 px-4 py-2 text-sm text-emerald-100"
+                  className={sfPrimaryButtonClass}
                   onClick={() => setActivePhase("describe")}
                 >
                   Review Draft Content
@@ -1642,7 +1649,7 @@ export default function SiteForgeAppPage() {
               <button
                 type="button"
                 data-testid="siteforge-build-website-action"
-                className={`rounded-lg border border-cyan-300/45 bg-cyan-500/20 px-4 py-2 text-sm text-cyan-100 ${busy || !canBuild ? "cursor-not-allowed opacity-60" : ""}`}
+                className={`${sfPrimaryButtonClass} ${busy || !canBuild ? "cursor-not-allowed opacity-60" : ""}`}
                 onClick={() => void runSitePipeline("build")}
                 disabled={busy || !canBuild}
               >
@@ -1650,9 +1657,9 @@ export default function SiteForgeAppPage() {
               </button>
             )}
           </div>
-          {buildDraftMessage ? <div className="mt-2 text-xs text-slate-300">{buildDraftMessage}</div> : null}
+          {buildDraftMessage ? <div className="mt-2 text-xs text-[#334155]">{buildDraftMessage}</div> : null}
           {hasCompletedBuild ? (
-            <div className="mt-3 rounded-lg border border-emerald-300/30 bg-emerald-500/10 p-3 text-xs text-emerald-50">
+            <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-100 p-3 text-xs text-emerald-700">
               <div className="font-medium">Draft ready</div>
               <div className="mt-1">What was created: {builtPageCount} page{builtPageCount === 1 ? "" : "s"} in your draft build.</div>
               <div className="mt-1">
@@ -1673,23 +1680,23 @@ export default function SiteForgeAppPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.18),_transparent_38%),radial-gradient(circle_at_90%_0%,_rgba(16,185,129,0.14),_transparent_30%),linear-gradient(180deg,_#050814_0%,_#0b1221_52%,_#070d19_100%)] text-slate-100">
+    <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <main className="mx-auto max-w-[1280px] px-4 py-6 md:px-8">
-        <section className="rounded-2xl border border-white/15 bg-slate-900/65 p-6 shadow-[0_10px_40px_rgba(15,23,42,0.45)]">
+        <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_18px_44px_rgba(15,23,42,0.09)]">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div>
-              <div className="text-xs uppercase tracking-[0.2em] text-cyan-200">SiteForge 2050</div>
-              <h1 className="mt-2 text-3xl font-semibold text-white">Your AI website partner</h1>
-              <p className="mt-2 max-w-3xl text-sm text-slate-300">Connect once, describe what you want, and launch.</p>
+              <div className="text-xs uppercase tracking-[0.2em] text-[#2563EB]">SiteForge 2050</div>
+              <h1 className="mt-2 text-3xl font-semibold text-[#0F172A]">Your AI website partner</h1>
+              <p className="mt-2 max-w-3xl text-sm text-[#334155]">Connect once, describe what you want, and launch.</p>
             </div>
-            <div className="rounded-xl border border-white/15 bg-white/5 px-4 py-3 text-xs text-slate-200">
+            <div className="rounded-xl border border-[#D9E4F0] bg-[#EAF1F8]/75 px-4 py-3 text-xs text-[#334155]">
               <div>Project: {activeProject?.name ?? "No project selected"}</div>
               <div className="mt-1">Connection: {isConnected ? "connected" : "pending"}</div>
               <div className="mt-1">Thrive: {isThriveDetected ? "detected" : "not detected"}</div>
             </div>
           </div>
 
-          <div className="mt-5 flex flex-wrap gap-2 border-b border-white/10 pb-3">
+          <div className="mt-5 flex flex-wrap gap-2 border-b border-[#D9E4F0] pb-3">
             {journeyFlow.map((phase) => (
               <button
                 key={phase.id}
@@ -1697,8 +1704,8 @@ export default function SiteForgeAppPage() {
                 onClick={() => setActivePhase(phase.id)}
                 className={`rounded-full border px-4 py-2 text-sm transition ${
                   activePhase === phase.id
-                    ? "border-cyan-300/45 bg-cyan-500/15 text-cyan-100"
-                    : "border-white/12 bg-white/5 text-slate-200 hover:bg-white/10"
+                    ? "border-[#2563EB] bg-[#2563EB] text-white"
+                    : "border-[#D9E4F0] bg-white text-[#334155] hover:bg-[#F8FBFF]"
                 }`}
               >
                 {phase.label}
@@ -1706,7 +1713,7 @@ export default function SiteForgeAppPage() {
             ))}
           </div>
 
-          {error ? <div className="mt-4 rounded-xl border border-amber-300/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100">{error}</div> : null}
+          {error ? <div className="mt-4 rounded-xl border border-amber-300/50 bg-amber-100 px-4 py-3 text-sm text-amber-700">{error}</div> : null}
         </section>
 
         <section className="mt-4">{renderPhase()}</section>
