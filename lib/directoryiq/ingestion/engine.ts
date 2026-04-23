@@ -1,4 +1,4 @@
-import { getBrainLearningPool } from "@/lib/brain-learning/db";
+import { getDirectoryIqPool } from "@/lib/brain-learning/db";
 import { runBrainTaxonomyEnrichment } from "@/lib/brain-learning/taxonomyEnrichment";
 import {
   type DedupeDecision,
@@ -110,7 +110,7 @@ async function createRun(params: {
   sourceType: IngestSourceType;
   item: NormalizedIngestItem;
 }): Promise<string> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   const attemptNoResult = await pool.query<{ attempt_no: number }>(
     `
       SELECT COALESCE(MAX(attempt_no), 0) + 1 AS attempt_no
@@ -173,7 +173,7 @@ async function updateRunStatus(
   metadata: Record<string, unknown>,
   error?: string
 ): Promise<void> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   await pool.query(
     `
       UPDATE brain_ingest_runs
@@ -193,7 +193,7 @@ async function upsertSourceItem(params: {
   brainId: string;
   item: NormalizedIngestItem;
 }): Promise<SourceItemRow> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   const sourceKind = mapSourceKind(params.item.source_type);
   const payloadHash = sha256Hex(JSON.stringify(params.item.metadata ?? {}));
   const inserted = await pool.query<SourceItemRow>(
@@ -269,7 +269,7 @@ async function upsertSourceItem(params: {
 }
 
 async function fetchCurrentDocument(sourceItemId: string, documentKind: DocumentKind): Promise<CurrentDocumentRow | null> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   const result = await pool.query<CurrentDocumentRow>(
     `
       SELECT id, content_sha256, version_no
@@ -291,7 +291,7 @@ async function replaceChunks(params: {
   runId: string;
   content: string;
 }): Promise<number> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   await pool.query(`DELETE FROM brain_chunks WHERE document_id = $1`, [params.documentId]);
 
   const chunks = chunkText(params.content);
@@ -342,7 +342,7 @@ async function persistCreateOrVersion(params: {
   documentKind: DocumentKind;
   current: CurrentDocumentRow | null;
 }): Promise<{ documentId: string; versionNo: number; chunksCreated: number }> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   const nextVersionNo = params.current ? params.current.version_no + 1 : 1;
 
   const inserted = await pool.query<{ id: string }>(
@@ -427,7 +427,7 @@ async function persistUpdateInPlace(params: {
   item: NormalizedIngestItem;
   current: CurrentDocumentRow;
 }): Promise<{ documentId: string; versionNo: number; chunksCreated: number }> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
 
   await pool.query(
     `
@@ -464,7 +464,7 @@ async function persistUpdateInPlace(params: {
 }
 
 async function loadSourceTotals(brainId: string): Promise<Record<IngestSourceType, number>> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
   const result = await pool.query<{ source_type: IngestSourceType; count: string }>(
     `
       SELECT
@@ -497,7 +497,7 @@ export async function runMultiSourceIngest(params: {
   sourceType: IngestSourceType;
   items: NormalizedIngestItem[];
 }): Promise<MultiSourceIngestSummary> {
-  const pool = getBrainLearningPool();
+  const pool = getDirectoryIqPool();
 
   const counters: IngestOutcomeCounter = {
     candidates_found: params.items.length,
