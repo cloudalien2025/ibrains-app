@@ -3,7 +3,7 @@ import { proxyDirectoryIqRequest } from "@/app/api/directoryiq/_utils/externalRe
 
 export const runtime = "nodejs";
 
-type Params = { params: Promise<{ versionId: string }> };
+type Params = { params: Promise<{ versionId: string }> | { versionId: string } };
 
 export async function POST(req: NextRequest, { params }: Params) {
   const { versionId } = await params;
