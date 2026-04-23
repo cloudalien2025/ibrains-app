@@ -14,6 +14,7 @@ import {
 import {
   deleteDirectoryIqIntegration,
   getDirectoryIqIntegration,
+  isDirectoryIqCredentialStoreAvailable,
   listDirectoryIqIntegrations,
   saveDirectoryIqIntegration,
 } from "@/app/api/directoryiq/_utils/credentials";
@@ -30,6 +31,28 @@ function providerToConnector(provider: string): DirectoryIqConnector {
   return "openai";
 }
 
+function isNonBdConnector(connector: DirectoryIqConnector): connector is "openai" | "serpapi" | "ga4" {
+  return connector === "openai" || connector === "serpapi" || connector === "ga4";
+}
+
+function connectorDisplayName(connector: DirectoryIqConnector): string {
+  if (connector === "openai") return "OpenAI API";
+  if (connector === "serpapi") return "SerpAPI";
+  if (connector === "ga4") return "GA4";
+  return "Brilliant Directories API";
+}
+
+function nonBdStorageUnavailableMessage(connector: "openai" | "serpapi" | "ga4"): string {
+  return `${connectorDisplayName(connector)} credential persistence is not available in this environment yet.`;
+}
+
+function relationErrorMessageForConnector(connector: DirectoryIqConnector | null): string {
+  if (connector && isNonBdConnector(connector)) {
+    return nonBdStorageUnavailableMessage(connector);
+  }
+  return "DirectoryIQ signal-source credentials are unavailable in this environment.";
+}
+
 export async function GET(req: NextRequest) {
   if (!shouldServeDirectoryIqLocally(req)) {
     return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "GET");
@@ -43,6 +66,7 @@ export async function GET(req: NextRequest) {
       listDirectoryIqIntegrations(userId),
       listBdSites(userId),
     ]);
+    const nonBdStorageAvailable = await isDirectoryIqCredentialStoreAvailable();
     const canonicalBdConnected = hasCanonicalDirectoryIqConnection(sites);
 
     const connectors: DirectoryIqCredentialStatus[] = integrations.map((row) => {
@@ -72,12 +96,33 @@ export async function GET(req: NextRequest) {
         config,
       };
     });
-    return NextResponse.json({ connectors });
+
+    const present = new Set(connectors.map((entry) => entry.connector_id));
+    for (const connectorId of ["brilliant_directories_api", "openai", "serpapi", "ga4"] as const) {
+      if (present.has(connectorId)) continue;
+      connectors.push({
+        connector_id: connectorId,
+        connected: false,
+        label: null,
+        masked_secret: "",
+        updated_at: null,
+        config: null,
+      });
+    }
+
+    const connectorSupport = {
+      brilliant_directories_api: true,
+      openai: nonBdStorageAvailable,
+      serpapi: nonBdStorageAvailable,
+      ga4: nonBdStorageAvailable,
+    };
+
+    return NextResponse.json({ connectors, connector_support: connectorSupport });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ signal-source error";
     if (isRawRelationLeakMessage(message)) {
       return NextResponse.json(
-        { error: "DirectoryIQ signal-source credentials are unavailable in this environment. Use site-level configuration under Brilliant Directories Sites." },
+        { error: "DirectoryIQ signal-source credentials are unavailable in this environment." },
         { status: 500 }
       );
     }
@@ -90,6 +135,7 @@ export async function POST(req: NextRequest) {
     return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "POST");
   }
 
+  let requestedConnector: DirectoryIqConnector | null = null;
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
@@ -102,6 +148,7 @@ export async function POST(req: NextRequest) {
     };
 
     const connectorId = (body.connector_id ?? "").trim().toLowerCase() as DirectoryIqConnector;
+    requestedConnector = connectorId;
     const secret = (body.secret ?? "").trim();
 
     if (!isDirectoryIqConnector(connectorId)) {
@@ -110,6 +157,13 @@ export async function POST(req: NextRequest) {
 
     if (!secret) {
       return NextResponse.json({ error: "secret is required" }, { status: 400 });
+    }
+
+    if (isNonBdConnector(connectorId) && !(await isDirectoryIqCredentialStoreAvailable())) {
+      return NextResponse.json(
+        { error: nonBdStorageUnavailableMessage(connectorId) },
+        { status: 503 }
+      );
     }
 
     const configInput = body.config && typeof body.config === "object" ? body.config : {};
@@ -152,7 +206,7 @@ export async function POST(req: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ credential save error";
     if (isRawRelationLeakMessage(message)) {
       return NextResponse.json(
-        { error: "DirectoryIQ legacy credential storage is unavailable. Configure Brilliant Directories using the site form below." },
+        { error: relationErrorMessageForConnector(requestedConnector) },
         { status: 500 }
       );
     }
@@ -165,13 +219,22 @@ export async function DELETE(req: NextRequest) {
     return proxyDirectoryIqRequest(req, "/api/directoryiq/signal-sources", "DELETE");
   }
 
+  let requestedConnector: DirectoryIqConnector | null = null;
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
 
     const connectorId = (req.nextUrl.searchParams.get("connector_id") ?? "").trim().toLowerCase() as DirectoryIqConnector;
+    requestedConnector = connectorId;
     if (!isDirectoryIqConnector(connectorId)) {
       return NextResponse.json({ error: "Unsupported connector_id" }, { status: 400 });
+    }
+
+    if (isNonBdConnector(connectorId) && !(await isDirectoryIqCredentialStoreAvailable())) {
+      return NextResponse.json(
+        { error: nonBdStorageUnavailableMessage(connectorId) },
+        { status: 503 }
+      );
     }
 
     await deleteDirectoryIqIntegration(userId, connectorToProvider(connectorId));
@@ -181,7 +244,7 @@ export async function DELETE(req: NextRequest) {
     const message = error instanceof Error ? error.message : "Unknown DirectoryIQ credential delete error";
     if (isRawRelationLeakMessage(message)) {
       return NextResponse.json(
-        { error: "DirectoryIQ legacy credential storage is unavailable in this environment." },
+        { error: relationErrorMessageForConnector(requestedConnector) },
         { status: 500 }
       );
     }

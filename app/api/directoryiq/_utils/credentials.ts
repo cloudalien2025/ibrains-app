@@ -193,3 +193,15 @@ export async function getDirectoryIqIntegrationSecret(
   const secret = decryptSecret(row.secret_ciphertext, `${userId}:directoryiq:${provider}`);
   return { secret, meta: asObject(row.meta_json) };
 }
+
+export async function isDirectoryIqCredentialStoreAvailable(): Promise<boolean> {
+  try {
+    const rows = await query<{ exists: string | null }>(
+      `SELECT to_regclass('public.integrations_credentials')::text as exists`
+    );
+    return Boolean(rows[0]?.exists);
+  } catch (error) {
+    if (isUndefinedRelationError(error, "integrations_credentials")) return false;
+    throw error;
+  }
+}
