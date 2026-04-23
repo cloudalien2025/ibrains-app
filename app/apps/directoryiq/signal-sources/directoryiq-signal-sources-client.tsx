@@ -65,6 +65,22 @@ type BdSiteVerificationState = {
   testedAt: string;
   verification: BdSiteVerificationSnapshot;
   detectedSummary: string | null;
+  discovery: {
+    selected: {
+      primaryListingDataId: number | null;
+      articleOrBlogDataId: number | null;
+    } | null;
+    optional: Array<{ dataId: number; role: string; confidence: number; name: string }>;
+    inventory: Array<{
+      data_id: number;
+      name: string;
+      role: string;
+      confidence: number;
+      auto_enabled: boolean;
+      sample_count: number;
+      endpoint_family: string | null;
+    }>;
+  } | null;
 };
 
 type IngestErrorResponse = {
@@ -102,7 +118,38 @@ type BdTestResponse = {
       detected_from?: string | null;
     } | null;
   } | null;
+  discovery?: {
+    selected?: {
+      primaryListingDataId?: number | null;
+      articleOrBlogDataId?: number | null;
+    } | null;
+    optional?: Array<{ dataId?: number; role?: string; confidence?: number; name?: string }> | null;
+    inventory?: Array<{
+      data_id?: number;
+      name?: string;
+      role?: string;
+      confidence?: number;
+      auto_enabled?: boolean;
+      sample_count?: number;
+      endpoint_family?: string | null;
+    }> | null;
+  } | null;
 };
+
+export function formatRoleLabel(role: string): string {
+  if (role === "primary_listing") return "Listings";
+  if (role === "article_or_blog") return "Blog Articles";
+  if (role === "video") return "Videos";
+  if (role === "property") return "Properties";
+  if (role === "coupon") return "Coupons";
+  if (role === "event") return "Events";
+  if (role === "product") return "Products";
+  if (role === "discussion") return "Discussions";
+  if (role === "review") return "Reviews";
+  if (role === "photo_album") return "Photo Albums";
+  if (role === "other_structured_content") return "Structured Content";
+  return "Unknown";
+}
 
 function readIngestErrorMessage(payload: IngestErrorResponse | null | undefined): string {
   if (!payload) return "DirectoryIQ ingest failed";
@@ -225,10 +272,11 @@ export default function DirectoryIqSignalSourcesClient() {
     apiKey: "",
     listingsDataId: "",
     blogPostsDataId: "",
-    listingsPath: "/api/v2/users_portfolio_groups/search",
+    listingsPath: "",
     blogPostsPath: "",
     enabled: true,
   });
+  const [bdAdvancedOpen, setBdAdvancedOpen] = useState(false);
 
   const orderedConnectors = useMemo(
     () => ["openai", "serpapi", "ga4"] as DirectoryIqConnector[],
@@ -421,11 +469,12 @@ export default function DirectoryIqSignalSourcesClient() {
       apiKey: "",
       listingsDataId: "",
       blogPostsDataId: "",
-      listingsPath: "/api/v2/users_portfolio_groups/search",
+      listingsPath: "",
       blogPostsPath: "",
       enabled: true,
     });
     setBdEditingId(null);
+    setBdAdvancedOpen(false);
   }
 
   function startEditSite(site: BdSite) {
@@ -440,6 +489,7 @@ export default function DirectoryIqSignalSourcesClient() {
       enabled: site.enabled,
     });
     setBdEditingId(site.id);
+    setBdAdvancedOpen(true);
     setBdSiteNotice(null);
     setBdSiteError(null);
   }
@@ -455,7 +505,7 @@ export default function DirectoryIqSignalSourcesClient() {
         api_key: bdForm.apiKey.trim() || undefined,
         listings_data_id: bdForm.listingsDataId.trim(),
         blog_posts_data_id: bdForm.blogPostsDataId.trim() || null,
-        listings_path: bdForm.listingsPath.trim() || "/api/v2/users_portfolio_groups/search",
+        listings_path: bdForm.listingsPath.trim() || null,
         blog_posts_path: bdForm.blogPostsPath.trim() || null,
         enabled: bdForm.enabled,
       };
@@ -471,6 +521,10 @@ export default function DirectoryIqSignalSourcesClient() {
         autodetect?: {
           listings?: { status?: string; effective_data_id?: number | null; auto_detected?: boolean } | null;
           blog_posts?: { status?: string; effective_data_id?: number | null; auto_detected?: boolean } | null;
+          selected?: {
+            primaryListingDataId?: number | null;
+            articleOrBlogDataId?: number | null;
+          } | null;
         } | null;
       };
       if (!response.ok) throw new Error(json.error ?? "Failed to save BD site");
@@ -482,6 +536,12 @@ export default function DirectoryIqSignalSourcesClient() {
       }
       if (json.autodetect?.blog_posts?.auto_detected && typeof json.autodetect.blog_posts.effective_data_id === "number") {
         detectedLabels.push(`Blog ${json.autodetect.blog_posts.effective_data_id}`);
+      }
+      if (typeof json.autodetect?.selected?.primaryListingDataId === "number") {
+        detectedLabels.push(`Primary listings ${json.autodetect.selected.primaryListingDataId}`);
+      }
+      if (typeof json.autodetect?.selected?.articleOrBlogDataId === "number") {
+        detectedLabels.push(`Primary blog ${json.autodetect.selected.articleOrBlogDataId}`);
       }
       setBdSiteNotice(detectedLabels.length > 0 ? `BD site saved. Auto-detected: ${detectedLabels.join(" · ")}.` : "BD site saved.");
     } catch (e) {
@@ -526,8 +586,51 @@ export default function DirectoryIqSignalSourcesClient() {
       if (json.verification?.blog_posts?.auto_detected && typeof json.verification?.blog_posts?.effective_data_id === "number") {
         detectedParts.push(`Blog ${json.verification.blog_posts.effective_data_id}`);
       }
+      const selected = json.discovery?.selected ?? null;
+      if (typeof selected?.primaryListingDataId === "number") {
+        detectedParts.push(`Primary Listings ${selected.primaryListingDataId}`);
+      }
+      if (typeof selected?.articleOrBlogDataId === "number") {
+        detectedParts.push(`Primary Blog ${selected.articleOrBlogDataId}`);
+      }
       const detectedSummary = detectedParts.length > 0 ? `Auto-detected: ${detectedParts.join(" · ")}` : null;
-      setBdSiteVerificationById((prev) => ({ ...prev, [siteId]: { testedAt, verification, detectedSummary } }));
+      const normalizedDiscovery = json.discovery
+        ? {
+            selected: {
+              primaryListingDataId:
+                typeof json.discovery.selected?.primaryListingDataId === "number"
+                  ? json.discovery.selected.primaryListingDataId
+                  : null,
+              articleOrBlogDataId:
+                typeof json.discovery.selected?.articleOrBlogDataId === "number"
+                  ? json.discovery.selected.articleOrBlogDataId
+                  : null,
+            },
+            optional: (json.discovery.optional ?? [])
+              .map((item) => ({
+                dataId: typeof item.dataId === "number" ? item.dataId : 0,
+                role: item.role ?? "unknown",
+                confidence: typeof item.confidence === "number" ? item.confidence : 0,
+                name: item.name ?? "Unknown",
+              }))
+              .filter((item) => item.dataId > 0),
+            inventory: (json.discovery.inventory ?? [])
+              .map((item) => ({
+                data_id: typeof item.data_id === "number" ? item.data_id : 0,
+                name: item.name ?? "Unknown",
+                role: item.role ?? "unknown",
+                confidence: typeof item.confidence === "number" ? item.confidence : 0,
+                auto_enabled: item.auto_enabled === true,
+                sample_count: typeof item.sample_count === "number" ? item.sample_count : 0,
+                endpoint_family: typeof item.endpoint_family === "string" ? item.endpoint_family : null,
+              }))
+              .filter((item) => item.data_id > 0),
+          }
+        : null;
+      setBdSiteVerificationById((prev) => ({
+        ...prev,
+        [siteId]: { testedAt, verification, detectedSummary, discovery: normalizedDiscovery },
+      }));
       const persisted = json.autodetect?.persisted ?? null;
       const persistedListings = typeof persisted?.listings_data_id === "number" ? persisted.listings_data_id : null;
       const persistedBlog = typeof persisted?.blog_posts_data_id === "number" ? persisted.blog_posts_data_id : null;
@@ -601,7 +704,7 @@ export default function DirectoryIqSignalSourcesClient() {
           <div>
             <h3 className="text-sm font-semibold text-[#0F172A]">Brilliant Directories Sites</h3>
             <p className="text-xs text-slate-300">
-              Add each BD site with its own Post Type IDs. Multi-site listings can be ingested per site or across all sites.
+              Add a site label, base URL, and API key. DirectoryIQ auto-discovers post types and selects primary sources.
             </p>
             {selectedSite ? (
               <div className="mt-2 text-xs text-slate-400">
@@ -658,34 +761,43 @@ export default function DirectoryIqSignalSourcesClient() {
               placeholder={bdEditingId ? "API key (leave blank to keep)" : "API key"}
               className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
             />
-            <div className="grid gap-2 md:grid-cols-2">
-              <input
-                value={bdForm.listingsDataId}
-                onChange={(event) => setBdForm((prev) => ({ ...prev, listingsDataId: event.target.value }))}
-                placeholder="Listings Post Type ID"
-                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-              />
-              <input
-                value={bdForm.blogPostsDataId}
-                onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsDataId: event.target.value }))}
-                placeholder="Blog Posts Post Type ID"
-                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-              />
-            </div>
-            <div className="grid gap-2 md:grid-cols-2">
-              <input
-                value={bdForm.listingsPath}
-                onChange={(event) => setBdForm((prev) => ({ ...prev, listingsPath: event.target.value }))}
-                placeholder="Listings path"
-                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-              />
-              <input
-                value={bdForm.blogPostsPath}
-                onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
-                placeholder="Blog posts path (optional)"
-                className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
-              />
-            </div>
+            <details
+              className="rounded-lg border border-white/15 bg-white/[0.03] p-2"
+              open={bdAdvancedOpen}
+              onToggle={(event) => setBdAdvancedOpen((event.target as HTMLDetailsElement).open)}
+            >
+              <summary className="cursor-pointer text-xs text-slate-300">Advanced / Troubleshooting</summary>
+              <div className="mt-2 space-y-2">
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    value={bdForm.listingsDataId}
+                    onChange={(event) => setBdForm((prev) => ({ ...prev, listingsDataId: event.target.value }))}
+                    placeholder="Listings Post Type ID (optional override)"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                  />
+                  <input
+                    value={bdForm.blogPostsDataId}
+                    onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsDataId: event.target.value }))}
+                    placeholder="Blog Post Type ID (optional override)"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                  />
+                </div>
+                <div className="grid gap-2 md:grid-cols-2">
+                  <input
+                    value={bdForm.listingsPath}
+                    onChange={(event) => setBdForm((prev) => ({ ...prev, listingsPath: event.target.value }))}
+                    placeholder="Listings endpoint path override"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                  />
+                  <input
+                    value={bdForm.blogPostsPath}
+                    onChange={(event) => setBdForm((prev) => ({ ...prev, blogPostsPath: event.target.value }))}
+                    placeholder="Blog endpoint path override"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-slate-100 outline-none ring-cyan-300/40 focus:border-cyan-300/40 focus:ring-2"
+                  />
+                </div>
+              </div>
+            </details>
             <label className="flex items-center gap-2 text-sm text-slate-200">
               <input
                 type="checkbox"
@@ -715,8 +827,13 @@ export default function DirectoryIqSignalSourcesClient() {
                 const testState = bdSiteVerificationById[site.id];
                 const verification = testState?.verification ?? null;
                 const detectedSummary = testState?.detectedSummary ?? null;
+                const discovery = testState?.discovery ?? null;
                 const testedAtText = testState ? new Date(testState.testedAt).toLocaleTimeString() : null;
                 const statusClass = verification?.overall === "verified" ? "text-emerald-200" : "text-amber-200";
+                const selectedSources = (discovery?.inventory ?? []).filter((item) => item.auto_enabled);
+                const optionalSources = (discovery?.inventory ?? [])
+                  .filter((item) => !item.auto_enabled && item.role !== "unknown")
+                  .slice(0, 5);
 
                 return (
                   <div key={site.id} className="rounded-lg border border-white/10 bg-white/[0.02] p-3 text-xs text-slate-300">
@@ -727,9 +844,7 @@ export default function DirectoryIqSignalSourcesClient() {
                         <div className={`text-xs ${site.secretPresent ? "text-slate-500" : "text-rose-200"}`}>
                           API key: {site.secretPresent ? site.maskedSecret : "missing"}
                         </div>
-                        <div className="text-xs text-slate-500">
-                          Listings ID: {site.listingsDataId ?? "-"} · Blog ID: {site.blogPostsDataId ?? "-"} · {site.enabled ? "Enabled" : "Disabled"}
-                        </div>
+                        <div className="text-xs text-slate-500">{site.enabled ? "Enabled" : "Disabled"}</div>
                         {verification ? (
                           <div className={`mt-1 text-xs ${statusClass}`}>
                             Verification: {verification.overall === "verified" ? "Verified" : "Unresolved"} · Listings{" "}
@@ -738,7 +853,20 @@ export default function DirectoryIqSignalSourcesClient() {
                             {testedAtText ? ` · Tested ${testedAtText}` : ""}
                           </div>
                         ) : null}
+                        {selectedSources.length > 0 ? (
+                          <div className="mt-1 text-xs text-cyan-100">
+                            {selectedSources.map((item) => `Detected ${formatRoleLabel(item.role)}: ${item.name}`).join(" · ")}
+                          </div>
+                        ) : null}
+                        {optionalSources.length > 0 ? (
+                          <div className="mt-1 text-xs text-slate-400">
+                            Optional: {optionalSources.map((item) => `${item.name} (${formatRoleLabel(item.role)})`).join(" · ")}
+                          </div>
+                        ) : null}
                         {detectedSummary ? <div className="mt-1 text-xs text-cyan-200">{detectedSummary}</div> : null}
+                        <div className="mt-1 text-[11px] text-slate-500">
+                          Advanced config: Listings ID {site.listingsDataId ?? "-"} · Blog ID {site.blogPostsDataId ?? "-"}
+                        </div>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <NeonButton variant="secondary" onClick={() => startEditSite(site)}>
