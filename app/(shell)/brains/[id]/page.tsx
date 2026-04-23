@@ -201,26 +201,28 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
         </div>
       </section>
 
-      {brainId === "siteforge" ? (
+      {brainId === "siteforge" || brainId === "directoryiq" ? (
         <section className="rounded-[18px] border border-cyan-300/25 bg-slate-950/70 p-4 shadow-[0_16px_32px_rgba(2,6,23,0.55)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <div className="text-[10px] uppercase tracking-[0.18em] text-cyan-200/75">
-                SiteForge Admin Traceability
+                {brainId === "siteforge" ? "SiteForge Admin Traceability" : "DirectoryIQ App Traceability"}
               </div>
               <h2 className="mt-1 text-lg font-semibold text-white">User App Operational Snapshot</h2>
               <p className="mt-1 text-xs text-slate-300">
-                Control-plane visibility into SiteForge app projects, sessions, and run outcomes.
+                {brainId === "siteforge"
+                  ? "Control-plane visibility into SiteForge app projects, sessions, and run outcomes."
+                  : "Control-plane visibility into DirectoryIQ user app routing and dedicated-brain workflows."}
               </p>
             </div>
             <Link
-              href="/apps/siteforge"
+              href={brainId === "siteforge" ? "/apps/siteforge" : "/apps/directoryiq"}
               className="rounded-full border border-cyan-300/40 bg-cyan-300/15 px-3 py-1 text-xs text-cyan-100 transition hover:bg-cyan-300/25"
             >
               Open User App
             </Link>
           </div>
-          {siteForgeAdminSummary ? (
+          {brainId === "siteforge" && siteForgeAdminSummary ? (
             <div className="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-6">
               <div className="rounded-lg border border-white/10 bg-black/25 p-2 text-xs text-slate-200">
                 Projects
@@ -263,9 +265,14 @@ export default async function BrainDetailPage({ params, searchParams }: BrainDet
                 </div>
               </div>
             </div>
-          ) : (
+          ) : brainId === "siteforge" ? (
             <p className="mt-3 text-xs text-slate-400">
               SiteForge telemetry source is unavailable. App route still operates independently.
+            </p>
+          ) : (
+            <p className="mt-3 text-xs text-slate-400">
+              DirectoryIQ app route is linked to <span className="font-mono">/apps/directoryiq</span> while mission control remains under
+              <span className="font-mono"> /brains/directoryiq</span>.
             </p>
           )}
         </section>
