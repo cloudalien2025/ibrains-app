@@ -30,6 +30,10 @@ function normalizeBaseUrl(value: string): string {
   return `${parsed.protocol}//${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
 }
 
+function isVerifiedStatus(status: unknown): boolean {
+  return status === "verified" || status === "verified_empty";
+}
+
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ siteId: string }> | { siteId: string } }
@@ -91,10 +95,10 @@ export async function PUT(
           configuredListingsDataId: listingsDataId,
           configuredBlogPostsDataId: blogPostsDataId,
         });
-        if (listingsDataId == null && detection.listings.status === "verified" && detection.listings.effectiveDataId) {
+        if (listingsDataId == null && isVerifiedStatus(detection.listings.status) && detection.listings.effectiveDataId) {
           listingsDataId = detection.listings.effectiveDataId;
         }
-        if (blogPostsDataId == null && detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId) {
+        if (blogPostsDataId == null && isVerifiedStatus(detection.blogPosts.status) && detection.blogPosts.effectiveDataId) {
           blogPostsDataId = detection.blogPosts.effectiveDataId;
         }
         autodetect = {

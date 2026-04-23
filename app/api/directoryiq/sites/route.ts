@@ -32,6 +32,10 @@ function normalizeBaseUrl(value: string): string {
   return `${parsed.protocol}//${parsed.host}${parsed.pathname === "/" ? "" : parsed.pathname}`;
 }
 
+function isVerifiedStatus(status: unknown): boolean {
+  return status === "verified" || status === "verified_empty";
+}
+
 export async function GET(req: NextRequest) {
   if (!shouldServeDirectoryIqLocally(req)) {
     return proxyDirectoryIqRequest(req, "/api/directoryiq/sites", "GET");
@@ -94,10 +98,10 @@ export async function POST(req: NextRequest) {
         configuredListingsDataId: resolvedListingsDataId,
         configuredBlogPostsDataId: resolvedBlogPostsDataId,
       });
-      if (resolvedListingsDataId == null && detection.listings.status === "verified" && detection.listings.effectiveDataId) {
+      if (resolvedListingsDataId == null && isVerifiedStatus(detection.listings.status) && detection.listings.effectiveDataId) {
         resolvedListingsDataId = detection.listings.effectiveDataId;
       }
-      if (resolvedBlogPostsDataId == null && detection.blogPosts.status === "verified" && detection.blogPosts.effectiveDataId) {
+      if (resolvedBlogPostsDataId == null && isVerifiedStatus(detection.blogPosts.status) && detection.blogPosts.effectiveDataId) {
         resolvedBlogPostsDataId = detection.blogPosts.effectiveDataId;
       }
       autodetect = {

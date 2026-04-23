@@ -129,10 +129,10 @@ function readIngestErrorMessage(payload: IngestErrorResponse | null | undefined)
   );
 }
 
-function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
+export function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
   const listings = payload.verification?.listings;
   const listingsReason = listings?.reason ?? null;
-  if (listingsReason === "listings_path_not_found") {
+  if (listingsReason === "listings_path_not_found" || listingsReason === "listings_valid_path_invalid") {
     return `Listings path is invalid or unreachable (${listings?.search?.path ?? "unknown path"}).`;
   }
   if (listingsReason === "listings_data_id_invalid_type") {
@@ -148,7 +148,7 @@ function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
     return "Listings Post Type ID could not be verified. Try Auto-detect IDs, or enter it manually.";
   }
   const blogReason = payload.verification?.blog_posts?.reason ?? null;
-  if (blogReason === "blog_posts_path_not_found") {
+  if (blogReason === "blog_posts_path_not_found" || blogReason === "blog_posts_valid_path_invalid") {
     return "Blog posts path is invalid or unreachable.";
   }
   if (blogReason === "blog_posts_data_id_invalid_type") {
@@ -165,7 +165,7 @@ function buildBdTestUnresolvedMessage(payload: BdTestResponse): string {
   return "Site test is unresolved. Verify base URL, API key, listings path, and Post Type IDs.";
 }
 
-function formatVerificationStatus(status: BdSiteVerificationStatus, count: number | null): string {
+export function formatVerificationStatus(status: BdSiteVerificationStatus, count: number | null): string {
   if (status === "verified") return count == null ? "verified" : `verified (${count})`;
   if (status === "verified_empty") return "verified, 0 rows returned";
   if (status === "invalid") return "invalid";

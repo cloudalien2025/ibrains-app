@@ -241,10 +241,67 @@ describe("directoryiq bd post type autodetect", () => {
       configuredBlogPostsDataId: 14,
     });
 
-    expect(detected.listings.status).toBe("invalid");
-    expect(detected.listings.reason).toBe("listings_path_not_found");
-    expect(detected.blogPosts.status).toBe("invalid");
-    expect(detected.blogPosts.reason).toBe("blog_posts_path_not_found");
+    expect(detected.listings.status).toBe("verified_empty");
+    expect(detected.listings.reason).toBe("listings_valid_path_invalid");
+    expect(detected.blogPosts.status).toBe("verified_empty");
+    expect(detected.blogPosts.reason).toBe("blog_posts_valid_path_invalid");
+  });
+
+  it("treats data_categories get/{id} message[] shape as canonical validity", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input.toString();
+        if (url.includes("/api/v2/data_categories/get?property=data_active&property_value=1")) {
+          return jsonResponse({
+            status: "success",
+            message: [
+              { data_id: 75, data_type: 4, name: "Business Listing", data_active: 1 },
+              { data_id: 14, data_type: 6, name: "Website Blog Article", data_active: 1 },
+            ],
+          });
+        }
+        if (url.endsWith("/api/v2/data_categories/get/75")) {
+          return jsonResponse({
+            status: "success",
+            message: [{ data_id: 75, data_type: 4, name: "Business Listing" }],
+          });
+        }
+        if (url.endsWith("/api/v2/data_categories/get/14")) {
+          return jsonResponse({
+            status: "success",
+            message: [{ data_id: 14, data_type: 6, name: "Website Blog Article" }],
+          });
+        }
+        if (
+          url.endsWith("/api/v2/users_portfolio_groups/search") ||
+          url.endsWith("/api/v2/data_posts/search") ||
+          url.endsWith("/api/v2/data_post/search") ||
+          url.endsWith("/api/v2/posts/search") ||
+          url.endsWith("/api/v2/data_posts/list")
+        ) {
+          return jsonResponse({ status: "success", data: [] });
+        }
+        return jsonResponse({ status: "error" }, 404);
+      })
+    );
+
+    const detected = await detectBdPostTypeIds({
+      baseUrl: "https://example.com",
+      apiKey: "secret",
+      listingsPath: "/api/v2/users_portfolio_groups/search",
+      blogPostsPath: "/api/v2/data_posts/search",
+      configuredListingsDataId: 75,
+      configuredBlogPostsDataId: 14,
+    });
+
+    expect(detected.diagnostics.categorySearchPath).toBe(
+      "/api/v2/data_categories/get?property=data_active&property_value=1"
+    );
+    expect(detected.listings.status).toBe("verified_empty");
+    expect(detected.listings.reason).toBe("listings_verified_empty");
+    expect(detected.blogPosts.status).toBe("verified_empty");
+    expect(detected.blogPosts.reason).toBe("blog_posts_verified_empty");
   });
 
   it("returns unresolved with specific reason when IDs cannot be verified", async () => {
@@ -264,9 +321,9 @@ describe("directoryiq bd post type autodetect", () => {
       configuredBlogPostsDataId: 888,
     });
 
-    expect(detected.listings.status).toBe("unresolved");
-    expect(detected.listings.reason).toBe("listings_data_id_unverified");
-    expect(detected.blogPosts.status).toBe("unresolved");
-    expect(detected.blogPosts.reason).toBe("blog_posts_data_id_unverified");
+    expect(detected.listings.status).toBe("invalid");
+    expect(detected.listings.reason).toBe("listings_data_id_not_found");
+    expect(detected.blogPosts.status).toBe("invalid");
+    expect(detected.blogPosts.reason).toBe("blog_posts_data_id_not_found");
   });
 });

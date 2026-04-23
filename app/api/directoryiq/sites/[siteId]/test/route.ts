@@ -43,14 +43,14 @@ export async function POST(
     const persisted: { listings_data_id?: number; blog_posts_data_id?: number } = {};
 
     if (
-      detection.listings.status === "verified" &&
+      isVerifiedStatus(detection.listings.status) &&
       typeof nextListingsDataId === "number" &&
       site.listings_data_id !== nextListingsDataId
     ) {
       persisted.listings_data_id = nextListingsDataId;
     }
     if (
-      detection.blogPosts.status === "verified" &&
+      isVerifiedStatus(detection.blogPosts.status) &&
       typeof nextBlogPostsDataId === "number" &&
       site.blog_posts_data_id !== nextBlogPostsDataId
     ) {
