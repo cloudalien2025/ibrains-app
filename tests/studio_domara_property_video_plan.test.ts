@@ -27,7 +27,10 @@ describe("Domara property video plan", () => {
     expect(plan.youtubeTitle).toContain("Italy Property Tour");
     expect(plan.youtubeDescription).toContain("informational storytelling");
     expect(plan.enrichmentSummary).toContain("Location enrichment pending");
+    expect(plan.locationIntelligence?.status).toBe("placeholder");
+    expect(plan.locationIntelligence?.provider).toBe("mock");
+    expect(plan.locationIntelligence?.locationLabel).toContain("Florence");
+    expect(plan.locationIntelligence?.pointsOfInterest.length).toBeGreaterThan(0);
     expect(plan.renderPlaceholder.status).toBe("pending_provider_connection");
   });
 });
-

@@ -25,6 +25,12 @@ export type NormalizedPropertyListing = {
   title: string;
   market: string;
   locationLabel: string;
+  location: {
+    country: string;
+    city?: string;
+    region?: string;
+    neighborhood?: string;
+  };
   priceLabel: string;
   propertyFacts: string[];
   imageUrls: string[];
@@ -48,6 +54,29 @@ export type PropertyVideoScene = {
   durationSeconds: number;
 };
 
+export type DomaraLocationEnrichment = {
+  status: "placeholder" | "enriched";
+  provider: "google_maps_places" | "mock";
+  locationLabel: string;
+  coordinates?: {
+    latitude: number;
+    longitude: number;
+    confidence: "provided" | "estimated";
+  };
+  pointsOfInterest: Array<{
+    name: string;
+    category: string;
+    distanceLabel?: string;
+    travelTimeLabel?: string;
+    source: string;
+    confidence: "placeholder" | "high" | "medium";
+    notes?: string;
+  }>;
+  placeholderMessage?: string;
+  summary: string;
+  poiNotes: string[];
+};
+
 export type PropertyVideoPlan = {
   id: string;
   channel: "Expat AI";
@@ -59,10 +88,10 @@ export type PropertyVideoPlan = {
   youtubeTitle: string;
   youtubeDescription: string;
   enrichmentSummary: string;
+  locationIntelligence?: Omit<DomaraLocationEnrichment, "summary" | "poiNotes">;
   renderPlaceholder: {
     status: "pending_provider_connection";
     nextStep: string;
     provider: string;
   };
 };
-

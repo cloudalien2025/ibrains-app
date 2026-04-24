@@ -1,9 +1,5 @@
-import { NormalizedPropertyListing, PropertyVideoScene } from "@/lib/studio/domara/types";
-
-export type DomaraLocationEnrichment = {
-  summary: string;
-  poiNotes: string[];
-};
+import { createLocationProvider } from "@/lib/studio/domara/location-provider";
+import { DomaraLocationEnrichment, NormalizedPropertyListing, PropertyVideoScene } from "@/lib/studio/domara/types";
 
 export type DomaraStoryDraft = {
   hook: string;
@@ -61,30 +57,6 @@ const mockListingProvider: RealEstateListingProvider = {
   },
 };
 
-const mockLocationProvider: LocationEnrichmentProvider = {
-  providerName: "mock",
-  async enrich(listing) {
-    if (listing.sourceMetadata.coordinates) {
-      const { latitude, longitude } = listing.sourceMetadata.coordinates;
-      return {
-        summary: `Coordinates received (${latitude.toFixed(5)}, ${longitude.toFixed(5)}). Google Maps / Places enrichment provider will attach verified POIs and transit metadata in the next integration phase.`,
-        poiNotes: [
-          "POI pass queued: airports, major hospitals, restaurants, landmarks, transit hubs.",
-          "Travel-time and map visual overlays pending provider integration.",
-        ],
-      };
-    }
-    return {
-      summary:
-        "Location enrichment pending: Google Maps / Places provider will add airports, hospitals, restaurants, landmarks, and transit context.",
-      poiNotes: [
-        "Awaiting geocode resolution and POI extraction.",
-        "Travel-time overlays and map scene prompts pending provider integration.",
-      ],
-    };
-  },
-};
-
 const mockStoryProvider: StoryGenerationProvider = {
   providerName: "mock",
   async generateStory(listing, context, angleLabel, inputDescription) {
@@ -99,6 +71,12 @@ const mockStoryProvider: StoryGenerationProvider = {
     const descriptionLine = inputDescription.trim()
       ? inputDescription.trim()
       : "Listing description was not provided. Script uses conservative editorial framing.";
+    const poiCategoryLine = context.pointsOfInterest.length
+      ? `POI focus: ${context.pointsOfInterest
+          .slice(0, 4)
+          .map((poi) => poi.category.replace(/_/g, " "))
+          .join(", ")}.`
+      : "POI enrichment placeholder only.";
 
     const hook = `In ${shortLocation}, this ${listing.title} opens with a distinct blend of Italian character and modern livability.`;
     const scenes: PropertyVideoScene[] = [
@@ -142,7 +120,9 @@ const mockStoryProvider: StoryGenerationProvider = {
         order: 5,
         title: "Lifestyle & Convenience",
         visualDirection: "Street-life, cafe, and local rhythm b-roll with warm cinematic grading.",
-        narration: `${lifestyleLine} Convenience analysis remains descriptive and avoids unsupported distance claims before POI verification.`,
+        narration: `${lifestyleLine} Convenience analysis remains descriptive and avoids unsupported distance claims before POI verification. ${
+          context.placeholderMessage || ""
+        } ${poiCategoryLine}`,
         overlayText: "Lifestyle Perspective",
         suggestedMedia: ["Lifestyle b-roll placeholders", "Neighborhood stills"],
         durationSeconds: 16,
@@ -225,13 +205,13 @@ const mockYoutubeProvider: YoutubeProvider = {
 };
 
 export function createDomaraMockProviders() {
+  const locationProvider: LocationEnrichmentProvider = createLocationProvider();
   return {
     listingProvider: mockListingProvider,
-    locationProvider: mockLocationProvider,
+    locationProvider,
     storyProvider: mockStoryProvider,
     voiceProvider: mockVoiceProvider,
     renderProvider: mockRenderProvider,
     youtubeProvider: mockYoutubeProvider,
   };
 }
-
