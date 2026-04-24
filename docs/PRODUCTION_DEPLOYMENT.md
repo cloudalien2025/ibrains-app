@@ -49,6 +49,8 @@ PROTO=http /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 BASE_URL=http://127.0.0.1 HOST_HEADER=app.ibrains.ai /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 ```
 
+`prod_smoke.sh` also validates that every `/_next/static/*` asset referenced by the live homepage HTML returns `200` to prevent HTML/chunk mismatch regressions.
+
 ## TLS (Let’s Encrypt)
 Only run after DNS A record for app.ibrains.ai points to 104.236.44.185.
 
