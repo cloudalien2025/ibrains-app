@@ -8,6 +8,7 @@ import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone }
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
+  listingProvider: "manual" | "idealista" | "immobiliare";
   listingUrl: string;
   source: string;
   country: string;
@@ -32,7 +33,10 @@ type FormState = {
   voicePace: DomaraVoicePace;
 };
 
+type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
+
 const initialState: FormState = {
+  listingProvider: "manual",
   listingUrl: "",
   source: "",
   country: "Italy",
@@ -64,6 +68,7 @@ function toInput(state: FormState): PropertyListingInput {
   return {
     listingUrl: state.listingUrl || undefined,
     source: state.source || undefined,
+    provider: state.listingProvider,
     country: state.country || "Italy",
     city: state.city || undefined,
     region: state.region || undefined,
@@ -85,6 +90,28 @@ function toInput(state: FormState): PropertyListingInput {
   };
 }
 
+function formStateFromListing(current: FormState, listing: PropertyListingInput): FormState {
+  return {
+    ...current,
+    listingUrl: listing.listingUrl || current.listingUrl,
+    source: listing.source || current.source,
+    country: listing.country || current.country,
+    city: listing.city || "",
+    region: listing.region || "",
+    neighborhood: listing.neighborhood || "",
+    title: listing.title || current.title,
+    description: listing.description || "",
+    price: listing.price || "",
+    propertyType: listing.propertyType || "",
+    bedrooms: listing.bedrooms !== undefined ? String(listing.bedrooms) : "",
+    bathrooms: listing.bathrooms !== undefined ? String(listing.bathrooms) : "",
+    squareMeters: listing.squareMeters !== undefined ? String(listing.squareMeters) : "",
+    imageUrls: (listing.imageUrls || []).join("\n"),
+    latitude: listing.latitude !== undefined ? String(listing.latitude) : "",
+    longitude: listing.longitude !== undefined ? String(listing.longitude) : "",
+  };
+}
+
 export default function StudioDomaraClient() {
   const [form, setForm] = useState<FormState>(initialState);
   const [plan, setPlan] = useState<PropertyVideoPlan | null>(null);
@@ -93,6 +120,10 @@ export default function StudioDomaraClient() {
   const [renderStatus, setRenderStatus] = useState<"idle" | "queued" | "rendering" | "complete" | "failed">("idle");
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderResult, setRenderResult] = useState<DomaraVideoRenderResult | null>(null);
+  const [listingFetchStatus, setListingFetchStatus] = useState<ListingFetchState>("idle");
+  const [listingFetchError, setListingFetchError] = useState<string | null>(null);
+  const [listingFetchWarnings, setListingFetchWarnings] = useState<string[]>([]);
+  const [listingFetchFallbackUsed, setListingFetchFallbackUsed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sceneDuration = useMemo(
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
@@ -176,6 +207,62 @@ export default function StudioDomaraClient() {
     }
   }
 
+  async function onFetchListing() {
+    setListingFetchError(null);
+    setListingFetchWarnings([]);
+    setListingFetchFallbackUsed(false);
+
+    if (form.listingProvider === "manual") {
+      setListingFetchStatus("failed");
+      setListingFetchError("Select Idealista or Immobiliare to use Fetch Listing.");
+      return;
+    }
+    if (!form.listingUrl.trim()) {
+      setListingFetchStatus("failed");
+      setListingFetchError("Listing URL or listing ID is required.");
+      return;
+    }
+
+    try {
+      setListingFetchStatus("fetching");
+      const response = await fetch("/api/studio/domara/listing/fetch", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          provider: form.listingProvider,
+          listingRef: form.listingUrl.trim(),
+          country: form.country,
+          fallbackToMock: true,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            result?: {
+              listing: PropertyListingInput;
+              warnings?: string[];
+              fallbackUsed?: boolean;
+            };
+            error?: { message?: string; details?: string };
+          }
+        | null;
+      if (!response.ok || !payload?.ok || !payload.result?.listing) {
+        throw new Error(payload?.error?.details || payload?.error?.message || "Failed to fetch listing.");
+      }
+
+      setForm((curr) => formStateFromListing(curr, payload.result!.listing));
+      setListingFetchWarnings(payload.result.warnings || []);
+      setListingFetchFallbackUsed(Boolean(payload.result.fallbackUsed));
+      setListingFetchStatus("ready");
+    } catch (fetchError) {
+      setListingFetchStatus("failed");
+      setListingFetchError(fetchError instanceof Error ? fetchError.message : "Failed to fetch listing.");
+    }
+  }
+
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-7xl px-6 py-12">
@@ -204,14 +291,31 @@ export default function StudioDomaraClient() {
             </p>
 
             <form onSubmit={onSubmit} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <label className="text-sm">
-                  Listing URL
+                  Listing provider
+                  <select
+                    className={fieldClass}
+                    value={form.listingProvider}
+                    onChange={(event) =>
+                      setForm((curr) => ({
+                        ...curr,
+                        listingProvider: event.target.value as FormState["listingProvider"],
+                      }))
+                    }
+                  >
+                    <option value="manual">Manual</option>
+                    <option value="idealista">Idealista</option>
+                    <option value="immobiliare">Immobiliare.it</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Listing URL or ID
                   <input
                     className={fieldClass}
                     value={form.listingUrl}
                     onChange={(event) => setForm((curr) => ({ ...curr, listingUrl: event.target.value }))}
-                    placeholder="https://..."
+                    placeholder="https://... or listing-id"
                   />
                 </label>
                 <label className="text-sm">
@@ -223,7 +327,36 @@ export default function StudioDomaraClient() {
                     placeholder="Immobiliare.it"
                   />
                 </label>
+                <div className="text-sm">
+                  <span className="text-[#334155]">Fetch listing</span>
+                  <button
+                    type="button"
+                    className="mt-1 w-full rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onFetchListing()}
+                    disabled={listingFetchStatus === "fetching"}
+                  >
+                    {listingFetchStatus === "fetching" ? "Fetching..." : "Fetch Listing"}
+                  </button>
+                </div>
               </div>
+              <p className="text-xs text-[#475569]">
+                Fetch Listing is source-ingestion only for content generation. Marketplace search and buyer workflows are
+                intentionally out of scope.
+              </p>
+              {listingFetchStatus === "ready" ? (
+                <p className="text-xs text-emerald-700">
+                  Listing fetched and mapped to Domara input model.
+                  {listingFetchFallbackUsed ? " Provider fallback: deterministic mock listing used." : ""}
+                </p>
+              ) : null}
+              {listingFetchWarnings.length > 0 ? (
+                <ul className="space-y-1 text-xs text-amber-700">
+                  {listingFetchWarnings.map((warning) => (
+                    <li key={warning}>{warning}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {listingFetchError ? <p className="text-xs text-rose-600">{listingFetchError}</p> : null}
               <div className="grid gap-4 md:grid-cols-4">
                 <label className="text-sm">
                   Voice mode

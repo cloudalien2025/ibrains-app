@@ -3,6 +3,7 @@ export type DomaraContentAngle = "lifestyle" | "investment" | "second_home" | "h
 export type PropertyListingInput = {
   listingUrl?: string;
   source?: string;
+  provider?: "manual" | "idealista" | "immobiliare" | "mock";
   country: string;
   city?: string;
   region?: string;
@@ -17,6 +18,10 @@ export type PropertyListingInput = {
   imageUrls: string[];
   latitude?: number | string;
   longitude?: number | string;
+  agency?: string;
+  fetchedAt?: string;
+  providerMetadata?: Record<string, string | number | boolean | null | undefined>;
+  sourceAttribution?: string;
   contentAngle?: DomaraContentAngle;
 };
 
@@ -37,6 +42,11 @@ export type NormalizedPropertyListing = {
   sourceMetadata: {
     listingUrl?: string;
     source?: string;
+    provider?: "manual" | "idealista" | "immobiliare" | "mock";
+    agency?: string;
+    fetchedAt?: string;
+    providerMetadata?: Record<string, string | number | boolean | null | undefined>;
+    sourceAttribution?: string;
     coordinates?: {
       latitude: number;
       longitude: number;

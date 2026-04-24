@@ -64,6 +64,11 @@ export function normalizePropertyListingInput(input: PropertyListingInput): Norm
     sourceMetadata: {
       listingUrl: input.listingUrl?.trim() || undefined,
       source: input.source?.trim() || undefined,
+      provider: input.provider,
+      agency: input.agency?.trim() || undefined,
+      fetchedAt: input.fetchedAt?.trim() || undefined,
+      providerMetadata: input.providerMetadata,
+      sourceAttribution: input.sourceAttribution?.trim() || undefined,
       coordinates:
         latitude !== null && longitude !== null
           ? {
