@@ -6,6 +6,16 @@ import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-pl
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
 import { generateDomaraYouTubePackage } from "@/lib/studio/domara/youtube-package";
+import {
+  DOMARA_BATCH_LIMIT,
+  DomaraBatch,
+  DomaraSeriesTemplateName,
+  buildBulkExportManifest,
+  createDomaraBatch,
+  generateContentCalendar,
+  listSeriesTemplates,
+  transitionBatchItemStatus,
+} from "@/lib/studio/domara/batch-calendar";
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
@@ -114,6 +124,7 @@ function formStateFromListing(current: FormState, listing: PropertyListingInput)
 }
 
 export default function StudioDomaraClient() {
+  const seriesTemplates = useMemo(() => listSeriesTemplates(), []);
   const [form, setForm] = useState<FormState>(initialState);
   const [plan, setPlan] = useState<PropertyVideoPlan | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
@@ -125,6 +136,9 @@ export default function StudioDomaraClient() {
   const [listingFetchError, setListingFetchError] = useState<string | null>(null);
   const [listingFetchWarnings, setListingFetchWarnings] = useState<string[]>([]);
   const [listingFetchFallbackUsed, setListingFetchFallbackUsed] = useState(false);
+  const [batchTemplate, setBatchTemplate] = useState<DomaraSeriesTemplateName>("hidden_gems_tuscany");
+  const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
+  const [batchNotice, setBatchNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sceneDuration = useMemo(
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
@@ -146,6 +160,8 @@ export default function StudioDomaraClient() {
       renderResult: renderResult || undefined,
     });
   }, [plan, generatedInput, renderResult]);
+  const contentCalendar = useMemo(() => generateContentCalendar(batch), [batch]);
+  const batchExportManifest = useMemo(() => buildBulkExportManifest(batch), [batch]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -270,6 +286,32 @@ export default function StudioDomaraClient() {
       setListingFetchStatus("failed");
       setListingFetchError(fetchError instanceof Error ? fetchError.message : "Failed to fetch listing.");
     }
+  }
+
+  function onAddCurrentToBatch() {
+    const listing = generatedInput ?? (form.title.trim() ? toInput(form) : null);
+    if (!listing) {
+      setBatchNotice("Generate or enter a listing first.");
+      return;
+    }
+
+    const combined = [...batch.items.map((item) => item.listing), listing];
+    const nextBatch = createDomaraBatch(combined, batchTemplate);
+    setBatch(nextBatch);
+    if (combined.length > DOMARA_BATCH_LIMIT) {
+      setBatchNotice(`Batch limit is ${DOMARA_BATCH_LIMIT}; additional items were dropped.`);
+    } else {
+      setBatchNotice(`Added to batch (${nextBatch.items.length}/${DOMARA_BATCH_LIMIT}).`);
+    }
+  }
+
+  function onBatchStatus(itemId: string, status: "ready" | "queued" | "ready_to_publish" | "failed") {
+    setBatch((current) => ({
+      ...current,
+      items: current.items.map((item) =>
+        item.id === itemId ? transitionBatchItemStatus(item, status, status === "failed" ? "Marked failed." : undefined) : item,
+      ),
+    }));
   }
 
   return (
@@ -827,6 +869,117 @@ export default function StudioDomaraClient() {
             )}
           </section>
         </div>
+        <section className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold">10. Batch Generation + Content Calendar</h2>
+          <p className="mt-1 text-sm text-[#475569]">
+            Queue a small set of listings for repeatable production planning. Batch rendering remains bounded to protect
+            server runtime.
+          </p>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <label className="text-sm">
+              Series template
+              <select
+                className={fieldClass}
+                value={batchTemplate}
+                onChange={(event) => setBatchTemplate(event.target.value as DomaraSeriesTemplateName)}
+              >
+                {seriesTemplates.map((template) => (
+                  <option key={template.name} value={template.name}>
+                    {template.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="text-sm">
+              <span className="text-[#334155]">Batch action</span>
+              <button
+                type="button"
+                className="mt-1 w-full rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
+                onClick={onAddCurrentToBatch}
+              >
+                Add Current Listing
+              </button>
+            </div>
+            <div className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+              <p>
+                Batch size: {batch.items.length}/{DOMARA_BATCH_LIMIT}
+              </p>
+              <p className="mt-1">Render queue safety: one item at a time.</p>
+            </div>
+          </div>
+          {batchNotice ? <p className="mt-2 text-xs text-[#334155]">{batchNotice}</p> : null}
+
+          <div className="mt-4 overflow-x-auto rounded-xl border border-[#D9E4F0]">
+            <table className="min-w-full text-left text-xs">
+              <thead className="bg-[#F8FBFF] text-[#475569]">
+                <tr>
+                  <th className="px-3 py-2">Title</th>
+                  <th className="px-3 py-2">Location</th>
+                  <th className="px-3 py-2">Angle</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {batch.items.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="px-3 py-3 text-[#64748B]">
+                      No batch items yet.
+                    </td>
+                  </tr>
+                ) : (
+                  batch.items.map((item) => (
+                    <tr key={item.id} className="border-t border-[#E2E8F0]">
+                      <td className="px-3 py-2">{item.listing.title}</td>
+                      <td className="px-3 py-2">{[item.listing.city, item.listing.country].filter(Boolean).join(", ")}</td>
+                      <td className="px-3 py-2">{item.contentAngle}</td>
+                      <td className="px-3 py-2">{item.status}</td>
+                      <td className="px-3 py-2">
+                        <div className="flex flex-wrap gap-1">
+                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "ready")}>
+                            Ready
+                          </button>
+                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "queued")}>
+                            Queue
+                          </button>
+                          <button
+                            type="button"
+                            className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5"
+                            onClick={() => onBatchStatus(item.id, "ready_to_publish")}
+                          >
+                            Publish-Ready
+                          </button>
+                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "failed")}>
+                            Fail
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+              <p className="font-medium">Content Calendar</p>
+              <ul className="mt-2 space-y-1">
+                {contentCalendar.length === 0 ? <li>No calendar entries yet.</li> : null}
+                {contentCalendar.map((entry) => (
+                  <li key={entry.batchItemId}>
+                    {entry.plannedPublishDate} | {entry.videoTitle} | {entry.status} | MP4: {entry.mp4Status} | YT:{" "}
+                    {entry.youtubePackageStatus}
+                  </li>
+                ))}
+              </ul>
+            </div>
+            <div className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+              <p className="font-medium">Bulk Export Manifest</p>
+              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(batchExportManifest, null, 2)}</pre>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   );
