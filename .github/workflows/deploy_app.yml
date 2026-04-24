@@ -55,8 +55,9 @@ jobs:
           package.json \
           package-lock.json \
           public \
-          next.config.ts \
-          app
+          next.config.mjs \
+          app \
+          scripts/prod_smoke.sh
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -120,3 +121,9 @@ jobs:
               journalctl -u ${{ secrets.SERVICE_NAME }} -n 150 --no-pager || true
               exit 1
             fi
+
+            BASE_URL=http://127.0.0.1:3001 \
+            HOST_HEADER=app.ibrains.ai \
+            PROTO=http \
+            DOMAIN=app.ibrains.ai \
+            ./scripts/prod_smoke.sh app.ibrains.ai
