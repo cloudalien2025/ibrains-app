@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
@@ -45,6 +45,17 @@ type FormState = {
 };
 
 type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
+type IntegrationStatusState = "loading" | "ready" | "error";
+type DomaraIntegrationProviderCard = {
+  providerId: string;
+  displayName: string;
+  category: string;
+  requiredEnvVars: string[];
+  configured: boolean;
+  validationStatus: "unknown" | "configured" | "missing" | "invalid";
+  safeSetupHelp: string;
+  capabilitiesEnabled: string[];
+};
 
 const initialState: FormState = {
   listingProvider: "manual",
@@ -136,6 +147,17 @@ export default function StudioDomaraClient() {
   const [listingFetchError, setListingFetchError] = useState<string | null>(null);
   const [listingFetchWarnings, setListingFetchWarnings] = useState<string[]>([]);
   const [listingFetchFallbackUsed, setListingFetchFallbackUsed] = useState(false);
+  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusState>("loading");
+  const [integrationError, setIntegrationError] = useState<string | null>(null);
+  const [integrationProviders, setIntegrationProviders] = useState<DomaraIntegrationProviderCard[]>([]);
+  const [integrationCapabilities, setIntegrationCapabilities] = useState<{
+    elevenlabsLiveNarration: boolean;
+    mapboxVisuals: boolean;
+    googleMapsVisuals: boolean;
+    listingFetchIdealista: boolean;
+    listingFetchImmobiliare: boolean;
+    youtubePublishingApi: boolean;
+  } | null>(null);
   const [batchTemplate, setBatchTemplate] = useState<DomaraSeriesTemplateName>("hidden_gems_tuscany");
   const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
   const [batchNotice, setBatchNotice] = useState<string | null>(null);
@@ -162,6 +184,50 @@ export default function StudioDomaraClient() {
   }, [plan, generatedInput, renderResult]);
   const contentCalendar = useMemo(() => generateContentCalendar(batch), [batch]);
   const batchExportManifest = useMemo(() => buildBulkExportManifest(batch), [batch]);
+
+  useEffect(() => {
+    let isCancelled = false;
+    async function loadIntegrationStatus() {
+      setIntegrationStatus("loading");
+      setIntegrationError(null);
+      try {
+        const response = await fetch("/api/studio/domara/integrations/status", {
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              ok?: boolean;
+              providers?: DomaraIntegrationProviderCard[];
+              capabilities?: {
+                elevenlabsLiveNarration: boolean;
+                mapboxVisuals: boolean;
+                googleMapsVisuals: boolean;
+                listingFetchIdealista: boolean;
+                listingFetchImmobiliare: boolean;
+                youtubePublishingApi: boolean;
+              };
+            }
+          | null;
+
+        if (!response.ok || !payload?.ok || !Array.isArray(payload.providers) || !payload.capabilities) {
+          throw new Error("Failed to load integration status.");
+        }
+        if (isCancelled) return;
+        setIntegrationProviders(payload.providers);
+        setIntegrationCapabilities(payload.capabilities);
+        setIntegrationStatus("ready");
+      } catch (loadError) {
+        if (isCancelled) return;
+        setIntegrationStatus("error");
+        setIntegrationError(loadError instanceof Error ? loadError.message : "Failed to load integration status.");
+      }
+    }
+
+    void loadIntegrationStatus();
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -333,6 +399,47 @@ export default function StudioDomaraClient() {
           </div>
         </header>
 
+        <section className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold">Integrations</h2>
+          <p className="mt-1 text-sm text-[#475569]">
+            Provider connection status is resolved server-side from environment configuration. Secrets are never returned
+            to the browser.
+          </p>
+          {integrationStatus === "loading" ? <p className="mt-3 text-sm text-[#475569]">Loading provider status...</p> : null}
+          {integrationStatus === "error" ? <p className="mt-3 text-sm text-rose-600">{integrationError}</p> : null}
+          {integrationStatus === "ready" ? (
+            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {integrationProviders.map((provider) => (
+                <article key={provider.providerId} className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-semibold">{provider.displayName}</p>
+                    <span
+                      className={`rounded-full border px-2 py-0.5 ${
+                        provider.configured
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : "border-amber-200 bg-amber-50 text-amber-700"
+                      }`}
+                    >
+                      {provider.configured ? "Connected" : "Action needed"}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-[#475569]">
+                    {provider.category} | validation: {provider.validationStatus}
+                  </p>
+                  <p className="mt-2">{provider.safeSetupHelp}</p>
+                  <p className="mt-2 font-medium">Capabilities</p>
+                  <ul className="mt-1 space-y-0.5">
+                    {provider.capabilitiesEnabled.map((capability) => (
+                      <li key={capability}>- {capability}</li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-[#475569]">Env vars: {provider.requiredEnvVars.join(", ")}</p>
+                </article>
+              ))}
+            </div>
+          ) : null}
+        </section>
+
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
           <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
             <h2 className="text-lg font-semibold">Listing Input</h2>
@@ -356,8 +463,12 @@ export default function StudioDomaraClient() {
                     }
                   >
                     <option value="manual">Manual</option>
-                    <option value="idealista">Idealista</option>
-                    <option value="immobiliare">Immobiliare.it</option>
+                    <option value="idealista" disabled={integrationCapabilities?.listingFetchIdealista === false}>
+                      Idealista {integrationCapabilities?.listingFetchIdealista === false ? "(env missing)" : ""}
+                    </option>
+                    <option value="immobiliare" disabled={integrationCapabilities?.listingFetchImmobiliare === false}>
+                      Immobiliare.it {integrationCapabilities?.listingFetchImmobiliare === false ? "(env missing)" : ""}
+                    </option>
                   </select>
                 </label>
                 <label className="text-sm">
@@ -418,7 +529,9 @@ export default function StudioDomaraClient() {
                   >
                     <option value="silent">Silent / caption-only</option>
                     <option value="mock">Mock narration</option>
-                    <option value="elevenlabs">ElevenLabs (if configured)</option>
+                    <option value="elevenlabs" disabled={integrationCapabilities?.elevenlabsLiveNarration === false}>
+                      ElevenLabs {integrationCapabilities?.elevenlabsLiveNarration === false ? "(env missing)" : "(connected)"}
+                    </option>
                   </select>
                 </label>
                 <label className="text-sm">
