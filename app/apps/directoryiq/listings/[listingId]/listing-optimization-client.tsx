@@ -1713,6 +1713,15 @@ export default function ListingOptimizationClient({
 
   const displayName = listing?.listing.listing_name || support?.listing.title || "Listing";
   const displayUrl = firstNonEmptyValue(listing?.listing.listing_url, support?.listing.canonicalUrl);
+  const displayInitials = useMemo(() => {
+    const words = displayName
+      .split(/\s+/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+    if (!words.length) return "LI";
+    if (words.length === 1) return words[0].slice(0, 2).toUpperCase();
+    return `${words[0][0] ?? ""}${words[1][0] ?? ""}`.toUpperCase();
+  }, [displayName]);
   const baseScore = listing?.evaluation.totalScore ?? 0;
 
   const connectNowFlywheelItems = (flywheel?.items ?? []).filter((item) => item.type !== "category_or_guide_page_should_join_cluster");
@@ -3503,36 +3512,21 @@ export default function ListingOptimizationClient({
                 >
                   {listing?.listing.mainImageUrl ? (
                     // eslint-disable-next-line @next/next/no-img-element
-                    <img src={listing.listing.mainImageUrl} alt={displayName} className="h-full w-full object-cover" />
+                    <img
+                      src={listing.listing.mainImageUrl}
+                      alt={displayName}
+                      className="h-full w-full object-cover"
+                      data-testid="listing-hero-image"
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-slate-900 text-sm text-slate-300">No listing image</div>
-                  )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-black/10 to-transparent" />
-                  <div className="absolute inset-0 flex items-center justify-center p-2 sm:p-3" data-testid="listing-hero-overlay">
-                    <div className="w-full max-w-[94%] rounded-2xl border border-white/35 bg-black/10 px-3 py-2.5 text-center shadow-lg backdrop-blur-md sm:max-w-[88%] sm:px-4 sm:py-3">
-                      <div className="truncate text-sm font-semibold text-[#0F172A] sm:text-[15px]" data-testid="listing-hero-title">
-                        {displayName}
-                      </div>
-                      {displayUrl ? (
-                        <Link
-                          className="mt-1 block max-w-full break-all text-[11px] text-cyan-100 underline underline-offset-4 sm:text-xs"
-                          href={displayUrl}
-                          target="_blank"
-                          data-testid="listing-hero-url"
-                        >
-                          {displayUrl}
-                        </Link>
-                      ) : null}
-                      <div className="mt-2 flex justify-center">
-                        <div
-                          className="inline-flex rounded-full border border-cyan-200/60 bg-black/20 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
-                          data-testid="listing-hero-score"
-                        >
-                          AI Selection Score: {computedScore}
-                        </div>
-                      </div>
+                    <div
+                      className="flex h-full w-full items-center justify-center bg-slate-900 text-3xl font-semibold tracking-wide text-cyan-100/85 sm:text-4xl"
+                      data-testid="listing-hero-image-fallback"
+                    >
+                      {displayInitials}
                     </div>
-                  </div>
+                  )}
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
                 </div>
 
                 {mapNodes.map((node, index) => {
@@ -3560,6 +3554,30 @@ export default function ListingOptimizationClient({
                     </button>
                   );
                 })}
+              </div>
+
+              <div className="mt-3 rounded-xl border border-white/15 bg-slate-900/85 p-3 text-center sm:p-4" data-testid="listing-identity-card">
+                <div className="truncate text-sm font-semibold text-slate-100 sm:text-[15px]" data-testid="listing-hero-title">
+                  {displayName}
+                </div>
+                {displayUrl ? (
+                  <Link
+                    className="mt-1 block max-w-full break-all text-[11px] text-cyan-200 underline underline-offset-4 sm:text-xs"
+                    href={displayUrl}
+                    target="_blank"
+                    data-testid="listing-hero-url"
+                  >
+                    {displayUrl}
+                  </Link>
+                ) : null}
+                <div className="mt-2 flex justify-center">
+                  <div
+                    className="inline-flex rounded-full border border-cyan-200/60 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
+                    data-testid="listing-hero-score"
+                  >
+                    AI Selection Score: {computedScore}
+                  </div>
+                </div>
               </div>
             </div>
           </section>
