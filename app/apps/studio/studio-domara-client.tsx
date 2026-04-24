@@ -8,6 +8,12 @@ import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone }
 import { generateDomaraYouTubePackage } from "@/lib/studio/domara/youtube-package";
 import { DomaraMapVisualMode } from "@/lib/studio/domara/map-visual-provider";
 import {
+  buildOperatorIntegrationRows,
+  DomaraOperatorIntegrationRow,
+  DomaraOperatorIntegrationStatus,
+} from "@/lib/studio/domara/integrations-ui";
+import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
+import {
   DOMARA_BATCH_LIMIT,
   DomaraBatch,
   DomaraSeriesTemplateName,
@@ -20,7 +26,7 @@ import {
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
-  listingProvider: "manual" | "idealista" | "immobiliare";
+  listingProvider: "manual" | "import_url" | "idealista" | "immobiliare";
   listingUrl: string;
   source: string;
   country: string;
@@ -48,16 +54,7 @@ type FormState = {
 
 type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
 type IntegrationStatusState = "loading" | "ready" | "error";
-type DomaraIntegrationProviderCard = {
-  providerId: string;
-  displayName: string;
-  category: string;
-  requiredEnvVars: string[];
-  configured: boolean;
-  validationStatus: "unknown" | "configured" | "missing" | "invalid";
-  safeSetupHelp: string;
-  capabilitiesEnabled: string[];
-};
+type DomaraIntegrationProviderCard = DomaraIntegrationProviderStatus;
 
 const initialState: FormState = {
   listingProvider: "manual",
@@ -88,6 +85,61 @@ const initialState: FormState = {
 
 const fieldClass =
   "mt-1 w-full rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] placeholder:text-[#94A3B8]";
+
+const providerFieldClass =
+  "w-full rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] placeholder:text-[#94A3B8]";
+
+const integrationStatusStyle: Record<DomaraOperatorIntegrationStatus, string> = {
+  connected: "border-emerald-200 bg-emerald-50 text-emerald-700",
+  missing: "border-slate-200 bg-slate-100 text-slate-600",
+  invalid: "border-rose-200 bg-rose-50 text-rose-700",
+};
+
+const integrationStatusLabel: Record<DomaraOperatorIntegrationStatus, string> = {
+  connected: "Connected",
+  missing: "Missing",
+  invalid: "Invalid",
+};
+
+function DomaraIntegrationRow(props: {
+  row: DomaraOperatorIntegrationRow;
+  draftValue: string;
+  saveEnabled: boolean;
+  onDraftChange: (providerId: string, value: string) => void;
+  onSave: (providerId: string) => void;
+}) {
+  const { row, draftValue, onDraftChange, onSave, saveEnabled } = props;
+
+  return (
+    <article className="rounded-xl border border-[#D9E4F0] bg-white p-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-sm font-medium text-[#0F172A]">{row.displayName}</p>
+        <span className={`rounded-full border px-2 py-0.5 text-xs ${integrationStatusStyle[row.status]}`}>
+          {integrationStatusLabel[row.status]}
+        </span>
+      </div>
+      <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto]">
+        <input
+          type="password"
+          className={providerFieldClass}
+          value={draftValue}
+          onChange={(event) => onDraftChange(row.providerId, event.target.value)}
+          placeholder={row.maskedKey || "Enter API key"}
+          autoComplete="off"
+          aria-label={`${row.displayName} API key`}
+        />
+        <button
+          type="button"
+          className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-55"
+          onClick={() => onSave(row.providerId)}
+          disabled={!saveEnabled}
+        >
+          Save
+        </button>
+      </div>
+    </article>
+  );
+}
 
 function toInput(state: FormState): PropertyListingInput {
   return {
@@ -150,10 +202,14 @@ export default function StudioDomaraClient() {
   const [listingFetchError, setListingFetchError] = useState<string | null>(null);
   const [listingFetchWarnings, setListingFetchWarnings] = useState<string[]>([]);
   const [listingFetchFallbackUsed, setListingFetchFallbackUsed] = useState(false);
+  const [listingFetchNotice, setListingFetchNotice] = useState<string | null>(null);
   const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusState>("loading");
   const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [integrationProviders, setIntegrationProviders] = useState<DomaraIntegrationProviderCard[]>([]);
+  const [integrationDraftKeys, setIntegrationDraftKeys] = useState<Record<string, string>>({});
+  const [integrationSaveNotice, setIntegrationSaveNotice] = useState<string | null>(null);
   const [integrationCapabilities, setIntegrationCapabilities] = useState<{
+    openaiGeneration: boolean;
     elevenlabsLiveNarration: boolean;
     mapboxVisuals: boolean;
     googleMapsVisuals: boolean;
@@ -165,6 +221,8 @@ export default function StudioDomaraClient() {
   const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
   const [batchNotice, setBatchNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const integrationSaveSupported = false;
+  const integrationRows = useMemo(() => buildOperatorIntegrationRows(integrationProviders), [integrationProviders]);
   const sceneDuration = useMemo(
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
     [plan],
@@ -202,6 +260,7 @@ export default function StudioDomaraClient() {
               ok?: boolean;
               providers?: DomaraIntegrationProviderCard[];
               capabilities?: {
+                openaiGeneration: boolean;
                 elevenlabsLiveNarration: boolean;
                 mapboxVisuals: boolean;
                 googleMapsVisuals: boolean;
@@ -306,12 +365,13 @@ export default function StudioDomaraClient() {
 
   async function onFetchListing() {
     setListingFetchError(null);
+    setListingFetchNotice(null);
     setListingFetchWarnings([]);
     setListingFetchFallbackUsed(false);
 
     if (form.listingProvider === "manual") {
       setListingFetchStatus("failed");
-      setListingFetchError("Select Idealista or Immobiliare to use Fetch Listing.");
+      setListingFetchError("Select Import from Listing URL, Idealista, or Immobiliare first.");
       return;
     }
     if (!form.listingUrl.trim()) {
@@ -322,18 +382,58 @@ export default function StudioDomaraClient() {
 
     try {
       setListingFetchStatus("fetching");
-      const response = await fetch("/api/studio/domara/listing/fetch", {
+      const isUrlImport = form.listingProvider === "import_url";
+      const response = await fetch(isUrlImport ? "/api/studio/domara/listing/import-url" : "/api/studio/domara/listing/fetch", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          provider: form.listingProvider,
-          listingRef: form.listingUrl.trim(),
-          country: form.country,
-          fallbackToMock: true,
-        }),
+        body: JSON.stringify(
+          isUrlImport
+            ? {
+                listingUrl: form.listingUrl.trim(),
+                providerHint: "auto",
+                countryHint: form.country,
+                sourceLabel: form.source || undefined,
+              }
+            : {
+                provider: form.listingProvider,
+                listingRef: form.listingUrl.trim(),
+                country: form.country,
+                fallbackToMock: true,
+              },
+        ),
       });
+      if (isUrlImport) {
+        const payload = (await response.json().catch(() => null)) as
+          | {
+              ok?: boolean;
+              result?: {
+                status: "imported" | "partial" | "blocked" | "failed";
+                normalizedListingInput?: PropertyListingInput | null;
+                warnings?: string[];
+                fallbackMessage?: string;
+              };
+              error?: { message?: string; details?: string };
+            }
+          | null;
+        if (!response.ok || !payload?.ok || !payload.result) {
+          throw new Error(payload?.error?.details || payload?.error?.message || "Failed to import listing URL.");
+        }
+        if (payload.result.normalizedListingInput) {
+          setForm((curr) => formStateFromListing(curr, payload.result!.normalizedListingInput!));
+        }
+        setListingFetchWarnings(payload.result.warnings || []);
+        setListingFetchFallbackUsed(payload.result.status !== "imported");
+        setListingFetchNotice(
+          payload.result.fallbackMessage ||
+            (payload.result.status === "imported"
+              ? "Listing imported. Review details before generating video."
+              : "Listing import was partially completed. Review details before generating video."),
+        );
+        setListingFetchStatus(payload.result.status === "failed" || payload.result.status === "blocked" ? "failed" : "ready");
+        return;
+      }
 
       const payload = (await response.json().catch(() => null)) as
         | {
@@ -353,6 +453,7 @@ export default function StudioDomaraClient() {
       setForm((curr) => formStateFromListing(curr, payload.result!.listing));
       setListingFetchWarnings(payload.result.warnings || []);
       setListingFetchFallbackUsed(Boolean(payload.result.fallbackUsed));
+      setListingFetchNotice("Listing imported. Review details before generating video.");
       setListingFetchStatus("ready");
     } catch (fetchError) {
       setListingFetchStatus("failed");
@@ -386,6 +487,20 @@ export default function StudioDomaraClient() {
     }));
   }
 
+  function onIntegrationDraftChange(providerId: string, value: string) {
+    setIntegrationDraftKeys((current) => ({
+      ...current,
+      [providerId]: value,
+    }));
+  }
+
+  function onIntegrationSave(providerId: string) {
+    const provider = integrationRows.find((row) => row.providerId === providerId);
+    setIntegrationSaveNotice(
+      provider ? `${provider.displayName}: set via server environment variables` : "Set via server environment variables",
+    );
+  }
+
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-7xl px-6 py-12">
@@ -405,46 +520,36 @@ export default function StudioDomaraClient() {
           </div>
         </header>
 
-        <section className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-          <h2 className="text-lg font-semibold">Integrations</h2>
-          <p className="mt-1 text-sm text-[#475569]">
-            Provider connection status is resolved server-side from environment configuration. Secrets are never returned
-            to the browser.
-          </p>
-          {integrationStatus === "loading" ? <p className="mt-3 text-sm text-[#475569]">Loading provider status...</p> : null}
-          {integrationStatus === "error" ? <p className="mt-3 text-sm text-rose-600">{integrationError}</p> : null}
-          {integrationStatus === "ready" ? (
-            <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-              {integrationProviders.map((provider) => (
-                <article key={provider.providerId} className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-semibold">{provider.displayName}</p>
-                    <span
-                      className={`rounded-full border px-2 py-0.5 ${
-                        provider.configured
-                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                          : "border-amber-200 bg-amber-50 text-amber-700"
-                      }`}
-                    >
-                      {provider.configured ? "Connected" : "Action needed"}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-[#475569]">
-                    {provider.category} | validation: {provider.validationStatus}
-                  </p>
-                  <p className="mt-2">{provider.safeSetupHelp}</p>
-                  <p className="mt-2 font-medium">Capabilities</p>
-                  <ul className="mt-1 space-y-0.5">
-                    {provider.capabilitiesEnabled.map((capability) => (
-                      <li key={capability}>- {capability}</li>
-                    ))}
-                  </ul>
-                  <p className="mt-2 text-[#475569]">Env vars: {provider.requiredEnvVars.join(", ")}</p>
-                </article>
+        <details className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
+          <summary className="cursor-pointer list-none text-lg font-semibold text-[#0F172A]">Integrations</summary>
+          <div className="mt-4 space-y-3">
+            {integrationRows.map((row) => (
+              <DomaraIntegrationRow
+                key={row.providerId}
+                row={row}
+                draftValue={integrationDraftKeys[row.providerId] || ""}
+                saveEnabled={integrationSaveSupported}
+                onDraftChange={onIntegrationDraftChange}
+                onSave={onIntegrationSave}
+              />
+            ))}
+          </div>
+          <p className="mt-3 text-xs text-[#475569]">Set via server environment variables</p>
+          {integrationStatus === "loading" ? <p className="mt-2 text-xs text-[#64748B]">Loading status...</p> : null}
+          {integrationStatus === "error" ? <p className="mt-2 text-xs text-rose-600">{integrationError}</p> : null}
+          {integrationSaveNotice ? <p className="mt-2 text-xs text-[#64748B]">{integrationSaveNotice}</p> : null}
+
+          <details className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <summary className="cursor-pointer list-none text-xs font-medium text-[#334155]">Advanced</summary>
+            <div className="mt-2 space-y-2 text-xs text-[#475569]">
+              {integrationRows.map((row) => (
+                <p key={`advanced-${row.providerId}`}>
+                  {row.displayName}: {row.requiredEnvVars.length > 0 ? row.requiredEnvVars.join(", ") : "No env vars"}
+                </p>
               ))}
             </div>
-          ) : null}
-        </section>
+          </details>
+        </details>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
           <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
@@ -469,11 +574,12 @@ export default function StudioDomaraClient() {
                     }
                   >
                     <option value="manual">Manual</option>
+                    <option value="import_url">Import from Listing URL</option>
                     <option value="idealista" disabled={integrationCapabilities?.listingFetchIdealista === false}>
-                      Idealista {integrationCapabilities?.listingFetchIdealista === false ? "(env missing)" : ""}
+                      Idealista API {integrationCapabilities?.listingFetchIdealista === false ? "(env missing)" : ""}
                     </option>
                     <option value="immobiliare" disabled={integrationCapabilities?.listingFetchImmobiliare === false}>
-                      Immobiliare.it {integrationCapabilities?.listingFetchImmobiliare === false ? "(env missing)" : ""}
+                      Immobiliare API {integrationCapabilities?.listingFetchImmobiliare === false ? "(env missing)" : ""}
                     </option>
                   </select>
                 </label>
@@ -496,26 +602,37 @@ export default function StudioDomaraClient() {
                   />
                 </label>
                 <div className="text-sm">
-                  <span className="text-[#334155]">Fetch listing</span>
+                  <span className="text-[#334155]">
+                    {form.listingProvider === "import_url" ? "Import listing URL" : "Fetch listing"}
+                  </span>
                   <button
                     type="button"
                     className="mt-1 w-full rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
                     onClick={() => void onFetchListing()}
                     disabled={listingFetchStatus === "fetching"}
                   >
-                    {listingFetchStatus === "fetching" ? "Fetching..." : "Fetch Listing"}
+                    {listingFetchStatus === "fetching"
+                      ? form.listingProvider === "import_url"
+                        ? "Importing..."
+                        : "Fetching..."
+                      : form.listingProvider === "import_url"
+                        ? "Import from Listing URL"
+                        : "Fetch Listing"}
                   </button>
                 </div>
               </div>
               <p className="text-xs text-[#475569]">
-                Fetch Listing is source-ingestion only for content generation. Marketplace search and buyer workflows are
-                intentionally out of scope.
+                Listing import is user-initiated source ingestion for content generation only. Marketplace search and
+                buyer workflows remain out of scope.
               </p>
               {listingFetchStatus === "ready" ? (
                 <p className="text-xs text-emerald-700">
-                  Listing fetched and mapped to Domara input model.
+                  {listingFetchNotice || "Listing imported and mapped to Domara input model."}
                   {listingFetchFallbackUsed ? " Provider fallback: deterministic mock listing used." : ""}
                 </p>
+              ) : null}
+              {listingFetchStatus === "failed" && listingFetchNotice ? (
+                <p className="text-xs text-amber-700">{listingFetchNotice}</p>
               ) : null}
               {listingFetchWarnings.length > 0 ? (
                 <ul className="space-y-1 text-xs text-amber-700">
@@ -787,6 +904,11 @@ export default function StudioDomaraClient() {
                     setForm(initialState);
                     setPlan(null);
                     setGeneratedInput(null);
+                    setListingFetchStatus("idle");
+                    setListingFetchError(null);
+                    setListingFetchWarnings([]);
+                    setListingFetchFallbackUsed(false);
+                    setListingFetchNotice(null);
                     setStatus("idle");
                     setRenderStatus("idle");
                     setRenderResult(null);
