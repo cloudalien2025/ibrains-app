@@ -64,6 +64,8 @@ describe("createDomaraRenderPlan", () => {
     expect(renderPlan.timeline[0]?.imageUrl).toBe("https://example.com/image-1.jpg");
     expect(renderPlan.timeline[1]?.imageUrl).toBe("https://example.com/image-2.jpg");
     expect(renderPlan.timeline[2]?.imageUrl).toBe("https://example.com/image-1.jpg");
+    expect(renderPlan.stylePreset).toBe("expat_ai_editorial");
+    expect(renderPlan.skippedImageCount).toBe(0);
   });
 
   it("creates a valid fallback render plan when image array is empty", () => {
@@ -79,6 +81,7 @@ describe("createDomaraRenderPlan", () => {
     expect(renderPlan.timeline.length).toBeGreaterThan(0);
     expect(renderPlan.imageUrls).toEqual([]);
     expect(renderPlan.totalDurationSeconds).toBeGreaterThan(0);
+    expect(renderPlan.timeline[0]?.title).toBe("Opening Hook");
   });
 
   it("includes Domara/Expat AI metadata without requiring credentials", () => {
@@ -94,6 +97,27 @@ describe("createDomaraRenderPlan", () => {
     expect(renderPlan.channel).toBe("Expat AI");
     expect(renderPlan.useCase).toBe("property_video_engine");
     expect(renderPlan.renderMode).toBe("mock-first local render");
+    expect(renderPlan.stylePreset).toBe("expat_ai_editorial");
+  });
+
+  it("skips invalid image urls and preserves stable order for accepted urls", () => {
+    const renderPlan = createDomaraRenderPlan({
+      plan: basePlan,
+      listingInput: {
+        country: "Italy",
+        title: "Image Validation Listing",
+        imageUrls: [
+          "https://example.com/hero.jpg",
+          "javascript:alert(1)",
+          "not-a-url",
+          "http://example.com/room.jpg",
+        ],
+      },
+      stylePreset: "premium_listing",
+    });
+
+    expect(renderPlan.imageUrls).toEqual(["https://example.com/hero.jpg", "http://example.com/room.jpg"]);
+    expect(renderPlan.skippedImageCount).toBe(2);
+    expect(renderPlan.stylePreset).toBe("premium_listing");
   });
 });
-

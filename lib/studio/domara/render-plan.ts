@@ -1,4 +1,7 @@
 import { PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
+import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
+
+export type DomaraRenderStyle = "property_showcase" | "expat_ai_editorial" | "premium_listing";
 
 export type DomaraRenderTimelineScene = {
   order: number;
@@ -12,6 +15,7 @@ export type DomaraRenderTimelineScene = {
 export type DomaraVideoRenderRequest = {
   plan: PropertyVideoPlan;
   listingInput: PropertyListingInput;
+  stylePreset?: DomaraRenderStyle;
 };
 
 export type DomaraVideoRenderPlan = {
@@ -20,21 +24,38 @@ export type DomaraVideoRenderPlan = {
   useCase: "property_video_engine";
   market: string;
   title: string;
-  imageUrls: string[];
+  imageUrls: string[]; // validated and ordered
+  requestedImageCount: number;
+  skippedImageCount: number;
+  imageValidationWarnings: string[];
   totalDurationSeconds: number;
   timeline: DomaraRenderTimelineScene[];
   renderMode: "mock-first local render";
+  stylePreset: DomaraRenderStyle;
+  sourceAttribution?: {
+    source?: string;
+    listingUrl?: string;
+  };
 };
 
 export type DomaraVideoRenderResult = {
   status: "complete";
   renderId: string;
   downloadUrl: string;
+  outputPath: string;
   filename: string;
   durationSeconds: number;
   sceneCount: number;
   imageCount: number;
+  skippedImageCount: number;
   renderMode: "mock-first local render";
+  stylePreset: DomaraRenderStyle;
+  generatedAt: string;
+  audioIncluded: boolean;
+  sourceAttribution?: {
+    source?: string;
+    listingUrl?: string;
+  };
 };
 
 function fallbackSceneDuration(durationSeconds: number): number {
@@ -43,8 +64,11 @@ function fallbackSceneDuration(durationSeconds: number): number {
 }
 
 export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): DomaraVideoRenderPlan {
-  const imageUrls = request.listingInput.imageUrls.filter(Boolean);
+  const rawImageUrls = request.listingInput.imageUrls.filter(Boolean);
+  const validation = validateDomaraImageUrls(rawImageUrls);
+  const imageUrls = validation.acceptedUrls;
   const market = request.listingInput.country || "Italy";
+  const stylePreset = request.stylePreset ?? "expat_ai_editorial";
   const timeline = request.plan.scenes.map((scene, index) => ({
     order: scene.order,
     title: scene.title,
@@ -60,7 +84,7 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
       : [
           {
             order: 1,
-            title: "Opening Hook",
+            title: "Cinematic Opening",
             overlayText: request.plan.youtubeTitle,
             narration: request.plan.hook,
             durationSeconds: 8,
@@ -68,11 +92,29 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
           },
           {
             order: 2,
-            title: "Closing CTA",
+            title: "Property Highlights",
+            overlayText: request.listingInput.title || "Studio Property Video Engine",
+            narration:
+              "Image gallery is unavailable. Rendering with branded fallback scenes while preserving Expat AI editorial structure.",
+            durationSeconds: 7,
+            imageUrl: imageUrls[0],
+          },
+          {
+            order: 3,
+            title: "Source Attribution",
+            overlayText: request.listingInput.source || "Manual Listing Input",
+            narration:
+              "Source attribution is included for editorial transparency. Location enrichment remains a clearly labeled placeholder when unavailable.",
+            durationSeconds: 5,
+            imageUrl: imageUrls[1] ?? imageUrls[0],
+          },
+          {
+            order: 4,
+            title: "Expat AI Closing",
             overlayText: "Created for Expat AI",
             narration: "Location enrichment placeholder - Google Maps / Places integration pending.",
             durationSeconds: 6,
-            imageUrl: imageUrls[1] ?? imageUrls[0],
+            imageUrl: undefined,
           },
         ];
 
@@ -83,9 +125,16 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
     market,
     title: request.listingInput.title || request.plan.youtubeTitle,
     imageUrls,
+    requestedImageCount: rawImageUrls.length,
+    skippedImageCount: validation.skippedUrls.length,
+    imageValidationWarnings: validation.warnings,
     totalDurationSeconds: fallbackTimeline.reduce((sum, scene) => sum + scene.durationSeconds, 0),
     timeline: fallbackTimeline,
     renderMode: "mock-first local render",
+    stylePreset,
+    sourceAttribution: {
+      source: request.listingInput.source || undefined,
+      listingUrl: request.listingInput.listingUrl || undefined,
+    },
   };
 }
-

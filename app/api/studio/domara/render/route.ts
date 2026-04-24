@@ -48,6 +48,7 @@ export async function POST(request: Request) {
     const renderPlan = createDomaraRenderPlan({
       plan,
       listingInput,
+      stylePreset: cast.stylePreset,
     });
     const result = await renderDomaraPropertyVideo(renderPlan);
     return NextResponse.json({
@@ -57,6 +58,10 @@ export async function POST(request: Request) {
         timelineScenes: renderPlan.timeline.length,
         channel: renderPlan.channel,
         useCase: renderPlan.useCase,
+        stylePreset: renderPlan.stylePreset,
+        requestedImageCount: renderPlan.requestedImageCount,
+        skippedImageCount: renderPlan.skippedImageCount,
+        imageValidationWarnings: renderPlan.imageValidationWarnings,
       },
     });
   } catch (error) {
