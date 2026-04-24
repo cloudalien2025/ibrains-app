@@ -5,7 +5,7 @@ import os from "node:os";
 import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { DomaraVideoRenderPlan, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
+import { DomaraRenderStyle, DomaraVideoRenderPlan, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 
 const execFileAsync = promisify(execFile);
 const OUTPUT_DIRECTORY = path.join(process.cwd(), "public", "generated", "domara");
@@ -97,22 +97,33 @@ async function renderSceneSegment(input: {
   durationSeconds: number;
   market: string;
   renderBrandText: string;
+  stylePreset: DomaraRenderStyle;
+  sceneOrder: number;
+  sceneTotal: number;
 }): Promise<void> {
   const fps = 30;
   const titleText = escapeDrawText(input.sceneTitle);
   const subtitleText = escapeDrawText(input.overlayText || `A property spotlight in ${input.market}`);
   const brandText = escapeDrawText(input.renderBrandText);
-  const bottomY = 620;
-  const titleY = 570;
+  const styleTheme =
+    input.stylePreset === "premium_listing"
+      ? { accent: "#ca8a04", titleY: 554, subtitleY: 612, brandY: 670, overlayAlpha: "0.56" }
+      : input.stylePreset === "property_showcase"
+        ? { accent: "#0ea5e9", titleY: 560, subtitleY: 618, brandY: 674, overlayAlpha: "0.52" }
+        : { accent: "#2563eb", titleY: 558, subtitleY: 616, brandY: 672, overlayAlpha: "0.54" };
+  const sceneCounter = escapeDrawText(`Scene ${input.sceneOrder}/${input.sceneTotal}`);
   const vf = [
     "scale=1280:720:force_original_aspect_ratio=decrease",
     "pad=1280:720:(ow-iw)/2:(oh-ih)/2",
-    `zoompan=z='min(zoom+0.0007,1.08)':d=${Math.max(1, Math.floor(input.durationSeconds * fps))}:s=1280x720`,
+    `zoompan=z='if(lte(mod(on\\,2)\\,1),min(zoom+0.00075,1.09),max(zoom-0.00055,1.01))':d=${Math.max(1, Math.floor(input.durationSeconds * fps))}:s=1280x720`,
     "fps=30",
-    "drawbox=x=0:y=520:w=1280:h=200:color=black@0.50:t=fill",
-    `drawtext=text='${titleText}':x=60:y=${titleY}:fontsize=42:fontcolor=white`,
-    `drawtext=text='${subtitleText}':x=60:y=${bottomY}:fontsize=30:fontcolor=white`,
-    `drawtext=text='${brandText}':x=60:y=672:fontsize=24:fontcolor=white@0.9`,
+    "drawbox=x=0:y=0:w=1280:h=720:color=black@0.15:t=fill",
+    `drawbox=x=0:y=516:w=1280:h=204:color=black@${styleTheme.overlayAlpha}:t=fill`,
+    `drawbox=x=56:y=${styleTheme.titleY - 10}:w=6:h=74:color=${styleTheme.accent}@0.95:t=fill`,
+    `drawtext=text='${titleText}':x=72:y=${styleTheme.titleY}:fontsize=45:fontcolor=white`,
+    `drawtext=text='${subtitleText}':x=72:y=${styleTheme.subtitleY}:fontsize=30:fontcolor=white@0.96`,
+    `drawtext=text='${sceneCounter}':x=1104:y=24:fontsize=21:fontcolor=white@0.88`,
+    `drawtext=text='${brandText}':x=72:y=${styleTheme.brandY}:fontsize=24:fontcolor=white@0.9`,
   ].join(",");
 
   const args = input.imagePath
@@ -143,12 +154,15 @@ async function renderSceneSegment(input: {
         "-t",
         String(input.durationSeconds),
         "-vf",
-        [
-          "drawbox=x=0:y=0:w=1280:h=720:color=#1e3a8a@0.28:t=fill",
-          "drawbox=x=0:y=520:w=1280:h=200:color=black@0.56:t=fill",
-          `drawtext=text='${titleText}':x=60:y=${titleY}:fontsize=42:fontcolor=white`,
-          `drawtext=text='${subtitleText}':x=60:y=${bottomY}:fontsize=30:fontcolor=white`,
-          `drawtext=text='${brandText}':x=60:y=672:fontsize=24:fontcolor=white@0.9`,
+      [
+          "drawbox=x=0:y=0:w=1280:h=720:color=#0f172a@1:t=fill",
+          `drawbox=x=0:y=0:w=1280:h=190:color=${styleTheme.accent}@0.22:t=fill`,
+          `drawbox=x=0:y=516:w=1280:h=204:color=black@${styleTheme.overlayAlpha}:t=fill`,
+          `drawbox=x=56:y=${styleTheme.titleY - 10}:w=6:h=74:color=${styleTheme.accent}@0.95:t=fill`,
+          `drawtext=text='${titleText}':x=72:y=${styleTheme.titleY}:fontsize=45:fontcolor=white`,
+          `drawtext=text='${subtitleText}':x=72:y=${styleTheme.subtitleY}:fontsize=30:fontcolor=white@0.96`,
+          `drawtext=text='${sceneCounter}':x=1104:y=24:fontsize=21:fontcolor=white@0.88`,
+          `drawtext=text='${brandText}':x=72:y=${styleTheme.brandY}:fontsize=24:fontcolor=white@0.9`,
         ].join(","),
         "-r",
         "30",
@@ -168,6 +182,7 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
   await fs.mkdir(OUTPUT_DIRECTORY, { recursive: true });
 
   const downloadedImages: string[] = [];
+  let downloadFailures = 0;
   try {
     for (let i = 0; i < renderPlan.imageUrls.length; i += 1) {
       const url = renderPlan.imageUrls[i];
@@ -177,6 +192,7 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
         downloadedImages.push(saved);
       } catch {
         // Keep rendering with remaining valid images.
+        downloadFailures += 1;
       }
     }
 
@@ -195,6 +211,9 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
         durationSeconds: scene.durationSeconds,
         market: renderPlan.market,
         renderBrandText: brandText,
+        stylePreset: renderPlan.stylePreset,
+        sceneOrder: index + 1,
+        sceneTotal: sceneCount,
       });
       segmentPaths.push(segmentPath);
     }
@@ -223,14 +242,19 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
       status: "complete",
       renderId,
       downloadUrl: `/generated/domara/${outputFilename}`,
+      outputPath: `/generated/domara/${outputFilename}`,
       filename: outputFilename,
       durationSeconds: renderPlan.totalDurationSeconds,
       sceneCount,
       imageCount: downloadedImages.length,
+      skippedImageCount: renderPlan.skippedImageCount + downloadFailures,
       renderMode: "mock-first local render",
+      stylePreset: renderPlan.stylePreset,
+      generatedAt: new Date().toISOString(),
+      audioIncluded: false,
+      sourceAttribution: renderPlan.sourceAttribution,
     };
   } finally {
     await fs.rm(tmpDir, { recursive: true, force: true });
   }
 }
-

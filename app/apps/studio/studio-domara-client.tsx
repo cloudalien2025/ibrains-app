@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
-import { DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
+import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
@@ -24,6 +24,7 @@ type FormState = {
   latitude: string;
   longitude: string;
   contentAngle: DomaraContentAngle;
+  renderStyle: DomaraRenderStyle;
 };
 
 const initialState: FormState = {
@@ -44,6 +45,7 @@ const initialState: FormState = {
   latitude: "",
   longitude: "",
   contentAngle: "lifestyle",
+  renderStyle: "expat_ai_editorial",
 };
 
 const fieldClass =
@@ -87,6 +89,14 @@ export default function StudioDomaraClient() {
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
     [plan],
   );
+  const phase3Preview = useMemo(() => {
+    if (!plan || !generatedInput) return null;
+    return createDomaraRenderPlan({
+      plan,
+      listingInput: generatedInput,
+      stylePreset: form.renderStyle,
+    });
+  }, [plan, generatedInput, form.renderStyle]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -128,6 +138,7 @@ export default function StudioDomaraClient() {
         body: JSON.stringify({
           plan,
           listingInput: input,
+          stylePreset: form.renderStyle,
         }),
       });
 
@@ -157,7 +168,7 @@ export default function StudioDomaraClient() {
           <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-1 text-xs font-medium text-[#334155]">
             Studio Module
           </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">Domara Property Video Engine</h1>
+                  <h1 className="mt-3 text-3xl font-semibold tracking-tight">Domara Property Video Engine</h1>
           <p className="mt-2 max-w-4xl text-sm text-[#334155]">
             Transform European property listings into premium YouTube-ready real-estate videos using listing data,
             images, and location intelligence.
@@ -178,7 +189,7 @@ export default function StudioDomaraClient() {
             </p>
 
             <form onSubmit={onSubmit} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <label className="text-sm">
                   Listing URL
                   <input
@@ -233,6 +244,18 @@ export default function StudioDomaraClient() {
                     <option value="second_home">Second Home</option>
                     <option value="hidden_gem">Hidden Gem</option>
                     <option value="deal_spotlight">Deal Spotlight</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Render style preset
+                  <select
+                    className={fieldClass}
+                    value={form.renderStyle}
+                    onChange={(event) => setForm((curr) => ({ ...curr, renderStyle: event.target.value as DomaraRenderStyle }))}
+                  >
+                    <option value="expat_ai_editorial">Expat AI Editorial</option>
+                    <option value="premium_listing">Premium Listing</option>
+                    <option value="property_showcase">Property Showcase</option>
                   </select>
                 </label>
               </div>
@@ -447,6 +470,23 @@ export default function StudioDomaraClient() {
                 </div>
                 <div>
                   <h3 className="font-semibold">8. Export / Render</h3>
+                  {phase3Preview ? (
+                    <div className="mt-2 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                      <p>
+                        Style: <span className="font-medium">{phase3Preview.stylePreset}</span> | Requested images:{" "}
+                        {phase3Preview.requestedImageCount} | Pre-render skipped: {phase3Preview.skippedImageCount}
+                      </p>
+                      {phase3Preview.imageValidationWarnings.length > 0 ? (
+                        <ul className="mt-2 space-y-1 text-amber-700">
+                          {phase3Preview.imageValidationWarnings.slice(0, 4).map((warning) => (
+                            <li key={warning}>{warning}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="mt-1 text-emerald-700">No image URL issues detected in current input.</p>
+                      )}
+                    </div>
+                  ) : null}
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <button
                       type="button"
@@ -462,15 +502,28 @@ export default function StudioDomaraClient() {
                     <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
                       Mode: mock-first local render
                     </span>
+                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
+                      Created for Expat AI
+                    </span>
                   </div>
                   {renderError ? <p className="mt-2 text-sm text-rose-600">{renderError}</p> : null}
                   {renderResult ? (
                     <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
                       <p>
                         Render complete. Duration: {renderResult.durationSeconds}s | Scenes: {renderResult.sceneCount}{" "}
-                        | Images used: {renderResult.imageCount}
+                        | Images used: {renderResult.imageCount} | Skipped images: {renderResult.skippedImageCount}
                       </p>
-                      <p className="mt-1">Artifact: {renderResult.filename}</p>
+                      <p className="mt-1">
+                        Artifact: {renderResult.filename} | Style: {renderResult.stylePreset} | Audio:{" "}
+                        {renderResult.audioIncluded ? "included" : "not included"}
+                      </p>
+                      <p className="mt-1">Generated: {new Date(renderResult.generatedAt).toLocaleString()}</p>
+                      {renderResult.sourceAttribution?.source || renderResult.sourceAttribution?.listingUrl ? (
+                        <p className="mt-1">
+                          Attribution: {renderResult.sourceAttribution?.source || "Manual source"}{" "}
+                          {renderResult.sourceAttribution?.listingUrl ? `| ${renderResult.sourceAttribution.listingUrl}` : ""}
+                        </p>
+                      ) : null}
                       <div className="mt-2">
                         <a
                           href={renderResult.downloadUrl}

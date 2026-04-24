@@ -25,8 +25,15 @@ describe("renderDomaraPropertyVideo smoke", () => {
       market: "Italy",
       title: "Smoke Test Listing",
       imageUrls: [],
+      requestedImageCount: 0,
+      skippedImageCount: 0,
+      imageValidationWarnings: [],
       totalDurationSeconds: 4,
       renderMode: "mock-first local render",
+      stylePreset: "expat_ai_editorial",
+      sourceAttribution: {
+        source: "Manual",
+      },
       timeline: [
         {
           order: 1,
@@ -51,6 +58,8 @@ describe("renderDomaraPropertyVideo smoke", () => {
 
     expect(result.filename.endsWith(".mp4")).toBe(true);
     expect(stats.size).toBeGreaterThan(0);
+    expect(result.audioIncluded).toBe(false);
+    expect(result.stylePreset).toBe("expat_ai_editorial");
 
     await fs.rm(absolutePath, { force: true });
   }, 30000);
