@@ -50,7 +50,14 @@ export async function generatePropertyVideoPlan(input: PropertyListingInput): Pr
     youtubeTitle: story.youtubeTitle,
     youtubeDescription: story.youtubeDescription,
     enrichmentSummary: enrichment.summary,
+    locationIntelligence: {
+      status: enrichment.status,
+      provider: enrichment.provider,
+      locationLabel: enrichment.locationLabel,
+      coordinates: enrichment.coordinates,
+      pointsOfInterest: enrichment.pointsOfInterest,
+      placeholderMessage: enrichment.placeholderMessage,
+    },
     renderPlaceholder,
   };
 }
-

@@ -52,6 +52,12 @@ export function normalizePropertyListingInput(input: PropertyListingInput): Norm
     title,
     market: country,
     locationLabel: locationLabel || country,
+    location: {
+      country,
+      city: city || undefined,
+      region: region || undefined,
+      neighborhood: neighborhood || undefined,
+    },
     priceLabel: price || "Price on request",
     propertyFacts: facts,
     imageUrls: input.imageUrls.filter(Boolean),
@@ -68,4 +74,3 @@ export function normalizePropertyListingInput(input: PropertyListingInput): Norm
     },
   };
 }
-
