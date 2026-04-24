@@ -26,3 +26,10 @@ Set a Clerk publishable key for browser auth. Either variable works in this repo
 Set a Clerk secret key for server-side auth and middleware protection:
 
 - `CLERK_SECRET_KEY=<sk_...>`
+
+## Runtime contract behavior
+
+- `app/layout.tsx` and `proxy.ts` both resolve Clerk env from one shared contract helper (`lib/auth/clerkEnvContract.ts`).
+- Development/test may use a local placeholder publishable key to keep local rendering stable when Clerk env is intentionally absent.
+- Production must provide a real publishable key and `CLERK_SECRET_KEY`.
+- If production env is misconfigured, the app now fails explicitly with a diagnosable Clerk contract error (instead of silently behaving like a normal logout).

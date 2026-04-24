@@ -1,6 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
+import { buildClerkProductionConfigError, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
 
 const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
 
@@ -12,10 +13,8 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
-const hasClerkPublishableKey = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY || process.env.CLERK_PUBLISHABLE_KEY);
-const hasClerkSecretKey = Boolean(process.env.CLERK_SECRET_KEY);
-const isClerkConfigured =
-  (hasClerkPublishableKey && hasClerkSecretKey) || process.env.NODE_ENV === "test" || process.env.VITEST === "true";
+const clerkRuntimeContract = resolveClerkRuntimeContract();
+const isClerkConfigured = clerkRuntimeContract.configuredForProxy;
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
@@ -92,6 +91,16 @@ export default e2eMockGraph
       return NextResponse.next();
     }
   : async function proxy(req: NextRequest, event: NextFetchEvent) {
+      if (clerkRuntimeContract.hasProductionConfigError) {
+        return new NextResponse(buildClerkProductionConfigError(clerkRuntimeContract), {
+          status: 503,
+          headers: {
+            "cache-control": "no-store",
+            "content-type": "text/plain; charset=utf-8",
+            "x-ibrains-auth-status": "misconfigured",
+          },
+        });
+      }
       if (!isClerkConfigured) {
         if (isProtectedRoute(req)) {
           return NextResponse.redirect(new URL("/sign-in", req.url));
