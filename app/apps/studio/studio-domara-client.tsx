@@ -5,6 +5,7 @@ import { FormEvent, useMemo, useState } from "react";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
+import { generateDomaraYouTubePackage } from "@/lib/studio/domara/youtube-package";
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
@@ -137,6 +138,14 @@ export default function StudioDomaraClient() {
       stylePreset: form.renderStyle,
     });
   }, [plan, generatedInput, form.renderStyle]);
+  const youtubePackage = useMemo(() => {
+    if (!plan || !generatedInput) return null;
+    return generateDomaraYouTubePackage({
+      plan,
+      listingInput: generatedInput,
+      renderResult: renderResult || undefined,
+    });
+  }, [plan, generatedInput, renderResult]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -674,7 +683,63 @@ export default function StudioDomaraClient() {
                   </pre>
                 </div>
                 <div>
-                  <h3 className="font-semibold">8. Export / Render</h3>
+                  <h3 className="font-semibold">8. Publishing Package</h3>
+                  {youtubePackage ? (
+                    <div className="mt-2 space-y-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                      <p>
+                        Recommended title: <span className="font-medium">{youtubePackage.finalRecommendedTitle}</span>
+                      </p>
+                      <div>
+                        <p className="font-medium">Title variants</p>
+                        <ul className="mt-1 space-y-1">
+                          {youtubePackage.titleVariants.slice(0, 5).map((option) => (
+                            <li key={`${option.angle}-${option.title}`}>
+                              {option.angle}: {option.title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-medium">Chapters</p>
+                        <ul className="mt-1 space-y-1">
+                          {youtubePackage.chapters.map((chapter) => (
+                            <li key={`${chapter.timestamp}-${chapter.title}`}>
+                              {chapter.timestamp} {chapter.title}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-medium">Hashtags</p>
+                        <p>{youtubePackage.hashtags.join(" ")}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Pinned comment</p>
+                        <p>{youtubePackage.pinnedComment}</p>
+                      </div>
+                      <div>
+                        <p className="font-medium">Shorts ideas</p>
+                        <ul className="mt-1 space-y-1">
+                          {youtubePackage.shortsIdeas.slice(0, 3).map((idea) => (
+                            <li key={idea.sourceSceneTitle}>
+                              {idea.hook} ({idea.sourceSceneTitle})
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                      <p className="text-[11px] text-[#475569]">
+                        Compliance: {youtubePackage.metadata.complianceNote} | Attribution:{" "}
+                        {youtubePackage.metadata.sourceAttribution}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-[#334155]">
+                      Publishing package appears after a plan is generated.
+                    </p>
+                  )}
+                </div>
+                <div>
+                  <h3 className="font-semibold">9. Export / Render</h3>
                   {phase3Preview ? (
                     <div className="mt-2 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
                       <p>
