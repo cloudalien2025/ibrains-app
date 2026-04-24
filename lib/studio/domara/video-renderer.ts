@@ -287,6 +287,7 @@ export async function renderDomaraPropertyVideo(
       audioIncluded: narration?.status === "ready" && !!narration.audioPath,
       narrationProvider: narration?.provider ?? "none",
       narrationStatus: narration?.status ?? "disabled",
+      narrationDurationSeconds: narration?.durationSeconds,
       narrationFallbackReason: narration?.fallbackReason,
       sourceAttribution: renderPlan.sourceAttribution,
     };
