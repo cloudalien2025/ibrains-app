@@ -1,6 +1,7 @@
 import { PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
+import type { DomaraMapVisualMode, DomaraMapVisualProviderId } from "@/lib/studio/domara/map-visual-provider";
 
 export type DomaraRenderStyle = "property_showcase" | "expat_ai_editorial" | "premium_listing";
 
@@ -23,6 +24,9 @@ export type DomaraVideoRenderRequest = {
     tone: DomaraVoiceTone;
     pace: DomaraVoicePace;
   };
+  mapSettings?: {
+    mode: DomaraMapVisualMode;
+  };
 };
 
 export type DomaraVideoRenderPlan = {
@@ -39,6 +43,10 @@ export type DomaraVideoRenderPlan = {
   timeline: DomaraRenderTimelineScene[];
   renderMode: "mock-first local render";
   stylePreset: DomaraRenderStyle;
+  mapVisualMode?: DomaraMapVisualMode;
+  mapVisualProvider?: DomaraMapVisualProviderId;
+  mapAttribution?: string;
+  mapFallbackReason?: string;
   sourceAttribution?: {
     source?: string;
     listingUrl?: string;
@@ -63,6 +71,9 @@ export type DomaraVideoRenderResult = {
   narrationStatus?: "disabled" | "ready" | "fallback";
   narrationDurationSeconds?: number;
   narrationFallbackReason?: string;
+  mapVisualProvider?: DomaraMapVisualProviderId;
+  mapAttribution?: string;
+  mapFallbackReason?: string;
   sourceAttribution?: {
     source?: string;
     listingUrl?: string;
@@ -143,6 +154,8 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
     timeline: fallbackTimeline,
     renderMode: "mock-first local render",
     stylePreset,
+    mapVisualMode: request.mapSettings?.mode || "off",
+    mapVisualProvider: "none",
     sourceAttribution: {
       source: request.listingInput.source || undefined,
       listingUrl: request.listingInput.listingUrl || undefined,

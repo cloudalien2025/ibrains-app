@@ -7,6 +7,7 @@ import {
   createDomaraRenderPlan,
   DomaraVideoRenderRequest,
 } from "@/lib/studio/domara/render-plan";
+import { applyMapVisualsToRenderPlan, resolveDomaraMapVisuals } from "@/lib/studio/domara/map-visual-provider";
 import { generateNarrationAudio } from "@/lib/studio/domara/narration-provider";
 import { PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 import { renderDomaraPropertyVideo } from "@/lib/studio/domara/video-renderer";
@@ -57,7 +58,14 @@ export async function POST(request: Request) {
       plan,
       listingInput,
       stylePreset: cast.stylePreset,
+      mapSettings: cast.mapSettings,
     });
+    const mapVisual = resolveDomaraMapVisuals({
+      mode: cast.mapSettings?.mode || "off",
+      listingInput,
+      plan,
+    });
+    const mappedRenderPlan = applyMapVisualsToRenderPlan(baseRenderPlan, mapVisual);
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "domara-narration-"));
     try {
       const narration = await generateNarrationAudio(
@@ -71,7 +79,7 @@ export async function POST(request: Request) {
         tmpDir,
       );
 
-      const renderPlan = applyNarrationDurationToTimeline(baseRenderPlan, narration.durationSeconds);
+      const renderPlan = applyNarrationDurationToTimeline(mappedRenderPlan, narration.durationSeconds);
       const result = await renderDomaraPropertyVideo(renderPlan, narration);
       return NextResponse.json({
         ok: true,
@@ -86,7 +94,11 @@ export async function POST(request: Request) {
           imageValidationWarnings: renderPlan.imageValidationWarnings,
           narrationProvider: narration.provider,
           narrationStatus: narration.status,
+          narrationDurationSeconds: narration.durationSeconds,
           narrationFallbackReason: narration.fallbackReason,
+          mapVisualProvider: renderPlan.mapVisualProvider,
+          mapAttribution: renderPlan.mapAttribution,
+          mapFallbackReason: renderPlan.mapFallbackReason,
         },
       });
     } finally {

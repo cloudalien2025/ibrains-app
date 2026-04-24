@@ -6,6 +6,7 @@ import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-pl
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
 import { generateDomaraYouTubePackage } from "@/lib/studio/domara/youtube-package";
+import { DomaraMapVisualMode } from "@/lib/studio/domara/map-visual-provider";
 import {
   DOMARA_BATCH_LIMIT,
   DomaraBatch,
@@ -42,6 +43,7 @@ type FormState = {
   voicePersona: DomaraVoicePersona;
   voiceTone: DomaraVoiceTone;
   voicePace: DomaraVoicePace;
+  mapVisualMode: DomaraMapVisualMode;
 };
 
 type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
@@ -81,6 +83,7 @@ const initialState: FormState = {
   voicePersona: "expat_ai_host",
   voiceTone: "informative",
   voicePace: "normal",
+  mapVisualMode: "off",
 };
 
 const fieldClass =
@@ -276,6 +279,9 @@ export default function StudioDomaraClient() {
             tone: form.voiceTone,
             pace: form.voicePace,
           },
+          mapSettings: {
+            mode: form.mapVisualMode,
+          },
         }),
       });
 
@@ -449,7 +455,7 @@ export default function StudioDomaraClient() {
             </p>
 
             <form onSubmit={onSubmit} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-4">
+              <div className="grid gap-4 md:grid-cols-5">
                 <label className="text-sm">
                   Listing provider
                   <select
@@ -569,6 +575,24 @@ export default function StudioDomaraClient() {
                     <option value="relaxed">Relaxed</option>
                     <option value="normal">Normal</option>
                     <option value="energetic">Energetic</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Map visual mode
+                  <select
+                    className={fieldClass}
+                    value={form.mapVisualMode}
+                    onChange={(event) => setForm((curr) => ({ ...curr, mapVisualMode: event.target.value as DomaraMapVisualMode }))}
+                  >
+                    <option value="off">Off</option>
+                    <option value="auto">Auto</option>
+                    <option value="mapbox" disabled={integrationCapabilities?.mapboxVisuals === false}>
+                      Mapbox {integrationCapabilities?.mapboxVisuals === false ? "(env missing)" : ""}
+                    </option>
+                    <option value="google_static" disabled={integrationCapabilities?.googleMapsVisuals === false}>
+                      Google Static {integrationCapabilities?.googleMapsVisuals === false ? "(env missing)" : ""}
+                    </option>
+                    <option value="earth_style_placeholder">Earth-style placeholder</option>
                   </select>
                 </label>
               </div>
@@ -885,6 +909,7 @@ export default function StudioDomaraClient() {
                       <p className="text-[11px] text-[#475569]">
                         Compliance: {youtubePackage.metadata.complianceNote} | Attribution:{" "}
                         {youtubePackage.metadata.sourceAttribution}
+                        {youtubePackage.metadata.mapAttribution ? ` | Map: ${youtubePackage.metadata.mapAttribution}` : ""}
                       </p>
                     </div>
                   ) : (
@@ -904,6 +929,7 @@ export default function StudioDomaraClient() {
                       <p className="mt-1">
                         Voice mode: {form.voiceMode} | Persona: Expat AI Host | Tone: {form.voiceTone} | Pace: {form.voicePace}
                       </p>
+                      <p className="mt-1">Map mode: {form.mapVisualMode}</p>
                       {phase3Preview.imageValidationWarnings.length > 0 ? (
                         <ul className="mt-2 space-y-1 text-amber-700">
                           {phase3Preview.imageValidationWarnings.slice(0, 4).map((warning) => (
@@ -949,9 +975,16 @@ export default function StudioDomaraClient() {
                         Narration provider: {renderResult.narrationProvider || "none"} | Status:{" "}
                         {renderResult.narrationStatus || "disabled"}
                       </p>
+                      {renderResult.mapVisualProvider ? (
+                        <p className="mt-1">
+                          Map visuals: {renderResult.mapVisualProvider}
+                          {renderResult.mapAttribution ? ` | ${renderResult.mapAttribution}` : ""}
+                        </p>
+                      ) : null}
                       {renderResult.narrationFallbackReason ? (
                         <p className="mt-1 text-amber-700">{renderResult.narrationFallbackReason}</p>
                       ) : null}
+                      {renderResult.mapFallbackReason ? <p className="mt-1 text-amber-700">{renderResult.mapFallbackReason}</p> : null}
                       <p className="mt-1">Generated: {new Date(renderResult.generatedAt).toLocaleString()}</p>
                       {renderResult.sourceAttribution?.source || renderResult.sourceAttribution?.listingUrl ? (
                         <p className="mt-1">
