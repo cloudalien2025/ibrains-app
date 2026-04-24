@@ -61,6 +61,7 @@ export type DomaraVideoRenderResult = {
   audioIncluded: boolean;
   narrationProvider?: "none" | "mock" | "elevenlabs";
   narrationStatus?: "disabled" | "ready" | "fallback";
+  narrationDurationSeconds?: number;
   narrationFallbackReason?: string;
   sourceAttribution?: {
     source?: string;
