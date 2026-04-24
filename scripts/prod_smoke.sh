@@ -56,7 +56,11 @@ check_frontdoor_assets() {
     return
   fi
 
-  rg -o '/_next/static/[^" )]+' "$html_file" | sed 's/\\$//' | sort -u > "$refs_file" || true
+  if command -v rg >/dev/null 2>&1; then
+    rg -o '/_next/static/[^" )]+' "$html_file" | sed 's/\\$//' | sort -u > "$refs_file" || true
+  else
+    grep -Eo '/_next/static/[^" )]+' "$html_file" | sed 's/\\$//' | sort -u > "$refs_file" || true
+  fi
   local ref_count
   ref_count=$(wc -l < "$refs_file" | tr -d ' ')
   if [ "${ref_count}" -eq 0 ]; then
