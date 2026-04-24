@@ -741,6 +741,84 @@ function firstNonEmptyValue(...values: Array<string | null | undefined>): string
   return null;
 }
 
+function isSafeImageSource(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return !normalized.startsWith("javascript:");
+}
+
+function normalizeImageSource(value: string, pageUrl?: string | null): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || !isSafeImageSource(trimmed)) return null;
+  if (trimmed.startsWith("data:image/") || trimmed.startsWith("blob:")) return trimmed;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  if (trimmed.startsWith("//")) return `https:${trimmed}`;
+  if (trimmed.startsWith("/")) {
+    const base = firstNonEmptyValue(pageUrl ?? null, "https://app.ibrains.ai");
+    if (!base) return trimmed;
+    try {
+      return new URL(trimmed, base).toString();
+    } catch {
+      return trimmed;
+    }
+  }
+  if (/^[a-z0-9.-]+\.[a-z]{2,}(?:\/|$)/i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+  return null;
+}
+
+function readImageCandidateFromUnknown(value: unknown): string | null {
+  if (typeof value === "string") return value.trim() || null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  return (
+    firstNonEmptyValue(
+      typeof record.url === "string" ? record.url : null,
+      typeof record.src === "string" ? record.src : null,
+      typeof record.href === "string" ? record.href : null,
+      typeof record.image_url === "string" ? record.image_url : null
+    ) ?? null
+  );
+}
+
+function resolveListingHeroImageSource(input: { listing: ListingDetailResponse["listing"] | null; listingUrl?: string | null }): string | null {
+  if (!input.listing) return null;
+  const listingRecord = asRecord(input.listing);
+  const preferredDirectCandidates: Array<string | null> = [
+    typeof listingRecord.mainImageUrl === "string" ? listingRecord.mainImageUrl : null,
+    typeof listingRecord.featured_image_url === "string" ? listingRecord.featured_image_url : null,
+    typeof listingRecord.featuredImageUrl === "string" ? listingRecord.featuredImageUrl : null,
+    typeof listingRecord.main_image_url === "string" ? listingRecord.main_image_url : null,
+    typeof listingRecord.hero_image === "string" ? listingRecord.hero_image : null,
+    typeof listingRecord.heroImage === "string" ? listingRecord.heroImage : null,
+    typeof listingRecord.primary_image === "string" ? listingRecord.primary_image : null,
+    typeof listingRecord.primaryImage === "string" ? listingRecord.primaryImage : null,
+    typeof listingRecord.image_url === "string" ? listingRecord.image_url : null,
+    typeof listingRecord.imageUrl === "string" ? listingRecord.imageUrl : null,
+    typeof listingRecord.photo_url === "string" ? listingRecord.photo_url : null,
+    typeof listingRecord.photoUrl === "string" ? listingRecord.photoUrl : null,
+    typeof listingRecord.logo_url === "string" ? listingRecord.logo_url : null,
+    typeof listingRecord.logoUrl === "string" ? listingRecord.logoUrl : null,
+  ];
+  const preferredNestedCandidates: Array<string | null> = [
+    readImageCandidateFromUnknown(listingRecord.main_image),
+    readImageCandidateFromUnknown(listingRecord.featured_image),
+    readImageCandidateFromUnknown(listingRecord.hero_image),
+    readImageCandidateFromUnknown(listingRecord.primary_image),
+  ];
+  const arrayCandidates = [listingRecord.images, listingRecord.photos, listingRecord.gallery, listingRecord.photo_urls]
+    .flatMap((entry) => (Array.isArray(entry) ? entry : []))
+    .map((entry) => readImageCandidateFromUnknown(entry));
+  const orderedCandidates = [...preferredDirectCandidates, ...preferredNestedCandidates, ...arrayCandidates];
+  for (const candidate of orderedCandidates) {
+    if (!candidate) continue;
+    const normalized = normalizeImageSource(candidate, input.listingUrl);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
 function parseError(json: ApiErrorShape, fallback: string, status?: number, listingId?: string): UiError {
   return {
     message: json.error?.message ?? fallback,
@@ -1713,6 +1791,11 @@ export default function ListingOptimizationClient({
 
   const displayName = listing?.listing.listing_name || support?.listing.title || "Listing";
   const displayUrl = firstNonEmptyValue(listing?.listing.listing_url, support?.listing.canonicalUrl);
+  // Deterministic precedence for listing hero image fields with URL normalization.
+  const listingHeroImageSrc = useMemo(
+    () => resolveListingHeroImageSource({ listing: listing?.listing ?? null, listingUrl: displayUrl }),
+    [displayUrl, listing?.listing]
+  );
   const displayInitials = useMemo(() => {
     const words = displayName
       .split(/\s+/)
@@ -3507,26 +3590,34 @@ export default function ListingOptimizationClient({
                 </svg>
 
                 <div
-                  className="absolute left-1/2 top-1/2 h-[44%] w-[74%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[999px] border border-cyan-300/45 bg-slate-900 shadow-2xl sm:h-[58%] sm:w-[62%]"
+                  className="absolute left-1/2 top-1/2 h-[44%] w-[74%] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-[999px] border border-slate-100/25 bg-slate-900 shadow-[0_26px_60px_-26px_rgba(15,23,42,0.85)] ring-1 ring-white/15 sm:h-[58%] sm:w-[62%]"
                   data-testid="listing-hero-node"
                 >
-                  {listing?.listing.mainImageUrl ? (
+                  {listingHeroImageSrc ? (
                     // eslint-disable-next-line @next/next/no-img-element
                     <img
-                      src={listing.listing.mainImageUrl}
+                      src={listingHeroImageSrc}
                       alt={displayName}
-                      className="h-full w-full object-cover"
+                      className="h-full w-full object-cover object-center"
                       data-testid="listing-hero-image"
                     />
                   ) : (
                     <div
-                      className="flex h-full w-full items-center justify-center bg-slate-900 text-3xl font-semibold tracking-wide text-cyan-100/85 sm:text-4xl"
+                      className="relative flex h-full w-full items-center justify-center bg-[radial-gradient(circle_at_20%_15%,rgba(148,163,184,0.2),transparent_50%),radial-gradient(circle_at_78%_86%,rgba(203,213,225,0.18),transparent_52%),linear-gradient(135deg,rgba(30,41,59,0.97),rgba(15,23,42,0.95))]"
                       data-testid="listing-hero-image-fallback"
                     >
-                      {displayInitials}
+                      <div className="flex items-center gap-3 rounded-full border border-white/20 bg-white/10 px-4 py-2 backdrop-blur-sm">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-slate-200/45 bg-slate-100/15 text-sm font-semibold uppercase tracking-[0.14em] text-slate-100">
+                          {displayInitials}
+                        </div>
+                        <div className="text-left">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-300">Listing Profile</div>
+                          <div className="text-xs text-slate-100">Featured image unavailable</div>
+                        </div>
+                      </div>
                     </div>
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-black/10 to-transparent" />
                 </div>
 
                 {mapNodes.map((node, index) => {
@@ -3556,13 +3647,19 @@ export default function ListingOptimizationClient({
                 })}
               </div>
 
-              <div className="mt-3 rounded-xl border border-white/15 bg-slate-900/85 p-3 text-center sm:p-4" data-testid="listing-identity-card">
-                <div className="truncate text-sm font-semibold text-slate-100 sm:text-[15px]" data-testid="listing-hero-title">
+              <div
+                className="mt-4 rounded-2xl border border-white/20 bg-[linear-gradient(180deg,rgba(15,23,42,0.85),rgba(15,23,42,0.7))] p-3 text-center shadow-[0_18px_44px_-30px_rgba(30,41,59,0.85)] backdrop-blur sm:p-4"
+                data-testid="listing-identity-card"
+              >
+                <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-300" data-testid="listing-identity-kicker">
+                  Primary Listing
+                </div>
+                <div className="mt-1 truncate text-base font-semibold text-slate-50 sm:text-lg" data-testid="listing-hero-title">
                   {displayName}
                 </div>
                 {displayUrl ? (
                   <Link
-                    className="mt-1 block max-w-full break-all text-[11px] text-cyan-200 underline underline-offset-4 sm:text-xs"
+                    className="mt-1 block max-w-full break-all text-xs text-cyan-100/90 underline decoration-cyan-200/55 underline-offset-[3px] hover:text-cyan-50"
                     href={displayUrl}
                     target="_blank"
                     data-testid="listing-hero-url"
@@ -3572,7 +3669,7 @@ export default function ListingOptimizationClient({
                 ) : null}
                 <div className="mt-2 flex justify-center">
                   <div
-                    className="inline-flex rounded-full border border-cyan-200/60 bg-cyan-400/10 px-2.5 py-0.5 text-[11px] font-medium text-cyan-100 sm:text-xs"
+                    className="inline-flex items-center rounded-full border border-emerald-200/35 bg-emerald-300/10 px-3 py-1 text-xs font-medium text-emerald-100"
                     data-testid="listing-hero-score"
                   >
                     AI Selection Score: {computedScore}
