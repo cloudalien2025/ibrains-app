@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
+import { DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
@@ -77,6 +78,10 @@ export default function StudioDomaraClient() {
   const [form, setForm] = useState<FormState>(initialState);
   const [plan, setPlan] = useState<PropertyVideoPlan | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [generatedInput, setGeneratedInput] = useState<PropertyListingInput | null>(null);
+  const [renderStatus, setRenderStatus] = useState<"idle" | "queued" | "rendering" | "complete" | "failed">("idle");
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderResult, setRenderResult] = useState<DomaraVideoRenderResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sceneDuration = useMemo(
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
@@ -94,12 +99,54 @@ export default function StudioDomaraClient() {
 
     try {
       setStatus("loading");
-      const output = await generatePropertyVideoPlan(toInput(form));
+      const input = toInput(form);
+      const output = await generatePropertyVideoPlan(input);
       setPlan(output);
+      setGeneratedInput(input);
       setStatus("ready");
+      setRenderStatus("idle");
+      setRenderError(null);
+      setRenderResult(null);
     } catch (submissionError) {
       setStatus("error");
       setError(submissionError instanceof Error ? submissionError.message : "Failed to generate property video plan.");
+    }
+  }
+
+  async function onRenderMp4() {
+    if (!plan) return;
+    const input = generatedInput ?? toInput(form);
+    setRenderStatus("queued");
+    setRenderError(null);
+    try {
+      setRenderStatus("rendering");
+      const response = await fetch("/api/studio/domara/render", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          plan,
+          listingInput: input,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            render?: DomaraVideoRenderResult;
+            error?: { message?: string; details?: string };
+          }
+        | null;
+      if (!response.ok || !payload?.ok || !payload.render) {
+        throw new Error(payload?.error?.details || payload?.error?.message || "Render failed.");
+      }
+
+      setRenderResult(payload.render);
+      setRenderStatus("complete");
+    } catch (renderSubmissionError) {
+      setRenderStatus("failed");
+      setRenderError(renderSubmissionError instanceof Error ? renderSubmissionError.message : "Failed to render MP4.");
     }
   }
 
@@ -323,7 +370,11 @@ export default function StudioDomaraClient() {
                   onClick={() => {
                     setForm(initialState);
                     setPlan(null);
+                    setGeneratedInput(null);
                     setStatus("idle");
+                    setRenderStatus("idle");
+                    setRenderResult(null);
+                    setRenderError(null);
                     setError(null);
                   }}
                 >
@@ -395,12 +446,49 @@ export default function StudioDomaraClient() {
                   </pre>
                 </div>
                 <div>
-                  <h3 className="font-semibold">8. Export / Render Placeholder</h3>
-                  <p className="mt-1 text-[#334155]">
-                    Status: <span className="font-medium">{plan.renderPlaceholder.status}</span>
-                  </p>
-                  <p className="mt-1 text-[#334155]">{plan.renderPlaceholder.nextStep}</p>
-                  <p className="mt-1 text-xs text-[#475569]">Provider seam: {plan.renderPlaceholder.provider}</p>
+                  <h3 className="font-semibold">8. Export / Render</h3>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => void onRenderMp4()}
+                      disabled={renderStatus === "queued" || renderStatus === "rendering"}
+                    >
+                      {renderStatus === "queued" || renderStatus === "rendering" ? "Rendering MP4..." : "Render MP4"}
+                    </button>
+                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
+                      Status: {renderStatus}
+                    </span>
+                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
+                      Mode: mock-first local render
+                    </span>
+                  </div>
+                  {renderError ? <p className="mt-2 text-sm text-rose-600">{renderError}</p> : null}
+                  {renderResult ? (
+                    <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                      <p>
+                        Render complete. Duration: {renderResult.durationSeconds}s | Scenes: {renderResult.sceneCount}{" "}
+                        | Images used: {renderResult.imageCount}
+                      </p>
+                      <p className="mt-1">Artifact: {renderResult.filename}</p>
+                      <div className="mt-2">
+                        <a
+                          href={renderResult.downloadUrl}
+                          className="inline-flex rounded-lg border border-[#2563EB] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4ED8] transition hover:bg-[#EEF4FF]"
+                          download
+                        >
+                          Download MP4
+                        </a>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="mt-2 text-[#334155]">
+                        {plan.renderPlaceholder.nextStep}
+                      </p>
+                      <p className="mt-1 text-xs text-[#475569]">Provider seam: {plan.renderPlaceholder.provider}</p>
+                    </>
+                  )}
                 </div>
               </div>
             )}
@@ -410,4 +498,3 @@ export default function StudioDomaraClient() {
     </div>
   );
 }
-
