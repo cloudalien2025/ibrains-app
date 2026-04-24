@@ -60,6 +60,8 @@ describe("renderDomaraPropertyVideo smoke", () => {
     expect(stats.size).toBeGreaterThan(0);
     expect(result.audioIncluded).toBe(false);
     expect(result.stylePreset).toBe("expat_ai_editorial");
+    expect(result.narrationProvider).toBe("none");
+    expect(result.narrationStatus).toBe("disabled");
 
     await fs.rm(absolutePath, { force: true });
   }, 30000);

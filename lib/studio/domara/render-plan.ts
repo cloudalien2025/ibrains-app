@@ -1,5 +1,6 @@
 import { PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
+import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
 
 export type DomaraRenderStyle = "property_showcase" | "expat_ai_editorial" | "premium_listing";
 
@@ -16,6 +17,12 @@ export type DomaraVideoRenderRequest = {
   plan: PropertyVideoPlan;
   listingInput: PropertyListingInput;
   stylePreset?: DomaraRenderStyle;
+  voiceSettings?: {
+    mode: DomaraVoiceMode;
+    persona: DomaraVoicePersona;
+    tone: DomaraVoiceTone;
+    pace: DomaraVoicePace;
+  };
 };
 
 export type DomaraVideoRenderPlan = {
@@ -52,6 +59,9 @@ export type DomaraVideoRenderResult = {
   stylePreset: DomaraRenderStyle;
   generatedAt: string;
   audioIncluded: boolean;
+  narrationProvider?: "none" | "mock" | "elevenlabs";
+  narrationStatus?: "disabled" | "ready" | "fallback";
+  narrationFallbackReason?: string;
   sourceAttribution?: {
     source?: string;
     listingUrl?: string;
@@ -136,5 +146,39 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
       source: request.listingInput.source || undefined,
       listingUrl: request.listingInput.listingUrl || undefined,
     },
+  };
+}
+
+export function applyNarrationDurationToTimeline(
+  renderPlan: DomaraVideoRenderPlan,
+  narrationDurationSeconds?: number,
+): DomaraVideoRenderPlan {
+  if (!narrationDurationSeconds || !Number.isFinite(narrationDurationSeconds) || narrationDurationSeconds <= 0) {
+    return renderPlan;
+  }
+
+  const currentDuration = renderPlan.totalDurationSeconds;
+  if (!Number.isFinite(currentDuration) || currentDuration <= 0) {
+    return renderPlan;
+  }
+
+  const ratio = narrationDurationSeconds / currentDuration;
+  if (Math.abs(1 - ratio) < 0.08) {
+    return renderPlan;
+  }
+
+  const timeline = renderPlan.timeline.map((scene, index) => {
+    const scaled = Math.max(3, Math.round(scene.durationSeconds * ratio));
+    return {
+      ...scene,
+      order: index + 1,
+      durationSeconds: scaled,
+    };
+  });
+
+  return {
+    ...renderPlan,
+    timeline,
+    totalDurationSeconds: timeline.reduce((sum, scene) => sum + scene.durationSeconds, 0),
   };
 }

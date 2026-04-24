@@ -6,6 +6,7 @@ import path from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { DomaraRenderStyle, DomaraVideoRenderPlan, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
+import { DomaraNarrationResult } from "@/lib/studio/domara/narration-provider";
 
 const execFileAsync = promisify(execFile);
 const OUTPUT_DIRECTORY = path.join(process.cwd(), "public", "generated", "domara");
@@ -176,7 +177,10 @@ async function renderSceneSegment(input: {
   await execFileAsync("ffmpeg", args, { maxBuffer: 8 * 1024 * 1024 });
 }
 
-export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPlan): Promise<DomaraVideoRenderResult> {
+export async function renderDomaraPropertyVideo(
+  renderPlan: DomaraVideoRenderPlan,
+  narration?: DomaraNarrationResult,
+): Promise<DomaraVideoRenderResult> {
   const renderId = `${renderPlan.id}-${randomUUID().slice(0, 8)}`;
   const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "domara-render-"));
   await fs.mkdir(OUTPUT_DIRECTORY, { recursive: true });
@@ -233,17 +237,46 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
       { maxBuffer: 8 * 1024 * 1024 },
     );
 
-    const stats = await fs.stat(outputPath);
+    let finalOutputPath = outputPath;
+    if (narration?.status === "ready" && narration.audioPath) {
+      const muxedOutputPath = path.join(OUTPUT_DIRECTORY, `${renderId}-narrated.mp4`);
+      await execFileAsync(
+        "ffmpeg",
+        [
+          "-y",
+          "-i",
+          outputPath,
+          "-i",
+          narration.audioPath,
+          "-map",
+          "0:v:0",
+          "-map",
+          "1:a:0",
+          "-c:v",
+          "copy",
+          "-c:a",
+          "aac",
+          "-shortest",
+          muxedOutputPath,
+        ],
+        { maxBuffer: 8 * 1024 * 1024 },
+      );
+      await fs.rm(outputPath, { force: true });
+      finalOutputPath = muxedOutputPath;
+    }
+
+    const stats = await fs.stat(finalOutputPath);
     if (!stats.isFile() || stats.size <= 0) {
       throw new Error("Render completed but output file is empty.");
     }
 
+    const finalFile = path.basename(finalOutputPath);
     return {
       status: "complete",
       renderId,
-      downloadUrl: `/generated/domara/${outputFilename}`,
-      outputPath: `/generated/domara/${outputFilename}`,
-      filename: outputFilename,
+      downloadUrl: `/generated/domara/${finalFile}`,
+      outputPath: `/generated/domara/${finalFile}`,
+      filename: finalFile,
       durationSeconds: renderPlan.totalDurationSeconds,
       sceneCount,
       imageCount: downloadedImages.length,
@@ -251,7 +284,10 @@ export async function renderDomaraPropertyVideo(renderPlan: DomaraVideoRenderPla
       renderMode: "mock-first local render",
       stylePreset: renderPlan.stylePreset,
       generatedAt: new Date().toISOString(),
-      audioIncluded: false,
+      audioIncluded: narration?.status === "ready" && !!narration.audioPath,
+      narrationProvider: narration?.provider ?? "none",
+      narrationStatus: narration?.status ?? "disabled",
+      narrationFallbackReason: narration?.fallbackReason,
       sourceAttribution: renderPlan.sourceAttribution,
     };
   } finally {

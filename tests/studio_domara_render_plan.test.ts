@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createDomaraRenderPlan } from "@/lib/studio/domara/render-plan";
+import { applyNarrationDurationToTimeline, createDomaraRenderPlan } from "@/lib/studio/domara/render-plan";
 import { PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 const basePlan: PropertyVideoPlan = {
@@ -119,5 +119,22 @@ describe("createDomaraRenderPlan", () => {
     expect(renderPlan.imageUrls).toEqual(["https://example.com/hero.jpg", "http://example.com/room.jpg"]);
     expect(renderPlan.skippedImageCount).toBe(2);
     expect(renderPlan.stylePreset).toBe("premium_listing");
+  });
+
+  it("adapts scene timing when narration duration is provided", () => {
+    const renderPlan = createDomaraRenderPlan({
+      plan: basePlan,
+      listingInput: {
+        country: "Italy",
+        title: "Narrated Listing",
+        imageUrls: ["https://example.com/image-1.jpg"],
+      },
+    });
+
+    const adjusted = applyNarrationDurationToTimeline(renderPlan, 60);
+    expect(adjusted.totalDurationSeconds).toBeGreaterThan(renderPlan.totalDurationSeconds);
+    expect(adjusted.timeline[0]?.order).toBe(1);
+    expect(adjusted.timeline[1]?.order).toBe(2);
+    expect(adjusted.timeline[2]?.order).toBe(3);
   });
 });

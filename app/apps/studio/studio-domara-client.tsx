@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useMemo, useState } from "react";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
+import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
 import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 
 type FormState = {
@@ -25,6 +26,10 @@ type FormState = {
   longitude: string;
   contentAngle: DomaraContentAngle;
   renderStyle: DomaraRenderStyle;
+  voiceMode: DomaraVoiceMode;
+  voicePersona: DomaraVoicePersona;
+  voiceTone: DomaraVoiceTone;
+  voicePace: DomaraVoicePace;
 };
 
 const initialState: FormState = {
@@ -46,6 +51,10 @@ const initialState: FormState = {
   longitude: "",
   contentAngle: "lifestyle",
   renderStyle: "expat_ai_editorial",
+  voiceMode: "silent",
+  voicePersona: "expat_ai_host",
+  voiceTone: "informative",
+  voicePace: "normal",
 };
 
 const fieldClass =
@@ -139,6 +148,12 @@ export default function StudioDomaraClient() {
           plan,
           listingInput: input,
           stylePreset: form.renderStyle,
+          voiceSettings: {
+            mode: form.voiceMode,
+            persona: form.voicePersona,
+            tone: form.voiceTone,
+            pace: form.voicePace,
+          },
         }),
       });
 
@@ -209,6 +224,63 @@ export default function StudioDomaraClient() {
                   />
                 </label>
               </div>
+              <div className="grid gap-4 md:grid-cols-4">
+                <label className="text-sm">
+                  Voice mode
+                  <select
+                    className={fieldClass}
+                    value={form.voiceMode}
+                    onChange={(event) => setForm((curr) => ({ ...curr, voiceMode: event.target.value as DomaraVoiceMode }))}
+                  >
+                    <option value="silent">Silent / caption-only</option>
+                    <option value="mock">Mock narration</option>
+                    <option value="elevenlabs">ElevenLabs (if configured)</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Voice persona
+                  <select
+                    className={fieldClass}
+                    value={form.voicePersona}
+                    onChange={(event) =>
+                      setForm((curr) => ({ ...curr, voicePersona: event.target.value as DomaraVoicePersona }))
+                    }
+                  >
+                    <option value="expat_ai_host">Expat AI Host</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Tone
+                  <select
+                    className={fieldClass}
+                    value={form.voiceTone}
+                    onChange={(event) => setForm((curr) => ({ ...curr, voiceTone: event.target.value as DomaraVoiceTone }))}
+                  >
+                    <option value="cinematic">Cinematic</option>
+                    <option value="warm">Warm</option>
+                    <option value="luxury">Luxury</option>
+                    <option value="informative">Informative</option>
+                  </select>
+                </label>
+                <label className="text-sm">
+                  Pace
+                  <select
+                    className={fieldClass}
+                    value={form.voicePace}
+                    onChange={(event) => setForm((curr) => ({ ...curr, voicePace: event.target.value as DomaraVoicePace }))}
+                  >
+                    <option value="relaxed">Relaxed</option>
+                    <option value="normal">Normal</option>
+                    <option value="energetic">Energetic</option>
+                  </select>
+                </label>
+              </div>
+              {form.voiceMode === "elevenlabs" ? (
+                <p className="text-xs text-amber-700">
+                  ElevenLabs narration uses provider fallback when API credentials are missing or unavailable. Silent MP4
+                  rendering remains supported.
+                </p>
+              ) : null}
 
               <label className="text-sm">
                 Property title
@@ -476,6 +548,9 @@ export default function StudioDomaraClient() {
                         Style: <span className="font-medium">{phase3Preview.stylePreset}</span> | Requested images:{" "}
                         {phase3Preview.requestedImageCount} | Pre-render skipped: {phase3Preview.skippedImageCount}
                       </p>
+                      <p className="mt-1">
+                        Voice mode: {form.voiceMode} | Persona: Expat AI Host | Tone: {form.voiceTone} | Pace: {form.voicePace}
+                      </p>
                       {phase3Preview.imageValidationWarnings.length > 0 ? (
                         <ul className="mt-2 space-y-1 text-amber-700">
                           {phase3Preview.imageValidationWarnings.slice(0, 4).map((warning) => (
@@ -517,6 +592,13 @@ export default function StudioDomaraClient() {
                         Artifact: {renderResult.filename} | Style: {renderResult.stylePreset} | Audio:{" "}
                         {renderResult.audioIncluded ? "included" : "not included"}
                       </p>
+                      <p className="mt-1">
+                        Narration provider: {renderResult.narrationProvider || "none"} | Status:{" "}
+                        {renderResult.narrationStatus || "disabled"}
+                      </p>
+                      {renderResult.narrationFallbackReason ? (
+                        <p className="mt-1 text-amber-700">{renderResult.narrationFallbackReason}</p>
+                      ) : null}
                       <p className="mt-1">Generated: {new Date(renderResult.generatedAt).toLocaleString()}</p>
                       {renderResult.sourceAttribution?.source || renderResult.sourceAttribution?.listingUrl ? (
                         <p className="mt-1">
