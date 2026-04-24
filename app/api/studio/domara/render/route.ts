@@ -1,5 +1,13 @@
 import { NextResponse } from "next/server";
-import { createDomaraRenderPlan, DomaraVideoRenderRequest } from "@/lib/studio/domara/render-plan";
+import os from "node:os";
+import path from "node:path";
+import { promises as fs } from "node:fs";
+import {
+  applyNarrationDurationToTimeline,
+  createDomaraRenderPlan,
+  DomaraVideoRenderRequest,
+} from "@/lib/studio/domara/render-plan";
+import { generateNarrationAudio } from "@/lib/studio/domara/narration-provider";
 import { PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
 import { renderDomaraPropertyVideo } from "@/lib/studio/domara/video-renderer";
 
@@ -45,25 +53,45 @@ export async function POST(request: Request) {
   try {
     const plan = cast.plan as PropertyVideoPlan;
     const listingInput = cast.listingInput as PropertyListingInput;
-    const renderPlan = createDomaraRenderPlan({
+    const baseRenderPlan = createDomaraRenderPlan({
       plan,
       listingInput,
       stylePreset: cast.stylePreset,
     });
-    const result = await renderDomaraPropertyVideo(renderPlan);
-    return NextResponse.json({
-      ok: true,
-      render: result,
-      metadata: {
-        timelineScenes: renderPlan.timeline.length,
-        channel: renderPlan.channel,
-        useCase: renderPlan.useCase,
-        stylePreset: renderPlan.stylePreset,
-        requestedImageCount: renderPlan.requestedImageCount,
-        skippedImageCount: renderPlan.skippedImageCount,
-        imageValidationWarnings: renderPlan.imageValidationWarnings,
-      },
-    });
+    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "domara-narration-"));
+    try {
+      const narration = await generateNarrationAudio(
+        {
+          script: plan.narrationScript,
+          mode: cast.voiceSettings?.mode || "silent",
+          persona: cast.voiceSettings?.persona || "expat_ai_host",
+          tone: cast.voiceSettings?.tone || "informative",
+          pace: cast.voiceSettings?.pace || "normal",
+        },
+        tmpDir,
+      );
+
+      const renderPlan = applyNarrationDurationToTimeline(baseRenderPlan, narration.durationSeconds);
+      const result = await renderDomaraPropertyVideo(renderPlan, narration);
+      return NextResponse.json({
+        ok: true,
+        render: result,
+        metadata: {
+          timelineScenes: renderPlan.timeline.length,
+          channel: renderPlan.channel,
+          useCase: renderPlan.useCase,
+          stylePreset: renderPlan.stylePreset,
+          requestedImageCount: renderPlan.requestedImageCount,
+          skippedImageCount: renderPlan.skippedImageCount,
+          imageValidationWarnings: renderPlan.imageValidationWarnings,
+          narrationProvider: narration.provider,
+          narrationStatus: narration.status,
+          narrationFallbackReason: narration.fallbackReason,
+        },
+      });
+    } finally {
+      await fs.rm(tmpDir, { recursive: true, force: true });
+    }
   } catch (error) {
     return NextResponse.json(
       {
