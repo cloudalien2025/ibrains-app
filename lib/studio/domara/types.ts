@@ -3,7 +3,7 @@ export type DomaraContentAngle = "lifestyle" | "investment" | "second_home" | "h
 export type PropertyListingInput = {
   listingUrl?: string;
   source?: string;
-  provider?: "manual" | "idealista" | "immobiliare" | "mock";
+  provider?: "manual" | "import_url" | "idealista" | "immobiliare" | "mock";
   country: string;
   city?: string;
   region?: string;
@@ -42,7 +42,7 @@ export type NormalizedPropertyListing = {
   sourceMetadata: {
     listingUrl?: string;
     source?: string;
-    provider?: "manual" | "idealista" | "immobiliare" | "mock";
+    provider?: "manual" | "import_url" | "idealista" | "immobiliare" | "mock";
     agency?: string;
     fetchedAt?: string;
     providerMetadata?: Record<string, string | number | boolean | null | undefined>;
@@ -52,6 +52,38 @@ export type NormalizedPropertyListing = {
       longitude: number;
     };
   };
+};
+
+export type DomaraListingUrlImportProviderHint = "auto" | "idealista" | "immobiliare" | "generic";
+
+export type DomaraListingUrlImportRequest = {
+  listingUrl: string;
+  providerHint?: DomaraListingUrlImportProviderHint;
+  countryHint?: string;
+  sourceLabel?: string;
+};
+
+export type DomaraListingUrlImportResult = {
+  status: "imported" | "partial" | "blocked" | "failed";
+  normalizedListingInput: PropertyListingInput | null;
+  extracted: {
+    title?: string;
+    description?: string;
+    price?: string;
+    location?: string;
+    propertyType?: string;
+    bedrooms?: number;
+    bathrooms?: number;
+    squareMeters?: number;
+    imageUrls: string[];
+    source?: string;
+    canonicalUrl?: string;
+    agency?: string;
+  };
+  warnings: string[];
+  fallbackMessage?: string;
+  extractionSources: Array<"jsonLd" | "openGraph" | "meta" | "visibleImages">;
+  fetchedAt: string;
 };
 
 export type PropertyVideoScene = {

@@ -1,4 +1,5 @@
 export type DomaraIntegrationProviderId =
+  | "openai"
   | "elevenlabs"
   | "mapbox"
   | "google_maps_places"
@@ -11,7 +12,7 @@ export type DomaraIntegrationValidationStatus = "unknown" | "configured" | "miss
 export type DomaraIntegrationProviderStatus = {
   providerId: DomaraIntegrationProviderId;
   displayName: string;
-  category: "voice" | "maps" | "listing_ingestion" | "publishing";
+  category: "ai_generation" | "voice" | "maps" | "listing_ingestion" | "publishing";
   requiredEnvVars: string[];
   configured: boolean;
   validationStatus: DomaraIntegrationValidationStatus;
@@ -22,7 +23,7 @@ export type DomaraIntegrationProviderStatus = {
 type ProviderDefinition = {
   providerId: DomaraIntegrationProviderId;
   displayName: string;
-  category: "voice" | "maps" | "listing_ingestion" | "publishing";
+  category: "ai_generation" | "voice" | "maps" | "listing_ingestion" | "publishing";
   requiredEnvVars: string[];
   optionalEnvVars?: string[];
   capabilitiesEnabled: string[];
@@ -30,6 +31,20 @@ type ProviderDefinition = {
 };
 
 const DEFINITIONS: ProviderDefinition[] = [
+  {
+    providerId: "openai",
+    displayName: "OpenAI",
+    category: "ai_generation",
+    requiredEnvVars: ["OPENAI_API_KEY"],
+    optionalEnvVars: ["OPENAI_MODEL"],
+    capabilitiesEnabled: [
+      "Script and storyboard generation",
+      "Narration script generation",
+      "YouTube metadata generation",
+      "Content angle expansion",
+    ],
+    safeSetupHelp: "Set OPENAI_API_KEY on the server environment. Optional: OPENAI_MODEL.",
+  },
   {
     providerId: "elevenlabs",
     displayName: "ElevenLabs",
@@ -121,6 +136,7 @@ export function getDomaraIntegrationCapabilityMap(env: NodeJS.ProcessEnv = proce
   return {
     statuses,
     capabilities: {
+      openaiGeneration: byId.openai?.configured ?? false,
       elevenlabsLiveNarration: byId.elevenlabs?.configured ?? false,
       mapboxVisuals: byId.mapbox?.configured ?? false,
       googleMapsVisuals: byId.google_maps_places?.configured ?? false,

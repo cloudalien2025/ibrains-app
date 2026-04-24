@@ -13,20 +13,25 @@ describe("Domara integrations registry", () => {
   });
 
   it("reports configured provider when env var is present", () => {
-    const statuses = getDomaraIntegrationStatuses({ ELEVENLABS_API_KEY: "set" });
+    const statuses = getDomaraIntegrationStatuses({ ELEVENLABS_API_KEY: "set", OPENAI_API_KEY: "openai-secret" });
     const elevenlabs = statuses.find((status) => status.providerId === "elevenlabs");
+    const openai = statuses.find((status) => status.providerId === "openai");
 
     expect(elevenlabs?.configured).toBe(true);
     expect(elevenlabs?.validationStatus).toBe("configured");
+    expect(openai?.configured).toBe(true);
+    expect(openai?.validationStatus).toBe("configured");
   });
 
   it("maps provider capabilities correctly", () => {
     const { capabilities } = getDomaraIntegrationCapabilityMap({
+      OPENAI_API_KEY: "oai",
       ELEVENLABS_API_KEY: "x",
       MAPBOX_ACCESS_TOKEN: "y",
       GOOGLE_MAPS_API_KEY: "z",
     });
 
+    expect(capabilities.openaiGeneration).toBe(true);
     expect(capabilities.elevenlabsLiveNarration).toBe(true);
     expect(capabilities.mapboxVisuals).toBe(true);
     expect(capabilities.googleMapsVisuals).toBe(true);
@@ -35,6 +40,7 @@ describe("Domara integrations registry", () => {
 
   it("never leaks secret values into provider status payload", () => {
     const env = {
+      OPENAI_API_KEY: "super-secret-openai",
       ELEVENLABS_API_KEY: "super-secret-elevenlabs",
       MAPBOX_ACCESS_TOKEN: "super-secret-mapbox",
       GOOGLE_MAPS_API_KEY: "super-secret-google",
@@ -43,5 +49,6 @@ describe("Domara integrations registry", () => {
     const statusJson = JSON.stringify(getDomaraIntegrationStatuses(env));
     expect(statusJson.includes("super-secret")).toBe(false);
     expect(statusJson.includes("ELEVENLABS_API_KEY")).toBe(true);
+    expect(statusJson.includes("OPENAI_API_KEY")).toBe(true);
   });
 });
