@@ -104,7 +104,21 @@ jobs:
 
             npm ci --omit=dev
 
-            systemctl restart ${{ secrets.SERVICE_NAME }}
+            SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
+            if [ -z "$SERVICE_NAME" ]; then
+              SERVICE_NAME="ibrains-app"
+            fi
+
+            if systemctl is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+              echo "Configured service '$SERVICE_NAME' is masked; falling back to 'ibrains-app'."
+              SERVICE_NAME="ibrains-app"
+            fi
+
+            if systemctl is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+              systemctl unmask "$SERVICE_NAME"
+            fi
+
+            systemctl restart "$SERVICE_NAME"
 
             ready=0
             for attempt in $(seq 1 10); do
@@ -117,8 +131,8 @@ jobs:
 
             if [ "$ready" -ne 1 ]; then
               echo "release endpoint did not become ready after restart"
-              systemctl status ${{ secrets.SERVICE_NAME }} --no-pager -l || true
-              journalctl -u ${{ secrets.SERVICE_NAME }} -n 150 --no-pager || true
+              systemctl status "$SERVICE_NAME" --no-pager -l || true
+              journalctl -u "$SERVICE_NAME" -n 150 --no-pager || true
               exit 1
             fi
 
