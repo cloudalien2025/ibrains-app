@@ -186,14 +186,20 @@ export async function renderDomaraPropertyVideo(
   await fs.mkdir(OUTPUT_DIRECTORY, { recursive: true });
 
   const downloadedImages: string[] = [];
+  const downloadedBySource = new Map<string, string>();
   let downloadFailures = 0;
   try {
-    for (let i = 0; i < renderPlan.imageUrls.length; i += 1) {
-      const url = renderPlan.imageUrls[i];
+    const allImageSources = Array.from(
+      new Set([...renderPlan.imageUrls, ...renderPlan.timeline.map((scene) => scene.imageUrl).filter(Boolean)]),
+    ) as string[];
+
+    for (let i = 0; i < allImageSources.length; i += 1) {
+      const url = allImageSources[i];
       if (!url) continue;
       try {
         const saved = await downloadImageAsset(url, tmpDir);
         downloadedImages.push(saved);
+        downloadedBySource.set(url, saved);
       } catch {
         // Keep rendering with remaining valid images.
         downloadFailures += 1;
@@ -206,7 +212,8 @@ export async function renderDomaraPropertyVideo(
     for (let index = 0; index < sceneCount; index += 1) {
       const scene = renderPlan.timeline[index];
       const segmentPath = path.join(tmpDir, `segment-${String(index + 1).padStart(2, "0")}.mp4`);
-      const mappedImage = downloadedImages.length ? downloadedImages[index % downloadedImages.length] : undefined;
+      const sceneSpecificImage = scene.imageUrl ? downloadedBySource.get(scene.imageUrl) : undefined;
+      const mappedImage = sceneSpecificImage || (downloadedImages.length ? downloadedImages[index % downloadedImages.length] : undefined);
       await renderSceneSegment({
         segmentPath,
         imagePath: mappedImage,
@@ -289,6 +296,9 @@ export async function renderDomaraPropertyVideo(
       narrationStatus: narration?.status ?? "disabled",
       narrationDurationSeconds: narration?.durationSeconds,
       narrationFallbackReason: narration?.fallbackReason,
+      mapVisualProvider: renderPlan.mapVisualProvider,
+      mapAttribution: renderPlan.mapAttribution,
+      mapFallbackReason: renderPlan.mapFallbackReason,
       sourceAttribution: renderPlan.sourceAttribution,
     };
   } finally {

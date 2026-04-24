@@ -25,6 +25,7 @@ export type DomaraChapter = {
 
 export type DomaraPublishingMetadata = {
   sourceAttribution: string;
+  mapAttribution?: string;
   complianceNote: string;
   generatedAt: string;
   renderLinked: boolean;
@@ -223,6 +224,7 @@ export function generateDomaraYouTubePackage(params: {
     ],
     metadata: {
       sourceAttribution,
+      mapAttribution: renderResult?.mapAttribution,
       complianceNote: "No promissory investment claims or return assurances.",
       generatedAt: new Date().toISOString(),
       renderLinked: Boolean(renderResult?.downloadUrl),
