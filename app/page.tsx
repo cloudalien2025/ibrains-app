@@ -206,38 +206,37 @@ export default function Home() {
         <div className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-10 shadow-[0_24px_56px_rgba(15,23,42,0.09)]">
           <div className="rounded-2xl bg-[linear-gradient(135deg,rgba(37,99,235,0.10)_0%,rgba(34,211,238,0.08)_45%,rgba(255,255,255,0)_100%)] p-6">
             <h1 className="text-4xl font-semibold tracking-tight text-[#0F172A]">iBrains</h1>
-
             <p className="mt-4 max-w-2xl text-base leading-relaxed text-[#334155]">
               iBrains is building the intelligence layer for complex platforms.
               First specialization: <span className="font-semibold text-[#0F172A]">Brilliant Directories Brain</span>.
             </p>
           </div>
 
-        <div className="mt-8 grid gap-4 sm:grid-cols-2">
-          <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
-            <div className="text-xs text-[#64748B]">Apps</div>
-            <div className="mt-1 text-sm font-medium text-[#0F172A]">DirectoryIQ + SiteForge</div>
-            <div className="mt-2 text-xs text-[#64748B]">Integrated under the iBrains app launcher.</div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              <Link
-                href="/apps/directoryiq"
-                className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
-              >
-                Open DirectoryIQ
-              </Link>
-              <Link
-                href="/apps/siteforge"
-                className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
-              >
-                Open SiteForge
-              </Link>
+          <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+              <div className="text-xs text-[#64748B]">Apps</div>
+              <div className="mt-1 text-sm font-medium text-[#0F172A]">DirectoryIQ + SiteForge</div>
+              <div className="mt-2 text-xs text-[#64748B]">Integrated under the iBrains app launcher.</div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Link
+                  href="/apps/directoryiq"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
+                >
+                  Open DirectoryIQ
+                </Link>
+                <Link
+                  href="/apps/siteforge"
+                  className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#334155] transition hover:bg-[#F8FBFF]"
+                >
+                  Open SiteForge
+                </Link>
+              </div>
             </div>
-          </div>
 
-          <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
-            <div className="text-xs text-[#64748B]">API</div>
-            <div className="mt-1 text-sm font-medium text-[#0F172A]">{workerUrl}</div>
-            <div className="mt-2 text-xs text-[#64748B]">Health</div>
+            <div className="rounded-2xl border border-[#D9E4F0] bg-[#EAF1F8]/75 p-5">
+              <div className="text-xs text-[#64748B]">API</div>
+              <div className="mt-1 text-sm font-medium text-[#0F172A]">{workerUrl}</div>
+              <div className="mt-2 text-xs text-[#64748B]">Health</div>
               <div className="mt-1 text-sm font-medium text-[#0F172A]">{healthUrl}</div>
             </div>
 
@@ -251,7 +250,6 @@ export default function Home() {
                 >
                   Refresh status
                 </button>
-
                 <a
                   href={healthUrl}
                   target="_blank"
@@ -266,9 +264,7 @@ export default function Home() {
               </p>
               {state.phase === "error" ? (
                 <div className="mt-4 rounded-xl border border-rose-200 bg-rose-100 p-3 text-xs text-rose-700">
-                  <div className="text-[11px] uppercase tracking-wide text-rose-500/90">
-                    Health Error
-                  </div>
+                  <div className="text-[11px] uppercase tracking-wide text-rose-500/90">Health Error</div>
                   <div className="mt-1 text-sm text-rose-700">{state.message}</div>
                   {state.requestId ? (
                     <div className="mt-1 text-[11px] text-rose-600">
@@ -281,9 +277,7 @@ export default function Home() {
           </div>
 
           <details className="mt-8 rounded-2xl border border-[#D9E4F0] bg-[#F8FBFF] p-5">
-            <summary className="cursor-pointer select-none text-sm font-medium text-[#0F172A]">
-              Raw Health JSON
-            </summary>
+            <summary className="cursor-pointer select-none text-sm font-medium text-[#0F172A]">Raw Health JSON</summary>
             <pre className="mt-4 overflow-x-auto rounded-xl bg-white p-4 text-xs leading-relaxed text-[#334155] ring-1 ring-inset ring-[#D9E4F0]">
               {jsonBlock}
             </pre>
