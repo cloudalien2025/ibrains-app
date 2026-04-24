@@ -5,6 +5,13 @@ import { UserButton, useAuth } from "@clerk/nextjs";
 
 const apps = [
   {
+    id: "studio",
+    name: "Studio",
+    href: "/apps/studio",
+    description: "Content-generation workspace for premium listing-to-video production and narrative workflows.",
+    status: "Live",
+  },
+  {
     id: "siteforge",
     name: "SiteForge",
     href: "/apps/siteforge",
@@ -73,7 +80,7 @@ export default function AppsIndexPage() {
           </div>
         </header>
 
-        <section className="grid gap-5 md:grid-cols-2">
+        <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
           {apps.map((app) => (
             <article
               key={app.id}
