@@ -231,7 +231,77 @@ export type EnrichedPoi = {
   travelMinutes: number;
   confidence: "high" | "medium" | "low";
   source: string;
+  providerMetadata?: Record<string, string | number | boolean | null | undefined>;
 };
+
+export type MapSceneKind = "property_pin" | "regional_orientation" | "local_poi" | "route_context" | "distance_context";
+
+export type LocationMediaProviderStatus = "live" | "mock" | "fallback" | "missing_credentials" | "error";
+
+export type LocationMediaAttribution = {
+  provider: string;
+  sourceLabel: string;
+  sourceUrl?: string;
+  required: boolean;
+  note?: string;
+};
+
+export type LocationMediaAsset = {
+  id: string;
+  kind: MapSceneKind | "poi_photo";
+  label: string;
+  sourceProvider: string;
+  url?: string;
+  placeholderUrl?: string;
+  width: number;
+  height: number;
+  attribution: LocationMediaAttribution[];
+  usageNote?: string;
+  confidence: "high" | "medium" | "low" | "placeholder";
+  status: "ready" | "placeholder" | "fallback" | "error";
+  metadata?: Record<string, string | number | boolean | null | undefined>;
+};
+
+export type PoiMediaCandidate = {
+  id: string;
+  poiId: string;
+  placeId?: string;
+  placeName: string;
+  displayName: string;
+  category: string;
+  photoName?: string;
+  photoUrl?: string;
+  placeholderUrl: string;
+  attribution: LocationMediaAttribution[];
+  confidence: "high" | "medium" | "low" | "placeholder";
+  status: "ready" | "placeholder" | "fallback" | "error";
+  metadata?: Record<string, string | number | boolean | null | undefined>;
+};
+
+export type LocationMediaRequest = {
+  candidateId: string;
+  title: string;
+  resolvedAddress: string;
+  latitude: number;
+  longitude: number;
+  locationConfidence: "high" | "medium" | "low";
+  pois: EnrichedPoi[];
+};
+
+export type LocationMediaResult = {
+  provider: string;
+  providerStatus: LocationMediaProviderStatus;
+  mapSceneKinds: MapSceneKind[];
+  assets: LocationMediaAsset[];
+  poiMediaCandidates: PoiMediaCandidate[];
+  attribution: LocationMediaAttribution[];
+  sourceNotes: string[];
+};
+
+export interface LocationMediaProvider {
+  providerName: string;
+  generateAssets(request: LocationMediaRequest): LocationMediaResult;
+}
 
 export type EnrichedListing = {
   id: string;
@@ -246,6 +316,7 @@ export type EnrichedListing = {
     poiOverlayUrl: string;
     provider: string;
   };
+  locationMedia: LocationMediaResult;
   distanceHighlights: string[];
   lifestyleSummary: string;
   investmentSummary: string;
@@ -289,6 +360,7 @@ export type Storyboard = {
   candidateIds: string[];
   title: string;
   scenes: StoryboardScene[];
+  locationMediaAssetIds: string[];
   narrationScript: string;
   estimatedDuration: number;
   status: "draft" | "ready";
@@ -312,6 +384,8 @@ export type VideoProject = {
   assets: {
     listingImages: string[];
     mapAssets: string[];
+    locationMediaAssetIds: string[];
+    poiMediaCandidateIds: string[];
     narrationAudioUrl: string;
   };
   timeline: Array<{

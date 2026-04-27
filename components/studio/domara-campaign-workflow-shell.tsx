@@ -171,7 +171,7 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
     if (!enriched || !selectedCandidate) return;
     const nextStoryboard = generateStoryboard(campaign, selectedCandidate, enriched);
     const nextNarration = createNarrationAssetSeam(nextStoryboard);
-    const nextVideoProject = createVideoProjectSeam(campaign, nextStoryboard, nextNarration);
+    const nextVideoProject = createVideoProjectSeam(campaign, nextStoryboard, nextNarration, enriched);
 
     setStoryboard(nextStoryboard);
     setNarrationAsset(nextNarration);
@@ -449,14 +449,14 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
 
         <section className={panelClass}>
           <h3 className="text-base font-semibold">5. Location / POI Enrichment</h3>
-          <p className="mt-1 text-xs text-[#64748B]">Provider seam: mock location + POI + map placeholders.</p>
+          <p className="mt-1 text-xs text-[#64748B]">Provider seam: deterministic location media assets with mock-first fallback.</p>
           <button
             type="button"
             className="mt-3 rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={onEnrich}
             disabled={!brief || !selectedCandidate}
           >
-            Enrich Selected Candidate
+            Enrich + Generate Location Media
           </button>
           {enriched ? (
             <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
@@ -466,9 +466,33 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
               <p>
                 Coordinates: {enriched.latitude.toFixed(4)}, {enriched.longitude.toFixed(4)}
               </p>
+              <p className="mt-1">
+                Provider mode: {enriched.locationMedia.providerStatus} | Map scenes:{" "}
+                {enriched.locationMedia.assets.filter((asset) => asset.kind !== "poi_photo").length} | POI photo candidates:{" "}
+                {enriched.locationMedia.poiMediaCandidates.length}
+              </p>
               <p className="mt-1">Map assets: {enriched.mapAssets.staticMapUrl} | {enriched.mapAssets.poiOverlayUrl}</p>
               <p className="mt-1">POIs: {enriched.pois.map((poi) => `${poi.name} (${poi.distanceKm} km)`).join(" | ")}</p>
               <p className="mt-1">Distance highlights: {enriched.distanceHighlights.join(" | ")}</p>
+              <p className="mt-1">Attribution/source notes: {enriched.locationMedia.sourceNotes.join(" | ")}</p>
+              <div className="mt-2 rounded-lg border border-[#D9E4F0] bg-white p-2">
+                <p className="font-medium text-[#0F172A]">Location media assets</p>
+                <div className="mt-1 space-y-1">
+                  {enriched.locationMedia.assets.map((asset) => (
+                    <p key={asset.id}>
+                      {asset.label} [{asset.kind}] - {asset.status} - {asset.url || asset.placeholderUrl || "n/a"}
+                    </p>
+                  ))}
+                </div>
+              </div>
+              <div className="mt-2 rounded-lg border border-[#D9E4F0] bg-white p-2">
+                <p className="font-medium text-[#0F172A]">Attribution</p>
+                <div className="mt-1 space-y-1">
+                  {enriched.locationMedia.attribution.map((entry) => (
+                    <p key={`${entry.provider}-${entry.sourceLabel}`}>{entry.sourceLabel}</p>
+                  ))}
+                </div>
+              </div>
             </div>
           ) : null}
         </section>

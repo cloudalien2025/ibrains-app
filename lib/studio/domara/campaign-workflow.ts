@@ -14,6 +14,7 @@ import type {
   TitleIdea,
   VideoProject,
 } from "@/lib/studio/domara/types";
+import { createLocationMediaRequest, generateLocationMediaAssets } from "@/lib/studio/domara/location-media-provider";
 
 const SOURCE_ORDER: CampaignSource[] = [
   "immobiliare",
@@ -428,6 +429,19 @@ export function enrichListingCandidate(candidate: ListingCandidate, brief: Resea
     source: "mock_poi_provider",
   }));
 
+  const locationMediaRequest = createLocationMediaRequest({
+    candidateId: candidate.id,
+    title: candidate.title,
+    resolvedAddress: `${candidate.city}, ${candidate.region}, ${candidate.country}`,
+    latitude: cityMeta.latitude,
+    longitude: cityMeta.longitude,
+    locationConfidence,
+    pois,
+  });
+  const locationMedia = generateLocationMediaAssets(locationMediaRequest);
+  const propertyPinAsset = locationMedia.assets.find((asset) => asset.kind === "property_pin");
+  const localPoiAsset = locationMedia.assets.find((asset) => asset.kind === "local_poi");
+
   return {
     id: stableId("enriched", candidate.id),
     candidateId: candidate.id,
@@ -437,10 +451,11 @@ export function enrichListingCandidate(candidate: ListingCandidate, brief: Resea
     locationConfidence,
     pois,
     mapAssets: {
-      staticMapUrl: `https://maps.example.com/static/${cityKey}.png`,
-      poiOverlayUrl: `https://maps.example.com/overlay/${cityKey}-poi.png`,
-      provider: "mock_map_provider",
+      staticMapUrl: propertyPinAsset?.url || propertyPinAsset?.placeholderUrl || `https://maps.example.com/static/${cityKey}.png`,
+      poiOverlayUrl: localPoiAsset?.url || localPoiAsset?.placeholderUrl || `https://maps.example.com/overlay/${cityKey}-poi.png`,
+      provider: locationMedia.provider,
     },
+    locationMedia,
     distanceHighlights: pois.map((poi) => `${poi.name}: ${poi.distanceKm} km (${poi.travelMinutes} min)`),
     lifestyleSummary: `Lifestyle frame: ${candidate.city} delivers ${brief.poiPriorities.join(", ")} access suited to ${brief.buyerPersona}.`,
     investmentSummary: `Investment frame: ${candidate.currency} ${candidate.price.toLocaleString("en-US")} range with tourism-linked demand assumptions kept as scenario placeholders.`,
@@ -448,6 +463,13 @@ export function enrichListingCandidate(candidate: ListingCandidate, brief: Resea
 }
 
 export function generateStoryboard(campaign: Campaign, candidate: ListingCandidate, enrichment: EnrichedListing): Storyboard {
+  const propertyPinMedia =
+    enrichment.locationMedia.assets.find((asset) => asset.kind === "property_pin") ||
+    enrichment.locationMedia.assets.find((asset) => asset.kind === "local_poi");
+  const routeMedia = enrichment.locationMedia.assets.find((asset) => asset.kind === "route_context");
+  const mapVisualSource = propertyPinMedia?.url || propertyPinMedia?.placeholderUrl || enrichment.mapAssets.staticMapUrl;
+  const routeVisualSource = routeMedia?.url || routeMedia?.placeholderUrl || enrichment.mapAssets.poiOverlayUrl;
+
   const scenes: StoryboardScene[] = [
     {
       id: stableId("scene", `${candidate.id}-hook`),
@@ -464,14 +486,24 @@ export function generateStoryboard(campaign: Campaign, candidate: ListingCandida
       order: 2,
       title: "Location + POI Story",
       visualType: "map",
-      visualSource: enrichment.mapAssets.staticMapUrl,
+      visualSource: mapVisualSource,
       narration: enrichment.lifestyleSummary,
       overlayText: `POI priorities: ${enrichment.pois.slice(0, 3).map((poi) => poi.category).join(", ")}`,
       durationSeconds: 16,
     },
     {
-      id: stableId("scene", `${candidate.id}-investment`),
+      id: stableId("scene", `${candidate.id}-route-context`),
       order: 3,
+      title: "Route + Distance Context",
+      visualType: "map",
+      visualSource: routeVisualSource,
+      narration: enrichment.distanceHighlights.slice(0, 3).join(" | "),
+      overlayText: `Location media: ${enrichment.locationMedia.providerStatus}`,
+      durationSeconds: 9,
+    },
+    {
+      id: stableId("scene", `${candidate.id}-investment`),
+      order: 4,
       title: "Investment Angle",
       visualType: "listing_gallery",
       visualSource: candidate.imageUrls[1] || candidate.imageUrls[0] || "mock://gallery",
@@ -481,7 +513,7 @@ export function generateStoryboard(campaign: Campaign, candidate: ListingCandida
     },
     {
       id: stableId("scene", `${candidate.id}-cta`),
-      order: 4,
+      order: 5,
       title: "Shortlist CTA",
       visualType: "cta",
       visualSource: "mock://cta",
@@ -497,6 +529,7 @@ export function generateStoryboard(campaign: Campaign, candidate: ListingCandida
     candidateIds: [candidate.id],
     title: `${candidate.city} ${titleCase(candidate.propertyType)} Storyboard`,
     scenes,
+    locationMediaAssetIds: enrichment.locationMedia.assets.map((asset) => asset.id),
     narrationScript: scenes.map((scene) => `Scene ${scene.order} - ${scene.title}: ${scene.narration}`).join("\n\n"),
     estimatedDuration: scenes.reduce((total, scene) => total + scene.durationSeconds, 0),
     status: "draft",
@@ -516,7 +549,12 @@ export function createNarrationAssetSeam(storyboard: Storyboard): NarrationAsset
   };
 }
 
-export function createVideoProjectSeam(campaign: Campaign, storyboard: Storyboard, narrationAsset: NarrationAsset): VideoProject {
+export function createVideoProjectSeam(
+  campaign: Campaign,
+  storyboard: Storyboard,
+  narrationAsset: NarrationAsset,
+  enrichment?: EnrichedListing,
+): VideoProject {
   return {
     id: stableId("video-project", `${campaign.id}-${storyboard.id}`),
     campaignId: campaign.id,
@@ -524,6 +562,8 @@ export function createVideoProjectSeam(campaign: Campaign, storyboard: Storyboar
     assets: {
       listingImages: storyboard.scenes.map((scene) => scene.visualSource),
       mapAssets: storyboard.scenes.filter((scene) => scene.visualType === "map").map((scene) => scene.visualSource),
+      locationMediaAssetIds: storyboard.locationMediaAssetIds,
+      poiMediaCandidateIds: enrichment?.locationMedia.poiMediaCandidates.map((candidate) => candidate.id) || [],
       narrationAudioUrl: narrationAsset.audioUrl,
     },
     timeline: storyboard.scenes.map((scene) => ({
@@ -540,6 +580,10 @@ export function createVideoProjectSeam(campaign: Campaign, storyboard: Storyboar
       mock: true,
       createdAt: nowIso(),
       renderNote: "Provider seam only. Live renderer can be attached in next task.",
+      locationMediaProviderStatus: enrichment?.locationMedia.providerStatus || "mock",
+      locationMediaMapAssetCount:
+        enrichment?.locationMedia.assets.filter((asset) => asset.kind !== "poi_photo").length || storyboard.scenes.filter((scene) => scene.visualType === "map").length,
+      locationMediaPoiAssetCount: enrichment?.locationMedia.assets.filter((asset) => asset.kind === "poi_photo").length || 0,
     },
   };
 }
