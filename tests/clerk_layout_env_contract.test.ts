@@ -12,6 +12,9 @@ describe("clerk layout env contract", () => {
     expect(source.includes("if (runtimeContract.hasProductionConfigError && !isProductionBuildPhase)")).toBe(true);
     expect(source.includes("throw new Error(buildClerkProductionConfigError(runtimeContract));")).toBe(true);
     expect(source.includes("DEV_PUBLISHABLE_KEY_FALLBACK")).toBe(true);
+    expect(source.includes("resolveCurrentReleaseId")).toBe(true);
+    expect(source.includes("data-release-id={releaseId ?? undefined}")).toBe(true);
+    expect(source.includes("<StaleClientRecovery />")).toBe(true);
     expect(source.includes("signInFallbackRedirectUrl={routeContract.signInFallbackRedirectUrl}")).toBe(true);
   });
 });

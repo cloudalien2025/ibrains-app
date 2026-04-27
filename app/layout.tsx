@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import StaleClientRecovery from "@/components/runtime/stale-client-recovery";
 import {
   DEV_PUBLISHABLE_KEY_FALLBACK,
   buildClerkProductionConfigError,
   resolveClerkRouteContract,
   resolveClerkRuntimeContract,
 } from "@/lib/auth/clerkEnvContract";
+import { resolveCurrentReleaseId } from "@/lib/release/currentRelease";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -13,13 +15,14 @@ export const metadata: Metadata = {
   description: "Operational intelligence for platform teams.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   const runtimeContract = resolveClerkRuntimeContract();
   const routeContract = resolveClerkRouteContract();
+  const releaseId = await resolveCurrentReleaseId();
   const isProductionBuildPhase =
     process.env.NODE_ENV === "production" && process.env.NEXT_PHASE === "phase-production-build";
 
@@ -35,7 +38,8 @@ export default function RootLayout({
 
   return (
     <html lang="en">
-      <body className="antialiased">
+      <body className="antialiased" data-release-id={releaseId ?? undefined}>
+        <StaleClientRecovery />
         <ClerkProvider
           publishableKey={publishableKey}
           signInUrl={routeContract.signInUrl}
