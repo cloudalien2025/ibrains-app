@@ -179,8 +179,28 @@ jobs:
             rm -rf "${STAGING_ROOT}"
             cd "${DEPLOY_PATH}"
 
+            smoke_fail() {
+              echo "smoke verification failed"
+              "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+              tail -n 120 /var/log/ibrains-app/app.log || true
+              tail -n 120 /var/log/nginx/app.ibrains.ai.error.log || true
+              tail -n 120 /var/log/nginx/app.ibrains.ai.access.log || true
+              exit 1
+            }
+
+            EXPECT_RELEASE_FILE=1 \
+            EXPECT_BUILD_ID="${GITHUB_RUN_ID}" \
+            EXPECT_GIT_SHA="${GITHUB_SHA}" \
             BASE_URL=http://127.0.0.1:3001 \
             HOST_HEADER=app.ibrains.ai \
             PROTO=http \
             DOMAIN=app.ibrains.ai \
-            ./scripts/prod_smoke.sh app.ibrains.ai
+            ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail
+
+            EXPECT_RELEASE_FILE=1 \
+            EXPECT_BUILD_ID="${GITHUB_RUN_ID}" \
+            EXPECT_GIT_SHA="${GITHUB_SHA}" \
+            BASE_URL=https://app.ibrains.ai \
+            PROTO=https \
+            DOMAIN=app.ibrains.ai \
+            ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail

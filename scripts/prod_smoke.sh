@@ -5,6 +5,9 @@ DOMAIN="${1:-${DOMAIN:-app.ibrains.ai}}"
 PROTO="${PROTO:-https}"
 BASE_URL="${BASE_URL:-${PROTO}://${DOMAIN}}"
 HOST_HEADER="${HOST_HEADER:-}"
+EXPECT_RELEASE_FILE="${EXPECT_RELEASE_FILE:-0}"
+EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
+EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
 
 curl_host_args=()
 if [ -n "${HOST_HEADER}" ]; then
@@ -118,6 +121,58 @@ PY
   fi
 }
 
+check_release_meta() {
+  local url="$1"
+  local body
+  body=$(curl -sS "${curl_host_args[@]}" "$url" || true)
+  if [ -z "$body" ]; then
+    fail "release meta empty response"
+    return
+  fi
+
+  python3 - "$body" <<'PY' > /tmp/release_meta_parse.txt 2>/dev/null || true
+import json,sys
+try:
+    data=json.loads(sys.argv[1])
+except Exception:
+    print('BADJSON')
+    sys.exit(2)
+
+print('RELEASE_FILE_TRUE' if data.get('release_file') is True else 'RELEASE_FILE_FALSE')
+print(f"BUILD_ID={data.get('build_id') or ''}")
+print(f"GIT_SHA={data.get('git_sha') or ''}")
+PY
+
+  if grep -q '^BADJSON$' /tmp/release_meta_parse.txt; then
+    fail "release meta invalid JSON"
+    return
+  fi
+
+  if [ "${EXPECT_RELEASE_FILE}" = "1" ]; then
+    if grep -q '^RELEASE_FILE_TRUE$' /tmp/release_meta_parse.txt; then
+      pass "release meta preserved release.json"
+    else
+      fail "release meta missing release.json"
+    fi
+  fi
+
+  if [ -n "${EXPECT_BUILD_ID}" ]; then
+    if grep -q "^BUILD_ID=${EXPECT_BUILD_ID}$" /tmp/release_meta_parse.txt; then
+      pass "release build_id matches ${EXPECT_BUILD_ID}"
+    else
+      fail "release build_id mismatch"
+    fi
+  fi
+
+  if [ -n "${EXPECT_GIT_SHA}" ]; then
+    if grep -q "^GIT_SHA=${EXPECT_GIT_SHA}$" /tmp/release_meta_parse.txt; then
+      pass "release git_sha matches ${EXPECT_GIT_SHA}"
+    else
+      fail "release git_sha mismatch"
+    fi
+  fi
+}
+
 note "Domain: ${DOMAIN}"
 note "Base URL: ${BASE_URL}"
 if [ -n "${HOST_HEADER}" ]; then
@@ -130,6 +185,7 @@ check_service nginx
 check_http_status "${BASE_URL}/" "/"
 check_frontdoor_assets "${BASE_URL}/"
 check_health_json "${BASE_URL}/api/health"
+check_release_meta "${BASE_URL}/api/meta/release"
 
 if [ "$failures" -eq 0 ]; then
   note "PASS: all checks succeeded"
