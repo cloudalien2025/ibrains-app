@@ -66,8 +66,8 @@ function sourceDomainForType(type: DiscoverySourceType): string {
 function buildSourceUrl(source: DiscoverySourceType, market: string, budgetMax: number, propertyType: string): string {
   const marketPath = normalizeMarketPath(market || "italy");
   const typePath = normalizeMarketPath(propertyType || "homes");
-  if (source === "csv_manual") return `https://storage.example.com/domara/${marketPath}-${typePath}.csv`;
-  if (source === "api_provider") return `https://api.example.com/domara/search?market=${marketPath}&type=${typePath}&max=${budgetMax}`;
+  if (source === "csv_manual") return `https://storage.example.com/casahud/${marketPath}-${typePath}.csv`;
+  if (source === "api_provider") return `https://api.example.com/casahud/search?market=${marketPath}&type=${typePath}&max=${budgetMax}`;
   return `https://${sourceDomainForType(source)}/search/${marketPath}/${typePath}?max=${budgetMax}`;
 }
 

@@ -109,7 +109,7 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: {
-          message: "Failed to render Domara MP4.",
+          message: "Failed to render CasaHUD MP4.",
           details: error instanceof Error ? error.message : "Unknown rendering failure.",
         },
       },

@@ -215,7 +215,7 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
   return (
     <section className="mt-6 space-y-4">
       <header className={panelClass}>
-        <h2 className="text-lg font-semibold">Campaign Workflow Shell</h2>
+        <h2 className="text-lg font-semibold">CasaHUD Campaign Workflow</h2>
         <p className="mt-1 text-sm text-[#475569]">
           Campaign-first path: setup, title ideation, research brief, mock discovery, scoring, shortlist, enrichment,
           storyboard, narration/video seams, and publish package.
@@ -387,7 +387,7 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
         </section>
 
         <section className={panelClass}>
-          <h3 className="text-base font-semibold">3. Discovery</h3>
+          <h3 className="text-base font-semibold">3. CasaHUD Discovery Sources</h3>
           <p className="mt-1 text-xs text-amber-700">
             Mock/provider seam only. No live crawling, no CAPTCHA bypass, and no credential dependency.
           </p>
@@ -501,7 +501,7 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
         </section>
 
         <section className={panelClass}>
-          <h3 className="text-base font-semibold">5. Location / POI Enrichment</h3>
+          <h3 className="text-base font-semibold">5. CasaHUD Location Media</h3>
           <p className="mt-1 text-xs text-[#64748B]">Provider seam: deterministic location media assets with mock-first fallback.</p>
           <button
             type="button"
@@ -551,7 +551,7 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
         </section>
 
         <section className={panelClass}>
-          <h3 className="text-base font-semibold">6. Story Studio</h3>
+          <h3 className="text-base font-semibold">6. CasaHUD Video Studio</h3>
           <button
             type="button"
             className="mt-2 rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
