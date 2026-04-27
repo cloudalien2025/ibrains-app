@@ -280,6 +280,10 @@ describe("CasaHUD production contracts", () => {
       path.join(process.cwd(), "db/migrations/20260427_casahud_ai_channel_engine.sql"),
       "utf8",
     );
+    const wizardOutputMigration = fs.readFileSync(
+      path.join(process.cwd(), "db/migrations/20260427_casahud_ai_wizard_outputs.sql"),
+      "utf8",
+    );
 
     for (const table of [
       "casahud_projects",
@@ -300,15 +304,40 @@ describe("CasaHUD production contracts", () => {
     ]) {
       expect(migration).toContain(`CREATE TABLE IF NOT EXISTS ${table}`);
     }
+    expect(wizardOutputMigration).toContain("CREATE TABLE IF NOT EXISTS casahud_run_outputs");
   });
 
-  it("keeps production UI free of fake listing/render/publish success states", () => {
+  it("persists the latest full wizard output so the review package reloads after refresh", () => {
+    const source = fs.readFileSync(
+      path.join(process.cwd(), "lib/studio/domara/ai-channel-engine/database-repository.ts"),
+      "utf8",
+    );
+    const route = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/ai-channel/runs/route.ts"), "utf8");
+
+    expect(source).toContain("INSERT INTO casahud_run_outputs");
+    expect(source).toContain("getLatestCasaHudRunOutput");
+    expect(route).toContain("latestOutput");
+  });
+
+  it("presents CasaHUD as a compact user-facing AI wizard instead of a manual builder", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
 
-    expect(source).toContain("Create Next YouTube Property Video");
-    expect(source).toContain("Project name = selected viral title");
-    expect(source).toContain("Review required before publish");
-    expect(source).toContain("fallbackToMock: false");
+    expect(source).toContain("Generate Viral Video");
+    expect(source).toContain("Finding high-potential video ideas");
+    expect(source).toContain("Creating viral title");
+    expect(source).toContain("Finding matching properties");
+    expect(source).toContain("Checking listing accuracy");
+    expect(source).toContain("Adding maps and local highlights");
+    expect(source).toContain("Writing the story");
+    expect(source).toContain("Building the video package");
+    expect(source).toContain("Preparing for review");
+    expect(source).toContain("Ready to publish or schedule");
+    expect(source).toContain("Publish Now");
+    expect(source).toContain("Schedule to YouTube");
+    expect(source).not.toContain("Create Next YouTube Property Video");
+    expect(source).not.toContain("Listing Input");
+    expect(source).not.toContain("<form");
+    expect(source).not.toContain("Provider seam:");
     expect(source).not.toContain("Mode: Mock-first MVP");
     expect(source).not.toContain("deterministic mock listing used");
     expect(source).not.toContain("<DomaraCampaignWorkflowShell");

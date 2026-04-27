@@ -9,13 +9,23 @@ import type {
 } from "@/lib/studio/domara/ai-channel-engine/types";
 
 export function isCasaHudStoreUnavailable(error: unknown): boolean {
-  return isUndefinedRelationError(error, "casahud_generation_runs") || isUndefinedRelationError(error, "casahud_projects");
+  return (
+    isUndefinedRelationError(error, "casahud_generation_runs") ||
+    isUndefinedRelationError(error, "casahud_projects") ||
+    isUndefinedRelationError(error, "casahud_run_outputs")
+  );
 }
 
 export async function isCasaHudStoreAvailable(): Promise<boolean> {
   try {
-    const result = await query<{ exists: string | null }>("SELECT to_regclass('public.casahud_generation_runs')::text as exists");
-    return Boolean(result[0]?.exists);
+    const result = await query<{ generation_runs: string | null; run_outputs: string | null }>(
+      `
+      SELECT
+        to_regclass('public.casahud_generation_runs')::text as generation_runs,
+        to_regclass('public.casahud_run_outputs')::text as run_outputs
+      `,
+    );
+    return Boolean(result[0]?.generation_runs && result[0]?.run_outputs);
   } catch {
     return false;
   }
@@ -58,6 +68,21 @@ export async function listCasaHudRunSummaries(userId: string, limit = 12): Promi
     `,
     [userId, limit],
   );
+}
+
+export async function getLatestCasaHudRunOutput(userId: string): Promise<CasaHudOrchestratorOutput | null> {
+  const result = await query<{ output_json: CasaHudOrchestratorOutput }>(
+    `
+    SELECT output_json
+    FROM casahud_run_outputs
+    WHERE user_id = $1
+    ORDER BY updated_at DESC
+    LIMIT 1
+    `,
+    [userId],
+  );
+
+  return result[0]?.output_json || null;
 }
 
 export class DatabaseCasaHudRepository implements CasaHudProductionRepository {
@@ -138,6 +163,17 @@ export class DatabaseCasaHudRepository implements CasaHudProductionRepository {
   }
 
   async saveOutput(output: CasaHudOrchestratorOutput): Promise<void> {
+    await query(
+      `
+      INSERT INTO casahud_run_outputs
+      (run_id, user_id, output_json, created_at, updated_at)
+      VALUES ($1, $2, $3::jsonb, now(), now())
+      ON CONFLICT (run_id)
+      DO UPDATE SET output_json = EXCLUDED.output_json, updated_at = now()
+      `,
+      [output.run.id, output.run.userId, JSON.stringify(output)],
+    );
+
     if (output.project) {
       await this.createProject(output.project);
       await this.updateRun({ ...output.run, projectId: output.project.id });
