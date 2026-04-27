@@ -116,8 +116,10 @@ describe("Domara campaign workflow", () => {
 
     expect(enrichment.locationConfidence).toMatch(/high|medium|low/);
     expect(enrichment.pois.length).toBeGreaterThan(0);
-    expect(enrichment.mapAssets.provider).toBe("mock_map_provider");
-    expect(enrichment.mapAssets.staticMapUrl).toContain("https://maps.example.com/static/");
+    expect(enrichment.mapAssets.provider).toBe("mock_location_media");
+    expect(enrichment.mapAssets.staticMapUrl).toContain("https://maps.example.com/location-media/");
+    expect(enrichment.locationMedia.providerStatus).toBe("mock");
+    expect(enrichment.locationMedia.poiMediaCandidates.length).toBeGreaterThan(0);
     expect(enrichment.distanceHighlights.length).toBe(enrichment.pois.length);
   });
 
@@ -129,13 +131,15 @@ describe("Domara campaign workflow", () => {
 
     const storyboard = generateStoryboard(campaign, candidate, enrichment);
     const narration = createNarrationAssetSeam(storyboard);
-    const videoProject = createVideoProjectSeam(campaign, storyboard, narration);
+    const videoProject = createVideoProjectSeam(campaign, storyboard, narration, enrichment);
     const publishingPackage = generatePublishingPackage(campaign, candidate, storyboard, videoProject);
 
     expect(storyboard.scenes.length).toBeGreaterThanOrEqual(4);
     expect(storyboard.narrationScript).toContain("Scene 1");
+    expect(storyboard.locationMediaAssetIds.length).toBeGreaterThan(0);
     expect(narration.fallbackUsed).toBe(true);
     expect(videoProject.renderStatus).toBe("provider_seam_ready");
+    expect(videoProject.assets.locationMediaAssetIds.length).toBeGreaterThan(0);
     expect(publishingPackage.youtubeTitle.toLowerCase()).toContain(candidate.city.toLowerCase());
     expect(publishingPackage.status).toBe("draft_ready");
   });
