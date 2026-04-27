@@ -10,6 +10,9 @@ describe("deploy app workflow contract", () => {
     expect(workflowSource.includes("npm ci --omit=dev")).toBe(true);
     expect(workflowSource.includes("scripts/prod_smoke.sh")).toBe(true);
     expect(workflowSource.includes("scripts/patch_next_route_types.mjs")).toBe(true);
+    expect(workflowSource.includes("db/directoryiq/001_directoryiq_schema_from_shared.sql")).toBe(true);
+    expect(workflowSource.includes("scripts/apply_directoryiq_schema.sh")).toBe(true);
+    expect(workflowSource.includes("bash \"${RELEASE_DIR}/scripts/apply_directoryiq_schema.sh\"")).toBe(true);
     expect(workflowSource.includes("EXPECT_RELEASE_FILE=1")).toBe(true);
     expect(workflowSource.includes("EXPECT_BUILD_ID=\"${GITHUB_RUN_ID}\"")).toBe(true);
     expect(workflowSource.includes("EXPECT_GIT_SHA=\"${GITHUB_SHA}\"")).toBe(true);

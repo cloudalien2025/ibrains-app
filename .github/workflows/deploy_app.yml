@@ -57,6 +57,8 @@ jobs:
           public \
           next.config.mjs \
           app \
+          db/directoryiq/001_directoryiq_schema_from_shared.sql \
+          scripts/apply_directoryiq_schema.sh \
           scripts/prod_smoke.sh \
           scripts/patch_next_route_types.mjs
 
@@ -129,6 +131,13 @@ jobs:
               "${systemctl_cmd[@]}" unmask "$SERVICE_NAME"
             fi
 
+            if [ -f "${DEPLOY_PATH}/.env.production.local" ]; then
+              set -a
+              . "${DEPLOY_PATH}/.env.production.local"
+              set +a
+            fi
+            bash "${RELEASE_DIR}/scripts/apply_directoryiq_schema.sh"
+
             service_started=0
             cleanup_on_error() {
               if [ "$service_started" -eq 0 ]; then
@@ -177,8 +186,6 @@ jobs:
             fi
 
             rm -rf "${STAGING_ROOT}"
-            cd "${DEPLOY_PATH}"
-
             smoke_fail() {
               echo "smoke verification failed"
               "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
