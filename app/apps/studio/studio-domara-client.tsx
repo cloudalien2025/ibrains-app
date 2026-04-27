@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import DomaraCampaignWorkflowShell from "@/components/studio/domara-campaign-workflow-shell";
+import type { CasaHudOrchestratorOutput, CasaHudStageName } from "@/lib/studio/domara/ai-channel-engine/types";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
@@ -60,6 +60,35 @@ type IntegrationPendingAction = "idle" | "saving" | "clearing" | "testing";
 type IntegrationRowNotice = {
   kind: "success" | "error";
   message: string;
+};
+
+type CasaHudRunSummary = {
+  id: string;
+  status: string;
+  current_stage: string;
+  selected_title?: string | null;
+  project_name?: string | null;
+  video_type?: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type CasaHudAiStatus = "idle" | "loading" | "ready" | "needs_setup" | "error";
+
+const aiStageLabels: Record<CasaHudStageName, string> = {
+  youtube_research: "Researching YouTube opportunities",
+  viral_title: "Generating viral titles",
+  project_creation: "Creating project",
+  content_strategy: "Selecting content strategy",
+  listing_discovery: "Finding matching listings",
+  listing_validation: "Validating listing claims",
+  location_intelligence: "Enriching maps and POIs",
+  script: "Writing script",
+  storyboard_render_plan: "Building storyboard and render plan",
+  youtube_package: "Preparing YouTube package",
+  render: "Preparing render job",
+  review: "Awaiting review",
+  publishing: "Publish or schedule gate",
 };
 
 const initialState: FormState = {
@@ -253,6 +282,11 @@ export default function StudioDomaraClient() {
     listingFetchImmobiliare: boolean;
     youtubePublishingApi: boolean;
   } | null>(null);
+  const [aiStatus, setAiStatus] = useState<CasaHudAiStatus>("idle");
+  const [aiError, setAiError] = useState<string | null>(null);
+  const [aiOutput, setAiOutput] = useState<CasaHudOrchestratorOutput | null>(null);
+  const [aiRuns, setAiRuns] = useState<CasaHudRunSummary[]>([]);
+  const [aiStoreAvailable, setAiStoreAvailable] = useState<boolean | null>(null);
   const [batchTemplate, setBatchTemplate] = useState<DomaraSeriesTemplateName>("hidden_gems_tuscany");
   const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
   const [batchNotice, setBatchNotice] = useState<string | null>(null);
@@ -323,6 +357,72 @@ export default function StudioDomaraClient() {
   useEffect(() => {
     void loadIntegrationStatus();
   }, [loadIntegrationStatus]);
+
+  const loadAiRuns = useCallback(async () => {
+    try {
+      const response = await fetch("/api/studio/domara/ai-channel/runs", {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            runs?: CasaHudRunSummary[];
+            storeAvailable?: boolean;
+            message?: string;
+          }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error("Failed to load CasaHUD AI runs.");
+      }
+      setAiRuns(payload.runs || []);
+      setAiStoreAvailable(Boolean(payload.storeAvailable));
+      if (payload.storeAvailable === false) {
+        setAiStatus("needs_setup");
+        setAiError(payload.message || "CasaHUD AI persistence is not ready.");
+      }
+    } catch (runLoadError) {
+      setAiStatus("error");
+      setAiError(runLoadError instanceof Error ? runLoadError.message : "Failed to load CasaHUD AI runs.");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAiRuns();
+  }, [loadAiRuns]);
+
+  async function onGenerateAiVideo() {
+    try {
+      setAiStatus("loading");
+      setAiError(null);
+      const response = await fetch("/api/studio/domara/ai-channel/runs", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          preferredMarket: "Italy real estate YouTube",
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            output?: CasaHudOrchestratorOutput;
+            error?: { message?: string; code?: string };
+          }
+        | null;
+
+      if (!response.ok || !payload?.ok || !payload.output) {
+        throw new Error(payload?.error?.message || "Failed to generate CasaHUD AI video run.");
+      }
+
+      setAiOutput(payload.output);
+      setAiStatus(payload.output.run.status === "needs_credentials" ? "needs_setup" : "ready");
+      await loadAiRuns();
+    } catch (generationError) {
+      setAiStatus("error");
+      setAiError(generationError instanceof Error ? generationError.message : "Failed to generate CasaHUD AI run.");
+    }
+  }
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -433,7 +533,7 @@ export default function StudioDomaraClient() {
                 provider: form.listingProvider,
                 listingRef: form.listingUrl.trim(),
                 country: form.country,
-                fallbackToMock: true,
+                fallbackToMock: false,
               },
         ),
       });
@@ -626,39 +726,108 @@ export default function StudioDomaraClient() {
     }
   }
 
-  function onBridgeFromCampaign(input: PropertyListingInput) {
-    setForm((current) => ({
-      ...formStateFromListing(current, input),
-      listingProvider:
-        input.provider === "idealista" || input.provider === "immobiliare" || input.provider === "import_url"
-          ? input.provider
-          : "manual",
-      listingUrl: input.listingUrl || current.listingUrl,
-      source: input.source || current.source,
-    }));
-    setListingFetchStatus("ready");
-    setListingFetchError(null);
-    setListingFetchWarnings([]);
-    setListingFetchFallbackUsed(true);
-    setListingFetchNotice("Candidate bridged from campaign workflow. Review fields, then generate plan.");
-  }
-
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-7xl px-6 py-12">
-        <header className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-          <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-1 text-xs font-medium text-[#334155]">
-            CasaHUD Studio
-          </div>
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">CasaHUD Property Video Engine</h1>
-          <p className="mt-2 max-w-4xl text-sm text-[#334155]">
-            Transform European property listings into premium YouTube-ready real-estate videos using listing data,
-            images, and location intelligence.
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2 text-xs text-[#334155]">
-            <span className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1">Initial market: Italy</span>
-            <span className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1">Channel: Expat AI</span>
-            <span className="rounded-full border border-[#D9E4F0] bg-white px-3 py-1">Mode: Mock-first MVP</span>
+        <header className="overflow-hidden rounded-3xl border border-[#D6E2EE] bg-[#F6F9FC] shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
+          <div className="grid gap-0 lg:grid-cols-[1fr_0.9fr]">
+            <div className="p-6 md:p-8">
+              <div className="inline-flex items-center rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs font-medium text-[#334155]">
+                CasaHUD AI Channel Engine
+              </div>
+              <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-[#0F172A] md:text-5xl">
+                Create the next YouTube property video from one decision.
+              </h1>
+              <p className="mt-4 max-w-3xl text-sm leading-6 text-[#334155] md:text-base">
+                CasaHUD researches YouTube opportunity, selects a viral title, creates the project under that title,
+                validates real listing evidence, enriches maps and POIs, builds the video package, then holds it for
+                human review before publishing.
+              </p>
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="rounded-xl border border-[#0F172A] bg-[#0F172A] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(15,23,42,0.18)] transition hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-65"
+                  onClick={() => void onGenerateAiVideo()}
+                  disabled={aiStatus === "loading"}
+                >
+                  {aiStatus === "loading" ? "Generating..." : "Create Next YouTube Property Video"}
+                </button>
+                <span className="rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs text-[#334155]">
+                  Project name = selected viral title
+                </span>
+                <span className="rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs text-[#334155]">
+                  Review required before publish
+                </span>
+              </div>
+              {aiError ? <p className="mt-3 text-sm text-amber-700">{aiError}</p> : null}
+              {aiOutput?.project ? (
+                <div className="mt-5 rounded-2xl border border-[#C7D7E6] bg-white p-4">
+                  <p className="text-xs font-medium uppercase tracking-[0.08em] text-[#64748B]">Current project</p>
+                  <h2 className="mt-1 text-xl font-semibold text-[#0F172A]">{aiOutput.project.name}</h2>
+                  <p className="mt-2 text-sm text-[#475569]">
+                    {aiOutput.strategy.strategySummary}
+                  </p>
+                  {aiOutput.run.status === "needs_credentials" ? (
+                    <p className="mt-3 text-sm text-amber-700">
+                      Listing provider credentials or contracts are required before CasaHUD can discover real listings
+                      and continue to script, render, and publish stages.
+                    </p>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="border-t border-[#D6E2EE] bg-white/75 p-6 lg:border-l lg:border-t-0">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-base font-semibold text-[#0F172A]">Production timeline</h2>
+                <span className="rounded-full border border-[#C7D7E6] bg-white px-2.5 py-1 text-xs text-[#475569]">
+                  {aiOutput?.run.status || (aiStoreAvailable === false ? "setup required" : "ready")}
+                </span>
+              </div>
+              <div className="mt-4 space-y-2">
+                {(aiOutput?.stages || ([] as CasaHudOrchestratorOutput["stages"])).length > 0 ? (
+                  aiOutput!.stages.map((stage) => (
+                    <div key={stage.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs">
+                      <span
+                        className={`h-2.5 w-2.5 rounded-full ${
+                          stage.status === "complete"
+                            ? "bg-emerald-500"
+                            : stage.status === "needs_credentials"
+                              ? "bg-amber-500"
+                              : stage.status === "failed"
+                                ? "bg-rose-500"
+                                : "bg-slate-300"
+                        }`}
+                      />
+                      <span className="text-[#334155]">{aiStageLabels[stage.name]}</span>
+                      <span className="text-[#64748B]">{stage.status.replace(/_/g, " ")}</span>
+                    </div>
+                  ))
+                ) : (
+                  Object.entries(aiStageLabels).map(([name, label]) => (
+                    <div key={name} className="grid grid-cols-[10px_1fr] items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs">
+                      <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
+                      <span className="text-[#475569]">{label}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+              {aiOutput?.youtubePackage ? (
+                <div className="mt-4 rounded-2xl border border-[#C7D7E6] bg-[#F8FBFF] p-4 text-sm text-[#334155]">
+                  <p className="font-semibold text-[#0F172A]">Package ready for review</p>
+                  <p className="mt-1">Title: {aiOutput.youtubePackage.finalRecommendedTitle}</p>
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    Chapters: {aiOutput.youtubePackage.chapters.length} | Tags: {aiOutput.youtubePackage.tags.length} |
+                    Thumbnail concepts: {aiOutput.youtubePackage.thumbnailIdeas.length}
+                  </p>
+                </div>
+              ) : null}
+              {aiRuns.length > 0 ? (
+                <div className="mt-4 text-xs text-[#64748B]">
+                  Latest saved run: {aiRuns[0]?.project_name || aiRuns[0]?.selected_title || aiRuns[0]?.id}
+                </div>
+              ) : null}
+            </div>
           </div>
         </header>
 
@@ -699,14 +868,12 @@ export default function StudioDomaraClient() {
           </details>
         </details>
 
-        <DomaraCampaignWorkflowShell onBridgeToListing={onBridgeFromCampaign} />
-
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
           <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
             <h2 className="text-lg font-semibold">Listing Input</h2>
             <p className="mt-1 text-sm text-[#475569]">
-              Provide manual listing details now. API providers for Idealista, Immobiliare, Google Maps, ElevenLabs,
-              and Studio render jobs are scaffolded as integration seams.
+              Optional manual review and source import workspace. CasaHUD will not use generated listing fixtures in
+              production; connect listing providers or import real source URLs before rendering.
             </p>
 
             <form onSubmit={onSubmit} className="mt-5 space-y-4">
@@ -778,7 +945,7 @@ export default function StudioDomaraClient() {
               {listingFetchStatus === "ready" ? (
                 <p className="text-xs text-emerald-700">
                   {listingFetchNotice || "Listing imported and mapped to CasaHUD input model."}
-                  {listingFetchFallbackUsed ? " Provider fallback: deterministic mock listing used." : ""}
+                  {listingFetchFallbackUsed ? " Provider fallback was used; review before production." : ""}
                 </p>
               ) : null}
               {listingFetchStatus === "failed" && listingFetchNotice ? (
@@ -801,7 +968,7 @@ export default function StudioDomaraClient() {
                     onChange={(event) => setForm((curr) => ({ ...curr, voiceMode: event.target.value as DomaraVoiceMode }))}
                   >
                     <option value="silent">Silent / caption-only</option>
-                    <option value="mock">Mock narration</option>
+                    <option value="mock">Test narration placeholder</option>
                     <option value="elevenlabs" disabled={integrationCapabilities?.elevenlabsLiveNarration === false}>
                       ElevenLabs {integrationCapabilities?.elevenlabsLiveNarration === false ? "(env missing)" : "(connected)"}
                     </option>
@@ -1226,7 +1393,7 @@ export default function StudioDomaraClient() {
                       Status: {renderStatus}
                     </span>
                     <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
-                      Mode: mock-first local render
+                      Review-gated render path
                     </span>
                     <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
                       Created for Expat AI
