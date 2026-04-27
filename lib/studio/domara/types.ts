@@ -196,6 +196,69 @@ export type ResearchBrief = {
 
 export type ListingCandidateStatus = "new" | "shortlist" | "reject" | "saved" | "needs_review";
 
+export type DiscoverySourceType =
+  | "immobiliare"
+  | "idealista"
+  | "gateaway"
+  | "kyero"
+  | "agency_site"
+  | "csv_manual"
+  | "api_provider"
+  | "other";
+
+export type DiscoverySourceStatus = "draft" | "ready" | "checked" | "needs_review" | "paused" | "error";
+
+export type DiscoverySource = {
+  id: string;
+  campaignId: string;
+  name: string;
+  sourceType: DiscoverySourceType;
+  sourceUrl: string;
+  marketTags: string[];
+  regionTags: string[];
+  cityTags: string[];
+  propertyTypeTags: string[];
+  budgetMin?: number;
+  budgetMax?: number;
+  currency: string;
+  buyerPersonaTags: string[];
+  poiPriorityTags: string[];
+  status: DiscoverySourceStatus;
+  lastCheckedAt?: string;
+  candidateCount: number;
+  importedCandidateCount: number;
+  rejectedCandidateCount: number;
+  confidence: number;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DiscoverySourceValidation = {
+  sourceId: string;
+  sourceUrl: string;
+  valid: boolean;
+  reason?: string;
+};
+
+export type DiscoveryCandidateBatch = {
+  sourceId: string;
+  providerStatus: "mock" | "fallback" | "error";
+  candidateCount: number;
+  importedCandidateCount: number;
+  confidence: number;
+  notes: string[];
+};
+
+export type DiscoverySourceCandidateResult = {
+  provider: "mock_discovery_source_provider";
+  sources: DiscoverySource[];
+  candidates: ListingCandidate[];
+  validations: DiscoverySourceValidation[];
+  batches: DiscoveryCandidateBatch[];
+  generatedAt: string;
+};
+
 export type ListingCandidate = {
   id: string;
   campaignId: string;
