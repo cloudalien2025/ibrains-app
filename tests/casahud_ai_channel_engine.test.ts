@@ -323,6 +323,11 @@ describe("CasaHUD production contracts", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
 
     expect(source).toContain("Generate Viral Video");
+    expect(source).toContain("Connect CasaHUD");
+    expect(source).toContain("Set up production video connections");
+    expect(source).toContain("casahud-connect-wizard");
+    expect(source).toContain("shouldOpenCasaHudSetupForGenerate");
+    expect(source).toContain("Save Connection");
     expect(source).toContain("Finding high-potential video ideas");
     expect(source).toContain("Creating viral title");
     expect(source).toContain("Finding matching properties");
@@ -340,6 +345,12 @@ describe("CasaHUD production contracts", () => {
     expect(source).not.toContain("Provider seam:");
     expect(source).not.toContain("Mode: Mock-first MVP");
     expect(source).not.toContain("deterministic mock listing used");
+    expect(source).not.toContain("OPENAI_API_KEY");
+    expect(source).not.toContain("YOUTUBE_API_KEY");
+    expect(source).not.toContain("environment variable");
+    expect(source).not.toContain("database");
+    expect(source).not.toContain("debug");
+    expect(source).not.toContain("sample data");
     expect(source).not.toContain("<DomaraCampaignWorkflowShell");
     expect(source).not.toContain("fake connected");
   });

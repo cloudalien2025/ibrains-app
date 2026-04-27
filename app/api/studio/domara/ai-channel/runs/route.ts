@@ -42,7 +42,7 @@ async function resolveCapabilities(userId: string) {
       openaiGeneration: capabilities.openaiGeneration,
       youtubeResearch: capabilities.youtubePublishingApi,
       listingDiscovery: capabilities.listingFetchIdealista || capabilities.listingFetchImmobiliare,
-      mapPoiEnrichment: capabilities.googleMapsVisuals || capabilities.mapboxVisuals,
+      mapPoiEnrichment: capabilities.googleMapsVisuals,
       renderJobs: true,
       youtubePublishing: capabilities.youtubePublishingApi,
     },
