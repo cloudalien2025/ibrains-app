@@ -9,6 +9,7 @@ import {
 } from "@/app/api/studio/domara/_utils/integration-settings";
 import {
   DatabaseCasaHudRepository,
+  getLatestCasaHudRunOutput,
   isCasaHudStoreAvailable,
   isCasaHudStoreUnavailable,
   listCasaHudRunSummaries,
@@ -60,15 +61,17 @@ export async function GET(request: NextRequest) {
         reqId,
         runs: [],
         storeAvailable: false,
-        message: "CasaHUD AI channel engine tables are not migrated yet.",
+        message: "CasaHUD storage is not ready yet.",
       });
     }
 
     const runs = await listCasaHudRunSummaries(userId);
+    const latestOutput = await getLatestCasaHudRunOutput(userId);
     return NextResponse.json({
       ok: true,
       reqId,
       runs,
+      latestOutput,
       storeAvailable: true,
     });
   } catch (error) {
@@ -91,7 +94,7 @@ export async function POST(request: NextRequest) {
     if (!(await isCasaHudStoreAvailable())) {
       return errorResponse(
         503,
-        "CasaHUD AI channel engine persistence is unavailable. Run the CasaHUD migration before generating production runs.",
+        "CasaHUD storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );
@@ -127,7 +130,7 @@ export async function POST(request: NextRequest) {
     if (isCasaHudStoreUnavailable(error)) {
       return errorResponse(
         503,
-        "CasaHUD AI channel engine persistence is unavailable. Run the CasaHUD migration before generating production runs.",
+        "CasaHUD storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );

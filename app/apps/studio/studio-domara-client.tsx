@@ -1,66 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
-import type { CasaHudOrchestratorOutput, CasaHudStageName } from "@/lib/studio/domara/ai-channel-engine/types";
-import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
-import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
-import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
-import { generateDomaraYouTubePackage } from "@/lib/studio/domara/youtube-package";
-import { DomaraMapVisualMode } from "@/lib/studio/domara/map-visual-provider";
-import {
-  buildOperatorIntegrationRows,
-  DomaraOperatorIntegrationRow,
-  DomaraOperatorIntegrationStatus,
-} from "@/lib/studio/domara/integrations-ui";
-import type { DomaraIntegrationProviderId, DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
-import {
-  DOMARA_BATCH_LIMIT,
-  DomaraBatch,
-  DomaraSeriesTemplateName,
-  buildBulkExportManifest,
-  createDomaraBatch,
-  generateContentCalendar,
-  listSeriesTemplates,
-  transitionBatchItemStatus,
-} from "@/lib/studio/domara/batch-calendar";
-import { DomaraContentAngle, PropertyListingInput, PropertyVideoPlan } from "@/lib/studio/domara/types";
-
-type FormState = {
-  listingProvider: "manual" | "import_url" | "idealista" | "immobiliare";
-  listingUrl: string;
-  source: string;
-  country: string;
-  city: string;
-  region: string;
-  neighborhood: string;
-  title: string;
-  description: string;
-  price: string;
-  propertyType: string;
-  bedrooms: string;
-  bathrooms: string;
-  squareMeters: string;
-  imageUrls: string;
-  latitude: string;
-  longitude: string;
-  contentAngle: DomaraContentAngle;
-  renderStyle: DomaraRenderStyle;
-  voiceMode: DomaraVoiceMode;
-  voicePersona: DomaraVoicePersona;
-  voiceTone: DomaraVoiceTone;
-  voicePace: DomaraVoicePace;
-  mapVisualMode: DomaraMapVisualMode;
-};
-
-type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
-type IntegrationStatusState = "loading" | "ready" | "error";
-type DomaraIntegrationProviderCard = DomaraIntegrationProviderStatus;
-type IntegrationPendingAction = "idle" | "saving" | "clearing" | "testing";
-type IntegrationRowNotice = {
-  kind: "success" | "error";
-  message: string;
-};
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type {
+  CasaHudOrchestratorOutput,
+  CasaHudStageName,
+  CasaHudStageStatus,
+} from "@/lib/studio/domara/ai-channel-engine/types";
 
 type CasaHudRunSummary = {
   id: string;
@@ -75,288 +21,80 @@ type CasaHudRunSummary = {
 
 type CasaHudAiStatus = "idle" | "loading" | "ready" | "needs_setup" | "error";
 
-const aiStageLabels: Record<CasaHudStageName, string> = {
-  youtube_research: "Researching YouTube opportunities",
-  viral_title: "Generating viral titles",
-  project_creation: "Creating project",
-  content_strategy: "Selecting content strategy",
-  listing_discovery: "Finding matching listings",
-  listing_validation: "Validating listing claims",
-  location_intelligence: "Enriching maps and POIs",
-  script: "Writing script",
-  storyboard_render_plan: "Building storyboard and render plan",
-  youtube_package: "Preparing YouTube package",
-  render: "Preparing render job",
-  review: "Awaiting review",
-  publishing: "Publish or schedule gate",
+const wizardSteps: Array<{ stage: CasaHudStageName; label: string }> = [
+  { stage: "youtube_research", label: "Finding high-potential video ideas" },
+  { stage: "viral_title", label: "Creating viral title" },
+  { stage: "listing_discovery", label: "Finding matching properties" },
+  { stage: "listing_validation", label: "Checking listing accuracy" },
+  { stage: "location_intelligence", label: "Adding maps and local highlights" },
+  { stage: "script", label: "Writing the story" },
+  { stage: "storyboard_render_plan", label: "Building the video package" },
+  { stage: "youtube_package", label: "Preparing for review" },
+  { stage: "review", label: "Ready to publish or schedule" },
+];
+
+const stageStatusLabel: Record<CasaHudStageStatus, string> = {
+  pending: "Waiting",
+  running: "Working",
+  complete: "Complete",
+  needs_credentials: "Connection needed",
+  failed: "Needs attention",
+  skipped: "Waiting",
 };
 
-const initialState: FormState = {
-  listingProvider: "manual",
-  listingUrl: "",
-  source: "",
-  country: "Italy",
-  city: "",
-  region: "",
-  neighborhood: "",
-  title: "",
-  description: "",
-  price: "",
-  propertyType: "",
-  bedrooms: "",
-  bathrooms: "",
-  squareMeters: "",
-  imageUrls: "",
-  latitude: "",
-  longitude: "",
-  contentAngle: "lifestyle",
-  renderStyle: "expat_ai_editorial",
-  voiceMode: "silent",
-  voicePersona: "expat_ai_host",
-  voiceTone: "informative",
-  voicePace: "normal",
-  mapVisualMode: "off",
-};
-
-const fieldClass =
-  "mt-1 w-full rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] placeholder:text-[#94A3B8]";
-
-const providerFieldClass =
-  "w-full rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] placeholder:text-[#94A3B8]";
-
-const integrationStatusStyle: Record<DomaraOperatorIntegrationStatus, string> = {
-  connected: "border-emerald-200 bg-emerald-50 text-emerald-700",
-  missing: "border-slate-200 bg-slate-100 text-slate-600",
-  invalid: "border-rose-200 bg-rose-50 text-rose-700",
-};
-
-const integrationStatusLabel: Record<DomaraOperatorIntegrationStatus, string> = {
-  connected: "Connected",
-  missing: "Missing",
-  invalid: "Invalid",
-};
-
-function DomaraIntegrationRow(props: {
-  row: DomaraOperatorIntegrationRow;
-  draftValue: string;
-  saveEnabled: boolean;
-  saveSupported: boolean;
-  pendingAction: IntegrationPendingAction;
-  notice?: IntegrationRowNotice;
-  onDraftChange: (providerId: string, value: string) => void;
-  onSave: (providerId: DomaraIntegrationProviderId) => Promise<void>;
-  onClear: (providerId: DomaraIntegrationProviderId) => Promise<void>;
-  onTest: (providerId: DomaraIntegrationProviderId) => Promise<void>;
-}) {
-  const { row, draftValue, onDraftChange, onSave, onClear, onTest, saveEnabled, saveSupported, pendingAction, notice } = props;
-
-  return (
-    <article className="rounded-xl border border-[#D9E4F0] bg-white p-3">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-sm font-medium text-[#0F172A]">{row.displayName}</p>
-        <span className={`rounded-full border px-2 py-0.5 text-xs ${integrationStatusStyle[row.status]}`}>
-          {integrationStatusLabel[row.status]}
-        </span>
-      </div>
-      <div className="mt-2 grid gap-2 md:grid-cols-[1fr_auto]">
-        <input
-          type="password"
-          className={providerFieldClass}
-          value={draftValue}
-          onChange={(event) => onDraftChange(row.providerId, event.target.value)}
-          placeholder={row.maskedKey || "Enter API key"}
-          autoComplete="off"
-          aria-label={`${row.displayName} API key`}
-        />
-        <div className="grid gap-2 md:grid-cols-3">
-          <button
-            type="button"
-            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-55"
-            onClick={() => void onSave(row.providerId)}
-            disabled={!saveEnabled || !saveSupported || pendingAction !== "idle"}
-          >
-            {pendingAction === "saving" ? "Saving..." : "Save"}
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-55"
-            onClick={() => void onClear(row.providerId)}
-            disabled={!saveSupported || !row.configured || pendingAction !== "idle"}
-          >
-            {pendingAction === "clearing" ? "Clearing..." : "Clear"}
-          </button>
-          <button
-            type="button"
-            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-55"
-            onClick={() => void onTest(row.providerId)}
-            disabled={!row.configured || pendingAction !== "idle"}
-          >
-            {pendingAction === "testing" ? "Testing..." : "Test"}
-          </button>
-        </div>
-      </div>
-      {row.lastUpdatedAt ? <p className="mt-2 text-xs text-[#64748B]">Updated: {new Date(row.lastUpdatedAt).toLocaleString()}</p> : null}
-      {notice ? (
-        <p className={`mt-2 text-xs ${notice.kind === "success" ? "text-emerald-700" : "text-rose-600"}`}>{notice.message}</p>
-      ) : null}
-    </article>
-  );
+function statusDotClass(status?: CasaHudStageStatus) {
+  if (status === "complete") return "bg-[#1B8A5A] shadow-[0_0_0_5px_rgba(27,138,90,0.12)]";
+  if (status === "needs_credentials") return "bg-[#B7791F] shadow-[0_0_0_5px_rgba(183,121,31,0.14)]";
+  if (status === "failed") return "bg-[#B91C1C] shadow-[0_0_0_5px_rgba(185,28,28,0.14)]";
+  if (status === "running") return "bg-[#2563EB] shadow-[0_0_0_5px_rgba(37,99,235,0.14)]";
+  return "bg-[#CBD5E1]";
 }
 
-function toInput(state: FormState): PropertyListingInput {
-  return {
-    listingUrl: state.listingUrl || undefined,
-    source: state.source || undefined,
-    provider: state.listingProvider,
-    country: state.country || "Italy",
-    city: state.city || undefined,
-    region: state.region || undefined,
-    neighborhood: state.neighborhood || undefined,
-    title: state.title,
-    description: state.description || undefined,
-    price: state.price || undefined,
-    propertyType: state.propertyType || undefined,
-    bedrooms: state.bedrooms || undefined,
-    bathrooms: state.bathrooms || undefined,
-    squareMeters: state.squareMeters || undefined,
-    imageUrls: state.imageUrls
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean),
-    latitude: state.latitude || undefined,
-    longitude: state.longitude || undefined,
-    contentAngle: state.contentAngle,
-  };
+function stageTextClass(status?: CasaHudStageStatus) {
+  if (status === "complete") return "text-[#0F5132]";
+  if (status === "needs_credentials") return "text-[#8A4B11]";
+  if (status === "failed") return "text-[#991B1B]";
+  return "text-[#344256]";
 }
 
-function formStateFromListing(current: FormState, listing: PropertyListingInput): FormState {
-  return {
-    ...current,
-    listingUrl: listing.listingUrl || current.listingUrl,
-    source: listing.source || current.source,
-    country: listing.country || current.country,
-    city: listing.city || "",
-    region: listing.region || "",
-    neighborhood: listing.neighborhood || "",
-    title: listing.title || current.title,
-    description: listing.description || "",
-    price: listing.price || "",
-    propertyType: listing.propertyType || "",
-    bedrooms: listing.bedrooms !== undefined ? String(listing.bedrooms) : "",
-    bathrooms: listing.bathrooms !== undefined ? String(listing.bathrooms) : "",
-    squareMeters: listing.squareMeters !== undefined ? String(listing.squareMeters) : "",
-    imageUrls: (listing.imageUrls || []).join("\n"),
-    latitude: listing.latitude !== undefined ? String(listing.latitude) : "",
-    longitude: listing.longitude !== undefined ? String(listing.longitude) : "",
-  };
+function formatVideoType(videoType?: string | null) {
+  if (!videoType) return "AI-selected format";
+  return videoType
+    .split("_")
+    .map((word) => (word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : ""))
+    .join(" ");
+}
+
+function getStageStatus(output: CasaHudOrchestratorOutput | null, stageName: CasaHudStageName): CasaHudStageStatus | undefined {
+  return output?.stages.find((stage) => stage.name === stageName)?.status;
+}
+
+function getPublishingMessage(output: CasaHudOrchestratorOutput | null) {
+  const publishingStage = output?.stages.find((stage) => stage.name === "publishing");
+  if (!publishingStage?.output || typeof publishingStage.output !== "object") return null;
+  const message = (publishingStage.output as { message?: unknown }).message;
+  return typeof message === "string" ? message : null;
 }
 
 export default function StudioDomaraClient() {
-  const seriesTemplates = useMemo(() => listSeriesTemplates(), []);
-  const [form, setForm] = useState<FormState>(initialState);
-  const [plan, setPlan] = useState<PropertyVideoPlan | null>(null);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
-  const [generatedInput, setGeneratedInput] = useState<PropertyListingInput | null>(null);
-  const [renderStatus, setRenderStatus] = useState<"idle" | "queued" | "rendering" | "complete" | "failed">("idle");
-  const [renderError, setRenderError] = useState<string | null>(null);
-  const [renderResult, setRenderResult] = useState<DomaraVideoRenderResult | null>(null);
-  const [listingFetchStatus, setListingFetchStatus] = useState<ListingFetchState>("idle");
-  const [listingFetchError, setListingFetchError] = useState<string | null>(null);
-  const [listingFetchWarnings, setListingFetchWarnings] = useState<string[]>([]);
-  const [listingFetchFallbackUsed, setListingFetchFallbackUsed] = useState(false);
-  const [listingFetchNotice, setListingFetchNotice] = useState<string | null>(null);
-  const [integrationStatus, setIntegrationStatus] = useState<IntegrationStatusState>("loading");
-  const [integrationError, setIntegrationError] = useState<string | null>(null);
-  const [integrationProviders, setIntegrationProviders] = useState<DomaraIntegrationProviderCard[]>([]);
-  const [integrationDraftKeys, setIntegrationDraftKeys] = useState<Record<string, string>>({});
-  const [integrationRowNotices, setIntegrationRowNotices] = useState<Record<string, IntegrationRowNotice>>({});
-  const [integrationPendingActions, setIntegrationPendingActions] = useState<Record<string, IntegrationPendingAction>>({});
-  const [integrationSaveSupported, setIntegrationSaveSupported] = useState(false);
-  const [integrationStoreNotice, setIntegrationStoreNotice] = useState<string | null>(null);
-  const [integrationCapabilities, setIntegrationCapabilities] = useState<{
-    openaiGeneration: boolean;
-    elevenlabsLiveNarration: boolean;
-    mapboxVisuals: boolean;
-    googleMapsVisuals: boolean;
-    listingFetchIdealista: boolean;
-    listingFetchImmobiliare: boolean;
-    youtubePublishingApi: boolean;
-  } | null>(null);
   const [aiStatus, setAiStatus] = useState<CasaHudAiStatus>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
   const [aiOutput, setAiOutput] = useState<CasaHudOrchestratorOutput | null>(null);
   const [aiRuns, setAiRuns] = useState<CasaHudRunSummary[]>([]);
   const [aiStoreAvailable, setAiStoreAvailable] = useState<boolean | null>(null);
-  const [batchTemplate, setBatchTemplate] = useState<DomaraSeriesTemplateName>("hidden_gems_tuscany");
-  const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
-  const [batchNotice, setBatchNotice] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const integrationRows = useMemo(() => buildOperatorIntegrationRows(integrationProviders), [integrationProviders]);
-  const sceneDuration = useMemo(
-    () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
-    [plan],
+  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
+  const [actionNotice, setActionNotice] = useState<string | null>(null);
+
+  const latestSavedRun = aiRuns[0];
+  const packageReady = Boolean(aiOutput?.youtubePackage);
+  const needsConnection = aiOutput?.run.status === "needs_credentials" || aiStatus === "needs_setup";
+  const selectedTitle = aiOutput?.project?.name || aiOutput?.selectedTitle.title || latestSavedRun?.project_name || latestSavedRun?.selected_title;
+  const publishingMessage = useMemo(() => getPublishingMessage(aiOutput), [aiOutput]);
+  const topTitleCandidates = useMemo(() => aiOutput?.titleCandidates.slice(0, 3) || [], [aiOutput]);
+  const selectedListings = useMemo(
+    () => aiOutput?.listingValidation?.selectedListings || aiOutput?.listingDiscovery.listings || [],
+    [aiOutput],
   );
-  const phase3Preview = useMemo(() => {
-    if (!plan || !generatedInput) return null;
-    return createDomaraRenderPlan({
-      plan,
-      listingInput: generatedInput,
-      stylePreset: form.renderStyle,
-    });
-  }, [plan, generatedInput, form.renderStyle]);
-  const youtubePackage = useMemo(() => {
-    if (!plan || !generatedInput) return null;
-    return generateDomaraYouTubePackage({
-      plan,
-      listingInput: generatedInput,
-      renderResult: renderResult || undefined,
-    });
-  }, [plan, generatedInput, renderResult]);
-  const contentCalendar = useMemo(() => generateContentCalendar(batch), [batch]);
-  const batchExportManifest = useMemo(() => buildBulkExportManifest(batch), [batch]);
-
-  const loadIntegrationStatus = useCallback(async () => {
-    try {
-      setIntegrationStatus("loading");
-      setIntegrationError(null);
-      const response = await fetch("/api/studio/domara/integrations/status", {
-        cache: "no-store",
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            providers?: DomaraIntegrationProviderCard[];
-            capabilities?: {
-              openaiGeneration: boolean;
-              elevenlabsLiveNarration: boolean;
-              mapboxVisuals: boolean;
-              googleMapsVisuals: boolean;
-              listingFetchIdealista: boolean;
-              listingFetchImmobiliare: boolean;
-              youtubePublishingApi: boolean;
-            };
-            saveSupported?: boolean;
-            storeStatusMessage?: string;
-          }
-        | null;
-
-      if (!response.ok || !payload?.ok || !Array.isArray(payload.providers) || !payload.capabilities) {
-        throw new Error("Failed to load integration status.");
-      }
-      setIntegrationProviders(payload.providers);
-      setIntegrationCapabilities(payload.capabilities);
-      setIntegrationSaveSupported(Boolean(payload.saveSupported));
-      setIntegrationStoreNotice(payload.storeStatusMessage || null);
-      setIntegrationStatus("ready");
-    } catch (loadError) {
-      setIntegrationStatus("error");
-      setIntegrationError(loadError instanceof Error ? loadError.message : "Failed to load integration status.");
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadIntegrationStatus();
-  }, [loadIntegrationStatus]);
 
   const loadAiRuns = useCallback(async () => {
     try {
@@ -367,22 +105,27 @@ export default function StudioDomaraClient() {
         | {
             ok?: boolean;
             runs?: CasaHudRunSummary[];
+            latestOutput?: CasaHudOrchestratorOutput | null;
             storeAvailable?: boolean;
             message?: string;
           }
         | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error("Failed to load CasaHUD AI runs.");
+        throw new Error("CasaHUD could not load saved videos.");
       }
+
       setAiRuns(payload.runs || []);
       setAiStoreAvailable(Boolean(payload.storeAvailable));
-      if (payload.storeAvailable === false) {
+      if (payload.latestOutput) {
+        setAiOutput(payload.latestOutput);
+        setAiStatus(payload.latestOutput.run.status === "needs_credentials" ? "needs_setup" : "ready");
+      } else if (payload.storeAvailable === false) {
         setAiStatus("needs_setup");
-        setAiError(payload.message || "CasaHUD AI persistence is not ready.");
+        setAiError("CasaHUD needs storage setup before it can save video packages.");
       }
     } catch (runLoadError) {
       setAiStatus("error");
-      setAiError(runLoadError instanceof Error ? runLoadError.message : "Failed to load CasaHUD AI runs.");
+      setAiError(runLoadError instanceof Error ? runLoadError.message : "CasaHUD could not load saved videos.");
     }
   }, []);
 
@@ -390,10 +133,12 @@ export default function StudioDomaraClient() {
     void loadAiRuns();
   }, [loadAiRuns]);
 
-  async function onGenerateAiVideo() {
+  async function onGenerateViralVideo() {
     try {
       setAiStatus("loading");
       setAiError(null);
+      setActionNotice(null);
+      setReviewAcknowledged(false);
       const response = await fetch("/api/studio/domara/ai-channel/runs", {
         method: "POST",
         headers: {
@@ -412,7 +157,7 @@ export default function StudioDomaraClient() {
         | null;
 
       if (!response.ok || !payload?.ok || !payload.output) {
-        throw new Error(payload?.error?.message || "Failed to generate CasaHUD AI video run.");
+        throw new Error(payload?.error?.message || "CasaHUD could not generate a viral video package.");
       }
 
       setAiOutput(payload.output);
@@ -420,1152 +165,265 @@ export default function StudioDomaraClient() {
       await loadAiRuns();
     } catch (generationError) {
       setAiStatus("error");
-      setAiError(generationError instanceof Error ? generationError.message : "Failed to generate CasaHUD AI run.");
+      setAiError(generationError instanceof Error ? generationError.message : "CasaHUD could not generate a viral video package.");
     }
   }
 
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setError(null);
-    if (!form.title.trim()) {
-      setStatus("error");
-      setError("Property title is required.");
+  function onReviewPackage() {
+    if (!packageReady) {
+      setActionNotice("CasaHUD needs matching properties before review is available.");
       return;
     }
-
-    try {
-      setStatus("loading");
-      const input = toInput(form);
-      const output = await generatePropertyVideoPlan(input);
-      setPlan(output);
-      setGeneratedInput(input);
-      setStatus("ready");
-      setRenderStatus("idle");
-      setRenderError(null);
-      setRenderResult(null);
-    } catch (submissionError) {
-      setStatus("error");
-      setError(submissionError instanceof Error ? submissionError.message : "Failed to generate property video plan.");
-    }
+    setReviewAcknowledged(true);
+    setActionNotice("Package reviewed. Publishing remains gated by the YouTube connection.");
   }
 
-  async function onRenderMp4() {
-    if (!plan) return;
-    const input = generatedInput ?? toInput(form);
-    setRenderStatus("queued");
-    setRenderError(null);
-    try {
-      setRenderStatus("rendering");
-      const response = await fetch("/api/studio/domara/render", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          plan,
-          listingInput: input,
-          stylePreset: form.renderStyle,
-          voiceSettings: {
-            mode: form.voiceMode,
-            persona: form.voicePersona,
-            tone: form.voiceTone,
-            pace: form.voicePace,
-          },
-          mapSettings: {
-            mode: form.mapVisualMode,
-          },
-        }),
-      });
-
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            render?: DomaraVideoRenderResult;
-            error?: { message?: string; details?: string };
-          }
-        | null;
-      if (!response.ok || !payload?.ok || !payload.render) {
-        throw new Error(payload?.error?.details || payload?.error?.message || "Render failed.");
-      }
-
-      setRenderResult(payload.render);
-      setRenderStatus("complete");
-    } catch (renderSubmissionError) {
-      setRenderStatus("failed");
-      setRenderError(renderSubmissionError instanceof Error ? renderSubmissionError.message : "Failed to render MP4.");
-    }
-  }
-
-  async function onFetchListing() {
-    setListingFetchError(null);
-    setListingFetchNotice(null);
-    setListingFetchWarnings([]);
-    setListingFetchFallbackUsed(false);
-
-    if (form.listingProvider === "manual") {
-      setListingFetchStatus("failed");
-      setListingFetchError("Select Import from Listing URL, Idealista, or Immobiliare first.");
+  function onPublishAction(mode: "publish" | "schedule") {
+    if (!packageReady) {
+      setActionNotice("Generate a complete video package before publishing.");
       return;
     }
-    if (!form.listingUrl.trim()) {
-      setListingFetchStatus("failed");
-      setListingFetchError("Listing URL or listing ID is required.");
+    if (!reviewAcknowledged) {
+      setActionNotice("Review the package before publishing or scheduling.");
       return;
     }
-
-    try {
-      setListingFetchStatus("fetching");
-      const isUrlImport = form.listingProvider === "import_url";
-      const response = await fetch(isUrlImport ? "/api/studio/domara/listing/import-url" : "/api/studio/domara/listing/fetch", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(
-          isUrlImport
-            ? {
-                listingUrl: form.listingUrl.trim(),
-                providerHint: "auto",
-                countryHint: form.country,
-                sourceLabel: form.source || undefined,
-              }
-            : {
-                provider: form.listingProvider,
-                listingRef: form.listingUrl.trim(),
-                country: form.country,
-                fallbackToMock: false,
-              },
-        ),
-      });
-      if (isUrlImport) {
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              ok?: boolean;
-              result?: {
-                status: "imported" | "partial" | "blocked" | "failed";
-                normalizedListingInput?: PropertyListingInput | null;
-                warnings?: string[];
-                fallbackMessage?: string;
-              };
-              error?: { message?: string; details?: string };
-            }
-          | null;
-        if (!response.ok || !payload?.ok || !payload.result) {
-          throw new Error(payload?.error?.details || payload?.error?.message || "Failed to import listing URL.");
-        }
-        if (payload.result.normalizedListingInput) {
-          setForm((curr) => formStateFromListing(curr, payload.result!.normalizedListingInput!));
-        }
-        setListingFetchWarnings(payload.result.warnings || []);
-        setListingFetchFallbackUsed(payload.result.status !== "imported");
-        setListingFetchNotice(
-          payload.result.fallbackMessage ||
-            (payload.result.status === "imported"
-              ? "Listing imported. Review details before generating video."
-              : "Listing import was partially completed. Review details before generating video."),
-        );
-        setListingFetchStatus(payload.result.status === "failed" || payload.result.status === "blocked" ? "failed" : "ready");
-        return;
-      }
-
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            result?: {
-              listing: PropertyListingInput;
-              warnings?: string[];
-              fallbackUsed?: boolean;
-            };
-            error?: { message?: string; details?: string };
-          }
-        | null;
-      if (!response.ok || !payload?.ok || !payload.result?.listing) {
-        throw new Error(payload?.error?.details || payload?.error?.message || "Failed to fetch listing.");
-      }
-
-      setForm((curr) => formStateFromListing(curr, payload.result!.listing));
-      setListingFetchWarnings(payload.result.warnings || []);
-      setListingFetchFallbackUsed(Boolean(payload.result.fallbackUsed));
-      setListingFetchNotice("Listing imported. Review details before generating video.");
-      setListingFetchStatus("ready");
-    } catch (fetchError) {
-      setListingFetchStatus("failed");
-      setListingFetchError(fetchError instanceof Error ? fetchError.message : "Failed to fetch listing.");
-    }
+    setActionNotice(
+      mode === "publish"
+        ? "Connect YouTube before CasaHUD can publish this reviewed package."
+        : "Connect YouTube before CasaHUD can schedule this reviewed package.",
+    );
   }
 
-  function onAddCurrentToBatch() {
-    const listing = generatedInput ?? (form.title.trim() ? toInput(form) : null);
-    if (!listing) {
-      setBatchNotice("Generate or enter a listing first.");
-      return;
-    }
-
-    const combined = [...batch.items.map((item) => item.listing), listing];
-    const nextBatch = createDomaraBatch(combined, batchTemplate);
-    setBatch(nextBatch);
-    if (combined.length > DOMARA_BATCH_LIMIT) {
-      setBatchNotice(`Batch limit is ${DOMARA_BATCH_LIMIT}; additional items were dropped.`);
-    } else {
-      setBatchNotice(`Added to batch (${nextBatch.items.length}/${DOMARA_BATCH_LIMIT}).`);
-    }
-  }
-
-  function onBatchStatus(itemId: string, status: "ready" | "queued" | "ready_to_publish" | "failed") {
-    setBatch((current) => ({
-      ...current,
-      items: current.items.map((item) =>
-        item.id === itemId ? transitionBatchItemStatus(item, status, status === "failed" ? "Marked failed." : undefined) : item,
-      ),
-    }));
-  }
-
-  function onIntegrationDraftChange(providerId: string, value: string) {
-    setIntegrationDraftKeys((current) => ({
-      ...current,
-      [providerId]: value,
-    }));
-  }
-
-  function setIntegrationPending(providerId: DomaraIntegrationProviderId, action: IntegrationPendingAction) {
-    setIntegrationPendingActions((current) => ({ ...current, [providerId]: action }));
-  }
-
-  async function onIntegrationSave(providerId: DomaraIntegrationProviderId) {
-    const apiKey = (integrationDraftKeys[providerId] || "").trim();
-    if (!apiKey) {
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "error", message: "Enter an API key before saving." },
-      }));
-      return;
-    }
-
-    try {
-      setIntegrationPending(providerId, "saving");
-      const response = await fetch(`/api/studio/domara/integrations/${providerId}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ apiKey }),
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: { message?: string } }
-        | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error?.message || "Failed to save integration key.");
-      }
-      setIntegrationDraftKeys((current) => ({ ...current, [providerId]: "" }));
-      await loadIntegrationStatus();
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "success", message: "Credential saved and status refreshed." },
-      }));
-    } catch (saveError) {
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "error", message: saveError instanceof Error ? saveError.message : "Failed to save credential." },
-      }));
-    } finally {
-      setIntegrationPending(providerId, "idle");
-    }
-  }
-
-  async function onIntegrationClear(providerId: DomaraIntegrationProviderId) {
-    try {
-      setIntegrationPending(providerId, "clearing");
-      const response = await fetch(`/api/studio/domara/integrations/${providerId}`, {
-        method: "DELETE",
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; error?: { message?: string } }
-        | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error?.message || "Failed to clear integration key.");
-      }
-      setIntegrationDraftKeys((current) => ({ ...current, [providerId]: "" }));
-      await loadIntegrationStatus();
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "success", message: "Credential cleared." },
-      }));
-    } catch (clearError) {
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "error", message: clearError instanceof Error ? clearError.message : "Failed to clear credential." },
-      }));
-    } finally {
-      setIntegrationPending(providerId, "idle");
-    }
-  }
-
-  async function onIntegrationTest(providerId: DomaraIntegrationProviderId) {
-    try {
-      setIntegrationPending(providerId, "testing");
-      const response = await fetch(`/api/studio/domara/integrations/${providerId}/test`, {
-        method: "POST",
-      });
-      const payload = (await response.json().catch(() => null)) as
-        | { ok?: boolean; message?: string; error?: { message?: string } }
-        | null;
-      if (!response.ok || !payload?.ok) {
-        throw new Error(payload?.error?.message || "Integration test failed.");
-      }
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "success", message: payload.message || "Integration test passed." },
-      }));
-    } catch (testError) {
-      setIntegrationRowNotices((current) => ({
-        ...current,
-        [providerId]: { kind: "error", message: testError instanceof Error ? testError.message : "Integration test failed." },
-      }));
-    } finally {
-      setIntegrationPending(providerId, "idle");
-    }
-  }
+  const timelineStatus = aiOutput
+    ? aiOutput.run.status.replace(/_/g, " ")
+    : aiStoreAvailable === false
+      ? "setup required"
+      : aiStatus === "loading"
+        ? "creating"
+        : "ready";
 
   return (
-    <div className="ibrains-shell min-h-screen text-[#0F172A]">
-      <div className="mx-auto max-w-7xl px-6 py-12">
-        <header className="overflow-hidden rounded-3xl border border-[#D6E2EE] bg-[#F6F9FC] shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-          <div className="grid gap-0 lg:grid-cols-[1fr_0.9fr]">
-            <div className="p-6 md:p-8">
-              <div className="inline-flex items-center rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs font-medium text-[#334155]">
-                CasaHUD AI Channel Engine
+    <main className="ibrains-shell min-h-screen overflow-hidden bg-[#ECE7DD] text-[#172033]">
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_18%_12%,rgba(255,255,255,0.92),transparent_28%),radial-gradient(circle_at_78%_2%,rgba(205,142,86,0.24),transparent_32%),linear-gradient(135deg,#F7F1E7_0%,#E9EDF1_52%,#DCE9E1_100%)]" />
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-5 py-6 md:px-8 lg:py-8">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8A5A34]">CasaHUD</p>
+            <p className="mt-1 text-sm text-[#657086]">AI YouTube Creator for real-estate videos</p>
+          </div>
+          <Link
+            href="/apps"
+            className="rounded-full border border-[#CFC4B2] bg-white/70 px-4 py-2 text-sm font-medium text-[#344256] shadow-sm transition hover:bg-white"
+          >
+            Apps
+          </Link>
+        </div>
+
+        <section className="mt-6 grid flex-1 gap-5 lg:grid-cols-[1.04fr_0.96fr]">
+          <div className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-[#FFFDF8]/[0.88] p-6 shadow-[0_28px_75px_rgba(70,55,35,0.18)] backdrop-blur md:p-8">
+            <div className="absolute right-[-80px] top-[-90px] h-64 w-64 rounded-full bg-[#D59D63]/25 blur-2xl" />
+            <div className="absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-[#6C9A84]/[0.18] blur-2xl" />
+            <div className="relative">
+              <div className="inline-flex rounded-full border border-[#E1D2BC] bg-white/75 px-3 py-1 text-xs font-semibold text-[#8A5A34]">
+                One click from idea to review-ready YouTube package
               </div>
-              <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-[#0F172A] md:text-5xl">
-                Create the next YouTube property video from one decision.
+              <h1 className="mt-5 max-w-3xl text-4xl font-semibold leading-[0.98] tracking-[-0.045em] text-[#172033] md:text-6xl">
+                Create the next viral property video without building it by hand.
               </h1>
-              <p className="mt-4 max-w-3xl text-sm leading-6 text-[#334155] md:text-base">
-                CasaHUD researches YouTube opportunity, selects a viral title, creates the project under that title,
-                validates real listing evidence, enriches maps and POIs, builds the video package, then holds it for
-                human review before publishing.
+              <p className="mt-5 max-w-2xl text-base leading-7 text-[#526070] md:text-lg">
+                CasaHUD researches the opportunity, chooses the strongest title, finds matching properties, adds local
+                intelligence, writes the story, prepares the render plan, and holds the finished package for review.
               </p>
-              <div className="mt-6 flex flex-wrap items-center gap-3">
+
+              <div className="mt-7 flex flex-wrap items-center gap-3">
                 <button
                   type="button"
-                  className="rounded-xl border border-[#0F172A] bg-[#0F172A] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_30px_rgba(15,23,42,0.18)] transition hover:bg-[#1E293B] disabled:cursor-not-allowed disabled:opacity-65"
-                  onClick={() => void onGenerateAiVideo()}
-                  disabled={aiStatus === "loading"}
+                  className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.28)] transition hover:-translate-y-0.5 hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                  onClick={() => void onGenerateViralVideo()}
+                  disabled={aiStatus === "loading" || aiStoreAvailable === false}
                 >
-                  {aiStatus === "loading" ? "Generating..." : "Create Next YouTube Property Video"}
+                  {aiStatus === "loading" ? "Generating..." : "Generate Viral Video"}
                 </button>
-                <span className="rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs text-[#334155]">
-                  Project name = selected viral title
-                </span>
-                <span className="rounded-full border border-[#C7D7E6] bg-white px-3 py-1 text-xs text-[#334155]">
-                  Review required before publish
-                </span>
+                <p className="max-w-sm text-sm leading-6 text-[#657086]">
+                  The winning YouTube title automatically becomes the project name.
+                </p>
               </div>
-              {aiError ? <p className="mt-3 text-sm text-amber-700">{aiError}</p> : null}
-              {aiOutput?.project ? (
-                <div className="mt-5 rounded-2xl border border-[#C7D7E6] bg-white p-4">
-                  <p className="text-xs font-medium uppercase tracking-[0.08em] text-[#64748B]">Current project</p>
-                  <h2 className="mt-1 text-xl font-semibold text-[#0F172A]">{aiOutput.project.name}</h2>
-                  <p className="mt-2 text-sm text-[#475569]">
-                    {aiOutput.strategy.strategySummary}
-                  </p>
-                  {aiOutput.run.status === "needs_credentials" ? (
-                    <p className="mt-3 text-sm text-amber-700">
-                      Listing provider credentials or contracts are required before CasaHUD can discover real listings
-                      and continue to script, render, and publish stages.
+
+              {aiError ? (
+                <div className="mt-5 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">
+                  {aiError}
+                </div>
+              ) : null}
+
+              <div className="mt-7 grid gap-3 md:grid-cols-3">
+                {["YouTube-informed ideas", "Real listing checks", "Maps and local highlights"].map((label) => (
+                  <div key={label} className="rounded-2xl border border-[#E8DDCD] bg-white/[0.66] p-4">
+                    <p className="text-sm font-semibold text-[#172033]">{label}</p>
+                    <p className="mt-2 text-xs leading-5 text-[#657086]">
+                      {label === "YouTube-informed ideas"
+                        ? "Uses live channel signals when connected, otherwise uses CasaHUD strategy rules."
+                        : label === "Real listing checks"
+                          ? "Only advances when sourced property data supports the promise."
+                          : "Location context shapes the hook, scenes, metadata, and thumbnail angle."}
+                    </p>
+                  </div>
+                ))}
+              </div>
+
+              {selectedTitle ? (
+                <div className="mt-5 rounded-3xl border border-[#E4D7C2] bg-[#FAF3E7]/[0.78] p-5">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current video</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.025em] text-[#172033]">{selectedTitle}</h2>
+                  <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
+                      {formatVideoType(aiOutput?.strategy.videoType || latestSavedRun?.video_type)}
+                    </span>
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
+                      {packageReady ? "Package ready for review" : needsConnection ? "Connection needed" : "Saved"}
+                    </span>
+                  </div>
+                  {needsConnection ? (
+                    <p className="mt-3 text-sm leading-6 text-[#7A4B13]">
+                      CasaHUD has created the title and project. Connect listing sources before it can select real
+                      properties and complete the video package.
                     </p>
                   ) : null}
                 </div>
               ) : null}
             </div>
+          </div>
 
-            <div className="border-t border-[#D6E2EE] bg-white/75 p-6 lg:border-l lg:border-t-0">
+          <aside className="grid gap-5">
+            <section className="rounded-[2rem] border border-white/70 bg-[#FBFCF9]/[0.88] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.14)] backdrop-blur md:p-6">
               <div className="flex items-center justify-between gap-3">
-                <h2 className="text-base font-semibold text-[#0F172A]">Production timeline</h2>
-                <span className="rounded-full border border-[#C7D7E6] bg-white px-2.5 py-1 text-xs text-[#475569]">
-                  {aiOutput?.run.status || (aiStoreAvailable === false ? "setup required" : "ready")}
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C7B6D]">Creation status</p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Production timeline</h2>
+                </div>
+                <span className="rounded-full border border-[#D8E2D9] bg-white/70 px-3 py-1 text-xs font-medium text-[#344256]">
+                  {timelineStatus}
                 </span>
               </div>
-              <div className="mt-4 space-y-2">
-                {(aiOutput?.stages || ([] as CasaHudOrchestratorOutput["stages"])).length > 0 ? (
-                  aiOutput!.stages.map((stage) => (
-                    <div key={stage.name} className="grid grid-cols-[10px_1fr_auto] items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs">
-                      <span
-                        className={`h-2.5 w-2.5 rounded-full ${
-                          stage.status === "complete"
-                            ? "bg-emerald-500"
-                            : stage.status === "needs_credentials"
-                              ? "bg-amber-500"
-                              : stage.status === "failed"
-                                ? "bg-rose-500"
-                                : "bg-slate-300"
-                        }`}
-                      />
-                      <span className="text-[#334155]">{aiStageLabels[stage.name]}</span>
-                      <span className="text-[#64748B]">{stage.status.replace(/_/g, " ")}</span>
+
+              <div className="mt-5 grid gap-2">
+                {wizardSteps.map((step) => {
+                  const status = getStageStatus(aiOutput, step.stage);
+                  return (
+                    <div
+                      key={step.stage}
+                      className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-2xl border border-[#E2E8E0] bg-white/[0.72] px-3 py-3"
+                    >
+                      <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
+                      <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
+                      <span className="text-xs text-[#718096]">{status ? stageStatusLabel[status] : "Waiting"}</span>
                     </div>
-                  ))
-                ) : (
-                  Object.entries(aiStageLabels).map(([name, label]) => (
-                    <div key={name} className="grid grid-cols-[10px_1fr] items-center gap-3 rounded-xl border border-[#E2E8F0] bg-white px-3 py-2 text-xs">
-                      <span className="h-2.5 w-2.5 rounded-full bg-slate-300" />
-                      <span className="text-[#475569]">{label}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-              {aiOutput?.youtubePackage ? (
-                <div className="mt-4 rounded-2xl border border-[#C7D7E6] bg-[#F8FBFF] p-4 text-sm text-[#334155]">
-                  <p className="font-semibold text-[#0F172A]">Package ready for review</p>
-                  <p className="mt-1">Title: {aiOutput.youtubePackage.finalRecommendedTitle}</p>
-                  <p className="mt-1 text-xs text-[#64748B]">
-                    Chapters: {aiOutput.youtubePackage.chapters.length} | Tags: {aiOutput.youtubePackage.tags.length} |
-                    Thumbnail concepts: {aiOutput.youtubePackage.thumbnailIdeas.length}
-                  </p>
-                </div>
-              ) : null}
-              {aiRuns.length > 0 ? (
-                <div className="mt-4 text-xs text-[#64748B]">
-                  Latest saved run: {aiRuns[0]?.project_name || aiRuns[0]?.selected_title || aiRuns[0]?.id}
-                </div>
-              ) : null}
-            </div>
-          </div>
-        </header>
-
-        <details className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-          <summary className="cursor-pointer list-none text-lg font-semibold text-[#0F172A]">Integrations</summary>
-          <div className="mt-4 space-y-3">
-            {integrationRows.map((row) => (
-              <DomaraIntegrationRow
-                key={row.providerId}
-                row={row}
-                draftValue={integrationDraftKeys[row.providerId] || ""}
-                saveEnabled={integrationSaveSupported}
-                saveSupported={integrationSaveSupported}
-                pendingAction={integrationPendingActions[row.providerId] || "idle"}
-                notice={integrationRowNotices[row.providerId]}
-                onDraftChange={onIntegrationDraftChange}
-                onSave={onIntegrationSave}
-                onClear={onIntegrationClear}
-                onTest={onIntegrationTest}
-              />
-            ))}
-          </div>
-          <p className="mt-3 text-xs text-[#475569]">
-            {integrationStoreNotice || "Provider secrets are stored server-side and never returned in plaintext."}
-          </p>
-          {integrationStatus === "loading" ? <p className="mt-2 text-xs text-[#64748B]">Loading status...</p> : null}
-          {integrationStatus === "error" ? <p className="mt-2 text-xs text-rose-600">{integrationError}</p> : null}
-
-          <details className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3">
-            <summary className="cursor-pointer list-none text-xs font-medium text-[#334155]">Advanced</summary>
-            <div className="mt-2 space-y-2 text-xs text-[#475569]">
-              {integrationRows.map((row) => (
-                <p key={`advanced-${row.providerId}`}>
-                  {row.displayName}: {row.requiredEnvVars.length > 0 ? row.requiredEnvVars.join(", ") : "No env vars"}
-                </p>
-              ))}
-            </div>
-          </details>
-        </details>
-
-        <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
-          <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-            <h2 className="text-lg font-semibold">Listing Input</h2>
-            <p className="mt-1 text-sm text-[#475569]">
-              Optional manual review and source import workspace. CasaHUD will not use generated listing fixtures in
-              production; connect listing providers or import real source URLs before rendering.
-            </p>
-
-            <form onSubmit={onSubmit} className="mt-5 space-y-4">
-              <div className="grid gap-4 md:grid-cols-5">
-                <label className="text-sm">
-                  Listing provider
-                  <select
-                    className={fieldClass}
-                    value={form.listingProvider}
-                    onChange={(event) =>
-                      setForm((curr) => ({
-                        ...curr,
-                        listingProvider: event.target.value as FormState["listingProvider"],
-                      }))
-                    }
-                  >
-                    <option value="manual">Manual</option>
-                    <option value="import_url">Import from Listing URL</option>
-                    <option value="idealista" disabled={integrationCapabilities?.listingFetchIdealista === false}>
-                      Idealista API {integrationCapabilities?.listingFetchIdealista === false ? "(env missing)" : ""}
-                    </option>
-                    <option value="immobiliare" disabled={integrationCapabilities?.listingFetchImmobiliare === false}>
-                      Immobiliare API {integrationCapabilities?.listingFetchImmobiliare === false ? "(env missing)" : ""}
-                    </option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Listing URL or ID
-                  <input
-                    className={fieldClass}
-                    value={form.listingUrl}
-                    onChange={(event) => setForm((curr) => ({ ...curr, listingUrl: event.target.value }))}
-                    placeholder="https://... or listing-id"
-                  />
-                </label>
-                <label className="text-sm">
-                  Optional agency / listing source
-                  <input
-                    className={fieldClass}
-                    value={form.source}
-                    onChange={(event) => setForm((curr) => ({ ...curr, source: event.target.value }))}
-                    placeholder="Immobiliare.it"
-                  />
-                </label>
-                <div className="text-sm">
-                  <span className="text-[#334155]">
-                    {form.listingProvider === "import_url" ? "Import listing URL" : "Fetch listing"}
-                  </span>
-                  <button
-                    type="button"
-                    className="mt-1 w-full rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
-                    onClick={() => void onFetchListing()}
-                    disabled={listingFetchStatus === "fetching"}
-                  >
-                    {listingFetchStatus === "fetching"
-                      ? form.listingProvider === "import_url"
-                        ? "Importing..."
-                        : "Fetching..."
-                      : form.listingProvider === "import_url"
-                        ? "Import from Listing URL"
-                        : "Fetch Listing"}
-                  </button>
-                </div>
-              </div>
-              <p className="text-xs text-[#475569]">
-                Listing import is user-initiated source ingestion for content generation only. Marketplace search and
-                buyer workflows remain out of scope.
-              </p>
-              {listingFetchStatus === "ready" ? (
-                <p className="text-xs text-emerald-700">
-                  {listingFetchNotice || "Listing imported and mapped to CasaHUD input model."}
-                  {listingFetchFallbackUsed ? " Provider fallback was used; review before production." : ""}
-                </p>
-              ) : null}
-              {listingFetchStatus === "failed" && listingFetchNotice ? (
-                <p className="text-xs text-amber-700">{listingFetchNotice}</p>
-              ) : null}
-              {listingFetchWarnings.length > 0 ? (
-                <ul className="space-y-1 text-xs text-amber-700">
-                  {listingFetchWarnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              ) : null}
-              {listingFetchError ? <p className="text-xs text-rose-600">{listingFetchError}</p> : null}
-              <div className="grid gap-4 md:grid-cols-4">
-                <label className="text-sm">
-                  Voice mode
-                  <select
-                    className={fieldClass}
-                    value={form.voiceMode}
-                    onChange={(event) => setForm((curr) => ({ ...curr, voiceMode: event.target.value as DomaraVoiceMode }))}
-                  >
-                    <option value="silent">Silent / caption-only</option>
-                    <option value="mock">Test narration placeholder</option>
-                    <option value="elevenlabs" disabled={integrationCapabilities?.elevenlabsLiveNarration === false}>
-                      ElevenLabs {integrationCapabilities?.elevenlabsLiveNarration === false ? "(env missing)" : "(connected)"}
-                    </option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Voice persona
-                  <select
-                    className={fieldClass}
-                    value={form.voicePersona}
-                    onChange={(event) =>
-                      setForm((curr) => ({ ...curr, voicePersona: event.target.value as DomaraVoicePersona }))
-                    }
-                  >
-                    <option value="expat_ai_host">Expat AI Host</option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Tone
-                  <select
-                    className={fieldClass}
-                    value={form.voiceTone}
-                    onChange={(event) => setForm((curr) => ({ ...curr, voiceTone: event.target.value as DomaraVoiceTone }))}
-                  >
-                    <option value="cinematic">Cinematic</option>
-                    <option value="warm">Warm</option>
-                    <option value="luxury">Luxury</option>
-                    <option value="informative">Informative</option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Pace
-                  <select
-                    className={fieldClass}
-                    value={form.voicePace}
-                    onChange={(event) => setForm((curr) => ({ ...curr, voicePace: event.target.value as DomaraVoicePace }))}
-                  >
-                    <option value="relaxed">Relaxed</option>
-                    <option value="normal">Normal</option>
-                    <option value="energetic">Energetic</option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Map visual mode
-                  <select
-                    className={fieldClass}
-                    value={form.mapVisualMode}
-                    onChange={(event) => setForm((curr) => ({ ...curr, mapVisualMode: event.target.value as DomaraMapVisualMode }))}
-                  >
-                    <option value="off">Off</option>
-                    <option value="auto">Auto</option>
-                    <option value="mapbox" disabled={integrationCapabilities?.mapboxVisuals === false}>
-                      Mapbox {integrationCapabilities?.mapboxVisuals === false ? "(env missing)" : ""}
-                    </option>
-                    <option value="google_static" disabled={integrationCapabilities?.googleMapsVisuals === false}>
-                      Google Static {integrationCapabilities?.googleMapsVisuals === false ? "(env missing)" : ""}
-                    </option>
-                    <option value="earth_style_placeholder">Earth-style placeholder</option>
-                  </select>
-                </label>
-              </div>
-              {form.voiceMode === "elevenlabs" ? (
-                <p className="text-xs text-amber-700">
-                  ElevenLabs narration uses provider fallback when API credentials are missing or unavailable. Silent MP4
-                  rendering remains supported.
-                </p>
-              ) : null}
-
-              <label className="text-sm">
-                Property title
-                <input
-                  className={fieldClass}
-                  value={form.title}
-                  onChange={(event) => setForm((curr) => ({ ...curr, title: event.target.value }))}
-                  placeholder="Panoramic Lakeview Villa"
-                  required
-                />
-              </label>
-
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="text-sm">
-                  Country
-                  <input
-                    className={fieldClass}
-                    value={form.country}
-                    onChange={(event) => setForm((curr) => ({ ...curr, country: event.target.value }))}
-                  />
-                </label>
-                <label className="text-sm">
-                  Content angle
-                  <select
-                    className={fieldClass}
-                    value={form.contentAngle}
-                    onChange={(event) =>
-                      setForm((curr) => ({ ...curr, contentAngle: event.target.value as DomaraContentAngle }))
-                    }
-                  >
-                    <option value="lifestyle">Lifestyle</option>
-                    <option value="investment">Investment</option>
-                    <option value="second_home">Second Home</option>
-                    <option value="hidden_gem">Hidden Gem</option>
-                    <option value="deal_spotlight">Deal Spotlight</option>
-                  </select>
-                </label>
-                <label className="text-sm">
-                  Render style preset
-                  <select
-                    className={fieldClass}
-                    value={form.renderStyle}
-                    onChange={(event) => setForm((curr) => ({ ...curr, renderStyle: event.target.value as DomaraRenderStyle }))}
-                  >
-                    <option value="expat_ai_editorial">Expat AI Editorial</option>
-                    <option value="premium_listing">Premium Listing</option>
-                    <option value="property_showcase">Property Showcase</option>
-                  </select>
-                </label>
+                  );
+                })}
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <label className="text-sm">
-                  City
-                  <input
-                    className={fieldClass}
-                    value={form.city}
-                    onChange={(event) => setForm((curr) => ({ ...curr, city: event.target.value }))}
-                    placeholder="Florence"
-                  />
-                </label>
-                <label className="text-sm">
-                  Region
-                  <input
-                    className={fieldClass}
-                    value={form.region}
-                    onChange={(event) => setForm((curr) => ({ ...curr, region: event.target.value }))}
-                    placeholder="Tuscany"
-                  />
-                </label>
-                <label className="text-sm">
-                  Neighborhood
-                  <input
-                    className={fieldClass}
-                    value={form.neighborhood}
-                    onChange={(event) => setForm((curr) => ({ ...curr, neighborhood: event.target.value }))}
-                    placeholder="Oltrarno"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-4">
-                <label className="text-sm">
-                  Asking price
-                  <input
-                    className={fieldClass}
-                    value={form.price}
-                    onChange={(event) => setForm((curr) => ({ ...curr, price: event.target.value }))}
-                    placeholder="€1,450,000"
-                  />
-                </label>
-                <label className="text-sm">
-                  Property type
-                  <input
-                    className={fieldClass}
-                    value={form.propertyType}
-                    onChange={(event) => setForm((curr) => ({ ...curr, propertyType: event.target.value }))}
-                    placeholder="Villa"
-                  />
-                </label>
-                <label className="text-sm">
-                  Bedrooms
-                  <input
-                    className={fieldClass}
-                    value={form.bedrooms}
-                    onChange={(event) => setForm((curr) => ({ ...curr, bedrooms: event.target.value }))}
-                    placeholder="4"
-                  />
-                </label>
-                <label className="text-sm">
-                  Bathrooms
-                  <input
-                    className={fieldClass}
-                    value={form.bathrooms}
-                    onChange={(event) => setForm((curr) => ({ ...curr, bathrooms: event.target.value }))}
-                    placeholder="3"
-                  />
-                </label>
-              </div>
-
-              <div className="grid gap-4 md:grid-cols-3">
-                <label className="text-sm md:col-span-1">
-                  Square meters
-                  <input
-                    className={fieldClass}
-                    value={form.squareMeters}
-                    onChange={(event) => setForm((curr) => ({ ...curr, squareMeters: event.target.value }))}
-                    placeholder="220"
-                  />
-                </label>
-                <label className="text-sm">
-                  Optional latitude
-                  <input
-                    className={fieldClass}
-                    value={form.latitude}
-                    onChange={(event) => setForm((curr) => ({ ...curr, latitude: event.target.value }))}
-                    placeholder="43.76956"
-                  />
-                </label>
-                <label className="text-sm">
-                  Optional longitude
-                  <input
-                    className={fieldClass}
-                    value={form.longitude}
-                    onChange={(event) => setForm((curr) => ({ ...curr, longitude: event.target.value }))}
-                    placeholder="11.25581"
-                  />
-                </label>
-              </div>
-
-              <label className="text-sm">
-                Listing description
-                <textarea
-                  className={`${fieldClass} min-h-28`}
-                  value={form.description}
-                  onChange={(event) => setForm((curr) => ({ ...curr, description: event.target.value }))}
-                  placeholder="Describe key features, finishes, and style..."
-                />
-              </label>
-
-              <label className="text-sm">
-                Image URLs (one per line)
-                <textarea
-                  className={`${fieldClass} min-h-24 font-mono text-xs`}
-                  value={form.imageUrls}
-                  onChange={(event) => setForm((curr) => ({ ...curr, imageUrls: event.target.value }))}
-                  placeholder="https://images.example.com/1.jpg&#10;https://images.example.com/2.jpg"
-                />
-              </label>
-
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="submit"
-                  className="rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={status === "loading"}
-                >
-                  {status === "loading" ? "Generating..." : "Generate Property Video Plan"}
-                </button>
-                <button
-                  type="button"
-                  className="rounded-xl border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF]"
-                  onClick={() => {
-                    setForm(initialState);
-                    setPlan(null);
-                    setGeneratedInput(null);
-                    setListingFetchStatus("idle");
-                    setListingFetchError(null);
-                    setListingFetchWarnings([]);
-                    setListingFetchFallbackUsed(false);
-                    setListingFetchNotice(null);
-                    setStatus("idle");
-                    setRenderStatus("idle");
-                    setRenderResult(null);
-                    setRenderError(null);
-                    setError(null);
-                  }}
-                >
-                  Reset
-                </button>
-                <Link
-                  href="/apps"
-                  className="rounded-xl border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF]"
-                >
-                  Back to Apps
-                </Link>
-              </div>
-
-              {error ? <p className="text-sm text-rose-600">{error}</p> : null}
-            </form>
-          </section>
-
-          <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-            <h2 className="text-lg font-semibold">Generated Output</h2>
-            {!plan ? (
-              <p className="mt-3 text-sm text-[#475569]">
-                Submit a listing to generate a normalized property summary, storyboard, narration script, and YouTube
-                metadata.
-              </p>
-            ) : (
-              <div className="mt-4 space-y-5 text-sm text-[#1E293B]">
-                <div>
-                  <h3 className="font-semibold">1. Property Summary</h3>
-                  <p className="mt-1 text-[#334155]">{plan.listingSummary}</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold">2. Opening Hook</h3>
-                  <p className="mt-1 text-[#334155]">{plan.hook}</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold">3. Scene Plan / Storyboard</h3>
-                  <div className="mt-2 space-y-2">
-                    {plan.scenes.map((scene) => (
-                      <article key={`${scene.order}-${scene.title}`} className="rounded-xl border border-[#D9E4F0] p-3">
-                        <p className="font-medium">
-                          {scene.order}. {scene.title} ({scene.durationSeconds}s)
-                        </p>
-                        <p className="mt-1 text-[#334155]">{scene.visualDirection}</p>
-                        <p className="mt-1 text-[#334155]">{scene.narration}</p>
-                        <p className="mt-1 text-xs text-[#475569]">Overlay: {scene.overlayText}</p>
-                      </article>
+              {topTitleCandidates.length > 0 ? (
+                <div className="mt-5 rounded-3xl border border-[#E4D7C2] bg-[#FFF9EF] p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Top title ideas</p>
+                  <div className="mt-3 grid gap-2">
+                    {topTitleCandidates.map((candidate) => (
+                      <div key={candidate.id} className="rounded-2xl bg-white/75 p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <p className="text-sm font-medium leading-5 text-[#344256]">{candidate.title}</p>
+                          <span className="rounded-full bg-[#172033] px-2 py-1 text-[11px] font-semibold text-white">
+                            {candidate.score}
+                          </span>
+                        </div>
+                      </div>
                     ))}
                   </div>
-                  <p className="mt-2 text-xs text-[#475569]">Estimated runtime: {sceneDuration} seconds</p>
                 </div>
+              ) : null}
+            </section>
+
+            <section className="rounded-[2rem] border border-white/70 bg-[#172033] p-5 text-white shadow-[0_24px_64px_rgba(23,32,51,0.24)] md:p-6">
+              <div className="flex items-start justify-between gap-3">
                 <div>
-                  <h3 className="font-semibold">4. Narration Script</h3>
-                  <pre className="mt-2 overflow-x-auto rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs leading-relaxed text-[#1E293B]">
-                    {plan.narrationScript}
-                  </pre>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#D9B383]">Review room</p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em]">
+                    {packageReady ? "Ready for human review" : "Waiting for a complete package"}
+                  </h2>
                 </div>
-                <div>
-                  <h3 className="font-semibold">5. Location / POI Placeholders</h3>
-                  <p className="mt-1 text-[#334155]">{plan.enrichmentSummary}</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold">6. YouTube Title</h3>
-                  <p className="mt-1 text-[#334155]">{plan.youtubeTitle}</p>
-                </div>
-                <div>
-                  <h3 className="font-semibold">7. YouTube Description</h3>
-                  <pre className="mt-2 overflow-x-auto rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs leading-relaxed text-[#1E293B]">
-                    {plan.youtubeDescription}
-                  </pre>
-                </div>
-                <div>
-                  <h3 className="font-semibold">8. Publishing Package</h3>
-                  {youtubePackage ? (
-                    <div className="mt-2 space-y-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                      <p>
-                        Recommended title: <span className="font-medium">{youtubePackage.finalRecommendedTitle}</span>
-                      </p>
-                      <div>
-                        <p className="font-medium">Title variants</p>
-                        <ul className="mt-1 space-y-1">
-                          {youtubePackage.titleVariants.slice(0, 5).map((option) => (
-                            <li key={`${option.angle}-${option.title}`}>
-                              {option.angle}: {option.title}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-medium">Chapters</p>
-                        <ul className="mt-1 space-y-1">
-                          {youtubePackage.chapters.map((chapter) => (
-                            <li key={`${chapter.timestamp}-${chapter.title}`}>
-                              {chapter.timestamp} {chapter.title}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <div>
-                        <p className="font-medium">Hashtags</p>
-                        <p>{youtubePackage.hashtags.join(" ")}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Pinned comment</p>
-                        <p>{youtubePackage.pinnedComment}</p>
-                      </div>
-                      <div>
-                        <p className="font-medium">Shorts ideas</p>
-                        <ul className="mt-1 space-y-1">
-                          {youtubePackage.shortsIdeas.slice(0, 3).map((idea) => (
-                            <li key={idea.sourceSceneTitle}>
-                              {idea.hook} ({idea.sourceSceneTitle})
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                      <p className="text-[11px] text-[#475569]">
-                        Compliance: {youtubePackage.metadata.complianceNote} | Attribution:{" "}
-                        {youtubePackage.metadata.sourceAttribution}
-                        {youtubePackage.metadata.mapAttribution ? ` | Map: ${youtubePackage.metadata.mapAttribution}` : ""}
-                      </p>
-                    </div>
-                  ) : (
-                    <p className="mt-1 text-[#334155]">
-                      Publishing package appears after a plan is generated.
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-semibold">9. Export / Render</h3>
-                  {phase3Preview ? (
-                    <div className="mt-2 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                      <p>
-                        Style: <span className="font-medium">{phase3Preview.stylePreset}</span> | Requested images:{" "}
-                        {phase3Preview.requestedImageCount} | Pre-render skipped: {phase3Preview.skippedImageCount}
-                      </p>
-                      <p className="mt-1">
-                        Voice mode: {form.voiceMode} | Persona: Expat AI Host | Tone: {form.voiceTone} | Pace: {form.voicePace}
-                      </p>
-                      <p className="mt-1">Map mode: {form.mapVisualMode}</p>
-                      {phase3Preview.imageValidationWarnings.length > 0 ? (
-                        <ul className="mt-2 space-y-1 text-amber-700">
-                          {phase3Preview.imageValidationWarnings.slice(0, 4).map((warning) => (
-                            <li key={warning}>{warning}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="mt-1 text-emerald-700">No image URL issues detected in current input.</p>
-                      )}
-                    </div>
-                  ) : null}
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      className="rounded-xl border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => void onRenderMp4()}
-                      disabled={renderStatus === "queued" || renderStatus === "rendering"}
-                    >
-                      {renderStatus === "queued" || renderStatus === "rendering" ? "Rendering MP4..." : "Render MP4"}
-                    </button>
-                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
-                      Status: {renderStatus}
-                    </span>
-                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
-                      Review-gated render path
-                    </span>
-                    <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
-                      Created for Expat AI
-                    </span>
-                  </div>
-                  {renderError ? <p className="mt-2 text-sm text-rose-600">{renderError}</p> : null}
-                  {renderResult ? (
-                    <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                      <p>
-                        Render complete. Duration: {renderResult.durationSeconds}s | Scenes: {renderResult.sceneCount}{" "}
-                        | Images used: {renderResult.imageCount} | Skipped images: {renderResult.skippedImageCount}
-                      </p>
-                      <p className="mt-1">
-                        Artifact: {renderResult.filename} | Style: {renderResult.stylePreset} | Audio:{" "}
-                        {renderResult.audioIncluded ? "included" : "not included"}
-                      </p>
-                      <p className="mt-1">
-                        Narration provider: {renderResult.narrationProvider || "none"} | Status:{" "}
-                        {renderResult.narrationStatus || "disabled"}
-                      </p>
-                      {renderResult.mapVisualProvider ? (
-                        <p className="mt-1">
-                          Map visuals: {renderResult.mapVisualProvider}
-                          {renderResult.mapAttribution ? ` | ${renderResult.mapAttribution}` : ""}
-                        </p>
-                      ) : null}
-                      {renderResult.narrationFallbackReason ? (
-                        <p className="mt-1 text-amber-700">{renderResult.narrationFallbackReason}</p>
-                      ) : null}
-                      {renderResult.mapFallbackReason ? <p className="mt-1 text-amber-700">{renderResult.mapFallbackReason}</p> : null}
-                      <p className="mt-1">Generated: {new Date(renderResult.generatedAt).toLocaleString()}</p>
-                      {renderResult.sourceAttribution?.source || renderResult.sourceAttribution?.listingUrl ? (
-                        <p className="mt-1">
-                          Attribution: {renderResult.sourceAttribution?.source || "Manual source"}{" "}
-                          {renderResult.sourceAttribution?.listingUrl ? `| ${renderResult.sourceAttribution.listingUrl}` : ""}
-                        </p>
-                      ) : null}
-                      <div className="mt-2">
-                        <a
-                          href={renderResult.downloadUrl}
-                          className="inline-flex rounded-lg border border-[#2563EB] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4ED8] transition hover:bg-[#EEF4FF]"
-                          download
-                        >
-                          Download MP4
-                        </a>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="mt-2 text-[#334155]">
-                        {plan.renderPlaceholder.nextStep}
-                      </p>
-                      <p className="mt-1 text-xs text-[#475569]">Provider seam: {plan.renderPlaceholder.provider}</p>
-                    </>
-                  )}
-                </div>
+                <span className="rounded-full border border-white/[0.15] bg-white/10 px-3 py-1 text-xs text-[#E8ECE8]">
+                  {reviewAcknowledged ? "Reviewed" : "Review required"}
+                </span>
               </div>
-            )}
-          </section>
-        </div>
-        <section className="mt-6 rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
-          <h2 className="text-lg font-semibold">10. Batch Generation + Content Calendar</h2>
-          <p className="mt-1 text-sm text-[#475569]">
-            Queue a small set of listings for repeatable production planning. Batch rendering remains bounded to protect
-            server runtime.
-          </p>
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <label className="text-sm">
-              Series template
-              <select
-                className={fieldClass}
-                value={batchTemplate}
-                onChange={(event) => setBatchTemplate(event.target.value as DomaraSeriesTemplateName)}
-              >
-                {seriesTemplates.map((template) => (
-                  <option key={template.name} value={template.name}>
-                    {template.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="text-sm">
-              <span className="text-[#334155]">Batch action</span>
-              <button
-                type="button"
-                className="mt-1 w-full rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
-                onClick={onAddCurrentToBatch}
-              >
-                Add Current Listing
-              </button>
-            </div>
-            <div className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-              <p>
-                Batch size: {batch.items.length}/{DOMARA_BATCH_LIMIT}
-              </p>
-              <p className="mt-1">Render queue safety: one item at a time.</p>
-            </div>
-          </div>
-          {batchNotice ? <p className="mt-2 text-xs text-[#334155]">{batchNotice}</p> : null}
 
-          <div className="mt-4 overflow-x-auto rounded-xl border border-[#D9E4F0]">
-            <table className="min-w-full text-left text-xs">
-              <thead className="bg-[#F8FBFF] text-[#475569]">
-                <tr>
-                  <th className="px-3 py-2">Title</th>
-                  <th className="px-3 py-2">Location</th>
-                  <th className="px-3 py-2">Angle</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {batch.items.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-3 py-3 text-[#64748B]">
-                      No batch items yet.
-                    </td>
-                  </tr>
-                ) : (
-                  batch.items.map((item) => (
-                    <tr key={item.id} className="border-t border-[#E2E8F0]">
-                      <td className="px-3 py-2">{item.listing.title}</td>
-                      <td className="px-3 py-2">{[item.listing.city, item.listing.country].filter(Boolean).join(", ")}</td>
-                      <td className="px-3 py-2">{item.contentAngle}</td>
-                      <td className="px-3 py-2">{item.status}</td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1">
-                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "ready")}>
-                            Ready
-                          </button>
-                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "queued")}>
-                            Queue
-                          </button>
-                          <button
-                            type="button"
-                            className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5"
-                            onClick={() => onBatchStatus(item.id, "ready_to_publish")}
-                          >
-                            Publish-Ready
-                          </button>
-                          <button type="button" className="rounded border border-[#D9E4F0] bg-white px-2 py-0.5" onClick={() => onBatchStatus(item.id, "failed")}>
-                            Fail
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+              {aiOutput?.youtubePackage ? (
+                <div className="mt-5 grid gap-3">
+                  <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-[#BFC8BF]">Selected title</p>
+                    <p className="mt-2 text-lg font-semibold leading-6">{aiOutput.youtubePackage.finalRecommendedTitle}</p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-2xl bg-white/[0.08] p-3">
+                      <p className="text-2xl font-semibold">{selectedListings.length}</p>
+                      <p className="mt-1 text-xs text-[#BFC8BF]">properties checked</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.08] p-3">
+                      <p className="text-2xl font-semibold">{aiOutput.storyboard?.mapSceneCount || 0}</p>
+                      <p className="mt-1 text-xs text-[#BFC8BF]">map scenes</p>
+                    </div>
+                    <div className="rounded-2xl bg-white/[0.08] p-3">
+                      <p className="text-2xl font-semibold">{aiOutput.youtubePackage.chapters.length}</p>
+                      <p className="mt-1 text-xs text-[#BFC8BF]">chapters</p>
+                    </div>
+                  </div>
+                  <p className="text-sm leading-6 text-[#E8ECE8]">{aiOutput.script?.hook}</p>
+                  <p className="text-xs leading-5 text-[#BFC8BF]">
+                    Thumbnail:{" "}
+                    {aiOutput.youtubePackage.thumbnailIdeas[0]?.visualDirection ||
+                      aiOutput.youtubePackage.thumbnailIdeas[0]?.text ||
+                      "Prepared with the video package."}
+                  </p>
+                </div>
+              ) : (
+                <p className="mt-5 text-sm leading-6 text-[#D7DED6]">
+                  CasaHUD will show the hook, title, storyboard, render plan, thumbnail idea, description, tags, and
+                  publishing metadata here once real listing evidence is available.
+                </p>
+              )}
 
-          <div className="mt-4 grid gap-4 xl:grid-cols-2">
-            <div className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-              <p className="font-medium">Content Calendar</p>
-              <ul className="mt-2 space-y-1">
-                {contentCalendar.length === 0 ? <li>No calendar entries yet.</li> : null}
-                {contentCalendar.map((entry) => (
-                  <li key={entry.batchItemId}>
-                    {entry.plannedPublishDate} | {entry.videoTitle} | {entry.status} | MP4: {entry.mp4Status} | YT:{" "}
-                    {entry.youtubePackageStatus}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-              <p className="font-medium">Bulk Export Manifest</p>
-              <pre className="mt-2 overflow-x-auto whitespace-pre-wrap">{JSON.stringify(batchExportManifest, null, 2)}</pre>
-            </div>
-          </div>
+              <div className="mt-6 grid gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-[#172033] transition hover:bg-[#F4EFE6] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={onReviewPackage}
+                  disabled={!packageReady}
+                >
+                  Review
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => onPublishAction("publish")}
+                  disabled={!packageReady}
+                >
+                  Publish Now
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => onPublishAction("schedule")}
+                  disabled={!packageReady}
+                >
+                  Schedule to YouTube
+                </button>
+              </div>
+
+              {actionNotice || publishingMessage ? (
+                <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.08] p-3 text-sm leading-6 text-[#E8ECE8]">
+                  {actionNotice || publishingMessage}
+                </p>
+              ) : null}
+            </section>
+          </aside>
         </section>
       </div>
-    </div>
+    </main>
   );
 }
