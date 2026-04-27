@@ -1,6 +1,8 @@
 import type {
   Campaign,
   CampaignSource,
+  DiscoverySource,
+  DiscoverySourceCandidateResult,
   EnrichedListing,
   ListingCandidate,
   ListingCandidateStatus,
@@ -15,6 +17,7 @@ import type {
   VideoProject,
 } from "@/lib/studio/domara/types";
 import { createLocationMediaRequest, generateLocationMediaAssets } from "@/lib/studio/domara/location-media-provider";
+import { buildSuggestedDiscoverySources, generateMockCandidatesFromSavedSources } from "@/lib/studio/domara/discovery-source-provider";
 
 const SOURCE_ORDER: CampaignSource[] = [
   "immobiliare",
@@ -186,6 +189,18 @@ export function generateResearchBrief(campaign: Campaign, selectedTitleIdea: Tit
     buyerPersona: campaign.buyerPersona,
     videoAngle: campaign.videoAngle,
   };
+}
+
+export function createSuggestedDiscoverySources(campaign: Campaign, brief: ResearchBrief): DiscoverySource[] {
+  return buildSuggestedDiscoverySources(campaign, brief);
+}
+
+export function discoverCandidatesFromSavedSources(
+  campaign: Campaign,
+  brief: ResearchBrief,
+  sources: DiscoverySource[],
+): DiscoverySourceCandidateResult {
+  return generateMockCandidatesFromSavedSources(campaign, brief, sources);
 }
 
 export function mockDiscoverListings(brief: ResearchBrief, sources: CampaignSource[]): ListingCandidate[] {

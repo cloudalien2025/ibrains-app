@@ -3,9 +3,11 @@
 import { useMemo, useState } from "react";
 import {
   buildShortlist,
+  createSuggestedDiscoverySources,
   createDefaultCampaign,
   createNarrationAssetSeam,
   createVideoProjectSeam,
+  discoverCandidatesFromSavedSources,
   domaraCampaignSources,
   enrichListingCandidate,
   generatePublishingPackage,
@@ -13,13 +15,14 @@ import {
   generateStoryboard,
   generateTitleIdeas,
   listingCandidateToInput,
-  mockDiscoverListings,
   rankListingCandidates,
   selectTitleIdea,
 } from "@/lib/studio/domara/campaign-workflow";
 import type {
   Campaign,
   CampaignSource,
+  DiscoverySource,
+  DiscoverySourceCandidateResult,
   EnrichedListing,
   ListingCandidate,
   ListingCandidateStatus,
@@ -47,6 +50,14 @@ function sourceLabel(source: CampaignSource): string {
   return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
+function discoverySourceTypeLabel(source: DiscoverySource["sourceType"]): string {
+  if (source === "gateaway") return "Gate-away";
+  if (source === "agency_site") return "Agency Site";
+  if (source === "csv_manual") return "CSV / Manual";
+  if (source === "api_provider") return "API Provider";
+  return source.charAt(0).toUpperCase() + source.slice(1);
+}
+
 function updateCampaignTimestamp(campaign: Campaign): Campaign {
   return {
     ...campaign,
@@ -58,6 +69,8 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
   const [campaign, setCampaign] = useState<Campaign>(() => createDefaultCampaign());
   const [titleIdeas, setTitleIdeas] = useState<TitleIdea[]>([]);
   const [brief, setBrief] = useState<ResearchBrief | null>(null);
+  const [discoverySources, setDiscoverySources] = useState<DiscoverySource[]>([]);
+  const [discoveryResult, setDiscoveryResult] = useState<DiscoverySourceCandidateResult | null>(null);
   const [rankedCandidates, setRankedCandidates] = useState<RankedCandidate[]>([]);
   const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [enriched, setEnriched] = useState<EnrichedListing | null>(null);
@@ -81,6 +94,8 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
   function onGenerateTitleIdeas() {
     setTitleIdeas(generateTitleIdeas(updateCampaignTimestamp(campaign)));
     setBrief(null);
+    setDiscoverySources([]);
+    setDiscoveryResult(null);
     setRankedCandidates([]);
     setSelectedCandidateId(null);
     setEnriched(null);
@@ -93,6 +108,8 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
   function onSelectTitle(id: string) {
     setTitleIdeas((current) => selectTitleIdea(current, id));
     setBrief(null);
+    setDiscoverySources([]);
+    setDiscoveryResult(null);
     setRankedCandidates([]);
     setSelectedCandidateId(null);
     setEnriched(null);
@@ -105,7 +122,10 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
   function onGenerateBrief() {
     if (!selectedTitleIdea) return;
     const nextBrief = generateResearchBrief(campaign, selectedTitleIdea);
+    const nextSources = createSuggestedDiscoverySources(campaign, nextBrief);
     setBrief(nextBrief);
+    setDiscoverySources(nextSources);
+    setDiscoveryResult(null);
     setRankedCandidates([]);
     setSelectedCandidateId(null);
     setEnriched(null);
@@ -117,8 +137,9 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
 
   function onDiscover() {
     if (!brief) return;
-    const candidates = mockDiscoverListings(brief, campaign.sources);
-    const ranked = rankListingCandidates(campaign, brief, candidates);
+    const activeSources = discoverySources.length > 0 ? discoverySources : createSuggestedDiscoverySources(campaign, brief);
+    const sourceResult = discoverCandidatesFromSavedSources(campaign, brief, activeSources);
+    const ranked = rankListingCandidates(campaign, brief, sourceResult.candidates);
     const shortlist = new Set(buildShortlist(ranked, 3).map((entry) => entry.candidate.id));
 
     const seeded = ranked.map((entry) => {
@@ -132,6 +153,8 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
       };
     });
 
+    setDiscoverySources(sourceResult.sources);
+    setDiscoveryResult(sourceResult);
     setRankedCandidates(seeded);
     setSelectedCandidateId(seeded[0]?.candidate.id || null);
     setEnriched(null);
@@ -368,20 +391,14 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
           <p className="mt-1 text-xs text-amber-700">
             Mock/provider seam only. No live crawling, no CAPTCHA bypass, and no credential dependency.
           </p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs text-[#334155]">
-            {domaraCampaignSources.map((source) => (
-              <span key={source} className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1">
-                {sourceLabel(source)}
-              </span>
-            ))}
-          </div>
+          <p className="mt-2 text-xs text-[#64748B]">Saved search URLs feed deterministic candidate queue generation.</p>
           <button
             type="button"
             className="mt-3 rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
             onClick={onDiscover}
             disabled={!brief}
           >
-            Generate Mock Listing Candidates
+            Check Saved Sources + Generate Candidate Queue
           </button>
           {brief ? (
             <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
@@ -391,6 +408,35 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
                 Budget ceiling: {campaign.currency} {brief.priceMax.toLocaleString("en-US")}
               </p>
               <p>POI priorities: {brief.poiPriorities.join(", ")}</p>
+            </div>
+          ) : null}
+          <div className="mt-3 space-y-2">
+            {discoverySources.length === 0 ? <p className="text-sm text-[#64748B]">No saved discovery sources yet.</p> : null}
+            {discoverySources.map((source) => (
+              <article key={source.id} className="rounded-xl border border-[#D9E4F0] bg-white p-3 text-xs text-[#334155]">
+                <p className="font-medium text-[#0F172A]">{source.name}</p>
+                <p className="mt-1">
+                  Type: {discoverySourceTypeLabel(source.sourceType)} | Status: {source.status} | Confidence:{" "}
+                  {(source.confidence * 100).toFixed(0)}%
+                </p>
+                <p className="mt-1 break-all">URL: {source.sourceUrl}</p>
+                <p className="mt-1">
+                  Markets: {source.marketTags.join(", ")} | Property types: {source.propertyTypeTags.join(", ")}
+                </p>
+                <p className="mt-1">
+                  Candidates: {source.candidateCount} | Imported: {source.importedCandidateCount} | Rejected: {source.rejectedCandidateCount}
+                </p>
+                {source.notes ? <p className="mt-1 text-[#475569]">Notes: {source.notes}</p> : null}
+              </article>
+            ))}
+          </div>
+          {discoveryResult ? (
+            <div className="mt-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+              <p>
+                Provider: {discoveryResult.provider} | Generated at: {discoveryResult.generatedAt}
+              </p>
+              <p className="mt-1">Validated sources: {discoveryResult.validations.filter((item) => item.valid).length}</p>
+              <p className="mt-1">Candidate queue size: {discoveryResult.candidates.length}</p>
             </div>
           ) : null}
         </section>
@@ -415,11 +461,18 @@ export default function DomaraCampaignWorkflowShell(props: { onBridgeToListing: 
                 <p className="mt-1 text-xs text-[#475569]">
                   {entry.candidate.city}, {entry.candidate.region} | {entry.candidate.currency} {entry.candidate.price.toLocaleString("en-US")} | {sourceLabel(entry.candidate.source)}
                 </p>
+                <p className="mt-1 text-xs text-[#475569] break-all">
+                  Source attribution: {(entry.candidate.providerMetadata?.sourceName as string) || "Saved source"} |{" "}
+                  {(entry.candidate.providerMetadata?.sourceType as string) || entry.candidate.source} | {entry.candidate.sourceUrl}
+                </p>
                 <p className="mt-1 text-xs text-[#334155]">
                   Images: {entry.candidate.imageUrls.length} | Confidence: {(entry.candidate.extractionConfidence * 100).toFixed(0)}% | Score: {entry.score.totalScore} ({entry.score.scoreBand})
                 </p>
                 <p className="mt-1 text-xs text-[#475569]">Status: {entry.candidate.status}</p>
                 <p className="mt-1 text-xs text-[#475569]">Reason: {entry.score.reasons[0]}</p>
+                {entry.candidate.providerMetadata?.complianceNote ? (
+                  <p className="mt-1 text-xs text-[#475569]">Compliance: {String(entry.candidate.providerMetadata.complianceNote)}</p>
+                ) : null}
                 {entry.score.riskFlags.length > 0 ? <p className="mt-1 text-xs text-amber-700">Risk: {entry.score.riskFlags.join(" | ")}</p> : null}
                 <div className="mt-2 flex flex-wrap gap-1 text-xs">
                   <button type="button" className="rounded border border-[#D9E4F0] px-2 py-0.5" onClick={() => updateCandidateStatus(entry.candidate.id, "shortlist")}>
