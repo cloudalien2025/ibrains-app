@@ -524,9 +524,9 @@ export default function StudioDomaraClient() {
       <div className="mx-auto max-w-7xl px-6 py-12">
         <header className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
           <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-1 text-xs font-medium text-[#334155]">
-            Studio Module
+            CasaHUD Studio
           </div>
-                  <h1 className="mt-3 text-3xl font-semibold tracking-tight">Domara Property Video Engine</h1>
+          <h1 className="mt-3 text-3xl font-semibold tracking-tight">CasaHUD Property Video Engine</h1>
           <p className="mt-2 max-w-4xl text-sm text-[#334155]">
             Transform European property listings into premium YouTube-ready real-estate videos using listing data,
             images, and location intelligence.
@@ -647,7 +647,7 @@ export default function StudioDomaraClient() {
               </p>
               {listingFetchStatus === "ready" ? (
                 <p className="text-xs text-emerald-700">
-                  {listingFetchNotice || "Listing imported and mapped to Domara input model."}
+                  {listingFetchNotice || "Listing imported and mapped to CasaHUD input model."}
                   {listingFetchFallbackUsed ? " Provider fallback: deterministic mock listing used." : ""}
                 </p>
               ) : null}
