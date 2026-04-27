@@ -105,7 +105,9 @@ const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
   google_maps_places: "Google Maps / Places",
   idealista: "Idealista",
   immobiliare: "Immobiliare",
-  youtube: "YouTube",
+  cloudinary: "Cloudinary",
+  digitalocean_spaces: "DigitalOcean Spaces",
+  youtube: "YouTube Channel",
 };
 
 function defaultProviderForCard(card: CasaHudConnectionCard, providers: DomaraIntegrationProviderStatus[]) {
@@ -137,6 +139,7 @@ export default function StudioDomaraClient() {
   const [connectionSecret, setConnectionSecret] = useState("");
   const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
   const [connectionSaving, setConnectionSaving] = useState(false);
+  const [connectionTesting, setConnectionTesting] = useState(false);
 
   const latestSavedRun = aiRuns[0];
   const packageReady = Boolean(aiOutput?.youtubePackage);
@@ -247,11 +250,11 @@ export default function StudioDomaraClient() {
     const activeCard = activeConnectionCard;
     if (!activeCard) return;
     if (!connectionSaveSupported) {
-      setConnectionNotice("This workspace cannot save new connections here yet. Ask an admin to enable secure connection saving.");
+      setConnectionNotice("This workspace cannot save new connections here yet. Existing connected services can still be used.");
       return;
     }
     if (!connectionSecret.trim()) {
-      setConnectionNotice(`Add the secure token for ${providerOptionLabels[activeProviderId]} before saving.`);
+      setConnectionNotice(`Add the connection key for ${providerOptionLabels[activeProviderId]} before saving.`);
       return;
     }
 
@@ -264,7 +267,7 @@ export default function StudioDomaraClient() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          apiKey: connectionSecret,
+          connectionKey: connectionSecret,
         }),
       });
       const payload = (await response.json().catch(() => null)) as CasaHudConnectionSavePayload | null;
@@ -278,6 +281,28 @@ export default function StudioDomaraClient() {
       setConnectionNotice(error instanceof Error ? error.message : "CasaHUD could not save this connection.");
     } finally {
       setConnectionSaving(false);
+    }
+  }
+
+  async function onTestConnection() {
+    if (!activeConnectionCard) return;
+
+    try {
+      setConnectionTesting(true);
+      setConnectionNotice(null);
+      const response = await fetch(`/api/studio/domara/integrations/${encodeURIComponent(activeProviderId)}/test`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: { message?: string } } | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "CasaHUD could not verify this connection.");
+      }
+      setConnectionNotice(payload.message || `${providerOptionLabels[activeProviderId]} looks ready.`);
+      await loadConnectionStatus();
+    } catch (error) {
+      setConnectionNotice(error instanceof Error ? error.message : "CasaHUD could not verify this connection.");
+    } finally {
+      setConnectionTesting(false);
     }
   }
 
@@ -325,6 +350,18 @@ export default function StudioDomaraClient() {
         | null;
 
       if (!response.ok || !payload?.ok || !payload.output) {
+        if (payload?.error?.code === "CONNECTIONS_REQUIRED" && payload.providers) {
+          setConnectionProviders(payload.providers);
+          const currentCards = buildCasaHudConnectionCards(payload.providers);
+          setAiStatus("needs_setup");
+          setAiError(null);
+          openSetup(
+            payload.error.message || getCasaHudSetupMessage(currentCards),
+            getMissingCasaHudCoreConnections(currentCards)[0]?.id,
+            currentCards,
+          );
+          return;
+        }
         throw new Error(payload?.error?.message || "CasaHUD could not generate a viral video package.");
       }
 
@@ -435,7 +472,7 @@ export default function StudioDomaraClient() {
                   onClick={() => openSetup()}
                   data-testid="casahud-connect-button"
                 >
-                  Connect CasaHUD
+                  {missingCoreConnections.length > 0 ? "Connect CasaHUD" : "Manage Connections"}
                 </button>
                 <p className="max-w-sm text-sm leading-6 text-[#657086]">
                   The winning YouTube title automatically becomes the project name.
@@ -455,7 +492,7 @@ export default function StudioDomaraClient() {
                   {connectionStatus === "loading"
                     ? "Checking CasaHUD connections..."
                     : missingCoreConnections.length === 0
-                      ? "YouTube, OpenAI, listing sources, and Google Maps / Places are ready for production videos."
+                      ? "OpenAI, listing sources, maps, local places, storage, and YouTube are ready for production videos."
                       : `${missingCoreConnections.length} core connection${missingCoreConnections.length === 1 ? "" : "s"} needed before generation.`}
                 </span>
               </div>
@@ -667,8 +704,17 @@ export default function StudioDomaraClient() {
             </div>
 
             <div className="grid gap-5 p-5 lg:grid-cols-[1.08fr_0.92fr] md:p-6">
-              <div className="grid gap-3" data-testid="casahud-connection-cards">
-                {connectionCards.map((card) => (
+              <div className="grid gap-4" data-testid="casahud-connection-cards">
+                {[
+                  { id: "create", title: "Required to Create Videos" },
+                  { id: "publish", title: "Required to Publish/Schedule" },
+                  { id: "optional", title: "Optional Premium Upgrade" },
+                ].map((group) => (
+                  <div key={group.id} className="grid gap-2">
+                    <p className="px-1 text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">{group.title}</p>
+                    {connectionCards
+                      .filter((card) => card.group === group.id)
+                      .map((card) => (
                   <article
                     key={card.id}
                     className={`rounded-2xl border p-4 transition ${
@@ -684,12 +730,16 @@ export default function StudioDomaraClient() {
                           <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">{card.title}</h3>
                           <span
                             className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              card.status === "connected"
+                              card.status === "connected" || card.status === "partially_connected"
                                 ? "bg-[#DFF3E7] text-[#0F5132]"
-                                : "bg-[#FFF0D6] text-[#7A4B13]"
+                                : card.status === "needs_attention"
+                                  ? "bg-[#FEE2E2] text-[#991B1B]"
+                                  : card.status === "optional"
+                                    ? "bg-[#EEF2F6] text-[#526070]"
+                                    : "bg-[#FFF0D6] text-[#7A4B13]"
                             }`}
                           >
-                            {card.status === "connected" ? "Connected" : "Not Connected"}
+                            {card.statusLabel}
                           </span>
                           {card.optional ? (
                             <span className="rounded-full bg-[#EEF2F6] px-2.5 py-1 text-xs font-semibold text-[#526070]">
@@ -697,12 +747,17 @@ export default function StudioDomaraClient() {
                             </span>
                           ) : (
                             <span className="rounded-full bg-[#EAF0FF] px-2.5 py-1 text-xs font-semibold text-[#274690]">
-                              Core
+                              Required
                             </span>
                           )}
                         </div>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">{card.enables}</p>
                         <p className="mt-1 text-xs leading-5 text-[#718096]">{card.detail}</p>
+                        {card.supportedSourceLabels ? (
+                          <p className="mt-2 text-xs font-medium leading-5 text-[#526070]">
+                            {card.supportedSourceLabels.join(" · ")}
+                          </p>
+                        ) : null}
                       </div>
                       <button
                         type="button"
@@ -713,32 +768,34 @@ export default function StudioDomaraClient() {
                       </button>
                     </div>
                   </article>
+                      ))}
+                  </div>
                 ))}
               </div>
 
               <aside className="rounded-2xl border border-[#E7D8C2] bg-[#F9F4EC] p-4" data-testid="casahud-connection-form">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Secure connection</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Connection setup</p>
                     <h3 className="mt-1 text-xl font-semibold tracking-[-0.025em] text-[#172033]">
                       {activeConnectionCard?.title || "Choose a connection"}
                     </h3>
                   </div>
                   {activeConnectionCard ? (
                     <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#526070]">
-                      {activeConnectionCard.optional ? "Optional" : "Core"}
+                      {activeConnectionCard.optional ? "Optional" : "Required"}
                     </span>
                   ) : null}
                 </div>
 
                 <p className="mt-3 text-sm leading-6 text-[#526070]">
-                  Add or update the secure token for this service. CasaHUD stores it safely for your account and never
+                  Add or update the connection key for this service. CasaHUD protects it for your account and never
                   shows the full value back on screen.
                 </p>
 
-                {activeConnectionCard?.id === "listing_sources" ? (
+                {activeConnectionCard?.id === "listing_sources" || activeConnectionCard?.id === "media_storage" ? (
                   <label className="mt-4 block text-sm font-semibold text-[#344256]">
-                    Listing source
+                    {activeConnectionCard.id === "listing_sources" ? "Listing source" : "Storage provider"}
                     <select
                       className="mt-2 w-full rounded-xl border border-[#D7CAB8] bg-white px-3 py-3 text-sm text-[#172033] outline-none transition focus:border-[#172033]"
                       value={activeProviderId}
@@ -754,13 +811,13 @@ export default function StudioDomaraClient() {
                 ) : null}
 
                 <label className="mt-4 block text-sm font-semibold text-[#344256]">
-                  Secure token
+                  Connection key
                   <input
                     className="mt-2 w-full rounded-xl border border-[#D7CAB8] bg-white px-3 py-3 text-sm text-[#172033] outline-none transition placeholder:text-[#98A1AE] focus:border-[#172033]"
                     type="password"
                     value={connectionSecret}
                     onChange={(event) => setConnectionSecret(event.target.value)}
-                    placeholder={`Paste ${providerOptionLabels[activeProviderId]} token`}
+                    placeholder={`Paste ${providerOptionLabels[activeProviderId]} connection key`}
                     autoComplete="off"
                   />
                 </label>
@@ -773,6 +830,14 @@ export default function StudioDomaraClient() {
                     disabled={connectionSaving || !activeConnectionCard}
                   >
                     {connectionSaving ? "Saving..." : "Save Connection"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[#CFC4B2] bg-white px-4 py-3 text-sm font-semibold text-[#344256] transition hover:bg-[#F8F0E5] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onTestConnection()}
+                    disabled={connectionTesting || !activeConnectionCard}
+                  >
+                    {connectionTesting ? "Testing..." : "Test Connection"}
                   </button>
                   <button
                     type="button"
@@ -797,8 +862,8 @@ export default function StudioDomaraClient() {
                       .map((card) => (
                         <div key={card.id} className="flex items-center justify-between gap-3">
                           <span>{card.title}</span>
-                          <span className={card.status === "connected" ? "font-semibold text-[#0F5132]" : "font-semibold text-[#7A4B13]"}>
-                            {card.status === "connected" ? "Connected" : "Needed"}
+                          <span className={card.status === "connected" || card.status === "partially_connected" ? "font-semibold text-[#0F5132]" : "font-semibold text-[#7A4B13]"}>
+                            {card.status === "connected" || card.status === "partially_connected" ? card.statusLabel : "Needed"}
                           </span>
                         </div>
                       ))}

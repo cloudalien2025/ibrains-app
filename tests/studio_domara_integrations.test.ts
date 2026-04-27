@@ -29,16 +29,18 @@ describe("Domara integrations registry", () => {
       ELEVENLABS_API_KEY: "x",
       MAPBOX_ACCESS_TOKEN: "y",
       GOOGLE_MAPS_API_KEY: "z",
+      CLOUDINARY_URL: "cloudinary",
     });
 
     expect(capabilities.openaiGeneration).toBe(true);
     expect(capabilities.elevenlabsLiveNarration).toBe(true);
     expect(capabilities.mapboxVisuals).toBe(true);
     expect(capabilities.googleMapsVisuals).toBe(true);
+    expect(capabilities.mediaStorage).toBe(true);
     expect(capabilities.youtubePublishingApi).toBe(false);
   });
 
-  it("never leaks secret values into provider status payload", () => {
+  it("never leaks secret values or setup internals into provider status payload", () => {
     const env = {
       OPENAI_API_KEY: "super-secret-openai",
       ELEVENLABS_API_KEY: "super-secret-elevenlabs",
@@ -48,7 +50,8 @@ describe("Domara integrations registry", () => {
 
     const statusJson = JSON.stringify(getDomaraIntegrationStatuses(env));
     expect(statusJson.includes("super-secret")).toBe(false);
-    expect(statusJson.includes("ELEVENLABS_API_KEY")).toBe(true);
-    expect(statusJson.includes("OPENAI_API_KEY")).toBe(true);
+    expect(statusJson.includes("ELEVENLABS_API_KEY")).toBe(false);
+    expect(statusJson.includes("OPENAI_API_KEY")).toBe(false);
+    expect(statusJson.includes("DATABASE_URL")).toBe(false);
   });
 });

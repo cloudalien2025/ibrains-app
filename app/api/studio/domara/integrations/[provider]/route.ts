@@ -7,13 +7,14 @@ import {
   isStudioIntegrationProvider,
   isStudioIntegrationStoreAvailable,
   listStudioStoredIntegrationStatuses,
-  sanitizeIntegrationApiKey,
+  parseStudioIntegrationSavePayload,
   saveStudioIntegrationSecret,
 } from "@/app/api/studio/domara/_utils/integration-settings";
 import {
   buildDomaraIntegrationCapabilitiesFromStatuses,
   getDomaraIntegrationCapabilityMap,
   mergeDomaraIntegrationStatusesWithStored,
+  toPublicDomaraIntegrationStatuses,
 } from "@/lib/studio/domara/integrations";
 
 export const runtime = "nodejs";
@@ -30,6 +31,7 @@ async function buildStatusPayload(userId: string) {
   const capabilities = buildDomaraIntegrationCapabilitiesFromStatuses(providers);
   return {
     providers,
+    publicProviders: toPublicDomaraIntegrationStatuses(providers),
     capabilities,
     saveSupported: storeAvailable,
   };
@@ -53,12 +55,14 @@ export async function GET(
     if (!item) {
       return errorResponse(404, "Provider status not found.", "NOT_FOUND");
     }
+    const publicItem = payload.publicProviders.find((entry) => entry.providerId === resolvedProvider);
     return NextResponse.json({
       ok: true,
-      provider: item,
+      provider: publicItem,
+      providers: payload.publicProviders,
       capabilities: payload.capabilities,
       saveSupported: payload.saveSupported,
-      securityNote: "Provider secrets are never returned to the client.",
+      securityNote: "Saved connection values are protected server-side and never returned.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown integration read error";
@@ -83,31 +87,33 @@ export async function POST(
     if (!storeAvailable) {
       return errorResponse(
         503,
-        "Integration settings storage is unavailable (missing table or encryption configuration).",
+        "Connection saving is not ready in this workspace. Existing connected services can still be used.",
         "STORE_UNAVAILABLE"
       );
     }
 
-    const body = (await req.json().catch(() => ({}))) as { apiKey?: unknown };
-    const apiKey = sanitizeIntegrationApiKey(body.apiKey);
-    if (!apiKey) {
-      return errorResponse(400, "API key is required.", "VALIDATION_ERROR");
+    const body = await req.json().catch(() => ({}));
+    const parsed = parseStudioIntegrationSavePayload(body);
+    if (!parsed.ok) {
+      return errorResponse(400, parsed.message, "VALIDATION_ERROR");
     }
 
     await saveStudioIntegrationSecret({
       userId,
       providerId: resolvedProvider,
-      apiKey,
+      apiKey: parsed.connectionKey,
     });
 
     const payload = await buildStatusPayload(userId);
     const item = payload.providers.find((entry) => entry.providerId === resolvedProvider);
+    const publicItem = payload.publicProviders.find((entry) => entry.providerId === resolvedProvider);
     return NextResponse.json({
       ok: true,
-      provider: item,
+      provider: publicItem,
+      providers: payload.publicProviders,
       capabilities: payload.capabilities,
       saveSupported: payload.saveSupported,
-      securityNote: "Provider secrets are never returned to the client.",
+      securityNote: "Saved connection values are protected server-side and never returned.",
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown integration save error";
@@ -132,7 +138,7 @@ export async function DELETE(
     if (!storeAvailable) {
       return errorResponse(
         503,
-        "Integration settings storage is unavailable (missing table or encryption configuration).",
+        "Connection saving is not ready in this workspace. Existing connected services can still be used.",
         "STORE_UNAVAILABLE"
       );
     }
@@ -144,9 +150,11 @@ export async function DELETE(
 
     const payload = await buildStatusPayload(userId);
     const item = payload.providers.find((entry) => entry.providerId === resolvedProvider);
+    const publicItem = payload.publicProviders.find((entry) => entry.providerId === resolvedProvider);
     return NextResponse.json({
       ok: true,
-      provider: item,
+      provider: publicItem,
+      providers: payload.publicProviders,
       capabilities: payload.capabilities,
       saveSupported: payload.saveSupported,
     });

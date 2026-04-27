@@ -21,19 +21,32 @@ export type CasaHudConnectionCardId =
   | "youtube"
   | "openai"
   | "listing_sources"
-  | "google_maps_places"
-  | "elevenlabs";
+  | "mapbox"
+  | "google_places"
+  | "elevenlabs"
+  | "media_storage";
+
+export type CasaHudConnectionGroupId = "create" | "publish" | "optional";
+export type CasaHudConnectionStatus = "connected" | "partially_connected" | "not_connected" | "needs_attention" | "optional";
+export type CasaHudConnectionAction = "Connect" | "Manage" | "Test Connection" | "Connect Source" | "Manage Sources" | "Test Source";
 
 export type CasaHudConnectionCard = {
   id: CasaHudConnectionCardId;
   title: string;
-  status: "connected" | "not_connected";
+  status: CasaHudConnectionStatus;
+  statusLabel: "Connected" | "Partially Connected" | "Not Connected" | "Needs Attention" | "Optional";
+  group: CasaHudConnectionGroupId;
   required: boolean;
   optional: boolean;
   enables: string;
   detail: string;
+  missingSetupGuidance: string;
+  safeErrorState: string | null;
+  supportedSourceLabels?: string[];
   providerIds: DomaraIntegrationProviderId[];
-  ctaLabel: "Connect" | "Manage";
+  actions: CasaHudConnectionAction[];
+  ctaLabel: CasaHudConnectionAction;
+  lastCheckedAt?: string;
 };
 
 const PROVIDER_ORDER: DomaraIntegrationProviderId[] = [
@@ -43,6 +56,8 @@ const PROVIDER_ORDER: DomaraIntegrationProviderId[] = [
   "google_maps_places",
   "idealista",
   "immobiliare",
+  "cloudinary",
+  "digitalocean_spaces",
   "youtube",
 ];
 
@@ -50,10 +65,12 @@ const PROVIDER_DISPLAY_NAMES: Record<DomaraIntegrationProviderId, string> = {
   openai: "OpenAI",
   elevenlabs: "ElevenLabs",
   mapbox: "Mapbox",
-  google_maps_places: "Google Maps",
+  google_maps_places: "Google Places",
   idealista: "Idealista",
   immobiliare: "Immobiliare",
-  youtube: "YouTube",
+  cloudinary: "Cloudinary",
+  digitalocean_spaces: "DigitalOcean Spaces",
+  youtube: "YouTube Channel",
 };
 
 export function resolveOperatorIntegrationStatus(
@@ -101,75 +118,184 @@ function providerConnected(
   return Boolean(provider?.configured && provider.validationStatus !== "invalid");
 }
 
+function providerNeedsAttention(
+  byId: Map<DomaraIntegrationProviderId, DomaraIntegrationProviderStatus>,
+  providerIds: DomaraIntegrationProviderId[],
+): boolean {
+  return providerIds.some((providerId) => byId.get(providerId)?.validationStatus === "invalid");
+}
+
+function latestCheckedAt(
+  byId: Map<DomaraIntegrationProviderId, DomaraIntegrationProviderStatus>,
+  providerIds: DomaraIntegrationProviderId[],
+): string | undefined {
+  return providerIds
+    .map((providerId) => byId.get(providerId)?.lastUpdatedAt)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+}
+
 export function buildCasaHudConnectionCards(providers: DomaraIntegrationProviderStatus[]): CasaHudConnectionCard[] {
   const byId = new Map(providers.map((provider) => [provider.providerId, provider]));
   const youtubeConnected = providerConnected(byId, "youtube");
   const openAiConnected = providerConnected(byId, "openai");
-  const listingConnected = providerConnected(byId, "idealista") || providerConnected(byId, "immobiliare");
-  const mapsConnected = providerConnected(byId, "google_maps_places");
+  const idealistaConnected = providerConnected(byId, "idealista");
+  const immobiliareConnected = providerConnected(byId, "immobiliare");
+  const listingConnectedCount = [idealistaConnected, immobiliareConnected].filter(Boolean).length;
+  const listingConnected = listingConnectedCount > 0;
+  const mapboxConnected = providerConnected(byId, "mapbox");
+  const placesConnected = providerConnected(byId, "google_maps_places");
   const voiceConnected = providerConnected(byId, "elevenlabs");
+  const mediaStorageConnected = providerConnected(byId, "cloudinary") || providerConnected(byId, "digitalocean_spaces");
 
   return [
     {
-      id: "youtube",
-      title: "YouTube",
-      status: youtubeConnected ? "connected" : "not_connected",
-      required: true,
-      optional: false,
-      enables: "Researches audience demand, prepares publishing details, and unlocks upload and scheduling actions.",
-      detail: "Required for a production video workflow from trend research through publishing.",
-      providerIds: ["youtube"],
-      ctaLabel: youtubeConnected ? "Manage" : "Connect",
-    },
-    {
       id: "openai",
       title: "OpenAI",
-      status: openAiConnected ? "connected" : "not_connected",
+      status: providerNeedsAttention(byId, ["openai"]) ? "needs_attention" : openAiConnected ? "connected" : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["openai"]) ? "Needs Attention" : openAiConnected ? "Connected" : "Not Connected",
+      group: "create",
       required: true,
       optional: false,
-      enables: "Creates the title strategy, script, storyboard, thumbnail direction, and video metadata.",
-      detail: "Required for CasaHUD to generate a production-ready creative package.",
+      enables: "Creates viral titles, video strategy, scripts, storyboards, narration prompts, YouTube packaging, and review checks.",
+      detail: "Required for Generate Viral Video, script/storyboard generation, and YouTube package generation.",
+      missingSetupGuidance: "Connect OpenAI so CasaHUD can create the strategy and review-ready video package.",
+      safeErrorState: providerNeedsAttention(byId, ["openai"]) ? "OpenAI needs to be reconnected before generation." : null,
       providerIds: ["openai"],
+      actions: [openAiConnected ? "Manage" : "Connect", "Test Connection"],
       ctaLabel: openAiConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["openai"]),
     },
     {
       id: "listing_sources",
       title: "Listing Sources",
-      status: listingConnected ? "connected" : "not_connected",
+      status: providerNeedsAttention(byId, ["idealista", "immobiliare"])
+        ? "needs_attention"
+        : listingConnectedCount > 1
+          ? "connected"
+          : listingConnected
+            ? "partially_connected"
+            : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["idealista", "immobiliare"])
+        ? "Needs Attention"
+        : listingConnectedCount > 1
+          ? "Connected"
+          : listingConnected
+            ? "Partially Connected"
+            : "Not Connected",
+      group: "create",
       required: true,
       optional: false,
-      enables: "Finds real properties, verifies listing fit, and keeps the video grounded in available inventory.",
-      detail: "Connect at least one listing source before CasaHUD selects properties for the video.",
+      enables: "Finds real properties for single-property, roundup, niche, and location videos.",
+      detail: "Required for finding matching real properties and validating video claims.",
+      missingSetupGuidance: "Connect at least one listing source before CasaHUD selects properties for the video.",
+      safeErrorState: providerNeedsAttention(byId, ["idealista", "immobiliare"]) ? "One listing source needs attention." : null,
+      supportedSourceLabels: ["Idealista", "Immobiliare", "Manual Listing Import", "Future Listing APIs"],
       providerIds: ["idealista", "immobiliare"],
-      ctaLabel: listingConnected ? "Manage" : "Connect",
+      actions: [listingConnected ? "Manage Sources" : "Connect Source", "Test Source"],
+      ctaLabel: listingConnected ? "Manage Sources" : "Connect Source",
+      lastCheckedAt: latestCheckedAt(byId, ["idealista", "immobiliare"]),
     },
     {
-      id: "google_maps_places",
-      title: "Google Maps / Places",
-      status: mapsConnected ? "connected" : "not_connected",
+      id: "mapbox",
+      title: "Maps & Location Visuals",
+      status: providerNeedsAttention(byId, ["mapbox"]) ? "needs_attention" : mapboxConnected ? "connected" : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["mapbox"]) ? "Needs Attention" : mapboxConnected ? "Connected" : "Not Connected",
+      group: "create",
       required: true,
       optional: false,
-      enables: "Adds neighborhood context, points of interest, map scenes, and location-aware hooks.",
-      detail: "Required for the local intelligence that makes the listing story production-ready.",
+      enables: "Creates premium map visuals, property-location scenes, area views, and map sequences for videos.",
+      detail: "Required for map visuals and premium location scenes.",
+      missingSetupGuidance: "Connect Mapbox so CasaHUD can prepare premium map scenes.",
+      safeErrorState: providerNeedsAttention(byId, ["mapbox"]) ? "Map visuals need to be reconnected." : null,
+      providerIds: ["mapbox"],
+      actions: [mapboxConnected ? "Manage" : "Connect", "Test Connection"],
+      ctaLabel: mapboxConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["mapbox"]),
+    },
+    {
+      id: "google_places",
+      title: "Local Places & POIs",
+      status: providerNeedsAttention(byId, ["google_maps_places"]) ? "needs_attention" : placesConnected ? "connected" : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["google_maps_places"]) ? "Needs Attention" : placesConnected ? "Connected" : "Not Connected",
+      group: "create",
+      required: true,
+      optional: false,
+      enables: "Finds cafes, restaurants, landmarks, beaches, marinas, airports, train stations, schools, ski areas, golf courses, and local highlights.",
+      detail: "Required for POI intelligence, lifestyle context, location storytelling, and local highlights.",
+      missingSetupGuidance: "Connect Google Places so CasaHUD can add local highlights and lifestyle context.",
+      safeErrorState: providerNeedsAttention(byId, ["google_maps_places"]) ? "Local Places needs to be reconnected." : null,
       providerIds: ["google_maps_places"],
-      ctaLabel: mapsConnected ? "Manage" : "Connect",
+      actions: [placesConnected ? "Manage" : "Connect", "Test Connection"],
+      ctaLabel: placesConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["google_maps_places"]),
+    },
+    {
+      id: "media_storage",
+      title: "Media Storage",
+      status: providerNeedsAttention(byId, ["cloudinary", "digitalocean_spaces"])
+        ? "needs_attention"
+        : mediaStorageConnected
+          ? "connected"
+          : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["cloudinary", "digitalocean_spaces"])
+        ? "Needs Attention"
+        : mediaStorageConnected
+          ? "Connected"
+          : "Not Connected",
+      group: "create",
+      required: true,
+      optional: false,
+      enables: "Stores thumbnails, generated media, render assets, exported packages, and video files.",
+      detail: "Required for saving generated media assets and completed packages.",
+      missingSetupGuidance: "Connect media storage so CasaHUD can save generated assets and completed packages.",
+      safeErrorState: providerNeedsAttention(byId, ["cloudinary", "digitalocean_spaces"]) ? "Media Storage needs to be reconnected." : null,
+      supportedSourceLabels: ["Cloudinary", "DigitalOcean Spaces"],
+      providerIds: ["cloudinary", "digitalocean_spaces"],
+      actions: [mediaStorageConnected ? "Manage" : "Connect", "Test Connection"],
+      ctaLabel: mediaStorageConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["cloudinary", "digitalocean_spaces"]),
+    },
+    {
+      id: "youtube",
+      title: "YouTube Channel",
+      status: providerNeedsAttention(byId, ["youtube"]) ? "needs_attention" : youtubeConnected ? "connected" : "not_connected",
+      statusLabel: providerNeedsAttention(byId, ["youtube"]) ? "Needs Attention" : youtubeConnected ? "Connected" : "Not Connected",
+      group: "publish",
+      required: true,
+      optional: false,
+      enables: "Researches ranking videos, analyzes title patterns, prepares uploads, publishes videos, and schedules videos.",
+      detail: "Required for YouTube research, upload, publish now, and schedule to YouTube.",
+      missingSetupGuidance: "Connect YouTube Channel before CasaHUD researches live ranking videos or publishes reviewed packages.",
+      safeErrorState: providerNeedsAttention(byId, ["youtube"]) ? "YouTube Channel needs to be reconnected." : null,
+      providerIds: ["youtube"],
+      actions: [youtubeConnected ? "Manage" : "Connect", "Test Connection"],
+      ctaLabel: youtubeConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["youtube"]),
     },
     {
       id: "elevenlabs",
-      title: "ElevenLabs",
-      status: voiceConnected ? "connected" : "not_connected",
+      title: "Voice Narration",
+      status: providerNeedsAttention(byId, ["elevenlabs"]) ? "needs_attention" : voiceConnected ? "connected" : "optional",
+      statusLabel: providerNeedsAttention(byId, ["elevenlabs"]) ? "Needs Attention" : voiceConnected ? "Connected" : "Optional",
+      group: "optional",
       required: false,
       optional: true,
-      enables: "Adds premium voice narration when you want CasaHUD to prepare narrated renders.",
-      detail: "Optional. CasaHUD can still build the video package without live narration.",
+      enables: "Creates premium AI voice narration.",
+      detail: "Optional premium narration. CasaHUD can still create scripts and review packages without ElevenLabs.",
+      missingSetupGuidance: "Connect ElevenLabs when you want premium AI voice narration.",
+      safeErrorState: providerNeedsAttention(byId, ["elevenlabs"]) ? "Voice Narration needs to be reconnected." : null,
       providerIds: ["elevenlabs"],
+      actions: [voiceConnected ? "Manage" : "Connect", "Test Connection"],
       ctaLabel: voiceConnected ? "Manage" : "Connect",
+      lastCheckedAt: latestCheckedAt(byId, ["elevenlabs"]),
     },
   ];
 }
 
 export function getMissingCasaHudCoreConnections(cards: CasaHudConnectionCard[]): CasaHudConnectionCard[] {
-  return cards.filter((card) => card.required && card.status !== "connected");
+  return cards.filter((card) => card.required && card.status !== "connected" && card.status !== "partially_connected");
 }
 
 export function shouldOpenCasaHudSetupForGenerate(cards: CasaHudConnectionCard[]): boolean {
@@ -179,9 +305,9 @@ export function shouldOpenCasaHudSetupForGenerate(cards: CasaHudConnectionCard[]
 export function getCasaHudSetupMessage(cards: CasaHudConnectionCard[]): string {
   const missing = getMissingCasaHudCoreConnections(cards);
   if (missing.length === 0) {
-    return "CasaHUD has the core connections needed to create, render, publish, and schedule a production video.";
+    return "CasaHUD has the core connections needed to create, save, publish, and schedule a production video.";
   }
 
   const names = missing.map((card) => card.title).join(", ");
-  return `Connect ${names} before CasaHUD generates a production video. These services power research, creative generation, real listing selection, local context, publishing, and scheduling.`;
+  return `Connect ${names} before CasaHUD generates a production video. These services power creative generation, real listing selection, map visuals, local highlights, media storage, publishing, and scheduling.`;
 }
