@@ -9,6 +9,7 @@
 cd /root/ibrains-app
 npm ci
 npm run build
+bash scripts/apply_directoryiq_schema.sh
 sudo systemctl restart ibrains-app
 sudo systemctl status ibrains-app --no-pager
 ```
@@ -71,6 +72,8 @@ sudo ufw status verbose
 - `/root/ibrains-app/.env.production.local`
 - Required by server routes:
   - `BRAINS_API_BASE` (example: `http://127.0.0.1:8000`)
+  - `DATABASE_URL`
+  - `DIRECTORYIQ_DATABASE_URL` (preferred for DirectoryIQ-owned `directoryiq_*` tables; falls back to `DATABASE_URL`)
 - Optional for UI:
   - `NEXT_PUBLIC_WORKER_URL`
 
