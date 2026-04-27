@@ -7,6 +7,8 @@ import { buildClerkProductionConfigError, resolveClerkRuntimeContract } from "@/
 import { redirect } from "next/navigation";
 import SideNav from "./_components/SideNav";
 
+export const dynamic = "force-dynamic";
+
 export default async function ShellLayout({ children }: { children: ReactNode }) {
   const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
   const runtimeContract = resolveClerkRuntimeContract();

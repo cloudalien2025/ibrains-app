@@ -20,4 +20,11 @@ describe("frontdoor public route auth isolation", () => {
     expect(source.includes("UserButton")).toBe(false);
     expect(source.includes("ClerkProvider")).toBe(false);
   });
+
+  it("forces the protected shell to render at runtime so production builds do not require clerk secrets", () => {
+    const source = fs.readFileSync(path.join(process.cwd(), "app/(shell)/layout.tsx"), "utf8");
+
+    expect(source.includes("export const dynamic = \"force-dynamic\";")).toBe(true);
+    expect(source.includes("runtimeContract.hasProductionConfigError")).toBe(true);
+  });
 });
