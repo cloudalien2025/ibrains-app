@@ -1,7 +1,4 @@
-"use client";
-
 import Link from "next/link";
-import { UserButton, useAuth } from "@clerk/nextjs";
 
 const apps = [
   {
@@ -28,8 +25,6 @@ const apps = [
 ] as const;
 
 export default function AppsIndexPage() {
-  const { isSignedIn } = useAuth();
-
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-6xl px-6 py-14">
@@ -51,32 +46,24 @@ export default function AppsIndexPage() {
             >
               Home
             </Link>
-            {isSignedIn ? (
-              <>
-                <Link
-                  href="/brains"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Console
-                </Link>
-                <UserButton />
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/sign-in"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Create account
-                </Link>
-              </>
-            )}
+            <Link
+              href="/brains"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Console
+            </Link>
+            <Link
+              href="/sign-in"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/sign-up"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Create account
+            </Link>
           </div>
         </header>
 
