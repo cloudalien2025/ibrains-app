@@ -60,8 +60,8 @@ export default defineConfig({
   outputDir,
   webServer: {
     command:
-      `bash -lc 'lsof -ti tcp:${e2ePort} | xargs -r kill -9; rm -f .next/lock; ` +
-      `pnpm exec next build && pnpm exec next start -p ${e2ePort} -H 127.0.0.1'`,
+      `bash -lc 'rm -f .next/lock; ` +
+      `npm run build && npm run start -- -p ${e2ePort} -H 127.0.0.1'`,
     // Health endpoint is stable for readiness checks in E2E mode.
     url: `http://127.0.0.1:${e2ePort}/api/health`,
     reuseExistingServer: false,
