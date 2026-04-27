@@ -1,10 +1,24 @@
-# Production Deployment (Mission Control)
+# Production Deployment (GitLab Authority)
 
 ## Domain
 - app.ibrains.ai
 - DNS must point to droplet IP: 104.236.44.185
 
-## Build + Start
+## Authoritative Deploy Path
+- Production deploy authority is `.gitlab-ci.yml`.
+- GitHub Actions deploy orchestration is retired for this repository.
+- Merges to the GitLab default branch build a release artifact, write release metadata, deploy over SSH, and run frontdoor integrity smoke checks before the deploy is considered healthy.
+
+## GitLab CI Variables
+- `DEPLOY_HOST`
+- `DEPLOY_USER`
+- `DEPLOY_SSH_KEY`
+- `DEPLOY_PORT` (optional, default `22`)
+- `DEPLOY_PATH`
+- `SERVICE_NAME` (optional, defaults to `ibrains-app`)
+- `DEPLOY_KNOWN_HOSTS` (optional, recommended)
+
+## Manual Build + Start
 ```bash
 cd /root/ibrains-app
 npm ci
@@ -50,7 +64,7 @@ PROTO=http /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 BASE_URL=http://127.0.0.1 HOST_HEADER=app.ibrains.ai /root/ibrains-app/scripts/prod_smoke.sh app.ibrains.ai
 ```
 
-`prod_smoke.sh` also validates that every `/_next/static/*` asset referenced by the live homepage HTML returns `200` to prevent HTML/chunk mismatch regressions.
+`prod_smoke.sh` now validates `/_next/static/*` assets referenced by `/`, `/apps`, and `/sign-in`. It fails on non-`200` responses and on wrong JS/CSS content types so HTML/chunk mismatch deploys cannot pass smoke.
 
 ## TLS (Let’s Encrypt)
 Only run after DNS A record for app.ibrains.ai points to 104.236.44.185.

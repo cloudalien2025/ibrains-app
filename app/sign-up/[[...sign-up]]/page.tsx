@@ -1,4 +1,5 @@
 import { SignUp } from "@clerk/nextjs";
+import ConfiguredClerkProvider from "@/components/auth/configured-clerk-provider";
 import { resolveClerkRouteContract, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
 
 export default function SignUpPage() {
@@ -16,13 +17,15 @@ export default function SignUpPage() {
   }
 
   return (
-    <div className="ibrains-shell flex min-h-screen items-center justify-center p-6">
-      <SignUp
-        fallbackRedirectUrl={routeContract.signUpFallbackRedirectUrl}
-        path={routeContract.signUpUrl}
-        routing="path"
-        signInUrl={routeContract.signInUrl}
-      />
-    </div>
+    <ConfiguredClerkProvider>
+      <div className="ibrains-shell flex min-h-screen items-center justify-center p-6">
+        <SignUp
+          fallbackRedirectUrl={routeContract.signUpFallbackRedirectUrl}
+          path={routeContract.signUpUrl}
+          routing="path"
+          signInUrl={routeContract.signInUrl}
+        />
+      </div>
+    </ConfiguredClerkProvider>
   );
 }

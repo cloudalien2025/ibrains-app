@@ -2,10 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  UserButton,
-  useAuth,
-} from "@clerk/nextjs";
 
 type HealthPayload = {
   ok: boolean;
@@ -38,7 +34,6 @@ function safeJsonStringify(obj: unknown, spaces = 2): string {
 }
 
 export default function Home() {
-  const { isSignedIn } = useAuth();
   const workerUrl =
     (process.env.NEXT_PUBLIC_WORKER_URL || "").trim() || DEFAULT_WORKER_URL;
 
@@ -162,44 +157,30 @@ export default function Home() {
             {badge}
           </div>
           <div className="flex items-center gap-2">
-            {!isSignedIn ? (
-              <>
-                <Link
-                  href="/apps"
-                  className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
-                >
-                  Open Apps
-                </Link>
-                <Link
-                  href="/sign-in"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Sign in
-                </Link>
-                <Link
-                  href="/sign-up"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Create account
-                </Link>
-              </>
-            ) : (
-              <>
-                <Link
-                  href="/apps"
-                  className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
-                >
-                  Open Apps
-                </Link>
-                <Link
-                  href="/brains"
-                  className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-                >
-                  Open console
-                </Link>
-                <UserButton />
-              </>
-            )}
+            <Link
+              href="/apps"
+              className="rounded-full border border-[#2563EB] bg-[#2563EB] px-4 py-2 text-sm text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
+            >
+              Open Apps
+            </Link>
+            <Link
+              href="/brains"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Open Console
+            </Link>
+            <Link
+              href="/sign-in"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Sign in
+            </Link>
+            <Link
+              href="/sign-up"
+              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
+            >
+              Create account
+            </Link>
           </div>
         </div>
 

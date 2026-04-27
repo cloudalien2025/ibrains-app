@@ -8,7 +8,8 @@ HOST_HEADER="${HOST_HEADER:-}"
 EXPECT_RELEASE_FILE="${EXPECT_RELEASE_FILE:-0}"
 EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
 EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
-SMOKE_PATHS="${SMOKE_PATHS:-/ /sign-in}"
+SMOKE_PATHS="${SMOKE_PATHS:-/ /apps /sign-in}"
+SKIP_SERVICE_CHECKS="${SKIP_SERVICE_CHECKS:-0}"
 
 curl_host_args=()
 if [ -n "${HOST_HEADER}" ]; then
@@ -77,13 +78,49 @@ check_frontdoor_assets() {
   local path
   while IFS= read -r path; do
     [ -z "$path" ] && continue
+    local headers_file
     local code
-    code=$(curl -sS -o /dev/null -w "%{http_code}" "${curl_host_args[@]}" "${BASE_URL}${path}" || true)
+    local content_type
+    headers_file="$(mktemp)"
+    if ! curl -sS -D "$headers_file" -o /dev/null "${curl_host_args[@]}" "${BASE_URL}${path}"; then
+      fail "${route_name} asset ${path} request failed"
+      rm -f "$headers_file"
+      continue
+    fi
+    code=$(awk '/^HTTP/{code=$2} END{print code}' "$headers_file")
+    content_type=$(awk 'BEGIN{IGNORECASE=1} /^Content-Type:/{print $2}' "$headers_file" | tr -d '\r' | tail -n 1)
     if [ "$code" = "200" ]; then
       pass "${route_name} asset ${path} returned 200"
     else
       fail "${route_name} asset ${path} returned ${code}"
+      rm -f "$headers_file"
+      continue
     fi
+
+    case "$path" in
+      *.js)
+        case "$content_type" in
+          application/javascript*|text/javascript*)
+            pass "${route_name} asset ${path} served javascript content-type"
+            ;;
+          *)
+            fail "${route_name} asset ${path} unexpected content-type ${content_type:-missing}"
+            ;;
+        esac
+        ;;
+      *.css)
+        case "$content_type" in
+          text/css*)
+            pass "${route_name} asset ${path} served css content-type"
+            ;;
+          *)
+            fail "${route_name} asset ${path} unexpected content-type ${content_type:-missing}"
+            ;;
+        esac
+        ;;
+    esac
+
+    rm -f "$headers_file"
   done < "$refs_file"
 }
 
@@ -181,8 +218,10 @@ if [ -n "${HOST_HEADER}" ]; then
   note "Host header: ${HOST_HEADER}"
 fi
 
-check_service ibrains-app
-check_service nginx
+if [ "${SKIP_SERVICE_CHECKS}" != "1" ]; then
+  check_service ibrains-app
+  check_service nginx
+fi
 
 for route_path in ${SMOKE_PATHS}; do
   check_http_status "${BASE_URL}${route_path}" "${route_path}"

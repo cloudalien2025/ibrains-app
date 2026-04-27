@@ -1,8 +1,8 @@
-# Codespaces + GitHub Actions Deployment
+# Codespaces + GitLab CI Deployment
 
-This setup avoids droplet DNS/npm/GitHub dependency by building in GitHub and shipping a release tarball over SSH.
+This setup uses GitLab CI as the tracked production deployment authority. GitHub Actions deploy orchestration is retired for this repository to avoid split deploy paths.
 
-## 1) Required GitHub Actions Secrets
+## 1) Required GitLab CI Variables
 
 - `DEPLOY_HOST` (example: `104.236.44.185`)
 - `DEPLOY_USER` (example: `root`)
@@ -31,11 +31,11 @@ pnpm build
 
 ## 3) CI Build Gate
 
-Workflow: `.github/workflows/ci.yml`
+Pipeline file: `.gitlab-ci.yml`
 
 Triggers:
-- Pull requests to `main`
-- Push to `fix/**` branches
+- Merge requests
+- Branch pushes
 
 Checks:
 - `pnpm install --frozen-lockfile`
@@ -44,18 +44,18 @@ Checks:
 
 ## 4) Deploy Workflow
 
-Workflow: `.github/workflows/deploy_app.yml`
+Pipeline job: `deploy_production`
 
 Trigger:
-- Manual (`workflow_dispatch`)
+- Default branch pipeline
 
 Flow:
-1. Checkout + Node 20 + `pnpm install --frozen-lockfile`
-2. `pnpm build`
-3. Create tarball with runtime files (`.next`, `node_modules`, config, public, manifests)
-4. Upload tarball via `scp` to `${DEPLOY_PATH}/.deploy/incoming/<sha>.tgz`
-5. Extract to `${DEPLOY_PATH}/.deploy/releases/<sha>`
-6. `rsync` release contents into `${DEPLOY_PATH}`
-7. Restart service and health-check `http://127.0.0.1:3001/brains`
+1. Install dependencies and run frontdoor integrity verification.
+2. Write `app/_meta/release.json` from GitLab pipeline metadata.
+3. Build the Next.js release artifact and upload `artifacts/build.tar.gz`.
+4. Copy the artifact to the droplet over SSH.
+5. Extract to staging, run `npm ci --omit=dev`, and apply the tracked DirectoryIQ schema.
+6. `rsync` the staged release into `${DEPLOY_PATH}`.
+7. Restart the service and run `scripts/prod_smoke.sh` against both `http://127.0.0.1:3001` and `https://app.ibrains.ai`.
 
 No droplet `git pull` is used.

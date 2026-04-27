@@ -1,0 +1,205 @@
+stages:
+  - verify
+  - build
+  - deploy
+
+variables:
+  NEXT_TELEMETRY_DISABLED: "1"
+  NPM_CONFIG_CACHE: "$CI_PROJECT_DIR/.npm"
+
+workflow:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+
+default:
+  image: node:20-bookworm
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .npm/
+
+verify_frontdoor_integrity:
+  stage: verify
+  script:
+    - npm ci
+    - bash scripts/check_route_signatures.sh
+    - npm test -- --run tests/clerk_env_contract_shared_logic.test.ts tests/clerk_layout_env_contract.test.ts tests/frontdoor_layout_chain_contract.test.ts tests/frontdoor_public_route_auth_isolation.test.ts tests/clerk_auth_routes_contract.test.ts tests/gitlab_deploy_pipeline_contract.test.ts
+    - npm run build
+
+build_release:
+  stage: build
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  script:
+    - npm ci
+    - mkdir -p app/_meta
+    - BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+    - SHORT_SHA="${CI_COMMIT_SHA:0:7}"
+    - |
+      cat > app/_meta/release.json <<EOF
+      {
+        "service": "ibrains",
+        "environment": "production",
+        "git_sha": "${CI_COMMIT_SHA}",
+        "git_sha_short": "${SHORT_SHA}",
+        "build_timestamp": "${BUILD_TIMESTAMP}",
+        "build_id": "${CI_PIPELINE_ID}",
+        "source": "gitlab_ci"
+      }
+      EOF
+    - npm run build
+    - mkdir -p artifacts
+    - |
+      tar -czf artifacts/build.tar.gz \
+      .next \
+      package.json \
+      package-lock.json \
+      public \
+      next.config.mjs \
+      app \
+      db/directoryiq/001_directoryiq_schema_from_shared.sql \
+      scripts/apply_directoryiq_schema.sh \
+      scripts/prod_smoke.sh \
+      scripts/patch_next_route_types.mjs
+  artifacts:
+    paths:
+      - artifacts/build.tar.gz
+    expire_in: 1 day
+
+deploy_production:
+  stage: deploy
+  needs:
+    - build_release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+  before_script:
+    - apt-get update
+    - apt-get install -y openssh-client rsync curl
+    - eval "$(ssh-agent -s)"
+    - mkdir -p ~/.ssh
+    - chmod 700 ~/.ssh
+    - printf '%s\n' "$DEPLOY_SSH_KEY" | tr -d '\r' | ssh-add -
+    - |
+      if [ -n "${DEPLOY_KNOWN_HOSTS:-}" ]; then
+        printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+      else
+        ssh-keyscan -p "${DEPLOY_PORT:-22}" "$DEPLOY_HOST" > ~/.ssh/known_hosts
+      fi
+    - chmod 600 ~/.ssh/known_hosts
+  script:
+    - test -n "${DEPLOY_HOST:-}"
+    - test -n "${DEPLOY_USER:-}"
+    - test -n "${DEPLOY_PATH:-}"
+    - scp -P "${DEPLOY_PORT:-22}" artifacts/build.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/artifacts/build.tar.gz"
+    - |
+      ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "CI_COMMIT_SHA='${CI_COMMIT_SHA}' CI_PIPELINE_ID='${CI_PIPELINE_ID}' DEPLOY_PATH='${DEPLOY_PATH}' SERVICE_NAME='${SERVICE_NAME:-ibrains-app}' bash -s" <<'EOF'
+      set -euo pipefail
+
+      ARTIFACT_PATH="${DEPLOY_PATH}/artifacts/build.tar.gz"
+      STAGING_ROOT="${DEPLOY_PATH}/.deploy_staging"
+      RELEASE_DIR="${STAGING_ROOT}/release-${CI_PIPELINE_ID}-$(date +%s)"
+
+      mkdir -p "${RELEASE_DIR}"
+      tar -xzf "${ARTIFACT_PATH}" -C "${RELEASE_DIR}"
+      rm -f "${ARTIFACT_PATH}"
+
+      cd "${RELEASE_DIR}"
+      npm ci --omit=dev
+
+      systemctl_cmd=(systemctl)
+      if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+        systemctl_cmd=(sudo systemctl)
+      fi
+
+      if "${systemctl_cmd[@]}" is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+        "${systemctl_cmd[@]}" unmask "$SERVICE_NAME"
+      fi
+
+      if [ -f "${DEPLOY_PATH}/.env.production.local" ]; then
+        set -a
+        . "${DEPLOY_PATH}/.env.production.local"
+        set +a
+      fi
+
+      bash "${RELEASE_DIR}/scripts/apply_directoryiq_schema.sh"
+
+      service_started=0
+      cleanup_on_error() {
+        if [ "$service_started" -eq 0 ]; then
+          "${systemctl_cmd[@]}" start "$SERVICE_NAME" >/dev/null 2>&1 || true
+        fi
+      }
+      trap cleanup_on_error EXIT
+
+      "${systemctl_cmd[@]}" stop "$SERVICE_NAME"
+
+      if command -v rsync >/dev/null 2>&1; then
+        rsync -a --delete \
+          --exclude artifacts \
+          --exclude .deploy_staging \
+          --exclude .env \
+          --exclude .env.production.local \
+          "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
+      else
+        find "${DEPLOY_PATH}" -mindepth 1 -maxdepth 1 \
+          ! -name artifacts \
+          ! -name .deploy_staging \
+          ! -name .env \
+          ! -name .env.production.local \
+          -exec rm -rf {} +
+        cp -a "${RELEASE_DIR}/." "${DEPLOY_PATH}/"
+      fi
+
+      "${systemctl_cmd[@]}" start "$SERVICE_NAME"
+      service_started=1
+      trap - EXIT
+
+      ready=0
+      for attempt in $(seq 1 10); do
+        if curl -fsS http://127.0.0.1:3001/api/meta/release; then
+          ready=1
+          break
+        fi
+        sleep 2
+      done
+
+      if [ "$ready" -ne 1 ]; then
+        echo "release endpoint did not become ready after restart"
+        "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+        (command -v journalctl >/dev/null 2>&1 && journalctl -u "$SERVICE_NAME" -n 150 --no-pager) || true
+        exit 1
+      fi
+
+      rm -rf "${STAGING_ROOT}"
+      smoke_fail() {
+        echo "smoke verification failed"
+        "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+        tail -n 120 /var/log/ibrains-app/app.log || true
+        tail -n 120 /var/log/nginx/app.ibrains.ai.error.log || true
+        tail -n 120 /var/log/nginx/app.ibrains.ai.access.log || true
+        exit 1
+      }
+
+      EXPECT_RELEASE_FILE=1 \
+      EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
+      EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
+      SMOKE_PATHS="/ /apps /sign-in" \
+      BASE_URL=http://127.0.0.1:3001 \
+      HOST_HEADER=app.ibrains.ai \
+      PROTO=http \
+      DOMAIN=app.ibrains.ai \
+      ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail
+
+      EXPECT_RELEASE_FILE=1 \
+      EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
+      EXPECT_GIT_SHA="${CI_COMMIT_SHA}" \
+      SMOKE_PATHS="/ /apps /sign-in" \
+      BASE_URL=https://app.ibrains.ai \
+      PROTO=https \
+      DOMAIN=app.ibrains.ai \
+      ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail
+      EOF
