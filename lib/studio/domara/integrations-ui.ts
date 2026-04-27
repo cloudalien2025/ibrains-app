@@ -14,6 +14,7 @@ export type DomaraOperatorIntegrationRow = {
   configured: boolean;
   requiredEnvVars: string[];
   maskedKey?: string;
+  lastUpdatedAt?: string;
 };
 
 const PROVIDER_ORDER: DomaraIntegrationProviderId[] = [
@@ -67,7 +68,8 @@ export function buildOperatorIntegrationRows(providers: DomaraIntegrationProvide
       validationStatus,
       configured,
       requiredEnvVars: provider?.requiredEnvVars || [],
-      maskedKey: configured ? maskIntegrationKey(undefined) : undefined,
+      maskedKey: configured ? provider?.maskedKey || maskIntegrationKey(undefined) : undefined,
+      lastUpdatedAt: provider?.lastUpdatedAt,
     };
   });
 }

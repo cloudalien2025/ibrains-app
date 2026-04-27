@@ -18,6 +18,9 @@ export type DomaraIntegrationProviderStatus = {
   validationStatus: DomaraIntegrationValidationStatus;
   safeSetupHelp: string;
   capabilitiesEnabled: string[];
+  maskedKey?: string;
+  lastUpdatedAt?: string;
+  configuredBy?: "environment" | "saved";
 };
 
 type ProviderDefinition = {
@@ -103,6 +106,17 @@ const DEFINITIONS: ProviderDefinition[] = [
   },
 ];
 
+export type DomaraStoredIntegrationStatus = {
+  providerId: DomaraIntegrationProviderId;
+  configured: boolean;
+  secretLast4?: string;
+  updatedAt?: string;
+};
+
+function maskLast4(last4?: string): string {
+  return last4 ? `••••••••${last4}` : "••••••••";
+}
+
 function hasEnv(name: string, env: NodeJS.ProcessEnv): boolean {
   const value = env[name];
   return typeof value === "string" && value.trim().length > 0;
@@ -122,27 +136,57 @@ export function getDomaraIntegrationStatuses(env: NodeJS.ProcessEnv = process.en
       validationStatus,
       safeSetupHelp: definition.safeSetupHelp,
       capabilitiesEnabled: definition.capabilitiesEnabled,
+      maskedKey: configured ? maskLast4() : undefined,
+      configuredBy: configured ? "environment" : undefined,
+    };
+  });
+}
+
+export function mergeDomaraIntegrationStatusesWithStored(
+  base: DomaraIntegrationProviderStatus[],
+  stored: DomaraStoredIntegrationStatus[]
+): DomaraIntegrationProviderStatus[] {
+  const storedByProvider = new Map(stored.map((item) => [item.providerId, item]));
+
+  return base.map((provider) => {
+    const storedEntry = storedByProvider.get(provider.providerId);
+    if (!storedEntry?.configured) return provider;
+    if (provider.configured) return provider;
+
+    return {
+      ...provider,
+      configured: true,
+      validationStatus: "configured",
+      maskedKey: maskLast4(storedEntry.secretLast4),
+      lastUpdatedAt: storedEntry.updatedAt,
+      configuredBy: "saved",
     };
   });
 }
 
 export function getDomaraIntegrationCapabilityMap(env: NodeJS.ProcessEnv = process.env) {
   const statuses = getDomaraIntegrationStatuses(env);
+  const capabilities = buildDomaraIntegrationCapabilitiesFromStatuses(statuses);
+
+  return {
+    statuses,
+    capabilities,
+  };
+}
+
+export function buildDomaraIntegrationCapabilitiesFromStatuses(statuses: DomaraIntegrationProviderStatus[]) {
   const byId = Object.fromEntries(statuses.map((status) => [status.providerId, status])) as Record<
     DomaraIntegrationProviderId,
     DomaraIntegrationProviderStatus
   >;
 
   return {
-    statuses,
-    capabilities: {
-      openaiGeneration: byId.openai?.configured ?? false,
-      elevenlabsLiveNarration: byId.elevenlabs?.configured ?? false,
-      mapboxVisuals: byId.mapbox?.configured ?? false,
-      googleMapsVisuals: byId.google_maps_places?.configured ?? false,
-      listingFetchIdealista: byId.idealista?.configured ?? false,
-      listingFetchImmobiliare: byId.immobiliare?.configured ?? false,
-      youtubePublishingApi: byId.youtube?.configured ?? false,
-    },
+    openaiGeneration: byId.openai?.configured ?? false,
+    elevenlabsLiveNarration: byId.elevenlabs?.configured ?? false,
+    mapboxVisuals: byId.mapbox?.configured ?? false,
+    googleMapsVisuals: byId.google_maps_places?.configured ?? false,
+    listingFetchIdealista: byId.idealista?.configured ?? false,
+    listingFetchImmobiliare: byId.immobiliare?.configured ?? false,
+    youtubePublishingApi: byId.youtube?.configured ?? false,
   };
 }
