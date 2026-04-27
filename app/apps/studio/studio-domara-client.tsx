@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { FormEvent, useEffect, useMemo, useState } from "react";
+import DomaraCampaignWorkflowShell from "@/components/studio/domara-campaign-workflow-shell";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
 import { DomaraVoiceMode, DomaraVoicePace, DomaraVoicePersona, DomaraVoiceTone } from "@/lib/studio/domara/narration-provider";
@@ -501,6 +502,23 @@ export default function StudioDomaraClient() {
     );
   }
 
+  function onBridgeFromCampaign(input: PropertyListingInput) {
+    setForm((current) => ({
+      ...formStateFromListing(current, input),
+      listingProvider:
+        input.provider === "idealista" || input.provider === "immobiliare" || input.provider === "import_url"
+          ? input.provider
+          : "manual",
+      listingUrl: input.listingUrl || current.listingUrl,
+      source: input.source || current.source,
+    }));
+    setListingFetchStatus("ready");
+    setListingFetchError(null);
+    setListingFetchWarnings([]);
+    setListingFetchFallbackUsed(true);
+    setListingFetchNotice("Candidate bridged from campaign workflow. Review fields, then generate plan.");
+  }
+
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-7xl px-6 py-12">
@@ -550,6 +568,8 @@ export default function StudioDomaraClient() {
             </div>
           </details>
         </details>
+
+        <DomaraCampaignWorkflowShell onBridgeToListing={onBridgeFromCampaign} />
 
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.1fr_1fr]">
           <section className="rounded-3xl border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]">
