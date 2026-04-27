@@ -137,3 +137,202 @@ export type PropertyVideoPlan = {
     provider: string;
   };
 };
+
+export type CampaignSource =
+  | "immobiliare"
+  | "idealista"
+  | "gate_away"
+  | "kyero"
+  | "agency_site"
+  | "csv_manual"
+  | "future_api";
+
+export type CampaignStatus = "draft" | "title_selected" | "research_ready" | "discovery_ready" | "shortlisted" | "story_ready";
+
+export type Campaign = {
+  id: string;
+  name: string;
+  markets: string[];
+  budgetMin: number;
+  budgetMax: number;
+  currency: string;
+  propertyTypes: string[];
+  buyerPersona: string;
+  videoAngle: string;
+  sources: CampaignSource[];
+  status: CampaignStatus;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TitleIdea = {
+  id: string;
+  campaignId: string;
+  title: string;
+  thumbnailHook: string;
+  angle: string;
+  targetBuyer: string;
+  researchBriefSummary?: string;
+  score: number;
+  selected: boolean;
+};
+
+export type PoiPriority = "beach" | "marina" | "airport" | "restaurants" | "historic_center";
+
+export type ResearchBrief = {
+  id: string;
+  campaignId: string;
+  titleIdeaId: string;
+  markets: string[];
+  cities: string[];
+  priceMax: number;
+  propertyTypes: string[];
+  poiPriorities: PoiPriority[];
+  mustHaveCriteria: string[];
+  avoidCriteria: string[];
+  buyerPersona: string;
+  videoAngle: string;
+};
+
+export type ListingCandidateStatus = "new" | "shortlist" | "reject" | "saved" | "needs_review";
+
+export type ListingCandidate = {
+  id: string;
+  campaignId: string;
+  source: CampaignSource;
+  sourceUrl: string;
+  listingUrl: string;
+  title: string;
+  price: number;
+  currency: string;
+  locationText: string;
+  city: string;
+  region: string;
+  country: string;
+  propertyType: string;
+  bedrooms: number;
+  bathrooms: number;
+  sqm: number;
+  description: string;
+  imageUrls: string[];
+  thumbnailUrl?: string;
+  agencyName?: string;
+  status: ListingCandidateStatus;
+  extractionConfidence: number;
+  discoveredAt: string;
+  providerMetadata?: Record<string, string | number | boolean | null | undefined>;
+};
+
+export type EnrichedPoi = {
+  id: string;
+  name: string;
+  category: PoiPriority;
+  distanceKm: number;
+  travelMinutes: number;
+  confidence: "high" | "medium" | "low";
+  source: string;
+};
+
+export type EnrichedListing = {
+  id: string;
+  candidateId: string;
+  latitude: number;
+  longitude: number;
+  resolvedAddress: string;
+  locationConfidence: "high" | "medium" | "low";
+  pois: EnrichedPoi[];
+  mapAssets: {
+    staticMapUrl: string;
+    poiOverlayUrl: string;
+    provider: string;
+  };
+  distanceHighlights: string[];
+  lifestyleSummary: string;
+  investmentSummary: string;
+};
+
+export type ListingScoreBand = "excellent" | "strong" | "possible" | "skip";
+
+export type ListingScore = {
+  id: string;
+  candidateId: string;
+  totalScore: number;
+  campaignFitScore: number;
+  priceFitScore: number;
+  locationScore: number;
+  propertyTypeFitScore: number;
+  poiScore: number;
+  imageScore: number;
+  investmentScore: number;
+  lifestyleScore: number;
+  buyerPersonaFitScore: number;
+  confidenceScore: number;
+  reasons: string[];
+  riskFlags: string[];
+  scoreBand: ListingScoreBand;
+};
+
+export type StoryboardScene = {
+  id: string;
+  order: number;
+  title: string;
+  visualType: "listing_hero" | "map" | "listing_gallery" | "cta";
+  visualSource: string;
+  narration: string;
+  overlayText: string;
+  durationSeconds: number;
+};
+
+export type Storyboard = {
+  id: string;
+  campaignId: string;
+  candidateIds: string[];
+  title: string;
+  scenes: StoryboardScene[];
+  narrationScript: string;
+  estimatedDuration: number;
+  status: "draft" | "ready";
+};
+
+export type NarrationAsset = {
+  id: string;
+  storyboardId: string;
+  provider: string;
+  voiceId: string;
+  audioUrl: string;
+  duration: number;
+  status: "ready" | "pending";
+  fallbackUsed: boolean;
+};
+
+export type VideoProject = {
+  id: string;
+  campaignId: string;
+  storyboardId: string;
+  assets: {
+    listingImages: string[];
+    mapAssets: string[];
+    narrationAudioUrl: string;
+  };
+  timeline: Array<{
+    sceneId: string;
+    startSeconds: number;
+    durationSeconds: number;
+    layer: string;
+  }>;
+  renderStatus: "provider_seam_ready" | "rendered";
+  mp4Url: string;
+  metadata: Record<string, string | number | boolean | null | undefined>;
+};
+
+export type PublishingPackage = {
+  id: string;
+  videoProjectId: string;
+  youtubeTitle: string;
+  description: string;
+  tags: string[];
+  chapters: Array<{ timestamp: string; title: string }>;
+  thumbnailHooks: string[];
+  pinnedComment: string;
+  status: "draft_ready" | "published";
+};
