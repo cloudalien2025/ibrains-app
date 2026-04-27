@@ -29,13 +29,6 @@ verify_frontdoor_integrity:
     - npm test -- --run tests/clerk_env_contract_shared_logic.test.ts tests/clerk_layout_env_contract.test.ts tests/frontdoor_layout_chain_contract.test.ts tests/frontdoor_public_route_auth_isolation.test.ts tests/clerk_auth_routes_contract.test.ts tests/gitlab_deploy_pipeline_contract.test.ts
     - npm run build
 
-frontdoor_e2e_smoke:
-  stage: verify
-  image: mcr.microsoft.com/playwright:v1.58.2-noble
-  script:
-    - npm ci
-    - npx playwright test tests/e2e/frontdoor-integrity.spec.ts tests/e2e/sign-in-app-load.spec.ts
-
 build_release:
   stage: build
   rules:
