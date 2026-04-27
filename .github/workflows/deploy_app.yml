@@ -191,6 +191,7 @@ jobs:
             EXPECT_RELEASE_FILE=1 \
             EXPECT_BUILD_ID="${GITHUB_RUN_ID}" \
             EXPECT_GIT_SHA="${GITHUB_SHA}" \
+            SMOKE_PATHS="/ /sign-in" \
             BASE_URL=http://127.0.0.1:3001 \
             HOST_HEADER=app.ibrains.ai \
             PROTO=http \
@@ -200,6 +201,7 @@ jobs:
             EXPECT_RELEASE_FILE=1 \
             EXPECT_BUILD_ID="${GITHUB_RUN_ID}" \
             EXPECT_GIT_SHA="${GITHUB_SHA}" \
+            SMOKE_PATHS="/ /sign-in" \
             BASE_URL=https://app.ibrains.ai \
             PROTO=https \
             DOMAIN=app.ibrains.ai \

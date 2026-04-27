@@ -8,6 +8,7 @@ HOST_HEADER="${HOST_HEADER:-}"
 EXPECT_RELEASE_FILE="${EXPECT_RELEASE_FILE:-0}"
 EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
 EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
+SMOKE_PATHS="${SMOKE_PATHS:-/ /sign-in}"
 
 curl_host_args=()
 if [ -n "${HOST_HEADER}" ]; then
@@ -48,6 +49,7 @@ check_http_status() {
 
 check_frontdoor_assets() {
   local html_url="$1"
+  local route_name="$2"
   local html_file
   local refs_file
   html_file="$(mktemp)"
@@ -55,7 +57,7 @@ check_frontdoor_assets() {
   trap 'rm -f "$html_file" "$refs_file"' RETURN
 
   if ! curl -sS "${curl_host_args[@]}" "$html_url" -o "$html_file"; then
-    fail "frontdoor HTML fetch failed"
+    fail "${route_name} HTML fetch failed"
     return
   fi
 
@@ -67,10 +69,10 @@ check_frontdoor_assets() {
   local ref_count
   ref_count=$(wc -l < "$refs_file" | tr -d ' ')
   if [ "${ref_count}" -eq 0 ]; then
-    fail "frontdoor HTML has no _next/static asset refs"
+    fail "${route_name} HTML has no _next/static asset refs"
     return
   fi
-  pass "frontdoor HTML exposes ${ref_count} _next/static asset refs"
+  pass "${route_name} HTML exposes ${ref_count} _next/static asset refs"
 
   local path
   while IFS= read -r path; do
@@ -78,9 +80,9 @@ check_frontdoor_assets() {
     local code
     code=$(curl -sS -o /dev/null -w "%{http_code}" "${curl_host_args[@]}" "${BASE_URL}${path}" || true)
     if [ "$code" = "200" ]; then
-      pass "asset ${path} returned 200"
+      pass "${route_name} asset ${path} returned 200"
     else
-      fail "asset ${path} returned ${code}"
+      fail "${route_name} asset ${path} returned ${code}"
     fi
   done < "$refs_file"
 }
@@ -182,8 +184,11 @@ fi
 check_service ibrains-app
 check_service nginx
 
-check_http_status "${BASE_URL}/" "/"
-check_frontdoor_assets "${BASE_URL}/"
+for route_path in ${SMOKE_PATHS}; do
+  check_http_status "${BASE_URL}${route_path}" "${route_path}"
+  check_frontdoor_assets "${BASE_URL}${route_path}" "${route_path}"
+done
+
 check_health_json "${BASE_URL}/api/health"
 check_release_meta "${BASE_URL}/api/meta/release"
 
