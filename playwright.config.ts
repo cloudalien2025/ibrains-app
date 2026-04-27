@@ -19,10 +19,6 @@ const chromiumArgs = needsNoSandbox
   ? [
       "--no-sandbox",
       "--disable-setuid-sandbox",
-      "--disable-crash-reporter",
-      "--disable-features=Crashpad,CrashpadHandler",
-      "--disable-breakpad",
-      // `--single-process` is unstable in CI/root containers and causes browser crashes.
       "--disable-dev-shm-usage",
     ]
   : [];
