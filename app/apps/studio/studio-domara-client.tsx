@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import DomaraCampaignWorkflowShell from "@/components/studio/domara-campaign-workflow-shell";
 import { generatePropertyVideoPlan } from "@/lib/studio/domara/property-video-plan";
 import { createDomaraRenderPlan, DomaraRenderStyle, DomaraVideoRenderResult } from "@/lib/studio/domara/render-plan";
@@ -13,7 +13,7 @@ import {
   DomaraOperatorIntegrationRow,
   DomaraOperatorIntegrationStatus,
 } from "@/lib/studio/domara/integrations-ui";
-import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
+import type { DomaraIntegrationProviderId, DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
 import {
   DOMARA_BATCH_LIMIT,
   DomaraBatch,
@@ -56,6 +56,11 @@ type FormState = {
 type ListingFetchState = "idle" | "fetching" | "ready" | "failed";
 type IntegrationStatusState = "loading" | "ready" | "error";
 type DomaraIntegrationProviderCard = DomaraIntegrationProviderStatus;
+type IntegrationPendingAction = "idle" | "saving" | "clearing" | "testing";
+type IntegrationRowNotice = {
+  kind: "success" | "error";
+  message: string;
+};
 
 const initialState: FormState = {
   listingProvider: "manual",
@@ -106,10 +111,15 @@ function DomaraIntegrationRow(props: {
   row: DomaraOperatorIntegrationRow;
   draftValue: string;
   saveEnabled: boolean;
+  saveSupported: boolean;
+  pendingAction: IntegrationPendingAction;
+  notice?: IntegrationRowNotice;
   onDraftChange: (providerId: string, value: string) => void;
-  onSave: (providerId: string) => void;
+  onSave: (providerId: DomaraIntegrationProviderId) => Promise<void>;
+  onClear: (providerId: DomaraIntegrationProviderId) => Promise<void>;
+  onTest: (providerId: DomaraIntegrationProviderId) => Promise<void>;
 }) {
-  const { row, draftValue, onDraftChange, onSave, saveEnabled } = props;
+  const { row, draftValue, onDraftChange, onSave, onClear, onTest, saveEnabled, saveSupported, pendingAction, notice } = props;
 
   return (
     <article className="rounded-xl border border-[#D9E4F0] bg-white p-3">
@@ -129,15 +139,37 @@ function DomaraIntegrationRow(props: {
           autoComplete="off"
           aria-label={`${row.displayName} API key`}
         />
-        <button
-          type="button"
-          className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-55"
-          onClick={() => onSave(row.providerId)}
-          disabled={!saveEnabled}
-        >
-          Save
-        </button>
+        <div className="grid gap-2 md:grid-cols-3">
+          <button
+            type="button"
+            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-55"
+            onClick={() => void onSave(row.providerId)}
+            disabled={!saveEnabled || !saveSupported || pendingAction !== "idle"}
+          >
+            {pendingAction === "saving" ? "Saving..." : "Save"}
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-55"
+            onClick={() => void onClear(row.providerId)}
+            disabled={!saveSupported || !row.configured || pendingAction !== "idle"}
+          >
+            {pendingAction === "clearing" ? "Clearing..." : "Clear"}
+          </button>
+          <button
+            type="button"
+            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#334155] transition hover:bg-[#F8FBFF] disabled:cursor-not-allowed disabled:opacity-55"
+            onClick={() => void onTest(row.providerId)}
+            disabled={!row.configured || pendingAction !== "idle"}
+          >
+            {pendingAction === "testing" ? "Testing..." : "Test"}
+          </button>
+        </div>
       </div>
+      {row.lastUpdatedAt ? <p className="mt-2 text-xs text-[#64748B]">Updated: {new Date(row.lastUpdatedAt).toLocaleString()}</p> : null}
+      {notice ? (
+        <p className={`mt-2 text-xs ${notice.kind === "success" ? "text-emerald-700" : "text-rose-600"}`}>{notice.message}</p>
+      ) : null}
     </article>
   );
 }
@@ -208,7 +240,10 @@ export default function StudioDomaraClient() {
   const [integrationError, setIntegrationError] = useState<string | null>(null);
   const [integrationProviders, setIntegrationProviders] = useState<DomaraIntegrationProviderCard[]>([]);
   const [integrationDraftKeys, setIntegrationDraftKeys] = useState<Record<string, string>>({});
-  const [integrationSaveNotice, setIntegrationSaveNotice] = useState<string | null>(null);
+  const [integrationRowNotices, setIntegrationRowNotices] = useState<Record<string, IntegrationRowNotice>>({});
+  const [integrationPendingActions, setIntegrationPendingActions] = useState<Record<string, IntegrationPendingAction>>({});
+  const [integrationSaveSupported, setIntegrationSaveSupported] = useState(false);
+  const [integrationStoreNotice, setIntegrationStoreNotice] = useState<string | null>(null);
   const [integrationCapabilities, setIntegrationCapabilities] = useState<{
     openaiGeneration: boolean;
     elevenlabsLiveNarration: boolean;
@@ -222,7 +257,6 @@ export default function StudioDomaraClient() {
   const [batch, setBatch] = useState<DomaraBatch>(createDomaraBatch([], "hidden_gems_tuscany"));
   const [batchNotice, setBatchNotice] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const integrationSaveSupported = false;
   const integrationRows = useMemo(() => buildOperatorIntegrationRows(integrationProviders), [integrationProviders]);
   const sceneDuration = useMemo(
     () => (plan ? plan.scenes.reduce((total, scene) => total + scene.durationSeconds, 0) : 0),
@@ -247,50 +281,48 @@ export default function StudioDomaraClient() {
   const contentCalendar = useMemo(() => generateContentCalendar(batch), [batch]);
   const batchExportManifest = useMemo(() => buildBulkExportManifest(batch), [batch]);
 
-  useEffect(() => {
-    let isCancelled = false;
-    async function loadIntegrationStatus() {
+  const loadIntegrationStatus = useCallback(async () => {
+    try {
       setIntegrationStatus("loading");
       setIntegrationError(null);
-      try {
-        const response = await fetch("/api/studio/domara/integrations/status", {
-          cache: "no-store",
-        });
-        const payload = (await response.json().catch(() => null)) as
-          | {
-              ok?: boolean;
-              providers?: DomaraIntegrationProviderCard[];
-              capabilities?: {
-                openaiGeneration: boolean;
-                elevenlabsLiveNarration: boolean;
-                mapboxVisuals: boolean;
-                googleMapsVisuals: boolean;
-                listingFetchIdealista: boolean;
-                listingFetchImmobiliare: boolean;
-                youtubePublishingApi: boolean;
-              };
-            }
-          | null;
+      const response = await fetch("/api/studio/domara/integrations/status", {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | {
+            ok?: boolean;
+            providers?: DomaraIntegrationProviderCard[];
+            capabilities?: {
+              openaiGeneration: boolean;
+              elevenlabsLiveNarration: boolean;
+              mapboxVisuals: boolean;
+              googleMapsVisuals: boolean;
+              listingFetchIdealista: boolean;
+              listingFetchImmobiliare: boolean;
+              youtubePublishingApi: boolean;
+            };
+            saveSupported?: boolean;
+            storeStatusMessage?: string;
+          }
+        | null;
 
-        if (!response.ok || !payload?.ok || !Array.isArray(payload.providers) || !payload.capabilities) {
-          throw new Error("Failed to load integration status.");
-        }
-        if (isCancelled) return;
-        setIntegrationProviders(payload.providers);
-        setIntegrationCapabilities(payload.capabilities);
-        setIntegrationStatus("ready");
-      } catch (loadError) {
-        if (isCancelled) return;
-        setIntegrationStatus("error");
-        setIntegrationError(loadError instanceof Error ? loadError.message : "Failed to load integration status.");
+      if (!response.ok || !payload?.ok || !Array.isArray(payload.providers) || !payload.capabilities) {
+        throw new Error("Failed to load integration status.");
       }
+      setIntegrationProviders(payload.providers);
+      setIntegrationCapabilities(payload.capabilities);
+      setIntegrationSaveSupported(Boolean(payload.saveSupported));
+      setIntegrationStoreNotice(payload.storeStatusMessage || null);
+      setIntegrationStatus("ready");
+    } catch (loadError) {
+      setIntegrationStatus("error");
+      setIntegrationError(loadError instanceof Error ? loadError.message : "Failed to load integration status.");
     }
-
-    void loadIntegrationStatus();
-    return () => {
-      isCancelled = true;
-    };
   }, []);
+
+  useEffect(() => {
+    void loadIntegrationStatus();
+  }, [loadIntegrationStatus]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -495,11 +527,103 @@ export default function StudioDomaraClient() {
     }));
   }
 
-  function onIntegrationSave(providerId: string) {
-    const provider = integrationRows.find((row) => row.providerId === providerId);
-    setIntegrationSaveNotice(
-      provider ? `${provider.displayName}: set via server environment variables` : "Set via server environment variables",
-    );
+  function setIntegrationPending(providerId: DomaraIntegrationProviderId, action: IntegrationPendingAction) {
+    setIntegrationPendingActions((current) => ({ ...current, [providerId]: action }));
+  }
+
+  async function onIntegrationSave(providerId: DomaraIntegrationProviderId) {
+    const apiKey = (integrationDraftKeys[providerId] || "").trim();
+    if (!apiKey) {
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "error", message: "Enter an API key before saving." },
+      }));
+      return;
+    }
+
+    try {
+      setIntegrationPending(providerId, "saving");
+      const response = await fetch(`/api/studio/domara/integrations/${providerId}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ apiKey }),
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: { message?: string } }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "Failed to save integration key.");
+      }
+      setIntegrationDraftKeys((current) => ({ ...current, [providerId]: "" }));
+      await loadIntegrationStatus();
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "success", message: "Credential saved and status refreshed." },
+      }));
+    } catch (saveError) {
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "error", message: saveError instanceof Error ? saveError.message : "Failed to save credential." },
+      }));
+    } finally {
+      setIntegrationPending(providerId, "idle");
+    }
+  }
+
+  async function onIntegrationClear(providerId: DomaraIntegrationProviderId) {
+    try {
+      setIntegrationPending(providerId, "clearing");
+      const response = await fetch(`/api/studio/domara/integrations/${providerId}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; error?: { message?: string } }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "Failed to clear integration key.");
+      }
+      setIntegrationDraftKeys((current) => ({ ...current, [providerId]: "" }));
+      await loadIntegrationStatus();
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "success", message: "Credential cleared." },
+      }));
+    } catch (clearError) {
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "error", message: clearError instanceof Error ? clearError.message : "Failed to clear credential." },
+      }));
+    } finally {
+      setIntegrationPending(providerId, "idle");
+    }
+  }
+
+  async function onIntegrationTest(providerId: DomaraIntegrationProviderId) {
+    try {
+      setIntegrationPending(providerId, "testing");
+      const response = await fetch(`/api/studio/domara/integrations/${providerId}/test`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; message?: string; error?: { message?: string } }
+        | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "Integration test failed.");
+      }
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "success", message: payload.message || "Integration test passed." },
+      }));
+    } catch (testError) {
+      setIntegrationRowNotices((current) => ({
+        ...current,
+        [providerId]: { kind: "error", message: testError instanceof Error ? testError.message : "Integration test failed." },
+      }));
+    } finally {
+      setIntegrationPending(providerId, "idle");
+    }
   }
 
   function onBridgeFromCampaign(input: PropertyListingInput) {
@@ -547,15 +671,21 @@ export default function StudioDomaraClient() {
                 row={row}
                 draftValue={integrationDraftKeys[row.providerId] || ""}
                 saveEnabled={integrationSaveSupported}
+                saveSupported={integrationSaveSupported}
+                pendingAction={integrationPendingActions[row.providerId] || "idle"}
+                notice={integrationRowNotices[row.providerId]}
                 onDraftChange={onIntegrationDraftChange}
                 onSave={onIntegrationSave}
+                onClear={onIntegrationClear}
+                onTest={onIntegrationTest}
               />
             ))}
           </div>
-          <p className="mt-3 text-xs text-[#475569]">Set via server environment variables</p>
+          <p className="mt-3 text-xs text-[#475569]">
+            {integrationStoreNotice || "Provider secrets are stored server-side and never returned in plaintext."}
+          </p>
           {integrationStatus === "loading" ? <p className="mt-2 text-xs text-[#64748B]">Loading status...</p> : null}
           {integrationStatus === "error" ? <p className="mt-2 text-xs text-rose-600">{integrationError}</p> : null}
-          {integrationSaveNotice ? <p className="mt-2 text-xs text-[#64748B]">{integrationSaveNotice}</p> : null}
 
           <details className="mt-4 rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3">
             <summary className="cursor-pointer list-none text-xs font-medium text-[#334155]">Advanced</summary>
