@@ -26,7 +26,9 @@ function providerStatus(
             ? "publishing"
             : providerId === "google_maps_places" || providerId === "mapbox"
               ? "maps"
-              : "listing_ingestion",
+              : providerId === "cloudinary" || providerId === "digitalocean_spaces"
+                ? "media_storage"
+                : "listing_ingestion",
     requiredEnvVars: [],
     configured,
     validationStatus: configured ? "configured" : "missing",
@@ -91,33 +93,40 @@ describe("Domara integrations UI helpers", () => {
     const text = rows.map((row) => row.displayName).join(" ");
 
     expect(text.includes("API_KEY")).toBe(false);
-    expect(rows.length).toBe(7);
+    expect(rows.length).toBe(9);
   });
 
-  it("builds premium CasaHUD connection cards around core and optional services", () => {
+  it("builds premium CasaHUD connection cards around required and optional services", () => {
     const cards = buildCasaHudConnectionCards([
       providerStatus("youtube", true),
       providerStatus("openai", true),
       providerStatus("idealista", true),
+      providerStatus("immobiliare", true),
+      providerStatus("mapbox", true),
       providerStatus("google_maps_places", true),
+      providerStatus("cloudinary", true),
       providerStatus("elevenlabs", false),
     ]);
 
     expect(cards.map((card) => card.title)).toEqual([
-      "YouTube",
       "OpenAI",
       "Listing Sources",
-      "Google Maps / Places",
-      "ElevenLabs",
+      "Maps & Location Visuals",
+      "Local Places & POIs",
+      "Media Storage",
+      "YouTube Channel",
+      "Voice Narration",
     ]);
     expect(cards.filter((card) => card.required).map((card) => card.id)).toEqual([
-      "youtube",
       "openai",
       "listing_sources",
-      "google_maps_places",
+      "mapbox",
+      "google_places",
+      "media_storage",
+      "youtube",
     ]);
     expect(cards.find((card) => card.id === "elevenlabs")?.optional).toBe(true);
-    expect(cards.find((card) => card.id === "elevenlabs")?.status).toBe("not_connected");
+    expect(cards.find((card) => card.id === "elevenlabs")?.statusLabel).toBe("Optional");
   });
 
   it("opens setup before Generate Viral Video when core connections are missing", () => {
@@ -126,14 +135,18 @@ describe("Domara integrations UI helpers", () => {
       providerStatus("openai", true),
       providerStatus("idealista", false),
       providerStatus("immobiliare", false),
+      providerStatus("mapbox", false),
       providerStatus("google_maps_places", false),
+      providerStatus("cloudinary", false),
     ]);
 
     expect(shouldOpenCasaHudSetupForGenerate(cards)).toBe(true);
     expect(getMissingCasaHudCoreConnections(cards).map((card) => card.title)).toEqual([
-      "YouTube",
       "Listing Sources",
-      "Google Maps / Places",
+      "Maps & Location Visuals",
+      "Local Places & POIs",
+      "Media Storage",
+      "YouTube Channel",
     ]);
     expect(getCasaHudSetupMessage(cards)).toContain("before CasaHUD generates a production video");
   });
@@ -143,20 +156,49 @@ describe("Domara integrations UI helpers", () => {
       providerStatus("youtube", true),
       providerStatus("openai", true),
       providerStatus("idealista", true),
+      providerStatus("mapbox", true),
       providerStatus("google_maps_places", true),
+      providerStatus("cloudinary", true),
     ]);
 
     expect(shouldOpenCasaHudSetupForGenerate(cards)).toBe(false);
-    expect(cards.find((card) => card.id === "elevenlabs")?.status).toBe("not_connected");
+    expect(cards.find((card) => card.id === "elevenlabs")?.status).toBe("optional");
     expect(cards.find((card) => card.id === "elevenlabs")?.ctaLabel).toBe("Connect");
   });
 
   it("keeps CasaHUD setup card copy user-facing", () => {
     const cards = buildCasaHudConnectionCards([]);
-    const cardText = cards.flatMap((card) => [card.title, card.enables, card.detail, card.ctaLabel]).join(" ");
+    const cardText = cards
+      .flatMap((card) => [
+        card.title,
+        card.enables,
+        card.detail,
+        card.missingSetupGuidance,
+        card.safeErrorState,
+        card.ctaLabel,
+        ...(card.supportedSourceLabels || []),
+      ])
+      .join(" ");
     const message = getCasaHudSetupMessage(cards);
-    const forbidden = /API_KEY|env var|environment|provider seam|database|debug|mock|sample/i;
+    const forbidden = /API_KEY|env var|DATABASE_URL|DIRECTORYIQ_DATABASE_URL|provider seam|migration|raw credential|raw secret|debug|mock|sample/i;
 
     expect(`${cardText} ${message}`).not.toMatch(forbidden);
+  });
+
+  it("marks one listing source as partially connected without blocking generation", () => {
+    const cards = buildCasaHudConnectionCards([
+      providerStatus("youtube", true),
+      providerStatus("openai", true),
+      providerStatus("idealista", true),
+      providerStatus("immobiliare", false),
+      providerStatus("mapbox", true),
+      providerStatus("google_maps_places", true),
+      providerStatus("digitalocean_spaces", true),
+    ]);
+
+    const listingSources = cards.find((card) => card.id === "listing_sources");
+    expect(listingSources?.statusLabel).toBe("Partially Connected");
+    expect(getMissingCasaHudCoreConnections(cards).map((card) => card.id)).not.toContain("listing_sources");
+    expect(shouldOpenCasaHudSetupForGenerate(cards)).toBe(false);
   });
 });

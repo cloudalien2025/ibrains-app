@@ -321,13 +321,28 @@ describe("CasaHUD production contracts", () => {
 
   it("presents CasaHUD as a compact user-facing AI wizard instead of a manual builder", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
+    const runRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/ai-channel/runs/route.ts"), "utf8");
+    const connectionUi = fs.readFileSync(path.join(process.cwd(), "lib/studio/domara/integrations-ui.ts"), "utf8");
+    const combinedUi = `${source}\n${connectionUi}`;
 
     expect(source).toContain("Generate Viral Video");
     expect(source).toContain("Connect CasaHUD");
     expect(source).toContain("Set up production video connections");
+    expect(source).toContain("Manage Connections");
     expect(source).toContain("casahud-connect-wizard");
     expect(source).toContain("shouldOpenCasaHudSetupForGenerate");
     expect(source).toContain("Save Connection");
+    expect(source).toContain("Test Connection");
+    expect(source).toContain("Required to Create Videos");
+    expect(source).toContain("Required to Publish/Schedule");
+    expect(source).toContain("Optional Premium Upgrade");
+    expect(combinedUi).toContain("OpenAI");
+    expect(combinedUi).toContain("YouTube Channel");
+    expect(combinedUi).toContain("Listing Sources");
+    expect(combinedUi).toContain("Maps & Location Visuals");
+    expect(combinedUi).toContain("Local Places & POIs");
+    expect(combinedUi).toContain("Media Storage");
+    expect(combinedUi).toContain("Voice Narration");
     expect(source).toContain("Finding high-potential video ideas");
     expect(source).toContain("Creating viral title");
     expect(source).toContain("Finding matching properties");
@@ -349,9 +364,18 @@ describe("CasaHUD production contracts", () => {
     expect(source).not.toContain("YOUTUBE_API_KEY");
     expect(source).not.toContain("environment variable");
     expect(source).not.toContain("database");
+    expect(source).not.toContain("DATABASE_URL");
+    expect(source).not.toContain("DIRECTORYIQ_DATABASE_URL");
+    expect(source).not.toContain("provider seam");
+    expect(source).not.toContain("migration");
+    expect(source).not.toContain("raw credential");
+    expect(source).not.toContain("raw secret");
     expect(source).not.toContain("debug");
     expect(source).not.toContain("sample data");
     expect(source).not.toContain("<DomaraCampaignWorkflowShell");
     expect(source).not.toContain("fake connected");
+    expect(runRoute).toContain("CONNECTIONS_REQUIRED");
+    expect(runRoute).toContain("getMissingCasaHudCoreConnections");
+    expect(runRoute).toContain("buildCasaHudConnectionCards");
   });
 });

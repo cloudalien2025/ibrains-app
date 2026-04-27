@@ -21,6 +21,8 @@ function formatLooksValid(provider: string, secret: string): boolean {
   if (provider === "google_maps_places") return trimmed.length >= 16;
   if (provider === "idealista") return trimmed.length >= 8;
   if (provider === "immobiliare") return trimmed.length >= 8;
+  if (provider === "cloudinary") return trimmed.length >= 8;
+  if (provider === "digitalocean_spaces") return trimmed.length >= 8;
   if (provider === "youtube") return trimmed.length >= 16;
   return false;
 }
@@ -41,19 +43,19 @@ export async function POST(
 
     const credential = await getStudioIntegrationSecret(userId, resolvedProvider);
     if (!credential) {
-      return errorResponse(400, "Provider credentials are not configured. Save credentials first.", "NOT_CONFIGURED", reqId);
+      return errorResponse(400, "This connection has not been saved yet. Connect it first.", "NOT_CONFIGURED", reqId);
     }
 
     const looksValid = formatLooksValid(resolvedProvider, credential.secret);
     if (!looksValid) {
-      return errorResponse(400, "Stored credential format is invalid.", "VALIDATION_ERROR", reqId);
+      return errorResponse(400, "Connection details need attention. Reconnect and try again.", "VALIDATION_ERROR", reqId);
     }
 
     return NextResponse.json({
       ok: true,
       reqId,
       providerId: resolvedProvider,
-      message: "Credential format is valid and ready for provider wiring.",
+      message: "Connection looks ready.",
       verifiedAt: new Date().toISOString(),
     });
   } catch (error) {
