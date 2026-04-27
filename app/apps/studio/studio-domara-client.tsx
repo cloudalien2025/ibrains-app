@@ -7,6 +7,15 @@ import type {
   CasaHudStageName,
   CasaHudStageStatus,
 } from "@/lib/studio/domara/ai-channel-engine/types";
+import type { DomaraIntegrationProviderId, DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
+import {
+  buildCasaHudConnectionCards,
+  getCasaHudSetupMessage,
+  getMissingCasaHudCoreConnections,
+  shouldOpenCasaHudSetupForGenerate,
+  type CasaHudConnectionCard,
+  type CasaHudConnectionCardId,
+} from "@/lib/studio/domara/integrations-ui";
 
 type CasaHudRunSummary = {
   id: string;
@@ -20,6 +29,19 @@ type CasaHudRunSummary = {
 };
 
 type CasaHudAiStatus = "idle" | "loading" | "ready" | "needs_setup" | "error";
+
+type CasaHudConnectionStatusPayload = {
+  ok?: boolean;
+  providers?: DomaraIntegrationProviderStatus[];
+  saveSupported?: boolean;
+};
+
+type CasaHudConnectionSavePayload = {
+  ok?: boolean;
+  provider?: DomaraIntegrationProviderStatus;
+  providers?: DomaraIntegrationProviderStatus[];
+  error?: { message?: string };
+};
 
 const wizardSteps: Array<{ stage: CasaHudStageName; label: string }> = [
   { stage: "youtube_research", label: "Finding high-potential video ideas" },
@@ -76,6 +98,27 @@ function getPublishingMessage(output: CasaHudOrchestratorOutput | null) {
   return typeof message === "string" ? message : null;
 }
 
+const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
+  openai: "OpenAI",
+  elevenlabs: "ElevenLabs",
+  mapbox: "Mapbox",
+  google_maps_places: "Google Maps / Places",
+  idealista: "Idealista",
+  immobiliare: "Immobiliare",
+  youtube: "YouTube",
+};
+
+function defaultProviderForCard(card: CasaHudConnectionCard, providers: DomaraIntegrationProviderStatus[]) {
+  if (card.id !== "listing_sources") return card.providerIds[0];
+  const connected = providers.find(
+    (provider) =>
+      card.providerIds.includes(provider.providerId) &&
+      provider.configured &&
+      provider.validationStatus !== "invalid",
+  );
+  return connected?.providerId || "idealista";
+}
+
 export default function StudioDomaraClient() {
   const [aiStatus, setAiStatus] = useState<CasaHudAiStatus>("idle");
   const [aiError, setAiError] = useState<string | null>(null);
@@ -84,10 +127,27 @@ export default function StudioDomaraClient() {
   const [aiStoreAvailable, setAiStoreAvailable] = useState<boolean | null>(null);
   const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
+  const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
+  const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
+  const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
+  const [setupOpen, setSetupOpen] = useState(false);
+  const [setupReason, setSetupReason] = useState<string | null>(null);
+  const [activeConnectionId, setActiveConnectionId] = useState<CasaHudConnectionCardId | null>(null);
+  const [activeProviderId, setActiveProviderId] = useState<DomaraIntegrationProviderId>("youtube");
+  const [connectionSecret, setConnectionSecret] = useState("");
+  const [connectionNotice, setConnectionNotice] = useState<string | null>(null);
+  const [connectionSaving, setConnectionSaving] = useState(false);
 
   const latestSavedRun = aiRuns[0];
   const packageReady = Boolean(aiOutput?.youtubePackage);
   const needsConnection = aiOutput?.run.status === "needs_credentials" || aiStatus === "needs_setup";
+  const connectionCards = useMemo(() => buildCasaHudConnectionCards(connectionProviders), [connectionProviders]);
+  const missingCoreConnections = useMemo(() => getMissingCasaHudCoreConnections(connectionCards), [connectionCards]);
+  const setupMessage = useMemo(() => getCasaHudSetupMessage(connectionCards), [connectionCards]);
+  const activeConnectionCard = useMemo(
+    () => connectionCards.find((card) => card.id === activeConnectionId) || null,
+    [activeConnectionId, connectionCards],
+  );
   const selectedTitle = aiOutput?.project?.name || aiOutput?.selectedTitle.title || latestSavedRun?.project_name || latestSavedRun?.selected_title;
   const publishingMessage = useMemo(() => getPublishingMessage(aiOutput), [aiOutput]);
   const topTitleCandidates = useMemo(() => aiOutput?.titleCandidates.slice(0, 3) || [], [aiOutput]);
@@ -95,6 +155,29 @@ export default function StudioDomaraClient() {
     () => aiOutput?.listingValidation?.selectedListings || aiOutput?.listingDiscovery.listings || [],
     [aiOutput],
   );
+
+  const loadConnectionStatus = useCallback(async () => {
+    setConnectionStatus("loading");
+    try {
+      const response = await fetch("/api/studio/domara/integrations/status", {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudConnectionStatusPayload | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error("CasaHUD could not load connection status.");
+      }
+
+      const providers = payload.providers || [];
+      setConnectionProviders(providers);
+      setConnectionSaveSupported(payload.saveSupported !== false);
+      setConnectionStatus("ready");
+      return providers;
+    } catch {
+      setConnectionStatus("error");
+      setConnectionNotice("CasaHUD could not check your connections. Open setup to try again.");
+      return [];
+    }
+  }, []);
 
   const loadAiRuns = useCallback(async () => {
     try {
@@ -121,7 +204,7 @@ export default function StudioDomaraClient() {
         setAiStatus(payload.latestOutput.run.status === "needs_credentials" ? "needs_setup" : "ready");
       } else if (payload.storeAvailable === false) {
         setAiStatus("needs_setup");
-        setAiError("CasaHUD needs storage setup before it can save video packages.");
+        setAiError("CasaHUD is not ready to save video packages in this workspace yet.");
       }
     } catch (runLoadError) {
       setAiStatus("error");
@@ -133,8 +216,92 @@ export default function StudioDomaraClient() {
     void loadAiRuns();
   }, [loadAiRuns]);
 
+  useEffect(() => {
+    void loadConnectionStatus();
+  }, [loadConnectionStatus]);
+
+  function openSetup(reason?: string, focusCardId?: CasaHudConnectionCardId, cardsOverride?: CasaHudConnectionCard[]) {
+    setSetupReason(reason || setupMessage);
+    setSetupOpen(true);
+    setConnectionNotice(null);
+    const availableCards = cardsOverride || connectionCards;
+    const missingCards = getMissingCasaHudCoreConnections(availableCards);
+    const targetCard =
+      (focusCardId ? availableCards.find((card) => card.id === focusCardId) : null) ||
+      missingCards[0] ||
+      availableCards[0];
+    if (targetCard) {
+      setActiveConnectionId(targetCard.id);
+      setActiveProviderId(defaultProviderForCard(targetCard, connectionProviders));
+    }
+  }
+
+  function openConnectionCard(card: CasaHudConnectionCard) {
+    setActiveConnectionId(card.id);
+    setActiveProviderId(defaultProviderForCard(card, connectionProviders));
+    setConnectionSecret("");
+    setConnectionNotice(null);
+  }
+
+  async function onSaveConnection() {
+    const activeCard = activeConnectionCard;
+    if (!activeCard) return;
+    if (!connectionSaveSupported) {
+      setConnectionNotice("This workspace cannot save new connections here yet. Ask an admin to enable secure connection saving.");
+      return;
+    }
+    if (!connectionSecret.trim()) {
+      setConnectionNotice(`Add the secure token for ${providerOptionLabels[activeProviderId]} before saving.`);
+      return;
+    }
+
+    try {
+      setConnectionSaving(true);
+      setConnectionNotice(null);
+      const response = await fetch(`/api/studio/domara/integrations/${encodeURIComponent(activeProviderId)}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          apiKey: connectionSecret,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudConnectionSavePayload | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "CasaHUD could not save this connection.");
+      }
+      setConnectionSecret("");
+      setConnectionNotice(`${providerOptionLabels[activeProviderId]} is connected.`);
+      await loadConnectionStatus();
+    } catch (error) {
+      setConnectionNotice(error instanceof Error ? error.message : "CasaHUD could not save this connection.");
+    } finally {
+      setConnectionSaving(false);
+    }
+  }
+
   async function onGenerateViralVideo() {
     try {
+      const currentProviders =
+        connectionStatus === "ready" ? connectionProviders : await loadConnectionStatus();
+      const currentCards = buildCasaHudConnectionCards(currentProviders);
+      if (shouldOpenCasaHudSetupForGenerate(currentCards)) {
+        setAiStatus("needs_setup");
+        setAiError(null);
+        openSetup(
+          getCasaHudSetupMessage(currentCards),
+          getMissingCasaHudCoreConnections(currentCards)[0]?.id,
+          currentCards,
+        );
+        return;
+      }
+      if (aiStoreAvailable === false) {
+        setAiStatus("needs_setup");
+        setAiError("CasaHUD is not ready to save video packages in this workspace yet.");
+        return;
+      }
+
       setAiStatus("loading");
       setAiError(null);
       setActionNotice(null);
@@ -152,6 +319,7 @@ export default function StudioDomaraClient() {
         | {
             ok?: boolean;
             output?: CasaHudOrchestratorOutput;
+            providers?: DomaraIntegrationProviderStatus[];
             error?: { message?: string; code?: string };
           }
         | null;
@@ -160,8 +328,14 @@ export default function StudioDomaraClient() {
         throw new Error(payload?.error?.message || "CasaHUD could not generate a viral video package.");
       }
 
+      if (payload.providers) {
+        setConnectionProviders(payload.providers);
+      }
       setAiOutput(payload.output);
       setAiStatus(payload.output.run.status === "needs_credentials" ? "needs_setup" : "ready");
+      if (payload.output.run.status === "needs_credentials") {
+        openSetup("CasaHUD needs a few live connections before it can finish a production video.");
+      }
       await loadAiRuns();
     } catch (generationError) {
       setAiStatus("error");
@@ -187,10 +361,20 @@ export default function StudioDomaraClient() {
       setActionNotice("Review the package before publishing or scheduling.");
       return;
     }
+    const youtubeCard = connectionCards.find((card) => card.id === "youtube");
+    if (!youtubeCard || youtubeCard.status !== "connected") {
+      openSetup(
+        mode === "publish"
+          ? "Connect YouTube before CasaHUD publishes this reviewed package."
+          : "Connect YouTube before CasaHUD schedules this reviewed package.",
+        "youtube",
+      );
+      return;
+    }
     setActionNotice(
       mode === "publish"
-        ? "Connect YouTube before CasaHUD can publish this reviewed package."
-        : "Connect YouTube before CasaHUD can schedule this reviewed package.",
+        ? "CasaHUD is ready to publish this reviewed package."
+        : "CasaHUD is ready to schedule this reviewed package.",
     );
   }
 
@@ -240,13 +424,40 @@ export default function StudioDomaraClient() {
                   type="button"
                   className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.28)] transition hover:-translate-y-0.5 hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                   onClick={() => void onGenerateViralVideo()}
-                  disabled={aiStatus === "loading" || aiStoreAvailable === false}
+                  disabled={aiStatus === "loading"}
+                  data-testid="casahud-generate-cta"
                 >
                   {aiStatus === "loading" ? "Generating..." : "Generate Viral Video"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-[#CFC4B2] bg-white/75 px-5 py-4 text-sm font-semibold text-[#172033] shadow-sm transition hover:bg-white"
+                  onClick={() => openSetup()}
+                  data-testid="casahud-connect-button"
+                >
+                  Connect CasaHUD
                 </button>
                 <p className="max-w-sm text-sm leading-6 text-[#657086]">
                   The winning YouTube title automatically becomes the project name.
                 </p>
+              </div>
+
+              <div
+                className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-[#E7D8C2] bg-white/[0.58] px-4 py-3 text-sm text-[#526070]"
+                data-testid="casahud-connection-summary"
+              >
+                <span className="font-semibold text-[#172033]">
+                  {missingCoreConnections.length === 0 && connectionStatus === "ready"
+                    ? "Core connections ready"
+                    : "Setup needed"}
+                </span>
+                <span>
+                  {connectionStatus === "loading"
+                    ? "Checking CasaHUD connections..."
+                    : missingCoreConnections.length === 0
+                      ? "YouTube, OpenAI, listing sources, and Google Maps / Places are ready for production videos."
+                      : `${missingCoreConnections.length} core connection${missingCoreConnections.length === 1 ? "" : "s"} needed before generation.`}
+                </span>
               </div>
 
               {aiError ? (
@@ -424,6 +635,180 @@ export default function StudioDomaraClient() {
           </aside>
         </section>
       </div>
+
+      {setupOpen ? (
+        <div
+          className="fixed inset-0 z-50 flex items-end bg-[#172033]/45 p-3 backdrop-blur-sm md:items-center md:justify-center md:p-6"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="casahud-connect-title"
+          data-testid="casahud-connect-wizard"
+        >
+          <section className="max-h-[92vh] w-full overflow-y-auto rounded-[1.75rem] border border-white/70 bg-[#FFFDF8] shadow-[0_30px_90px_rgba(23,32,51,0.34)] md:max-w-5xl">
+            <div className="border-b border-[#E6D8C6] p-5 md:p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#8A5A34]">Connect CasaHUD</p>
+                  <h2 id="casahud-connect-title" className="mt-2 text-3xl font-semibold tracking-[-0.035em] text-[#172033]">
+                    Set up production video connections
+                  </h2>
+                  <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]" data-testid="casahud-setup-message">
+                    {setupReason || setupMessage}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="rounded-full border border-[#D7CAB8] bg-white px-4 py-2 text-sm font-semibold text-[#344256] transition hover:bg-[#F8F0E5]"
+                  onClick={() => setSetupOpen(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="grid gap-5 p-5 lg:grid-cols-[1.08fr_0.92fr] md:p-6">
+              <div className="grid gap-3" data-testid="casahud-connection-cards">
+                {connectionCards.map((card) => (
+                  <article
+                    key={card.id}
+                    className={`rounded-2xl border p-4 transition ${
+                      activeConnectionId === card.id
+                        ? "border-[#172033] bg-white shadow-[0_16px_36px_rgba(23,32,51,0.12)]"
+                        : "border-[#E7D8C2] bg-white/[0.72]"
+                    }`}
+                    data-testid={`casahud-connection-card-${card.id}`}
+                  >
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">{card.title}</h3>
+                          <span
+                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              card.status === "connected"
+                                ? "bg-[#DFF3E7] text-[#0F5132]"
+                                : "bg-[#FFF0D6] text-[#7A4B13]"
+                            }`}
+                          >
+                            {card.status === "connected" ? "Connected" : "Not Connected"}
+                          </span>
+                          {card.optional ? (
+                            <span className="rounded-full bg-[#EEF2F6] px-2.5 py-1 text-xs font-semibold text-[#526070]">
+                              Optional
+                            </span>
+                          ) : (
+                            <span className="rounded-full bg-[#EAF0FF] px-2.5 py-1 text-xs font-semibold text-[#274690]">
+                              Core
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-2 text-sm leading-6 text-[#526070]">{card.enables}</p>
+                        <p className="mt-1 text-xs leading-5 text-[#718096]">{card.detail}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-xl border border-[#CFC4B2] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B]"
+                        onClick={() => openConnectionCard(card)}
+                      >
+                        {card.ctaLabel}
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <aside className="rounded-2xl border border-[#E7D8C2] bg-[#F9F4EC] p-4" data-testid="casahud-connection-form">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Secure connection</p>
+                    <h3 className="mt-1 text-xl font-semibold tracking-[-0.025em] text-[#172033]">
+                      {activeConnectionCard?.title || "Choose a connection"}
+                    </h3>
+                  </div>
+                  {activeConnectionCard ? (
+                    <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#526070]">
+                      {activeConnectionCard.optional ? "Optional" : "Core"}
+                    </span>
+                  ) : null}
+                </div>
+
+                <p className="mt-3 text-sm leading-6 text-[#526070]">
+                  Add or update the secure token for this service. CasaHUD stores it safely for your account and never
+                  shows the full value back on screen.
+                </p>
+
+                {activeConnectionCard?.id === "listing_sources" ? (
+                  <label className="mt-4 block text-sm font-semibold text-[#344256]">
+                    Listing source
+                    <select
+                      className="mt-2 w-full rounded-xl border border-[#D7CAB8] bg-white px-3 py-3 text-sm text-[#172033] outline-none transition focus:border-[#172033]"
+                      value={activeProviderId}
+                      onChange={(event) => setActiveProviderId(event.target.value as DomaraIntegrationProviderId)}
+                    >
+                      {activeConnectionCard.providerIds.map((providerId) => (
+                        <option key={providerId} value={providerId}>
+                          {providerOptionLabels[providerId]}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : null}
+
+                <label className="mt-4 block text-sm font-semibold text-[#344256]">
+                  Secure token
+                  <input
+                    className="mt-2 w-full rounded-xl border border-[#D7CAB8] bg-white px-3 py-3 text-sm text-[#172033] outline-none transition placeholder:text-[#98A1AE] focus:border-[#172033]"
+                    type="password"
+                    value={connectionSecret}
+                    onChange={(event) => setConnectionSecret(event.target.value)}
+                    placeholder={`Paste ${providerOptionLabels[activeProviderId]} token`}
+                    autoComplete="off"
+                  />
+                </label>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onSaveConnection()}
+                    disabled={connectionSaving || !activeConnectionCard}
+                  >
+                    {connectionSaving ? "Saving..." : "Save Connection"}
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-xl border border-[#CFC4B2] bg-white px-4 py-3 text-sm font-semibold text-[#344256] transition hover:bg-[#F8F0E5]"
+                    onClick={() => void loadConnectionStatus()}
+                  >
+                    Refresh Status
+                  </button>
+                </div>
+
+                {connectionNotice ? (
+                  <p className="mt-4 rounded-xl border border-[#E1D2BC] bg-white p-3 text-sm leading-6 text-[#526070]">
+                    {connectionNotice}
+                  </p>
+                ) : null}
+
+                <div className="mt-5 rounded-2xl border border-[#E1D2BC] bg-white p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Production checklist</p>
+                  <div className="mt-3 grid gap-2 text-sm text-[#526070]">
+                    {connectionCards
+                      .filter((card) => card.required)
+                      .map((card) => (
+                        <div key={card.id} className="flex items-center justify-between gap-3">
+                          <span>{card.title}</span>
+                          <span className={card.status === "connected" ? "font-semibold text-[#0F5132]" : "font-semibold text-[#7A4B13]"}>
+                            {card.status === "connected" ? "Connected" : "Needed"}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </main>
   );
 }
