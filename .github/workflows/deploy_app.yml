@@ -97,11 +97,16 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT }}
           script: |
             set -e
-            cd ${{ secrets.DEPLOY_PATH }}
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            ARTIFACT_PATH="${DEPLOY_PATH}/artifacts/build.tar.gz"
+            STAGING_ROOT="${DEPLOY_PATH}/.deploy_staging"
+            RELEASE_DIR="${STAGING_ROOT}/release-${GITHUB_RUN_ID:-manual}-$(date +%s)"
 
-            tar -xzf ${{ secrets.DEPLOY_PATH }}/artifacts/build.tar.gz
-            rm -f ${{ secrets.DEPLOY_PATH }}/artifacts/build.tar.gz
+            mkdir -p "${RELEASE_DIR}"
+            tar -xzf "${ARTIFACT_PATH}" -C "${RELEASE_DIR}"
+            rm -f "${ARTIFACT_PATH}"
 
+            cd "${RELEASE_DIR}"
             npm ci --omit=dev
 
             SERVICE_NAME="${{ secrets.SERVICE_NAME }}"
@@ -109,16 +114,50 @@ jobs:
               SERVICE_NAME="ibrains-app"
             fi
 
-            if systemctl is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+            systemctl_cmd=(systemctl)
+            if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+              systemctl_cmd=(sudo systemctl)
+            fi
+
+            if "${systemctl_cmd[@]}" is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
               echo "Configured service '$SERVICE_NAME' is masked; falling back to 'ibrains-app'."
               SERVICE_NAME="ibrains-app"
             fi
 
-            if systemctl is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
-              systemctl unmask "$SERVICE_NAME"
+            if "${systemctl_cmd[@]}" is-enabled "$SERVICE_NAME" 2>/dev/null | grep -q "^masked$"; then
+              "${systemctl_cmd[@]}" unmask "$SERVICE_NAME"
             fi
 
-            systemctl restart "$SERVICE_NAME"
+            service_started=0
+            cleanup_on_error() {
+              if [ "$service_started" -eq 0 ]; then
+                "${systemctl_cmd[@]}" start "$SERVICE_NAME" >/dev/null 2>&1 || true
+              fi
+            }
+            trap cleanup_on_error EXIT
+
+            "${systemctl_cmd[@]}" stop "$SERVICE_NAME"
+
+            if command -v rsync >/dev/null 2>&1; then
+              rsync -a --delete \
+                --exclude artifacts \
+                --exclude .deploy_staging \
+                --exclude .env \
+                --exclude .env.production.local \
+                "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
+            else
+              find "${DEPLOY_PATH}" -mindepth 1 -maxdepth 1 \
+                ! -name artifacts \
+                ! -name .deploy_staging \
+                ! -name .env \
+                ! -name .env.production.local \
+                -exec rm -rf {} +
+              cp -a "${RELEASE_DIR}/." "${DEPLOY_PATH}/"
+            fi
+
+            "${systemctl_cmd[@]}" start "$SERVICE_NAME"
+            service_started=1
+            trap - EXIT
 
             ready=0
             for attempt in $(seq 1 10); do
@@ -131,10 +170,13 @@ jobs:
 
             if [ "$ready" -ne 1 ]; then
               echo "release endpoint did not become ready after restart"
-              systemctl status "$SERVICE_NAME" --no-pager -l || true
-              journalctl -u "$SERVICE_NAME" -n 150 --no-pager || true
+              "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
+              (command -v journalctl >/dev/null 2>&1 && journalctl -u "$SERVICE_NAME" -n 150 --no-pager) || true
               exit 1
             fi
+
+            rm -rf "${STAGING_ROOT}"
+            cd "${DEPLOY_PATH}"
 
             BASE_URL=http://127.0.0.1:3001 \
             HOST_HEADER=app.ibrains.ai \
