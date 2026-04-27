@@ -8,9 +8,9 @@ describe("front door layout chain contract", () => {
     const source = fs.readFileSync(sourcePath, "utf8");
 
     expect(source.includes("import \"./globals.css\";")).toBe(true);
-    expect(source.includes("<body className=\"antialiased\">")).toBe(true);
+    expect(source.includes("<body className=\"antialiased\" data-release-id={releaseId ?? undefined}>")).toBe(true);
+    expect(source.includes("<StaleClientRecovery />")).toBe(true);
     expect(source.includes("<ClerkProvider")).toBe(true);
     expect(source.includes("{children}")).toBe(true);
   });
 });
-
