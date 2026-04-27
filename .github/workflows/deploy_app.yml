@@ -57,7 +57,8 @@ jobs:
           public \
           next.config.mjs \
           app \
-          scripts/prod_smoke.sh
+          scripts/prod_smoke.sh \
+          scripts/patch_next_route_types.mjs
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
