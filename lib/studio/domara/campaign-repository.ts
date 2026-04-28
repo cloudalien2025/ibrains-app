@@ -2,6 +2,7 @@ import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
 import {
   CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE,
+  CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE,
   buildCasaHudCampaignFromOpportunity,
   CASAHUD_CAMPAIGN_METADATA_PHASE,
   parseCasaHudCampaignMetadata,
@@ -115,11 +116,11 @@ export async function listCasaHudCampaignSummaries(userId: string, limit = 12): 
       updated_at
     FROM casahud_projects
     WHERE user_id = $1
-      AND provider_metadata->>'phase' IN ($2, $3)
+      AND provider_metadata->>'phase' IN ($2, $3, $4)
     ORDER BY updated_at DESC, created_at DESC
-    LIMIT $4
+    LIMIT $5
     `,
-    [userId, CASAHUD_CAMPAIGN_METADATA_PHASE, CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE, limit],
+    [userId, CASAHUD_CAMPAIGN_METADATA_PHASE, CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE, CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE, limit],
   );
 
   return rows
@@ -144,10 +145,16 @@ export async function getCasaHudCampaign(userId: string, campaignId: string): Pr
     FROM casahud_projects
     WHERE user_id = $1
       AND id = $2
-      AND provider_metadata->>'phase' IN ($3, $4)
+      AND provider_metadata->>'phase' IN ($3, $4, $5)
     LIMIT 1
     `,
-    [userId, campaignId, CASAHUD_CAMPAIGN_METADATA_PHASE, CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE],
+    [
+      userId,
+      campaignId,
+      CASAHUD_CAMPAIGN_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE,
+    ],
   );
 
   const row = rows[0];

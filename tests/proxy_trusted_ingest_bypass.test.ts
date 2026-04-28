@@ -134,6 +134,22 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
+  it("bypasses Clerk middleware on new Studio campaign validation routes", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest(
+      "https://app.ibrains.ai/api/studio/domara/campaigns/casahud-project-123/validate-listings",
+      {
+        method: "POST",
+      },
+    );
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
   it("keeps non-Studio API routes on the Clerk proxy path unless separately trusted", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;

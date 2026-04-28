@@ -66,6 +66,14 @@ type CasaHudListingDiscoveryPayload = {
   error?: { message?: string };
 };
 
+type CasaHudListingValidationPayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -82,6 +90,14 @@ const discoverySteps: CasaHudProgressStep[] = [
   { id: "build_criteria", label: "Building listing search criteria" },
   { id: "search_sources", label: "Searching listing sources" },
   { id: "prepare_candidates", label: "Preparing candidate properties" },
+];
+
+const validationSteps: CasaHudProgressStep[] = [
+  { id: "check_truthfulness", label: "Checking title truthfulness" },
+  { id: "remove_duplicates", label: "Removing duplicate listings" },
+  { id: "score_fit", label: "Scoring listing fit" },
+  { id: "rank_properties", label: "Ranking strongest properties" },
+  { id: "prepare_shortlist", label: "Preparing approved shortlist" },
 ];
 
 const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
@@ -155,6 +171,31 @@ function formatListingProvider(provider: string) {
   return provider;
 }
 
+function formatSupportConfidence(value?: number | null) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return "Pending";
+  return `${Math.round(value)}%`;
+}
+
+function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
+  return {
+    id: campaign.id,
+    name: campaign.name,
+    campaignType: campaign.campaignType,
+    marketRegionHint: campaign.marketRegionHint,
+    status: campaign.status,
+    createdAt: campaign.createdAt,
+    updatedAt: campaign.updatedAt,
+    researchSummary: campaign.researchBrief.summary,
+    listingCandidateCount: campaign.listingCandidates.length,
+    listingDiscoveryStatus: campaign.listingDiscoveryStatus,
+    approvedListingCount: campaign.approvedListings.length,
+    listingValidationStatus: campaign.listingValidationStatus,
+    titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
+    discoverySummary: campaign.discoverySummary?.headline,
+    validationSummary: campaign.listingValidationSummary?.headline,
+  };
+}
+
 function defaultProviderForCard(card: CasaHudConnectionCard, providers: DomaraIntegrationProviderStatus[]) {
   if (card.id !== "listing_sources") return card.providerIds[0];
   const connected = providers.find(
@@ -203,6 +244,8 @@ export default function StudioDomaraClient() {
   const [campaignOpeningId, setCampaignOpeningId] = useState<string | null>(null);
   const [campaignDiscoveringId, setCampaignDiscoveringId] = useState<string | null>(null);
   const [discoveryProgressIndex, setDiscoveryProgressIndex] = useState(0);
+  const [campaignValidatingId, setCampaignValidatingId] = useState<string | null>(null);
+  const [validationProgressIndex, setValidationProgressIndex] = useState(0);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -309,6 +352,17 @@ export default function StudioDomaraClient() {
 
     return () => window.clearTimeout(timeoutId);
   }, [campaignDiscoveringId, discoveryProgressIndex]);
+
+  useEffect(() => {
+    if (!campaignValidatingId) return;
+    if (validationProgressIndex >= validationSteps.length - 1) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setValidationProgressIndex((current) => Math.min(current + 1, validationSteps.length - 1));
+    }, 650);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignValidatingId, validationProgressIndex]);
 
   function openSetup(reason?: string, focusCardId?: CasaHudConnectionCardId, cardsOverride?: CasaHudConnectionCard[]) {
     setSetupReason(reason || setupMessage);
@@ -458,20 +512,7 @@ export default function StudioDomaraClient() {
       setOpportunityOutput(null);
       setCampaignNotice(payload.message || `Campaign saved. "${payload.campaign.name}" is ready for Property Discovery.`);
       setRecentCampaigns((current) => {
-        const summary =
-          payload.summary || {
-            id: payload.campaign!.id,
-            name: payload.campaign!.name,
-            campaignType: payload.campaign!.campaignType,
-            marketRegionHint: payload.campaign!.marketRegionHint,
-            status: payload.campaign!.status,
-            createdAt: payload.campaign!.createdAt,
-            updatedAt: payload.campaign!.updatedAt,
-            researchSummary: payload.campaign!.researchBrief.summary,
-            listingCandidateCount: payload.campaign!.listingCandidates.length,
-            listingDiscoveryStatus: payload.campaign!.listingDiscoveryStatus,
-            discoverySummary: payload.campaign!.discoverySummary?.headline,
-          };
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
         return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
       });
     } catch (error) {
@@ -525,20 +566,7 @@ export default function StudioDomaraClient() {
       setActiveCampaign(payload.campaign);
       setCampaignNotice(payload.message || `Property discovery complete. "${payload.campaign.name}" is ready for listing validation.`);
       setRecentCampaigns((current) => {
-        const summary =
-          payload.summary || {
-            id: payload.campaign!.id,
-            name: payload.campaign!.name,
-            campaignType: payload.campaign!.campaignType,
-            marketRegionHint: payload.campaign!.marketRegionHint,
-            status: payload.campaign!.status,
-            createdAt: payload.campaign!.createdAt,
-            updatedAt: payload.campaign!.updatedAt,
-            researchSummary: payload.campaign!.researchBrief.summary,
-            listingCandidateCount: payload.campaign!.listingCandidates.length,
-            listingDiscoveryStatus: payload.campaign!.listingDiscoveryStatus,
-            discoverySummary: payload.campaign!.discoverySummary?.headline,
-          };
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
         return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
       });
       setDiscoveryProgressIndex(discoverySteps.length - 1);
@@ -546,6 +574,37 @@ export default function StudioDomaraClient() {
       setCampaignError(error instanceof Error ? error.message : "CasaHUD could not discover listings right now.");
     } finally {
       setCampaignDiscoveringId(null);
+    }
+  }
+
+  async function onValidateListings() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignValidatingId(activeCampaign.id);
+      setValidationProgressIndex(0);
+      setCampaignError(null);
+      setCampaignNotice(null);
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/validate-listings`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudListingValidationPayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not validate listings right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(payload.message || `Listing validation complete. "${payload.campaign.name}" is ready for Location Intelligence.`);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setValidationProgressIndex(validationSteps.length - 1);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not validate listings right now.");
+    } finally {
+      setCampaignValidatingId(null);
     }
   }
 
@@ -578,10 +637,16 @@ export default function StudioDomaraClient() {
       ? "discovering"
       : campaignDiscoveringId
         ? "property discovery"
-      : opportunityOutput
-        ? "opportunity ready"
+        : campaignValidatingId
+          ? "listing validation"
+        : opportunityOutput
+          ? "opportunity ready"
         : activeCampaign
-          ? "campaign ready"
+          ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
+            ? "validation ready"
+            : activeCampaign.listingDiscoveryStatus === "listing_candidates_discovered"
+              ? "listing discovery ready"
+              : "campaign ready"
           : "ready";
 
   return (
@@ -769,7 +834,7 @@ export default function StudioDomaraClient() {
                           {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {campaign.discoverySummary || campaign.researchSummary}
+                          {campaign.validationSummary || campaign.discoverySummary || campaign.researchSummary}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
                           {campaign.marketRegionHint ? (
@@ -780,6 +845,16 @@ export default function StudioDomaraClient() {
                           {campaign.listingCandidateCount > 0 ? (
                             <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
                               {campaign.listingCandidateCount} candidates
+                            </span>
+                          ) : null}
+                          {campaign.approvedListingCount > 0 ? (
+                            <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                              {campaign.approvedListingCount} approved
+                            </span>
+                          ) : null}
+                          {typeof campaign.titleSupportConfidence === "number" ? (
+                            <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                              {formatSupportConfidence(campaign.titleSupportConfidence)} support
                             </span>
                           ) : null}
                           <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
@@ -893,10 +968,14 @@ export default function StudioDomaraClient() {
                   ? "CasaHUD is discovering the opportunity"
                   : campaignDiscoveringId
                     ? "CasaHUD is finding matching properties"
+                    : campaignValidatingId
+                      ? "CasaHUD is validating and ranking listings"
                   : activeCampaign
-                    ? activeCampaign.listingCandidates.length > 0
-                      ? "Property discovery is saved on the campaign"
-                      : "Campaign saved and ready for the next phase"
+                    ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
+                      ? "Validated shortlist is ready for location intelligence"
+                      : activeCampaign.listingCandidates.length > 0
+                        ? "Property discovery is saved on the campaign"
+                        : "Campaign saved and ready for the next phase"
                     : "What happens after you click generate"}
               </h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]">
@@ -904,10 +983,14 @@ export default function StudioDomaraClient() {
                   ? "CasaHUD moves through YouTube opportunity research, title strategy, and final concept selection before handing the result to the next campaign phase."
                   : campaignDiscoveringId
                     ? "CasaHUD is translating the saved title promise into listing search criteria, checking provider availability, and assembling candidate properties for the next validation phase."
+                    : campaignValidatingId
+                      ? "CasaHUD is checking title truthfulness, removing duplicate listings, scoring fit, and ranking the shortlist that can move forward to location intelligence."
                   : activeCampaign
-                    ? activeCampaign.listingCandidates.length > 0
-                      ? "The campaign now includes saved listing candidates, provider status, and derived search criteria. CasaHUD can reopen this package and hand it forward to listing validation without rerunning discovery."
-                      : "The viral title, ranked candidates, and research brief are now durable campaign state. CasaHUD can reopen this package and hand it forward to Property Discovery without regenerating titles."
+                    ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
+                      ? "The campaign now includes approved and rejected listing results, ranking context, warnings, and title-support confidence. CasaHUD can reopen this package and hand it forward to Location Intelligence without rerunning validation."
+                      : activeCampaign.listingCandidates.length > 0
+                        ? "The campaign now includes saved listing candidates, provider status, and derived search criteria. CasaHUD can reopen this package and hand it forward to listing validation without rerunning discovery."
+                        : "The viral title, ranked candidates, and research brief are now durable campaign state. CasaHUD can reopen this package and hand it forward to Property Discovery without regenerating titles."
                     : "CasaHUD keeps the process guided and productized. It starts with competitive title opportunity discovery, then hands the winning concept forward for campaign creation."}
               </p>
             </div>
@@ -918,10 +1001,12 @@ export default function StudioDomaraClient() {
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="grid gap-2">
-              {(campaignDiscoveringId ? discoverySteps : wizardSteps).map((step, index) => {
-                const status = campaignDiscoveringId
-                  ? getProgressStepStatus("loading", discoveryProgressIndex, index)
-                  : getProgressStepStatus(generationStatus, progressIndex, index);
+              {(campaignValidatingId ? validationSteps : campaignDiscoveringId ? discoverySteps : wizardSteps).map((step, index) => {
+                const status = campaignValidatingId
+                  ? getProgressStepStatus("loading", validationProgressIndex, index)
+                  : campaignDiscoveringId
+                    ? getProgressStepStatus("loading", discoveryProgressIndex, index)
+                    : getProgressStepStatus(generationStatus, progressIndex, index);
                 return (
                   <div
                     key={step.id}
@@ -1322,6 +1407,17 @@ export default function StudioDomaraClient() {
                       <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.discoverySummary.headline}</p>
                     </div>
                   ) : null}
+                  {activeCampaign.listingValidationSummary ? (
+                    <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                      <p className="text-sm font-semibold text-[#172033]">Validation summary</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {activeCampaign.listingValidationSummary.headline}
+                      </p>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        Title support confidence: {formatSupportConfidence(activeCampaign.titleSupportConfidence)}
+                      </p>
+                    </div>
+                  ) : null}
                 </section>
 
                 <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/[0.92] p-5 shadow-sm">
@@ -1345,6 +1441,21 @@ export default function StudioDomaraClient() {
                         CasaHUD will persist candidate listings on this campaign and hand the shortlist to validation next.
                       </p>
                     </>
+                  ) : activeCampaign.nextPhase.key === "listing_validation" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void onValidateListings()}
+                        disabled={campaignValidatingId === activeCampaign.id}
+                        data-testid="casahud-validate-listings-cta"
+                      >
+                        {campaignValidatingId === activeCampaign.id ? "Validating Listings..." : "Validate and Rank Listings"}
+                      </button>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                        CasaHUD will separate approved and rejected listings, rank the shortlist, and prepare Location Intelligence next.
+                      </p>
+                    </>
                   ) : (
                     <button
                       type="button"
@@ -1365,6 +1476,30 @@ export default function StudioDomaraClient() {
                     <div className="mt-4 grid gap-2">
                       {discoverySteps.map((step, index) => {
                         const status = getProgressStepStatus("loading", discoveryProgressIndex, index);
+                        return (
+                          <div
+                            key={step.id}
+                            className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-2xl border border-[#D8E2D9] bg-white/80 px-3 py-3"
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
+                            <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
+                            <span className="text-xs text-[#718096]">{progressStatusLabel(status)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+
+                {campaignValidatingId === activeCampaign.id ? (
+                  <section
+                    className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm"
+                    data-testid="casahud-validation-progress"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Listing Validation</p>
+                    <div className="mt-4 grid gap-2">
+                      {validationSteps.map((step, index) => {
+                        const status = getProgressStepStatus("loading", validationProgressIndex, index);
                         return (
                           <div
                             key={step.id}
@@ -1437,6 +1572,193 @@ export default function StudioDomaraClient() {
                 ) : null}
               </aside>
             </div>
+
+            {activeCampaign.listingValidationSummary ? (
+              <section
+                className="mt-6 rounded-[1.85rem] border border-[#D8E2D9] bg-[linear-gradient(160deg,rgba(244,247,242,0.96),rgba(255,255,255,0.92))] p-5 shadow-sm"
+                data-testid="casahud-validation-summary"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Listing Validation</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                      {activeCampaign.listingValidationSummary.headline}
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {formatSupportConfidence(activeCampaign.titleSupportConfidence)} support
+                  </span>
+                </div>
+                <p className="mt-3 max-w-4xl text-sm leading-6 text-[#526070]">
+                  {activeCampaign.listingValidationSummary.rankingExplanation}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#344256]">
+                  <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1">
+                    {activeCampaign.listingValidationSummary.discoveredCount} discovered
+                  </span>
+                  <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1">
+                    {activeCampaign.listingValidationSummary.approvedCount} approved
+                  </span>
+                  <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1">
+                    {activeCampaign.listingValidationSummary.rejectedCount} rejected
+                  </span>
+                  {activeCampaign.listingValidationSummary.needsAttentionCount > 0 ? (
+                    <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1">
+                      {activeCampaign.listingValidationSummary.needsAttentionCount} needs attention
+                    </span>
+                  ) : null}
+                </div>
+                {activeCampaign.validationWarnings.length > 0 ? (
+                  <div className="mt-4 rounded-2xl border border-[#E7D8C2] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">
+                    {activeCampaign.validationWarnings.map((warning) => (
+                      <p key={warning} className="leading-6">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                  Next: Location Intelligence
+                </p>
+              </section>
+            ) : null}
+
+            {activeCampaign.approvedListings.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-approved-listings">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1B8A5A]">Approved Listings</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Validated shortlist</h3>
+                  </div>
+                  <span className="rounded-full border border-[#C6DFC9] bg-[#F2FBF3] px-3 py-1 text-xs font-semibold text-[#0F5132]">
+                    {activeCampaign.approvedListings.length} approved
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.approvedListings.map((listing) => (
+                    <article
+                      key={listing.id}
+                      className="rounded-3xl border border-[#CFE2D2] bg-white/[0.94] p-5 shadow-sm"
+                      data-testid="casahud-approved-listing-card"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            {typeof listing.rank === "number" ? (
+                              <span className="rounded-full bg-[#1B8A5A] px-2.5 py-1 text-[11px] font-semibold text-white">
+                                #{listing.rank}
+                              </span>
+                            ) : null}
+                            <span className="rounded-full border border-[#CFE2D2] bg-[#F2FBF3] px-2.5 py-1 text-[11px] font-semibold text-[#0F5132]">
+                              Approved
+                            </span>
+                            <span className="rounded-full border border-[#D7CAB8] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                              {formatListingProvider(listing.provider)}
+                            </span>
+                            {listing.propertyType ? (
+                              <span className="rounded-full border border-[#D7CAB8] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                                {listing.propertyType}
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{listing.title}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[#526070]">{listing.locationText}</p>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-sm font-semibold text-[#172033]">
+                            {formatListingPrice(listing.price, listing.currency)}
+                          </span>
+                          <span className="rounded-full border border-[#CFE2D2] bg-[#F2FBF3] px-3 py-1 text-xs font-semibold text-[#0F5132]">
+                            Score {listing.overallScore}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#344256]">
+                        <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1">
+                          Photos: {listing.photoAvailability}
+                        </span>
+                        <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1">
+                          {listing.imageCount} images
+                        </span>
+                        {typeof listing.sizeSqm === "number" ? (
+                          <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1">
+                            {listing.sizeSqm} sqm
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-[#526070]">
+                        {listing.validationReasons.slice(0, 3).join(" · ")}
+                      </p>
+                      {listing.warnings.length > 0 ? (
+                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                          {listing.warnings.join(" · ")}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.rejectedListings.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-rejected-listings">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Rejected Or Needs Attention</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Listings that did not clear the bar</h3>
+                  </div>
+                  <span className="rounded-full border border-[#E7D8C2] bg-[#FFF5DA] px-3 py-1 text-xs font-semibold text-[#7A4B13]">
+                    {activeCampaign.rejectedListings.length} reviewed out
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.rejectedListings.map((listing) => (
+                    <article
+                      key={listing.id}
+                      className="rounded-3xl border border-[#E7D8C2] bg-white/[0.9] p-5 shadow-sm"
+                      data-testid="casahud-rejected-listing-card"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${
+                                listing.validationStatus === "needs_attention"
+                                  ? "border border-[#D7CAB8] bg-[#FFF5DA] text-[#7A4B13]"
+                                  : "border border-[#E8CFCF] bg-[#FDECEC] text-[#991B1B]"
+                              }`}
+                            >
+                              {listing.validationStatus === "needs_attention" ? "Needs attention" : "Rejected"}
+                            </span>
+                            <span className="rounded-full border border-[#D7CAB8] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                              {formatListingProvider(listing.provider)}
+                            </span>
+                            {listing.rejectionCategory ? (
+                              <span className="rounded-full border border-[#D7CAB8] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                                {formatCampaignStatus(listing.rejectionCategory)}
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{listing.title}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[#526070]">{listing.locationText}</p>
+                        </div>
+                        <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-sm font-semibold text-[#172033]">
+                          Score {listing.overallScore}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-[#526070]">
+                        {listing.validationReasons.slice(0, 3).join(" · ")}
+                      </p>
+                      {listing.warnings.length > 0 ? (
+                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                          {listing.warnings.join(" · ")}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             {activeCampaign.listingCandidates.length > 0 ? (
               <section className="mt-6" data-testid="casahud-listing-candidates">

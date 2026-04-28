@@ -66,6 +66,13 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
     listingProviderStatuses: [],
     discoverySummary: null,
     listingDiscoveryStatus: "not_started",
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    listingValidationStatus: "not_started",
+    listingValidationSummary: null,
+    titleSupportConfidence: null,
+    validationWarnings: [],
     nextPhase: {
       key: "property_discovery",
       label: "Find matching properties",
@@ -77,6 +84,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
     updatedAt: "2026-04-28T00:00:00.000Z",
     generatedAt: "2026-04-28T00:00:00.000Z",
     futureState: {
+      listingCandidates: [],
       approvedListings: [],
       rejectedListings: [],
       listingRankOrder: [],
