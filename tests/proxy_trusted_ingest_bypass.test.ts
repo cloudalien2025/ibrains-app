@@ -105,6 +105,32 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
+  it("bypasses Clerk middleware on Studio API routes so they do not self-proxy", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/studio/domara/integrations/status", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
+  it("keeps non-Studio API routes on the Clerk proxy path unless separately trusted", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/siteforge/admin/summary", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
+  });
+
   it("bypasses Clerk middleware on release metadata health checks", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
