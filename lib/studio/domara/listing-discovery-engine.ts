@@ -171,9 +171,7 @@ function inferTargetListingCount(title: string, singlePropertyFocus: boolean): n
 }
 
 function inferPropertyTypes(campaign: CasaHudCampaign, title: string): string[] {
-  const hints = uniqueStrings([...(campaign.selectedTitle.listingSearchHints || []), ...campaign.titleCandidates.flatMap((candidate) => candidate.listingSearchHints || [])]).join(
-    " ",
-  );
+  const hints = uniqueStrings([...(campaign.selectedTitle.listingSearchHints || [])]).join(" ");
   const corpus = `${title} ${hints}`.toLowerCase();
 
   if (corpus.includes("farmhouse")) return ["farmhouse", "country house"];
@@ -183,6 +181,24 @@ function inferPropertyTypes(campaign: CasaHudCampaign, title: string): string[] 
   if (corpus.includes("beachfront") || corpus.includes("coastal")) return ["apartment", "villa", "townhouse"];
   if (campaign.campaignType === "single_property_showcase") return ["villa", "apartment"];
   return ["apartment", "villa", "house"];
+}
+
+function relatedSearchHints(campaign: CasaHudCampaign): string[] {
+  const selectedRegion = campaign.selectedTitle.regionHint?.trim().toLowerCase();
+
+  return uniqueStrings([
+    ...(campaign.selectedTitle.listingSearchHints || []),
+    ...campaign.titleCandidates
+      .filter((candidate) => {
+        const candidateRegion = candidate.regionHint?.trim().toLowerCase();
+        return (
+          candidate.id === campaign.titleCandidates[0]?.id ||
+          candidate.campaignType === campaign.campaignType ||
+          (selectedRegion && candidateRegion === selectedRegion)
+        );
+      })
+      .flatMap((candidate) => candidate.listingSearchHints || []),
+  ]);
 }
 
 function inferFeatureTags(campaign: CasaHudCampaign, title: string): string[] {
@@ -243,15 +259,14 @@ export function deriveCasaHudListingSearchCriteria(campaign: CasaHudCampaign): C
     titlePromise: title,
     regionHint: campaign.marketRegionHint || campaign.selectedTitle.regionHint || profile.regionHint,
     country: profile.country,
-    cities: uniqueStrings([profile.cities[0], profile.cities[1], profile.cities[2], campaign.selectedTitle.regionHint]),
+    cities: uniqueStrings(profile.cities.slice(0, 3)),
     propertyTypes: inferPropertyTypes(campaign, title),
     featureTags: inferFeatureTags(campaign, title),
     lifestyleTags: inferLifestyleTags(campaign, title),
     searchTerms: uniqueStrings([
       title,
       campaign.selectedTitle.regionHint,
-      ...(campaign.selectedTitle.listingSearchHints || []),
-      ...campaign.titleCandidates.flatMap((candidate) => candidate.listingSearchHints || []),
+      ...relatedSearchHints(campaign),
     ]),
     pricePositioning: inferPricePositioning(title, budget),
     targetListingCount: inferTargetListingCount(title, singlePropertyFocus),
