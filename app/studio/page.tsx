@@ -57,14 +57,14 @@ export default async function StudioPage() {
         </section>
 
         <section className={`${brainTheme.glassCard} mt-6 p-6`}>
-          <h2 className="text-lg font-semibold text-[#0F172A]">CasaHUD Property Video Engine</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">CasaHUD</h2>
           <p className="mt-2 text-sm text-[#334155]">
-            Transform European property listings into premium YouTube-ready real-estate videos with a mock-first
-            listing-to-storyboard workflow for Expat AI.
+            Generate the next viral property video concept, prepare the story package, and move into review inside
+            Studio.
           </p>
           <div className="mt-4">
             <Link href="/apps/studio" className={`${brainTheme.glowButton} text-sm`}>
-              Open CasaHUD in Apps Studio
+              Open CasaHUD
             </Link>
           </div>
         </section>
