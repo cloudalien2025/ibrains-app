@@ -25,5 +25,8 @@ describe("gitlab deploy pipeline contract", () => {
     expect(smokeSource.includes("SMOKE_PATHS=\"${SMOKE_PATHS:-/ /apps /sign-in}\"")).toBe(true);
     expect(smokeSource.includes("served javascript content-type")).toBe(true);
     expect(smokeSource.includes("served css content-type")).toBe(true);
+    expect(smokeSource.includes("health http status:")).toBe(true);
+    expect(smokeSource.includes("health body:")).toBe(true);
+    expect(smokeSource.includes("health parsed:")).toBe(true);
   });
 });

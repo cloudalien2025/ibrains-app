@@ -23,6 +23,7 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
   return (
     pathname === "/" ||
+    pathname === "/api/health" ||
     pathname === "/api/meta/release" ||
     pathname === "/api/_meta/release" ||
     pathname.startsWith("/apps") ||
