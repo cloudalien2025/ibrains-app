@@ -118,6 +118,19 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
+  it("bypasses Clerk middleware on /api/health", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const req = new NextRequest("https://app.ibrains.ai/api/health", {
+      method: "GET",
+    });
+
+    const res = await handler(req);
+    expect(res.status).toBe(200);
+    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+  });
+
   it("keeps Clerk middleware for run-status requests without service key", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;

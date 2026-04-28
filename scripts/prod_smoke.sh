@@ -126,10 +126,16 @@ check_frontdoor_assets() {
 
 check_health_json() {
   local url="$1"
+  local body_file
+  local status_code
   local body
-  body=$(curl -sS "${curl_host_args[@]}" "$url" || true)
+  body_file="$(mktemp)"
+  trap 'rm -f "$body_file"' RETURN
+  status_code=$(curl -sS -o "$body_file" -w "%{http_code}" "${curl_host_args[@]}" "$url" || true)
+  body=$(cat "$body_file" 2>/dev/null || true)
   if [ -z "$body" ]; then
     fail "health check empty response"
+    note "health http status: ${status_code:-missing}"
     return
   fi
 
@@ -143,20 +149,37 @@ except Exception:
 
 ok = data.get('ok') is True
 upstream_ok = data.get('upstream_ok') is True
-print('OK' if ok else 'NOK')
-print('UPSTREAM_OK' if upstream_ok else 'UPSTREAM_BAD')
+print(f"OK={'true' if ok else 'false'}")
+print(f"UPSTREAM_OK={'true' if upstream_ok else 'false'}")
+print(f"APP_OK={data.get('app_ok')!r}")
+print(f"DEPLOY_READY={data.get('deploy_ready')!r}")
+print(f"STATUS={data.get('status')!r}")
+print(f"UPSTREAM_ERROR={data.get('upstream_error')!r}")
 PY
 
-  if grep -q '^OK$' /tmp/health_parse.txt; then
+  if grep -q '^BADJSON$' /tmp/health_parse.txt; then
+    fail "health check invalid JSON"
+    note "health http status: ${status_code:-missing}"
+    note "health body: ${body}"
+    return
+  fi
+
+  if grep -q '^OK=true$' /tmp/health_parse.txt; then
     pass "health ok=true"
   else
     fail "health ok not true"
   fi
 
-  if grep -q '^UPSTREAM_OK$' /tmp/health_parse.txt; then
+  if grep -q '^UPSTREAM_OK=true$' /tmp/health_parse.txt; then
     pass "health upstream_ok=true"
   else
     fail "health upstream_ok not true"
+  fi
+
+  if ! grep -q '^OK=true$' /tmp/health_parse.txt || ! grep -q '^UPSTREAM_OK=true$' /tmp/health_parse.txt; then
+    note "health http status: ${status_code:-missing}"
+    note "health body: ${body}"
+    note "health parsed: $(tr '\n' ';' < /tmp/health_parse.txt | sed 's/;$/\\n/')"
   fi
 }
 
