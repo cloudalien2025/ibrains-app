@@ -1,9 +1,10 @@
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
 import {
+  CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE,
   buildCasaHudCampaignFromOpportunity,
   CASAHUD_CAMPAIGN_METADATA_PHASE,
-  isCasaHudCampaignMetadata,
+  parseCasaHudCampaignMetadata,
   toCasaHudCampaignMetadata,
   toCasaHudCampaignSummary,
   toCasaHudProjectVideoType,
@@ -43,8 +44,9 @@ export async function isCasaHudCampaignStoreAvailable(): Promise<boolean> {
 }
 
 function mapRowToCampaign(row: CasaHudCampaignRow): CasaHudCampaign | null {
-  if (!isCasaHudCampaignMetadata(row.provider_metadata)) return null;
-  const stored = row.provider_metadata.campaign;
+  const parsed = parseCasaHudCampaignMetadata(row.provider_metadata);
+  if (!parsed) return null;
+  const stored = parsed.campaign;
 
   return {
     ...stored,
@@ -57,11 +59,7 @@ function mapRowToCampaign(row: CasaHudCampaignRow): CasaHudCampaign | null {
   };
 }
 
-export async function createCasaHudCampaignFromOpportunity(
-  userId: string,
-  opportunity: CasaHudOpportunityResult,
-): Promise<CasaHudCampaign> {
-  const campaign = buildCasaHudCampaignFromOpportunity(userId, opportunity);
+export async function saveCasaHudCampaign(userId: string, campaign: CasaHudCampaign): Promise<CasaHudCampaign> {
   const metadata = toCasaHudCampaignMetadata(campaign);
 
   await query(
@@ -94,6 +92,14 @@ export async function createCasaHudCampaignFromOpportunity(
   return campaign;
 }
 
+export async function createCasaHudCampaignFromOpportunity(
+  userId: string,
+  opportunity: CasaHudOpportunityResult,
+): Promise<CasaHudCampaign> {
+  const campaign = buildCasaHudCampaignFromOpportunity(userId, opportunity);
+  return saveCasaHudCampaign(userId, campaign);
+}
+
 export async function listCasaHudCampaignSummaries(userId: string, limit = 12): Promise<CasaHudCampaignSummary[]> {
   const rows = await query<CasaHudCampaignRow>(
     `
@@ -109,11 +115,11 @@ export async function listCasaHudCampaignSummaries(userId: string, limit = 12): 
       updated_at
     FROM casahud_projects
     WHERE user_id = $1
-      AND provider_metadata->>'phase' = $2
+      AND provider_metadata->>'phase' IN ($2, $3)
     ORDER BY updated_at DESC, created_at DESC
-    LIMIT $3
+    LIMIT $4
     `,
-    [userId, CASAHUD_CAMPAIGN_METADATA_PHASE, limit],
+    [userId, CASAHUD_CAMPAIGN_METADATA_PHASE, CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE, limit],
   );
 
   return rows
@@ -138,10 +144,10 @@ export async function getCasaHudCampaign(userId: string, campaignId: string): Pr
     FROM casahud_projects
     WHERE user_id = $1
       AND id = $2
-      AND provider_metadata->>'phase' = $3
+      AND provider_metadata->>'phase' IN ($3, $4)
     LIMIT 1
     `,
-    [userId, campaignId, CASAHUD_CAMPAIGN_METADATA_PHASE],
+    [userId, campaignId, CASAHUD_CAMPAIGN_METADATA_PHASE, CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE],
   );
 
   const row = rows[0];

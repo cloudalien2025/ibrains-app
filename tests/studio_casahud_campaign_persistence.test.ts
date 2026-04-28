@@ -139,7 +139,7 @@ describe("CasaHUD campaign persistence", () => {
         return [];
       }
 
-      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' = $2")) {
+      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3)")) {
         const [storedUserId] = params as [string];
         return Array.from(state.projects.values())
           .filter((row) => row.user_id === storedUserId)
@@ -153,7 +153,7 @@ describe("CasaHUD campaign persistence", () => {
       if (
         normalized.includes("from casahud_projects") &&
         normalized.includes("and id = $2") &&
-        normalized.includes("and provider_metadata->>'phase' = $3")
+        normalized.includes("and provider_metadata->>'phase' in ($3, $4)")
       ) {
         const [storedUserId, campaignId] = params as [string, string];
         const row = state.projects.get(campaignId);
@@ -184,6 +184,8 @@ describe("CasaHUD campaign persistence", () => {
     expect(metadata.campaign.titleCandidates[0]?.title).toBe(opportunity.titleCandidates[0]?.title);
     expect(metadata.campaign.researchBrief.summary).toBe(opportunity.researchBrief.summary);
     expect(metadata.campaign.nextPhase.key).toBe("property_discovery");
+    expect(metadata.campaign.listingCandidates).toEqual([]);
+    expect(metadata.campaign.listingDiscoveryStatus).toBe("not_started");
   });
 
   it("lists recent campaigns and reopens a saved campaign by id", async () => {
@@ -204,5 +206,30 @@ describe("CasaHUD campaign persistence", () => {
     expect(reopened?.selectedTitle.title).toBe(opportunity.selectedTitle.title);
     expect(reopened?.confidenceReasoning.summary).toBe(opportunity.confidenceSummary);
     expect(reopened?.generationSource.label).toBe(opportunity.providerStatus.label);
+    expect(campaigns[0]?.listingCandidateCount).toBe(0);
+    expect(campaigns[0]?.listingDiscoveryStatus).toBe("not_started");
+  });
+
+  it("persists discovered listing candidates and reloads them on the campaign", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+    const discovery = await import("@/lib/studio/domara/listing-discovery-engine");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const discoveryResult = await discovery.runCasaHudListingDiscovery(created);
+    const updated = campaigns.applyCasaHudListingDiscovery(created, discoveryResult);
+
+    await repository.saveCasaHudCampaign(userId, updated);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.status).toBe("listing_candidates_discovered");
+    expect(reopened?.listingCandidates.length).toBeGreaterThan(0);
+    expect(reopened?.listingSearchCriteria?.regionHint).toBe("Southern Italy");
+    expect(reopened?.listingProviderStatuses.some((status) => status.provider === "casahud_sample")).toBe(true);
+    expect(reopened?.nextPhase.key).toBe("listing_validation");
+
+    const summaries = await repository.listCasaHudCampaignSummaries(userId);
+    expect(summaries[0]?.listingCandidateCount).toBe(reopened?.listingCandidates.length);
+    expect(summaries[0]?.status).toBe("listing_candidates_discovered");
   });
 });

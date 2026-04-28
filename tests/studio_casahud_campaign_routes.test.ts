@@ -79,10 +79,16 @@ const campaign: CasaHudCampaign = {
     selectedTitleConfidence: opportunity.selectedTitle.confidence,
   },
   status: "campaign_created",
+  listingCandidates: [],
+  listingSearchCriteria: null,
+  listingProviderStatuses: [],
+  discoverySummary: null,
+  listingDiscoveryStatus: "not_started",
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
-    detail: "Property Discovery arrives next. CasaHUD will enrich this campaign without regenerating the title package.",
+    detail:
+      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -154,6 +160,8 @@ describe("CasaHUD campaign routes", () => {
         createdAt: campaign.createdAt,
         updatedAt: campaign.updatedAt,
         researchSummary: campaign.researchBrief.summary,
+        listingCandidateCount: 0,
+        listingDiscoveryStatus: "not_started",
       },
     ]);
     mocks.getCasaHudCampaign.mockResolvedValue(campaign);

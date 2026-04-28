@@ -129,10 +129,16 @@ const savedCampaign: CasaHudCampaign = {
     selectedTitleConfidence: successOutput.selectedTitle.confidence,
   },
   status: "campaign_created",
+  listingCandidates: [],
+  listingSearchCriteria: null,
+  listingProviderStatuses: [],
+  discoverySummary: null,
+  listingDiscoveryStatus: "not_started",
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
-    detail: "Property Discovery arrives next. CasaHUD will enrich this campaign without regenerating the title package.",
+    detail:
+      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -154,6 +160,116 @@ const savedCampaign: CasaHudCampaign = {
     publishStatus: null,
     scheduleStatus: null,
   },
+};
+
+const discoveredCampaign: CasaHudCampaign = {
+  ...savedCampaign,
+  status: "listing_candidates_discovered",
+  listingCandidates: [
+    {
+      id: "listing-1",
+      provider: "casahud_sample",
+      title: "Tropea apartment candidate",
+      locationText: "Tropea, Calabria, Italy",
+      country: "Italy",
+      region: "Calabria",
+      city: "Tropea",
+      price: 284000,
+      currency: "USD",
+      propertyType: "apartment",
+      bedrooms: 2,
+      bathrooms: 2,
+      sizeSqm: 88,
+      descriptionSnippet: "Candidate listing pattern with strong relocation fit.",
+      features: ["budget-conscious", "move-in ready", "coastal lifestyle"],
+      imageUrls: ["https://images.example.com/1.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
+      preliminaryMatchNotes: "Fits the title promise and budget.",
+    },
+    {
+      id: "listing-2",
+      provider: "casahud_sample",
+      title: "Lecce villa candidate",
+      locationText: "Lecce, Puglia, Italy",
+      country: "Italy",
+      region: "Puglia",
+      city: "Lecce",
+      price: 296000,
+      currency: "USD",
+      propertyType: "villa",
+      bedrooms: 3,
+      bathrooms: 2,
+      sizeSqm: 112,
+      descriptionSnippet: "Candidate listing pattern with strong relocation fit.",
+      features: ["budget-conscious", "move-in ready", "coastal lifestyle"],
+      imageUrls: ["https://images.example.com/2.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
+      preliminaryMatchNotes: "Matches the retirement angle with visual support.",
+    },
+  ],
+  listingSearchCriteria: {
+    operation: "sale",
+    campaignType: "lifestyle_relocation",
+    titlePromise: savedCampaign.selectedViralTitle,
+    regionHint: "Southern Italy",
+    country: "Italy",
+    cities: ["Tropea", "Lecce", "Palermo"],
+    propertyTypes: ["apartment", "villa"],
+    featureTags: ["budget-conscious", "move-in ready"],
+    lifestyleTags: ["retirement", "relocation"],
+    searchTerms: ["Southern Italy homes under 300k"],
+    pricePositioning: "affordable",
+    targetListingCount: 6,
+    singlePropertyFocus: false,
+    maxPrice: 300000,
+    currency: "USD",
+  },
+  listingProviderStatuses: [
+    {
+      provider: "idealista",
+      label: "Idealista",
+      state: "missing_credentials",
+      configured: false,
+      used: false,
+      candidateCount: 0,
+      detail: "Idealista is not connected yet. CasaHUD can still prepare candidate properties with sample listing patterns.",
+      warning: "Connect Idealista to search live listings.",
+    },
+    {
+      provider: "casahud_sample",
+      label: "CasaHUD sample listing patterns",
+      state: "fallback",
+      configured: true,
+      used: true,
+      candidateCount: 2,
+      detail: "Using CasaHUD sample listing patterns until listing sources are connected.",
+      warning: "Connect Idealista or Immobiliare to search live listings.",
+    },
+  ],
+  discoverySummary: {
+    headline: `Prepared 2 candidate properties for "${savedCampaign.selectedViralTitle}".`,
+    criteriaSummary: "Searching sale listings around Southern Italy up to USD 300,000, focused on budget-conscious and move-in ready properties.",
+    providerSummary: "Using CasaHUD sample listing patterns until listing sources are connected.",
+    candidateCount: 2,
+    liveCandidateCount: 0,
+    fallbackCandidateCount: 2,
+    fallbackUsed: true,
+    warnings: ["Using CasaHUD sample listing patterns until listing sources are connected."],
+    discoveredAt: "2026-04-28T00:20:00.000Z",
+  },
+  listingDiscoveryStatus: "listing_candidates_discovered",
+  nextPhase: {
+    key: "listing_validation",
+    label: "Validate and rank listings",
+    detail:
+      "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
+    implemented: false,
+  },
+  updatedAt: "2026-04-28T00:20:00.000Z",
 };
 
 async function flush() {
@@ -276,6 +392,8 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: savedCampaign.createdAt,
               updatedAt: savedCampaign.updatedAt,
               researchSummary: savedCampaign.researchBrief.summary,
+              listingCandidateCount: 0,
+              listingDiscoveryStatus: "not_started",
             },
             message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
           }),
@@ -336,6 +454,155 @@ describe("CasaHUD opportunity UI flow", () => {
       savedCampaign.selectedViralTitle,
     );
     expect(container.querySelector('[data-testid="casahud-opportunity-results"]')).toBeNull();
+  });
+
+  it("shows property discovery progress and persists candidate listing cards on the reopened campaign", async () => {
+    let resolveDiscovery: ((response: Response) => void) | null = null;
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return Promise.resolve(new Response(JSON.stringify({ ok: true, campaigns: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }));
+      }
+
+      if (url.endsWith("/api/studio/domara/opportunity")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, output: successOutput }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "POST") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              campaign: savedCampaign,
+              summary: {
+                id: savedCampaign.id,
+                name: savedCampaign.name,
+                campaignType: savedCampaign.campaignType,
+                marketRegionHint: savedCampaign.marketRegionHint,
+                status: savedCampaign.status,
+                createdAt: savedCampaign.createdAt,
+                updatedAt: savedCampaign.updatedAt,
+                researchSummary: savedCampaign.researchBrief.summary,
+                listingCandidateCount: 0,
+                listingDiscoveryStatus: "not_started",
+              },
+              message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}/discover-listings`) && method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolveDiscovery = resolve;
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}`)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, campaign: discoveredCampaign }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const generateButton = container.querySelector('[data-testid="casahud-generate-cta"]');
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const createButton = container.querySelector('[data-testid="casahud-create-campaign-cta"]');
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const discoverButton = container.querySelector('[data-testid="casahud-discover-listings-cta"]');
+    expect(discoverButton?.textContent).toContain("Find Matching Properties");
+
+    await act(async () => {
+      discoverButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-discovery-progress"]')?.textContent).toContain(
+      "Reading campaign title promise",
+    );
+    expect(container.textContent).toContain("Building listing search criteria");
+
+    await act(async () => {
+      resolveDiscovery?.(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: discoveredCampaign,
+            summary: {
+              id: discoveredCampaign.id,
+              name: discoveredCampaign.name,
+              campaignType: discoveredCampaign.campaignType,
+              marketRegionHint: discoveredCampaign.marketRegionHint,
+              status: discoveredCampaign.status,
+              createdAt: discoveredCampaign.createdAt,
+              updatedAt: discoveredCampaign.updatedAt,
+              researchSummary: discoveredCampaign.researchBrief.summary,
+              listingCandidateCount: discoveredCampaign.listingCandidates.length,
+              listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+              discoverySummary: discoveredCampaign.discoverySummary?.headline,
+            },
+            message: `Property discovery complete. "${discoveredCampaign.name}" is ready for listing validation.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    });
+    await flush();
+
+    expect(container.querySelectorAll('[data-testid="casahud-listing-candidate-card"]').length).toBe(2);
+    expect(container.querySelector('[data-testid="casahud-listing-candidates"]')?.textContent).toContain(
+      "Using CasaHUD sample listing patterns until listing sources are connected.",
+    );
+    expect(container.textContent).toContain("Next: Validate and rank listings");
+    expect(container.textContent).toContain("Tropea apartment candidate");
+    expect(container.textContent).toContain("Connect Idealista or Immobiliare to search live listings.");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {
