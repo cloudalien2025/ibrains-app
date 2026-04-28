@@ -26,6 +26,7 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
     pathname === "/api/health" ||
     pathname === "/api/meta/release" ||
     pathname === "/api/_meta/release" ||
+    pathname.startsWith("/api/studio/domara/") ||
     pathname.startsWith("/apps") ||
     pathname === "/sign-in" ||
     pathname.startsWith("/sign-in/") ||
