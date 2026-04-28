@@ -19,6 +19,20 @@ const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
 
+function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
+  const pathname = req.nextUrl.pathname;
+  return (
+    pathname === "/" ||
+    pathname === "/api/meta/release" ||
+    pathname === "/api/_meta/release" ||
+    pathname.startsWith("/apps") ||
+    pathname === "/sign-in" ||
+    pathname.startsWith("/sign-in/") ||
+    pathname === "/sign-up" ||
+    pathname.startsWith("/sign-up/")
+  );
+}
+
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
@@ -107,6 +121,7 @@ export default e2eMockGraph
         }
         return NextResponse.next();
       }
+      if (isPublicClerkPassthroughRoute(req)) return NextResponse.next();
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
