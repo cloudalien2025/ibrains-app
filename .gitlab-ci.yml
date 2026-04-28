@@ -158,9 +158,17 @@ deploy_production:
       service_started=1
       trap - EXIT
 
+      release_probe_url="http://127.0.0.1:3001/api/meta/release"
+      release_probe_host="${DOMAIN:-app.ibrains.ai}"
+      release_probe_args=()
+      if [ -n "${release_probe_host}" ]; then
+        release_probe_args=(-H "Host: ${release_probe_host}")
+      fi
+
       ready=0
       for attempt in $(seq 1 10); do
-        if curl -fsS http://127.0.0.1:3001/api/meta/release; then
+        echo "release readiness probe ${attempt}/10"
+        if curl -fsS "${release_probe_args[@]}" "${release_probe_url}"; then
           ready=1
           break
         fi
@@ -169,6 +177,12 @@ deploy_production:
 
       if [ "$ready" -ne 1 ]; then
         echo "release endpoint did not become ready after restart"
+        echo "release probe url: ${release_probe_url}"
+        if [ -n "${release_probe_host}" ]; then
+          echo "release probe host: ${release_probe_host}"
+        fi
+        curl -sS "${release_probe_args[@]}" "${release_probe_url}" || true
+        tail -n 120 /var/log/ibrains-app/app.log || true
         "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true
         (command -v journalctl >/dev/null 2>&1 && journalctl -u "$SERVICE_NAME" -n 150 --no-pager) || true
         exit 1
