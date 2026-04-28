@@ -3,16 +3,14 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
-  CasaHudOrchestratorOutput,
-  CasaHudStageName,
-  CasaHudStageStatus,
-} from "@/lib/studio/domara/ai-channel-engine/types";
+  CasaHudOpportunityCampaignType,
+  CasaHudOpportunityResult,
+} from "@/lib/studio/domara/opportunity-engine/types";
 import type { DomaraIntegrationProviderId, DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
 import {
   buildCasaHudConnectionCards,
   getCasaHudSetupMessage,
   getMissingCasaHudCoreConnections,
-  shouldOpenCasaHudSetupForGenerate,
   type CasaHudConnectionCard,
   type CasaHudConnectionCardId,
 } from "@/lib/studio/domara/integrations-ui";
@@ -28,7 +26,8 @@ type CasaHudRunSummary = {
   updated_at: string;
 };
 
-type CasaHudAiStatus = "idle" | "loading" | "ready" | "needs_setup" | "error";
+type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
+type CasaHudProgressState = "idle" | "running" | "complete" | "failed";
 
 type CasaHudConnectionStatusPayload = {
   ok?: boolean;
@@ -43,56 +42,49 @@ type CasaHudConnectionSavePayload = {
   error?: { message?: string };
 };
 
+type CasaHudOpportunityPayload = {
+  ok?: boolean;
+  output?: CasaHudOpportunityResult;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
-  stage?: CasaHudStageName;
 };
-
-type CasaHudProgressState = CasaHudStageStatus | "idle";
 
 const wizardSteps: CasaHudProgressStep[] = [
-  { id: "youtube_research", stage: "youtube_research", label: "Researching YouTube opportunities" },
-  { id: "viral_title", stage: "viral_title", label: "Creating viral titles" },
+  { id: "youtube_research", label: "Researching YouTube opportunities" },
+  { id: "viral_title", label: "Creating viral titles" },
   { id: "winning_concept", label: "Selecting winning concept" },
-  { id: "listing_discovery", stage: "listing_discovery", label: "Finding matching properties" },
-  { id: "listing_validation", stage: "listing_validation", label: "Checking listing accuracy" },
-  { id: "location_intelligence", stage: "location_intelligence", label: "Gathering local highlights" },
-  { id: "script", stage: "script", label: "Writing the story" },
-  { id: "storyboard_render_plan", stage: "storyboard_render_plan", label: "Building the video package" },
-  { id: "youtube_package", stage: "youtube_package", label: "Preparing for review" },
 ];
 
-const stageStatusLabel: Record<CasaHudStageStatus, string> = {
-  pending: "Waiting",
-  running: "Working",
-  complete: "Complete",
-  needs_credentials: "Connection needed",
-  failed: "Needs attention",
-  skipped: "Waiting",
+const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
+  openai: "OpenAI",
+  elevenlabs: "ElevenLabs",
+  mapbox: "Mapbox",
+  google_maps_places: "Google Maps / Places",
+  idealista: "Idealista",
+  immobiliare: "Immobiliare",
+  cloudinary: "Cloudinary",
+  digitalocean_spaces: "DigitalOcean Spaces",
+  youtube: "YouTube Channel",
 };
 
-const progressStatusLabel: Record<CasaHudProgressState, string> = {
-  ...stageStatusLabel,
-  idle: "Coming up",
-};
-
-function statusDotClass(status?: CasaHudProgressState) {
+function statusDotClass(status: CasaHudProgressState) {
   if (status === "complete") return "bg-[#1B8A5A] shadow-[0_0_0_5px_rgba(27,138,90,0.12)]";
-  if (status === "needs_credentials") return "bg-[#B7791F] shadow-[0_0_0_5px_rgba(183,121,31,0.14)]";
   if (status === "failed") return "bg-[#B91C1C] shadow-[0_0_0_5px_rgba(185,28,28,0.14)]";
   if (status === "running") return "bg-[#2563EB] shadow-[0_0_0_5px_rgba(37,99,235,0.14)]";
   return "bg-[#CBD5E1]";
 }
 
-function stageTextClass(status?: CasaHudProgressState) {
+function stageTextClass(status: CasaHudProgressState) {
   if (status === "complete") return "text-[#0F5132]";
-  if (status === "needs_credentials") return "text-[#8A4B11]";
   if (status === "failed") return "text-[#991B1B]";
   return "text-[#344256]";
 }
 
-function formatVideoType(videoType?: string | null) {
+function formatRunVideoType(videoType?: string | null) {
   if (!videoType) return "AI-selected format";
   return videoType
     .split("_")
@@ -100,31 +92,19 @@ function formatVideoType(videoType?: string | null) {
     .join(" ");
 }
 
-function getStageStatus(output: CasaHudOrchestratorOutput | null, stageName: CasaHudStageName): CasaHudStageStatus | undefined {
-  return output?.stages.find((stage) => stage.name === stageName)?.status;
-}
-
-function getPublishingMessage(output: CasaHudOrchestratorOutput | null) {
-  const publishingStage = output?.stages.find((stage) => stage.name === "publishing");
-  if (!publishingStage?.output || typeof publishingStage.output !== "object") return null;
-  const message = (publishingStage.output as { message?: unknown }).message;
-  return typeof message === "string" ? message : null;
-}
-
-function getProgressStepStatus(
-  output: CasaHudOrchestratorOutput | null,
-  step: CasaHudProgressStep,
-  selectedTitle?: string | null,
-): CasaHudProgressState {
-  if (step.id === "winning_concept") {
-    if (selectedTitle) return "complete";
-    const titleStage = getStageStatus(output, "viral_title");
-    if (titleStage === "running" || titleStage === "complete") return "running";
-    return "idle";
+function formatOpportunityCampaignType(type: CasaHudOpportunityCampaignType) {
+  switch (type) {
+    case "roundup":
+      return "Roundup";
+    case "single_property_showcase":
+      return "Single Property Showcase";
+    case "niche_category":
+      return "Niche / Category";
+    case "location_led":
+      return "Location-Led";
+    case "lifestyle_relocation":
+      return "Lifestyle / Relocation";
   }
-
-  if (!step.stage) return "idle";
-  return getStageStatus(output, step.stage) || "idle";
 }
 
 function formatCampaignTime(value: string) {
@@ -144,18 +124,6 @@ function formatCampaignStatus(status?: string) {
     .replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
-const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
-  openai: "OpenAI",
-  elevenlabs: "ElevenLabs",
-  mapbox: "Mapbox",
-  google_maps_places: "Google Maps / Places",
-  idealista: "Idealista",
-  immobiliare: "Immobiliare",
-  cloudinary: "Cloudinary",
-  digitalocean_spaces: "DigitalOcean Spaces",
-  youtube: "YouTube Channel",
-};
-
 function defaultProviderForCard(card: CasaHudConnectionCard, providers: DomaraIntegrationProviderStatus[]) {
   if (card.id !== "listing_sources") return card.providerIds[0];
   const connected = providers.find(
@@ -167,14 +135,36 @@ function defaultProviderForCard(card: CasaHudConnectionCard, providers: DomaraIn
   return connected?.providerId || "idealista";
 }
 
+function progressStatusLabel(status: CasaHudProgressState) {
+  if (status === "complete") return "Complete";
+  if (status === "running") return "Working";
+  if (status === "failed") return "Needs attention";
+  return "Coming up";
+}
+
+function getProgressStepStatus(
+  generationStatus: CasaHudGenerationStatus,
+  progressIndex: number,
+  stepIndex: number,
+): CasaHudProgressState {
+  if (generationStatus === "ready") return "complete";
+  if (generationStatus === "error") {
+    if (stepIndex < progressIndex) return "complete";
+    if (stepIndex === progressIndex) return "failed";
+    return "idle";
+  }
+  if (generationStatus !== "loading") return "idle";
+  if (stepIndex < progressIndex) return "complete";
+  if (stepIndex === progressIndex) return "running";
+  return "idle";
+}
+
 export default function StudioDomaraClient() {
-  const [aiStatus, setAiStatus] = useState<CasaHudAiStatus>("idle");
-  const [aiError, setAiError] = useState<string | null>(null);
-  const [aiOutput, setAiOutput] = useState<CasaHudOrchestratorOutput | null>(null);
+  const [generationStatus, setGenerationStatus] = useState<CasaHudGenerationStatus>("idle");
+  const [generationError, setGenerationError] = useState<string | null>(null);
+  const [opportunityOutput, setOpportunityOutput] = useState<CasaHudOpportunityResult | null>(null);
+  const [progressIndex, setProgressIndex] = useState(0);
   const [aiRuns, setAiRuns] = useState<CasaHudRunSummary[]>([]);
-  const [aiStoreAvailable, setAiStoreAvailable] = useState<boolean | null>(null);
-  const [reviewAcknowledged, setReviewAcknowledged] = useState(false);
-  const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -187,23 +177,23 @@ export default function StudioDomaraClient() {
   const [connectionSaving, setConnectionSaving] = useState(false);
   const [connectionTesting, setConnectionTesting] = useState(false);
 
-  const latestSavedRun = aiRuns[0];
-  const packageReady = Boolean(aiOutput?.youtubePackage);
-  const needsConnection = aiOutput?.run.status === "needs_credentials" || aiStatus === "needs_setup";
   const connectionCards = useMemo(() => buildCasaHudConnectionCards(connectionProviders), [connectionProviders]);
-  const missingCoreConnections = useMemo(() => getMissingCasaHudCoreConnections(connectionCards), [connectionCards]);
   const setupMessage = useMemo(() => getCasaHudSetupMessage(connectionCards), [connectionCards]);
   const activeConnectionCard = useMemo(
     () => connectionCards.find((card) => card.id === activeConnectionId) || null,
     [activeConnectionId, connectionCards],
   );
-  const selectedTitle = aiOutput?.project?.name || aiOutput?.selectedTitle.title || latestSavedRun?.project_name || latestSavedRun?.selected_title;
-  const publishingMessage = useMemo(() => getPublishingMessage(aiOutput), [aiOutput]);
-  const topTitleCandidates = useMemo(() => aiOutput?.titleCandidates.slice(0, 3) || [], [aiOutput]);
-  const selectedListings = useMemo(
-    () => aiOutput?.listingValidation?.selectedListings || aiOutput?.listingDiscovery.listings || [],
-    [aiOutput],
-  );
+  const latestSavedRun = aiRuns[0];
+  const recentRuns = aiRuns.slice(0, 3);
+  const hasRecentCampaigns = recentRuns.length > 0;
+  const requiredConnections = connectionCards.filter((card) => card.required);
+  const connectedRequiredConnections = requiredConnections.filter(
+    (card) => card.status === "connected" || card.status === "partially_connected",
+  ).length;
+  const attentionConnectionCount = connectionCards.filter((card) => card.status === "needs_attention").length;
+  const youtubeConnectionCard = connectionCards.find((card) => card.id === "youtube");
+  const selectedTitle = opportunityOutput?.selectedTitle.title || latestSavedRun?.project_name || latestSavedRun?.selected_title;
+  const topTitleCandidates = useMemo(() => opportunityOutput?.titleCandidates.slice(0, 3) || [], [opportunityOutput]);
 
   const loadConnectionStatus = useCallback(async () => {
     setConnectionStatus("loading");
@@ -237,27 +227,16 @@ export default function StudioDomaraClient() {
         | {
             ok?: boolean;
             runs?: CasaHudRunSummary[];
-            latestOutput?: CasaHudOrchestratorOutput | null;
-            storeAvailable?: boolean;
-            message?: string;
           }
         | null;
       if (!response.ok || !payload?.ok) {
-        throw new Error("CasaHUD could not load saved videos.");
+        setAiRuns([]);
+        return;
       }
 
       setAiRuns(payload.runs || []);
-      setAiStoreAvailable(Boolean(payload.storeAvailable));
-      if (payload.latestOutput) {
-        setAiOutput(payload.latestOutput);
-        setAiStatus(payload.latestOutput.run.status === "needs_credentials" ? "needs_setup" : "ready");
-      } else if (payload.storeAvailable === false) {
-        setAiStatus("needs_setup");
-        setAiError("CasaHUD is not ready to save video packages in this workspace yet.");
-      }
-    } catch (runLoadError) {
-      setAiStatus("error");
-      setAiError(runLoadError instanceof Error ? runLoadError.message : "CasaHUD could not load saved videos.");
+    } catch {
+      setAiRuns([]);
     }
   }, []);
 
@@ -268,6 +247,17 @@ export default function StudioDomaraClient() {
   useEffect(() => {
     void loadConnectionStatus();
   }, [loadConnectionStatus]);
+
+  useEffect(() => {
+    if (generationStatus !== "loading") return;
+    if (progressIndex >= wizardSteps.length - 1) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setProgressIndex((current) => Math.min(current + 1, wizardSteps.length - 1));
+    }, 850);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [generationStatus, progressIndex]);
 
   function openSetup(reason?: string, focusCardId?: CasaHudConnectionCardId, cardsOverride?: CasaHudConnectionCard[]) {
     setSetupReason(reason || setupMessage);
@@ -339,7 +329,9 @@ export default function StudioDomaraClient() {
       const response = await fetch(`/api/studio/domara/integrations/${encodeURIComponent(activeProviderId)}/test`, {
         method: "POST",
       });
-      const payload = (await response.json().catch(() => null)) as { ok?: boolean; message?: string; error?: { message?: string } } | null;
+      const payload = (await response.json().catch(() => null)) as
+        | { ok?: boolean; message?: string; error?: { message?: string } }
+        | null;
       if (!response.ok || !payload?.ok) {
         throw new Error(payload?.error?.message || "CasaHUD could not verify this connection.");
       }
@@ -354,128 +346,52 @@ export default function StudioDomaraClient() {
 
   async function onGenerateViralVideo() {
     try {
-      const currentProviders =
-        connectionStatus === "ready" ? connectionProviders : await loadConnectionStatus();
-      const currentCards = buildCasaHudConnectionCards(currentProviders);
-      if (shouldOpenCasaHudSetupForGenerate(currentCards)) {
-        setAiStatus("needs_setup");
-        setAiError(null);
-        openSetup(
-          getCasaHudSetupMessage(currentCards),
-          getMissingCasaHudCoreConnections(currentCards)[0]?.id,
-          currentCards,
-        );
-        return;
-      }
-      if (aiStoreAvailable === false) {
-        setAiStatus("needs_setup");
-        setAiError("CasaHUD is not ready to save video packages in this workspace yet.");
-        return;
-      }
+      setGenerationStatus("loading");
+      setGenerationError(null);
+      setOpportunityOutput(null);
+      setProgressIndex(0);
 
-      setAiStatus("loading");
-      setAiError(null);
-      setActionNotice(null);
-      setReviewAcknowledged(false);
-      const response = await fetch("/api/studio/domara/ai-channel/runs", {
+      const response = await fetch("/api/studio/domara/opportunity", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          preferredMarket: "Italy real estate YouTube",
+          preferredMarket: "Italian real-estate YouTube",
         }),
       });
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            output?: CasaHudOrchestratorOutput;
-            providers?: DomaraIntegrationProviderStatus[];
-            error?: { message?: string; code?: string };
-          }
-        | null;
+      const payload = (await response.json().catch(() => null)) as CasaHudOpportunityPayload | null;
 
       if (!response.ok || !payload?.ok || !payload.output) {
-        if (payload?.error?.code === "CONNECTIONS_REQUIRED" && payload.providers) {
-          setConnectionProviders(payload.providers);
-          const currentCards = buildCasaHudConnectionCards(payload.providers);
-          setAiStatus("needs_setup");
-          setAiError(null);
-          openSetup(
-            payload.error.message || getCasaHudSetupMessage(currentCards),
-            getMissingCasaHudCoreConnections(currentCards)[0]?.id,
-            currentCards,
-          );
-          return;
-        }
-        throw new Error(payload?.error?.message || "CasaHUD could not generate a viral video package.");
+        throw new Error(payload?.error?.message || "CasaHUD could not generate title opportunities right now.");
       }
 
-      if (payload.providers) {
-        setConnectionProviders(payload.providers);
-      }
-      setAiOutput(payload.output);
-      setAiStatus(payload.output.run.status === "needs_credentials" ? "needs_setup" : "ready");
-      if (payload.output.run.status === "needs_credentials") {
-        openSetup("CasaHUD needs a few live connections before it can finish a production video.");
-      }
-      await loadAiRuns();
+      setOpportunityOutput(payload.output);
+      setProgressIndex(wizardSteps.length - 1);
+      setGenerationStatus("ready");
     } catch (generationError) {
-      setAiStatus("error");
-      setAiError(generationError instanceof Error ? generationError.message : "CasaHUD could not generate a viral video package.");
-    }
-  }
-
-  function onReviewPackage() {
-    if (!packageReady) {
-      setActionNotice("CasaHUD needs matching properties before review is available.");
-      return;
-    }
-    setReviewAcknowledged(true);
-    setActionNotice("Package reviewed. Publishing remains gated by the YouTube connection.");
-  }
-
-  function onPublishAction(mode: "publish" | "schedule") {
-    if (!packageReady) {
-      setActionNotice("Generate a complete video package before publishing.");
-      return;
-    }
-    if (!reviewAcknowledged) {
-      setActionNotice("Review the package before publishing or scheduling.");
-      return;
-    }
-    const youtubeCard = connectionCards.find((card) => card.id === "youtube");
-    if (!youtubeCard || youtubeCard.status !== "connected") {
-      openSetup(
-        mode === "publish"
-          ? "Connect YouTube before CasaHUD publishes this reviewed package."
-          : "Connect YouTube before CasaHUD schedules this reviewed package.",
-        "youtube",
+      setGenerationStatus("error");
+      setGenerationError(
+        generationError instanceof Error
+          ? generationError.message
+          : "CasaHUD could not generate title opportunities right now.",
       );
-      return;
     }
-    setActionNotice(
-      mode === "publish"
-        ? "CasaHUD is ready to publish this reviewed package."
-        : "CasaHUD is ready to schedule this reviewed package.",
-    );
   }
 
-  const timelineStatus = aiOutput
-    ? aiOutput.run.status.replace(/_/g, " ")
-    : aiStoreAvailable === false
-      ? "setup required"
-      : aiStatus === "loading"
-        ? "creating"
-        : "ready";
-  const requiredConnections = connectionCards.filter((card) => card.required);
-  const connectedRequiredConnections = requiredConnections.filter(
-    (card) => card.status === "connected" || card.status === "partially_connected",
-  ).length;
-  const attentionConnectionCount = connectionCards.filter((card) => card.status === "needs_attention").length;
-  const recentRuns = aiRuns.slice(0, 3);
-  const hasRecentCampaigns = recentRuns.length > 0;
-  const progressActive = aiStatus === "loading" || Boolean(aiOutput);
+  const researchModeSummary =
+    connectionStatus === "loading"
+      ? "Checking whether live YouTube competitive research is available."
+      : opportunityOutput
+        ? opportunityOutput.providerStatus.detail
+        : connectionStatus === "error"
+          ? "Live research status is unavailable. CasaHUD can still generate opportunity-backed title concepts."
+          : youtubeConnectionCard?.status === "connected"
+            ? "Live YouTube competitive research is ready for title discovery."
+            : youtubeConnectionCard?.status === "needs_attention"
+              ? "YouTube needs attention. CasaHUD can fall back to internal opportunity patterns."
+              : "Using CasaHUD opportunity patterns until YouTube connection is enabled.";
+
   const connectionSummary =
     connectionStatus === "loading"
       ? "Checking connection readiness for CasaHUD."
@@ -483,7 +399,10 @@ export default function StudioDomaraClient() {
         ? "Connection status needs attention. Open Connections to refresh and verify services."
         : attentionConnectionCount > 0
           ? `${attentionConnectionCount} connection${attentionConnectionCount === 1 ? "" : "s"} needs attention.`
-          : `${connectedRequiredConnections} of ${requiredConnections.length} core services ready.`;
+          : `${connectedRequiredConnections} of ${requiredConnections.length} later-stage services ready.`;
+
+  const timelineStatus =
+    generationStatus === "loading" ? "discovering" : opportunityOutput ? "opportunity ready" : "ready";
 
   return (
     <main className="ibrains-shell min-h-screen overflow-hidden bg-[#ECE7DD] text-[#172033]">
@@ -511,14 +430,14 @@ export default function StudioDomaraClient() {
           <div className="relative grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
             <div>
               <div className="inline-flex rounded-full border border-[#E1D2BC] bg-white/75 px-3 py-1 text-xs font-semibold text-[#8A5A34]">
-                Generate → Review → Publish
+                Opportunity Discovery Engine
               </div>
               <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-[0.98] tracking-[-0.045em] text-[#172033] md:text-6xl">
                 Generate your next viral property video
               </h1>
               <p className="mt-5 max-w-3xl text-base leading-7 text-[#526070] md:text-lg">
-                CasaHUD researches winning content angles, finds matching properties, builds the story, and prepares a
-                YouTube-ready package.
+                CasaHUD researches competitive YouTube patterns, ranks title opportunities, and selects the next
+                property-video concept in one click.
               </p>
 
               <div className="mt-7 flex flex-wrap items-center gap-3">
@@ -526,10 +445,10 @@ export default function StudioDomaraClient() {
                   type="button"
                   className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.28)] transition hover:-translate-y-0.5 hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
                   onClick={() => void onGenerateViralVideo()}
-                  disabled={aiStatus === "loading"}
+                  disabled={generationStatus === "loading"}
                   data-testid="casahud-generate-cta"
                 >
-                  {aiStatus === "loading" ? "Generating Viral Video Title..." : "Generate Viral Video Title"}
+                  {generationStatus === "loading" ? "Generating Viral Video Title..." : "Generate Viral Video Title"}
                 </button>
                 <button
                   type="button"
@@ -549,40 +468,61 @@ export default function StudioDomaraClient() {
 
               <div
                 className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#E7D8C2] bg-white/[0.58] px-4 py-3 text-sm text-[#526070]"
-                data-testid="casahud-connection-summary"
+                data-testid="casahud-research-mode"
               >
                 <span className="font-semibold text-[#172033]">
-                  {missingCoreConnections.length === 0 && connectionStatus === "ready" ? "Connected" : "Needs setup"}
+                  {opportunityOutput?.providerStatus.label || "Research mode"}
                 </span>
-                <span>{connectionSummary}</span>
+                <span>{researchModeSummary}</span>
               </div>
 
-              {aiError ? (
-                <div className="mt-5 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">
-                  {aiError}
+              {generationError ? (
+                <div
+                  className="mt-5 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]"
+                  data-testid="casahud-generation-error"
+                >
+                  {generationError}
                 </div>
               ) : null}
             </div>
 
             <aside className="rounded-[1.75rem] border border-[#E4D7C2] bg-[linear-gradient(160deg,rgba(250,243,231,0.9),rgba(255,255,255,0.82))] p-5 shadow-[0_20px_45px_rgba(70,55,35,0.12)]">
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">
-                {selectedTitle ? "Latest campaign" : "How it starts"}
+                {opportunityOutput ? "Winning concept" : selectedTitle ? "Latest campaign" : "How it starts"}
               </p>
-              {selectedTitle ? (
+
+              {opportunityOutput ? (
+                <>
+                  <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    {opportunityOutput.selectedTitle.title}
+                  </h2>
+                  <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
+                      {formatOpportunityCampaignType(opportunityOutput.selectedTitle.campaignType)}
+                    </span>
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
+                      Score {opportunityOutput.selectedTitle.score}
+                    </span>
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
+                      {Math.round(opportunityOutput.selectedTitle.confidence * 100)}% confidence
+                    </span>
+                  </div>
+                  <p className="mt-4 text-sm leading-6 text-[#526070]">{opportunityOutput.selectedTitle.reasoning}</p>
+                </>
+              ) : selectedTitle ? (
                 <>
                   <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedTitle}</h2>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
                     <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
-                      {formatVideoType(aiOutput?.strategy.videoType || latestSavedRun?.video_type)}
+                      {formatRunVideoType(latestSavedRun?.video_type)}
                     </span>
                     <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
-                      {packageReady ? "Ready for review" : needsConnection ? "Needs connections" : "In progress"}
+                      {formatCampaignStatus(latestSavedRun?.status)}
                     </span>
                   </div>
                   <p className="mt-4 text-sm leading-6 text-[#526070]">
-                    {needsConnection
-                      ? "CasaHUD has the concept ready. Connect the remaining services so it can finish the package with verified property detail."
-                      : "CasaHUD keeps the newest title package close at hand so you can move straight into review."}
+                    CasaHUD keeps the most recent campaign visible, while the title engine stays ready for the next
+                    concept run.
                   </p>
                 </>
               ) : (
@@ -591,13 +531,14 @@ export default function StudioDomaraClient() {
                     One click creates the next campaign starting point.
                   </h2>
                   <p className="mt-4 text-sm leading-6 text-[#526070]">
-                    CasaHUD begins with the title, then expands it into a story-led package prepared for human review.
+                    CasaHUD starts with real opportunity discovery, then selects the most supportable high-potential
+                    title before later campaign creation begins.
                   </p>
                 </>
               )}
 
               <div className="mt-5 flex flex-wrap gap-2">
-                {["Generate", "Review", "Publish"].map((step) => (
+                {["Research", "Rank", "Select"].map((step) => (
                   <span
                     key={step}
                     className="rounded-full border border-[#D7CAB8] bg-white/75 px-3 py-1 text-xs font-semibold text-[#344256]"
@@ -642,7 +583,7 @@ export default function StudioDomaraClient() {
                           {run.project_name || run.selected_title || "Untitled CasaHUD campaign"}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {run.video_type ? formatVideoType(run.video_type) : "AI-selected format"} · Updated{" "}
+                          {run.video_type ? formatRunVideoType(run.video_type) : "AI-selected format"} · Updated{" "}
                           {formatCampaignTime(run.updated_at || run.created_at)}
                         </p>
                       </div>
@@ -692,8 +633,8 @@ export default function StudioDomaraClient() {
             </div>
 
             <p className="mt-4 text-sm leading-6 text-[#526070]">
-              Manage the services CasaHUD uses for OpenAI, listing sources, maps, local places, media storage, YouTube,
-              and optional premium voice.
+              Manage the services CasaHUD uses for live competitive research and later production stages such as
+              listings, maps, media storage, and publishing.
             </p>
 
             <div className="mt-4 rounded-2xl border border-[#E7D8C2] bg-[#F8F3EA] px-4 py-3 text-sm text-[#526070]">
@@ -737,12 +678,14 @@ export default function StudioDomaraClient() {
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C7B6D]">Guided Progress</p>
               <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
-                {progressActive ? "CasaHUD is building the package" : "What happens after you click generate"}
+                {generationStatus === "loading" || opportunityOutput
+                  ? "CasaHUD is discovering the opportunity"
+                  : "What happens after you click generate"}
               </h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]">
-                {progressActive
-                  ? "The title leads the process. CasaHUD moves step by step toward a review-ready property video package."
-                  : "CasaHUD keeps the process guided and productized. It starts with the title, then moves toward review without front-loading setup work."}
+                {generationStatus === "loading" || opportunityOutput
+                  ? "CasaHUD moves through YouTube opportunity research, title strategy, and final concept selection before handing the result to the next campaign phase."
+                  : "CasaHUD keeps the process guided and productized. It starts with competitive title opportunity discovery, then hands the winning concept forward for campaign creation."}
               </p>
             </div>
             <span className="rounded-full border border-[#D8E2D9] bg-white/70 px-3 py-1 text-xs font-medium text-[#344256]">
@@ -752,8 +695,8 @@ export default function StudioDomaraClient() {
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="grid gap-2">
-              {wizardSteps.map((step) => {
-                const status = getProgressStepStatus(aiOutput, step, selectedTitle);
+              {wizardSteps.map((step, index) => {
+                const status = getProgressStepStatus(generationStatus, progressIndex, index);
                 return (
                   <div
                     key={step.id}
@@ -761,7 +704,7 @@ export default function StudioDomaraClient() {
                   >
                     <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
                     <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
-                    <span className="text-xs text-[#718096]">{progressStatusLabel[status]}</span>
+                    <span className="text-xs text-[#718096]">{progressStatusLabel(status)}</span>
                   </div>
                 );
               })}
@@ -770,12 +713,18 @@ export default function StudioDomaraClient() {
             <div className="grid gap-3">
               {topTitleCandidates.length > 0 ? (
                 <div className="rounded-3xl border border-[#E4D7C2] bg-[#FFF9EF] p-4">
-                  <p className="text-sm font-semibold text-[#172033]">Title directions</p>
+                  <p className="text-sm font-semibold text-[#172033]">Leading title directions</p>
                   <div className="mt-3 grid gap-2">
                     {topTitleCandidates.map((candidate) => (
                       <div key={candidate.id} className="rounded-2xl bg-white/75 p-3">
                         <div className="flex items-start justify-between gap-3">
-                          <p className="text-sm font-medium leading-5 text-[#344256]">{candidate.title}</p>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium leading-5 text-[#344256]">{candidate.title}</p>
+                            <p className="mt-1 text-xs text-[#718096]">
+                              {formatOpportunityCampaignType(candidate.campaignType)}
+                              {candidate.regionHint ? ` · ${candidate.regionHint}` : ""}
+                            </p>
+                          </div>
                           <span className="rounded-full bg-[#172033] px-2 py-1 text-[11px] font-semibold text-white">
                             {candidate.score}
                           </span>
@@ -788,95 +737,184 @@ export default function StudioDomaraClient() {
                 <div className="rounded-3xl border border-[#E4D7C2] bg-[#FFF9EF] p-4">
                   <p className="text-sm font-semibold text-[#172033]">Title-first workflow</p>
                   <p className="mt-3 text-sm leading-6 text-[#526070]">
-                    CasaHUD starts by shaping a title with strong YouTube potential, then checks the market, property
-                    fit, and local story before anything is prepared for review.
+                    CasaHUD starts by shaping a title with strong YouTube potential, ranking multiple opportunity
+                    directions, and selecting the concept that is most likely to hold up when campaign creation begins.
                   </p>
                 </div>
               )}
 
               <div className="rounded-3xl border border-[#D8E2D9] bg-white/[0.84] p-4">
-                <p className="text-sm font-semibold text-[#172033]">Review comes before publish</p>
+                <p className="text-sm font-semibold text-[#172033]">YouTube connection improves the research</p>
                 <p className="mt-3 text-sm leading-6 text-[#526070]">
-                  CasaHUD prepares the package for human review first. Publishing remains a separate decision after the
-                  concept, property backing, and story are checked.
+                  CasaHUD can generate opportunity-backed titles without blocking, and it upgrades the competitive
+                  research when the YouTube connection is available.
                 </p>
               </div>
             </div>
           </div>
         </section>
 
-        {aiOutput?.youtubePackage ? (
-          <section className="mt-6 rounded-[2rem] border border-white/70 bg-[#172033] p-5 text-white shadow-[0_24px_64px_rgba(23,32,51,0.24)] md:p-6">
-            <div className="flex items-start justify-between gap-3">
+        {opportunityOutput ? (
+          <section
+            className="mt-6 rounded-[2rem] border border-white/70 bg-[#FFFDF8]/[0.92] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.14)] backdrop-blur md:p-6"
+            data-testid="casahud-opportunity-results"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#D9B383]">Review</p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em]">Ready for human review</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Opportunity Review</p>
+                <h2 className="mt-1 text-3xl font-semibold tracking-[-0.035em] text-[#172033]">
+                  Selected winning title
+                </h2>
               </div>
-              <span className="rounded-full border border-white/[0.15] bg-white/10 px-3 py-1 text-xs text-[#E8ECE8]">
-                {reviewAcknowledged ? "Reviewed" : "Review required"}
+              <span
+                className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1 text-xs font-semibold text-[#344256]"
+                data-testid="casahud-provider-status"
+              >
+                {opportunityOutput.providerStatus.label}
               </span>
             </div>
 
-            <div className="mt-5 grid gap-3">
-              <div className="rounded-3xl border border-white/10 bg-white/[0.08] p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-[#BFC8BF]">Selected title</p>
-                <p className="mt-2 text-lg font-semibold leading-6">{aiOutput.youtubePackage.finalRecommendedTitle}</p>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-3">
-                <div className="rounded-2xl bg-white/[0.08] p-3">
-                  <p className="text-2xl font-semibold">{selectedListings.length}</p>
-                  <p className="mt-1 text-xs text-[#BFC8BF]">properties checked</p>
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <section
+                className="rounded-[1.75rem] border border-[#E4D7C2] bg-[linear-gradient(160deg,rgba(255,249,239,0.92),rgba(255,255,255,0.86))] p-5 shadow-sm"
+                data-testid="casahud-winning-title"
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Winning Title</p>
+                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">
+                  {opportunityOutput.selectedTitle.title}
+                </h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {formatOpportunityCampaignType(opportunityOutput.selectedTitle.campaignType)}
+                  </span>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                    Score {opportunityOutput.selectedTitle.score}
+                  </span>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {Math.round(opportunityOutput.selectedTitle.confidence * 100)}% confidence
+                  </span>
+                  {opportunityOutput.selectedTitle.regionHint ? (
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                      {opportunityOutput.selectedTitle.regionHint}
+                    </span>
+                  ) : null}
                 </div>
-                <div className="rounded-2xl bg-white/[0.08] p-3">
-                  <p className="text-2xl font-semibold">{aiOutput.storyboard?.mapSceneCount || 0}</p>
-                  <p className="mt-1 text-xs text-[#BFC8BF]">map scenes</p>
+                <p className="mt-5 text-sm leading-6 text-[#526070]">{opportunityOutput.titleOpportunitySummary}</p>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">
+                  Why this title was chosen
+                </p>
+                <p className="mt-3 text-sm leading-7 text-[#344256]">{opportunityOutput.selectedTitle.reasoning}</p>
+                <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Confidence summary</p>
+                  <p className="mt-2 text-sm leading-6 text-[#526070]">{opportunityOutput.confidenceSummary}</p>
                 </div>
-                <div className="rounded-2xl bg-white/[0.08] p-3">
-                  <p className="text-2xl font-semibold">{aiOutput.youtubePackage.chapters.length}</p>
-                  <p className="mt-1 text-xs text-[#BFC8BF]">chapters</p>
-                </div>
-              </div>
-              <p className="text-sm leading-6 text-[#E8ECE8]">{aiOutput.script?.hook}</p>
-              <p className="text-xs leading-5 text-[#BFC8BF]">
-                Thumbnail:{" "}
-                {aiOutput.youtubePackage.thumbnailIdeas[0]?.visualDirection ||
-                  aiOutput.youtubePackage.thumbnailIdeas[0]?.text ||
-                  "Prepared with the video package."}
-              </p>
+              </section>
             </div>
 
-            <div className="mt-6 grid gap-2 sm:grid-cols-3">
-              <button
-                type="button"
-                className="rounded-2xl border border-white/20 bg-white px-4 py-3 text-sm font-semibold text-[#172033] transition hover:bg-[#F4EFE6] disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={onReviewPackage}
-                disabled={!packageReady}
-              >
-                Review
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() => onPublishAction("publish")}
-                disabled={!packageReady}
-              >
-                Publish Now
-              </button>
-              <button
-                type="button"
-                className="rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.16] disabled:cursor-not-allowed disabled:opacity-50"
-                onClick={() => onPublishAction("schedule")}
-                disabled={!packageReady}
-              >
-                Schedule to YouTube
-              </button>
-            </div>
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Title Candidates</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Ranked concepts</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {opportunityOutput.titleCandidates.length} candidates
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {opportunityOutput.titleCandidates.map((candidate, index) => (
+                    <article
+                      key={candidate.id}
+                      className="rounded-3xl border border-[#E4D7C2] bg-white/[0.88] p-4 shadow-sm"
+                      data-testid="casahud-candidate-card"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-[#172033] px-2.5 py-1 text-[11px] font-semibold text-white">
+                              #{index + 1}
+                            </span>
+                            <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                              {formatOpportunityCampaignType(candidate.campaignType)}
+                            </span>
+                            {candidate.regionHint ? (
+                              <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                                {candidate.regionHint}
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-lg font-semibold tracking-[-0.02em] text-[#172033]">{candidate.title}</h4>
+                        </div>
+                        <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-sm font-semibold text-[#172033]">
+                          {candidate.score}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[#526070]">{candidate.reasoning}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
 
-            {actionNotice || publishingMessage ? (
-              <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.08] p-3 text-sm leading-6 text-[#E8ECE8]">
-                {actionNotice || publishingMessage}
-              </p>
-            ) : null}
+              <aside className="grid gap-4">
+                <section className="rounded-[1.75rem] border border-[#E4D7C2] bg-[#FFF9EF] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Research Brief</p>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{opportunityOutput.researchBrief.summary}</p>
+
+                  <div className="mt-4 grid gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Opportunity categories</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {opportunityOutput.researchBrief.opportunityCategories.join(" · ")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Competitor patterns</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {opportunityOutput.researchBrief.competitorPatterns.join(" · ")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Risk notes</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {opportunityOutput.researchBrief.riskNotes.join(" · ")}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Campaign Type</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    {formatOpportunityCampaignType(opportunityOutput.campaignTypePrediction)}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">
+                    CasaHUD predicts this concept is best executed as a {formatOpportunityCampaignType(opportunityOutput.campaignTypePrediction).toLowerCase()} campaign.
+                  </p>
+                </section>
+
+                <section
+                  className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/[0.92] p-5 shadow-sm"
+                  data-testid="casahud-next-step"
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Next Step</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    {opportunityOutput.nextStep.label}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{opportunityOutput.nextStep.detail}</p>
+                  <button
+                    type="button"
+                    className="mt-4 rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#526070]"
+                    disabled
+                  >
+                    {opportunityOutput.nextStep.label}
+                  </button>
+                </section>
+              </aside>
+            </div>
           </section>
         ) : null}
       </div>
@@ -923,59 +961,59 @@ export default function StudioDomaraClient() {
                     {connectionCards
                       .filter((card) => card.group === group.id)
                       .map((card) => (
-                  <article
-                    key={card.id}
-                    className={`rounded-2xl border p-4 transition ${
-                      activeConnectionId === card.id
-                        ? "border-[#172033] bg-white shadow-[0_16px_36px_rgba(23,32,51,0.12)]"
-                        : "border-[#E7D8C2] bg-white/[0.72]"
-                    }`}
-                    data-testid={`casahud-connection-card-${card.id}`}
-                  >
-                    <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">{card.title}</h3>
-                          <span
-                            className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
-                              card.status === "connected" || card.status === "partially_connected"
-                                ? "bg-[#DFF3E7] text-[#0F5132]"
-                                : card.status === "needs_attention"
-                                  ? "bg-[#FEE2E2] text-[#991B1B]"
-                                  : card.status === "optional"
-                                    ? "bg-[#EEF2F6] text-[#526070]"
-                                    : "bg-[#FFF0D6] text-[#7A4B13]"
-                            }`}
-                          >
-                            {card.statusLabel}
-                          </span>
-                          {card.optional ? (
-                            <span className="rounded-full bg-[#EEF2F6] px-2.5 py-1 text-xs font-semibold text-[#526070]">
-                              Optional
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-[#EAF0FF] px-2.5 py-1 text-xs font-semibold text-[#274690]">
-                              Required
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-[#526070]">{card.enables}</p>
-                        <p className="mt-1 text-xs leading-5 text-[#718096]">{card.detail}</p>
-                        {card.supportedSourceLabels ? (
-                          <p className="mt-2 text-xs font-medium leading-5 text-[#526070]">
-                            {card.supportedSourceLabels.join(" · ")}
-                          </p>
-                        ) : null}
-                      </div>
-                      <button
-                        type="button"
-                        className="rounded-xl border border-[#CFC4B2] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B]"
-                        onClick={() => openConnectionCard(card)}
-                      >
-                        {card.ctaLabel}
-                      </button>
-                    </div>
-                  </article>
+                        <article
+                          key={card.id}
+                          className={`rounded-2xl border p-4 transition ${
+                            activeConnectionId === card.id
+                              ? "border-[#172033] bg-white shadow-[0_16px_36px_rgba(23,32,51,0.12)]"
+                              : "border-[#E7D8C2] bg-white/[0.72]"
+                          }`}
+                          data-testid={`casahud-connection-card-${card.id}`}
+                        >
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">{card.title}</h3>
+                                <span
+                                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                    card.status === "connected" || card.status === "partially_connected"
+                                      ? "bg-[#DFF3E7] text-[#0F5132]"
+                                      : card.status === "needs_attention"
+                                        ? "bg-[#FEE2E2] text-[#991B1B]"
+                                        : card.status === "optional"
+                                          ? "bg-[#EEF2F6] text-[#526070]"
+                                          : "bg-[#FFF0D6] text-[#7A4B13]"
+                                  }`}
+                                >
+                                  {card.statusLabel}
+                                </span>
+                                {card.optional ? (
+                                  <span className="rounded-full bg-[#EEF2F6] px-2.5 py-1 text-xs font-semibold text-[#526070]">
+                                    Optional
+                                  </span>
+                                ) : (
+                                  <span className="rounded-full bg-[#EAF0FF] px-2.5 py-1 text-xs font-semibold text-[#274690]">
+                                    Required
+                                  </span>
+                                )}
+                              </div>
+                              <p className="mt-2 text-sm leading-6 text-[#526070]">{card.enables}</p>
+                              <p className="mt-1 text-xs leading-5 text-[#718096]">{card.detail}</p>
+                              {card.supportedSourceLabels ? (
+                                <p className="mt-2 text-xs font-medium leading-5 text-[#526070]">
+                                  {card.supportedSourceLabels.join(" · ")}
+                                </p>
+                              ) : null}
+                            </div>
+                            <button
+                              type="button"
+                              className="rounded-xl border border-[#CFC4B2] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B]"
+                              onClick={() => openConnectionCard(card)}
+                            >
+                              {card.ctaLabel}
+                            </button>
+                          </div>
+                        </article>
                       ))}
                   </div>
                 ))}
@@ -1063,15 +1101,23 @@ export default function StudioDomaraClient() {
                 ) : null}
 
                 <div className="mt-5 rounded-2xl border border-[#E1D2BC] bg-white p-4">
-                  <p className="text-sm font-semibold text-[#172033]">Production checklist</p>
+                  <p className="text-sm font-semibold text-[#172033]">Later-stage checklist</p>
                   <div className="mt-3 grid gap-2 text-sm text-[#526070]">
                     {connectionCards
                       .filter((card) => card.required)
                       .map((card) => (
                         <div key={card.id} className="flex items-center justify-between gap-3">
                           <span>{card.title}</span>
-                          <span className={card.status === "connected" || card.status === "partially_connected" ? "font-semibold text-[#0F5132]" : "font-semibold text-[#7A4B13]"}>
-                            {card.status === "connected" || card.status === "partially_connected" ? card.statusLabel : "Needed"}
+                          <span
+                            className={
+                              card.status === "connected" || card.status === "partially_connected"
+                                ? "font-semibold text-[#0F5132]"
+                                : "font-semibold text-[#7A4B13]"
+                            }
+                          >
+                            {card.status === "connected" || card.status === "partially_connected"
+                              ? card.statusLabel
+                              : "Needed"}
                           </span>
                         </div>
                       ))}
