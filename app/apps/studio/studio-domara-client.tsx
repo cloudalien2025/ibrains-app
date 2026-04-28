@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { CasaHudCampaign, CasaHudCampaignSummary } from "@/lib/studio/domara/campaigns";
 import type {
   CasaHudOpportunityCampaignType,
   CasaHudOpportunityResult,
@@ -14,17 +15,6 @@ import {
   type CasaHudConnectionCard,
   type CasaHudConnectionCardId,
 } from "@/lib/studio/domara/integrations-ui";
-
-type CasaHudRunSummary = {
-  id: string;
-  status: string;
-  current_stage: string;
-  selected_title?: string | null;
-  project_name?: string | null;
-  video_type?: string | null;
-  created_at: string;
-  updated_at: string;
-};
 
 type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
 type CasaHudProgressState = "idle" | "running" | "complete" | "failed";
@@ -45,6 +35,26 @@ type CasaHudConnectionSavePayload = {
 type CasaHudOpportunityPayload = {
   ok?: boolean;
   output?: CasaHudOpportunityResult;
+  error?: { message?: string };
+};
+
+type CasaHudCampaignListPayload = {
+  ok?: boolean;
+  campaigns?: CasaHudCampaignSummary[];
+  error?: { message?: string };
+};
+
+type CasaHudCampaignCreatePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
+type CasaHudCampaignDetailPayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
   error?: { message?: string };
 };
 
@@ -82,14 +92,6 @@ function stageTextClass(status: CasaHudProgressState) {
   if (status === "complete") return "text-[#0F5132]";
   if (status === "failed") return "text-[#991B1B]";
   return "text-[#344256]";
-}
-
-function formatRunVideoType(videoType?: string | null) {
-  if (!videoType) return "AI-selected format";
-  return videoType
-    .split("_")
-    .map((word) => (word ? `${word.charAt(0).toUpperCase()}${word.slice(1)}` : ""))
-    .join(" ");
 }
 
 function formatOpportunityCampaignType(type: CasaHudOpportunityCampaignType) {
@@ -164,7 +166,12 @@ export default function StudioDomaraClient() {
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [opportunityOutput, setOpportunityOutput] = useState<CasaHudOpportunityResult | null>(null);
   const [progressIndex, setProgressIndex] = useState(0);
-  const [aiRuns, setAiRuns] = useState<CasaHudRunSummary[]>([]);
+  const [recentCampaigns, setRecentCampaigns] = useState<CasaHudCampaignSummary[]>([]);
+  const [activeCampaign, setActiveCampaign] = useState<CasaHudCampaign | null>(null);
+  const [campaignNotice, setCampaignNotice] = useState<string | null>(null);
+  const [campaignError, setCampaignError] = useState<string | null>(null);
+  const [campaignCreating, setCampaignCreating] = useState(false);
+  const [campaignOpeningId, setCampaignOpeningId] = useState<string | null>(null);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -183,17 +190,21 @@ export default function StudioDomaraClient() {
     () => connectionCards.find((card) => card.id === activeConnectionId) || null,
     [activeConnectionId, connectionCards],
   );
-  const latestSavedRun = aiRuns[0];
-  const recentRuns = aiRuns.slice(0, 3);
-  const hasRecentCampaigns = recentRuns.length > 0;
+  const latestSavedCampaign = recentCampaigns[0] || null;
+  const visibleCampaign = activeCampaign || latestSavedCampaign;
+  const campaignCards = recentCampaigns.slice(0, 3);
+  const hasRecentCampaigns = campaignCards.length > 0;
   const requiredConnections = connectionCards.filter((card) => card.required);
   const connectedRequiredConnections = requiredConnections.filter(
     (card) => card.status === "connected" || card.status === "partially_connected",
   ).length;
   const attentionConnectionCount = connectionCards.filter((card) => card.status === "needs_attention").length;
   const youtubeConnectionCard = connectionCards.find((card) => card.id === "youtube");
-  const selectedTitle = opportunityOutput?.selectedTitle.title || latestSavedRun?.project_name || latestSavedRun?.selected_title;
-  const topTitleCandidates = useMemo(() => opportunityOutput?.titleCandidates.slice(0, 3) || [], [opportunityOutput]);
+  const selectedTitle = opportunityOutput?.selectedTitle.title || visibleCampaign?.name;
+  const topTitleCandidates = useMemo(
+    () => opportunityOutput?.titleCandidates.slice(0, 3) || activeCampaign?.titleCandidates.slice(0, 3) || [],
+    [activeCampaign, opportunityOutput],
+  );
 
   const loadConnectionStatus = useCallback(async () => {
     setConnectionStatus("loading");
@@ -218,31 +229,29 @@ export default function StudioDomaraClient() {
     }
   }, []);
 
-  const loadAiRuns = useCallback(async () => {
+  const loadCampaigns = useCallback(async () => {
     try {
-      const response = await fetch("/api/studio/domara/ai-channel/runs", {
+      const response = await fetch("/api/studio/domara/campaigns", {
         cache: "no-store",
       });
-      const payload = (await response.json().catch(() => null)) as
-        | {
-            ok?: boolean;
-            runs?: CasaHudRunSummary[];
-          }
-        | null;
+      const payload = (await response.json().catch(() => null)) as CasaHudCampaignListPayload | null;
       if (!response.ok || !payload?.ok) {
-        setAiRuns([]);
-        return;
+        setRecentCampaigns([]);
+        return [];
       }
 
-      setAiRuns(payload.runs || []);
+      const campaigns = payload.campaigns || [];
+      setRecentCampaigns(campaigns);
+      return campaigns;
     } catch {
-      setAiRuns([]);
+      setRecentCampaigns([]);
+      return [];
     }
   }, []);
 
   useEffect(() => {
-    void loadAiRuns();
-  }, [loadAiRuns]);
+    void loadCampaigns();
+  }, [loadCampaigns]);
 
   useEffect(() => {
     void loadConnectionStatus();
@@ -348,6 +357,8 @@ export default function StudioDomaraClient() {
     try {
       setGenerationStatus("loading");
       setGenerationError(null);
+      setCampaignError(null);
+      setCampaignNotice(null);
       setOpportunityOutput(null);
       setProgressIndex(0);
 
@@ -379,11 +390,83 @@ export default function StudioDomaraClient() {
     }
   }
 
+  async function onCreateCampaign() {
+    if (!opportunityOutput) return;
+
+    try {
+      setCampaignCreating(true);
+      setCampaignError(null);
+      setCampaignNotice(null);
+
+      const response = await fetch("/api/studio/domara/campaigns", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          opportunity: opportunityOutput,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudCampaignCreatePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not save this campaign right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setOpportunityOutput(null);
+      setCampaignNotice(payload.message || `Campaign saved. "${payload.campaign.name}" is ready for Property Discovery.`);
+      setRecentCampaigns((current) => {
+        const summary =
+          payload.summary || {
+            id: payload.campaign!.id,
+            name: payload.campaign!.name,
+            campaignType: payload.campaign!.campaignType,
+            marketRegionHint: payload.campaign!.marketRegionHint,
+            status: payload.campaign!.status,
+            createdAt: payload.campaign!.createdAt,
+            updatedAt: payload.campaign!.updatedAt,
+            researchSummary: payload.campaign!.researchBrief.summary,
+          };
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not save this campaign right now.");
+    } finally {
+      setCampaignCreating(false);
+    }
+  }
+
+  async function onResumeCampaign(campaignId: string) {
+    try {
+      setCampaignOpeningId(campaignId);
+      setCampaignError(null);
+      setCampaignNotice(null);
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(campaignId)}`, {
+        cache: "no-store",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudCampaignDetailPayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not reopen this campaign right now.");
+      }
+
+      setOpportunityOutput(null);
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(`Resumed "${payload.campaign.name}".`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not reopen this campaign right now.");
+    } finally {
+      setCampaignOpeningId(null);
+    }
+  }
+
   const researchModeSummary =
     connectionStatus === "loading"
       ? "Checking whether live YouTube competitive research is available."
       : opportunityOutput
         ? opportunityOutput.providerStatus.detail
+        : activeCampaign
+          ? activeCampaign.generationSource.detail
         : connectionStatus === "error"
           ? "Live research status is unavailable. CasaHUD can still generate opportunity-backed title concepts."
           : youtubeConnectionCard?.status === "connected"
@@ -402,7 +485,13 @@ export default function StudioDomaraClient() {
           : `${connectedRequiredConnections} of ${requiredConnections.length} later-stage services ready.`;
 
   const timelineStatus =
-    generationStatus === "loading" ? "discovering" : opportunityOutput ? "opportunity ready" : "ready";
+    generationStatus === "loading"
+      ? "discovering"
+      : opportunityOutput
+        ? "opportunity ready"
+        : activeCampaign
+          ? "campaign ready"
+          : "ready";
 
   return (
     <main className="ibrains-shell min-h-screen overflow-hidden bg-[#ECE7DD] text-[#172033]">
@@ -471,7 +560,7 @@ export default function StudioDomaraClient() {
                 data-testid="casahud-research-mode"
               >
                 <span className="font-semibold text-[#172033]">
-                  {opportunityOutput?.providerStatus.label || "Research mode"}
+                  {opportunityOutput?.providerStatus.label || activeCampaign?.generationSource.label || "Research mode"}
                 </span>
                 <span>{researchModeSummary}</span>
               </div>
@@ -514,15 +603,17 @@ export default function StudioDomaraClient() {
                   <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedTitle}</h2>
                   <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
                     <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
-                      {formatRunVideoType(latestSavedRun?.video_type)}
+                      {visibleCampaign ? formatOpportunityCampaignType(visibleCampaign.campaignType) : "Campaign"}
                     </span>
                     <span className="rounded-full border border-[#D7CAB8] bg-white/70 px-3 py-1">
-                      {formatCampaignStatus(latestSavedRun?.status)}
+                      {formatCampaignStatus(visibleCampaign?.status)}
                     </span>
                   </div>
                   <p className="mt-4 text-sm leading-6 text-[#526070]">
-                    CasaHUD keeps the most recent campaign visible, while the title engine stays ready for the next
-                    concept run.
+                    {activeCampaign
+                      ? activeCampaign.researchBrief.summary
+                      : latestSavedCampaign?.researchSummary ||
+                        "CasaHUD keeps saved campaigns durable, resumable, and ready for the next property-discovery phase."}
                   </p>
                 </>
               ) : (
@@ -564,32 +655,54 @@ export default function StudioDomaraClient() {
               </div>
               {hasRecentCampaigns ? (
                 <span className="rounded-full border border-[#D8E2D9] bg-white/70 px-3 py-1 text-xs font-medium text-[#344256]">
-                  {recentRuns.length} recent
+                  {campaignCards.length} recent
                 </span>
               ) : null}
             </div>
 
             {hasRecentCampaigns ? (
               <div className="mt-5 grid gap-3">
-                {recentRuns.map((run) => (
+                {campaignCards.map((campaign) => (
                   <article
-                    key={run.id}
+                    key={campaign.id}
                     className="rounded-3xl border border-[#E2E8E0] bg-white/[0.82] p-4 shadow-sm"
                     data-testid="casahud-campaign-card"
                   >
                     <div className="flex flex-wrap items-start justify-between gap-3">
-                      <div className="min-w-0">
+                      <div className="min-w-0 flex-1">
                         <p className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">
-                          {run.project_name || run.selected_title || "Untitled CasaHUD campaign"}
+                          {campaign.name}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {run.video_type ? formatRunVideoType(run.video_type) : "AI-selected format"} · Updated{" "}
-                          {formatCampaignTime(run.updated_at || run.created_at)}
+                          {formatOpportunityCampaignType(campaign.campaignType)} · Updated{" "}
+                          {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
                         </p>
+                        <p className="mt-2 text-sm leading-6 text-[#526070]">{campaign.researchSummary}</p>
+                        <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
+                          {campaign.marketRegionHint ? (
+                            <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                              {campaign.marketRegionHint}
+                            </span>
+                          ) : null}
+                          <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                            Created {formatCampaignTime(campaign.createdAt)}
+                          </span>
+                        </div>
                       </div>
-                      <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1 text-xs font-semibold text-[#344256]">
-                        {formatCampaignStatus(run.status)}
-                      </span>
+                      <div className="flex flex-col items-end gap-3">
+                        <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1 text-xs font-semibold text-[#344256]">
+                          {formatCampaignStatus(campaign.status)}
+                        </span>
+                        <button
+                          type="button"
+                          className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => void onResumeCampaign(campaign.id)}
+                          disabled={campaignOpeningId === campaign.id}
+                          data-testid="casahud-resume-campaign"
+                        >
+                          {campaignOpeningId === campaign.id ? "Opening..." : "Resume"}
+                        </button>
+                      </div>
                     </div>
                   </article>
                 ))}
@@ -680,11 +793,15 @@ export default function StudioDomaraClient() {
               <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
                 {generationStatus === "loading" || opportunityOutput
                   ? "CasaHUD is discovering the opportunity"
+                  : activeCampaign
+                    ? "Campaign saved and ready for the next phase"
                   : "What happens after you click generate"}
               </h2>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]">
                 {generationStatus === "loading" || opportunityOutput
                   ? "CasaHUD moves through YouTube opportunity research, title strategy, and final concept selection before handing the result to the next campaign phase."
+                  : activeCampaign
+                    ? "The viral title, ranked candidates, and research brief are now durable campaign state. CasaHUD can reopen this package and hand it forward to Property Discovery without regenerating titles."
                   : "CasaHUD keeps the process guided and productized. It starts with competitive title opportunity discovery, then hands the winning concept forward for campaign creation."}
               </p>
             </div>
@@ -902,15 +1019,209 @@ export default function StudioDomaraClient() {
                 >
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Next Step</p>
                   <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
-                    {opportunityOutput.nextStep.label}
+                    Create Campaign
                   </h3>
-                  <p className="mt-3 text-sm leading-6 text-[#526070]">{opportunityOutput.nextStep.detail}</p>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">
+                    The winning viral title becomes the campaign name automatically. CasaHUD saves the selected title,
+                    ranked candidates, research brief, confidence reasoning, and a Property Discovery handoff state in
+                    one step.
+                  </p>
+                  <button
+                    type="button"
+                    className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onCreateCampaign()}
+                    disabled={campaignCreating}
+                    data-testid="casahud-create-campaign-cta"
+                  >
+                    {campaignCreating ? "Creating Campaign..." : "Create Campaign"}
+                  </button>
+                  <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                    Campaign name: {opportunityOutput.selectedTitle.title}
+                  </p>
+                  {campaignError ? (
+                    <p
+                      className="mt-4 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]"
+                      data-testid="casahud-campaign-create-error"
+                    >
+                      {campaignError}
+                    </p>
+                  ) : null}
+                </section>
+              </aside>
+            </div>
+          </section>
+        ) : null}
+
+        {activeCampaign && !opportunityOutput ? (
+          <section
+            className="mt-6 rounded-[2rem] border border-white/70 bg-[#FFFDF8]/[0.92] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.14)] backdrop-blur md:p-6"
+            data-testid="casahud-campaign-detail"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Campaign Review</p>
+                <h2 className="mt-1 text-3xl font-semibold tracking-[-0.035em] text-[#172033]">{activeCampaign.name}</h2>
+              </div>
+              <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-3 py-1 text-xs font-semibold text-[#344256]">
+                {formatCampaignStatus(activeCampaign.status)}
+              </span>
+            </div>
+
+            {campaignNotice ? (
+              <div
+                className="mt-5 rounded-2xl border border-[#C6DFC9] bg-[#F2FBF3] p-4 text-sm text-[#0F5132]"
+                data-testid="casahud-campaign-create-success"
+              >
+                {campaignNotice}
+              </div>
+            ) : null}
+
+            {campaignError ? (
+              <div className="mt-5 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">
+                {campaignError}
+              </div>
+            ) : null}
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <section className="rounded-[1.75rem] border border-[#E4D7C2] bg-[linear-gradient(160deg,rgba(255,249,239,0.92),rgba(255,255,255,0.86))] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Saved Campaign</p>
+                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">{activeCampaign.name}</h3>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {formatOpportunityCampaignType(activeCampaign.campaignType)}
+                  </span>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {Math.round(activeCampaign.confidenceReasoning.selectedTitleConfidence * 100)}% confidence
+                  </span>
+                  {activeCampaign.marketRegionHint ? (
+                    <span className="rounded-full border border-[#D7CAB8] bg-white/80 px-3 py-1 text-xs font-semibold text-[#344256]">
+                      {activeCampaign.marketRegionHint}
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-5 grid gap-3 text-sm leading-6 text-[#526070]">
+                  <p>
+                    <span className="font-semibold text-[#172033]">Campaign name:</span> {activeCampaign.name}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Selected viral title:</span>{" "}
+                    {activeCampaign.selectedViralTitle}
+                  </p>
+                  <p>{activeCampaign.confidenceReasoning.titleOpportunitySummary}</p>
+                </div>
+              </section>
+
+              <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">
+                  Generation confidence and reasoning
+                </p>
+                <p className="mt-3 text-sm leading-7 text-[#344256]">
+                  {activeCampaign.confidenceReasoning.selectedTitleReasoning}
+                </p>
+                <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Confidence summary</p>
+                  <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.confidenceReasoning.summary}</p>
+                </div>
+                <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Generation source</p>
+                  <p className="mt-2 text-sm leading-6 text-[#526070]">
+                    {activeCampaign.generationSource.label} · {activeCampaign.generationSource.detail}
+                  </p>
+                </div>
+              </section>
+            </div>
+
+            <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
+              <section>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Title Candidates</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Saved ranking</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {activeCampaign.titleCandidates.length} candidates
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.titleCandidates.map((candidate, index) => (
+                    <article key={candidate.id} className="rounded-3xl border border-[#E4D7C2] bg-white/[0.88] p-4 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full bg-[#172033] px-2.5 py-1 text-[11px] font-semibold text-white">
+                              #{index + 1}
+                            </span>
+                            <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                              {formatOpportunityCampaignType(candidate.campaignType)}
+                            </span>
+                            {candidate.regionHint ? (
+                              <span className="rounded-full border border-[#D7CAB8] bg-[#F8F3EA] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                                {candidate.regionHint}
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-lg font-semibold tracking-[-0.02em] text-[#172033]">{candidate.title}</h4>
+                        </div>
+                        <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-sm font-semibold text-[#172033]">
+                          {candidate.score}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[#526070]">{candidate.reasoning}</p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <aside className="grid gap-4">
+                <section className="rounded-[1.75rem] border border-[#E4D7C2] bg-[#FFF9EF] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Research Brief</p>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.researchBrief.summary}</p>
+
+                  <div className="mt-4 grid gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Opportunity categories</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {activeCampaign.researchBrief.opportunityCategories.join(" · ")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Competitor patterns</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {activeCampaign.researchBrief.competitorPatterns.join(" · ")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-[#172033]">Risk notes</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {activeCampaign.researchBrief.riskNotes.join(" · ")}
+                      </p>
+                    </div>
+                  </div>
+                </section>
+
+                <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Current Status</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    {formatCampaignStatus(activeCampaign.status)}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">
+                    Created {formatCampaignTime(activeCampaign.createdAt)} · Updated{" "}
+                    {formatCampaignTime(activeCampaign.updatedAt)}
+                  </p>
+                </section>
+
+                <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/[0.92] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Next Step</p>
+                  <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    Next: {activeCampaign.nextPhase.label}
+                  </h3>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.nextPhase.detail}</p>
                   <button
                     type="button"
                     className="mt-4 rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#526070]"
                     disabled
                   >
-                    {opportunityOutput.nextStep.label}
+                    {activeCampaign.nextPhase.label}
                   </button>
                 </section>
               </aside>

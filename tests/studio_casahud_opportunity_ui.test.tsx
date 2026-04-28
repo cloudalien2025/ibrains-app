@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
+import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 vi.mock("next/link", async () => {
@@ -110,6 +111,51 @@ const successOutput: CasaHudOpportunityResult = {
   },
 };
 
+const savedCampaign: CasaHudCampaign = {
+  id: "casahud-project-phase3",
+  name: "Could You Retire in Southern Italy for Under $300K?",
+  selectedViralTitle: "Could You Retire in Southern Italy for Under $300K?",
+  selectedTitle: successOutput.selectedTitle,
+  titleCandidates: successOutput.titleCandidates,
+  researchBrief: successOutput.researchBrief,
+  campaignType: successOutput.campaignTypePrediction,
+  marketRegionHint: "Southern Italy",
+  preferredMarket: successOutput.preferredMarket,
+  generationSource: successOutput.providerStatus,
+  confidenceReasoning: {
+    summary: successOutput.confidenceSummary,
+    titleOpportunitySummary: successOutput.titleOpportunitySummary,
+    selectedTitleReasoning: successOutput.selectedTitle.reasoning,
+    selectedTitleConfidence: successOutput.selectedTitle.confidence,
+  },
+  status: "campaign_created",
+  nextPhase: {
+    key: "property_discovery",
+    label: "Find matching properties",
+    detail: "Property Discovery arrives next. CasaHUD will enrich this campaign without regenerating the title package.",
+    implemented: false,
+  },
+  createdAt: "2026-04-28T00:10:00.000Z",
+  updatedAt: "2026-04-28T00:10:00.000Z",
+  generatedAt: successOutput.generatedAt,
+  futureState: {
+    listingCandidates: [],
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    locationIntelligence: null,
+    mapPoiBundle: null,
+    script: null,
+    storyboard: null,
+    mediaPlan: null,
+    packaging: null,
+    renderStatus: null,
+    reviewStatus: null,
+    publishStatus: null,
+    scheduleStatus: null,
+  },
+};
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -147,8 +193,8 @@ describe("CasaHUD opportunity UI flow", () => {
         });
       }
 
-      if (url.includes("/api/studio/domara/ai-channel/runs")) {
-        return new Response(JSON.stringify({ ok: true, runs: [] }), {
+      if (url.includes("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
@@ -185,7 +231,177 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.querySelectorAll('[data-testid="casahud-candidate-card"]').length).toBe(3);
     expect(container.textContent).toContain("Researching YouTube opportunities");
     expect(container.textContent).toContain("Why this title was chosen");
-    expect(container.textContent).toContain("Create campaign");
+    expect(container.textContent).toContain("Create Campaign");
+    expect(container.querySelector('[data-testid="casahud-create-campaign-cta"]')?.textContent).toContain("Create Campaign");
+    expect(container.textContent).toContain(`Campaign name: ${successOutput.selectedTitle.title}`);
+  });
+
+  it("creates a saved campaign, shows it in Recent Campaigns, and reopens it without regenerating titles", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return new Response(JSON.stringify({ ok: true, campaigns: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/opportunity")) {
+        return new Response(JSON.stringify({ ok: true, output: successOutput }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: savedCampaign,
+            summary: {
+              id: savedCampaign.id,
+              name: savedCampaign.name,
+              campaignType: savedCampaign.campaignType,
+              marketRegionHint: savedCampaign.marketRegionHint,
+              status: savedCampaign.status,
+              createdAt: savedCampaign.createdAt,
+              updatedAt: savedCampaign.updatedAt,
+              researchSummary: savedCampaign.researchBrief.summary,
+            },
+            message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: savedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const generateButton = container.querySelector('[data-testid="casahud-generate-cta"]');
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const createButton = container.querySelector('[data-testid="casahud-create-campaign-cta"]');
+    expect(createButton).not.toBeNull();
+
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-campaign-detail"]')?.textContent).toContain(savedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-campaign-create-success"]')?.textContent).toContain(
+      "ready for Property Discovery",
+    );
+    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain(savedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Resume");
+    expect(container.textContent).toContain("Next: Find matching properties");
+
+    const resumeButton = container.querySelector('[data-testid="casahud-resume-campaign"]');
+    expect(resumeButton).not.toBeNull();
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-campaign-detail"]')?.textContent).toContain(
+      savedCampaign.selectedViralTitle,
+    );
+    expect(container.querySelector('[data-testid="casahud-opportunity-results"]')).toBeNull();
+  });
+
+  it("shows a safe recoverable error if campaign creation fails", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return new Response(JSON.stringify({ ok: true, campaigns: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/opportunity")) {
+        return new Response(JSON.stringify({ ok: true, output: successOutput }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            ok: false,
+            error: { message: "CasaHUD could not save this campaign right now. Try again in a moment." },
+          }),
+          {
+            status: 500,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const generateButton = container.querySelector('[data-testid="casahud-generate-cta"]');
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const createButton = container.querySelector('[data-testid="casahud-create-campaign-cta"]');
+    await act(async () => {
+      createButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-campaign-create-error"]')?.textContent).toContain(
+      "CasaHUD could not save this campaign right now. Try again in a moment.",
+    );
   });
 
   it("shows a safe recoverable error if the opportunity route fails", async () => {
@@ -199,8 +415,8 @@ describe("CasaHUD opportunity UI flow", () => {
         });
       }
 
-      if (url.includes("/api/studio/domara/ai-channel/runs")) {
-        return new Response(JSON.stringify({ ok: true, runs: [] }), {
+      if (url.includes("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
