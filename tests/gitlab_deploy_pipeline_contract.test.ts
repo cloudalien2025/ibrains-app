@@ -16,6 +16,11 @@ describe("gitlab deploy pipeline contract", () => {
     expect(pipelineSource.includes("BASE_URL=http://127.0.0.1:3001")).toBe(true);
     expect(pipelineSource.includes("HOST_HEADER=app.ibrains.ai")).toBe(true);
     expect(pipelineSource.includes("BASE_URL=https://app.ibrains.ai")).toBe(true);
+    expect(pipelineSource.includes("release_probe_url=\"http://127.0.0.1:3001/api/meta/release\"")).toBe(true);
+    expect(pipelineSource.includes("release_probe_host=\"${DOMAIN:-app.ibrains.ai}\"")).toBe(true);
+    expect(pipelineSource.includes("curl -fsS \"${release_probe_args[@]}\" \"${release_probe_url}\"")).toBe(true);
+    expect(pipelineSource.includes("release probe host: ${release_probe_host}")).toBe(true);
+    expect(pipelineSource.includes("tail -n 120 /var/log/ibrains-app/app.log")).toBe(true);
     expect(pipelineSource.includes("tail -n 120 /var/log/nginx/app.ibrains.ai.error.log")).toBe(true);
     expect(smokeSource.includes("SMOKE_PATHS=\"${SMOKE_PATHS:-/ /apps /sign-in}\"")).toBe(true);
     expect(smokeSource.includes("served javascript content-type")).toBe(true);
