@@ -1,4 +1,7 @@
 import Link from "next/link";
+import FrontdoorHeaderActions from "@/components/frontdoor/frontdoor-header-actions";
+
+export const dynamic = "force-dynamic";
 
 const apps = [
   {
@@ -28,7 +31,7 @@ export default function AppsIndexPage() {
   return (
     <div className="ibrains-shell min-h-screen text-[#0F172A]">
       <div className="mx-auto max-w-6xl px-6 py-14">
-        <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EAF1F8] px-3 py-1 text-xs font-medium text-[#334155]">
               iBrains Apps
@@ -39,32 +42,7 @@ export default function AppsIndexPage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <Link
-              href="/"
-              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-            >
-              Home
-            </Link>
-            <Link
-              href="/brains"
-              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-            >
-              Console
-            </Link>
-            <Link
-              href="/sign-in"
-              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-            >
-              Sign in
-            </Link>
-            <Link
-              href="/sign-up"
-              className="rounded-full border border-[#D9E4F0] bg-white px-4 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
-            >
-              Create account
-            </Link>
-          </div>
+          <FrontdoorHeaderActions currentPath="/apps" />
         </header>
 
         <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">

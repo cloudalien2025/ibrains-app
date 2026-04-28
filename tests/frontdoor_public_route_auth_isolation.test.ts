@@ -6,6 +6,8 @@ describe("frontdoor public route auth isolation", () => {
   it("keeps the homepage free of clerk client hooks and placeholder auth state", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/page.tsx"), "utf8");
 
+    expect(source.includes("\"use client\"")).toBe(false);
+    expect(source.includes("FrontdoorHeaderActions")).toBe(true);
     expect(source.includes("useAuth(")).toBe(false);
     expect(source.includes("UserButton")).toBe(false);
     expect(source.includes("NEXT_PUBLIC_CLERK")).toBe(false);
@@ -16,6 +18,7 @@ describe("frontdoor public route auth isolation", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/apps/page.tsx"), "utf8");
 
     expect(source.includes("\"use client\"")).toBe(false);
+    expect(source.includes("FrontdoorHeaderActions")).toBe(true);
     expect(source.includes("useAuth(")).toBe(false);
     expect(source.includes("UserButton")).toBe(false);
     expect(source.includes("ClerkProvider")).toBe(false);
