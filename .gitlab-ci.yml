@@ -174,6 +174,8 @@ deploy_production:
         exit 1
       fi
 
+      cd "${DEPLOY_PATH}"
+      SMOKE_SCRIPT="${DEPLOY_PATH}/scripts/prod_smoke.sh"
       rm -rf "${STAGING_ROOT}"
       smoke_fail() {
         echo "smoke verification failed"
@@ -192,7 +194,7 @@ deploy_production:
       HOST_HEADER=app.ibrains.ai \
       PROTO=http \
       DOMAIN=app.ibrains.ai \
-      ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail
+      "${SMOKE_SCRIPT}" app.ibrains.ai || smoke_fail
 
       EXPECT_RELEASE_FILE=1 \
       EXPECT_BUILD_ID="${CI_PIPELINE_ID}" \
@@ -201,5 +203,5 @@ deploy_production:
       BASE_URL=https://app.ibrains.ai \
       PROTO=https \
       DOMAIN=app.ibrains.ai \
-      ./scripts/prod_smoke.sh app.ibrains.ai || smoke_fail
+      "${SMOKE_SCRIPT}" app.ibrains.ai || smoke_fail
       EOF
