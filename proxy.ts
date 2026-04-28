@@ -110,10 +110,6 @@ export default e2eMockGraph
       if (isTrustedIngestServiceRequest(req)) return NextResponse.next();
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
-      const isRunStatusPath = trustedRunStatusPathRegex.test(req.nextUrl.pathname);
-      if (!isProtectedRoute(req) && !isRunStatusPath) {
-        return NextResponse.next();
-      }
       try {
         return await clerkProxy(req, event);
       } catch {
