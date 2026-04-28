@@ -226,38 +226,63 @@ CREATE TABLE IF NOT EXISTS public.directoryiq_versions (
   link_delta_json jsonb DEFAULT '{}'::jsonb NOT NULL,
   created_at timestamp with time zone DEFAULT now() NOT NULL
 );
-ALTER TABLE ONLY public.directoryiq_audit_events ADD CONSTRAINT directoryiq_audit_events_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_authority_hubs ADD CONSTRAINT directoryiq_authority_hubs_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_authority_posts ADD CONSTRAINT directoryiq_authority_posts_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_authority_posts ADD CONSTRAINT directoryiq_authority_posts_slot_index_check CHECK (slot_index >= 1 AND slot_index <= 5);
-ALTER TABLE ONLY public.directoryiq_authority_posts ADD CONSTRAINT directoryiq_authority_posts_user_id_listing_source_id_slot__key UNIQUE (user_id, listing_source_id, slot_index);
-ALTER TABLE ONLY public.directoryiq_bd_sites ADD CONSTRAINT directoryiq_bd_sites_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_bd_sites ADD CONSTRAINT directoryiq_bd_sites_user_id_base_url_key UNIQUE (user_id, base_url);
-ALTER TABLE ONLY public.directoryiq_blog_fixes ADD CONSTRAINT directoryiq_blog_fixes_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_blog_post_links ADD CONSTRAINT directoryiq_blog_post_links_blog_post_id_listing_user_id_key UNIQUE (blog_post_id, listing_user_id);
-ALTER TABLE ONLY public.directoryiq_blog_post_links ADD CONSTRAINT directoryiq_blog_post_links_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_blog_post_mentions ADD CONSTRAINT directoryiq_blog_post_mention_blog_post_id_listing_user_id__key UNIQUE (blog_post_id, listing_user_id, mention_type);
-ALTER TABLE ONLY public.directoryiq_blog_post_mentions ADD CONSTRAINT directoryiq_blog_post_mentions_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_blog_posts ADD CONSTRAINT directoryiq_blog_posts_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_blog_posts ADD CONSTRAINT directoryiq_blog_posts_source_source_post_id_key UNIQUE (source, source_post_id);
-ALTER TABLE ONLY public.directoryiq_blog_post_links ADD CONSTRAINT directoryiq_blog_post_links_blog_post_id_fkey FOREIGN KEY (blog_post_id) REFERENCES directoryiq_blog_posts(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.directoryiq_blog_post_mentions ADD CONSTRAINT directoryiq_blog_post_mentions_blog_post_id_fkey FOREIGN KEY (blog_post_id) REFERENCES directoryiq_blog_posts(id) ON DELETE CASCADE;
-ALTER TABLE ONLY public.directoryiq_blog_sync_runs ADD CONSTRAINT directoryiq_blog_sync_runs_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_ingest_runs ADD CONSTRAINT directoryiq_ingest_runs_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_jobs ADD CONSTRAINT directoryiq_jobs_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_listing_upgrades ADD CONSTRAINT directoryiq_listing_upgrades_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_nodes ADD CONSTRAINT directoryiq_nodes_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_nodes ADD CONSTRAINT directoryiq_nodes_user_id_source_type_source_id_key UNIQUE (user_id, source_type, source_id);
-ALTER TABLE ONLY public.directoryiq_policy_profiles ADD CONSTRAINT directoryiq_policy_profiles_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_authority_hubs ADD CONSTRAINT directoryiq_authority_hubs_policy_profile_id_fkey FOREIGN KEY (policy_profile_id) REFERENCES directoryiq_policy_profiles(id);
-ALTER TABLE ONLY public.directoryiq_reinforcement_plans ADD CONSTRAINT directoryiq_reinforcement_plans_hub_id_fkey FOREIGN KEY (hub_id) REFERENCES directoryiq_authority_hubs(id);
-ALTER TABLE ONLY public.directoryiq_reinforcement_plans ADD CONSTRAINT directoryiq_reinforcement_plans_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_reinforcement_plans ADD CONSTRAINT directoryiq_reinforcement_plans_policy_profile_id_fkey FOREIGN KEY (policy_profile_id) REFERENCES directoryiq_policy_profiles(id);
-ALTER TABLE ONLY public.directoryiq_settings ADD CONSTRAINT directoryiq_settings_pkey PRIMARY KEY (user_id);
-ALTER TABLE ONLY public.directoryiq_signal_source_credentials ADD CONSTRAINT directoryiq_signal_source_credentials_pkey PRIMARY KEY (id);
-ALTER TABLE ONLY public.directoryiq_signal_source_credentials ADD CONSTRAINT directoryiq_signal_source_credentials_user_id_connector_id_key UNIQUE (user_id, connector_id);
-ALTER TABLE ONLY public.directoryiq_versions ADD CONSTRAINT directoryiq_versions_authority_post_id_fkey FOREIGN KEY (authority_post_id) REFERENCES directoryiq_authority_posts(id) ON DELETE SET NULL;
-ALTER TABLE ONLY public.directoryiq_versions ADD CONSTRAINT directoryiq_versions_pkey PRIMARY KEY (id);
+CREATE OR REPLACE FUNCTION public.directoryiq_ensure_constraint(
+  target_table regclass,
+  constraint_name text,
+  constraint_sql text
+) RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conrelid = target_table
+      AND conname = constraint_name
+  ) THEN
+    RETURN;
+  END IF;
+
+  EXECUTE format(
+    'ALTER TABLE ONLY %s ADD CONSTRAINT %I %s',
+    target_table,
+    constraint_name,
+    constraint_sql
+  );
+END;
+$$;
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_audit_events', 'directoryiq_audit_events_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_authority_hubs', 'directoryiq_authority_hubs_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_authority_posts', 'directoryiq_authority_posts_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_authority_posts', 'directoryiq_authority_posts_slot_index_check', 'CHECK (slot_index >= 1 AND slot_index <= 5)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_authority_posts', 'directoryiq_authority_posts_user_id_listing_source_id_slot__key', 'UNIQUE (user_id, listing_source_id, slot_index)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_bd_sites', 'directoryiq_bd_sites_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_bd_sites', 'directoryiq_bd_sites_user_id_base_url_key', 'UNIQUE (user_id, base_url)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_fixes', 'directoryiq_blog_fixes_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_links', 'directoryiq_blog_post_links_blog_post_id_listing_user_id_key', 'UNIQUE (blog_post_id, listing_user_id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_links', 'directoryiq_blog_post_links_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_mentions', 'directoryiq_blog_post_mention_blog_post_id_listing_user_id__key', 'UNIQUE (blog_post_id, listing_user_id, mention_type)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_mentions', 'directoryiq_blog_post_mentions_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_posts', 'directoryiq_blog_posts_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_posts', 'directoryiq_blog_posts_source_source_post_id_key', 'UNIQUE (source, source_post_id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_links', 'directoryiq_blog_post_links_blog_post_id_fkey', 'FOREIGN KEY (blog_post_id) REFERENCES directoryiq_blog_posts(id) ON DELETE CASCADE');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_post_mentions', 'directoryiq_blog_post_mentions_blog_post_id_fkey', 'FOREIGN KEY (blog_post_id) REFERENCES directoryiq_blog_posts(id) ON DELETE CASCADE');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_blog_sync_runs', 'directoryiq_blog_sync_runs_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_ingest_runs', 'directoryiq_ingest_runs_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_jobs', 'directoryiq_jobs_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_listing_upgrades', 'directoryiq_listing_upgrades_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_nodes', 'directoryiq_nodes_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_nodes', 'directoryiq_nodes_user_id_source_type_source_id_key', 'UNIQUE (user_id, source_type, source_id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_policy_profiles', 'directoryiq_policy_profiles_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_authority_hubs', 'directoryiq_authority_hubs_policy_profile_id_fkey', 'FOREIGN KEY (policy_profile_id) REFERENCES directoryiq_policy_profiles(id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_reinforcement_plans', 'directoryiq_reinforcement_plans_hub_id_fkey', 'FOREIGN KEY (hub_id) REFERENCES directoryiq_authority_hubs(id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_reinforcement_plans', 'directoryiq_reinforcement_plans_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_reinforcement_plans', 'directoryiq_reinforcement_plans_policy_profile_id_fkey', 'FOREIGN KEY (policy_profile_id) REFERENCES directoryiq_policy_profiles(id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_settings', 'directoryiq_settings_pkey', 'PRIMARY KEY (user_id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_signal_source_credentials', 'directoryiq_signal_source_credentials_pkey', 'PRIMARY KEY (id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_signal_source_credentials', 'directoryiq_signal_source_credentials_user_id_connector_id_key', 'UNIQUE (user_id, connector_id)');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_versions', 'directoryiq_versions_authority_post_id_fkey', 'FOREIGN KEY (authority_post_id) REFERENCES directoryiq_authority_posts(id) ON DELETE SET NULL');
+SELECT public.directoryiq_ensure_constraint('public.directoryiq_versions', 'directoryiq_versions_pkey', 'PRIMARY KEY (id)');
 CREATE INDEX IF NOT EXISTS directoryiq_authority_hubs_user_status_idx ON public.directoryiq_authority_hubs USING btree (user_id, status);
 CREATE INDEX IF NOT EXISTS directoryiq_authority_hubs_user_type_idx ON public.directoryiq_authority_hubs USING btree (user_id, hub_type);
 CREATE UNIQUE INDEX IF NOT EXISTS directoryiq_authority_hubs_user_canonical_url_uq ON public.directoryiq_authority_hubs USING btree (user_id, canonical_url);
@@ -279,4 +304,5 @@ ALTER SEQUENCE public.directoryiq_blog_post_links_id_seq OWNED BY public.directo
 ALTER SEQUENCE public.directoryiq_blog_post_mentions_id_seq OWNED BY public.directoryiq_blog_post_mentions.id;
 ALTER SEQUENCE public.directoryiq_blog_posts_id_seq OWNED BY public.directoryiq_blog_posts.id;
 ALTER SEQUENCE public.directoryiq_blog_sync_runs_id_seq OWNED BY public.directoryiq_blog_sync_runs.id;
+DROP FUNCTION public.directoryiq_ensure_constraint(regclass, text, text);
 COMMIT;
