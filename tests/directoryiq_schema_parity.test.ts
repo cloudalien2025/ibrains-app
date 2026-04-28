@@ -13,12 +13,13 @@ describe("DirectoryIQ schema parity", () => {
     expect(schema).toContain("vertical_override text");
     expect(schema).toContain("risk_tier_overrides_json jsonb DEFAULT '{}'::jsonb NOT NULL");
     expect(schema).toContain("image_style_preference text DEFAULT 'editorial clean'::text NOT NULL");
-    expect(schema).toContain("ALTER TABLE ONLY public.directoryiq_settings ADD CONSTRAINT directoryiq_settings_pkey PRIMARY KEY (user_id)");
+    expect(schema).toContain("CREATE OR REPLACE FUNCTION public.directoryiq_ensure_constraint");
+    expect(schema).toContain("SELECT public.directoryiq_ensure_constraint('public.directoryiq_settings', 'directoryiq_settings_pkey', 'PRIMARY KEY (user_id)');");
 
     expect(schema).toContain("CREATE TABLE IF NOT EXISTS public.directoryiq_signal_source_credentials");
     expect(schema).toContain("connector_id text NOT NULL");
     expect(schema).toContain("config_json jsonb DEFAULT '{}'::jsonb NOT NULL");
-    expect(schema).toContain("directoryiq_signal_source_credentials_user_id_connector_id_key UNIQUE (user_id, connector_id)");
+    expect(schema).toContain("SELECT public.directoryiq_ensure_constraint('public.directoryiq_signal_source_credentials', 'directoryiq_signal_source_credentials_user_id_connector_id_key', 'UNIQUE (user_id, connector_id)');");
   });
 
   it("applies and verifies the tracked DirectoryIQ schema during deployment", () => {
