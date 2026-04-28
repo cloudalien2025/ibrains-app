@@ -134,6 +134,13 @@ const savedCampaign: CasaHudCampaign = {
   listingProviderStatuses: [],
   discoverySummary: null,
   listingDiscoveryStatus: "not_started",
+  approvedListings: [],
+  rejectedListings: [],
+  listingRankOrder: [],
+  listingValidationStatus: "not_started",
+  listingValidationSummary: null,
+  titleSupportConfidence: null,
+  validationWarnings: [],
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -262,6 +269,13 @@ const discoveredCampaign: CasaHudCampaign = {
     discoveredAt: "2026-04-28T00:20:00.000Z",
   },
   listingDiscoveryStatus: "listing_candidates_discovered",
+  approvedListings: [],
+  rejectedListings: [],
+  listingRankOrder: [],
+  listingValidationStatus: "not_started",
+  listingValidationSummary: null,
+  titleSupportConfidence: null,
+  validationWarnings: [],
   nextPhase: {
     key: "listing_validation",
     label: "Validate and rank listings",
@@ -270,6 +284,100 @@ const discoveredCampaign: CasaHudCampaign = {
     implemented: false,
   },
   updatedAt: "2026-04-28T00:20:00.000Z",
+};
+
+const validatedCampaign: CasaHudCampaign = {
+  ...discoveredCampaign,
+  status: "listing_candidates_validated",
+  approvedListings: [
+    {
+      ...discoveredCampaign.listingCandidates[0]!,
+      validationStatus: "approved",
+      overallScore: 88,
+      scoreBreakdown: {
+        titleMatchScore: 92,
+        geographyScore: 100,
+        priceFitScore: 100,
+        propertyTypeScore: 100,
+        featureClaimScore: 76,
+        mediaAvailabilityScore: 52,
+        listingCompletenessScore: 78,
+        providerQualityScore: 64,
+        uniquenessScore: 100,
+        overallScore: 88,
+      },
+      validationReasons: [
+        "Location aligns with the campaign region.",
+        "Price supports the title budget claim.",
+        "Property type fits the selected title angle.",
+      ],
+      warnings: [],
+      rank: 1,
+      duplicateGroupKey: "listing-1",
+    },
+  ],
+  rejectedListings: [
+    {
+      ...discoveredCampaign.listingCandidates[1]!,
+      validationStatus: "needs_attention",
+      overallScore: 63,
+      scoreBreakdown: {
+        titleMatchScore: 58,
+        geographyScore: 86,
+        priceFitScore: 100,
+        propertyTypeScore: 100,
+        featureClaimScore: 42,
+        mediaAvailabilityScore: 52,
+        listingCompletenessScore: 78,
+        providerQualityScore: 64,
+        uniquenessScore: 100,
+        overallScore: 63,
+      },
+      validationReasons: [
+        "Location aligns with the campaign region.",
+        "Price supports the title budget claim.",
+        "Feature support is thin for this title.",
+      ],
+      warnings: ["Some listings are plausible but still need review before CasaHUD can rely on them."],
+      rejectionCategory: "weak_support",
+      duplicateGroupKey: "listing-2",
+    },
+  ],
+  listingRankOrder: ["listing-1"],
+  listingValidationStatus: "listing_candidates_validated",
+  listingValidationSummary: {
+    headline: "Approved 1 of 2 discovered listings for the title promise.",
+    rankingExplanation:
+      "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+    discoveredCount: 2,
+    approvedCount: 1,
+    rejectedCount: 1,
+    needsAttentionCount: 1,
+    titleSupportConfidence: 74,
+    warnings: [
+      "The discovered listings only partially support the title promise. Review the rejected listings or rerun property discovery before moving forward.",
+    ],
+    completedAt: "2026-04-28T00:25:00.000Z",
+  },
+  titleSupportConfidence: 74,
+  validationWarnings: [
+    "The discovered listings only partially support the title promise. Review the rejected listings or rerun property discovery before moving forward.",
+    "Some listings are plausible but still need review before CasaHUD can rely on them.",
+  ],
+  nextPhase: {
+    key: "location_intelligence",
+    label: "Location Intelligence",
+    detail:
+      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+    implemented: false,
+  },
+  updatedAt: "2026-04-28T00:25:00.000Z",
+  futureState: {
+    ...discoveredCampaign.futureState,
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: ["listing-1"],
+  },
 };
 
 async function flush() {
@@ -394,6 +502,8 @@ describe("CasaHUD opportunity UI flow", () => {
               researchSummary: savedCampaign.researchBrief.summary,
               listingCandidateCount: 0,
               listingDiscoveryStatus: "not_started",
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
             },
             message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
           }),
@@ -502,10 +612,12 @@ describe("CasaHUD opportunity UI flow", () => {
                 status: savedCampaign.status,
                 createdAt: savedCampaign.createdAt,
                 updatedAt: savedCampaign.updatedAt,
-                researchSummary: savedCampaign.researchBrief.summary,
-                listingCandidateCount: 0,
-                listingDiscoveryStatus: "not_started",
-              },
+              researchSummary: savedCampaign.researchBrief.summary,
+              listingCandidateCount: 0,
+              listingDiscoveryStatus: "not_started",
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
+            },
               message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
             }),
             {
@@ -583,6 +695,8 @@ describe("CasaHUD opportunity UI flow", () => {
               researchSummary: discoveredCampaign.researchBrief.summary,
               listingCandidateCount: discoveredCampaign.listingCandidates.length,
               listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
               discoverySummary: discoveredCampaign.discoverySummary?.headline,
             },
             message: `Property discovery complete. "${discoveredCampaign.name}" is ready for listing validation.`,
@@ -603,6 +717,141 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.textContent).toContain("Next: Validate and rank listings");
     expect(container.textContent).toContain("Tropea apartment candidate");
     expect(container.textContent).toContain("Connect Idealista or Immobiliare to search live listings.");
+  });
+
+  it("shows listing validation progress and persists approved and rejected results on the campaign", async () => {
+    let resolveValidation: ((response: Response) => void) | null = null;
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              campaigns: [
+                {
+                  id: discoveredCampaign.id,
+                  name: discoveredCampaign.name,
+                  campaignType: discoveredCampaign.campaignType,
+                  marketRegionHint: discoveredCampaign.marketRegionHint,
+                  status: discoveredCampaign.status,
+                  createdAt: discoveredCampaign.createdAt,
+                  updatedAt: discoveredCampaign.updatedAt,
+                  researchSummary: discoveredCampaign.researchBrief.summary,
+                  listingCandidateCount: discoveredCampaign.listingCandidates.length,
+                  listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+                  approvedListingCount: 0,
+                  listingValidationStatus: "not_started",
+                  discoverySummary: discoveredCampaign.discoverySummary?.headline,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${discoveredCampaign.id}`)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, campaign: discoveredCampaign }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${discoveredCampaign.id}/validate-listings`) && method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolveValidation = resolve;
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const resumeButton = container.querySelector('[data-testid="casahud-resume-campaign"]');
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const validateButton = container.querySelector('[data-testid="casahud-validate-listings-cta"]');
+    expect(validateButton?.textContent).toContain("Validate and Rank Listings");
+
+    await act(async () => {
+      validateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-validation-progress"]')?.textContent).toContain(
+      "Checking title truthfulness",
+    );
+    expect(container.textContent).toContain("Removing duplicate listings");
+
+    await act(async () => {
+      resolveValidation?.(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: validatedCampaign,
+            summary: {
+              id: validatedCampaign.id,
+              name: validatedCampaign.name,
+              campaignType: validatedCampaign.campaignType,
+              marketRegionHint: validatedCampaign.marketRegionHint,
+              status: validatedCampaign.status,
+              createdAt: validatedCampaign.createdAt,
+              updatedAt: validatedCampaign.updatedAt,
+              researchSummary: validatedCampaign.researchBrief.summary,
+              listingCandidateCount: validatedCampaign.listingCandidates.length,
+              listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
+              approvedListingCount: validatedCampaign.approvedListings.length,
+              listingValidationStatus: validatedCampaign.listingValidationStatus,
+              titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
+              discoverySummary: validatedCampaign.discoverySummary?.headline,
+              validationSummary: validatedCampaign.listingValidationSummary?.headline,
+            },
+            message: `Listing validation complete. "${validatedCampaign.name}" is ready for Location Intelligence.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-validation-summary"]')?.textContent).toContain(
+      "Approved 1 of 2 discovered listings for the title promise.",
+    );
+    expect(container.querySelectorAll('[data-testid="casahud-approved-listing-card"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(1);
+    expect(container.textContent).toContain("Next: Location Intelligence");
+    expect(container.textContent).toContain("Title support confidence: 74%");
+    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("1 approved");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {

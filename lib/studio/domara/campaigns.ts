@@ -9,17 +9,20 @@ import type {
   CasaHudOpportunityTitleCandidate,
 } from "@/lib/studio/domara/opportunity-engine/types";
 
-export const CASAHUD_CAMPAIGN_METADATA_PHASE = "phase_4_listing_discovery" as const;
+export const CASAHUD_CAMPAIGN_METADATA_PHASE = "phase_5_listing_validation" as const;
+export const CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE = "phase_4_listing_discovery" as const;
 export const CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE = "phase_3_campaign_persistence" as const;
-const CASAHUD_CAMPAIGN_METADATA_VERSION = 2 as const;
+const CASAHUD_CAMPAIGN_METADATA_VERSION = 3 as const;
 
 export type CasaHudCampaignStatus =
   | "opportunity_generated"
   | "campaign_created"
   | "ready_for_property_discovery"
-  | "listing_candidates_discovered";
+  | "listing_candidates_discovered"
+  | "listing_candidates_validated";
 
 export type CasaHudListingDiscoveryStatus = "not_started" | "listing_candidates_discovered";
+export type CasaHudListingValidationStatus = "not_started" | "listing_candidates_validated";
 
 export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample";
 
@@ -108,11 +111,60 @@ export type CasaHudCampaignListingValidationNextPhase = {
   implemented: false;
 };
 
+export type CasaHudCampaignLocationIntelligenceNextPhase = {
+  key: "location_intelligence";
+  label: "Location Intelligence";
+  detail: "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.";
+  implemented: false;
+};
+
 export type CasaHudCampaignNextPhase =
   | CasaHudCampaignPropertyDiscoveryNextPhase
-  | CasaHudCampaignListingValidationNextPhase;
+  | CasaHudCampaignListingValidationNextPhase
+  | CasaHudCampaignLocationIntelligenceNextPhase;
+
+export type CasaHudValidatedListingStatus = "approved" | "rejected" | "needs_attention";
+
+export type CasaHudListingValidationScoreBreakdown = {
+  titleMatchScore: number;
+  geographyScore: number;
+  priceFitScore: number;
+  propertyTypeScore: number;
+  featureClaimScore: number;
+  mediaAvailabilityScore: number;
+  listingCompletenessScore: number;
+  providerQualityScore: number;
+  uniquenessScore: number;
+  overallScore: number;
+};
+
+export type CasaHudValidatedListing = CasaHudListingCandidate & {
+  validationStatus: CasaHudValidatedListingStatus;
+  overallScore: number;
+  scoreBreakdown: CasaHudListingValidationScoreBreakdown;
+  validationReasons: string[];
+  warnings: string[];
+  rank?: number;
+  duplicateOfListingId?: string;
+  duplicateGroupKey?: string;
+  duplicateReferenceIds?: string[];
+  rejectionCategory?: "duplicate" | "price_mismatch" | "geography_mismatch" | "property_type_mismatch" | "weak_support" | "incomplete";
+};
+
+export type CasaHudListingValidationSummary = {
+  headline: string;
+  rankingExplanation: string;
+  discoveredCount: number;
+  approvedCount: number;
+  rejectedCount: number;
+  needsAttentionCount: number;
+  titleSupportConfidence: number;
+  warnings: string[];
+  completedAt: string;
+};
 
 export type CasaHudCampaignFutureState = {
+  listingCandidates?: unknown[];
   approvedListings: unknown[];
   rejectedListings: unknown[];
   listingRankOrder: string[];
@@ -151,6 +203,13 @@ export type CasaHudCampaign = {
   listingProviderStatuses: CasaHudListingProviderStatus[];
   discoverySummary: CasaHudListingDiscoverySummary | null;
   listingDiscoveryStatus: CasaHudListingDiscoveryStatus;
+  approvedListings: CasaHudValidatedListing[];
+  rejectedListings: CasaHudValidatedListing[];
+  listingRankOrder: string[];
+  listingValidationStatus: CasaHudListingValidationStatus;
+  listingValidationSummary: CasaHudListingValidationSummary | null;
+  titleSupportConfidence: number | null;
+  validationWarnings: string[];
   nextPhase: CasaHudCampaignNextPhase;
   createdAt: string;
   updatedAt: string;
@@ -169,12 +228,19 @@ export type CasaHudCampaignSummary = {
   researchSummary: string;
   listingCandidateCount: number;
   listingDiscoveryStatus: CasaHudListingDiscoveryStatus;
+  approvedListingCount: number;
+  listingValidationStatus: CasaHudListingValidationStatus;
+  titleSupportConfidence?: number;
   discoverySummary?: string;
+  validationSummary?: string;
 };
 
 export type CasaHudCampaignMetadata = {
   schemaVersion: number;
-  phase: typeof CASAHUD_CAMPAIGN_METADATA_PHASE | typeof CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE;
+  phase:
+    | typeof CASAHUD_CAMPAIGN_METADATA_PHASE
+    | typeof CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE
+    | typeof CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE;
   source: "opportunity_result";
   campaign: CasaHudCampaign;
 };
@@ -254,12 +320,17 @@ function isCampaignStatus(value: unknown): value is CasaHudCampaignStatus {
     value === "opportunity_generated" ||
     value === "campaign_created" ||
     value === "ready_for_property_discovery" ||
-    value === "listing_candidates_discovered"
+    value === "listing_candidates_discovered" ||
+    value === "listing_candidates_validated"
   );
 }
 
 function isListingDiscoveryStatus(value: unknown): value is CasaHudListingDiscoveryStatus {
   return value === "not_started" || value === "listing_candidates_discovered";
+}
+
+function isListingValidationStatus(value: unknown): value is CasaHudListingValidationStatus {
+  return value === "not_started" || value === "listing_candidates_validated";
 }
 
 function isListingProvider(value: unknown): value is CasaHudListingProvider {
@@ -358,6 +429,65 @@ function isListingDiscoverySummary(value: unknown): value is CasaHudListingDisco
   );
 }
 
+function isListingValidationScoreBreakdown(value: unknown): value is CasaHudListingValidationScoreBreakdown {
+  return (
+    isRecord(value) &&
+    isFiniteNumber(value.titleMatchScore) &&
+    isFiniteNumber(value.geographyScore) &&
+    isFiniteNumber(value.priceFitScore) &&
+    isFiniteNumber(value.propertyTypeScore) &&
+    isFiniteNumber(value.featureClaimScore) &&
+    isFiniteNumber(value.mediaAvailabilityScore) &&
+    isFiniteNumber(value.listingCompletenessScore) &&
+    isFiniteNumber(value.providerQualityScore) &&
+    isFiniteNumber(value.uniquenessScore) &&
+    isFiniteNumber(value.overallScore)
+  );
+}
+
+function isValidatedListingStatus(value: unknown): value is CasaHudValidatedListingStatus {
+  return value === "approved" || value === "rejected" || value === "needs_attention";
+}
+
+function isValidatedListing(value: unknown): value is CasaHudValidatedListing {
+  if (!isRecord(value) || !isListingCandidate(value)) return false;
+
+  const candidate = value as Record<string, unknown>;
+  return (
+    isValidatedListingStatus(candidate.validationStatus) &&
+    isFiniteNumber(candidate.overallScore) &&
+    isListingValidationScoreBreakdown(candidate.scoreBreakdown) &&
+    isStringArray(candidate.validationReasons) &&
+    isStringArray(candidate.warnings) &&
+    (candidate.rank === undefined || isFiniteNumber(candidate.rank)) &&
+    (candidate.duplicateOfListingId === undefined || isNonEmptyString(candidate.duplicateOfListingId)) &&
+    (candidate.duplicateGroupKey === undefined || isNonEmptyString(candidate.duplicateGroupKey)) &&
+    (candidate.duplicateReferenceIds === undefined || isStringArray(candidate.duplicateReferenceIds)) &&
+    (candidate.rejectionCategory === undefined ||
+      candidate.rejectionCategory === "duplicate" ||
+      candidate.rejectionCategory === "price_mismatch" ||
+      candidate.rejectionCategory === "geography_mismatch" ||
+      candidate.rejectionCategory === "property_type_mismatch" ||
+      candidate.rejectionCategory === "weak_support" ||
+      candidate.rejectionCategory === "incomplete")
+  );
+}
+
+function isListingValidationSummary(value: unknown): value is CasaHudListingValidationSummary {
+  return (
+    isRecord(value) &&
+    isNonEmptyString(value.headline) &&
+    isNonEmptyString(value.rankingExplanation) &&
+    isFiniteNumber(value.discoveredCount) &&
+    isFiniteNumber(value.approvedCount) &&
+    isFiniteNumber(value.rejectedCount) &&
+    isFiniteNumber(value.needsAttentionCount) &&
+    isFiniteNumber(value.titleSupportConfidence) &&
+    isStringArray(value.warnings) &&
+    isNonEmptyString(value.completedAt)
+  );
+}
+
 function isCampaignNextPhase(value: unknown): value is CasaHudCampaignNextPhase {
   return (
     isRecord(value) &&
@@ -367,6 +497,9 @@ function isCampaignNextPhase(value: unknown): value is CasaHudCampaignNextPhase 
       isNonEmptyString(value.detail)) ||
       (value.key === "listing_validation" &&
         value.label === "Validate and rank listings" &&
+        isNonEmptyString(value.detail)) ||
+      (value.key === "location_intelligence" &&
+        value.label === "Location Intelligence" &&
         isNonEmptyString(value.detail)))
   );
 }
@@ -448,6 +581,7 @@ export function toCasaHudProjectVideoType(type: CasaHudOpportunityCampaignType):
 
 function createFutureState(): CasaHudCampaignFutureState {
   return {
+    listingCandidates: [],
     approvedListings: [],
     rejectedListings: [],
     listingRankOrder: [],
@@ -484,6 +618,16 @@ export function createListingValidationNextPhase(): CasaHudCampaignListingValida
   };
 }
 
+export function createLocationIntelligenceNextPhase(): CasaHudCampaignLocationIntelligenceNextPhase {
+  return {
+    key: "location_intelligence",
+    label: "Location Intelligence",
+    detail:
+      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+    implemented: false,
+  };
+}
+
 export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity: CasaHudOpportunityResult): CasaHudCampaign {
   const timestamp = nowIso();
   const nonce = Math.random().toString(36).slice(2, 10);
@@ -513,6 +657,13 @@ export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity:
     listingProviderStatuses: [],
     discoverySummary: null,
     listingDiscoveryStatus: "not_started",
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    listingValidationStatus: "not_started",
+    listingValidationSummary: null,
+    titleSupportConfidence: null,
+    validationWarnings: [],
     nextPhase: createPropertyDiscoveryNextPhase(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -540,8 +691,56 @@ export function applyCasaHudListingDiscovery(
     listingProviderStatuses: discovery.listingProviderStatuses,
     discoverySummary: discovery.discoverySummary,
     listingDiscoveryStatus: "listing_candidates_discovered",
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    listingValidationStatus: "not_started",
+    listingValidationSummary: null,
+    titleSupportConfidence: null,
+    validationWarnings: [],
     nextPhase: createListingValidationNextPhase(),
     updatedAt,
+    futureState: {
+      ...campaign.futureState,
+      listingCandidates: discovery.listingCandidates,
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+    },
+  };
+}
+
+export function applyCasaHudListingValidation(
+  campaign: CasaHudCampaign,
+  validation: {
+    approvedListings: CasaHudValidatedListing[];
+    rejectedListings: CasaHudValidatedListing[];
+    listingRankOrder: string[];
+    listingValidationSummary: CasaHudListingValidationSummary;
+    titleSupportConfidence: number;
+    validationWarnings: string[];
+  },
+): CasaHudCampaign {
+  const updatedAt = validation.listingValidationSummary.completedAt || nowIso();
+
+  return {
+    ...campaign,
+    status: "listing_candidates_validated",
+    approvedListings: validation.approvedListings,
+    rejectedListings: validation.rejectedListings,
+    listingRankOrder: validation.listingRankOrder,
+    listingValidationStatus: "listing_candidates_validated",
+    listingValidationSummary: validation.listingValidationSummary,
+    titleSupportConfidence: validation.titleSupportConfidence,
+    validationWarnings: validation.validationWarnings,
+    nextPhase: createLocationIntelligenceNextPhase(),
+    updatedAt,
+    futureState: {
+      ...campaign.futureState,
+      approvedListings: validation.approvedListings,
+      rejectedListings: validation.rejectedListings,
+      listingRankOrder: validation.listingRankOrder,
+    },
   };
 }
 
@@ -557,7 +756,11 @@ export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCamp
     researchSummary: campaign.researchBrief.summary,
     listingCandidateCount: campaign.listingCandidates.length,
     listingDiscoveryStatus: campaign.listingDiscoveryStatus,
+    approvedListingCount: campaign.approvedListings.length,
+    listingValidationStatus: campaign.listingValidationStatus,
+    titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
     discoverySummary: campaign.discoverySummary?.headline,
+    validationSummary: campaign.listingValidationSummary?.headline,
   };
 }
 
@@ -574,6 +777,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
   if (!isRecord(value)) return null;
   if (
     value.phase !== CASAHUD_CAMPAIGN_METADATA_PHASE &&
+    value.phase !== CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE &&
     value.phase !== CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE
   ) {
     return null;
@@ -625,6 +829,37 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
     : listingCandidates.length > 0
       ? "listing_candidates_discovered"
       : "not_started";
+  const approvedListings = Array.isArray(campaign.approvedListings)
+    ? campaign.approvedListings.filter((item): item is CasaHudValidatedListing => isValidatedListing(item))
+    : Array.isArray(futureState.approvedListings)
+      ? futureState.approvedListings.filter((item): item is CasaHudValidatedListing => isValidatedListing(item))
+      : [];
+  const rejectedListings = Array.isArray(campaign.rejectedListings)
+    ? campaign.rejectedListings.filter((item): item is CasaHudValidatedListing => isValidatedListing(item))
+    : Array.isArray(futureState.rejectedListings)
+      ? futureState.rejectedListings.filter((item): item is CasaHudValidatedListing => isValidatedListing(item))
+      : [];
+  const listingRankOrder = isStringArray(campaign.listingRankOrder)
+    ? campaign.listingRankOrder
+    : isStringArray(futureState.listingRankOrder)
+      ? futureState.listingRankOrder
+      : [];
+  const listingValidationSummary = isListingValidationSummary(campaign.listingValidationSummary)
+    ? campaign.listingValidationSummary
+    : null;
+  const listingValidationStatus = isListingValidationStatus(campaign.listingValidationStatus)
+    ? campaign.listingValidationStatus
+    : approvedListings.length > 0 || rejectedListings.length > 0 || listingValidationSummary !== null
+      ? "listing_candidates_validated"
+      : "not_started";
+  const titleSupportConfidence = isFiniteNumber(campaign.titleSupportConfidence)
+    ? campaign.titleSupportConfidence
+    : isFiniteNumber(listingValidationSummary?.titleSupportConfidence)
+      ? listingValidationSummary.titleSupportConfidence
+      : null;
+  const validationWarnings = isStringArray(campaign.validationWarnings)
+    ? campaign.validationWarnings
+    : listingValidationSummary?.warnings ?? [];
 
   const normalizedCampaign: CasaHudCampaign = {
     id: campaign.id,
@@ -652,19 +887,29 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
     listingProviderStatuses,
     discoverySummary,
     listingDiscoveryStatus,
+    approvedListings,
+    rejectedListings,
+    listingRankOrder,
+    listingValidationStatus,
+    listingValidationSummary,
+    titleSupportConfidence,
+    validationWarnings,
     nextPhase:
-      listingDiscoveryStatus === "listing_candidates_discovered"
-        ? createListingValidationNextPhase()
-        : isCampaignNextPhase(campaign.nextPhase)
-          ? campaign.nextPhase
-          : createPropertyDiscoveryNextPhase(),
+      listingValidationStatus === "listing_candidates_validated"
+        ? createLocationIntelligenceNextPhase()
+        : listingDiscoveryStatus === "listing_candidates_discovered"
+          ? createListingValidationNextPhase()
+          : isCampaignNextPhase(campaign.nextPhase)
+            ? campaign.nextPhase
+            : createPropertyDiscoveryNextPhase(),
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
     generatedAt: campaign.generatedAt,
     futureState: {
-      approvedListings: Array.isArray(futureState.approvedListings) ? futureState.approvedListings : [],
-      rejectedListings: Array.isArray(futureState.rejectedListings) ? futureState.rejectedListings : [],
-      listingRankOrder: isStringArray(futureState.listingRankOrder) ? futureState.listingRankOrder : [],
+      listingCandidates,
+      approvedListings,
+      rejectedListings,
+      listingRankOrder,
       locationIntelligence: null,
       mapPoiBundle: null,
       script: null,
@@ -677,6 +922,12 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
       scheduleStatus: null,
     },
   };
+
+  if (listingValidationStatus === "listing_candidates_validated") {
+    normalizedCampaign.status = "listing_candidates_validated";
+  } else if (listingDiscoveryStatus === "listing_candidates_discovered") {
+    normalizedCampaign.status = "listing_candidates_discovered";
+  }
 
   return {
     schemaVersion: value.schemaVersion,

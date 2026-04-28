@@ -84,6 +84,13 @@ const campaign: CasaHudCampaign = {
   listingProviderStatuses: [],
   discoverySummary: null,
   listingDiscoveryStatus: "not_started",
+  approvedListings: [],
+  rejectedListings: [],
+  listingRankOrder: [],
+  listingValidationStatus: "not_started",
+  listingValidationSummary: null,
+  titleSupportConfidence: null,
+  validationWarnings: [],
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -162,6 +169,8 @@ describe("CasaHUD campaign routes", () => {
         researchSummary: campaign.researchBrief.summary,
         listingCandidateCount: 0,
         listingDiscoveryStatus: "not_started",
+        approvedListingCount: 0,
+        listingValidationStatus: "not_started",
       },
     ]);
     mocks.getCasaHudCampaign.mockResolvedValue(campaign);

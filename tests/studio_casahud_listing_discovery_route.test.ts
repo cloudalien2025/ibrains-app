@@ -84,6 +84,13 @@ const savedCampaign: CasaHudCampaign = {
   listingProviderStatuses: [],
   discoverySummary: null,
   listingDiscoveryStatus: "not_started",
+  approvedListings: [],
+  rejectedListings: [],
+  listingRankOrder: [],
+  listingValidationStatus: "not_started",
+  listingValidationSummary: null,
+  titleSupportConfidence: null,
+  validationWarnings: [],
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -95,6 +102,7 @@ const savedCampaign: CasaHudCampaign = {
   updatedAt: "2026-04-28T00:10:00.000Z",
   generatedAt: opportunity.generatedAt,
   futureState: {
+    listingCandidates: [],
     approvedListings: [],
     rejectedListings: [],
     listingRankOrder: [],
