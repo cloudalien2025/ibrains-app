@@ -219,7 +219,8 @@ const savedCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
-    detail: "Find matching properties next.",
+    detail:
+      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -312,7 +313,8 @@ const discoveredCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "listing_validation",
     label: "Validate and rank listings",
-    detail: "Validate and rank listings next.",
+    detail:
+      "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
     implemented: false,
   },
   updatedAt: "2026-04-28T00:20:00.000Z",
@@ -446,7 +448,8 @@ const scriptedCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
-    detail: "Build the media plan next.",
+    detail:
+      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   },
 };
@@ -512,7 +515,7 @@ describe("CasaHUD opportunity flow", () => {
     vi.restoreAllMocks();
   });
 
-  it("generates an Opportunity Brief and creates a saved campaign without reintroducing Viral Titles as the workspace label", async () => {
+  it("generates a viral title package and creates a saved campaign in the properties workspace", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
@@ -567,8 +570,8 @@ describe("CasaHUD opportunity flow", () => {
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-opportunity-brief"]')?.textContent).toContain(opportunity.selectedTitle.title);
-    expect(container.querySelector('[data-testid="casahud-opportunity-brief"]')?.textContent).not.toContain("Viral Titles");
+    expect(container.querySelector('[data-testid="casahud-viral-titles"]')?.textContent).toContain(opportunity.selectedTitle.title);
+    expect(container.querySelector('[data-testid="casahud-viral-titles"]')?.textContent).toContain("Viral Titles");
     expect(container.querySelectorAll('[data-testid="casahud-candidate-card"]').length).toBe(2);
 
     await act(async () => {
@@ -577,7 +580,7 @@ describe("CasaHUD opportunity flow", () => {
     await flush();
 
     expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain(savedCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Find matching properties");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Find Matching Properties");
   });
 
   it("discovers property candidates and keeps every card image-first with a fallback placeholder when a listing image is missing", async () => {
@@ -642,10 +645,10 @@ describe("CasaHUD opportunity flow", () => {
 
     expect(container.querySelectorAll('[data-testid="casahud-listing-candidate-card"]').length).toBe(2);
     expect(container.querySelectorAll('[data-testid="casahud-property-card-media"]').length).toBeGreaterThanOrEqual(2);
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Source thumbnail");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Source thumbnail");
   });
 
-  it("builds the Video Builder from script plus media plan and renders scene cards with paired narration and on-screen text", async () => {
+  it("builds the media workspace from script plus media plan and renders scene cards with paired narration and on-screen text", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = String(input);
 
@@ -676,7 +679,7 @@ describe("CasaHUD opportunity flow", () => {
             ok: true,
             campaign: mediaPlannedCampaign,
             summary: toSummary(mediaPlannedCampaign),
-            message: `Video Builder updated for "${mediaPlannedCampaign.name}".`,
+            message: `Media plan updated for "${mediaPlannedCampaign.name}".`,
           }),
           {
             status: 200,
@@ -700,7 +703,7 @@ describe("CasaHUD opportunity flow", () => {
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Build Media Plan");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("Build Media Plan");
 
     await act(async () => {
       container.querySelector('[data-testid="casahud-build-media-plan-cta"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -708,9 +711,9 @@ describe("CasaHUD opportunity flow", () => {
     await flush();
 
     expect(container.querySelectorAll('[data-testid="casahud-video-scene-card"]').length).toBeGreaterThan(1);
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Narration");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("On-screen Text");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Scene 1");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("Narration");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("On-screen Text");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("Scene 1");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {
