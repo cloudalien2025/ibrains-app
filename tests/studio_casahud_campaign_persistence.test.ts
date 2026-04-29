@@ -580,10 +580,18 @@ describe("CasaHUD campaign persistence", () => {
       id: "imported-1",
       provider: "idealista" as const,
       sourceType: "imported_url" as const,
+      originalSourceUrl: "https://www.idealista.it/en/annuncio/123?utm_source=test",
+      normalizedSourceUrl: "https://www.idealista.it/en/annuncio/123",
+      canonicalSourceUrl: "https://www.idealista.it/en/annuncio/123",
       sourceUrl: "https://www.idealista.it/en/annuncio/123",
       sourceHost: "idealista.it",
       sourceLabel: "Idealista",
+      urlClassification: "listing" as const,
       importedAt: "2026-04-29T10:00:00.000Z",
+      manualCompletionStatus: "partially_completed" as const,
+      manuallyCompletedFields: ["title", "locationText"],
+      manualUpdatedAt: "2026-04-29T10:05:00.000Z",
+      manualFeaturedImageUrl: "https://images.example.com/imported-1-manual.jpg",
       featuredImageUrl: "https://images.example.com/imported-1.jpg",
       metadataImageUrl: "https://images.example.com/imported-1.jpg",
       metadataTitle: "Apartment in Tropea",
@@ -625,6 +633,9 @@ describe("CasaHUD campaign persistence", () => {
     const reopened = await repository.getCasaHudCampaign(userId, created.id);
     expect(reopened?.listingCandidates[0]?.sourceType).toBe("imported_url");
     expect(reopened?.listingCandidates[0]?.sourceLabel).toBe("Idealista");
+    expect(reopened?.listingCandidates[0]?.normalizedSourceUrl).toBe("https://www.idealista.it/en/annuncio/123");
+    expect(reopened?.listingCandidates[0]?.manualCompletionStatus).toBe("partially_completed");
+    expect(reopened?.listingCandidates[0]?.manualFeaturedImageUrl).toBe("https://images.example.com/imported-1-manual.jpg");
     expect(reopened?.listingCandidates[0]?.metadataImageUrl).toBe("https://images.example.com/imported-1.jpg");
     expect(reopened?.listingCandidates[0]?.needsReviewFields).toEqual([
       "rooms",

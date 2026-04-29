@@ -19,6 +19,29 @@ function errorResponse(status: number, message: string, code: string, reqId = cr
   return NextResponse.json({ ok: false, error: { message, code, reqId } }, { status });
 }
 
+function buildImportMessage(params: {
+  importedCount: number;
+  partialCount: number;
+  manualDraftCount: number;
+  duplicateCount: number;
+  searchPageCount: number;
+  invalidCount: number;
+  failedCount: number;
+}) {
+  const parts = [
+    params.importedCount > 0 ? `Imported ${params.importedCount} fully extracted listing URL${params.importedCount === 1 ? "" : "s"}` : null,
+    params.partialCount > 0 ? `added ${params.partialCount} partial import${params.partialCount === 1 ? "" : "s"}` : null,
+    params.manualDraftCount > 0 ? `created ${params.manualDraftCount} manual draft${params.manualDraftCount === 1 ? "" : "s"}` : null,
+    params.searchPageCount > 0 ? `detected ${params.searchPageCount} search page${params.searchPageCount === 1 ? "" : "s"}` : null,
+    params.duplicateCount > 0 ? `skipped ${params.duplicateCount} duplicate${params.duplicateCount === 1 ? "" : "s"}` : null,
+    params.invalidCount > 0 ? `rejected ${params.invalidCount} invalid URL${params.invalidCount === 1 ? "" : "s"}` : null,
+    params.failedCount > 0 ? `${params.failedCount} URL${params.failedCount === 1 ? "" : "s"} could not be used` : null,
+  ].filter(Boolean);
+
+  if (parts.length === 0) return "CasaHUD processed the submitted listing URLs.";
+  return `${parts.join("; ")}.`;
+}
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } },
@@ -55,12 +78,27 @@ export async function POST(
       rawUrls: payload.rawUrls,
     });
 
-    if (imported.importedCount === 0) {
+    const importedCount = imported.importedCount || 0;
+    const partialCount = imported.partialCount || 0;
+    const manualDraftCount = imported.manualDraftCount || 0;
+    const duplicateCount = imported.duplicateCount || 0;
+    const searchPageCount = imported.searchPageCount || 0;
+    const invalidCount = imported.invalidCount || 0;
+    const failedCount = imported.failedCount || 0;
+    const skippedCount = imported.skippedCount || 0;
+    const persistedCount = importedCount + partialCount + manualDraftCount;
+
+    if (persistedCount === 0) {
       const hasOnlyDuplicates = imported.results.every((result) => result.status === "duplicate");
+      const hasOnlySearchPages = imported.results.every((result) => result.status === "search_results");
       return errorResponse(
         hasOnlyDuplicates ? 409 : 400,
-        hasOnlyDuplicates ? "Every URL in this import is already on the campaign." : "CasaHUD could not use any of the submitted URLs.",
-        hasOnlyDuplicates ? "DUPLICATE_URLS" : "NO_USABLE_URLS",
+        hasOnlyDuplicates
+          ? "Every URL in this import is already on the campaign."
+          : hasOnlySearchPages
+            ? "This looks like a search results page. Paste individual listing URLs or choose listings to import."
+            : "CasaHUD could not use any of the submitted URLs.",
+        hasOnlyDuplicates ? "DUPLICATE_URLS" : hasOnlySearchPages ? "SEARCH_PAGE_DETECTED" : "NO_USABLE_URLS",
         reqId,
       );
     }
@@ -78,21 +116,38 @@ export async function POST(
       reqId,
       campaign: updatedCampaign,
       summary: toCasaHudCampaignSummary(updatedCampaign),
-      importedCount: imported.importedCount,
-      duplicateCount: imported.duplicateCount,
-      invalidCount: imported.invalidCount,
-      failedCount: imported.failedCount,
-      skippedCount: imported.skippedCount,
+      importedCount,
+      partialCount,
+      manualDraftCount,
+      duplicateCount,
+      searchPageCount,
+      invalidCount,
+      failedCount,
+      skippedCount,
       results: imported.results.map((result) => ({
         inputUrl: result.inputUrl,
         normalizedUrl: result.normalizedUrl,
+        provider: result.provider,
+        providerName: result.providerName,
+        urlClassification: result.urlClassification,
+        extractionStatus: result.extractionStatus,
         status: result.status,
         warnings: result.warnings,
         reason: result.reason,
+        nextAction: result.nextAction,
+        discoveredListingUrls: result.discoveredListingUrls,
         candidateId: result.candidate?.id,
       })),
       warnings: imported.warnings,
-      message: `Imported ${imported.importedCount} listing URL${imported.importedCount === 1 ? "" : "s"} and skipped ${imported.skippedCount}.`,
+      message: buildImportMessage({
+        importedCount,
+        partialCount,
+        manualDraftCount,
+        duplicateCount,
+        searchPageCount,
+        invalidCount,
+        failedCount,
+      }),
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {

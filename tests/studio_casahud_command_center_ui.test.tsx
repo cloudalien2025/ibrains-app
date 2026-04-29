@@ -402,9 +402,13 @@ const importedCampaign: CasaHudCampaign = {
       id: "imported-listing-1",
       provider: "idealista",
       sourceType: "imported_url",
+      originalSourceUrl: "https://www.idealista.it/en/annuncio/123?utm_source=test",
+      normalizedSourceUrl: "https://www.idealista.it/en/annuncio/123",
+      canonicalSourceUrl: "https://www.idealista.it/en/annuncio/123",
       sourceUrl: "https://www.idealista.it/en/annuncio/123",
       sourceHost: "idealista.it",
       sourceLabel: "Idealista",
+      urlClassification: "listing",
       importedAt: "2026-04-29T10:00:00.000Z",
       featuredImageUrl: "https://images.example.com/imported-og.jpg",
       metadataImageUrl: "https://images.example.com/imported-og.jpg",
@@ -416,6 +420,9 @@ const importedCampaign: CasaHudCampaign = {
       extractionFields: ["title", "price", "locationText", "bedrooms", "bathrooms", "interiorSizeSqm", "featuredImageUrl"],
       extractionWarnings: [],
       needsReviewFields: ["rooms", "land_size", "floor", "parking", "condition", "energy"],
+      manualCompletionStatus: "partially_completed",
+      manuallyCompletedFields: ["title", "locationText"],
+      manualUpdatedAt: "2026-04-29T10:05:00.000Z",
       title: "Apartment in Tropea",
       locationText: "Tropea, Calabria, Italy",
       price: 284000,
@@ -825,6 +832,106 @@ describe("CasaHUD command center UI", () => {
     expect(propertyText).not.toContain("Price on request");
     expect(propertyText).not.toContain("Facts pending");
     expect(propertyText).not.toContain("Image needed");
+  });
+
+  it("opens the imported listing editor, saves manual details, and updates the card copy", async () => {
+    const editedCampaign: CasaHudCampaign = {
+      ...importedCampaign,
+      listingCandidates: [
+        {
+          ...importedCampaign.listingCandidates[0]!,
+          title: "Tropea Apartment with Manual Title",
+          manualFeaturedImageUrl: "https://images.example.com/imported-manual.jpg",
+          featuredImageUrl: "https://images.example.com/imported-manual.jpg",
+          manualCompletionStatus: "completed",
+          needsReviewFields: [],
+          summary: "In Tropea, this apartment is listed at €284,000 with two bedrooms, two bathrooms, and a stronger imported image.",
+          casaHudNarrationSeed: "In Tropea, this apartment is listed at €284,000 with two bedrooms, two bathrooms, and a stronger imported image.",
+        },
+      ],
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(importedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: importedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (
+        url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}/listing-candidates/${importedCampaign.listingCandidates[0]!.id}`) &&
+        init?.method === "PATCH"
+      ) {
+        return new Response(JSON.stringify({ ok: true, campaign: editedCampaign, summary: toSummary(editedCampaign), listing: editedCampaign.listingCandidates[0] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-edit-imported-listing"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const titleInput = container.querySelector('[data-testid="casahud-listing-editor-title"]') as HTMLInputElement | null;
+    const imageInput = container.querySelector('[data-testid="casahud-listing-editor-image-url"]') as HTMLInputElement | null;
+    expect(titleInput).not.toBeNull();
+    expect(imageInput).not.toBeNull();
+
+    await act(async () => {
+      titleInput!.value = "Tropea Apartment with Manual Title";
+      titleInput!.dispatchEvent(new Event("input", { bubbles: true }));
+      imageInput!.value = "https://images.example.com/imported-manual.jpg";
+      imageInput!.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-listing-editor-save"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertyText).toContain("Tropea Apartment with Manual Title");
+    expect(propertyText).toContain("Manual details complete");
+    expect(propertyText).not.toContain("candidate listing pattern");
   });
 
   it("resumes a campaign, shows the active campaign in the sidebar, and opens the focused location workspace", async () => {
