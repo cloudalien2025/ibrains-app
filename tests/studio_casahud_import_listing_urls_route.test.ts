@@ -183,6 +183,10 @@ describe("CasaHUD import listing URLs route", () => {
         {
           inputUrl: importedCandidate.sourceUrl,
           normalizedUrl: importedCandidate.sourceUrl,
+          provider: "idealista",
+          providerName: "Idealista",
+          urlClassification: "listing",
+          extractionStatus: "partial",
           status: "imported",
           candidate: importedCandidate,
           warnings: [],
@@ -190,7 +194,10 @@ describe("CasaHUD import listing URLs route", () => {
       ],
       importedCandidates: [importedCandidate],
       importedCount: 1,
+      partialCount: 0,
+      manualDraftCount: 0,
       duplicateCount: 0,
+      searchPageCount: 0,
       invalidCount: 0,
       failedCount: 0,
       skippedCount: 0,
@@ -210,6 +217,7 @@ describe("CasaHUD import listing URLs route", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.importedCount).toBe(1);
+    expect(payload.manualDraftCount).toBe(0);
     expect(payload.failedCount).toBe(0);
     expect(payload.skippedCount).toBe(0);
     expect(payload.campaign.listingCandidates[0].sourceType).toBe("imported_url");
@@ -223,6 +231,9 @@ describe("CasaHUD import listing URLs route", () => {
         {
           inputUrl: importedCandidate.sourceUrl,
           normalizedUrl: importedCandidate.sourceUrl,
+          provider: "idealista",
+          providerName: "Idealista",
+          urlClassification: "listing",
           status: "duplicate",
           warnings: [],
           reason: "Duplicate URL skipped.",
@@ -230,7 +241,10 @@ describe("CasaHUD import listing URLs route", () => {
       ],
       importedCandidates: [],
       importedCount: 0,
+      partialCount: 0,
+      manualDraftCount: 0,
       duplicateCount: 1,
+      searchPageCount: 0,
       invalidCount: 0,
       failedCount: 0,
       skippedCount: 1,
@@ -257,6 +271,10 @@ describe("CasaHUD import listing URLs route", () => {
         {
           inputUrl: "https://www.immobiliare.it/annunci/456",
           normalizedUrl: "https://www.immobiliare.it/annunci/456",
+          provider: "immobiliare",
+          providerName: "Immobiliare",
+          urlClassification: "listing",
+          extractionStatus: "failed",
           status: "failed",
           warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
           reason: "Source page blocked or unavailable for safe extraction.",
@@ -264,7 +282,10 @@ describe("CasaHUD import listing URLs route", () => {
       ],
       importedCandidates: [],
       importedCount: 0,
+      partialCount: 0,
+      manualDraftCount: 0,
       duplicateCount: 0,
+      searchPageCount: 0,
       invalidCount: 0,
       failedCount: 1,
       skippedCount: 1,
@@ -283,5 +304,69 @@ describe("CasaHUD import listing URLs route", () => {
 
     expect(response.status).toBe(400);
     expect(payload.error.code).toBe("NO_USABLE_URLS");
+  });
+
+  it("persists a manual draft when a provider listing is valid but blocked for extraction", async () => {
+    const manualDraft = {
+      ...importedCandidate,
+      id: "manual-draft-1",
+      provider: "immobiliare" as const,
+      sourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+      sourceHost: "immobiliare.it",
+      sourceLabel: "Immobiliare",
+      extractionStatus: "blocked_or_unavailable" as const,
+      manualCompletionStatus: "incomplete" as const,
+      needsReviewFields: ["price", "location", "images"],
+      title: "Imported Immobiliare listing",
+      locationText: "Location needs review",
+      featuredImageUrl: undefined,
+      imageUrls: [],
+      imageCount: 0,
+      photoAvailability: "none" as const,
+    };
+
+    mocks.importCasaHudListingUrls.mockResolvedValue({
+      results: [
+        {
+          inputUrl: manualDraft.sourceUrl,
+          normalizedUrl: manualDraft.sourceUrl,
+          provider: "immobiliare",
+          providerName: "Immobiliare",
+          urlClassification: "listing",
+          extractionStatus: "blocked_or_unavailable",
+          status: "manual_draft",
+          candidate: manualDraft,
+          warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
+          reason: "Source page was blocked for safe extraction, so CasaHUD created a manual draft.",
+          nextAction: "Open Complete Listing Details to finish the imported property.",
+        },
+      ],
+      importedCandidates: [manualDraft],
+      importedCount: 0,
+      partialCount: 0,
+      manualDraftCount: 1,
+      duplicateCount: 0,
+      searchPageCount: 0,
+      invalidCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
+      warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
+      importedAt: "2026-04-29T10:00:00.000Z",
+    });
+
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/import-listing-urls/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-project-import-route/import-listing-urls", {
+      method: "POST",
+      body: JSON.stringify({ rawUrls: manualDraft.sourceUrl }),
+    });
+
+    const response = await route.POST(request, { params: { id: "casahud-project-import-route" } });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.manualDraftCount).toBe(1);
+    expect(payload.failedCount).toBe(0);
+    expect(payload.campaign.listingCandidates[0].manualCompletionStatus).toBe("incomplete");
   });
 });

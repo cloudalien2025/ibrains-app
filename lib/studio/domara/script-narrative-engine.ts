@@ -186,9 +186,12 @@ function buildPropertyNarration(
 ): CasaHudPropertySegment {
   const supportedFacts = buildListingFactBullets(listing);
   const insightLine = insight?.summary || insight?.highlights[0] || insight?.locationStrengths[0];
-  const descriptionLead = listing.descriptionSnippet
-    ? listing.descriptionSnippet.replace(/\s+/g, " ").trim()
-    : "Public detail is lighter here, so the segment should stay focused on the verified listing facts.";
+  const descriptionLead =
+    listing.casaHudNarrationSeed ||
+    listing.summary ||
+    (listing.descriptionSnippet
+      ? listing.descriptionSnippet.replace(/\s+/g, " ").trim()
+      : "Public detail is lighter here, so the segment should stay focused on the verified listing facts.");
 
   let whyItMadeTheCut = `It keeps the story grounded through ${supportedFacts.slice(0, 3).join(", ")}.`;
   if (campaign.campaignType === "location_led") {

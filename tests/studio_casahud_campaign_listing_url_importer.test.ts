@@ -198,7 +198,7 @@ describe("CasaHUD campaign listing URL importer", () => {
     expect(result.results[0]?.status).toBe("duplicate");
   });
 
-  it("returns a failed result instead of importing a blank candidate when extraction is blocked", async () => {
+  it("creates a manual draft when a valid provider listing is blocked for safe extraction", async () => {
     const fetchFn = vi.fn(async (input: string) => mockHtmlResponse(input, "<html><head></head><body></body></html>", 403));
 
     const result = await importCasaHudListingUrls({
@@ -209,10 +209,56 @@ describe("CasaHUD campaign listing URL importer", () => {
     });
 
     expect(result.importedCount).toBe(0);
-    expect(result.failedCount).toBe(1);
-    expect(result.results[0]?.status).toBe("failed");
-    expect(result.results[0]?.reason).toContain("blocked");
+    expect(result.manualDraftCount).toBe(1);
+    expect(result.failedCount).toBe(0);
+    expect(result.results[0]?.status).toBe("manual_draft");
+    expect(result.results[0]?.reason).toContain("manual draft");
     expect(result.results[0]?.warnings.join(" ")).toContain("HTTP 403");
+    expect(result.importedCandidates[0]?.sourceType).toBe("imported_url");
+    expect(result.importedCandidates[0]?.manualCompletionStatus).toBe("incomplete");
+    expect(result.importedCandidates[0]?.needsReviewFields).toContain("location");
+  });
+
+  it("classifies search pages and safely imports discovered listing URLs from public links", async () => {
+    const fetchFn = vi.fn(async (input: string) => {
+      if (input.includes("/vendita-case/")) {
+        return mockHtmlResponse(
+          input,
+          `
+            <html>
+              <body>
+                <a href="/en/annunci/121869400/">Listing A</a>
+                <a href="/annunci/122960988/">Listing B</a>
+              </body>
+            </html>
+          `,
+        );
+      }
+
+      return mockHtmlResponse(
+        input,
+        `
+          <html>
+            <head>
+              <meta property="og:title" content="Apartment in Tropea" />
+              <meta property="og:description" content="EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm." />
+            </head>
+          </html>
+        `,
+      );
+    });
+
+    const result = await importCasaHudListingUrls({
+      campaign: buildCampaign(),
+      rawUrls: "https://www.immobiliare.it/vendita-case/campania/",
+      fetchFn,
+      importedAt: "2026-04-29T10:00:00.000Z",
+    });
+
+    expect(result.searchPageCount).toBe(1);
+    expect(result.results[0]?.status).toBe("search_results");
+    expect(result.importedCandidates.length).toBe(2);
+    expect(result.results.some((entry) => entry.status === "partial" || entry.status === "imported")).toBe(true);
   });
 
   it("skips a second URL when the extractor resolves to an existing canonical URL", async () => {

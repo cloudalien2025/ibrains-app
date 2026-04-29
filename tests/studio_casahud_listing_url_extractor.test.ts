@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  classifyListingImportUrl,
   extractListingUrlMetadata,
   extractListingUrlMetadataFromHtml,
 } from "@/lib/studio/domara/listing-url-extractor";
 
 const immobiliareUrl = "https://www.immobiliare.it/annunci/122960988/";
+const immobiliareEnglishUrl = "https://www.immobiliare.it/en/annunci/121869400/";
 
 const immobiliareFixtureHtml = `
   <html>
@@ -134,7 +136,137 @@ const immobiliareFixtureHtml = `
   </html>
 `;
 
+const immobiliareEnglishFixtureHtml = `
+  <html>
+    <head>
+      <title>Single family villa via San Berardino, Albanella - immobiliare.it</title>
+      <link rel="canonical" href="${immobiliareEnglishUrl}" />
+      <meta property="og:title" content="Single family villa via San Berardino, Albanella" />
+      <meta property="og:description" content="€299.000 single family villa in Albanella, Salerno, Campania with 3 bedrooms, 2 bathrooms, 150 m² interior, 1,106 m² garden, and private parking." />
+      <meta property="og:image" content="/images/albanella-villa-og.jpg" />
+      <script type="application/ld+json">
+        {
+          "@context": "https://schema.org",
+          "@type": "House",
+          "name": "Single family villa via San Berardino, Albanella",
+          "description": "Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.",
+          "url": "${immobiliareEnglishUrl}",
+          "image": ["//images.example.com/albanella-villa-1.jpg"],
+          "address": {
+            "@type": "PostalAddress",
+            "streetAddress": "Via San Berardino",
+            "addressLocality": "Albanella",
+            "addressRegion": "Campania",
+            "addressCountry": "Italy"
+          },
+          "offers": {
+            "@type": "Offer",
+            "price": 299000,
+            "priceCurrency": "EUR"
+          },
+          "numberOfBedrooms": 3,
+          "numberOfBathroomsTotal": 2,
+          "numberOfRooms": 5,
+          "floorSize": {
+            "@type": "QuantitativeValue",
+            "value": 150,
+            "unitCode": "MTK"
+          }
+        }
+      </script>
+      <script type="application/json" id="__NEXT_DATA__">
+        {
+          "props": {
+            "pageProps": {
+              "listing": {
+                "propertyType": "Single family villa",
+                "commercialSurfaceSqm": 260.6,
+                "landSizeSqm": 1106,
+                "garageParking": "2 garage/box spaces · 3 parking spaces",
+                "balcony": true,
+                "terrace": true,
+                "condition": "Excellent / renovated",
+                "heating": "Independent radiators powered by LPG",
+                "airConditioning": "Independent hot/cold",
+                "energyClass": "D",
+                "photoCount": 86,
+                "floorPlanCount": 1,
+                "virtualTour": true,
+                "updatedDate": "October 16, 2025",
+                "advertiser": "Mirko Franco / Professionecasa Capaccio Paestum",
+                "city": "Albanella",
+                "province": "Salerno",
+                "region": "Campania",
+                "country": "Italy"
+              }
+            }
+          }
+        }
+      </script>
+    </head>
+    <body>
+      <h1>Single family villa via San Berardino, Albanella</h1>
+      <section>
+        <div>Price</div>
+        <div>€299.000</div>
+        <div>Address</div>
+        <div>Via San Berardino, Albanella, Salerno, Campania, Italy</div>
+        <div>Property type</div>
+        <div>Single family villa</div>
+        <div>Rooms</div>
+        <div>5+</div>
+        <div>Bedrooms</div>
+        <div>3</div>
+        <div>Bathrooms</div>
+        <div>2</div>
+        <div>Interior size</div>
+        <div>150 m²</div>
+        <div>Commercial surface</div>
+        <div>260.6 m²</div>
+        <div>Garden</div>
+        <div>1.106 m²</div>
+        <div>Garage / Parking</div>
+        <div>2 garage/box spaces · 3 parking spaces</div>
+        <div>Balcony</div>
+        <div>Yes</div>
+        <div>Terrace</div>
+        <div>Yes</div>
+        <div>Condition</div>
+        <div>Excellent / renovated</div>
+        <div>Heating</div>
+        <div>Independent radiators powered by LPG</div>
+        <div>Air conditioning</div>
+        <div>Independent hot/cold</div>
+        <div>Energy class</div>
+        <div>D</div>
+        <div>86 photos</div>
+        <div>1 floor plan</div>
+        <div>Virtual tour</div>
+        <div>Yes</div>
+        <div>Updated on</div>
+        <div>October 16, 2025</div>
+        <div>Advertiser</div>
+        <div>Mirko Franco / Professionecasa Capaccio Paestum</div>
+      </section>
+      <section>
+        <h2>Description</h2>
+        <p>
+          Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.
+        </p>
+      </section>
+    </body>
+  </html>
+`;
+
 describe("CasaHUD listing URL extractor", () => {
+  it("accepts localized Immobiliare and Idealista URLs through domain-based classification", () => {
+    expect(classifyListingImportUrl("https://www.immobiliare.it/annunci/121869400/").classification).toBe("listing");
+    expect(classifyListingImportUrl("https://www.immobiliare.it/en/annunci/121869400/").classification).toBe("listing");
+    expect(classifyListingImportUrl("https://www.idealista.it/immobile/123456/").classification).toBe("listing");
+    expect(classifyListingImportUrl("https://www.idealista.it/en/immobile/123456/").classification).toBe("listing");
+    expect(classifyListingImportUrl("https://www.immobiliare.it/vendita-case/campania/").classification).toBe("search_results");
+  });
+
   it("extracts deep listing facts from Immobiliare-like public HTML", () => {
     const result = extractListingUrlMetadataFromHtml({
       url: immobiliareUrl,
@@ -142,6 +274,7 @@ describe("CasaHUD listing URL extractor", () => {
     });
 
     expect(result.provider).toBe("immobiliare");
+    expect(result.urlClassification).toBe("listing");
     expect(result.extractionStatus).toBe("extracted");
     expect(result.data.title).toBe("Altavilla Silentina Country House with Olive Grove");
     expect(result.data.locationText).toBe("Contrada Campelle 2, Altavilla Silentina, Salerno, Campania, Italy");
@@ -163,6 +296,31 @@ describe("CasaHUD listing URL extractor", () => {
     expect(result.needsReviewFields).not.toContain("price");
     expect(result.needsReviewFields).not.toContain("location");
     expect(result.needsReviewFields).not.toContain("images");
+  });
+
+  it("extracts English Immobiliare fixture data from localized /en/annunci paths", () => {
+    const result = extractListingUrlMetadataFromHtml({
+      url: immobiliareEnglishUrl,
+      html: immobiliareEnglishFixtureHtml,
+    });
+
+    expect(result.provider).toBe("immobiliare");
+    expect(result.urlClassification).toBe("listing");
+    expect(result.extractionStatus).toBe("extracted");
+    expect(result.data.title).toBe("Single family villa via San Berardino, Albanella");
+    expect(result.data.price).toBe(299000);
+    expect(result.data.locationText).toContain("Albanella");
+    expect(result.data.propertyType).toBe("Single family villa");
+    expect(result.data.bedrooms).toBe(3);
+    expect(result.data.bathrooms).toBe(2);
+    expect(result.data.interiorSizeSqm).toBe(150);
+    expect(result.data.landSizeSqm).toBe(1106);
+    expect(result.data.garageParking).toContain("3 parking spaces");
+    expect(result.data.energyClass).toBe("D");
+    expect(result.data.photoCount).toBe(86);
+    expect(result.data.featuredImageUrl).toBe("https://images.example.com/albanella-villa-1.jpg");
+    expect(result.data.virtualTour).toBe(true);
+    expect(result.data.advertiser).toContain("Professionecasa");
   });
 
   it("falls back to Open Graph and title text when structured data is missing", () => {
@@ -215,8 +373,27 @@ describe("CasaHUD listing URL extractor", () => {
     });
 
     expect(result.extractionStatus).toBe("blocked_or_unavailable");
+    expect(result.urlClassification).toBe("blocked_or_unavailable");
     expect(result.warnings.join(" ")).toContain("limited by the source host");
     expect(result.data.title).toBeUndefined();
+  });
+
+  it("returns partial extraction when only limited metadata is publicly readable", () => {
+    const result = extractListingUrlMetadataFromHtml({
+      url: "https://www.idealista.it/en/immobile/456",
+      html: `
+        <html>
+          <head>
+            <meta property="og:title" content="Apartment in Lecce" />
+            <meta property="og:description" content="Apartment in Lecce, Puglia, Italy with 2 bedrooms." />
+          </head>
+        </html>
+      `,
+    });
+
+    expect(result.extractionStatus).toBe("partial");
+    expect(result.needsReviewFields).toContain("price");
+    expect(result.needsReviewFields).toContain("images");
   });
 
   it("resolves relative and protocol-relative image URLs safely", () => {

@@ -3,9 +3,10 @@ import type {
   CasaHudListingNeedsReviewField,
   CasaHudListingImageStatus,
   CasaHudListingProvider,
+  CasaHudListingUrlClassification,
 } from "@/lib/studio/domara/campaigns";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
-import { validateListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
+import { normalizeListingImportUrl, validateListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
 
 const MAX_HTML_BYTES = 500_000;
 const MAX_REDIRECTS = 3;
@@ -27,12 +28,15 @@ export type CasaHudListingUrlExtractionProvider = "immobiliare_html" | "idealist
 
 export type CasaHudImportedListingExtractionData = {
   sourceType: "imported_url";
+  originalSourceUrl?: string;
+  normalizedSourceUrl?: string;
   sourceUrl: string;
   sourceHost: string;
   sourceLabel: string;
   providerName: string;
   providerListingId?: string;
   canonicalUrl?: string;
+  canonicalSourceUrl?: string;
   title?: string;
   metadataTitle?: string;
   metadataDescription?: string;
@@ -50,26 +54,36 @@ export type CasaHudImportedListingExtractionData = {
   priceCurrency?: string;
   priceText?: string;
   propertyType?: string;
+  contract?: string;
+  ownership?: string;
   rooms?: number;
   bedrooms?: number;
   bathrooms?: number;
+  kitchen?: string;
   interiorSizeSqm?: number;
   commercialSurfaceSqm?: number;
   landSizeSqm?: number;
   floorCount?: number;
   floorText?: string;
+  buildingFloors?: number;
+  lift?: boolean;
   garageParking?: string;
   balcony?: boolean;
   terrace?: boolean;
   furnished?: string;
   condition?: string;
   heating?: string;
+  airConditioning?: string;
   energyClass?: string;
+  energyConsumption?: string;
   pricePerSquareMeter?: number;
+  condoFees?: string;
   referenceCode?: string;
   updatedDate?: string;
   photoCount?: number;
   floorPlanCount?: number;
+  virtualTour?: boolean;
+  advertiser?: string;
   description?: string;
   summary?: string;
   keyFeatures: string[];
@@ -87,8 +101,11 @@ export type CasaHudImportedListingExtractionResult = {
   provider: CasaHudListingProvider;
   providerName: string;
   providerListingId?: string;
+  urlClassification: CasaHudListingUrlClassification;
+  discoveredListingUrls: string[];
   extractionProvider: CasaHudListingUrlExtractionProvider;
   extractionStatus: CasaHudListingExtractionStatus;
+  extractionConfidence: number;
   needsReviewFields: CasaHudListingNeedsReviewField[];
   warnings: string[];
   extractionFields: string[];
@@ -453,6 +470,65 @@ function detectProvider(url: URL): ProviderInfo {
   return { provider: "generic", providerName: host, extractionProvider: "generic_html" };
 }
 
+const IMMOBILIARE_LISTING_PATH = /^\/(?:[a-z]{2}\/)?annunci\/\d+(?:\/|$)/i;
+const IDEALISTA_LISTING_PATH = /^\/(?:[a-z]{2}\/)?(?:annuncio|immobile|inmueble)\/\d+(?:\/|$)/i;
+const SEARCH_RESULT_PATH = /\/(?:vendita|vendita-case|affitto|case|immobili|ricerca|search|result|results)(?:[-/]|$)/i;
+
+export function classifyListingImportUrl(input: string | URL): {
+  normalizedUrl: string;
+  provider: CasaHudListingProvider;
+  providerName: string;
+  classification: CasaHudListingUrlClassification;
+} {
+  const normalized = normalizeListingImportUrl(input);
+  const providerInfo = detectProvider(normalized);
+  const pathname = normalized.pathname;
+
+  if (providerInfo.provider === "immobiliare") {
+    if (IMMOBILIARE_LISTING_PATH.test(pathname)) {
+      return { normalizedUrl: normalized.toString(), provider: providerInfo.provider, providerName: providerInfo.providerName, classification: "listing" };
+    }
+    if (SEARCH_RESULT_PATH.test(pathname)) {
+      return { normalizedUrl: normalized.toString(), provider: providerInfo.provider, providerName: providerInfo.providerName, classification: "search_results" };
+    }
+    return {
+      normalizedUrl: normalized.toString(),
+      provider: providerInfo.provider,
+      providerName: providerInfo.providerName,
+      classification: pathname === "/" ? "provider_page" : "unsupported_provider_path",
+    };
+  }
+
+  if (providerInfo.provider === "idealista") {
+    if (IDEALISTA_LISTING_PATH.test(pathname)) {
+      return { normalizedUrl: normalized.toString(), provider: providerInfo.provider, providerName: providerInfo.providerName, classification: "listing" };
+    }
+    if (SEARCH_RESULT_PATH.test(pathname)) {
+      return { normalizedUrl: normalized.toString(), provider: providerInfo.provider, providerName: providerInfo.providerName, classification: "search_results" };
+    }
+    return {
+      normalizedUrl: normalized.toString(),
+      provider: providerInfo.provider,
+      providerName: providerInfo.providerName,
+      classification: pathname === "/" ? "provider_page" : "unsupported_provider_path",
+    };
+  }
+
+  const genericClassification =
+    /\/\d{5,}(?:\/|$)/.test(pathname) || /\/(?:listing|property|annuncio|annunci|immobile)\//i.test(pathname)
+      ? "listing"
+      : pathname === "/"
+        ? "provider_page"
+        : "unsupported_provider_path";
+
+  return {
+    normalizedUrl: normalized.toString(),
+    provider: providerInfo.provider,
+    providerName: providerInfo.providerName,
+    classification: genericClassification,
+  };
+}
+
 function detectProviderListingId(url: URL, provider: CasaHudListingProvider): string | undefined {
   if (provider === "immobiliare") {
     return url.pathname.match(/\/annunci\/(\d+)/i)?.[1];
@@ -465,6 +541,31 @@ function detectProviderListingId(url: URL, provider: CasaHudListingProvider): st
 
 function looksBlocked(html: string): boolean {
   return /please enable js and disable any ad blocker|captcha-delivery\.com|datadome|cf-chl|access denied/i.test(html);
+}
+
+function extractProviderListingUrlsFromHtml(html: string, baseUrl: string, provider: CasaHudListingProvider): string[] {
+  const urls: string[] = [];
+  const hrefRegex = /<a\b[^>]*href\s*=\s*("([^"]+)"|'([^']+)'|([^\s>]+))/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = hrefRegex.exec(html)) !== null) {
+    const href = decodeHtml((match[2] || match[3] || match[4] || "").trim());
+    if (!href) continue;
+
+    let resolved: URL;
+    try {
+      resolved = normalizeListingImportUrl(new URL(href.startsWith("//") ? `https:${href}` : href, baseUrl));
+    } catch {
+      continue;
+    }
+
+    if (provider !== "generic" && detectProvider(resolved).provider !== provider) continue;
+    if (classifyListingImportUrl(resolved).classification !== "listing") continue;
+    pushUnique(urls, resolved.toString());
+    if (urls.length >= 8) break;
+  }
+
+  return urls;
 }
 
 function collectImagesFromUnknown(value: unknown, baseUrl: string, images: string[]) {
@@ -583,6 +684,8 @@ function extractFromEmbeddedState(nodes: JsonRecord[], baseUrl: string): ParsedL
       if (!draft.propertyType && ["propertytype", "category", "assettype"].includes(lowerKey)) {
         draft.propertyType = stringValue(value);
       }
+      if (!draft.contract && ["contract", "contracttype"].includes(lowerKey)) draft.contract = stringValue(value);
+      if (!draft.ownership && ["ownership", "ownershiptype"].includes(lowerKey)) draft.ownership = stringValue(value);
       if (!draft.priceText && lowerKey === "pricetext") draft.priceText = stringValue(value);
       if (draft.price === undefined && ["price", "amount", "value"].includes(lowerKey)) {
         const amount = normalizeNumberish(value);
@@ -596,6 +699,7 @@ function extractFromEmbeddedState(nodes: JsonRecord[], baseUrl: string): ParsedL
       if (draft.bathrooms === undefined && ["bathrooms", "bathroomcount", "numberofbathroomstotal"].includes(lowerKey)) {
         draft.bathrooms = normalizeNumberish(value);
       }
+      if (!draft.kitchen && ["kitchen", "kitchentype"].includes(lowerKey)) draft.kitchen = stringValue(value);
       if (draft.interiorSizeSqm === undefined && ["sizesqm", "interiorsizesqm", "size", "surface"].includes(lowerKey)) {
         const amount = normalizeNumberish(value);
         if (amount !== undefined && amount > 10) draft.interiorSizeSqm = amount;
@@ -610,6 +714,10 @@ function extractFromEmbeddedState(nodes: JsonRecord[], baseUrl: string): ParsedL
         draft.floorCount = normalizeNumberish(value);
       }
       if (!draft.floorText && ["floortext", "floor"].includes(lowerKey)) draft.floorText = stringValue(value);
+      if (draft.buildingFloors === undefined && ["buildingfloors", "buildingfloorcount"].includes(lowerKey)) {
+        draft.buildingFloors = normalizeNumberish(value);
+      }
+      if (draft.lift === undefined && lowerKey === "lift" && typeof value === "boolean") draft.lift = value;
       if (!draft.garageParking && ["garageparking", "parking", "parkingtext"].includes(lowerKey)) {
         draft.garageParking = stringValue(value);
       }
@@ -618,10 +726,13 @@ function extractFromEmbeddedState(nodes: JsonRecord[], baseUrl: string): ParsedL
       if (!draft.furnished && ["furnished", "furniture"].includes(lowerKey)) draft.furnished = stringValue(value);
       if (!draft.condition && ["condition", "state"].includes(lowerKey)) draft.condition = stringValue(value);
       if (!draft.heating && ["heating", "heatingtype"].includes(lowerKey)) draft.heating = stringValue(value);
+      if (!draft.airConditioning && ["airconditioning", "ac", "cooling"].includes(lowerKey)) draft.airConditioning = stringValue(value);
       if (!draft.energyClass && ["energyclass", "energy"].includes(lowerKey)) draft.energyClass = stringValue(value);
+      if (!draft.energyConsumption && ["energyconsumption", "consumption"].includes(lowerKey)) draft.energyConsumption = stringValue(value);
       if (draft.pricePerSquareMeter === undefined && ["pricepersquaremeter", "pricepersqm"].includes(lowerKey)) {
         draft.pricePerSquareMeter = normalizeNumberish(value);
       }
+      if (!draft.condoFees && ["condofees", "monthlyfees", "servicecharge"].includes(lowerKey)) draft.condoFees = stringValue(value);
       if (!draft.referenceCode && ["reference", "referencecode", "listingid"].includes(lowerKey)) {
         const text = stringValue(value);
         if (text) draft.referenceCode = text;
@@ -632,6 +743,12 @@ function extractFromEmbeddedState(nodes: JsonRecord[], baseUrl: string): ParsedL
       }
       if (draft.floorPlanCount === undefined && ["floorplancount", "planimetrycount"].includes(lowerKey)) {
         draft.floorPlanCount = normalizeNumberish(value);
+      }
+      if (draft.virtualTour === undefined && ["virtualtour", "hastour"].includes(lowerKey) && typeof value === "boolean") {
+        draft.virtualTour = value;
+      }
+      if (!draft.advertiser && ["advertiser", "agency", "agencyname", "contactname"].includes(lowerKey)) {
+        draft.advertiser = stringValue(value);
       }
       if (lowerKey.includes("image") || lowerKey.includes("photo") || lowerKey.includes("gallery")) {
         collectImagesFromUnknown(value, baseUrl, imageCandidates);
@@ -743,6 +860,9 @@ function extractImmobiliareFromText(lines: string[], fullText: string): ParsedLi
   const heating = findLineValue(lines, [/^(?:riscaldamento|heating)\b[:\s-]*(.*)$/i]);
   if (heating) draft.heating = heating;
 
+  const airConditioning = findLineValue(lines, [/^(?:aria condizionata|air conditioning)\b[:\s-]*(.*)$/i]);
+  if (airConditioning) draft.airConditioning = airConditioning;
+
   const energy = findLineValue(lines, [/^(?:classe energetica|energy class)\b[:\s-]*(.*)$/i]);
   if (energy) draft.energyClass = energy;
 
@@ -764,6 +884,13 @@ function extractImmobiliareFromText(lines: string[], fullText: string): ParsedLi
 
   const floorPlanCount = fullText.match(/\b(\d{1,3})\s*planimetr/i)?.[1];
   if (floorPlanCount) draft.floorPlanCount = Number(floorPlanCount);
+
+  if (draft.virtualTour === undefined && /\bvirtual tour\b/i.test(fullText)) {
+    draft.virtualTour = true;
+  }
+
+  const advertiser = findLineValue(lines, [/^(?:annunciante|advertiser|agenzia|agency)\b[:\s-]*(.*)$/i]);
+  if (advertiser) draft.advertiser = advertiser;
 
   const description = collectSectionText(lines, [/^(?:descrizione|description)$/i], 10);
   if (description) draft.description = description;
@@ -919,6 +1046,49 @@ function fetchErrorMessage(error: unknown): string {
   return error.message.replace(/(api[_-]?key|token|secret)\s*[:=]\s*[^\s,;]+/gi, "$1=[redacted]");
 }
 
+function buildEmptyExtractionResult(params: {
+  url: URL;
+  providerInfo: ProviderInfo;
+  providerListingId?: string;
+  urlClassification: CasaHudListingUrlClassification;
+  extractionStatus: CasaHudListingExtractionStatus;
+  warnings: string[];
+  discoveredListingUrls?: string[];
+  canonicalUrl?: string;
+  originalUrl?: string;
+}): CasaHudImportedListingExtractionResult {
+  return {
+    normalizedUrl: params.url.toString(),
+    provider: params.providerInfo.provider,
+    providerName: params.providerInfo.providerName,
+    providerListingId: params.providerListingId || detectProviderListingId(params.url, params.providerInfo.provider),
+    urlClassification: params.urlClassification,
+    discoveredListingUrls: params.discoveredListingUrls || [],
+    extractionProvider: params.providerInfo.extractionProvider,
+    extractionStatus: params.extractionStatus,
+    extractionConfidence: 0,
+    needsReviewFields: [],
+    warnings: params.warnings,
+    extractionFields: [],
+    data: {
+      sourceType: "imported_url",
+      originalSourceUrl: params.originalUrl || params.url.toString(),
+      normalizedSourceUrl: params.url.toString(),
+      sourceUrl: params.url.toString(),
+      sourceHost: params.url.hostname.replace(/^www\./, ""),
+      sourceLabel: params.providerInfo.providerName,
+      providerName: params.providerInfo.providerName,
+      providerListingId: params.providerListingId || detectProviderListingId(params.url, params.providerInfo.provider),
+      canonicalUrl: params.canonicalUrl || params.url.toString(),
+      canonicalSourceUrl: params.canonicalUrl || params.url.toString(),
+      keyFeatures: [],
+      lifestyleHighlights: [],
+      imageUrls: [],
+      imageStatus: "missing",
+    },
+  };
+}
+
 async function fetchWithRedirectLimit(url: string, fetchImpl: FetchLike): Promise<FetchResponse> {
   let currentUrl = url;
 
@@ -955,6 +1125,7 @@ function finalizeDraft(params: {
   meta: Record<string, string>;
   draft: ParsedListingDraft;
   warnings: string[];
+  originalUrl?: string;
 }): CasaHudImportedListingExtractionResult {
   const { url, providerInfo, titleTag, meta, warnings } = params;
   const draft = { ...params.draft };
@@ -1001,25 +1172,33 @@ function finalizeDraft(params: {
   const needsReviewFields = buildNeedsReviewFields(draft, imageStatus);
   const blocked = false;
   const extractionStatus = determineStatus({ blocked, extractedFields: fields });
+  const extractionConfidence = Math.min(1, Number((fields.length / 14).toFixed(2)));
+  const canonicalSourceUrl = draft.canonicalUrl || url.toString();
 
   return {
     normalizedUrl: url.toString(),
     provider: providerInfo.provider,
     providerName: providerInfo.providerName,
     providerListingId: draft.providerListingId || detectProviderListingId(url, providerInfo.provider),
+    urlClassification: "listing",
+    discoveredListingUrls: [],
     extractionProvider: providerInfo.extractionProvider,
     extractionStatus,
+    extractionConfidence,
     needsReviewFields,
     warnings: Array.from(new Set(warnings)),
     extractionFields: fields,
     data: {
       sourceType: "imported_url",
+      originalSourceUrl: params.originalUrl || url.toString(),
+      normalizedSourceUrl: url.toString(),
       sourceUrl: url.toString(),
       sourceHost: url.hostname.replace(/^www\./, ""),
       sourceLabel: providerInfo.providerName,
       providerName: providerInfo.providerName,
       providerListingId: draft.providerListingId || detectProviderListingId(url, providerInfo.provider),
-      canonicalUrl: draft.canonicalUrl,
+      canonicalUrl: canonicalSourceUrl,
+      canonicalSourceUrl,
       title: draft.title,
       metadataTitle: draft.metadataTitle || meta["og:title"] || meta["twitter:title"] || titleTag,
       metadataDescription: draft.metadataDescription || meta["og:description"] || meta["twitter:description"] || meta.description,
@@ -1034,26 +1213,36 @@ function finalizeDraft(params: {
       priceCurrency: draft.priceCurrency,
       priceText: draft.priceText,
       propertyType: draft.propertyType,
+      contract: draft.contract,
+      ownership: draft.ownership,
       rooms: draft.rooms,
       bedrooms: draft.bedrooms,
       bathrooms: draft.bathrooms,
+      kitchen: draft.kitchen,
       interiorSizeSqm: draft.interiorSizeSqm,
       commercialSurfaceSqm: draft.commercialSurfaceSqm,
       landSizeSqm: draft.landSizeSqm,
       floorCount: draft.floorCount,
       floorText: draft.floorText,
+      buildingFloors: draft.buildingFloors,
+      lift: draft.lift,
       garageParking: draft.garageParking,
       balcony: draft.balcony,
       terrace: draft.terrace,
       furnished: draft.furnished,
       condition: draft.condition,
       heating: draft.heating,
+      airConditioning: draft.airConditioning,
       energyClass: draft.energyClass,
+      energyConsumption: draft.energyConsumption,
       pricePerSquareMeter: draft.pricePerSquareMeter,
+      condoFees: draft.condoFees,
       referenceCode: draft.referenceCode,
       updatedDate: draft.updatedDate,
       photoCount: draft.photoCount,
       floorPlanCount: draft.floorPlanCount,
+      virtualTour: draft.virtualTour,
+      advertiser: draft.advertiser,
       description: draft.description,
       summary: draft.summary,
       keyFeatures: draft.keyFeatures || [],
@@ -1072,8 +1261,44 @@ export function extractListingUrlMetadataFromHtml(input: {
   url: string;
   html: string;
 }): CasaHudImportedListingExtractionResult {
-  const parsedUrl = validateListingImportUrl(input.url);
+  const parsedUrl = normalizeListingImportUrl(input.url);
   const providerInfo = detectProvider(parsedUrl);
+  const initialClassification = classifyListingImportUrl(parsedUrl).classification;
+  const discoveredListingUrls =
+    initialClassification === "listing" ? [] : extractProviderListingUrlsFromHtml(input.html, parsedUrl.toString(), providerInfo.provider);
+  if (discoveredListingUrls.length > 0 && initialClassification !== "listing") {
+    return {
+      normalizedUrl: parsedUrl.toString(),
+      provider: providerInfo.provider,
+      providerName: providerInfo.providerName,
+      providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
+      urlClassification: "search_results",
+      discoveredListingUrls,
+      extractionProvider: providerInfo.extractionProvider,
+      extractionStatus: "failed",
+      extractionConfidence: 0,
+      needsReviewFields: [],
+      warnings: ["This looks like a search results page. Paste individual listing URLs or choose listings to import."],
+      extractionFields: [],
+      data: {
+        sourceType: "imported_url",
+        originalSourceUrl: input.url,
+        normalizedSourceUrl: parsedUrl.toString(),
+        sourceUrl: parsedUrl.toString(),
+        sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
+        sourceLabel: providerInfo.providerName,
+        providerName: providerInfo.providerName,
+        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
+        canonicalUrl: parsedUrl.toString(),
+        canonicalSourceUrl: parsedUrl.toString(),
+        keyFeatures: [],
+        lifestyleHighlights: [],
+        imageUrls: [],
+        imageStatus: "missing",
+      },
+    };
+  }
+
   const meta = parseMetaTags(input.html);
   const titleTag = extractTitleTag(input.html);
   const jsonLdDraft = extractFromJsonLd(extractJsonLdScripts(input.html), parsedUrl.toString());
@@ -1133,6 +1358,7 @@ export function extractListingUrlMetadataFromHtml(input: {
     meta,
     draft: merged,
     warnings: [],
+    originalUrl: input.url,
   });
 }
 
@@ -1141,46 +1367,32 @@ export async function extractListingUrlMetadata(input: {
   fetchImpl?: FetchLike;
   now?: Date;
 }): Promise<CasaHudImportedListingExtractionResult> {
-  const parsedUrl = validateListingImportUrl(input.url);
+  const parsedUrl = normalizeListingImportUrl(input.url);
   const providerInfo = detectProvider(parsedUrl);
+  const initialClassification = classifyListingImportUrl(parsedUrl).classification;
   const fetchImpl = input.fetchImpl || (fetch as FetchLike);
   const warnings: string[] = [];
 
   try {
     const response = await fetchWithRedirectLimit(parsedUrl.toString(), fetchImpl);
-    const finalUrl = response.url || parsedUrl.toString();
+    const finalUrl = normalizeListingImportUrl(response.url || parsedUrl.toString());
+    const finalClassification = classifyListingImportUrl(finalUrl).classification;
     const contentType = (response.headers.get("content-type") || "").toLowerCase();
     const contentLength = Number(response.headers.get("content-length") || "0");
+    const providerListingId = detectProviderListingId(finalUrl, providerInfo.provider) || detectProviderListingId(parsedUrl, providerInfo.provider);
 
     if ([401, 403, 429].includes(response.status)) {
       warnings.push(`Listing extraction was limited by the source host (HTTP ${response.status}).`);
-      return {
-        normalizedUrl: parsedUrl.toString(),
-        provider: providerInfo.provider,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        extractionProvider: providerInfo.extractionProvider,
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: "blocked_or_unavailable",
         extractionStatus: "blocked_or_unavailable",
-        needsReviewFields: [],
         warnings,
-        extractionFields: [],
-        data: {
-          sourceType: "imported_url",
-          sourceUrl: parsedUrl.toString(),
-          sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-          sourceLabel: providerInfo.providerName,
-          providerName: providerInfo.providerName,
-          providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-          canonicalUrl: parsedUrl.toString(),
-          title: undefined,
-          metadataTitle: undefined,
-          metadataDescription: undefined,
-          keyFeatures: [],
-          lifestyleHighlights: [],
-          imageUrls: [],
-          imageStatus: "missing",
-        },
-      };
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
     }
 
     if (!response.ok) {
@@ -1188,148 +1400,99 @@ export async function extractListingUrlMetadata(input: {
     }
     if (!contentType.includes("text/html") && !contentType.includes("application/xhtml+xml")) {
       warnings.push("Listing extraction requires an HTML page.");
-      return {
-        normalizedUrl: parsedUrl.toString(),
-        provider: providerInfo.provider,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        extractionProvider: providerInfo.extractionProvider,
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: finalClassification,
         extractionStatus: "failed",
-        needsReviewFields: [],
         warnings,
-        extractionFields: [],
-        data: {
-          sourceType: "imported_url",
-          sourceUrl: parsedUrl.toString(),
-          sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-          sourceLabel: providerInfo.providerName,
-          providerName: providerInfo.providerName,
-          providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-          canonicalUrl: finalUrl,
-          keyFeatures: [],
-          lifestyleHighlights: [],
-          imageUrls: [],
-          imageStatus: "missing",
-        },
-      };
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
     }
     if (Number.isFinite(contentLength) && contentLength > MAX_HTML_BYTES) {
       warnings.push("Listing extraction stopped because the page was too large to import safely.");
-      return {
-        normalizedUrl: parsedUrl.toString(),
-        provider: providerInfo.provider,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        extractionProvider: providerInfo.extractionProvider,
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: finalClassification,
         extractionStatus: "failed",
-        needsReviewFields: [],
         warnings,
-        extractionFields: [],
-        data: {
-          sourceType: "imported_url",
-          sourceUrl: parsedUrl.toString(),
-          sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-          sourceLabel: providerInfo.providerName,
-          providerName: providerInfo.providerName,
-          providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-          canonicalUrl: finalUrl,
-          keyFeatures: [],
-          lifestyleHighlights: [],
-          imageUrls: [],
-          imageStatus: "missing",
-        },
-      };
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
     }
 
     const html = await response.text();
     if (html.length > MAX_HTML_BYTES) {
       warnings.push("Listing extraction stopped because the page exceeded the safe import size.");
-      return {
-        normalizedUrl: parsedUrl.toString(),
-        provider: providerInfo.provider,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        extractionProvider: providerInfo.extractionProvider,
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: finalClassification,
         extractionStatus: "failed",
-        needsReviewFields: [],
         warnings,
-        extractionFields: [],
-        data: {
-          sourceType: "imported_url",
-          sourceUrl: parsedUrl.toString(),
-          sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-          sourceLabel: providerInfo.providerName,
-          providerName: providerInfo.providerName,
-          providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-          canonicalUrl: finalUrl,
-          keyFeatures: [],
-          lifestyleHighlights: [],
-          imageUrls: [],
-          imageStatus: "missing",
-        },
-      };
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
     }
 
     if (looksBlocked(html)) {
       warnings.push("Listing extraction was blocked by the source page's bot or JS gate.");
-      return {
-        normalizedUrl: parsedUrl.toString(),
-        provider: providerInfo.provider,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        extractionProvider: providerInfo.extractionProvider,
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: "blocked_or_unavailable",
         extractionStatus: "blocked_or_unavailable",
-        needsReviewFields: [],
         warnings,
-        extractionFields: [],
-        data: {
-          sourceType: "imported_url",
-          sourceUrl: parsedUrl.toString(),
-          sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-          sourceLabel: providerInfo.providerName,
-          providerName: providerInfo.providerName,
-          providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-          canonicalUrl: finalUrl,
-          keyFeatures: [],
-          lifestyleHighlights: [],
-          imageUrls: [],
-          imageStatus: "missing",
-        },
-      };
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
+    }
+
+    const discoveredListingUrls =
+      finalClassification === "listing" ? [] : extractProviderListingUrlsFromHtml(html, finalUrl.toString(), providerInfo.provider);
+    if (discoveredListingUrls.length > 0 && finalClassification !== "listing") {
+      warnings.push("This looks like a search results page. Paste individual listing URLs or choose listings to import.");
+      return buildEmptyExtractionResult({
+        url: finalUrl,
+        providerInfo,
+        providerListingId,
+        urlClassification: "search_results",
+        extractionStatus: "failed",
+        warnings: Array.from(new Set(warnings)),
+        discoveredListingUrls,
+        canonicalUrl: finalUrl.toString(),
+        originalUrl: input.url,
+      });
     }
 
     const extracted = extractListingUrlMetadataFromHtml({
-      url: finalUrl,
+      url: finalUrl.toString(),
       html,
     });
     return {
       ...extracted,
+      normalizedUrl: finalUrl.toString(),
+      providerListingId,
+      urlClassification:
+        extracted.urlClassification === "listing" ? (initialClassification === "listing" ? "listing" : finalClassification) : extracted.urlClassification,
       warnings: Array.from(new Set([...warnings, ...extracted.warnings])),
     };
   } catch (error) {
-    return {
-      normalizedUrl: parsedUrl.toString(),
-      provider: providerInfo.provider,
-      providerName: providerInfo.providerName,
+    return buildEmptyExtractionResult({
+      url: parsedUrl,
+      providerInfo,
       providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-      extractionProvider: providerInfo.extractionProvider,
+      urlClassification: initialClassification,
       extractionStatus: "failed",
-      needsReviewFields: [],
       warnings: [fetchErrorMessage(error)],
-      extractionFields: [],
-      data: {
-        sourceType: "imported_url",
-        sourceUrl: parsedUrl.toString(),
-        sourceHost: parsedUrl.hostname.replace(/^www\./, ""),
-        sourceLabel: providerInfo.providerName,
-        providerName: providerInfo.providerName,
-        providerListingId: detectProviderListingId(parsedUrl, providerInfo.provider),
-        canonicalUrl: parsedUrl.toString(),
-        keyFeatures: [],
-        lifestyleHighlights: [],
-        imageUrls: [],
-        imageStatus: "missing",
-      },
-    };
+      canonicalUrl: parsedUrl.toString(),
+      originalUrl: input.url,
+    });
   }
 }

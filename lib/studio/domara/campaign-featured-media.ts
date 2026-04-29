@@ -217,6 +217,8 @@ export function deriveCasaHudFeaturedPropertyMedia(
     listing.provider === "casahud_sample" || asNonEmptyString(metadataRecord.discoveryMode) === "sample_patterns";
 
   const explicitFeaturedImage =
+    asNonEmptyString(listingRecord.manualFeaturedImageUrl) ||
+    asNonEmptyString(listingRecord.manual_featured_image_url) ||
     asNonEmptyString(listingRecord.featuredImageUrl) ||
     asNonEmptyString(listingRecord.featured_image_url) ||
     asNonEmptyString(listingRecord.mainImageUrl) ||
@@ -227,6 +229,8 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(listingRecord.primary_image) ||
     asNonEmptyString(listingRecord.mediaUrl) ||
     asNonEmptyString(listingRecord.media_url) ||
+    asNonEmptyString(metadataRecord.manualFeaturedImageUrl) ||
+    asNonEmptyString(metadataRecord.manual_featured_image_url) ||
     asNonEmptyString(metadataRecord.featuredImageUrl) ||
     asNonEmptyString(metadataRecord.featured_image_url) ||
     asNonEmptyString(metadataRecord.mainImageUrl) ||

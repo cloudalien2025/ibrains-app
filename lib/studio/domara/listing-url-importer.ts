@@ -10,6 +10,18 @@ const MAX_HTML_BYTES = 1_500_000;
 const MAX_IMAGES = 30;
 const REQUEST_TIMEOUT_MS = 9000;
 const MAX_REDIRECTS = 4;
+const TRACKING_QUERY_PARAMS = [
+  "fbclid",
+  "gclid",
+  "mc_cid",
+  "mc_eid",
+  "utm_campaign",
+  "utm_content",
+  "utm_id",
+  "utm_medium",
+  "utm_source",
+  "utm_term",
+];
 
 const PRIVATE_IPV4_PATTERNS = [/^10\./, /^127\./, /^169\.254\./, /^192\.168\./, /^172\.(1[6-9]|2\d|3[0-1])\./];
 
@@ -41,7 +53,7 @@ function sanitizeErrorMessage(error: unknown): string {
 }
 
 export function validateListingImportUrl(input: string): URL {
-  const value = input.trim();
+  const value = input.trim().startsWith("//") ? `https:${input.trim()}` : input.trim();
   if (!value) throw new Error("Listing URL is required.");
 
   let parsed: URL;
@@ -60,6 +72,29 @@ export function validateListingImportUrl(input: string): URL {
   }
 
   return parsed;
+}
+
+export function normalizeListingImportUrl(input: string | URL): URL {
+  const parsed = validateListingImportUrl(input instanceof URL ? input.toString() : input);
+  const normalized = new URL(parsed.toString());
+  normalized.hash = "";
+
+  if ((normalized.protocol === "https:" && normalized.port === "443") || (normalized.protocol === "http:" && normalized.port === "80")) {
+    normalized.port = "";
+  }
+
+  for (const key of Array.from(normalized.searchParams.keys())) {
+    if (TRACKING_QUERY_PARAMS.includes(key.toLowerCase())) {
+      normalized.searchParams.delete(key);
+    }
+  }
+
+  if (!normalized.searchParams.toString()) {
+    normalized.search = "";
+  }
+
+  normalized.pathname = normalized.pathname.replace(/\/{2,}/g, "/");
+  return normalized;
 }
 
 type FetchResponse = {

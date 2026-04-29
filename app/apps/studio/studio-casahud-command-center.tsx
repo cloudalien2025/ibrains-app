@@ -6,7 +6,10 @@ import type {
   CasaHudCampaign,
   CasaHudCampaignSummary,
   CasaHudListingCandidate,
+  CasaHudListingExtractionStatus,
+  CasaHudListingManualCompletionStatus,
   CasaHudListingNeedsReviewField,
+  CasaHudListingUrlClassification,
   CasaHudValidatedListing,
 } from "@/lib/studio/domara/campaigns";
 import type { CasaHudVisualAsset, CasaHudVisualAssetType } from "@/lib/studio/domara/campaign-media-planning";
@@ -124,19 +127,64 @@ type CasaHudListingUrlImportPayload = {
   summary?: CasaHudCampaignSummary;
   message?: string;
   importedCount?: number;
+  partialCount?: number;
+  manualDraftCount?: number;
   duplicateCount?: number;
+  searchPageCount?: number;
   invalidCount?: number;
+  failedCount?: number;
   warnings?: string[];
   results?: Array<{
     inputUrl: string;
     normalizedUrl?: string;
-    status: "imported" | "duplicate" | "invalid";
+    provider?: string;
+    providerName?: string;
+    urlClassification?: CasaHudListingUrlClassification;
+    extractionStatus?: CasaHudListingExtractionStatus;
+    status: "imported" | "partial" | "manual_draft" | "duplicate" | "invalid" | "failed" | "search_results";
     warnings: string[];
     reason?: string;
+    nextAction?: string;
+    discoveredListingUrls?: string[];
     candidateId?: string;
   }>;
   error?: { message?: string };
 };
+
+type CasaHudListingManualUpdatePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  listing?: CasaHudListingCandidate;
+  message?: string;
+  error?: { message?: string };
+};
+
+type CasaHudListingEditorDraft = {
+  title: string;
+  price: string;
+  currency: string;
+  locationText: string;
+  propertyType: string;
+  bedrooms: string;
+  bathrooms: string;
+  rooms: string;
+  sizeSqm: string;
+  commercialSurfaceSqm: string;
+  landSizeSqm: string;
+  garageParking: string;
+  balcony: boolean;
+  terrace: boolean;
+  condition: string;
+  energyClass: string;
+  descriptionSnippet: string;
+  keyFeatures: string;
+  manualFeaturedImageUrl: string;
+  sourceUrl: string;
+  manualLifestyleAngle: string;
+};
+
+type CasaHudListingUrlImportResult = NonNullable<CasaHudListingUrlImportPayload["results"]>[number];
 
 type CasaHudLocationIntelligencePayload = {
   ok?: boolean;
@@ -459,6 +507,48 @@ function listingSourceProviderText(listing: CasaHudListingCandidate | CasaHudVal
   return provider ? `${sourceType} via ${provider}` : sourceType;
 }
 
+function formatListingExtractionStatus(status?: CasaHudListingExtractionStatus) {
+  if (status === "extracted") return "Extracted";
+  if (status === "partial") return "Partial";
+  if (status === "blocked_or_unavailable") return "Blocked";
+  if (status === "failed") return "Needs manual details";
+  return "Needs review";
+}
+
+function formatManualCompletionStatus(status?: CasaHudListingManualCompletionStatus) {
+  if (status === "completed") return "Manual details complete";
+  if (status === "partially_completed") return "Manual details in progress";
+  return "Needs manual details";
+}
+
+function formatUrlClassification(classification?: CasaHudListingUrlClassification) {
+  if (classification === "listing") return "Listing URL";
+  if (classification === "search_results") return "Search page";
+  if (classification === "provider_page") return "Provider page";
+  if (classification === "unsupported_provider_path") return "Unsupported path";
+  if (classification === "blocked_or_unavailable") return "Blocked";
+  if (classification === "invalid_or_unsafe") return "Invalid or unsafe";
+  return "URL review";
+}
+
+function importResultTone(status: CasaHudListingUrlImportResult["status"]) {
+  if (status === "imported") return "sage" as const;
+  if (status === "partial" || status === "search_results") return "gold" as const;
+  if (status === "manual_draft") return "blue" as const;
+  if (status === "duplicate") return "neutral" as const;
+  return "red" as const;
+}
+
+function importResultLabel(status: CasaHudListingUrlImportResult["status"]) {
+  if (status === "imported") return "Imported";
+  if (status === "partial") return "Imported with missing details";
+  if (status === "manual_draft") return "Needs manual details";
+  if (status === "duplicate") return "Duplicate skipped";
+  if (status === "invalid") return "Invalid/unsafe URL";
+  if (status === "search_results") return "Search page detected";
+  return "Blocked or failed";
+}
+
 function needsReviewLabel(field: CasaHudListingNeedsReviewField) {
   if (field === "price") return "Price needs review";
   if (field === "location") return "Location needs review";
@@ -477,6 +567,7 @@ function needsReviewLabel(field: CasaHudListingNeedsReviewField) {
 
 function validationReadinessLabel(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (listing.sourceType === "imported_url") {
+    if (listing.manualCompletionStatus === "incomplete") return "Needs manual details";
     return listing.needsReviewFields?.length ? "Needs details before validation" : "Ready for validation with imported metadata";
   }
   if ("validationStatus" in listing) {
@@ -589,6 +680,8 @@ function canOpenExternalUrl(url?: string | null) {
 
 function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (listing.sourceType === "imported_url") {
+    if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "Needs manual details";
+    if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "Ready";
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "Extracted";
     if (listing.extractionStatus === "partial") return "Partial";
     return "Needs review";
@@ -599,6 +692,8 @@ function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValida
 
 function listingStatusTone(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (listing.sourceType === "imported_url") {
+    if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "sage" as const;
+    if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "red" as const;
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "sage" as const;
     if (listing.extractionStatus === "partial") return "gold" as const;
     return "red" as const;
@@ -620,6 +715,32 @@ function propertyFacts(listing: CasaHudListingCandidate | CasaHudValidatedListin
     listing.garageParking || null,
   ].filter(Boolean) as string[];
   return facts.slice(0, 6);
+}
+
+function buildListingEditorDraft(listing: CasaHudListingCandidate | CasaHudValidatedListing): CasaHudListingEditorDraft {
+  return {
+    title: listing.title || "",
+    price: typeof listing.price === "number" ? String(listing.price) : "",
+    currency: listing.currency || "EUR",
+    locationText: listing.locationText || "",
+    propertyType: listing.propertyType || "",
+    bedrooms: typeof listing.bedrooms === "number" ? String(listing.bedrooms) : "",
+    bathrooms: typeof listing.bathrooms === "number" ? String(listing.bathrooms) : "",
+    rooms: typeof listing.rooms === "number" ? String(listing.rooms) : "",
+    sizeSqm: typeof listing.sizeSqm === "number" ? String(listing.sizeSqm) : "",
+    commercialSurfaceSqm: typeof listing.commercialSurfaceSqm === "number" ? String(listing.commercialSurfaceSqm) : "",
+    landSizeSqm: typeof listing.landSizeSqm === "number" ? String(listing.landSizeSqm) : "",
+    garageParking: listing.garageParking || "",
+    balcony: Boolean(listing.balcony),
+    terrace: Boolean(listing.terrace),
+    condition: listing.condition || "",
+    energyClass: listing.energyClass || "",
+    descriptionSnippet: listing.descriptionSnippet || "",
+    keyFeatures: (listing.keyFeatures || []).join("\n"),
+    manualFeaturedImageUrl: listing.manualFeaturedImageUrl || listing.featuredImageUrl || "",
+    sourceUrl: listing.sourceUrl || "",
+    manualLifestyleAngle: listing.manualLifestyleAngle || listing.summary || "",
+  };
 }
 
 function getPropertySupportCopy(
@@ -1277,7 +1398,7 @@ function PropertyCard({
   campaign: CasaHudCampaign;
   listing: CasaHudListingCandidate | CasaHudValidatedListing;
   testId: string;
-  onSelect: (listingId: string) => void;
+  onSelect: (listingId: string, editor?: boolean) => void;
 }) {
   const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
   const facts = propertyFacts(listing);
@@ -1308,6 +1429,8 @@ function PropertyCard({
           <div className="flex flex-wrap gap-2">
             <StatusPill tone="gold">{formatListingSourceType(listing)}</StatusPill>
             <StatusPill tone="neutral">{formatListingProviderLabel(listing)}</StatusPill>
+            {listing.sourceType === "imported_url" ? <StatusPill tone="neutral">{formatListingExtractionStatus(listing.extractionStatus)}</StatusPill> : null}
+            {listing.sourceType === "imported_url" ? <StatusPill tone="neutral">{formatManualCompletionStatus(listing.manualCompletionStatus)}</StatusPill> : null}
             {listing.propertyType ? <StatusPill tone="neutral">{formatCampaignStatus(listing.propertyType)}</StatusPill> : null}
             {"overallScore" in listing && typeof listing.overallScore === "number" ? (
               <StatusPill tone="blue">Score {Math.round(listing.overallScore)}</StatusPill>
@@ -1354,6 +1477,9 @@ function PropertyCard({
               <p>
                 <span className="font-semibold text-[#172033]">Validation readiness:</span> {validationReadinessLabel(listing)}
               </p>
+              <p>
+                <span className="font-semibold text-[#172033]">Manual completion:</span> {formatManualCompletionStatus(listing.manualCompletionStatus)}
+              </p>
             </>
           ) : null}
         </div>
@@ -1391,6 +1517,16 @@ function PropertyCard({
           ) : (
             <span className={mutedButtonClass}>Source unavailable</span>
           )}
+          {listing.sourceType === "imported_url" ? (
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              onClick={() => onSelect(listing.id, true)}
+              data-testid="casahud-edit-imported-listing"
+            >
+              {(listing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
+            </button>
+          ) : null}
           <button type="button" className={primaryButtonClass} onClick={() => onSelect(listing.id)}>
             View details
           </button>
@@ -1563,11 +1699,16 @@ export default function StudioCasaHudCommandCenter() {
   const [activeSection, setActiveSection] = useState<CasaHudWorkspaceSection>("campaigns");
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
+  const [listingEditorOpen, setListingEditorOpen] = useState(false);
+  const [listingEditorSaving, setListingEditorSaving] = useState(false);
+  const [listingEditorNotice, setListingEditorNotice] = useState<string | null>(null);
+  const [listingEditorDraft, setListingEditorDraft] = useState<CasaHudListingEditorDraft | null>(null);
   const [scriptCopyNotice, setScriptCopyNotice] = useState<string | null>(null);
   const [listingUrlImportText, setListingUrlImportText] = useState("");
   const [listingUrlImporting, setListingUrlImporting] = useState(false);
   const [listingUrlImportNotice, setListingUrlImportNotice] = useState<string | null>(null);
   const [listingUrlImportWarnings, setListingUrlImportWarnings] = useState<string[]>([]);
+  const [listingUrlImportResults, setListingUrlImportResults] = useState<CasaHudListingUrlImportResult[]>([]);
   const [propertySearch, setPropertySearch] = useState("");
   const [propertyStatusFilter, setPropertyStatusFilter] = useState<"all" | "approved" | "candidate" | "rejected">("all");
   const [propertySort, setPropertySort] = useState<"rank" | "price_desc" | "price_asc" | "updated">("rank");
@@ -1796,6 +1937,10 @@ export default function StudioCasaHudCommandCenter() {
     setListingUrlImportText("");
     setListingUrlImportNotice(null);
     setListingUrlImportWarnings([]);
+    setListingUrlImportResults([]);
+    setListingEditorOpen(false);
+    setListingEditorNotice(null);
+    setListingEditorDraft(null);
   }, [activeCampaign?.id]);
 
   useEffect(() => {
@@ -1807,9 +1952,26 @@ export default function StudioCasaHudCommandCenter() {
     if (!listingStillExists) setSelectedListingId(null);
   }, [activeCampaign, selectedListingId]);
 
+  useEffect(() => {
+    if (!selectedListing) {
+      setListingEditorDraft(null);
+      setListingEditorOpen(false);
+      return;
+    }
+    if (listingEditorOpen) {
+      setListingEditorDraft(buildListingEditorDraft(selectedListing));
+    }
+  }, [listingEditorOpen, selectedListing]);
+
   function openWorkspace(section: CasaHudWorkspaceSection) {
     setActiveSection(section);
     setDrawerOpen(false);
+  }
+
+  function openListingDetails(listingId: string, editor = false) {
+    setSelectedListingId(listingId);
+    setListingEditorNotice(null);
+    setListingEditorOpen(editor);
   }
 
   function openConnections(cardId?: CasaHudConnectionCardId) {
@@ -2020,6 +2182,7 @@ export default function StudioCasaHudCommandCenter() {
     if (!listingUrlImportText.trim()) {
       setListingUrlImportNotice("Paste at least one listing URL to import.");
       setListingUrlImportWarnings([]);
+      setListingUrlImportResults([]);
       return;
     }
 
@@ -2050,6 +2213,7 @@ export default function StudioCasaHudCommandCenter() {
       setListingUrlImportText("");
       setListingUrlImportNotice(payload.message || `Imported ${payload.importedCount || 0} listing URLs.`);
       setListingUrlImportWarnings(warnings);
+      setListingUrlImportResults(payload.results || []);
       setRecentCampaigns((current) => {
         const summary = payload.summary || summarizeCampaign(payload.campaign!);
         return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
@@ -2057,8 +2221,64 @@ export default function StudioCasaHudCommandCenter() {
     } catch (error) {
       setListingUrlImportNotice(error instanceof Error ? error.message : "Could not import listing URLs right now.");
       setListingUrlImportWarnings([]);
+      setListingUrlImportResults([]);
     } finally {
       setListingUrlImporting(false);
+    }
+  }
+
+  async function onSaveListingDetails() {
+    if (!activeCampaign || !selectedListing || !listingEditorDraft) return;
+
+    try {
+      setListingEditorSaving(true);
+      setListingEditorNotice(null);
+      const response = await fetch(
+        `/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/listing-candidates/${encodeURIComponent(selectedListing.id)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: listingEditorDraft.title,
+            price: listingEditorDraft.price,
+            currency: listingEditorDraft.currency,
+            locationText: listingEditorDraft.locationText,
+            propertyType: listingEditorDraft.propertyType,
+            bedrooms: listingEditorDraft.bedrooms,
+            bathrooms: listingEditorDraft.bathrooms,
+            rooms: listingEditorDraft.rooms,
+            sizeSqm: listingEditorDraft.sizeSqm,
+            commercialSurfaceSqm: listingEditorDraft.commercialSurfaceSqm,
+            landSizeSqm: listingEditorDraft.landSizeSqm,
+            garageParking: listingEditorDraft.garageParking,
+            balcony: listingEditorDraft.balcony,
+            terrace: listingEditorDraft.terrace,
+            condition: listingEditorDraft.condition,
+            energyClass: listingEditorDraft.energyClass,
+            descriptionSnippet: listingEditorDraft.descriptionSnippet,
+            keyFeatures: listingEditorDraft.keyFeatures,
+            manualFeaturedImageUrl: listingEditorDraft.manualFeaturedImageUrl,
+            sourceUrl: listingEditorDraft.sourceUrl,
+            manualLifestyleAngle: listingEditorDraft.manualLifestyleAngle,
+          }),
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as CasaHudListingManualUpdatePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "Could not save listing details right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setListingEditorNotice(payload.message || "Listing details saved.");
+      setListingEditorOpen(false);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+    } catch (error) {
+      setListingEditorNotice(error instanceof Error ? error.message : "Could not save listing details right now.");
+    } finally {
+      setListingEditorSaving(false);
     }
   }
 
@@ -2810,7 +3030,7 @@ export default function StudioCasaHudCommandCenter() {
                             ? "casahud-rejected-listing-card"
                             : "casahud-listing-candidate-card"
                       }
-                      onSelect={setSelectedListingId}
+                      onSelect={openListingDetails}
                     />
                   </div>
                 ))}
@@ -3717,6 +3937,45 @@ export default function StudioCasaHudCommandCenter() {
                     ))}
                   </div>
                 ) : null}
+                {listingUrlImportResults.length > 0 ? (
+                  <div className="grid gap-3" data-testid="casahud-import-listing-urls-results">
+                    {listingUrlImportResults.map((result) => (
+                      <article key={`${result.inputUrl}-${result.status}`} className="rounded-[1.2rem] border border-[#E7DCCB] bg-[#FFFDF8] p-4">
+                        <div className="flex flex-wrap gap-2">
+                          <StatusPill tone={importResultTone(result.status)}>{importResultLabel(result.status)}</StatusPill>
+                          {result.providerName ? <StatusPill tone="neutral">{result.providerName}</StatusPill> : null}
+                          {result.urlClassification ? <StatusPill tone="neutral">{formatUrlClassification(result.urlClassification)}</StatusPill> : null}
+                          {result.extractionStatus ? <StatusPill tone="neutral">{formatListingExtractionStatus(result.extractionStatus)}</StatusPill> : null}
+                        </div>
+                        <div className="mt-3 grid gap-2 text-sm leading-6 text-[#526070]">
+                          <p>
+                            <span className="font-semibold text-[#172033]">Submitted:</span> {result.inputUrl}
+                          </p>
+                          {result.normalizedUrl && result.normalizedUrl !== result.inputUrl ? (
+                            <p>
+                              <span className="font-semibold text-[#172033]">Normalized:</span> {result.normalizedUrl}
+                            </p>
+                          ) : null}
+                          {result.reason ? (
+                            <p>
+                              <span className="font-semibold text-[#172033]">Result:</span> {result.reason}
+                            </p>
+                          ) : null}
+                          {result.nextAction ? (
+                            <p>
+                              <span className="font-semibold text-[#172033]">Next action:</span> {result.nextAction}
+                            </p>
+                          ) : null}
+                          {result.discoveredListingUrls?.length ? (
+                            <p>
+                              <span className="font-semibold text-[#172033]">Discovered listing URLs:</span> {result.discoveredListingUrls.length}
+                            </p>
+                          ) : null}
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
               </div>
             </section>
 
@@ -3766,7 +4025,7 @@ export default function StudioCasaHudCommandCenter() {
                           campaign={activeCampaign}
                           listing={listing}
                           testId="casahud-listing-candidate-card"
-                          onSelect={setSelectedListingId}
+                          onSelect={openListingDetails}
                         />
                       ))}
                     </div>
@@ -3789,7 +4048,7 @@ export default function StudioCasaHudCommandCenter() {
                           campaign={activeCampaign}
                           listing={listing}
                           testId="casahud-approved-listing-card"
-                          onSelect={setSelectedListingId}
+                          onSelect={openListingDetails}
                         />
                       ))}
                     </div>
@@ -3812,7 +4071,7 @@ export default function StudioCasaHudCommandCenter() {
                           campaign={activeCampaign}
                           listing={listing}
                           testId="casahud-rejected-listing-card"
-                          onSelect={setSelectedListingId}
+                          onSelect={openListingDetails}
                         />
                       ))}
                     </div>
@@ -4744,14 +5003,29 @@ export default function StudioCasaHudCommandCenter() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Property Detail</p>
                 <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedListing.title}</h2>
               </div>
-              <button
-                type="button"
-                className={secondaryButtonClass}
-                onClick={() => setSelectedListingId(null)}
-                aria-label="Close property details"
-              >
-                Close
-              </button>
+              <div className="flex flex-wrap gap-3">
+                {selectedListing.sourceType === "imported_url" ? (
+                  <button
+                    type="button"
+                    className={secondaryButtonClass}
+                    onClick={() => setListingEditorOpen((current) => !current)}
+                  >
+                    {listingEditorOpen ? "Cancel Edit" : (selectedListing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => {
+                    setSelectedListingId(null);
+                    setListingEditorOpen(false);
+                    setListingEditorNotice(null);
+                  }}
+                  aria-label="Close property details"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="grid gap-0 lg:grid-cols-[1.02fr_0.98fr]">
@@ -4764,6 +5038,12 @@ export default function StudioCasaHudCommandCenter() {
                   <StatusPill tone="gold">{formatListingSourceType(selectedListing)}</StatusPill>
                   <StatusPill tone="neutral">{formatListingProviderLabel(selectedListing)}</StatusPill>
                   <StatusPill tone="blue">{selectedListingMedia.stateLabel}</StatusPill>
+                  {selectedListing.sourceType === "imported_url" ? (
+                    <StatusPill tone="neutral">{formatListingExtractionStatus(selectedListing.extractionStatus)}</StatusPill>
+                  ) : null}
+                  {selectedListing.sourceType === "imported_url" ? (
+                    <StatusPill tone="neutral">{formatManualCompletionStatus(selectedListing.manualCompletionStatus)}</StatusPill>
+                  ) : null}
                 </div>
 
                 <div className="grid gap-3 text-sm leading-6 text-[#526070]">
@@ -4798,6 +5078,9 @@ export default function StudioCasaHudCommandCenter() {
                       <p>
                         <span className="font-semibold text-[#172033]">Validation readiness:</span> {validationReadinessLabel(selectedListing)}
                       </p>
+                      <p>
+                        <span className="font-semibold text-[#172033]">Manual completion:</span> {formatManualCompletionStatus(selectedListing.manualCompletionStatus)}
+                      </p>
                     </>
                   ) : null}
                 </div>
@@ -4821,6 +5104,211 @@ export default function StudioCasaHudCommandCenter() {
                     <span className={mutedButtonClass}>Source unavailable</span>
                   )}
                 </div>
+
+                {selectedListing.sourceType === "imported_url" && listingEditorOpen && listingEditorDraft ? (
+                  <div className="grid gap-4 rounded-[1.5rem] border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-imported-listing-editor">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Manual Listing Details</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        Manual details are user-provided. CasaHUD keeps the source label and extraction warnings intact.
+                      </p>
+                    </div>
+                    {listingEditorNotice ? (
+                      <p className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#475569]">{listingEditorNotice}</p>
+                    ) : null}
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Display title</span>
+                        <input
+                          value={listingEditorDraft.title}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, title: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          data-testid="casahud-listing-editor-title"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Location</span>
+                        <input
+                          value={listingEditorDraft.locationText}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, locationText: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          data-testid="casahud-listing-editor-location"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Price</span>
+                        <input
+                          value={listingEditorDraft.price}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, price: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Currency</span>
+                        <input
+                          value={listingEditorDraft.currency}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, currency: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Property type</span>
+                        <input
+                          value={listingEditorDraft.propertyType}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, propertyType: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Garage / parking</span>
+                        <input
+                          value={listingEditorDraft.garageParking}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, garageParking: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Bedrooms</span>
+                        <input
+                          value={listingEditorDraft.bedrooms}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bedrooms: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Bathrooms</span>
+                        <input
+                          value={listingEditorDraft.bathrooms}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bathrooms: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Rooms</span>
+                        <input
+                          value={listingEditorDraft.rooms}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, rooms: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Interior size (m²)</span>
+                        <input
+                          value={listingEditorDraft.sizeSqm}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sizeSqm: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Commercial surface (m²)</span>
+                        <input
+                          value={listingEditorDraft.commercialSurfaceSqm}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, commercialSurfaceSqm: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Garden / land size (m²)</span>
+                        <input
+                          value={listingEditorDraft.landSizeSqm}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, landSizeSqm: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Condition</span>
+                        <input
+                          value={listingEditorDraft.condition}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, condition: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Energy class</span>
+                        <input
+                          value={listingEditorDraft.energyClass}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, energyClass: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                    </div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
+                        <input
+                          type="checkbox"
+                          checked={listingEditorDraft.balcony}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, balcony: event.target.checked } : current))}
+                        />
+                        Balcony
+                      </label>
+                      <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
+                        <input
+                          type="checkbox"
+                          checked={listingEditorDraft.terrace}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, terrace: event.target.checked } : current))}
+                        />
+                        Terrace
+                      </label>
+                    </div>
+                    <label className="grid gap-2 text-sm text-[#172033]">
+                      <span className="font-medium">Description</span>
+                      <textarea
+                        value={listingEditorDraft.descriptionSnippet}
+                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, descriptionSnippet: event.target.value } : current))}
+                        rows={4}
+                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm text-[#172033]">
+                      <span className="font-medium">Key features</span>
+                      <textarea
+                        value={listingEditorDraft.keyFeatures}
+                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, keyFeatures: event.target.value } : current))}
+                        rows={3}
+                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                      />
+                    </label>
+                    <label className="grid gap-2 text-sm text-[#172033]">
+                      <span className="font-medium">Lifestyle angle / notes</span>
+                      <textarea
+                        value={listingEditorDraft.manualLifestyleAngle}
+                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualLifestyleAngle: event.target.value } : current))}
+                        rows={3}
+                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                      />
+                    </label>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Featured image URL</span>
+                        <input
+                          value={listingEditorDraft.manualFeaturedImageUrl}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualFeaturedImageUrl: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          data-testid="casahud-listing-editor-image-url"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Source URL</span>
+                        <input
+                          value={listingEditorDraft.sourceUrl}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sourceUrl: event.target.value } : current))}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                    </div>
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        className={primaryButtonClass}
+                        onClick={() => void onSaveListingDetails()}
+                        disabled={listingEditorSaving}
+                        data-testid="casahud-listing-editor-save"
+                      >
+                        {listingEditorSaving ? "Saving Details..." : "Save Details"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
