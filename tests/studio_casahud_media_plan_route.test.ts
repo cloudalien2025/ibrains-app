@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { createEmptyCasaHudMediaPlanData, type CasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 
 const userId = "11111111-1111-4111-8111-111111111111";
 
@@ -187,6 +188,7 @@ const scriptReadyCampaign: CasaHudCampaign = {
   },
   fullScriptText: "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
   ...createEmptyCasaHudMediaPlanData(),
+  ...createEmptyCasaHudYouTubePackageData(),
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",

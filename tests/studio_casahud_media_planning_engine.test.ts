@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import { runCasaHudMediaPlanning } from "@/lib/studio/domara/media-planning-engine";
 
 function buildScriptReadyCampaign(): CasaHudCampaign {
@@ -347,6 +348,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
     },
     fullScriptText: "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
     ...createEmptyCasaHudMediaPlanData(),
+    ...createEmptyCasaHudYouTubePackageData(),
     nextPhase: {
       key: "media_planning_asset_assembly",
       label: "Media Planning and Asset Assembly",

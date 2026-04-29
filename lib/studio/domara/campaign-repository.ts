@@ -6,6 +6,7 @@ import {
   CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE,
   CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE,
   CASAHUD_CAMPAIGN_PHASE_7_METADATA_PHASE,
+  CASAHUD_CAMPAIGN_PHASE_8_METADATA_PHASE,
   buildCasaHudCampaignFromOpportunity,
   CASAHUD_CAMPAIGN_METADATA_PHASE,
   parseCasaHudCampaignMetadata,
@@ -119,13 +120,14 @@ export async function listCasaHudCampaignSummaries(userId: string, limit = 12): 
       updated_at
     FROM casahud_projects
     WHERE user_id = $1
-      AND provider_metadata->>'phase' IN ($2, $3, $4, $5, $6, $7)
+      AND provider_metadata->>'phase' IN ($2, $3, $4, $5, $6, $7, $8)
     ORDER BY updated_at DESC, created_at DESC
-    LIMIT $8
+    LIMIT $9
     `,
     [
       userId,
       CASAHUD_CAMPAIGN_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_8_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_7_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE,
@@ -157,13 +159,14 @@ export async function getCasaHudCampaign(userId: string, campaignId: string): Pr
     FROM casahud_projects
     WHERE user_id = $1
       AND id = $2
-      AND provider_metadata->>'phase' IN ($3, $4, $5, $6, $7, $8)
+      AND provider_metadata->>'phase' IN ($3, $4, $5, $6, $7, $8, $9)
     LIMIT 1
     `,
     [
       userId,
       campaignId,
       CASAHUD_CAMPAIGN_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_8_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_7_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE,
       CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE,

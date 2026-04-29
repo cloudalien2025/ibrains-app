@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 vi.mock("next/link", async () => {
@@ -142,6 +143,7 @@ const emptyScriptState = {
 };
 
 const emptyMediaPlanState = createEmptyCasaHudMediaPlanData();
+const emptyYouTubePackageState = createEmptyCasaHudYouTubePackageData();
 
 const savedCampaign: CasaHudCampaign = {
   id: "casahud-project-phase3",
@@ -176,6 +178,7 @@ const savedCampaign: CasaHudCampaign = {
   ...emptyLocationState,
   ...emptyScriptState,
   ...emptyMediaPlanState,
+  ...emptyYouTubePackageState,
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",

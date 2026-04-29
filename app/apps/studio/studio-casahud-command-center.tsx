@@ -119,6 +119,14 @@ type CasaHudMediaPlanPayload = {
   error?: { message?: string };
 };
 
+type CasaHudYouTubePackagePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -162,11 +170,13 @@ type CasaHudSceneOutlineRow = {
 
 type CasaHudYouTubePackagePreview = {
   finalTitle: string;
+  titleRationale: string;
   description: string;
   tags: string[];
   hashtags: string[];
   chapters: { timestamp: string; title: string }[];
   thumbnailConcept: string;
+  packagingSummary?: string;
 };
 
 const sidebarSections: CasaHudWorkspaceNavItem[] = [
@@ -297,6 +307,15 @@ const mediaSteps: CasaHudProgressStep[] = [
   { id: "map_location_assets", label: "Adding map and location visuals" },
   { id: "thumbnail_candidates", label: "Preparing thumbnail candidates" },
   { id: "coverage_check", label: "Checking visual coverage" },
+];
+
+const packageSteps: CasaHudProgressStep[] = [
+  { id: "refine_title", label: "Refining the YouTube title" },
+  { id: "write_metadata", label: "Writing description and metadata" },
+  { id: "thumbnail_concept", label: "Building thumbnail concept" },
+  { id: "truthfulness_review", label: "Checking content truthfulness" },
+  { id: "visual_review", label: "Reviewing visual coverage" },
+  { id: "render_plan", label: "Preparing render plan" },
 ];
 
 const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
@@ -441,11 +460,14 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     locationIntelligenceStatus: campaign.locationIntelligenceStatus,
     scriptGenerationStatus: campaign.scriptGenerationStatus,
     mediaPlanningStatus: campaign.mediaPlanningStatus,
+    youtubePackageStatus: campaign.youtubePackageStatus,
+    reviewStatus: campaign.reviewStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
     scriptSummary: campaign.scriptSummary ?? undefined,
     mediaPlanSummary: campaign.mediaPlanSummary ?? undefined,
+    packagingSummary: campaign.packagingSummary ?? undefined,
   };
 }
 
@@ -510,10 +532,18 @@ function getCampaignPrimaryAction(campaign: CasaHudCampaign | null): CasaHudPrim
     };
   }
 
-  if (campaign.mediaPlanningStatus === "media_plan_built") {
+  if (campaign.youtubePackageStatus === "package_prepared") {
     return {
       label: "Review Package",
-      helper: "Review the completed visual plan before package, review, and render planning steps.",
+      helper: "The YouTube package, review findings, and render plan are ready for human review.",
+      section: "review_package",
+    };
+  }
+
+  if (campaign.mediaPlanningStatus === "media_plan_built") {
+    return {
+      label: "Build YouTube Package",
+      helper: "Turn the media-planned campaign into a review-ready YouTube package and render plan.",
       section: "review_package",
     };
   }
@@ -553,9 +583,9 @@ function buildPhaseProgress(campaign: CasaHudCampaign | null, youtubeConnected: 
   if (campaign.locationIntelligenceStatus === "location_intelligence_completed") completedThrough = 5;
   if (campaign.scriptGenerationStatus === "script_generated") completedThrough = 6;
   if (campaign.mediaPlanningStatus === "media_plan_built" || campaign.futureState.mediaPlan || campaign.futureState.storyboard) completedThrough = 7;
-  if (campaign.futureState.packaging) completedThrough = 8;
-  if (campaign.futureState.renderStatus) completedThrough = 9;
-  if (campaign.futureState.reviewStatus) completedThrough = 10;
+  if (campaign.youtubePackageStatus === "package_prepared" || campaign.futureState.packaging) completedThrough = 8;
+  if (campaign.renderPlanStatus === "render_plan_ready" || campaign.futureState.renderStatus) completedThrough = 9;
+  if (campaign.reviewStatus !== "not_started" || campaign.futureState.reviewStatus) completedThrough = 10;
   if (campaign.futureState.publishStatus || campaign.futureState.scheduleStatus) completedThrough = 11;
 
   return commandSteps.map((label, index) => {
@@ -633,6 +663,14 @@ function deriveVisualReadiness(campaign: CasaHudCampaign | null) {
     };
   }
 
+  if (campaign.youtubePackageStatus === "package_prepared") {
+    return {
+      headline: "Review package is assembled",
+      detail: campaign.packagingSummary || "The YouTube package, review findings, and render plan are ready for review.",
+      tone: "sage" as const,
+    };
+  }
+
   const listings = campaign.approvedListings.length > 0 ? campaign.approvedListings : campaign.listingCandidates;
   const photoCount = listings.reduce((sum, listing) => sum + listing.imageCount, 0);
   if (campaign.mediaPlanningStatus === "media_plan_built") {
@@ -672,6 +710,7 @@ function buildAgentRows(params: {
   campaignLocatingId: string | null;
   campaignScriptingId: string | null;
   campaignMediaPlanningId: string | null;
+  campaignPackagingId: string | null;
   youtubeCard?: CasaHudConnectionCard;
 }): CasaHudAgentActivityRow[] {
   const {
@@ -683,6 +722,7 @@ function buildAgentRows(params: {
     campaignLocatingId,
     campaignScriptingId,
     campaignMediaPlanningId,
+    campaignPackagingId,
     youtubeCard,
   } = params;
 
@@ -802,13 +842,17 @@ function buildAgentRows(params: {
     {
       name: "Packaging Agent",
       state:
-        campaign?.futureState.packaging
+        campaignPackagingId
+          ? "running"
+          : campaign?.youtubePackageStatus === "package_prepared" || campaign?.futureState.packaging
           ? "complete"
           : campaign?.mediaPlanningStatus === "media_plan_built"
             ? "pending"
             : "blocked",
       detail:
-        campaign?.futureState.packaging
+        campaignPackagingId
+          ? "Refining the metadata, review summary, and render plan."
+          : campaign?.youtubePackageStatus === "package_prepared" || campaign?.futureState.packaging
           ? "The YouTube package is assembled for review."
           : campaign?.mediaPlanningStatus === "media_plan_built"
             ? "The command center is ready to hand the project forward into package, review, and render planning."
@@ -817,36 +861,42 @@ function buildAgentRows(params: {
     {
       name: "Render Agent",
       state:
-        campaign?.futureState.renderStatus
+        campaign?.renderPlanStatus === "render_plan_ready" || campaign?.futureState.renderStatus
           ? "complete"
-          : campaign?.scriptGenerationStatus === "script_generated"
+          : campaign?.youtubePackageStatus === "package_prepared"
             ? "pending"
             : "blocked",
       detail:
-        campaign?.futureState.renderStatus
-          ? `Render status: ${formatCampaignStatus(String(campaign.futureState.renderStatus))}.`
-          : campaign?.scriptGenerationStatus === "script_generated"
-            ? "Render remains gated behind later phase media and review approval."
+        campaign?.renderPlanStatus === "render_plan_ready" || campaign?.futureState.renderStatus
+          ? `Render status: ${formatCampaignStatus(String(campaign.renderPlanStatus || campaign.futureState.renderStatus))}.`
+          : campaign?.youtubePackageStatus === "package_prepared"
+            ? "Render execution is still a later phase, but the draft render plan is ready."
             : "Render is blocked until the narrative package is ready.",
     },
     {
       name: "Review Agent",
       state:
-        campaign?.futureState.reviewStatus
-          ? "complete"
+        campaign?.reviewStatus === "blocked"
+          ? "blocked"
+          : campaign && (campaign.reviewStatus !== "not_started" || Boolean(campaign.futureState.reviewStatus))
+            ? "complete"
           : campaign?.scriptWarnings.length
             ? "needs_attention"
-            : campaign?.scriptGenerationStatus === "script_generated"
+            : campaign?.youtubePackageStatus === "package_prepared" || campaign?.mediaPlanningStatus === "media_plan_built"
               ? "pending"
               : "blocked",
       detail:
-        campaign?.futureState.reviewStatus
-          ? `Review status: ${formatCampaignStatus(String(campaign.futureState.reviewStatus))}.`
+        campaign?.reviewStatus === "blocked"
+          ? `Review status: ${formatCampaignStatus(String(campaign.reviewStatus))}.`
+          : campaign && (campaign.reviewStatus !== "not_started" || Boolean(campaign.futureState.reviewStatus))
+            ? `Review status: ${formatCampaignStatus(String(campaign.reviewStatus || campaign.futureState.reviewStatus))}.`
           : campaign?.scriptWarnings.length
             ? "Warnings are present, so the human review pass should tighten claims before publish."
-            : campaign?.scriptGenerationStatus === "script_generated"
+            : campaign?.youtubePackageStatus === "package_prepared"
               ? "The package is ready for human review."
-              : "Review opens after the narrative package is ready.",
+              : campaign?.mediaPlanningStatus === "media_plan_built"
+                ? "Review opens after the YouTube package is assembled."
+                : "Review opens after the narrative package is ready.",
     },
     {
       name: "Publish Agent",
@@ -911,6 +961,29 @@ function buildSceneOutline(campaign: CasaHudCampaign | null): CasaHudSceneOutlin
 function buildYouTubePackagePreview(campaign: CasaHudCampaign | null): CasaHudYouTubePackagePreview | null {
   if (!campaign) return null;
 
+  if (campaign.youtubePackageStatus === "package_prepared") {
+    return {
+      finalTitle: campaign.finalTitle || campaign.selectedViralTitle,
+      titleRationale:
+        campaign.titleRationale ||
+        campaign.confidenceReasoning.selectedTitleReasoning ||
+        campaign.confidenceReasoning.titleOpportunitySummary,
+      description: campaign.youtubeDescription || campaign.scriptSummary || campaign.researchBrief.summary,
+      tags: campaign.youtubeTags,
+      hashtags: campaign.youtubeHashtags,
+      chapters: campaign.youtubeChapters.map((chapter) => ({
+        timestamp: toTimestamp(chapter.startTimeSeconds),
+        title: chapter.title,
+      })),
+      thumbnailConcept:
+        campaign.thumbnailConcept?.visualDirection ||
+        campaign.thumbnailConcept?.headline ||
+        campaign.locationStory?.headline ||
+        "Review package is ready.",
+      packagingSummary: campaign.packagingSummary || undefined,
+    };
+  }
+
   const scenes = buildSceneOutline(campaign);
   let elapsed = 0;
   const chapters = scenes.slice(0, 6).map((scene) => {
@@ -942,6 +1015,7 @@ function buildYouTubePackagePreview(campaign: CasaHudCampaign | null): CasaHudYo
 
   return {
     finalTitle: campaign.selectedViralTitle,
+    titleRationale: campaign.confidenceReasoning.selectedTitleReasoning || campaign.confidenceReasoning.titleOpportunitySummary,
     description: descriptionParts.join("\n\n"),
     tags,
     hashtags: ["#CasaHUD", "#PropertyVideo", "#RealEstate", "#YouTubeStrategy", "#ReviewBeforePublish"],
@@ -949,6 +1023,7 @@ function buildYouTubePackagePreview(campaign: CasaHudCampaign | null): CasaHudYo
     thumbnailConcept:
       campaign.locationStory?.headline ||
       `Lead with ${campaign.marketRegionHint || "the region"} and the strongest approved property against a premium editorial frame.`,
+    packagingSummary: campaign.mediaPlanSummary || undefined,
   };
 }
 
@@ -1017,11 +1092,13 @@ function ReviewStatusCard({
 }) {
   const visualGaps = campaign.approvedListings.filter((listing) => listing.imageCount === 0).length;
   const reviewState =
-    campaign.scriptWarnings.length > 0 || (campaign.titleSupportConfidence ?? 0) < 80
-      ? "Needs revision"
-      : campaign.scriptGenerationStatus === "script_generated"
-        ? "Ready for review"
-        : "Blocked";
+    campaign.reviewStatus !== "not_started"
+      ? formatCampaignStatus(campaign.reviewStatus)
+      : campaign.scriptWarnings.length > 0 || (campaign.titleSupportConfidence ?? 0) < 80
+        ? "Needs revision"
+        : campaign.scriptGenerationStatus === "script_generated"
+          ? "Ready for review"
+          : "Blocked";
 
   return (
     <section className="rounded-[1.7rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
@@ -1030,23 +1107,29 @@ function ReviewStatusCard({
       <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
         <p>
           <span className="font-semibold text-[#172033]">Unsupported claims:</span>{" "}
-          {campaign.scriptWarnings.length > 0 ? campaign.scriptWarnings[0] : "No obvious unsupported claims surfaced in the current script package."}
+          {campaign.reviewFindings.find((finding) => finding.category === "unsupported_claims")?.detail ||
+            campaign.reviewWarnings[0] ||
+            campaign.scriptWarnings[0] ||
+            "No obvious unsupported claims surfaced in the current package."}
         </p>
         <p>
           <span className="font-semibold text-[#172033]">Weak listings:</span>{" "}
-          {campaign.rejectedListings.length > 0
-            ? `${campaign.rejectedListings.length} rejected or weak-fit listing${campaign.rejectedListings.length === 1 ? "" : "s"} remain outside the default package.`
-            : "No rejected listings are competing for inclusion."}
+          {campaign.reviewFindings.find((finding) => finding.category === "weak_listings")?.detail ||
+            (campaign.rejectedListings.length > 0
+              ? `${campaign.rejectedListings.length} rejected or weak-fit listing${campaign.rejectedListings.length === 1 ? "" : "s"} remain outside the default package.`
+              : "No rejected listings are competing for inclusion.")}
         </p>
         <p>
           <span className="font-semibold text-[#172033]">Visual gaps:</span>{" "}
-          {visualGaps > 0
-            ? `${visualGaps} approved listing${visualGaps === 1 ? "" : "s"} still need stronger visual coverage before render.`
-            : "Property visuals are present for the approved shortlist."}
+          {campaign.reviewFindings.find((finding) => finding.category === "visual_gaps")?.detail ||
+            (visualGaps > 0
+              ? `${visualGaps} approved listing${visualGaps === 1 ? "" : "s"} still need stronger visual coverage before render.`
+              : "Property visuals are present for the approved shortlist.")}
         </p>
         <p>
           <span className="font-semibold text-[#172033]">Metadata quality:</span>{" "}
-          {youtubePreview ? "A reviewable title, description, chapters, tags, and thumbnail concept preview are available." : "Metadata preview waits on the current campaign package."}
+          {campaign.reviewFindings.find((finding) => finding.category === "metadata_quality")?.detail ||
+            (youtubePreview ? "A reviewable title, description, chapters, tags, and thumbnail concept preview are available." : "Metadata preview waits on the current campaign package.")}
         </p>
       </div>
     </section>
@@ -1339,6 +1422,8 @@ export default function StudioCasaHudCommandCenter() {
   const [scriptProgressIndex, setScriptProgressIndex] = useState(0);
   const [campaignMediaPlanningId, setCampaignMediaPlanningId] = useState<string | null>(null);
   const [mediaProgressIndex, setMediaProgressIndex] = useState(0);
+  const [campaignPackagingId, setCampaignPackagingId] = useState<string | null>(null);
+  const [packageProgressIndex, setPackageProgressIndex] = useState(0);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -1403,6 +1488,7 @@ export default function StudioCasaHudCommandCenter() {
         campaignLocatingId,
         campaignScriptingId,
         campaignMediaPlanningId,
+        campaignPackagingId,
         youtubeCard: youtubeConnectionCard,
       }),
     [
@@ -1414,6 +1500,7 @@ export default function StudioCasaHudCommandCenter() {
       campaignLocatingId,
       campaignScriptingId,
       campaignMediaPlanningId,
+      campaignPackagingId,
       youtubeConnectionCard,
     ],
   );
@@ -1516,6 +1603,14 @@ export default function StudioCasaHudCommandCenter() {
     }, 620);
     return () => window.clearTimeout(timeoutId);
   }, [campaignMediaPlanningId, mediaProgressIndex]);
+
+  useEffect(() => {
+    if (!campaignPackagingId || packageProgressIndex >= packageSteps.length - 1) return;
+    const timeoutId = window.setTimeout(() => {
+      setPackageProgressIndex((current) => Math.min(current + 1, packageSteps.length - 1));
+    }, 620);
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignPackagingId, packageProgressIndex]);
 
   useEffect(() => {
     if (!selectedListingId || !activeCampaign) return;
@@ -1880,6 +1975,38 @@ export default function StudioCasaHudCommandCenter() {
     }
   }
 
+  async function onBuildYouTubePackage() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignPackagingId(activeCampaign.id);
+      setPackageProgressIndex(0);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setActiveSection("review_package");
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/youtube-package`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudYouTubePackagePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not build the YouTube package right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(payload.message || `YouTube package ready. "${payload.campaign.name}" now includes the review summary and render plan draft.`);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setPackageProgressIndex(packageSteps.length - 1);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not build the YouTube package right now.");
+    } finally {
+      setCampaignPackagingId(null);
+    }
+  }
+
   async function onCopyScript() {
     if (!activeCampaign?.fullScriptText || typeof navigator === "undefined" || !navigator.clipboard) {
       setScriptCopyNotice("Copy Script is unavailable in this browser session.");
@@ -2044,6 +2171,16 @@ export default function StudioCasaHudCommandCenter() {
                       data-testid="casahud-build-media-plan-cta"
                     >
                       {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+                    </button>
+                  ) : activeCampaign.nextPhase.key === "youtube_package_review_render_plan" ? (
+                    <button
+                      type="button"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => void onBuildYouTubePackage()}
+                      disabled={campaignPackagingId === activeCampaign.id}
+                      data-testid="casahud-build-youtube-package-cta"
+                    >
+                      {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
                     </button>
                   ) : (
                     <button
@@ -2735,6 +2872,16 @@ export default function StudioCasaHudCommandCenter() {
               >
                 {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
               </button>
+            ) : activeCampaign?.nextPhase.key === "youtube_package_review_render_plan" ? (
+              <button
+                type="button"
+                className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void onBuildYouTubePackage()}
+                disabled={campaignPackagingId === activeCampaign.id}
+                data-testid="casahud-build-youtube-package-cta"
+              >
+                {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
+              </button>
             ) : null}
             <button
               type="button"
@@ -2878,7 +3025,17 @@ export default function StudioCasaHudCommandCenter() {
         title="Media Planning and Asset Assembly"
         description="The visual plan maps listing imagery, location context, and thumbnail inputs onto the approved narrative package."
         actions={
-          activeCampaign?.scriptGenerationStatus === "script_generated" && activeCampaign.mediaPlanningStatus !== "media_plan_built" ? (
+          activeCampaign?.nextPhase.key === "youtube_package_review_render_plan" ? (
+            <button
+              type="button"
+              className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void onBuildYouTubePackage()}
+              disabled={campaignPackagingId === activeCampaign.id}
+              data-testid="casahud-build-youtube-package-cta"
+            >
+              {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
+            </button>
+          ) : activeCampaign?.scriptGenerationStatus === "script_generated" && activeCampaign.mediaPlanningStatus !== "media_plan_built" ? (
             <button
               type="button"
               className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
@@ -3160,9 +3317,11 @@ export default function StudioCasaHudCommandCenter() {
   }
 
   if (activeSection === "video_builder") {
-    const renderStatus = activeCampaign?.futureState.renderStatus
-      ? formatCampaignStatus(String(activeCampaign.futureState.renderStatus))
-      : "Awaiting media planning and review approval";
+    const renderStatus = activeCampaign?.renderPlanStatus
+      ? formatCampaignStatus(String(activeCampaign.renderPlanStatus))
+      : activeCampaign?.futureState.renderStatus
+        ? formatCampaignStatus(String(activeCampaign.futureState.renderStatus))
+        : "Awaiting package review and render planning";
 
     sectionContent = (
       <WorkspaceCard
@@ -3181,15 +3340,21 @@ export default function StudioCasaHudCommandCenter() {
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Scene count:</span>{" "}
-                    {sceneOutline.length > 0 ? sceneOutline.length : "Pending script and storyboard"}
+                    {activeCampaign.renderPlan?.sceneCount || (sceneOutline.length > 0 ? sceneOutline.length : "Pending script and storyboard")}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Preview package:</span>{" "}
-                    {activeCampaign.mediaPlanningStatus === "media_plan_built"
+                    {activeCampaign.youtubePackageStatus === "package_prepared"
+                      ? activeCampaign.previewPackage?.assetReadinessSummary || "The review-ready package and render plan are prepared."
+                      : activeCampaign.mediaPlanningStatus === "media_plan_built"
                       ? "Visual plan is ready to hand forward into package, review, and render planning."
                       : activeCampaign.scriptGenerationStatus === "script_generated"
                         ? "Narrative package is ready to hand forward into media planning."
                       : "The narrative package must be ready before render planning can become specific."}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Estimated duration:</span>{" "}
+                    {formatDuration(activeCampaign.renderPlan?.estimatedDurationSeconds || activeCampaign.estimatedDurationSeconds)}
                   </p>
                 </div>
               </div>
@@ -3197,8 +3362,8 @@ export default function StudioCasaHudCommandCenter() {
               <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Render Warnings</p>
                 <div className="mt-4 grid gap-2">
-                  {activeCampaign.scriptWarnings.length > 0 ? (
-                    activeCampaign.scriptWarnings.map((warning) => (
+                  {activeCampaign.renderWarnings.length > 0 ? (
+                    activeCampaign.renderWarnings.map((warning) => (
                       <p key={warning} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
                         {warning}
                       </p>
@@ -3238,7 +3403,11 @@ export default function StudioCasaHudCommandCenter() {
 
               <PlaceholderVisual
                 label="Render preview"
-                detail="Scene timing, assets, and approvals move here after Media Planning and Asset Assembly."
+                detail={
+                  activeCampaign.youtubePackageStatus === "package_prepared"
+                    ? activeCampaign.renderPlan?.audioPlanPlaceholder || "Scene timing, assets, and approvals are mapped here before Phase 10 execution."
+                    : "Scene timing, assets, and approvals move here after Media Planning and Asset Assembly."
+                }
               />
             </aside>
           </div>
@@ -3257,37 +3426,47 @@ export default function StudioCasaHudCommandCenter() {
         description="This is the premium review surface: title, properties, script, storyboard, thumbnail direction, metadata, and publish gating in one place."
         actions={
           <>
+            {activeCampaign?.nextPhase.key === "youtube_package_review_render_plan" ? (
+              <button
+                type="button"
+                className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void onBuildYouTubePackage()}
+                disabled={campaignPackagingId === activeCampaign.id}
+                data-testid="casahud-build-youtube-package-cta"
+              >
+                {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
+              </button>
+            ) : null}
             <button
               type="button"
-              className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
-              onClick={() => setActiveSection("publishing")}
+              className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
+              onClick={() => setActiveSection("video_builder")}
               disabled={!activeCampaign}
             >
-              Publish / Schedule
-            </button>
-            <button
-              type="button"
-              className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-              disabled
-            >
-              Create/Refresh YouTube Package
+              Preview Render Plan
             </button>
           </>
         }
         testId="casahud-review-package"
       >
+        {campaignPackagingId === activeCampaign?.id ? renderProgressList(packageSteps, packageProgressIndex, "loading", "casahud-package-progress") : null}
+
         {activeCampaign ? (
+          activeCampaign.youtubePackageStatus === "package_prepared" ? (
           <div className="grid gap-5 xl:grid-cols-[1.07fr_0.93fr]">
             <section className="grid gap-4">
-              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
+              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm" data-testid="casahud-package-title">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Campaign Title</p>
-                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{activeCampaign.selectedViralTitle}</h3>
+                <h3 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                  {activeCampaign.finalTitle || activeCampaign.selectedViralTitle}
+                </h3>
                 <p className="mt-3 text-sm leading-6 text-[#526070]">
-                  {activeCampaign.confidenceReasoning.selectedTitleReasoning || activeCampaign.confidenceReasoning.titleOpportunitySummary}
+                  {activeCampaign.titleRationale || activeCampaign.confidenceReasoning.selectedTitleReasoning || activeCampaign.confidenceReasoning.titleOpportunitySummary}
                 </p>
+                {activeCampaign.packagingSummary ? <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.packagingSummary}</p> : null}
               </div>
 
-              <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm">
+              <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm" data-testid="casahud-selected-properties-review">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Selected Properties</p>
                 <div className="mt-4 grid gap-3">
                   {(activeCampaign.approvedListings.length > 0 ? activeCampaign.approvedListings : activeCampaign.listingCandidates)
@@ -3336,57 +3515,150 @@ export default function StudioCasaHudCommandCenter() {
                       : "Storyboard preview appears once CasaHUD has scene-level narration or script segments."}
                   </p>
                 </div>
-                <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm">
+                <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm" data-testid="casahud-thumbnail-concept">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Thumbnail Concept</p>
                   <p className="mt-3 text-sm leading-6 text-[#526070]">
-                    {youtubePackagePreview?.thumbnailConcept ||
-                      "Thumbnail direction will emerge from the selected title, lead listing, and location story."}
+                    {activeCampaign.thumbnailConcept?.visualDirection || youtubePackagePreview?.thumbnailConcept || "Thumbnail direction will emerge from the selected title, lead listing, and location story."}
                   </p>
+                  <p className="mt-3 text-sm font-semibold text-[#172033]">{activeCampaign.thumbnailConcept?.headline || "Thumbnail headline pending"}</p>
+                  <p className="mt-2 text-sm leading-6 text-[#526070]">Text overlay: {activeCampaign.thumbnailConcept?.textOverlay || "Pending"}</p>
                 </div>
               </div>
             </section>
 
             <aside className="grid gap-4">
-              <section className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
+              <section className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm" data-testid="casahud-youtube-package">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">YouTube Package</p>
                 <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
                   <p>
                     <span className="font-semibold text-[#172033]">Final title:</span>{" "}
-                    {youtubePackagePreview?.finalTitle || activeCampaign.selectedViralTitle}
+                    {activeCampaign.finalTitle || youtubePackagePreview?.finalTitle || activeCampaign.selectedViralTitle}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Description:</span>{" "}
-                    {youtubePackagePreview?.description || "Description preview will follow the completed script and review pass."}
+                    {activeCampaign.youtubeDescription || youtubePackagePreview?.description || "Description preview will follow the completed script and review pass."}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Tags:</span>{" "}
-                    {youtubePackagePreview?.tags.join(" · ") || "Pending"}
+                    {activeCampaign.youtubeTags.join(" · ") || youtubePackagePreview?.tags.join(" · ") || "Pending"}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Hashtags:</span>{" "}
-                    {youtubePackagePreview?.hashtags.join(" " ) || "Pending"}
+                    {activeCampaign.youtubeHashtags.join(" ") || youtubePackagePreview?.hashtags.join(" ") || "Pending"}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Chapters:</span>{" "}
-                    {youtubePackagePreview?.chapters.length
-                      ? youtubePackagePreview.chapters.map((chapter) => `${chapter.timestamp} ${chapter.title}`).join(" · ")
-                      : "Pending"}
+                    {activeCampaign.youtubeChapters.length
+                      ? activeCampaign.youtubeChapters.map((chapter) => `${toTimestamp(chapter.startTimeSeconds)} ${chapter.title}`).join(" · ")
+                      : youtubePackagePreview?.chapters.length
+                        ? youtubePackagePreview.chapters.map((chapter) => `${chapter.timestamp} ${chapter.title}`).join(" · ")
+                        : "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Publish metadata draft:</span>{" "}
+                    {activeCampaign.publishMetadataDraft?.packageNote || "Pending"}
                   </p>
                 </div>
               </section>
 
-              <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Render / Preview Status</p>
-                <p className="mt-3 text-sm leading-6 text-[#526070]">
-                  {activeCampaign.futureState.renderStatus
-                    ? formatCampaignStatus(String(activeCampaign.futureState.renderStatus))
-                    : "No render output is persisted on this campaign yet."}
+              <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm" data-testid="casahud-review-summary">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Review Summary</p>
+                <p className="mt-3 text-sm font-semibold text-[#172033]">
+                  {formatCampaignStatus(activeCampaign.reviewStatus)}
+                  {typeof activeCampaign.readinessScore === "number" ? ` · ${activeCampaign.readinessScore}/100` : ""}
                 </p>
+                <p className="mt-2 text-sm leading-6 text-[#526070]">
+                  {activeCampaign.reviewSummary || activeCampaign.readinessExplanation || "Review summary appears here once prepared."}
+                </p>
+                {activeCampaign.reviewBlockers.length > 0 ? (
+                  <div className="mt-4 grid gap-2">
+                    {activeCampaign.reviewBlockers.map((blocker) => (
+                      <p key={blocker} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
+                        {blocker}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {activeCampaign.reviewWarnings.length > 0 ? (
+                  <div className="mt-4 grid gap-2">
+                    {activeCampaign.reviewWarnings.slice(0, 3).map((warning) => (
+                      <p key={warning} className="rounded-2xl border border-[#E6D8C7] bg-white/90 p-3 text-sm leading-6 text-[#7A4B13]">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {activeCampaign.recommendedFixes.length > 0 ? (
+                  <p className="mt-4 text-sm leading-6 text-[#526070]">Recommended fixes: {activeCampaign.recommendedFixes.join(" · ")}</p>
+                ) : null}
+              </section>
+
+              <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/90 p-5 shadow-sm" data-testid="casahud-render-plan">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Render Plan</p>
+                <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
+                  <p>
+                    <span className="font-semibold text-[#172033]">Estimated duration:</span>{" "}
+                    {formatDuration(activeCampaign.renderPlan?.estimatedDurationSeconds || activeCampaign.estimatedDurationSeconds)}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Scene count:</span> {activeCampaign.renderPlan?.sceneCount || sceneOutline.length || "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Required assets:</span> {activeCampaign.renderPlan?.requiredAssets.length || 0}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Missing assets:</span> {activeCampaign.renderPlan?.missingAssets.length || 0}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Asset readiness:</span>{" "}
+                    {activeCampaign.renderPlan?.assetReadinessSummary || activeCampaign.previewPackage?.assetReadinessSummary || "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Next:</span> {activeCampaign.nextPhase.label}
+                  </p>
+                </div>
+                {activeCampaign.renderBlockers.length > 0 ? (
+                  <div className="mt-4 grid gap-2">
+                    {activeCampaign.renderBlockers.map((blocker) => (
+                      <p key={blocker} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
+                        {blocker}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                {activeCampaign.renderWarnings.length > 0 ? (
+                  <div className="mt-4 grid gap-2">
+                    {activeCampaign.renderWarnings.slice(0, 3).map((warning) => (
+                      <p key={warning} className="rounded-2xl border border-[#E6D8C7] bg-[#FFF9EF] p-3 text-sm leading-6 text-[#7A4B13]">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
               </section>
 
               <ReviewStatusCard campaign={activeCampaign} youtubePreview={youtubePackagePreview} />
             </aside>
           </div>
+          ) : activeCampaign.mediaPlanningStatus === "media_plan_built" ? (
+          <EmptyState
+            title="YouTube package not prepared yet"
+            description="Build YouTube Package to generate the final title, metadata, review findings, and render plan from the completed media plan."
+            action={
+              <button
+                type="button"
+                className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void onBuildYouTubePackage()}
+                disabled={campaignPackagingId === activeCampaign.id}
+                data-testid="casahud-build-youtube-package-cta"
+              >
+                {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
+              </button>
+            }
+          />
+          ) : (
+            <EmptyState title="No review package yet" description="Open a campaign to review its package." />
+          )
         ) : (
           <EmptyState title="No review package yet" description="Open a campaign to review its package." />
         )}
@@ -3699,6 +3971,11 @@ export default function StudioCasaHudCommandCenter() {
               {campaignMediaPlanningId ? (
                 <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
                   {renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress")}
+                </div>
+              ) : null}
+              {campaignPackagingId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(packageSteps, packageProgressIndex, "loading", "casahud-package-progress")}
                 </div>
               ) : null}
 

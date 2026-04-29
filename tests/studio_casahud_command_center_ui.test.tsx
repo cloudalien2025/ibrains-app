@@ -6,10 +6,17 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
-import { applyCasaHudMediaPlan, type CasaHudCampaign, type CasaHudCampaignSummary } from "@/lib/studio/domara/campaigns";
+import {
+  applyCasaHudMediaPlan,
+  applyCasaHudYouTubePackage,
+  type CasaHudCampaign,
+  type CasaHudCampaignSummary,
+} from "@/lib/studio/domara/campaigns";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
 import { runCasaHudMediaPlanning } from "@/lib/studio/domara/media-planning-engine";
+import { runCasaHudYouTubePackageReview } from "@/lib/studio/domara/youtube-package-engine";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -442,6 +449,7 @@ const activeCampaign: CasaHudCampaign = {
   fullScriptText:
     "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
   ...createEmptyCasaHudMediaPlanData(),
+  ...createEmptyCasaHudYouTubePackageData(),
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
@@ -500,14 +508,18 @@ const activeCampaignSummary: CasaHudCampaignSummary = {
   locationIntelligenceStatus: activeCampaign.locationIntelligenceStatus,
   scriptGenerationStatus: activeCampaign.scriptGenerationStatus,
   mediaPlanningStatus: activeCampaign.mediaPlanningStatus,
+  youtubePackageStatus: activeCampaign.youtubePackageStatus,
+  reviewStatus: activeCampaign.reviewStatus,
   discoverySummary: activeCampaign.discoverySummary?.headline,
   validationSummary: activeCampaign.listingValidationSummary?.headline,
   locationSummary: activeCampaign.locationIntelligenceSummary?.headline,
   scriptSummary: activeCampaign.scriptSummary ?? undefined,
   mediaPlanSummary: activeCampaign.mediaPlanSummary ?? undefined,
+  packagingSummary: activeCampaign.packagingSummary ?? undefined,
 };
 
 const mediaPlannedCampaign = applyCasaHudMediaPlan(activeCampaign, runCasaHudMediaPlanning(activeCampaign));
+const packagedCampaign = applyCasaHudYouTubePackage(mediaPlannedCampaign, runCasaHudYouTubePackageReview(mediaPlannedCampaign));
 
 async function flush() {
   await act(async () => {
@@ -609,10 +621,8 @@ describe("CasaHUD premium command center UI", () => {
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain(activeCampaign.selectedViralTitle);
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Tropea apartment with sea views");
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("YouTube Package");
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Publish / Schedule");
+    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("No review package yet");
+    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Preview Render Plan");
 
     const publishingNav = container.querySelector('[data-testid="casahud-nav-publishing"]');
     await act(async () => {
@@ -727,5 +737,98 @@ describe("CasaHUD premium command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-thumbnail-candidates"]')?.textContent).toContain("Thumbnail Candidate Inputs");
     expect(container.querySelector('[data-testid="casahud-media-warnings"]')?.textContent).toContain("Missing / Weak Media Warnings");
     expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("YouTube Package, Review, and Render Plan");
+  });
+
+  it("shows Build YouTube Package after media planning and renders the persisted review-ready package", async () => {
+    const mediaPlannedSummary = {
+      ...activeCampaignSummary,
+      status: mediaPlannedCampaign.status,
+      updatedAt: mediaPlannedCampaign.updatedAt,
+      mediaPlanningStatus: mediaPlannedCampaign.mediaPlanningStatus,
+      mediaPlanSummary: mediaPlannedCampaign.mediaPlanSummary ?? undefined,
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [mediaPlannedSummary] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: mediaPlannedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}/youtube-package`) && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: packagedCampaign,
+            summary: {
+              ...mediaPlannedSummary,
+              status: packagedCampaign.status,
+              updatedAt: packagedCampaign.updatedAt,
+              youtubePackageStatus: packagedCampaign.youtubePackageStatus,
+              reviewStatus: packagedCampaign.reviewStatus,
+              packagingSummary: packagedCampaign.packagingSummary ?? undefined,
+            },
+            message: `YouTube package ready. "${packagedCampaign.name}" now includes the review summary and render plan draft.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const reviewNav = container.querySelector('[data-testid="casahud-nav-review_package"]');
+    await act(async () => {
+      reviewNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const buildButton = container.querySelector('[data-testid="casahud-build-youtube-package-cta"]');
+    expect(buildButton?.textContent).toContain("Build YouTube Package");
+
+    await act(async () => {
+      buildButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-package-title"]')?.textContent).toContain(packagedCampaign.finalTitle || packagedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-thumbnail-concept"]')?.textContent).toContain("Thumbnail Concept");
+    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain("Final title:");
+    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain(packagedCampaign.youtubeDescription || "");
+    expect(container.querySelector('[data-testid="casahud-review-summary"]')?.textContent).toContain("Review Summary");
+    expect(container.querySelector('[data-testid="casahud-render-plan"]')?.textContent).toContain("Render Plan");
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Render, Publish, and Schedule");
   });
 });
