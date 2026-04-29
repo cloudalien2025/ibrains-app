@@ -15,6 +15,17 @@ import {
   type CasaHudMapSceneIdea,
   type CasaHudPoiBundle,
 } from "@/lib/studio/domara/campaign-location-intelligence";
+import {
+  buildCasaHudFutureScriptState,
+  createEmptyCasaHudScriptData,
+  parseCasaHudScriptData,
+  type CasaHudCampaignFutureScriptState,
+  type CasaHudPropertySegment,
+  type CasaHudScriptData,
+  type CasaHudScriptGenerationStatus,
+  type CasaHudScriptProviderStatus,
+  type CasaHudScriptSegment,
+} from "@/lib/studio/domara/campaign-script-narrative";
 import type {
   CasaHudOpportunityCampaignType,
   CasaHudOpportunityProviderStatus,
@@ -24,11 +35,12 @@ import type {
   CasaHudOpportunityTitleCandidate,
 } from "@/lib/studio/domara/opportunity-engine/types";
 
-export const CASAHUD_CAMPAIGN_METADATA_PHASE = "phase_6_location_intelligence" as const;
+export const CASAHUD_CAMPAIGN_METADATA_PHASE = "phase_7_script_narrative" as const;
+export const CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE = "phase_6_location_intelligence" as const;
 export const CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE = "phase_5_listing_validation" as const;
 export const CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE = "phase_4_listing_discovery" as const;
 export const CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE = "phase_3_campaign_persistence" as const;
-const CASAHUD_CAMPAIGN_METADATA_VERSION = 4 as const;
+const CASAHUD_CAMPAIGN_METADATA_VERSION = 5 as const;
 
 export type CasaHudCampaignStatus =
   | "opportunity_generated"
@@ -36,11 +48,13 @@ export type CasaHudCampaignStatus =
   | "ready_for_property_discovery"
   | "listing_candidates_discovered"
   | "listing_candidates_validated"
-  | "location_intelligence_completed";
+  | "location_intelligence_completed"
+  | "script_narrative_completed";
 
 export type CasaHudListingDiscoveryStatus = "not_started" | "listing_candidates_discovered";
 export type CasaHudListingValidationStatus = "not_started" | "listing_candidates_validated";
 export type CasaHudCampaignLocationIntelligenceStatus = CasaHudLocationIntelligenceStatus;
+export type CasaHudCampaignScriptGenerationStatus = CasaHudScriptGenerationStatus;
 
 export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample";
 
@@ -143,11 +157,19 @@ export type CasaHudCampaignScriptNarrativeGenerationNextPhase = {
   implemented: false;
 };
 
+export type CasaHudCampaignMediaPlanningNextPhase = {
+  key: "media_planning_asset_assembly";
+  label: "Media Planning and Asset Assembly";
+  detail: "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.";
+  implemented: false;
+};
+
 export type CasaHudCampaignNextPhase =
   | CasaHudCampaignPropertyDiscoveryNextPhase
   | CasaHudCampaignListingValidationNextPhase
   | CasaHudCampaignLocationIntelligenceNextPhase
-  | CasaHudCampaignScriptNarrativeGenerationNextPhase;
+  | CasaHudCampaignScriptNarrativeGenerationNextPhase
+  | CasaHudCampaignMediaPlanningNextPhase;
 
 export type CasaHudValidatedListingStatus = "approved" | "rejected" | "needs_attention";
 
@@ -196,7 +218,7 @@ export type CasaHudCampaignFutureState = {
   listingRankOrder: string[];
   locationIntelligence: CasaHudCampaignFutureLocationState | null;
   mapPoiBundle: CasaHudPoiBundle | null;
-  script: null;
+  script: CasaHudCampaignFutureScriptState | null;
   storyboard: null;
   mediaPlan: null;
   packaging: null;
@@ -245,6 +267,20 @@ export type CasaHudCampaign = {
   listingLocationInsights: CasaHudListingLocationInsight[];
   locationProviderStatuses: CasaHudLocationProviderStatus[];
   locationWarnings: string[];
+  scriptGenerationStatus: CasaHudCampaignScriptGenerationStatus;
+  scriptSummary: string | null;
+  openingHook: string | null;
+  estimatedDurationSeconds: number | null;
+  tone: string | null;
+  scriptSegments: CasaHudScriptSegment[];
+  propertySegments: CasaHudPropertySegment[];
+  locationLifestyleLines: string[];
+  transitions: string[];
+  closingCta: string | null;
+  toneAndPacingNotes: string[];
+  scriptWarnings: string[];
+  scriptProviderStatus: CasaHudScriptProviderStatus | null;
+  fullScriptText: string | null;
   nextPhase: CasaHudCampaignNextPhase;
   createdAt: string;
   updatedAt: string;
@@ -267,15 +303,18 @@ export type CasaHudCampaignSummary = {
   listingValidationStatus: CasaHudListingValidationStatus;
   titleSupportConfidence?: number;
   locationIntelligenceStatus: CasaHudCampaignLocationIntelligenceStatus;
+  scriptGenerationStatus: CasaHudCampaignScriptGenerationStatus;
   discoverySummary?: string;
   validationSummary?: string;
   locationSummary?: string;
+  scriptSummary?: string;
 };
 
 export type CasaHudCampaignMetadata = {
   schemaVersion: number;
   phase:
     | typeof CASAHUD_CAMPAIGN_METADATA_PHASE
+    | typeof CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE
     | typeof CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE
     | typeof CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE
     | typeof CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE;
@@ -360,7 +399,8 @@ function isCampaignStatus(value: unknown): value is CasaHudCampaignStatus {
     value === "ready_for_property_discovery" ||
     value === "listing_candidates_discovered" ||
     value === "listing_candidates_validated" ||
-    value === "location_intelligence_completed"
+    value === "location_intelligence_completed" ||
+    value === "script_narrative_completed"
   );
 }
 
@@ -542,6 +582,9 @@ function isCampaignNextPhase(value: unknown): value is CasaHudCampaignNextPhase 
         isNonEmptyString(value.detail)) ||
       (value.key === "script_narrative_generation" &&
         value.label === "Script and Narrative Generation" &&
+        isNonEmptyString(value.detail)) ||
+      (value.key === "media_planning_asset_assembly" &&
+        value.label === "Media Planning and Asset Assembly" &&
         isNonEmptyString(value.detail)))
   );
 }
@@ -680,12 +723,23 @@ export function createScriptNarrativeGenerationNextPhase(): CasaHudCampaignScrip
   };
 }
 
+export function createMediaPlanningAssetAssemblyNextPhase(): CasaHudCampaignMediaPlanningNextPhase {
+  return {
+    key: "media_planning_asset_assembly",
+    label: "Media Planning and Asset Assembly",
+    detail:
+      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+    implemented: false,
+  };
+}
+
 export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity: CasaHudOpportunityResult): CasaHudCampaign {
   const timestamp = nowIso();
   const nonce = Math.random().toString(36).slice(2, 10);
   const selectedViralTitle = opportunity.selectedTitle.title.trim();
   const marketRegionHint = opportunity.selectedTitle.regionHint?.trim() || opportunity.preferredMarket?.trim() || undefined;
   const emptyLocationData = createEmptyCasaHudLocationData();
+  const emptyScriptData = createEmptyCasaHudScriptData();
 
   return {
     id: stableCasaHudId("casahud-project", `${userId}:${selectedViralTitle}:${timestamp}:${nonce}`),
@@ -718,6 +772,7 @@ export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity:
     titleSupportConfidence: null,
     validationWarnings: [],
     ...emptyLocationData,
+    ...emptyScriptData,
     nextPhase: createPropertyDiscoveryNextPhase(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -737,6 +792,7 @@ export function applyCasaHudListingDiscovery(
 ): CasaHudCampaign {
   const updatedAt = discovery.discoverySummary.discoveredAt || nowIso();
   const emptyLocationData = createEmptyCasaHudLocationData();
+  const emptyScriptData = createEmptyCasaHudScriptData();
 
   return {
     ...campaign,
@@ -754,6 +810,7 @@ export function applyCasaHudListingDiscovery(
     titleSupportConfidence: null,
     validationWarnings: [],
     ...emptyLocationData,
+    ...emptyScriptData,
     nextPhase: createListingValidationNextPhase(),
     updatedAt,
     futureState: {
@@ -764,6 +821,7 @@ export function applyCasaHudListingDiscovery(
       listingRankOrder: [],
       locationIntelligence: null,
       mapPoiBundle: null,
+      script: null,
     },
   };
 }
@@ -781,6 +839,7 @@ export function applyCasaHudListingValidation(
 ): CasaHudCampaign {
   const updatedAt = validation.listingValidationSummary.completedAt || nowIso();
   const emptyLocationData = createEmptyCasaHudLocationData();
+  const emptyScriptData = createEmptyCasaHudScriptData();
 
   return {
     ...campaign,
@@ -793,6 +852,7 @@ export function applyCasaHudListingValidation(
     titleSupportConfidence: validation.titleSupportConfidence,
     validationWarnings: validation.validationWarnings,
     ...emptyLocationData,
+    ...emptyScriptData,
     nextPhase: createLocationIntelligenceNextPhase(),
     updatedAt,
     futureState: {
@@ -802,6 +862,7 @@ export function applyCasaHudListingValidation(
       listingRankOrder: validation.listingRankOrder,
       locationIntelligence: null,
       mapPoiBundle: null,
+      script: null,
     },
   };
 }
@@ -811,17 +872,39 @@ export function applyCasaHudLocationIntelligence(
   intelligence: CasaHudLocationData,
 ): CasaHudCampaign {
   const updatedAt = intelligence.locationIntelligenceSummary?.generatedAt || nowIso();
+  const emptyScriptData = createEmptyCasaHudScriptData();
 
   return {
     ...campaign,
     status: "location_intelligence_completed",
     ...intelligence,
+    ...emptyScriptData,
     nextPhase: createScriptNarrativeGenerationNextPhase(),
     updatedAt,
     futureState: {
       ...campaign.futureState,
       locationIntelligence: buildCasaHudFutureLocationState(intelligence),
       mapPoiBundle: intelligence.poiBundle,
+      script: null,
+    },
+  };
+}
+
+export function applyCasaHudScriptNarrative(
+  campaign: CasaHudCampaign,
+  script: CasaHudScriptData,
+): CasaHudCampaign {
+  const updatedAt = nowIso();
+
+  return {
+    ...campaign,
+    status: "script_narrative_completed",
+    ...script,
+    nextPhase: createMediaPlanningAssetAssemblyNextPhase(),
+    updatedAt,
+    futureState: {
+      ...campaign.futureState,
+      script: buildCasaHudFutureScriptState(script),
     },
   };
 }
@@ -842,9 +925,11 @@ export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCamp
     listingValidationStatus: campaign.listingValidationStatus,
     titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
     locationIntelligenceStatus: campaign.locationIntelligenceStatus,
+    scriptGenerationStatus: campaign.scriptGenerationStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
+    scriptSummary: campaign.scriptSummary ?? undefined,
   };
 }
 
@@ -861,6 +946,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
   if (!isRecord(value)) return null;
   if (
     value.phase !== CASAHUD_CAMPAIGN_METADATA_PHASE &&
+    value.phase !== CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE &&
     value.phase !== CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE &&
     value.phase !== CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE &&
     value.phase !== CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE
@@ -946,6 +1032,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
     ? campaign.validationWarnings
     : listingValidationSummary?.warnings ?? [];
   const locationData = parseCasaHudLocationData(campaign);
+  const scriptData = parseCasaHudScriptData(campaign);
 
   const normalizedCampaign: CasaHudCampaign = {
     id: campaign.id,
@@ -981,8 +1068,11 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
     titleSupportConfidence,
     validationWarnings,
     ...locationData,
+    ...scriptData,
     nextPhase:
-      locationData.locationIntelligenceStatus === "location_intelligence_completed"
+      scriptData.scriptGenerationStatus === "script_generated"
+        ? createMediaPlanningAssetAssemblyNextPhase()
+        : locationData.locationIntelligenceStatus === "location_intelligence_completed"
         ? createScriptNarrativeGenerationNextPhase()
         : listingValidationStatus === "listing_candidates_validated"
         ? createLocationIntelligenceNextPhase()
@@ -1001,7 +1091,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
       listingRankOrder,
       locationIntelligence: buildCasaHudFutureLocationState(locationData),
       mapPoiBundle: locationData.poiBundle,
-      script: null,
+      script: buildCasaHudFutureScriptState(scriptData),
       storyboard: null,
       mediaPlan: null,
       packaging: null,
@@ -1019,6 +1109,9 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
   }
   if (locationData.locationIntelligenceStatus === "location_intelligence_completed") {
     normalizedCampaign.status = "location_intelligence_completed";
+  }
+  if (scriptData.scriptGenerationStatus === "script_generated") {
+    normalizedCampaign.status = "script_narrative_completed";
   }
 
   return {
