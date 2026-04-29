@@ -121,7 +121,6 @@ type CasaHudWorkspaceNavItem = {
   label: string;
   eyebrow: string;
   description: string;
-  icon: string;
 };
 
 type CasaHudPhaseProgressItem = {
@@ -165,80 +164,69 @@ type CasaHudYouTubePackagePreview = {
 const sidebarSections: CasaHudWorkspaceNavItem[] = [
   {
     id: "campaigns",
-    label: "Dashboard",
+    label: "Campaigns",
     eyebrow: "Overview",
     description: "Current campaign, workflow stages, and recent work.",
-    icon: "DB",
   },
   {
     id: "viral_titles",
     label: "Viral Titles",
     eyebrow: "Strategy",
     description: "Winning title, candidates, and research brief.",
-    icon: "VT",
   },
   {
     id: "property_shortlist",
     label: "Property Shortlist",
     eyebrow: "Listings",
     description: "Approved properties, ranking, and title support.",
-    icon: "PS",
   },
   {
     id: "location_intelligence",
     label: "Location Intelligence",
     eyebrow: "Place Story",
     description: "POIs, local highlights, and map scene ideas.",
-    icon: "LI",
   },
   {
     id: "script_studio",
     label: "Script Studio",
     eyebrow: "Narrative",
     description: "Hook, segments, narration, transitions, and CTA.",
-    icon: "SS",
   },
   {
     id: "media_library",
     label: "Media Library",
     eyebrow: "Assets",
     description: "Listing images, map visuals, and coverage gaps.",
-    icon: "ML",
   },
   {
     id: "storyboard",
     label: "Storyboard",
     eyebrow: "Scenes",
     description: "Scene-by-scene creative plan for review.",
-    icon: "SB",
   },
   {
     id: "review_package",
     label: "Review Package",
     eyebrow: "Review",
     description: "Title, properties, script, storyboard, and metadata.",
-    icon: "RP",
   },
   {
     id: "publishing",
     label: "Publishing",
     eyebrow: "Ship",
     description: "Publish now, schedule, and channel status.",
-    icon: "PB",
   },
   {
     id: "connections",
     label: "Connections",
     eyebrow: "Providers",
     description: "Creation and publishing service readiness.",
-    icon: "CN",
   },
   {
     id: "settings",
     label: "Settings",
     eyebrow: "Advanced",
     description: "Preferences and advanced defaults.",
-    icon: "ST",
   },
 ];
 
@@ -641,46 +629,6 @@ function deriveVisualReadiness(campaign: CasaHudCampaign | null) {
   };
 }
 
-function derivePublishReadiness(campaign: CasaHudCampaign | null, youtubeCard: CasaHudConnectionCard | undefined) {
-  if (!campaign) {
-    return {
-      headline: "No campaign to publish",
-      detail: "Generate and save a campaign first.",
-      tone: "neutral" as const,
-    };
-  }
-
-  if (youtubeCard?.status !== "connected") {
-    return {
-      headline: "YouTube channel required",
-      detail: "Connect the publishing channel before CasaHUD can publish or schedule.",
-      tone: "gold" as const,
-    };
-  }
-
-  if (campaign.scriptGenerationStatus !== "script_generated") {
-    return {
-      headline: "Narrative package pending",
-      detail: "Publishing stays blocked until the script and review package are ready.",
-      tone: "gold" as const,
-    };
-  }
-
-  if (campaign.scriptWarnings.length > 0 || (campaign.titleSupportConfidence ?? 0) < 80) {
-    return {
-      headline: "Needs review before publish",
-      detail: "Warnings and moderate support should be resolved in review before going live.",
-      tone: "red" as const,
-    };
-  }
-
-  return {
-    headline: "Ready for review handoff",
-    detail: "The campaign can move into packaging, approval, and publish scheduling.",
-    tone: "sage" as const,
-  };
-}
-
 function buildAgentRows(params: {
   campaign: CasaHudCampaign | null;
   opportunityOutput: CasaHudOpportunityResult | null;
@@ -1051,6 +999,21 @@ function ReviewStatusCard({
   );
 }
 
+function SidebarGlyph({ active }: { active: boolean }) {
+  return (
+    <span
+      className={cx(
+        "relative inline-flex h-5 w-5 shrink-0 items-center justify-center",
+        active ? "text-[#7A5230]" : "text-white/65",
+      )}
+      aria-hidden="true"
+    >
+      <span className={cx("absolute h-3.5 w-3.5 rounded-[5px] border", active ? "border-[#D4B180] bg-[#F7ECD9]" : "border-white/16 bg-white/8")} />
+      <span className={cx("absolute h-1.5 w-1.5 rounded-full", active ? "bg-[#7A5230]" : "bg-white/55")} />
+    </span>
+  );
+}
+
 function StatusPill({
   children,
   tone = "neutral",
@@ -1341,7 +1304,6 @@ export default function StudioCasaHudCommandCenter() {
     () => connectionCards.find((card) => card.id === activeConnectionId) || null,
     [activeConnectionId, connectionCards],
   );
-  const latestSavedCampaign = recentCampaigns[0] || null;
   const campaignCards = recentCampaigns.slice(0, 4);
   const hasRecentCampaigns = campaignCards.length > 0;
   const requiredConnections = connectionCards.filter((card) => card.required);
@@ -1350,7 +1312,6 @@ export default function StudioCasaHudCommandCenter() {
   ).length;
   const attentionConnectionCount = connectionCards.filter((card) => card.status === "needs_attention").length;
   const youtubeConnectionCard = connectionCards.find((card) => card.id === "youtube");
-  const selectedHeroTitle = opportunityOutput?.selectedTitle.title || activeCampaign?.name || latestSavedCampaign?.name || null;
   const activeListings = useMemo(() => {
     if (!activeCampaign) return [];
     if (activeCampaign.approvedListings.length > 0) return activeCampaign.approvedListings;
@@ -1369,10 +1330,6 @@ export default function StudioCasaHudCommandCenter() {
   const readinessScore = useMemo(() => deriveReadinessScore(activeCampaign), [activeCampaign]);
   const truthfulnessStatus = useMemo(() => deriveTruthfulnessStatus(activeCampaign), [activeCampaign]);
   const visualReadiness = useMemo(() => deriveVisualReadiness(activeCampaign), [activeCampaign]);
-  const publishReadiness = useMemo(
-    () => derivePublishReadiness(activeCampaign, youtubeConnectionCard),
-    [activeCampaign, youtubeConnectionCard],
-  );
   const commandProgress = useMemo(
     () => buildPhaseProgress(activeCampaign, youtubeConnectionCard?.status === "connected"),
     [activeCampaign, youtubeConnectionCard],
@@ -1839,55 +1796,6 @@ export default function StudioCasaHudCommandCenter() {
     }
   }
 
-  function runPrimaryAction() {
-    if (!activeCampaign) {
-      if (opportunityOutput) {
-        void onCreateCampaign();
-        return;
-      }
-      void onGenerateViralVideo();
-      return;
-    }
-
-    if (activeCampaign.scriptGenerationStatus === "script_generated") {
-      setActiveSection("review_package");
-      return;
-    }
-
-    if (activeCampaign.nextPhase.key === "property_discovery") {
-      void onDiscoverListings();
-      return;
-    }
-    if (activeCampaign.nextPhase.key === "listing_validation") {
-      void onValidateListings();
-      return;
-    }
-    if (activeCampaign.nextPhase.key === "location_intelligence") {
-      void onAddLocationIntelligence();
-      return;
-    }
-    if (activeCampaign.nextPhase.key === "script_narrative_generation") {
-      void onGenerateScript();
-      return;
-    }
-    setActiveSection("review_package");
-  }
-
-  const researchModeSummary =
-    connectionStatus === "loading"
-      ? "Checking whether live YouTube competitive research is available."
-      : opportunityOutput
-        ? opportunityOutput.providerStatus.detail
-        : activeCampaign
-          ? activeCampaign.generationSource.detail
-          : connectionStatus === "error"
-            ? "Live research status is unavailable. CasaHUD can still generate opportunity-backed title concepts."
-            : youtubeConnectionCard?.status === "connected"
-              ? "Live YouTube competitive research is ready for title discovery."
-              : youtubeConnectionCard?.status === "needs_attention"
-                ? "YouTube needs attention. CasaHUD can fall back to internal opportunity patterns."
-                : "Using CasaHUD opportunity patterns until YouTube connection is enabled.";
-
   const connectionSummary =
     connectionStatus === "loading"
       ? "Checking connection readiness for CasaHUD."
@@ -1897,41 +1805,41 @@ export default function StudioCasaHudCommandCenter() {
           ? `${attentionConnectionCount} connection${attentionConnectionCount === 1 ? "" : "s"} needs attention.`
           : `${connectedRequiredConnections} of ${requiredConnections.length} required services are ready.`;
 
-  const timelineStatus =
-    generationStatus === "loading"
-      ? "opportunity discovery"
-      : campaignDiscoveringId
-        ? "property discovery"
-        : campaignValidatingId
-          ? "listing validation"
-          : campaignLocatingId
-            ? "location intelligence"
-            : campaignScriptingId
-              ? "script generation"
-              : opportunityOutput
-                ? "title review"
-                : activeCampaign
-                  ? activeCampaign.scriptGenerationStatus === "script_generated"
-                    ? "review package"
-                    : activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
-                      ? "script handoff"
-                      : activeCampaign.listingValidationStatus === "listing_candidates_validated"
-                        ? "location handoff"
-                        : activeCampaign.listingDiscoveryStatus === "listing_candidates_discovered"
-                          ? "validation handoff"
-                          : "campaign ready"
-                  : "ready";
-
-  const activeSectionItem = sidebarSections.find((section) => section.id === activeSection) || sidebarSections[0];
-
   let sectionContent: ReactNode = null;
 
   if (activeSection === "campaigns") {
     sectionContent = (
       <WorkspaceCard
-        eyebrow="Dashboard"
-        title={activeCampaign ? "Current campaign overview" : "Premium CasaHUD workspace"}
-        description="Keep the default view concise: one campaign summary, one workflow snapshot, and one recent-campaigns area."
+        eyebrow="Campaigns"
+        title="Campaigns"
+        description="Create, resume, and review CasaHUD video campaigns."
+        actions={
+          <>
+            <button
+              type="button"
+              className="rounded-2xl border border-[#172033] bg-[#172033] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void onGenerateViralVideo()}
+              disabled={generationStatus === "loading"}
+              data-testid="casahud-generate-cta"
+            >
+              {generationStatus === "loading" ? "Generating Viral Video Title..." : "Generate Viral Video Title"}
+            </button>
+            {hasRecentCampaigns ? (
+              <button
+                type="button"
+                className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
+                onClick={() => {
+                  const campaign = campaignCards[0];
+                  if (campaign) {
+                    void onResumeCampaign(campaign.id);
+                  }
+                }}
+              >
+                Recent Campaigns
+              </button>
+            ) : null}
+          </>
+        }
         testId="casahud-workspace"
       >
         {campaignNotice ? (
@@ -2051,16 +1959,7 @@ export default function StudioCasaHudCommandCenter() {
             ) : (
               <EmptyState
                 title="No active campaign yet"
-                description="Generate a viral property title to start a clean Generate → Review → Publish workflow."
-                action={
-                  <button
-                    type="button"
-                    className="rounded-2xl border border-[#172033] bg-[#172033] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.2)] transition hover:bg-[#26324B]"
-                    onClick={() => void onGenerateViralVideo()}
-                  >
-                    Generate Viral Video Title
-                  </button>
-                }
+                description="Generate your first viral property video title to start a CasaHUD campaign."
               />
             )}
           </section>
@@ -3356,17 +3255,9 @@ export default function StudioCasaHudCommandCenter() {
     sectionContent = (
       <WorkspaceCard
         eyebrow="Connections"
-        title="Provider readiness"
-        description="Connection cards stay user-facing and never expose raw environment-variable language or secrets."
-        actions={
-          <button
-            type="button"
-            className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B]"
-            onClick={() => openSetup()}
-          >
-            Manage Connections
-          </button>
-        }
+        title="Connections"
+        description="Manage the services CasaHUD uses to research, build, package, and publish videos."
+        actions={<StatusPill tone={attentionConnectionCount > 0 ? "gold" : "sage"}>{attentionConnectionCount > 0 ? "Needs attention" : "Ready"}</StatusPill>}
         testId="casahud-connections-panel"
       >
         <div className="grid gap-5">
@@ -3489,11 +3380,9 @@ export default function StudioCasaHudCommandCenter() {
         <div className="mt-6 lg:grid lg:grid-cols-[236px_minmax(0,1fr)] lg:gap-6">
           <aside className="lg:sticky lg:top-6 lg:self-start">
             <div className="rounded-[1.8rem] border border-[#1A2233] bg-[#111725] p-4 text-white shadow-[0_28px_70px_rgba(17,23,37,0.28)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#CBA16E]">CasaHUD Studio</p>
-                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Generate → Review → Publish</h2>
-                </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#CBA16E]">CasaHUD Studio</p>
+                <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Generate → Review → Publish</h2>
               </div>
 
               <div
@@ -3514,188 +3403,27 @@ export default function StudioCasaHudCommandCenter() {
                     data-testid={`casahud-nav-${section.id}`}
                     aria-current={activeSection === section.id ? "page" : undefined}
                   >
-                    <span
-                      className={cx(
-                        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.08em]",
-                        activeSection === section.id ? "border-[#E7D0AE] bg-[#F7ECD9] text-[#7A5230]" : "border-white/12 bg-white/10 text-white/70",
-                      )}
-                    >
-                      {section.icon}
-                    </span>
+                    <SidebarGlyph active={activeSection === section.id} />
                     <span className="text-sm font-medium">{section.label}</span>
                   </button>
                 ))}
               </div>
-
-              <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-white/5 p-4" data-testid="casahud-connections-entry">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#CBA16E]">Connections</p>
-                    <p className="mt-2 text-sm text-white/74">{connectionSummary}</p>
-                  </div>
-                  <button
-                    type="button"
-                    className="rounded-full border border-white/14 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/18"
-                    onClick={() => {
-                      setActiveSection("connections");
-                      openSetup();
-                    }}
-                  >
-                    Open
-                  </button>
-                </div>
-              </div>
             </div>
           </aside>
 
-          <div className="mt-5 min-w-0 space-y-6 lg:mt-0">
-            <section
-              className="relative overflow-hidden rounded-[2rem] border border-[#E6D9C8] bg-[#FBF8F1]/95 p-6 shadow-[0_24px_60px_rgba(70,55,35,0.12)] md:p-8"
-              data-testid="casahud-entry-hero"
-            >
-              <div className="absolute right-[-72px] top-[-88px] h-60 w-60 rounded-full bg-[#D59D63]/18 blur-3xl" />
-              <div className="absolute bottom-[-130px] left-[-96px] h-72 w-72 rounded-full bg-[#DCCEB9]/40 blur-3xl" />
-
-              <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8A5A34]">CasaHUD Studio</p>
-                  <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-[1.02] tracking-[-0.05em] text-[#172033] md:text-6xl">
-                    Generate your next viral property video
-                  </h1>
-                  <p className="mt-4 max-w-2xl text-base leading-7 text-[#556273]">
-                    AI research. Market insight. Story-driven content that sells.
-                  </p>
-
-                  <div className="mt-6 flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.24)] transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
-                      onClick={() => void onGenerateViralVideo()}
-                      disabled={generationStatus === "loading"}
-                      data-testid="casahud-generate-cta"
-                    >
-                      {generationStatus === "loading" ? "Generating Viral Video Title..." : "Generate Viral Video Title"}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D6C7B3] bg-white px-5 py-4 text-sm font-semibold text-[#172033] transition hover:bg-[#FFFEFB]"
-                      onClick={() => {
-                        setActiveSection("connections");
-                        openSetup();
-                      }}
-                      data-testid="casahud-connections-cta"
-                    >
-                      Connections
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-transparent px-2 py-3 text-sm font-semibold text-[#556273] transition hover:text-[#172033]"
-                      onClick={() => setActiveSection("campaigns")}
-                    >
-                      Recent Campaigns
-                    </button>
-                    {activeCampaign ? (
-                      <>
-                        <button
-                          type="button"
-                          className="rounded-2xl border border-[#D6C7B3] bg-[#F6F0E5] px-5 py-4 text-sm font-semibold text-[#172033]"
-                          onClick={() => runPrimaryAction()}
-                        >
-                          Continue Campaign
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-2xl border border-[#D6C7B3] bg-[#FDF8EE] px-5 py-4 text-sm font-semibold text-[#172033]"
-                          onClick={() => setActiveSection("review_package")}
-                        >
-                          Review Package
-                        </button>
-                      </>
-                    ) : null}
-                  </div>
-
-                  <div
-                    className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-[#E3D6C1] bg-white/72 px-4 py-2 text-sm text-[#526070]"
-                    data-testid="casahud-research-mode"
-                  >
-                    <span className="font-semibold text-[#172033]">
-                      {opportunityOutput?.providerStatus.label || activeCampaign?.generationSource.label || "Research mode"}
-                    </span>
-                    <span>{researchModeSummary}</span>
-                  </div>
-
-                  {generationError ? (
-                    <div
-                      className="mt-5 rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]"
-                      data-testid="casahud-generation-error"
-                    >
-                      {generationError}
-                    </div>
-                  ) : null}
-                </div>
-
-                <aside className="overflow-hidden rounded-[1.6rem] border border-[#E3D5C2] bg-white/82 p-4 shadow-[0_18px_42px_rgba(70,55,35,0.1)]">
-                  <div className="relative h-44 overflow-hidden rounded-[1.2rem] bg-[#EFE5D6]">
-                    <PropertyImage
-                      src={activeListings[0] ? featuredImage(activeListings[0]) : null}
-                      alt={selectedHeroTitle ? `${selectedHeroTitle} campaign preview` : "CasaHUD campaign preview"}
-                      label={selectedHeroTitle || "CasaHUD preview"}
-                      className="h-44 w-full"
-                    />
-                    <div className="absolute left-3 top-3">
-                      <StatusPill tone="gold">{opportunityOutput ? "Winning concept" : activeCampaign ? "Current campaign" : "CasaHUD"}</StatusPill>
-                    </div>
-                  </div>
-                  <div className="mt-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current summary</p>
-                    <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#172033]">
-                      {selectedHeroTitle || "One click creates the next review-ready package."}
-                    </h2>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {activeCampaign ? <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill> : null}
-                      {activeCampaign ? <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill> : null}
-                      {opportunityOutput ? <StatusPill tone="blue">{Math.round(opportunityOutput.selectedTitle.confidence * 100)}% confidence</StatusPill> : null}
-                    </div>
-                    <p className="mt-3 text-sm leading-6 text-[#526070]">
-                      {opportunityOutput?.selectedTitle.reasoning ||
-                        activeCampaign?.scriptSummary ||
-                        activeCampaign?.researchBrief.summary ||
-                        latestSavedCampaign?.researchSummary ||
-                        "CasaHUD keeps the product simple: generate the concept, review the package, then publish when it is ready."}
-                    </p>
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                      <div className="rounded-2xl border border-[#E7DCCB] bg-[#FFFCF6] p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Properties</p>
-                        <p className="mt-1 font-semibold text-[#172033]">{formatCountLabel(activeListings.length, "shortlisted property", "shortlisted properties")}</p>
-                      </div>
-                      <div className="rounded-2xl border border-[#E7DCCB] bg-[#FFFCF6] p-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Updated</p>
-                        <p className="mt-1 font-semibold text-[#172033]">
-                          {activeCampaign ? formatCampaignTime(activeCampaign.updatedAt) : latestSavedCampaign ? formatCampaignTime(latestSavedCampaign.updatedAt || latestSavedCampaign.createdAt) : "Ready"}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </aside>
-              </div>
-            </section>
-
+          <div className="mt-5 min-w-0 lg:mt-0">
             <section className="space-y-4" data-testid="casahud-workspace-shell">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current workspace</p>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[#172033]">{activeSectionItem.label}</h2>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <StatusPill tone="neutral">{timelineStatus}</StatusPill>
-                  {activeCampaign ? <StatusPill tone={truthfulnessStatus.tone}>{truthfulnessStatus.headline}</StatusPill> : null}
-                  {activeCampaign ? <StatusPill tone={publishReadiness.tone}>{publishReadiness.headline}</StatusPill> : null}
-                </div>
-              </div>
-
               {generationStatus === "loading" ? (
                 <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
                   {renderProgressList(wizardSteps, progressIndex, generationStatus)}
+                </div>
+              ) : null}
+              {generationError ? (
+                <div
+                  className="rounded-2xl border border-[#D8B26A] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]"
+                  data-testid="casahud-generation-error"
+                >
+                  {generationError}
                 </div>
               ) : null}
               {campaignDiscoveringId ? (
