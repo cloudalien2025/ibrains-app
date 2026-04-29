@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import { runCasaHudScriptNarrative } from "@/lib/studio/domara/script-narrative-engine";
 
 function buildLocationReadyCampaign(
@@ -298,6 +299,7 @@ function buildLocationReadyCampaign(
     scriptWarnings: [],
     scriptProviderStatus: null,
     fullScriptText: null,
+    ...createEmptyCasaHudMediaPlanData(),
     nextPhase: {
       key: "script_narrative_generation",
       label: "Script and Narrative Generation",

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import { runCasaHudLocationIntelligence } from "@/lib/studio/domara/location-intelligence-engine";
 
 function baseValidatedCampaign(): CasaHudCampaign {
@@ -152,6 +153,7 @@ function baseValidatedCampaign(): CasaHudCampaign {
     scriptWarnings: [],
     scriptProviderStatus: null,
     fullScriptText: null,
+    ...createEmptyCasaHudMediaPlanData(),
     nextPhase: {
       key: "location_intelligence",
       label: "Location Intelligence",

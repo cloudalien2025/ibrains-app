@@ -111,6 +111,14 @@ type CasaHudScriptNarrativePayload = {
   error?: { message?: string };
 };
 
+type CasaHudMediaPlanPayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -282,6 +290,15 @@ const scriptSteps: CasaHudProgressStep[] = [
   { id: "review_ready", label: "Preparing review-ready script" },
 ];
 
+const mediaSteps: CasaHudProgressStep[] = [
+  { id: "read_scenes", label: "Reading the script scenes" },
+  { id: "organize_visuals", label: "Organizing listing visuals" },
+  { id: "match_scenes", label: "Matching images to scenes" },
+  { id: "map_location_assets", label: "Adding map and location visuals" },
+  { id: "thumbnail_candidates", label: "Preparing thumbnail candidates" },
+  { id: "coverage_check", label: "Checking visual coverage" },
+];
+
 const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
   openai: "OpenAI",
   elevenlabs: "ElevenLabs",
@@ -423,10 +440,12 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
     locationIntelligenceStatus: campaign.locationIntelligenceStatus,
     scriptGenerationStatus: campaign.scriptGenerationStatus,
+    mediaPlanningStatus: campaign.mediaPlanningStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
     scriptSummary: campaign.scriptSummary ?? undefined,
+    mediaPlanSummary: campaign.mediaPlanSummary ?? undefined,
   };
 }
 
@@ -491,11 +510,19 @@ function getCampaignPrimaryAction(campaign: CasaHudCampaign | null): CasaHudPrim
     };
   }
 
-  if (campaign.scriptGenerationStatus === "script_generated") {
+  if (campaign.mediaPlanningStatus === "media_plan_built") {
     return {
       label: "Review Package",
-      helper: "Review the completed narrative package before media planning and publish steps.",
+      helper: "Review the completed visual plan before package, review, and render planning steps.",
       section: "review_package",
+    };
+  }
+
+  if (campaign.scriptGenerationStatus === "script_generated") {
+    return {
+      label: "Build Media Plan",
+      helper: "Assemble the visual plan from listing imagery, map cues, and the scripted scenes.",
+      section: "media_library",
     };
   }
 
@@ -525,7 +552,7 @@ function buildPhaseProgress(campaign: CasaHudCampaign | null, youtubeConnected: 
   if (campaign.listingValidationStatus === "listing_candidates_validated") completedThrough = 4;
   if (campaign.locationIntelligenceStatus === "location_intelligence_completed") completedThrough = 5;
   if (campaign.scriptGenerationStatus === "script_generated") completedThrough = 6;
-  if (campaign.futureState.mediaPlan || campaign.futureState.storyboard) completedThrough = 7;
+  if (campaign.mediaPlanningStatus === "media_plan_built" || campaign.futureState.mediaPlan || campaign.futureState.storyboard) completedThrough = 7;
   if (campaign.futureState.packaging) completedThrough = 8;
   if (campaign.futureState.renderStatus) completedThrough = 9;
   if (campaign.futureState.reviewStatus) completedThrough = 10;
@@ -608,6 +635,13 @@ function deriveVisualReadiness(campaign: CasaHudCampaign | null) {
 
   const listings = campaign.approvedListings.length > 0 ? campaign.approvedListings : campaign.listingCandidates;
   const photoCount = listings.reduce((sum, listing) => sum + listing.imageCount, 0);
+  if (campaign.mediaPlanningStatus === "media_plan_built") {
+    return {
+      headline: "Media plan is assembled",
+      detail: campaign.mediaPlanSummary || "Scene-to-asset mapping, shot list, and thumbnail inputs are ready for review.",
+      tone: "sage" as const,
+    };
+  }
   if (campaign.scriptGenerationStatus === "script_generated" && photoCount >= 8 && campaign.mapSceneIdeas.length > 0) {
     return {
       headline: "Visual coverage is promising",
@@ -637,6 +671,7 @@ function buildAgentRows(params: {
   campaignValidatingId: string | null;
   campaignLocatingId: string | null;
   campaignScriptingId: string | null;
+  campaignMediaPlanningId: string | null;
   youtubeCard?: CasaHudConnectionCard;
 }): CasaHudAgentActivityRow[] {
   const {
@@ -647,6 +682,7 @@ function buildAgentRows(params: {
     campaignValidatingId,
     campaignLocatingId,
     campaignScriptingId,
+    campaignMediaPlanningId,
     youtubeCard,
   } = params;
 
@@ -747,14 +783,18 @@ function buildAgentRows(params: {
     {
       name: "Media Agent",
       state:
-        campaign?.futureState.mediaPlan || campaign?.futureState.storyboard
+        campaignMediaPlanningId
+          ? "running"
+          : campaign?.mediaPlanningStatus === "media_plan_built" || campaign?.futureState.mediaPlan || campaign?.futureState.storyboard
           ? "complete"
           : campaign?.scriptGenerationStatus === "script_generated"
             ? "pending"
             : "blocked",
       detail:
-        campaign?.futureState.mediaPlan || campaign?.futureState.storyboard
-          ? "Scene visuals and media planning assets are available."
+        campaignMediaPlanningId
+          ? "Reading scenes, organizing visuals, and matching media coverage to the scripted package."
+          : campaign?.mediaPlanningStatus === "media_plan_built" || campaign?.futureState.mediaPlan || campaign?.futureState.storyboard
+          ? "Scene visuals, shot list, and media planning assets are available."
           : campaign?.scriptGenerationStatus === "script_generated"
             ? "Waiting on Phase 8 media planning and asset assembly."
             : "Script completion unlocks the media phase.",
@@ -764,14 +804,14 @@ function buildAgentRows(params: {
       state:
         campaign?.futureState.packaging
           ? "complete"
-          : campaign?.scriptGenerationStatus === "script_generated"
+          : campaign?.mediaPlanningStatus === "media_plan_built"
             ? "pending"
             : "blocked",
       detail:
         campaign?.futureState.packaging
           ? "The YouTube package is assembled for review."
-          : campaign?.scriptGenerationStatus === "script_generated"
-            ? "The command center can preview the package while backend packaging stays behind later seams."
+          : campaign?.mediaPlanningStatus === "media_plan_built"
+            ? "The command center is ready to hand the project forward into package, review, and render planning."
             : "Packaging waits on the narrative package.",
     },
     {
@@ -828,6 +868,20 @@ function buildAgentRows(params: {
 
 function buildSceneOutline(campaign: CasaHudCampaign | null): CasaHudSceneOutlineRow[] {
   if (!campaign) return [];
+
+  if (campaign.sceneAssetMapping.length > 0) {
+    return campaign.sceneAssetMapping.map((scene, index) => ({
+      id: scene.sceneId,
+      title: scene.sceneTitle,
+      narration: scene.narrationExcerpt,
+      durationSeconds: campaign.scriptSegments.find((segment) => segment.id === scene.segmentId)?.durationSeconds || 16,
+      associatedListingId:
+        campaign.scriptSegments.find((segment) => segment.id === scene.segmentId)?.associatedListingId ||
+        campaign.propertySegments[index]?.listingId,
+      visualSummary: scene.visualPurpose,
+      status: scene.coverageStatus === "strong" ? "complete" : scene.coverageStatus === "partial" ? "needs_attention" : "blocked",
+    }));
+  }
 
   if (campaign.scriptSegments.length > 0) {
     return campaign.scriptSegments.map((segment) => ({
@@ -1283,6 +1337,8 @@ export default function StudioCasaHudCommandCenter() {
   const [locationProgressIndex, setLocationProgressIndex] = useState(0);
   const [campaignScriptingId, setCampaignScriptingId] = useState<string | null>(null);
   const [scriptProgressIndex, setScriptProgressIndex] = useState(0);
+  const [campaignMediaPlanningId, setCampaignMediaPlanningId] = useState<string | null>(null);
+  const [mediaProgressIndex, setMediaProgressIndex] = useState(0);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -1346,6 +1402,7 @@ export default function StudioCasaHudCommandCenter() {
         campaignValidatingId,
         campaignLocatingId,
         campaignScriptingId,
+        campaignMediaPlanningId,
         youtubeCard: youtubeConnectionCard,
       }),
     [
@@ -1356,6 +1413,7 @@ export default function StudioCasaHudCommandCenter() {
       campaignValidatingId,
       campaignLocatingId,
       campaignScriptingId,
+      campaignMediaPlanningId,
       youtubeConnectionCard,
     ],
   );
@@ -1450,6 +1508,14 @@ export default function StudioCasaHudCommandCenter() {
     }, 620);
     return () => window.clearTimeout(timeoutId);
   }, [campaignScriptingId, scriptProgressIndex]);
+
+  useEffect(() => {
+    if (!campaignMediaPlanningId || mediaProgressIndex >= mediaSteps.length - 1) return;
+    const timeoutId = window.setTimeout(() => {
+      setMediaProgressIndex((current) => Math.min(current + 1, mediaSteps.length - 1));
+    }, 620);
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignMediaPlanningId, mediaProgressIndex]);
 
   useEffect(() => {
     if (!selectedListingId || !activeCampaign) return;
@@ -1782,6 +1848,38 @@ export default function StudioCasaHudCommandCenter() {
     }
   }
 
+  async function onBuildMediaPlan() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignMediaPlanningId(activeCampaign.id);
+      setMediaProgressIndex(0);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setActiveSection("media_library");
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/media-plan`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudMediaPlanPayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not assemble the visual plan right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(payload.message || `Media plan ready. "${payload.campaign.name}" now includes the visual production package.`);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setMediaProgressIndex(mediaSteps.length - 1);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not assemble the visual plan right now.");
+    } finally {
+      setCampaignMediaPlanningId(null);
+    }
+  }
+
   async function onCopyScript() {
     if (!activeCampaign?.fullScriptText || typeof navigator === "undefined" || !navigator.clipboard) {
       setScriptCopyNotice("Copy Script is unavailable in this browser session.");
@@ -1937,14 +2035,24 @@ export default function StudioCasaHudCommandCenter() {
                     >
                       {campaignScriptingId === activeCampaign.id ? "Generating Script..." : "Generate Script"}
                     </button>
+                  ) : activeCampaign.nextPhase.key === "media_planning_asset_assembly" ? (
+                    <button
+                      type="button"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      onClick={() => void onBuildMediaPlan()}
+                      disabled={campaignMediaPlanningId === activeCampaign.id}
+                      data-testid="casahud-build-media-plan-cta"
+                    >
+                      {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+                    </button>
                   ) : (
                     <button
                       type="button"
                       className="rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
-                      disabled
+                      onClick={() => setActiveSection("review_package")}
                       data-testid="casahud-media-planning-placeholder"
                     >
-                      Media Planning and Asset Assembly
+                      {activeCampaign.nextPhase.label}
                     </button>
                   )}
                   <button
@@ -2617,6 +2725,16 @@ export default function StudioCasaHudCommandCenter() {
               >
                 {campaignScriptingId === activeCampaign.id ? "Generating Script..." : "Generate Script"}
               </button>
+            ) : activeCampaign?.nextPhase.key === "media_planning_asset_assembly" ? (
+              <button
+                type="button"
+                className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void onBuildMediaPlan()}
+                disabled={campaignMediaPlanningId === activeCampaign.id}
+                data-testid="casahud-build-media-plan-cta"
+              >
+                {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+              </button>
             ) : null}
             <button
               type="button"
@@ -2754,108 +2872,214 @@ export default function StudioCasaHudCommandCenter() {
   }
 
   if (activeSection === "media_library") {
-    const mediaListings = activeCampaign?.approvedListings.length ? activeCampaign.approvedListings : activeCampaign?.listingCandidates || [];
-    const imageAssignments = sceneOutline.map((scene) => {
-      const sceneListing = mediaListings.find((listing) => listing.id === scene.associatedListingId);
-      return {
-        scene,
-        listing: sceneListing,
-      };
-    });
-
     sectionContent = (
       <WorkspaceCard
         eyebrow="Media Library"
-        title="Image coverage and scene assets"
-        description="CasaHUD keeps the media view premium and honest about what is already covered versus what Phase 8 still needs to assemble."
+        title="Media Planning and Asset Assembly"
+        description="The visual plan maps listing imagery, location context, and thumbnail inputs onto the approved narrative package."
+        actions={
+          activeCampaign?.scriptGenerationStatus === "script_generated" && activeCampaign.mediaPlanningStatus !== "media_plan_built" ? (
+            <button
+              type="button"
+              className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => void onBuildMediaPlan()}
+              disabled={campaignMediaPlanningId === activeCampaign.id}
+              data-testid="casahud-build-media-plan-cta"
+            >
+              {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+            </button>
+          ) : null
+        }
       >
-        {activeCampaign ? (
-          <div className="grid gap-5 xl:grid-cols-[1.06fr_0.94fr]">
+        {campaignMediaPlanningId === activeCampaign?.id ? renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress") : null}
+
+        {activeCampaign ? activeCampaign.mediaPlanningStatus === "media_plan_built" ? (
+          <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
             <section className="grid gap-4">
-              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Listing Images</p>
-                {mediaListings.length > 0 ? (
-                  <div className="mt-4 grid gap-4 md:grid-cols-2">
-                    {mediaListings.map((listing) => (
-                      <div key={listing.id} className="overflow-hidden rounded-[1.4rem] border border-[#E6D8C7] bg-[#FFF9EF]">
-                        <div className="h-40">
-                          <PropertyImage
-                            src={featuredImage(listing)}
-                            alt={`${listing.title} listing image`}
-                            label={listing.title}
-                            className="h-40 w-full"
-                          />
-                        </div>
-                        <div className="p-4">
-                          <p className="text-sm font-semibold text-[#172033]">{listing.title}</p>
-                          <p className="mt-2 text-sm text-[#526070]">{formatCountLabel(listing.imageCount, "photo")}</p>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm leading-6 text-[#526070]">No listing imagery is available yet.</p>
-                )}
+              <div className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm" data-testid="casahud-media-plan-summary">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Media Plan Summary</p>
+                <p className="mt-3 text-sm leading-7 text-[#172033]">{activeCampaign.mediaPlanSummary}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <StatusPill tone="blue">{formatCountLabel(activeCampaign.visualAssets.length, "visual asset")}</StatusPill>
+                  <StatusPill tone="sage">{formatCountLabel(activeCampaign.sceneAssetMapping.length, "scene mapping")}</StatusPill>
+                  <StatusPill tone="gold">{formatCountLabel(activeCampaign.thumbnailCandidateInputs.length, "thumbnail input")}</StatusPill>
+                </div>
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#41608E]">
+                  Next: {activeCampaign.nextPhase.label}
+                </p>
               </div>
 
-              <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Scene-to-image assignments</p>
+              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm" data-testid="casahud-scene-asset-mapping">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Scene-to-Asset Mapping</p>
                 <div className="mt-4 grid gap-3">
-                  {imageAssignments.length > 0 ? (
-                    imageAssignments.map(({ scene, listing }) => (
-                      <div key={scene.id} className="rounded-2xl border border-[#D8E2D9] bg-white/90 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <p className="text-sm font-semibold text-[#172033]">{scene.title}</p>
-                          <StatusPill tone={operationalTone(scene.status)}>{formatCampaignStatus(scene.status)}</StatusPill>
-                        </div>
-                        <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {listing ? `Use ${listing.title} as the lead visual for this scene.` : "Waiting on later media planning to attach a dedicated visual source."}
-                        </p>
+                  {activeCampaign.sceneAssetMapping.map((scene) => (
+                    <div key={scene.sceneId} className="rounded-2xl border border-[#E6D8C7] bg-[#FFF9EF] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#172033]">{scene.sceneTitle}</p>
+                        <StatusPill tone={scene.coverageStatus === "strong" ? "sage" : scene.coverageStatus === "partial" ? "gold" : "red"}>
+                          {formatCampaignStatus(scene.coverageStatus)}
+                        </StatusPill>
                       </div>
-                    ))
-                  ) : (
-                    <p className="text-sm leading-6 text-[#526070]">Scene assignments will appear once the script or shortlist is available.</p>
-                  )}
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{scene.visualPurpose}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[#7A897E]">
+                        {scene.assignedAssetIds.length} assigned asset{scene.assignedAssetIds.length === 1 ? "" : "s"} · Recommended {formatCampaignStatus(scene.recommendedAssetType)}
+                      </p>
+                      {scene.warnings.length > 0 ? (
+                        <div className="mt-3 grid gap-2">
+                          {scene.warnings.slice(0, 2).map((warning) => (
+                            <p key={warning} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
+                              {warning}
+                            </p>
+                          ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm" data-testid="casahud-shot-list">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Shot List</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.shotList.map((shot) => (
+                    <div key={shot.id} className="rounded-2xl border border-[#D8E2D9] bg-white/90 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#172033]">{shot.order}. {shot.title}</p>
+                        <StatusPill tone="neutral">{formatCampaignStatus(shot.recommendedVisualType)}</StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{shot.description}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[#7A897E]">
+                        {shot.assetIds.length} linked asset{shot.assetIds.length === 1 ? "" : "s"}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm" data-testid="casahud-listing-image-coverage">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Listing Image Coverage</p>
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  {activeCampaign.listingImageCoverage.map((coverage) => (
+                    <div key={coverage.listingId} className="rounded-2xl border border-[#E6D8C7] bg-[#FFF9EF] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#172033]">{coverage.listingTitle}</p>
+                        <StatusPill tone={coverage.coverageStatus === "strong" ? "sage" : coverage.coverageStatus === "partial" ? "gold" : "red"}>
+                          {formatCampaignStatus(coverage.coverageStatus)}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{coverage.coverageSummary}</p>
+                    </div>
+                  ))}
                 </div>
               </div>
             </section>
 
             <aside className="grid gap-4">
-              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Map and location visuals</p>
-                {activeCampaign.mapSceneIdeas.length > 0 ? (
-                  <div className="mt-4 grid gap-3">
-                    {activeCampaign.mapSceneIdeas.map((scene) => (
-                      <PlaceholderVisual key={scene.id} label={scene.title} detail={scene.suggestedVisual} />
-                    ))}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm leading-6 text-[#526070]">Map visuals will appear here once location intelligence adds scene ideas.</p>
-                )}
+              <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm" data-testid="casahud-visual-assets">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Visual Asset List</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.visualAssets.slice(0, 8).map((asset) => (
+                    <div key={asset.id} className="rounded-2xl border border-[#E6D8C7] bg-[#FFF9EF] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#172033]">{asset.title}</p>
+                        <StatusPill tone={asset.availabilityStatus === "available" ? "sage" : asset.availabilityStatus === "planned" ? "blue" : "gold"}>
+                          {formatCampaignStatus(asset.availabilityStatus)}
+                        </StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{asset.description}</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <StatusPill tone="neutral">{formatCampaignStatus(asset.type)}</StatusPill>
+                        <StatusPill tone="neutral">{formatCampaignStatus(asset.sourceProvider)}</StatusPill>
+                      </div>
+                      {canOpenExternalUrl(asset.sourceUrl) ? (
+                        <a
+                          href={asset.sourceUrl}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="mt-3 inline-flex rounded-2xl border border-[#D6C9B9] bg-white px-4 py-2 text-sm font-semibold text-[#172033] transition hover:bg-[#FFF9EF]"
+                        >
+                          Open source media
+                        </a>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="rounded-[1.75rem] border border-[#F1C9C9] bg-[#FFF4F4] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Missing asset warnings</p>
-                <div className="mt-4 grid gap-2">
-                  {mediaListings.filter((listing) => listing.imageCount === 0).length > 0 ? (
-                    <p className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
-                      Some selected properties have no image coverage yet.
-                    </p>
-                  ) : null}
-                  {activeCampaign.mapSceneIdeas.length === 0 ? (
-                    <p className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
-                      Map scene ideas are still missing for the current package.
-                    </p>
-                  ) : null}
-                  {mediaListings.every((listing) => listing.imageCount > 0) && activeCampaign.mapSceneIdeas.length > 0 ? (
-                    <p className="rounded-2xl border border-[#D8E2D9] bg-white/90 p-3 text-sm leading-6 text-[#526070]">
-                      No obvious visual coverage warnings surfaced yet. Phase 8 will still refine scene fit and final asset quality.
-                    </p>
-                  ) : null}
+              <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5 shadow-sm" data-testid="casahud-map-location-plan">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Map and Location Visual Plan</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.mapLocationVisualPlan.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-[#D8E2D9] bg-white/90 p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <p className="text-sm font-semibold text-[#172033]">{item.title}</p>
+                        <StatusPill tone="blue">{formatCampaignStatus(item.visualType)}</StatusPill>
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{item.suggestedUse}</p>
+                    </div>
+                  ))}
                 </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm" data-testid="casahud-thumbnail-candidates">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Thumbnail Candidate Inputs</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.thumbnailCandidateInputs.map((candidate) => (
+                    <div key={candidate.id} className="rounded-2xl border border-[#D4DDF2] bg-white/90 p-4">
+                      <p className="text-sm font-semibold text-[#172033]">{candidate.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{candidate.rationale}</p>
+                      <p className="mt-2 text-xs uppercase tracking-[0.12em] text-[#6B7FA7]">{candidate.textOverlayIdea}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{candidate.compositionNotes}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-[#F1C9C9] bg-[#FFF4F4] p-5 shadow-sm" data-testid="casahud-media-warnings">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Missing / Weak Media Warnings</p>
+                <div className="mt-4 grid gap-2">
+                  {activeCampaign.missingMediaWarnings.length > 0 ? (
+                    activeCampaign.missingMediaWarnings.map((warning) => (
+                      <p key={warning} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
+                        {warning}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="rounded-2xl border border-[#D8E2D9] bg-white/90 p-3 text-sm leading-6 text-[#526070]">
+                      No major media gaps are flagged on the current plan.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[1.75rem] border border-[#E7DCCB] bg-white/90 p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Next Phase</p>
+                <p className="mt-3 text-lg font-semibold text-[#172033]">{activeCampaign.nextPhase.label}</p>
+                <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.nextPhase.detail}</p>
               </div>
             </aside>
           </div>
+        ) : activeCampaign.scriptGenerationStatus === "script_generated" ? (
+          <EmptyState
+            title="Visual plan not built yet"
+            description="Build Media Plan to turn the approved script, listing imagery, map cues, and location context into a scene-by-scene visual package."
+            action={
+              <button
+                type="button"
+                className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                onClick={() => void onBuildMediaPlan()}
+                disabled={campaignMediaPlanningId === activeCampaign.id}
+                data-testid="casahud-build-media-plan-cta"
+              >
+                {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+              </button>
+            }
+          />
+        ) : (
+          <EmptyState
+            title="Media planning is waiting on the script"
+            description="Complete Script and Narrative Generation first, then CasaHUD will assemble the visual plan here."
+          />
         ) : (
           <EmptyState title="No media coverage yet" description="Open a campaign to review its image and scene coverage." />
         )}
@@ -2868,11 +3092,17 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspaceCard
         eyebrow="Storyboard"
         title="Scene-by-scene story plan"
-        description="The storyboard reads like a premium YouTube production plan, even when later media phases have not yet assembled final visuals."
+        description="The storyboard turns the script and visual assignments into a production-readable scene plan."
       >
         {activeCampaign ? (
-          sceneOutline.length > 0 ? (
+          activeCampaign.mediaPlanningStatus === "media_plan_built" ? (
             <div className="grid gap-4">
+              <div className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Storyboard Status</p>
+                <p className="mt-3 text-sm leading-6 text-[#526070]">
+                  {activeCampaign.sceneAssetMapping.length} storyboard scene{activeCampaign.sceneAssetMapping.length === 1 ? "" : "s"} are mapped to the media plan.
+                </p>
+              </div>
               {sceneOutline.map((scene, index) => (
                 <article key={scene.id} className="rounded-[1.6rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -2898,6 +3128,24 @@ export default function StudioCasaHudCommandCenter() {
                 </article>
               ))}
             </div>
+          ) : sceneOutline.length > 0 ? (
+            <EmptyState
+              title="Storyboard is waiting on the media plan"
+              description="Build Media Plan first, and CasaHUD will attach scene-level assets, shot order, and coverage notes here."
+              action={
+                activeCampaign.scriptGenerationStatus === "script_generated" ? (
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onBuildMediaPlan()}
+                    disabled={campaignMediaPlanningId === activeCampaign.id}
+                    data-testid="casahud-build-media-plan-cta"
+                  >
+                    {campaignMediaPlanningId === activeCampaign.id ? "Building Media Plan..." : "Build Media Plan"}
+                  </button>
+                ) : null
+              }
+            />
           ) : (
             <EmptyState
               title="Storyboard is waiting on narrative structure"
@@ -2937,8 +3185,10 @@ export default function StudioCasaHudCommandCenter() {
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Preview package:</span>{" "}
-                    {activeCampaign.scriptGenerationStatus === "script_generated"
-                      ? "Narrative package is ready to hand forward into media planning."
+                    {activeCampaign.mediaPlanningStatus === "media_plan_built"
+                      ? "Visual plan is ready to hand forward into package, review, and render planning."
+                      : activeCampaign.scriptGenerationStatus === "script_generated"
+                        ? "Narrative package is ready to hand forward into media planning."
                       : "The narrative package must be ready before render planning can become specific."}
                   </p>
                 </div>
@@ -3444,6 +3694,11 @@ export default function StudioCasaHudCommandCenter() {
               {campaignScriptingId ? (
                 <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
                   {renderProgressList(scriptSteps, scriptProgressIndex, "loading", "casahud-script-progress")}
+                </div>
+              ) : null}
+              {campaignMediaPlanningId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress")}
                 </div>
               ) : null}
 

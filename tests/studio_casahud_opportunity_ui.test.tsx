@@ -6,6 +6,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 vi.mock("next/link", async () => {
@@ -140,6 +141,8 @@ const emptyScriptState = {
   fullScriptText: null,
 };
 
+const emptyMediaPlanState = createEmptyCasaHudMediaPlanData();
+
 const savedCampaign: CasaHudCampaign = {
   id: "casahud-project-phase3",
   name: "Could You Retire in Southern Italy for Under $300K?",
@@ -172,6 +175,7 @@ const savedCampaign: CasaHudCampaign = {
   validationWarnings: [],
   ...emptyLocationState,
   ...emptyScriptState,
+  ...emptyMediaPlanState,
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -634,6 +638,7 @@ const scriptedCampaign: CasaHudCampaign = {
   },
   fullScriptText:
     "Opening Hook\nIf this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?\n\nLocation Story\nLead the place story through Tropea and Calabria before drilling into property specifics.",
+  ...emptyMediaPlanState,
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
