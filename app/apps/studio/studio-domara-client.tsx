@@ -74,6 +74,14 @@ type CasaHudListingValidationPayload = {
   error?: { message?: string };
 };
 
+type CasaHudLocationIntelligencePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -98,6 +106,14 @@ const validationSteps: CasaHudProgressStep[] = [
   { id: "score_fit", label: "Scoring listing fit" },
   { id: "rank_properties", label: "Ranking strongest properties" },
   { id: "prepare_shortlist", label: "Preparing approved shortlist" },
+];
+
+const locationSteps: CasaHudProgressStep[] = [
+  { id: "read_locations", label: "Reading approved property locations" },
+  { id: "find_highlights", label: "Finding local highlights" },
+  { id: "build_poi_context", label: "Building POI context" },
+  { id: "prepare_map_ideas", label: "Preparing map scene ideas" },
+  { id: "create_story", label: "Creating location story" },
 ];
 
 const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
@@ -191,8 +207,10 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     approvedListingCount: campaign.approvedListings.length,
     listingValidationStatus: campaign.listingValidationStatus,
     titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
+    locationIntelligenceStatus: campaign.locationIntelligenceStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
+    locationSummary: campaign.locationIntelligenceSummary?.headline,
   };
 }
 
@@ -246,6 +264,8 @@ export default function StudioDomaraClient() {
   const [discoveryProgressIndex, setDiscoveryProgressIndex] = useState(0);
   const [campaignValidatingId, setCampaignValidatingId] = useState<string | null>(null);
   const [validationProgressIndex, setValidationProgressIndex] = useState(0);
+  const [campaignLocatingId, setCampaignLocatingId] = useState<string | null>(null);
+  const [locationProgressIndex, setLocationProgressIndex] = useState(0);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -363,6 +383,17 @@ export default function StudioDomaraClient() {
 
     return () => window.clearTimeout(timeoutId);
   }, [campaignValidatingId, validationProgressIndex]);
+
+  useEffect(() => {
+    if (!campaignLocatingId) return;
+    if (locationProgressIndex >= locationSteps.length - 1) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setLocationProgressIndex((current) => Math.min(current + 1, locationSteps.length - 1));
+    }, 620);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignLocatingId, locationProgressIndex]);
 
   function openSetup(reason?: string, focusCardId?: CasaHudConnectionCardId, cardsOverride?: CasaHudConnectionCard[]) {
     setSetupReason(reason || setupMessage);
@@ -608,6 +639,37 @@ export default function StudioDomaraClient() {
     }
   }
 
+  async function onAddLocationIntelligence() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignLocatingId(activeCampaign.id);
+      setLocationProgressIndex(0);
+      setCampaignError(null);
+      setCampaignNotice(null);
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/location-intelligence`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudLocationIntelligencePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not build location intelligence right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(payload.message || `Location intelligence complete. "${payload.campaign.name}" now includes place story, POIs, and map scene ideas.`);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setLocationProgressIndex(locationSteps.length - 1);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not build location intelligence right now.");
+    } finally {
+      setCampaignLocatingId(null);
+    }
+  }
+
   const researchModeSummary =
     connectionStatus === "loading"
       ? "Checking whether live YouTube competitive research is available."
@@ -639,11 +701,15 @@ export default function StudioDomaraClient() {
         ? "property discovery"
         : campaignValidatingId
           ? "listing validation"
+          : campaignLocatingId
+            ? "location intelligence"
         : opportunityOutput
           ? "opportunity ready"
         : activeCampaign
-          ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
-            ? "validation ready"
+          ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+            ? "location story ready"
+            : activeCampaign.listingValidationStatus === "listing_candidates_validated"
+              ? "validation ready"
             : activeCampaign.listingDiscoveryStatus === "listing_candidates_discovered"
               ? "listing discovery ready"
               : "campaign ready"
@@ -834,7 +900,7 @@ export default function StudioDomaraClient() {
                           {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {campaign.validationSummary || campaign.discoverySummary || campaign.researchSummary}
+                          {campaign.locationSummary || campaign.validationSummary || campaign.discoverySummary || campaign.researchSummary}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
                           {campaign.marketRegionHint ? (
@@ -855,6 +921,11 @@ export default function StudioDomaraClient() {
                           {typeof campaign.titleSupportConfidence === "number" ? (
                             <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
                               {formatSupportConfidence(campaign.titleSupportConfidence)} support
+                            </span>
+                          ) : null}
+                          {campaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
+                            <span className="rounded-full border border-[#D8E2D9] bg-[#F2FBF3] px-3 py-1 text-[#0F5132]">
+                              Location story ready
                             </span>
                           ) : null}
                           <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
@@ -970,9 +1041,13 @@ export default function StudioDomaraClient() {
                     ? "CasaHUD is finding matching properties"
                     : campaignValidatingId
                       ? "CasaHUD is validating and ranking listings"
+                      : campaignLocatingId
+                        ? "CasaHUD is building the location story"
                   : activeCampaign
-                    ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
-                      ? "Validated shortlist is ready for location intelligence"
+                    ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+                      ? "Location intelligence is saved on the campaign"
+                      : activeCampaign.listingValidationStatus === "listing_candidates_validated"
+                        ? "Validated shortlist is ready for location intelligence"
                       : activeCampaign.listingCandidates.length > 0
                         ? "Property discovery is saved on the campaign"
                         : "Campaign saved and ready for the next phase"
@@ -985,9 +1060,13 @@ export default function StudioDomaraClient() {
                     ? "CasaHUD is translating the saved title promise into listing search criteria, checking provider availability, and assembling candidate properties for the next validation phase."
                     : campaignValidatingId
                       ? "CasaHUD is checking title truthfulness, removing duplicate listings, scoring fit, and ranking the shortlist that can move forward to location intelligence."
+                      : campaignLocatingId
+                        ? "CasaHUD is reading approved property locations, checking map and places coverage, shaping POI context, and packaging a place-led story for the next script phase."
                   : activeCampaign
-                    ? activeCampaign.listingValidationStatus === "listing_candidates_validated"
-                      ? "The campaign now includes approved and rejected listing results, ranking context, warnings, and title-support confidence. CasaHUD can reopen this package and hand it forward to Location Intelligence without rerunning validation."
+                    ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+                      ? "The campaign now includes a location story, local highlights, POI cards, listing-level context, provider status, warnings, and map scene ideas. CasaHUD can reopen this package and hand it forward to Script and Narrative Generation."
+                      : activeCampaign.listingValidationStatus === "listing_candidates_validated"
+                        ? "The campaign now includes approved and rejected listing results, ranking context, warnings, and title-support confidence. CasaHUD can reopen this package and hand it forward to Location Intelligence without rerunning validation."
                       : activeCampaign.listingCandidates.length > 0
                         ? "The campaign now includes saved listing candidates, provider status, and derived search criteria. CasaHUD can reopen this package and hand it forward to listing validation without rerunning discovery."
                         : "The viral title, ranked candidates, and research brief are now durable campaign state. CasaHUD can reopen this package and hand it forward to Property Discovery without regenerating titles."
@@ -1001,8 +1080,10 @@ export default function StudioDomaraClient() {
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="grid gap-2">
-              {(campaignValidatingId ? validationSteps : campaignDiscoveringId ? discoverySteps : wizardSteps).map((step, index) => {
-                const status = campaignValidatingId
+              {(campaignLocatingId ? locationSteps : campaignValidatingId ? validationSteps : campaignDiscoveringId ? discoverySteps : wizardSteps).map((step, index) => {
+                const status = campaignLocatingId
+                  ? getProgressStepStatus("loading", locationProgressIndex, index)
+                  : campaignValidatingId
                   ? getProgressStepStatus("loading", validationProgressIndex, index)
                   : campaignDiscoveringId
                     ? getProgressStepStatus("loading", discoveryProgressIndex, index)
@@ -1418,6 +1499,17 @@ export default function StudioDomaraClient() {
                       </p>
                     </div>
                   ) : null}
+                  {activeCampaign.locationIntelligenceSummary ? (
+                    <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                      <p className="text-sm font-semibold text-[#172033]">Location intelligence</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">
+                        {activeCampaign.locationIntelligenceSummary.headline}
+                      </p>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        Script and Narrative Generation is next
+                      </p>
+                    </div>
+                  ) : null}
                 </section>
 
                 <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/[0.92] p-5 shadow-sm">
@@ -1456,15 +1548,36 @@ export default function StudioDomaraClient() {
                         CasaHUD will separate approved and rejected listings, rank the shortlist, and prepare Location Intelligence next.
                       </p>
                     </>
-                  ) : (
-                    <button
-                      type="button"
-                      className="mt-4 rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#526070]"
-                      disabled
-                    >
-                      {activeCampaign.nextPhase.label}
-                    </button>
-                  )}
+                  ) : activeCampaign.nextPhase.key === "location_intelligence" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void onAddLocationIntelligence()}
+                        disabled={campaignLocatingId === activeCampaign.id}
+                        data-testid="casahud-location-intelligence-cta"
+                      >
+                        {campaignLocatingId === activeCampaign.id ? "Building Location Story..." : "Add Location Intelligence"}
+                      </button>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                        CasaHUD will connect the approved shortlist to local highlights, POIs, listing-level context, and map scene ideas before Script and Narrative Generation.
+                      </p>
+                    </>
+                  ) : activeCampaign.nextPhase.key === "script_narrative_generation" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#526070]"
+                        disabled
+                        data-testid="casahud-script-narrative-placeholder"
+                      >
+                        Script and Narrative Generation
+                      </button>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        Location intelligence is saved. Phase 7 will turn this place story into the actual script and narrative flow.
+                      </p>
+                    </>
+                  ) : null}
                 </section>
 
                 {campaignDiscoveringId === activeCampaign.id ? (
@@ -1500,6 +1613,30 @@ export default function StudioDomaraClient() {
                     <div className="mt-4 grid gap-2">
                       {validationSteps.map((step, index) => {
                         const status = getProgressStepStatus("loading", validationProgressIndex, index);
+                        return (
+                          <div
+                            key={step.id}
+                            className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-2xl border border-[#D8E2D9] bg-white/80 px-3 py-3"
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
+                            <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
+                            <span className="text-xs text-[#718096]">{progressStatusLabel(status)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+
+                {campaignLocatingId === activeCampaign.id ? (
+                  <section
+                    className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm"
+                    data-testid="casahud-location-progress"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Location Intelligence</p>
+                    <div className="mt-4 grid gap-2">
+                      {locationSteps.map((step, index) => {
+                        const status = getProgressStepStatus("loading", locationProgressIndex, index);
                         return (
                           <div
                             key={step.id}
@@ -1620,6 +1757,293 @@ export default function StudioDomaraClient() {
                 <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
                   Next: Location Intelligence
                 </p>
+              </section>
+            ) : null}
+
+            {activeCampaign.locationIntelligenceSummary ? (
+              <section
+                className="mt-6 rounded-[1.85rem] border border-[#D8E2D9] bg-[linear-gradient(160deg,rgba(239,245,242,0.98),rgba(255,255,255,0.94))] p-5 shadow-sm"
+                data-testid="casahud-location-intelligence-summary"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1B8A5A]">Location Intelligence</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                      {activeCampaign.locationIntelligenceSummary.headline}
+                    </h3>
+                  </div>
+                  <span className="rounded-full border border-[#C6DFC9] bg-[#F2FBF3] px-3 py-1 text-xs font-semibold text-[#0F5132]">
+                    {activeCampaign.poiBundle?.cards.length || 0} POIs
+                  </span>
+                </div>
+                <p className="mt-3 max-w-4xl text-sm leading-6 text-[#526070]">
+                  {activeCampaign.locationIntelligenceSummary.coverageSummary}
+                </p>
+                <p className="mt-3 text-sm leading-6 text-[#526070]">
+                  {activeCampaign.locationIntelligenceSummary.providerSummary}
+                </p>
+                {activeCampaign.locationWarnings.length > 0 ? (
+                  <div className="mt-4 rounded-2xl border border-[#E7D8C2] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">
+                    {activeCampaign.locationWarnings.map((warning) => (
+                      <p key={warning} className="leading-6">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                  Next: Script and Narrative Generation
+                </p>
+              </section>
+            ) : null}
+
+            {activeCampaign.locationStory ? (
+              <section
+                className="mt-6 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]"
+                data-testid="casahud-location-story"
+              >
+                <section className="rounded-[1.85rem] border border-[#D8E2D9] bg-white/[0.94] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Campaign Location Story</p>
+                  <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">
+                    {activeCampaign.locationStory.headline}
+                  </h3>
+                  <p className="mt-4 text-sm leading-7 text-[#526070]">{activeCampaign.locationStory.summary}</p>
+                  {activeCampaign.locationStory.fallbackNotice ? (
+                    <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                      {activeCampaign.locationStory.fallbackNotice}
+                    </p>
+                  ) : null}
+                </section>
+
+                <aside className="grid gap-4">
+                  <section className="rounded-[1.75rem] border border-[#E4D7C2] bg-[#FFF9EF] p-5 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Lifestyle Anchors</p>
+                    <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#344256]">
+                      {activeCampaign.locationStory.lifestyleAnchors.map((anchor) => (
+                        <span key={anchor} className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                          {anchor}
+                        </span>
+                      ))}
+                    </div>
+                  </section>
+
+                  <section className="rounded-[1.75rem] border border-[#D8E2D9] bg-[#F7FAF8] p-5 shadow-sm">
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Narrative Angles</p>
+                    <div className="mt-4 grid gap-3">
+                      {activeCampaign.locationStory.narrativeAngles.map((angle) => (
+                        <div key={angle} className="rounded-2xl border border-[#D8E2D9] bg-white/80 p-4 text-sm leading-6 text-[#526070]">
+                          {angle}
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                </aside>
+              </section>
+            ) : null}
+
+            {activeCampaign.localHighlights.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-local-highlights">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Local Highlights</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Why the place matters</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {activeCampaign.localHighlights.length} highlights
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {activeCampaign.localHighlights.map((highlight) => (
+                    <article key={highlight.id} className="rounded-3xl border border-[#E4D7C2] bg-white/[0.92] p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">{highlight.locationText}</p>
+                      <h4 className="mt-2 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{highlight.title}</h4>
+                      <p className="mt-3 text-sm leading-6 text-[#526070]">{highlight.description}</p>
+                      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        {highlight.provider === "casahud_location_patterns" ? "CasaHUD location patterns" : highlight.provider === "google_places" ? "Google Places" : "Mapbox"}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.poiBundle ? (
+              <section className="mt-6" data-testid="casahud-poi-bundle">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Points of Interest</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Context cards for the shortlist</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {activeCampaign.poiBundle.cards.length} cards
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.poiBundle.summary}</p>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {activeCampaign.poiBundle.cards.map((poi) => (
+                    <article key={poi.id} className="rounded-3xl border border-[#D8E2D9] bg-white/[0.94] p-5 shadow-sm">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="rounded-full border border-[#D8E2D9] bg-[#F7FAF8] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                              {poi.category}
+                            </span>
+                            {poi.associatedListingId ? (
+                              <span className="rounded-full border border-[#D7CAB8] bg-[#FFF9EF] px-2.5 py-1 text-[11px] font-semibold text-[#8A5A34]">
+                                Linked to shortlist
+                              </span>
+                            ) : null}
+                          </div>
+                          <h4 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{poi.name}</h4>
+                          <p className="mt-2 text-sm leading-6 text-[#526070]">{poi.locationText}</p>
+                        </div>
+                        <span className="rounded-full border border-[#D8E2D9] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                          {poi.distanceText || "Area context"}
+                        </span>
+                      </div>
+                      <p className="mt-4 text-sm leading-6 text-[#526070]">{poi.relevanceReason}</p>
+                      <p className="mt-4 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        {poi.provider === "casahud_location_patterns" ? "CasaHUD location patterns" : poi.provider === "google_places" ? "Google Places" : "Mapbox"}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.mapSceneIdeas.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-map-scene-ideas">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Map Scene Ideas</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Visual anchors for later scripting</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {activeCampaign.mapSceneIdeas.length} scene ideas
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {activeCampaign.mapSceneIdeas.map((scene) => (
+                    <article key={scene.id} className="rounded-3xl border border-[#E4D7C2] bg-[#FFFDF8]/[0.95] p-5 shadow-sm">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded-full border border-[#D7CAB8] bg-white px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                          {formatCampaignStatus(scene.sceneType)}
+                        </span>
+                        <span className="rounded-full border border-[#D8E2D9] bg-[#F7FAF8] px-2.5 py-1 text-[11px] font-semibold text-[#344256]">
+                          {scene.provider === "casahud_location_patterns" ? "CasaHUD patterns" : scene.provider === "google_places" ? "Google Places" : "Mapbox"}
+                        </span>
+                      </div>
+                      <h4 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{scene.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{scene.description}</p>
+                      <p className="mt-4 text-sm leading-6 text-[#344256]">
+                        <span className="font-semibold text-[#172033]">Suggested visual:</span> {scene.suggestedVisual}
+                      </p>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                        {scene.locationText}
+                      </p>
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.listingLocationInsights.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-listing-location-insights">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1B8A5A]">Listing Location Insights</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Why each approved listing fits its place</h3>
+                  </div>
+                  <span className="rounded-full border border-[#C6DFC9] bg-[#F2FBF3] px-3 py-1 text-xs font-semibold text-[#0F5132]">
+                    {activeCampaign.listingLocationInsights.length} insights
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.listingLocationInsights.map((insight) => (
+                    <article key={insight.listingId} className="rounded-3xl border border-[#CFE2D2] bg-white/[0.95] p-5 shadow-sm">
+                      <h4 className="text-xl font-semibold tracking-[-0.02em] text-[#172033]">{insight.summary}</h4>
+                      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.95fr]">
+                        <div>
+                          <p className="text-sm font-semibold text-[#172033]">Highlights</p>
+                          <div className="mt-3 grid gap-2">
+                            {insight.highlights.map((highlight) => (
+                              <p key={highlight} className="rounded-2xl border border-[#D8E2D9] bg-[#F7FAF8] px-4 py-3 text-sm leading-6 text-[#526070]">
+                                {highlight}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-sm font-semibold text-[#172033]">Location strengths</p>
+                          <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold text-[#344256]">
+                            {insight.locationStrengths.map((strength) => (
+                              <span key={strength} className="rounded-full border border-[#D7CAB8] bg-[#FFF9EF] px-3 py-1">
+                                {strength}
+                              </span>
+                            ))}
+                          </div>
+                          {insight.nearbyPois.length > 0 ? (
+                            <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-white/80 p-4">
+                              <p className="text-sm font-semibold text-[#172033]">Nearby POIs</p>
+                              <p className="mt-2 text-sm leading-6 text-[#526070]">
+                                {insight.nearbyPois.map((poi) => poi.name).join(" · ")}
+                              </p>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {insight.warnings.length > 0 ? (
+                        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                          {insight.warnings.join(" · ")}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.locationProviderStatuses.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-location-provider-statuses">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Provider Status</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Coverage and fallback state</h3>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  {activeCampaign.locationProviderStatuses.map((providerStatus) => (
+                    <article key={providerStatus.provider} className="rounded-3xl border border-[#D8E2D9] bg-white/[0.94] p-5 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-[#172033]">{providerStatus.label}</p>
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                            providerStatus.state === "connected"
+                              ? "bg-[#DFF3E7] text-[#0F5132]"
+                              : providerStatus.state === "fallback"
+                                ? "bg-[#FFF0D6] text-[#7A4B13]"
+                                : providerStatus.state === "error"
+                                  ? "bg-[#FEE2E2] text-[#991B1B]"
+                                  : "bg-[#EEF2F6] text-[#526070]"
+                          }`}
+                        >
+                          {formatCampaignStatus(providerStatus.state)}
+                        </span>
+                      </div>
+                      <p className="mt-3 text-sm leading-6 text-[#526070]">{providerStatus.detail}</p>
+                      {providerStatus.coverage ? (
+                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
+                          {providerStatus.coverage}
+                        </p>
+                      ) : null}
+                      {providerStatus.warning ? (
+                        <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">
+                          {providerStatus.warning}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
               </section>
             ) : null}
 
