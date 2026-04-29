@@ -190,7 +190,8 @@ const savedCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
-    detail: "Property discovery comes next.",
+    detail:
+      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:00:00.000Z",
@@ -374,7 +375,8 @@ const validatedCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "location_intelligence",
     label: "Location Intelligence",
-    detail: "Location story comes next.",
+    detail:
+      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
     implemented: false,
   },
   updatedAt: "2026-04-28T00:25:00.000Z",
@@ -562,7 +564,8 @@ const scriptedCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
-    detail: "Build the media plan next.",
+    detail:
+      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   },
 };
@@ -657,18 +660,22 @@ describe("CasaHUD command center UI", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the sidebar and drawer shell with Opportunity Brief navigation and no old mock-first language", () => {
+  it("renders the compact sidebar shell with the reset workspace labels and no old mock-first language", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
     expect(html).toContain("casahud-sidebar");
     expect(html).toContain("casahud-mobile-menu");
-    expect(html).toContain(">Opportunity Brief<");
-    expect(html).toContain(">Render &amp; Publish<");
+    expect(html).toContain(">Campaigns<");
+    expect(html).toContain(">Viral Titles<");
+    expect(html).toContain(">Publish<");
     expect(html).toContain(">Connections<");
-    expect(html).not.toContain(">Viral Titles<");
+    expect(html).not.toContain(">Dashboard<");
+    expect(html).not.toContain(">Opportunity Brief<");
+    expect(html).not.toContain(">Render &amp; Publish<");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mock-first MVP");
     expect(html).not.toContain("CasaHUD Campaign Workflow");
+    expect(html).not.toContain("Generate your next viral property video");
   });
 
   it("opens a mobile drawer with an independently scrollable navigation container that reaches lower items", async () => {
@@ -707,9 +714,46 @@ describe("CasaHUD command center UI", () => {
     const drawer = container.querySelector('[data-testid="casahud-mobile-drawer"]');
     const scrollRegion = container.querySelector('[data-testid="casahud-mobile-drawer-scroll"]');
 
-    expect(drawer?.textContent).toContain("Render & Publish");
+    expect(drawer?.textContent).toContain("Publish");
     expect(drawer?.textContent).toContain("Connections");
     expect(scrollRegion?.className).toContain("overflow-y-auto");
+  });
+
+  it("renders the Connections workspace directly without duplicate top-level manage controls", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(packagedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-connections"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-connections"]')?.textContent).toContain("Connections");
+    expect(container.querySelector('[data-testid="casahud-connections"]')?.textContent).not.toContain("Manage Connections");
   });
 
   it("shows the shortlist URL import UI and renders imported URL cards with source preview imagery", async () => {
@@ -753,19 +797,19 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-property_shortlist"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-import-listing-urls"]')?.textContent).toContain("Import Properties From URLs");
+    expect(container.querySelector('[data-testid="casahud-import-listing-urls"]')?.textContent).toContain("Import Listing URLs");
 
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Imported URL");
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Idealista");
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Imported URL image");
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Property type needs review");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Imported URL");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Idealista");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Imported URL image");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Property type needs review");
   });
 
-  it("resumes a campaign, shows the active campaign in the selector, and keeps overview and location story accessible", async () => {
+  it("resumes a campaign, shows the active campaign in the sidebar, and opens the focused location workspace", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -806,16 +850,16 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain(validatedCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain("Continue to Location Story");
-    expect(container.querySelector('[data-testid="casahud-location-story"]')?.textContent).toContain("Location story not ready");
+    expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain("Build Location");
+    expect(container.querySelector('[data-testid="casahud-location"]')?.textContent).toContain("Location not ready");
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-overview"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-campaigns"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain(validatedCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain("Workflow Progress");
+    expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain(validatedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain("Resume Campaign");
   });
 
   it("renders featured image areas for approved and rejected property cards and uses source thumbnails before fallback copy", async () => {
@@ -859,15 +903,15 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-property_shortlist"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
     expect(container.querySelectorAll('[data-testid="casahud-approved-listing-card"]').length).toBe(1);
     expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(1);
     expect(container.querySelectorAll('[data-testid="casahud-property-card-media"]').length).toBeGreaterThanOrEqual(2);
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Source thumbnail");
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Lecce villa with courtyard");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Source thumbnail");
+    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Lecce villa with courtyard");
     expect(
       Array.from(container.querySelectorAll('[data-testid="casahud-property-card-media"]')).some(
         (node) => node.getAttribute("data-media-kind") === "thumbnail",
@@ -875,7 +919,7 @@ describe("CasaHUD command center UI", () => {
     ).toBe(true);
   });
 
-  it("shows scene-based Video Builder cards, keeps package navigation accessible, and renders an honest preview-package state", async () => {
+  it("shows scene-based media cards, keeps review navigation accessible, and renders an honest preview-package state", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -916,32 +960,32 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-video_builder"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-media"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
     expect(container.querySelectorAll('[data-testid="casahud-video-scene-card"]').length).toBeGreaterThan(1);
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Narration");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("On-screen Text");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Scene 1");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).not.toContain("title promise");
-    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).not.toContain("validation phase");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("Narration");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("On-screen Text");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).toContain("Scene 1");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).not.toContain("title promise");
+    expect(container.querySelector('[data-testid="casahud-media"]')?.textContent).not.toContain("validation phase");
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-youtube_package"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-review"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain("Final Title");
+    expect(container.querySelector('[data-testid="casahud-review"]')?.textContent).toContain("Final Title");
     expect(container.querySelector('[data-testid="casahud-thumbnail-concept"]')?.textContent).toContain("Thumbnail Concept");
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Publish Now");
-    expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Schedule to YouTube");
+    expect(container.querySelector('[data-testid="casahud-publish"]')?.textContent).toContain("Publish Now");
+    expect(container.querySelector('[data-testid="casahud-publish"]')?.textContent).toContain("Schedule to YouTube");
     expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("Preview package");
     expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("not a final MP4");
     expect(container.querySelector('[data-testid="casahud-video-preview-storyboard"]')).not.toBeNull();
@@ -989,7 +1033,7 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
@@ -1038,7 +1082,7 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     await act(async () => {
-      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 

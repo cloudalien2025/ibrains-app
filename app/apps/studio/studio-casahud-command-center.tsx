@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type {
   CasaHudCampaign,
@@ -31,14 +32,23 @@ type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
 type CasaHudProgressState = "idle" | "running" | "complete" | "failed";
 type CasaHudWorkspaceSection =
   | "campaigns"
+  | "viral_titles"
+  | "properties"
+  | "location"
+  | "script"
+  | "media"
+  | "storyboard"
+  | "review"
+  | "publish"
+  | "connections"
+  | "settings"
   | "overview"
   | "opportunity_brief"
   | "property_shortlist"
   | "location_story"
   | "video_builder"
   | "youtube_package"
-  | "render_publish"
-  | "connections";
+  | "render_publish";
 type CasaHudOperationalState = "ready" | "needs_review" | "missing_media" | "fallback_asset";
 type CasaHudCommandStepState = "complete" | "current" | "pending";
 type CasaHudNextActionId =
@@ -176,8 +186,6 @@ type CasaHudProgressStep = {
 type CasaHudWorkspaceNavItem = {
   id: CasaHudWorkspaceSection;
   label: string;
-  eyebrow: string;
-  description: string;
 };
 
 type CasaHudPhaseProgressItem = {
@@ -214,60 +222,17 @@ type CasaHudVideoScene = {
 };
 
 const workspaceNav: CasaHudWorkspaceNavItem[] = [
-  {
-    id: "campaigns",
-    label: "Campaigns",
-    eyebrow: "Select",
-    description: "Create or resume the campaign you want to work on.",
-  },
-  {
-    id: "overview",
-    label: "Campaign Overview",
-    eyebrow: "Orient",
-    description: "See the active campaign, current stage, and next best action.",
-  },
-  {
-    id: "opportunity_brief",
-    label: "Opportunity Brief",
-    eyebrow: "Strategy",
-    description: "Review the selected title, why it won, and the research brief.",
-  },
-  {
-    id: "property_shortlist",
-    label: "Property Shortlist",
-    eyebrow: "Listings",
-    description: "Discover, validate, and review property evidence with featured imagery.",
-  },
-  {
-    id: "location_story",
-    label: "Location Story",
-    eyebrow: "Place",
-    description: "Translate the shortlist into POIs, map scenes, and location context.",
-  },
-  {
-    id: "video_builder",
-    label: "Video Builder",
-    eyebrow: "Scenes",
-    description: "Pair every visual beat with narration, on-screen text, and media coverage.",
-  },
-  {
-    id: "youtube_package",
-    label: "YouTube Package",
-    eyebrow: "Package",
-    description: "Review final title, metadata, chapters, thumbnail concept, and readiness.",
-  },
-  {
-    id: "render_publish",
-    label: "Render & Publish",
-    eyebrow: "Ship",
-    description: "Render, preview, publish, or schedule with honest execution states.",
-  },
-  {
-    id: "connections",
-    label: "Connections",
-    eyebrow: "Ready",
-    description: "Manage the services that power generation, discovery, storage, and YouTube.",
-  },
+  { id: "campaigns", label: "Campaigns" },
+  { id: "viral_titles", label: "Viral Titles" },
+  { id: "properties", label: "Properties" },
+  { id: "location", label: "Location" },
+  { id: "script", label: "Script" },
+  { id: "media", label: "Media" },
+  { id: "storyboard", label: "Storyboard" },
+  { id: "review", label: "Review" },
+  { id: "publish", label: "Publish" },
+  { id: "connections", label: "Connections" },
+  { id: "settings", label: "Settings" },
 ];
 
 const opportunitySteps: CasaHudProgressStep[] = [
@@ -959,30 +924,35 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
 
 function buildPhaseProgress(campaign: CasaHudCampaign | null): CasaHudPhaseProgressItem[] {
   const steps = [
-    { id: "opportunity", label: "Opportunity Brief", complete: Boolean(campaign?.selectedTitle?.title || campaign?.selectedViralTitle) },
+    { id: "opportunity", label: "Viral Titles", complete: Boolean(campaign?.selectedTitle?.title || campaign?.selectedViralTitle) },
     {
       id: "properties",
-      label: "Property Shortlist",
+      label: "Properties",
       complete: Boolean(campaign?.listingValidationStatus === "listing_candidates_validated" || campaign?.approvedListings.length),
     },
     {
       id: "location",
-      label: "Location Story",
+      label: "Location",
       complete: campaign?.locationIntelligenceStatus === "location_intelligence_completed",
     },
     {
-      id: "video",
-      label: "Video Builder",
+      id: "script",
+      label: "Script",
+      complete: Boolean(campaign?.scriptGenerationStatus === "script_generated"),
+    },
+    {
+      id: "media",
+      label: "Media",
       complete: Boolean(campaign?.scriptGenerationStatus === "script_generated" && campaign?.mediaPlanningStatus === "media_plan_built"),
     },
     {
-      id: "package",
-      label: "YouTube Package",
+      id: "review",
+      label: "Review",
       complete: campaign?.youtubePackageStatus === "package_prepared",
     },
     {
-      id: "render",
-      label: "Render & Publish",
+      id: "publish",
+      label: "Publish",
       complete: Boolean(campaign?.renderStatus === "rendered" || campaign?.publishStatus === "published" || campaign?.scheduleStatus === "scheduled"),
     },
   ];
@@ -1048,42 +1018,42 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
   if (campaign.publishStatus === "published" || campaign.scheduleStatus === "scheduled") {
     return {
       actionId: "review_publish_status",
-      workspace: "render_publish",
+      workspace: "publish",
       statusLabel: "Live or scheduled",
       title: "Review render and publish history",
       detail: "This campaign already has a live or scheduled execution state. Review output, run history, and channel status.",
-      ctaLabel: "Review Publish Status",
+      ctaLabel: "Open Publish",
     };
   }
 
   if (campaign.youtubePackageStatus === "package_prepared") {
     return {
       actionId: "review_render_publish",
-      workspace: "render_publish",
+      workspace: "publish",
       statusLabel: "Package ready",
       title: "Render or publish the current package",
       detail: "The review-ready package is in place. Render it now or move into publish and schedule controls.",
-      ctaLabel: "Continue to Render & Publish",
+      ctaLabel: "Open Publish",
     };
   }
 
   if (campaign.mediaPlanningStatus === "media_plan_built") {
     return {
       actionId: "build_youtube_package",
-      workspace: "youtube_package",
-      statusLabel: "Needs YouTube package",
-      title: "Build the YouTube package",
+      workspace: "review",
+      statusLabel: "Needs review package",
+      title: "Build the review package",
       detail: "Turn the finished scene plan into the final title, description, chapters, thumbnail concept, and render plan.",
-      ctaLabel: "Build YouTube Package",
+      ctaLabel: "Build Review Package",
     };
   }
 
   if (campaign.scriptGenerationStatus === "script_generated") {
     return {
       actionId: "build_media_plan",
-      workspace: "video_builder",
+      workspace: "media",
       statusLabel: "Needs media plan",
-      title: "Complete the Video Builder",
+      title: "Complete the media plan",
       detail: "Match property images, map visuals, and POI coverage to every scripted scene.",
       ctaLabel: "Build Media Plan",
     };
@@ -1092,7 +1062,7 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
   if (campaign.locationIntelligenceStatus === "location_intelligence_completed") {
     return {
       actionId: "generate_script",
-      workspace: "video_builder",
+      workspace: "script",
       statusLabel: "Needs script",
       title: "Generate the scene-by-scene script",
       detail: "Use the validated shortlist and location story to build narration, scene flow, and on-screen text.",
@@ -1103,18 +1073,18 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
   if (campaign.listingValidationStatus === "listing_candidates_validated") {
     return {
       actionId: "build_location_story",
-      workspace: "location_story",
+      workspace: "location",
       statusLabel: "Needs place context",
       title: "Add the location story",
       detail: "Build local highlights, POIs, and map scenes that explain why this place matters.",
-      ctaLabel: "Continue to Location Story",
+      ctaLabel: "Build Location",
     };
   }
 
   if (campaign.listingDiscoveryStatus === "listing_candidates_discovered" || campaign.listingCandidates.length > 0) {
     return {
       actionId: "validate_listings",
-      workspace: "property_shortlist",
+      workspace: "properties",
       statusLabel: "Needs validation",
       title: "Validate and rank the shortlist",
       detail: "Approve the strongest properties, flag weak support, and tighten title confidence.",
@@ -1124,7 +1094,7 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
 
   return {
     actionId: "discover_listings",
-    workspace: "property_shortlist",
+    workspace: "properties",
     statusLabel: "Needs properties",
     title: "Find matching properties",
     detail: "Translate the selected hook into real candidate listings and featured media coverage.",
@@ -1201,18 +1171,18 @@ function WorkspacePage({
 }) {
   return (
     <section
-      className="rounded-[2rem] border border-[#E7D8C7] bg-[#FFFDF8]/95 p-5 shadow-[0_24px_60px_rgba(70,55,35,0.12)] md:p-6 xl:p-7"
+      className="rounded-[1.6rem] border border-[#D9E4F0] bg-white/96 p-5 shadow-[0_18px_40px_rgba(15,23,42,0.08)] md:p-6"
       data-testid={testId}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="max-w-3xl">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8A5A34]">{eyebrow}</p>
-          <h1 className="mt-2 text-[2rem] font-semibold tracking-[-0.04em] text-[#172033] md:text-[2.4rem]">{title}</h1>
-          <p className="mt-3 text-sm leading-6 text-[#556274]">{description}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#64748B]">{eyebrow}</p>
+          <h1 className="mt-2 text-[1.8rem] font-semibold tracking-[-0.04em] text-[#0F172A] md:text-[2.1rem]">{title}</h1>
+          <p className="mt-3 text-sm leading-6 text-[#475569]">{description}</p>
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
-      <div className="mt-6">{children}</div>
+      <div className="mt-5">{children}</div>
     </section>
   );
 }
@@ -1516,17 +1486,13 @@ function SidebarButton({
       aria-current={active ? "page" : undefined}
       data-testid={`casahud-nav-${item.id}`}
       className={cx(
-        "w-full rounded-[1.35rem] border px-4 py-3 text-left transition",
+        "w-full rounded-2xl border px-3 py-2.5 text-left text-sm font-medium transition",
         active
-          ? "border-[#172033] bg-[#172033] text-white shadow-[0_16px_30px_rgba(23,32,51,0.18)]"
-          : "border-transparent bg-white/78 text-[#172033] hover:border-[#E2D4C2] hover:bg-white",
+          ? "border-[#0F172A] bg-[#0F172A] text-white shadow-[0_14px_28px_rgba(15,23,42,0.16)]"
+          : "border-[#D9E4F0] bg-white text-[#0F172A] hover:border-[#94A3B8] hover:bg-[#F8FAFC]",
       )}
     >
-      <p className={cx("text-[11px] font-semibold uppercase tracking-[0.18em]", active ? "text-white/68" : "text-[#8A5A34]")}>
-        {item.eyebrow}
-      </p>
-      <p className="mt-1 text-sm font-semibold">{item.label}</p>
-      <p className={cx("mt-2 text-xs leading-5", active ? "text-white/72" : "text-[#667386]")}>{item.description}</p>
+      {item.label}
     </button>
   );
 }
@@ -1575,6 +1541,9 @@ export default function StudioCasaHudCommandCenter() {
   const [listingUrlImporting, setListingUrlImporting] = useState(false);
   const [listingUrlImportNotice, setListingUrlImportNotice] = useState<string | null>(null);
   const [listingUrlImportWarnings, setListingUrlImportWarnings] = useState<string[]>([]);
+  const [propertySearch, setPropertySearch] = useState("");
+  const [propertyStatusFilter, setPropertyStatusFilter] = useState<"all" | "approved" | "candidate" | "rejected">("all");
+  const [propertySort, setPropertySort] = useState<"rank" | "price_desc" | "price_asc" | "updated">("rank");
 
   const connectionCards = useMemo(() => buildCasaHudConnectionCards(connectionProviders), [connectionProviders]);
   const setupMessage = useMemo(() => getCasaHudSetupMessage(connectionCards), [connectionCards]);
@@ -1603,6 +1572,62 @@ export default function StudioCasaHudCommandCenter() {
       null
     );
   }, [activeCampaign, selectedListingId]);
+  const propertyWorkspaceListings = useMemo(() => {
+    if (!activeCampaign) return [];
+
+    const listingMap = new Map<
+      string,
+      {
+        listing: CasaHudListingCandidate | CasaHudValidatedListing;
+        bucket: "approved" | "candidate" | "rejected";
+      }
+    >();
+
+    for (const listing of activeCampaign.listingCandidates) {
+      listingMap.set(listing.id, { listing, bucket: "candidate" });
+    }
+    for (const listing of activeCampaign.rejectedListings) {
+      listingMap.set(listing.id, { listing, bucket: "rejected" });
+    }
+    for (const listing of activeCampaign.approvedListings) {
+      listingMap.set(listing.id, { listing, bucket: "approved" });
+    }
+
+    const allListings = Array.from(listingMap.values());
+
+    const search = propertySearch.trim().toLowerCase();
+    const filtered = allListings.filter((entry) => {
+      if (propertyStatusFilter !== "all" && entry.bucket !== propertyStatusFilter) return false;
+      if (!search) return true;
+      const haystack = [
+        entry.listing.title,
+        entry.listing.locationText,
+        entry.listing.city,
+        entry.listing.region,
+        entry.listing.country,
+        entry.listing.propertyType,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(search);
+    });
+
+    filtered.sort((left, right) => {
+      if (propertySort === "price_desc") return (right.listing.price || 0) - (left.listing.price || 0);
+      if (propertySort === "price_asc") return (left.listing.price || 0) - (right.listing.price || 0);
+      if (propertySort === "updated") {
+        return String(right.listing.discoveredAt || "").localeCompare(String(left.listing.discoveredAt || ""));
+      }
+
+      const leftRank = "rank" in left.listing && typeof left.listing.rank === "number" ? left.listing.rank : Number.MAX_SAFE_INTEGER;
+      const rightRank = "rank" in right.listing && typeof right.listing.rank === "number" ? right.listing.rank : Number.MAX_SAFE_INTEGER;
+      if (leftRank !== rightRank) return leftRank - rightRank;
+      return left.listing.title.localeCompare(right.listing.title);
+    });
+
+    return filtered;
+  }, [activeCampaign, propertySearch, propertySort, propertyStatusFilter]);
   const currentCampaignLabel = activeCampaign?.name || "No campaign selected";
   const connectionSummary =
     connectionStatus === "loading"
@@ -1830,7 +1855,7 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignNotice(null);
       setOpportunityOutput(null);
       setProgressIndex(0);
-      openWorkspace("opportunity_brief");
+      openWorkspace("viral_titles");
 
       const response = await fetch("/api/studio/domara/opportunity", {
         method: "POST",
@@ -1910,7 +1935,7 @@ export default function StudioCasaHudCommandCenter() {
       setDiscoveryProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("property_shortlist");
+      openWorkspace("properties");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/discover-listings`, {
         method: "POST",
@@ -1940,7 +1965,7 @@ export default function StudioCasaHudCommandCenter() {
       setValidationProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("property_shortlist");
+      openWorkspace("properties");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/validate-listings`, {
         method: "POST",
@@ -1977,7 +2002,7 @@ export default function StudioCasaHudCommandCenter() {
       setListingUrlImportWarnings([]);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("property_shortlist");
+      openWorkspace("properties");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/import-listing-urls`, {
         method: "POST",
@@ -2017,7 +2042,7 @@ export default function StudioCasaHudCommandCenter() {
       setLocationProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("location_story");
+      openWorkspace("location");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/location-intelligence`, {
         method: "POST",
@@ -2047,7 +2072,7 @@ export default function StudioCasaHudCommandCenter() {
       setScriptProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("video_builder");
+      openWorkspace("script");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/script`, {
         method: "POST",
@@ -2077,7 +2102,7 @@ export default function StudioCasaHudCommandCenter() {
       setMediaProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("video_builder");
+      openWorkspace("media");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/media-plan`, {
         method: "POST",
@@ -2087,7 +2112,7 @@ export default function StudioCasaHudCommandCenter() {
         throw new Error(payload?.error?.message || "Could not assemble the media plan right now.");
       }
       setActiveCampaign(payload.campaign);
-      setCampaignNotice(payload.message || `Video Builder updated for "${payload.campaign.name}".`);
+      setCampaignNotice(payload.message || `Media plan updated for "${payload.campaign.name}".`);
       setRecentCampaigns((current) => {
         const summary = payload.summary || summarizeCampaign(payload.campaign!);
         return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
@@ -2107,7 +2132,7 @@ export default function StudioCasaHudCommandCenter() {
       setPackageProgressIndex(0);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("youtube_package");
+      openWorkspace("review");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/youtube-package`, {
         method: "POST",
@@ -2136,7 +2161,7 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignRenderingId(activeCampaign.id);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("render_publish");
+      openWorkspace("publish");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/render`, {
         method: "POST",
@@ -2166,7 +2191,7 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignPublishingId(activeCampaign.id);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("render_publish");
+      openWorkspace("publish");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/publish`, {
         method: "POST",
@@ -2201,7 +2226,7 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignSchedulingId(activeCampaign.id);
       setCampaignError(null);
       setCampaignNotice(null);
-      openWorkspace("render_publish");
+      openWorkspace("publish");
 
       const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/schedule`, {
         method: "POST",
@@ -2331,7 +2356,7 @@ export default function StudioCasaHudCommandCenter() {
       case "review_render_publish":
       case "review_publish_status":
         return (
-          <button type="button" className={className} onClick={() => openWorkspace("render_publish")}>
+          <button type="button" className={className} onClick={() => openWorkspace("publish")}>
             {step.ctaLabel}
           </button>
         );
@@ -2339,166 +2364,89 @@ export default function StudioCasaHudCommandCenter() {
   }
 
   function renderSidebarContent(mobile = false) {
-    const currentStep = nextStep;
+    const missingCoreConnections = getMissingCasaHudCoreConnections(connectionCards).length;
     return (
       <div className="flex h-full min-h-0 flex-col">
-        {mobile ? (
-          <>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E6D8C7] bg-[#FFFDF8]/96 px-4 py-4 backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#8A5A34]">CasaHUD Studio</p>
-              <button type="button" className={secondaryButtonClass} onClick={() => setDrawerOpen(false)}>
-                Close
-              </button>
+        <div className="flex items-start justify-between gap-3 border-b border-[#D9E4F0] px-4 py-4 md:px-5">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#64748B]">Studio App</p>
+            <div className="mt-2 flex items-center gap-2">
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[#0F172A]">CasaHUD</h2>
+              <Link
+                href="/apps/studio"
+                className="inline-flex rounded-full border border-[#D9E4F0] px-2.5 py-1 text-xs font-medium text-[#475569] transition hover:border-[#94A3B8] hover:text-[#0F172A]"
+              >
+                Studio
+              </Link>
             </div>
-            <div
-              className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain px-4 pb-[calc(env(safe-area-inset-bottom)+2rem)] pt-4"
-              data-testid="casahud-mobile-drawer-scroll"
-            >
-              <div className="grid gap-5">
-                <div className="rounded-[1.7rem] border border-[#223149] bg-[#172033] p-5 text-white shadow-[0_20px_40px_rgba(23,32,51,0.18)]">
-                  <h2 className="text-2xl font-semibold tracking-[-0.04em]">AI real-estate YouTube content engine</h2>
-                  <p className="mt-3 text-sm leading-6 text-white/74">
-                    Generate, build, review, and publish campaign-centered property videos without losing the workflow.
-                  </p>
-                </div>
+            <p className="mt-2 text-sm text-[#475569]">Real-estate YouTube content engine.</p>
+          </div>
+          {mobile ? (
+            <button type="button" className={secondaryButtonClass} onClick={() => setDrawerOpen(false)}>
+              Close
+            </button>
+          ) : null}
+        </div>
 
-                <div className="rounded-[1.7rem] border border-[#E7DCCB] bg-white/92 p-4" data-testid="casahud-current-campaign">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current Campaign</p>
-                  {activeCampaign ? (
-                    <div className="mt-3 grid gap-3">
-                      <div>
-                        <p className="text-lg font-semibold tracking-[-0.03em] text-[#172033]">{activeCampaign.name}</p>
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
-                          <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill>
-                        </div>
-                      </div>
-                      <div className="rounded-[1.2rem] border border-[#EEE3D4] bg-[#FFF9EF] p-3">
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8A5A34]">Next Best Action</p>
-                        <p className="mt-2 text-sm font-semibold text-[#172033]">{currentStep.title}</p>
-                        <p className="mt-2 text-sm leading-6 text-[#556274]">{currentStep.detail}</p>
-                      </div>
-                      <div className="grid gap-2">
-                        {renderNextActionButton(currentStep, true)}
-                        <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("campaigns")}>
-                          Switch Campaign
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="mt-3 grid gap-3">
-                      <p className="text-sm leading-6 text-[#556274]">No campaign selected.</p>
-                      <div className="grid gap-2">
-                        <button type="button" className={primaryButtonClass} onClick={() => openWorkspace("campaigns")}>
-                          Select Campaign
-                        </button>
-                        <button type="button" className={secondaryButtonClass} onClick={() => void onGenerateViralVideo()}>
-                          Generate Viral Video Title
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                <nav className="grid gap-2">
-                  {workspaceNav.map((item) => (
-                    <SidebarButton key={item.id} item={item} active={activeSection === item.id} onClick={() => openWorkspace(item.id)} />
-                  ))}
-                </nav>
-
-                <div className="rounded-[1.5rem] border border-[#E7DCCB] bg-white/92 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Connection Status</p>
-                      <p className="mt-2 text-sm leading-6 text-[#556274]">{connectionSummary}</p>
-                    </div>
-                    <StatusPill tone={connectionStatus === "error" ? "red" : "neutral"}>{connectionStatus}</StatusPill>
-                  </div>
-                  <div className="mt-4 grid gap-2">
-                    <button type="button" className={secondaryButtonClass} onClick={() => openConnections()}>
-                      Open Connections
-                    </button>
-                  </div>
-                  {setupMessage ? <p className="mt-3 text-xs leading-5 text-[#6A7687]">{setupMessage}</p> : null}
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex h-full min-h-0 flex-col p-5 xl:p-6">
-            <div className="rounded-[1.7rem] border border-[#223149] bg-[#172033] p-5 text-white shadow-[0_20px_40px_rgba(23,32,51,0.18)]">
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#E9D5B7]">CasaHUD Studio</p>
-              <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em]">AI real-estate YouTube content engine</h2>
-              <p className="mt-3 text-sm leading-6 text-white/74">
-                Generate, build, review, and publish campaign-centered property videos without losing the workflow.
-              </p>
-            </div>
-
-            <div className="mt-5 rounded-[1.7rem] border border-[#E7DCCB] bg-white/92 p-4" data-testid="casahud-current-campaign">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current Campaign</p>
+        <div
+          className={cx(
+            "flex-1 min-h-0 overflow-y-auto overflow-x-hidden",
+            mobile ? "px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)] pt-4" : "px-4 py-4 md:px-5",
+          )}
+          data-testid={mobile ? "casahud-mobile-drawer-scroll" : undefined}
+        >
+          <div className="grid gap-4">
+            <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-current-campaign">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]">Current Campaign</p>
               {activeCampaign ? (
                 <div className="mt-3 grid gap-3">
                   <div>
-                    <p className="text-lg font-semibold tracking-[-0.03em] text-[#172033]">{activeCampaign.name}</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
-                      <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill>
-                    </div>
+                    <p className="text-sm font-semibold text-[#0F172A]">{activeCampaign.name}</p>
+                    <p className="mt-1 text-sm text-[#475569]">{formatCampaignStatus(activeCampaign.status)}</p>
                   </div>
-                  <div className="rounded-[1.2rem] border border-[#EEE3D4] bg-[#FFF9EF] p-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8A5A34]">Next Best Action</p>
-                    <p className="mt-2 text-sm font-semibold text-[#172033]">{currentStep.title}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#556274]">{currentStep.detail}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
+                    <StatusPill tone="gold">{nextStep.statusLabel}</StatusPill>
                   </div>
-                  <div className="grid gap-2">
-                    {renderNextActionButton(currentStep, true)}
-                    <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("campaigns")}>
-                      Switch Campaign
-                    </button>
-                  </div>
+                  <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace(nextStep.workspace)}>
+                    {nextStep.ctaLabel}
+                  </button>
                 </div>
               ) : (
-                <div className="mt-3 grid gap-3">
-                  <p className="text-sm leading-6 text-[#556274]">No campaign selected.</p>
-                  <div className="grid gap-2">
-                    <button type="button" className={primaryButtonClass} onClick={() => openWorkspace("campaigns")}>
-                      Select Campaign
-                    </button>
-                    <button type="button" className={secondaryButtonClass} onClick={() => void onGenerateViralVideo()}>
-                      Generate Viral Video Title
-                    </button>
-                  </div>
+                <div className="mt-3 grid gap-2">
+                  <p className="text-sm text-[#475569]">No campaign selected.</p>
+                  <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("campaigns")}>
+                    Select Campaign
+                  </button>
                 </div>
               )}
-            </div>
+            </section>
 
-            <div className="mt-5 flex flex-1 flex-col">
-              <nav className="grid gap-2">
-                {workspaceNav.map((item) => (
-                  <SidebarButton key={item.id} item={item} active={activeSection === item.id} onClick={() => openWorkspace(item.id)} />
-                ))}
-              </nav>
-
-              <div className="mt-auto pt-5">
-                <div className="rounded-[1.5rem] border border-[#E7DCCB] bg-white/92 p-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Connection Status</p>
-                      <p className="mt-2 text-sm leading-6 text-[#556274]">{connectionSummary}</p>
-                    </div>
-                    <StatusPill tone={connectionStatus === "error" ? "red" : "neutral"}>{connectionStatus}</StatusPill>
-                  </div>
-                  <div className="mt-4 grid gap-2">
-                    <button type="button" className={secondaryButtonClass} onClick={() => openConnections()}>
-                      Open Connections
-                    </button>
-                  </div>
-                  {setupMessage ? <p className="mt-3 text-xs leading-5 text-[#6A7687]">{setupMessage}</p> : null}
-                </div>
-              </div>
-            </div>
+            <nav className="grid gap-2" data-testid="casahud-sidebar">
+              {workspaceNav.map((item) => (
+                <SidebarButton key={item.id} item={item} active={activeSection === item.id} onClick={() => openWorkspace(item.id)} />
+              ))}
+            </nav>
           </div>
-        )}
+        </div>
+
+        <div className="border-t border-[#D9E4F0] px-4 py-4 md:px-5">
+          <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#64748B]">Connections</p>
+                <p className="mt-1 text-sm text-[#475569]">{connectionSummary}</p>
+              </div>
+              <StatusPill tone={missingCoreConnections > 0 ? "gold" : "sage"}>
+                {missingCoreConnections > 0 ? `${missingCoreConnections} missing` : "Ready"}
+              </StatusPill>
+            </div>
+            <button type="button" className={secondaryButtonClass} onClick={() => openConnections()} style={{ marginTop: "0.75rem" }}>
+              Open Connections
+            </button>
+            {setupMessage ? <p className="mt-3 text-xs leading-5 text-[#64748B]">{setupMessage}</p> : null}
+          </div>
+        </div>
       </div>
     );
   }
@@ -2592,6 +2540,816 @@ export default function StudioCasaHudCommandCenter() {
             }
           />
         )}
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "viral_titles") {
+    const winningTitle = opportunitySource?.selectedTitle;
+
+    sectionContent = opportunitySource && winningTitle ? (
+      <WorkspacePage
+        eyebrow="Viral Titles"
+        title={winningTitle.title}
+        description="Selected title, ranked alternatives, and the research signal behind this campaign."
+        actions={
+          <>
+            {opportunityOutput ? (
+              <button
+                type="button"
+                className={primaryButtonClass}
+                onClick={() => void onCreateCampaign()}
+                disabled={campaignCreating}
+                data-testid="casahud-create-campaign-cta"
+              >
+                {campaignCreating ? "Creating Campaign..." : "Create Campaign"}
+              </button>
+            ) : null}
+            <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("campaigns")}>
+              Back to Campaigns
+            </button>
+          </>
+        }
+        testId="casahud-viral-titles"
+      >
+        {generationStatus === "loading"
+          ? renderProgressList(opportunitySteps, progressIndex, "loading", "casahud-opportunity-progress")
+          : null}
+
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+          <section className="grid gap-4">
+            <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-[#F8FBFF] p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Selected Title</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#0F172A]">{winningTitle.title}</h2>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill tone="blue">Score {winningTitle.score}</StatusPill>
+                  <StatusPill tone="gold">{Math.round(winningTitle.confidence * 100)}% confidence</StatusPill>
+                </div>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#475569]">
+                {opportunitySource.titleOpportunitySummary}
+              </p>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Research Brief</p>
+              <p className="mt-3 text-sm leading-6 text-[#475569]">{opportunitySource.researchBrief.summary}</p>
+              <div className="mt-4 grid gap-2 text-sm text-[#475569]">
+                <p>
+                  <span className="font-semibold text-[#0F172A]">Campaign type:</span>{" "}
+                  {formatOpportunityCampaignType(opportunitySource.campaignTypePrediction)}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F172A]">Reason:</span> {winningTitle.reasoning}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F172A]">Risk notes:</span>{" "}
+                  {opportunitySource.researchBrief.riskNotes.join(" · ") || "No major risk notes."}
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Ranked Directions</p>
+                <p className="mt-1 text-sm text-[#475569]">{formatCountLabel(opportunitySource.titleCandidates.length, "candidate")}</p>
+              </div>
+              <StatusPill tone="neutral">{formatOpportunityCampaignType(winningTitle.campaignType)}</StatusPill>
+            </div>
+            <div className="mt-4 grid gap-3">
+              {opportunitySource.titleCandidates.map((candidate, index) => (
+                <article key={candidate.id} className="rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-candidate-card">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-[#0F172A]">{candidate.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#475569]">{candidate.reasoning}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <StatusPill tone="ink">#{index + 1}</StatusPill>
+                      <StatusPill tone={candidate.title === winningTitle.title ? "gold" : "blue"}>{candidate.score}</StatusPill>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </section>
+        </div>
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage
+        eyebrow="Viral Titles"
+        title="No viral title selected"
+        description="Campaign concepts appear here after you generate them from Campaigns."
+        testId="casahud-viral-titles"
+      >
+        <EmptyState
+          title="No title package yet"
+          description="Use Campaigns to create the next CasaHUD concept."
+          action={
+            <button type="button" className={primaryButtonClass} onClick={() => openWorkspace("campaigns")}>
+              Open Campaigns
+            </button>
+          }
+        />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "properties") {
+    sectionContent = (
+      <WorkspacePage
+        eyebrow="Properties"
+        title={activeCampaign ? "Source-backed property set" : "No campaign selected"}
+        description="Discover, import, filter, and review the properties that support the selected campaign."
+        actions={activeCampaign ? renderNextActionButton(deriveNextStep(activeCampaign)) : undefined}
+        testId="casahud-properties"
+      >
+        {campaignDiscoveringId === activeCampaign?.id
+          ? renderProgressList(discoverySteps, discoveryProgressIndex, "loading", "casahud-discovery-progress")
+          : null}
+        {campaignValidatingId === activeCampaign?.id ? (
+          <div className="mt-4">{renderProgressList(validationSteps, validationProgressIndex, "loading", "casahud-validation-progress")}</div>
+        ) : null}
+
+        {activeCampaign ? (
+          <div className="grid gap-4" data-testid="casahud-listing-candidates">
+            <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-import-listing-urls">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="max-w-3xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Import Listing URLs</p>
+                  <p className="mt-2 text-sm leading-6 text-[#475569]">Paste property URLs when you want to seed the campaign with specific listings.</p>
+                </div>
+                <StatusPill tone="neutral">Source-labeled</StatusPill>
+              </div>
+              <div className="mt-4 grid gap-3">
+                <textarea
+                  value={listingUrlImportText}
+                  onChange={(event) => setListingUrlImportText(event.target.value)}
+                  rows={4}
+                  placeholder={`https://www.idealista.it/...\nhttps://www.immobiliare.it/...`}
+                  className="min-h-[120px] w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm leading-6 text-[#0F172A] outline-none transition placeholder:text-[#94A3B8] focus:border-[#0F172A]"
+                  data-testid="casahud-import-listing-urls-input"
+                />
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    className={primaryButtonClass}
+                    onClick={() => void onImportListingUrls()}
+                    disabled={listingUrlImporting}
+                    data-testid="casahud-import-listing-urls-cta"
+                  >
+                    {listingUrlImporting ? "Importing Listing URLs..." : "Import Listing URLs"}
+                  </button>
+                  {listingUrlImportNotice ? <p className="text-sm text-[#475569]">{listingUrlImportNotice}</p> : null}
+                </div>
+                {listingUrlImportWarnings.length > 0 ? (
+                  <div className="grid gap-2">
+                    {listingUrlImportWarnings.map((warning) => (
+                      <p key={warning} className="rounded-2xl border border-[#FDE68A] bg-[#FFFBEB] px-3 py-2 text-sm text-[#92400E]">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            </section>
+
+            <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Property Queue</p>
+                  <p className="mt-1 text-sm text-[#475569]">
+                    {activeCampaign.discoverySummary?.headline || activeCampaign.listingValidationSummary?.headline || "Review the current property set."}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill tone="sage">{formatCountLabel(activeCampaign.approvedListings.length, "approved property")}</StatusPill>
+                  <StatusPill tone="neutral">{formatCountLabel(activeCampaign.listingCandidates.length, "candidate")}</StatusPill>
+                  <StatusPill tone="red">{formatCountLabel(activeCampaign.rejectedListings.length, "rejected listing")}</StatusPill>
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <input
+                  value={propertySearch}
+                  onChange={(event) => setPropertySearch(event.target.value)}
+                  placeholder="Search title or location"
+                  className="w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none"
+                />
+                <select
+                  value={propertyStatusFilter}
+                  onChange={(event) => setPropertyStatusFilter(event.target.value as typeof propertyStatusFilter)}
+                  className="w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="approved">Approved</option>
+                  <option value="candidate">Candidates</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+                <select
+                  value={propertySort}
+                  onChange={(event) => setPropertySort(event.target.value as typeof propertySort)}
+                  className="w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none"
+                >
+                  <option value="rank">Sort by rank</option>
+                  <option value="updated">Sort by updated</option>
+                  <option value="price_desc">Price high to low</option>
+                  <option value="price_asc">Price low to high</option>
+                </select>
+              </div>
+            </section>
+
+            {propertyWorkspaceListings.length > 0 ? (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {propertyWorkspaceListings.map(({ listing, bucket }) => (
+                  <div key={`${bucket}-${listing.id}`} className="grid gap-2">
+                    <div className="flex items-center justify-between gap-3">
+                      <StatusPill tone={bucket === "approved" ? "sage" : bucket === "rejected" ? "red" : "neutral"}>
+                        {bucket === "approved" ? "Approved" : bucket === "rejected" ? "Rejected" : "Candidate"}
+                      </StatusPill>
+                    </div>
+                    <PropertyCard
+                      campaign={activeCampaign}
+                      listing={listing}
+                      testId={
+                        bucket === "approved"
+                          ? "casahud-approved-listing-card"
+                          : bucket === "rejected"
+                            ? "casahud-rejected-listing-card"
+                            : "casahud-listing-candidate-card"
+                      }
+                      onSelect={setSelectedListingId}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <EmptyState
+                title="No properties in this view"
+                description="Adjust the search or filter, or discover more matching properties."
+                action={renderNextActionButton(deriveNextStep(activeCampaign))}
+              />
+            )}
+          </div>
+        ) : (
+          <EmptyState
+            title="No campaign selected"
+            description="Open a campaign before reviewing properties."
+            action={
+              <button type="button" className={primaryButtonClass} onClick={() => openWorkspace("campaigns")}>
+                Open Campaigns
+              </button>
+            }
+          />
+        )}
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "location") {
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Location"
+        title={activeCampaign.locationStory?.headline || "Location context"}
+        description="Local story, POIs, and map scenes that explain why this place matters for the campaign."
+        actions={renderNextActionButton(deriveNextStep(activeCampaign))}
+        testId="casahud-location"
+      >
+        {campaignLocatingId === activeCampaign.id ? renderProgressList(locationSteps, locationProgressIndex, "loading", "casahud-location-progress") : null}
+
+        {activeCampaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
+          <div className="grid gap-4 lg:grid-cols-2">
+            <section className="grid gap-4">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-location-intelligence-summary">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Campaign Story</p>
+                <p className="mt-2 text-sm leading-6 text-[#475569]">
+                  {activeCampaign.locationStory?.summary || activeCampaign.locationIntelligenceSummary?.coverageSummary}
+                </p>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-local-highlights">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Local Highlights</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.localHighlights.map((highlight) => (
+                    <div key={highlight.id} className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                      <p className="text-sm font-semibold text-[#0F172A]">{highlight.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#475569]">{highlight.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            <section className="grid gap-4">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-poi-bundle">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">POIs</p>
+                <div className="mt-4 grid gap-3">
+                  {(activeCampaign.poiBundle?.cards || []).map((poi) => (
+                    <div key={poi.id} className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                      <p className="text-sm font-semibold text-[#0F172A]">{poi.name}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#475569]">{poi.relevanceReason}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-map-scene-ideas">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Map Scene Ideas</p>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.mapSceneIdeas.map((scene) => (
+                    <div key={scene.id} className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                      <p className="text-sm font-semibold text-[#0F172A]">{scene.title}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#475569]">{scene.description}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <EmptyState
+            title="Location not ready"
+            description="Run the location pass after properties are validated."
+            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+          />
+        )}
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Location" title="No campaign selected" description="Open a campaign to review its location data." testId="casahud-location">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "script") {
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Script"
+        title={activeCampaign.scriptSummary || "Scene-by-scene script"}
+        description="Narration, hook, and current script package for the selected campaign."
+        actions={
+          <>
+            {renderNextActionButton(deriveNextStep(activeCampaign))}
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              onClick={() => void onCopyScript()}
+              disabled={!activeCampaign.fullScriptText}
+            >
+              Copy Script
+            </button>
+          </>
+        }
+        testId="casahud-script"
+      >
+        {campaignScriptingId === activeCampaign.id ? renderProgressList(scriptSteps, scriptProgressIndex, "loading", "casahud-script-progress") : null}
+
+        {activeCampaign.scriptGenerationStatus === "script_generated" ? (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+            <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Master Script</p>
+              <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#475569]">
+                {activeCampaign.fullScriptText || activeCampaign.scriptSummary || activeCampaign.openingHook}
+              </p>
+              {scriptCopyNotice ? <p className="mt-3 text-sm text-[#475569]">{scriptCopyNotice}</p> : null}
+            </section>
+            <section className="grid gap-4">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Script Status</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <StatusPill tone="blue">{formatDuration(activeCampaign.estimatedDurationSeconds)}</StatusPill>
+                  <StatusPill tone="neutral">{formatCountLabel(videoScenes.length, "scene")}</StatusPill>
+                  <StatusPill tone="sage">{formatCampaignStatus(activeCampaign.scriptGenerationStatus)}</StatusPill>
+                </div>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Scene Outline</p>
+                <div className="mt-4 grid gap-3">
+                  {videoScenes.slice(0, 5).map((scene) => (
+                    <div key={scene.id} className="rounded-2xl border border-[#E2E8F0] bg-[#F8FAFC] p-4">
+                      <p className="text-sm font-semibold text-[#0F172A]">
+                        {scene.order}. {scene.title}
+                      </p>
+                      <p className="mt-2 text-sm leading-6 text-[#475569]">{scene.narration}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <EmptyState
+            title="Script not ready"
+            description="Generate the script after location is complete."
+            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+          />
+        )}
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Script" title="No campaign selected" description="Open a campaign to review script output." testId="casahud-script">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "media") {
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Media"
+        title="Media plan"
+        description="Scene assets, shot list, and media coverage for the current campaign."
+        actions={renderNextActionButton(deriveNextStep(activeCampaign))}
+        testId="casahud-media"
+      >
+        {campaignMediaPlanningId === activeCampaign.id ? <div className="mt-4">{renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress")}</div> : null}
+
+        {activeCampaign.scriptGenerationStatus === "script_generated" ? (
+          <div className="grid gap-4">
+            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Media Status</p>
+                <p className="mt-3 text-sm leading-6 text-[#475569]">
+                  {activeCampaign.mediaPlanningStatus === "media_plan_built"
+                    ? activeCampaign.mediaPlanSummary || "The media plan is ready for review."
+                    : "Build the media plan to map visuals to each scripted scene."}
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <StatusPill tone="neutral">{formatCountLabel(videoScenes.length, "scene")}</StatusPill>
+                  <StatusPill tone={activeCampaign.mediaPlanningStatus === "media_plan_built" ? "sage" : "gold"}>
+                    {activeCampaign.mediaPlanningStatus === "media_plan_built" ? "Media ready" : "Media pending"}
+                  </StatusPill>
+                </div>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#FECACA] bg-[#FFF7F7] p-4" data-testid="casahud-media-warnings">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#991B1B]">Missing Media Warnings</p>
+                <div className="mt-4 grid gap-2">
+                  {(activeCampaign.missingMediaWarnings || []).length > 0 ? (
+                    activeCampaign.missingMediaWarnings.map((warning) => (
+                      <p key={warning} className="rounded-2xl border border-[#FECACA] bg-white px-3 py-2 text-sm text-[#7F1D1D]">
+                        {warning}
+                      </p>
+                    ))
+                  ) : (
+                    <p className="rounded-2xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#475569]">
+                      No major media gaps are flagged on the current scene plan.
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4">
+              {videoScenes.map((scene) => (
+                <VideoSceneCard key={scene.id} scene={scene} />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <EmptyState
+            title="Media not ready"
+            description="Generate the script first, then build the media plan."
+            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+          />
+        )}
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Media" title="No campaign selected" description="Open a campaign to review the media plan." testId="casahud-media">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "storyboard") {
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Storyboard"
+        title="Storyboard"
+        description="Compact scene order, visual target, and on-screen text for the current package."
+        actions={activeCampaign.mediaPlanningStatus === "media_plan_built" ? <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("review")}>Open Review</button> : renderNextActionButton(deriveNextStep(activeCampaign))}
+        testId="casahud-storyboard"
+      >
+        {videoScenes.length > 0 ? (
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {videoScenes.map((scene) => (
+              <article key={scene.id} className="overflow-hidden rounded-[1.3rem] border border-[#D9E4F0] bg-white">
+                <div className="aspect-[16/10] bg-[#E2E8F0]">
+                  <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                </div>
+                <div className="grid gap-2 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill tone="ink">Scene {scene.order}</StatusPill>
+                    <StatusPill tone="neutral">{scene.preview.stateLabel}</StatusPill>
+                  </div>
+                  <p className="text-sm font-semibold text-[#0F172A]">{scene.title}</p>
+                  <p className="text-sm leading-6 text-[#475569]">{scene.onScreenText}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            title="Storyboard not ready"
+            description="Scenes appear here after script and media planning are available."
+            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+          />
+        )}
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Storyboard" title="No campaign selected" description="Open a campaign to review its storyboard." testId="casahud-storyboard">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "review") {
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Review"
+        title={activeCampaign.finalTitle || activeCampaign.selectedViralTitle || "Review package"}
+        description="Final title, description, chapters, and review blockers before render and publish."
+        actions={
+          <>
+            {renderNextActionButton(deriveNextStep(activeCampaign))}
+            <button type="button" className={secondaryButtonClass} onClick={() => openWorkspace("publish")}>
+              Open Publish
+            </button>
+          </>
+        }
+        testId="casahud-review"
+      >
+        {campaignPackagingId === activeCampaign.id ? renderProgressList(packageSteps, packageProgressIndex, "loading", "casahud-package-progress") : null}
+
+        {activeCampaign.youtubePackageStatus === "package_prepared" ? (
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
+            <section className="grid gap-4">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-package-title">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Final Title</p>
+                <p className="mt-2 text-lg font-semibold text-[#0F172A]">{activeCampaign.finalTitle || activeCampaign.selectedViralTitle}</p>
+                <p className="mt-3 text-sm leading-6 text-[#475569]">
+                  {activeCampaign.titleRationale || activeCampaign.confidenceReasoning.selectedTitleReasoning || activeCampaign.confidenceReasoning.titleOpportunitySummary}
+                </p>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Description</p>
+                <p className="mt-3 whitespace-pre-line text-sm leading-6 text-[#475569]">{activeCampaign.youtubeDescription || "Description pending."}</p>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#FECACA] bg-[#FFF7F7] p-4" data-testid="casahud-review-summary">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#991B1B]">Review Summary</p>
+                <p className="mt-3 text-sm leading-6 text-[#475569]">
+                  {activeCampaign.reviewSummary || activeCampaign.packagingSummary || "Review summary is ready."}
+                </p>
+              </div>
+            </section>
+
+            <section className="grid gap-4">
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-thumbnail-concept">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Thumbnail Concept</p>
+                <div className="mt-3 grid gap-2 text-sm leading-6 text-[#475569]">
+                  <p>{activeCampaign.thumbnailConcept?.visualDirection || "Thumbnail concept pending."}</p>
+                  <p>
+                    <span className="font-semibold text-[#0F172A]">Headline:</span> {activeCampaign.thumbnailConcept?.headline || "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#0F172A]">Overlay:</span> {activeCampaign.thumbnailConcept?.textOverlay || "Pending"}
+                  </p>
+                </div>
+              </div>
+              <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-render-plan">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Render Plan</p>
+                <div className="mt-3 grid gap-2 text-sm leading-6 text-[#475569]">
+                  <p>{activeCampaign.renderPlan?.assetReadinessSummary || activeCampaign.previewPackage?.assetReadinessSummary || "Render plan pending."}</p>
+                  <p>
+                    <span className="font-semibold text-[#0F172A]">Readiness score:</span>{" "}
+                    {typeof activeCampaign.readinessScore === "number" ? activeCampaign.readinessScore : "Pending"}
+                  </p>
+                </div>
+              </div>
+            </section>
+          </div>
+        ) : (
+          <EmptyState
+            title="Review package not ready"
+            description="Build the review package after the media plan is ready."
+            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+          />
+        )}
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Review" title="No campaign selected" description="Open a campaign to review the current package." testId="casahud-review">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "publish") {
+    const youtubeCard = connectionCards.find((card) => card.id === "youtube");
+    const youtubeConnected = youtubeCard?.status === "connected";
+    const renderOutputUrl = activeCampaign?.renderOutputUrl || activeCampaign?.renderOutput?.url || null;
+    const renderOutputPath = activeCampaign?.renderOutputPath || activeCampaign?.renderOutput?.path || null;
+    const renderPreviewState =
+      activeCampaign?.renderOutput?.type === "mp4"
+        ? "final_mp4"
+        : activeCampaign?.renderOutput?.type === "preview_package" || activeCampaign?.previewPackage
+          ? "preview_package"
+          : activeCampaign?.renderStatus === "blocked" || (activeCampaign?.renderBlockers.length || 0) > 0
+            ? "blocked"
+            : "not_started";
+
+    sectionContent = activeCampaign ? (
+      <WorkspacePage
+        eyebrow="Publish"
+        title="Render and publish"
+        description="Review output state, render the current package, and publish when the final MP4 is ready."
+        actions={
+          <button
+            type="button"
+            className={primaryButtonClass}
+            onClick={() => void onRenderVideo()}
+            disabled={activeCampaign.youtubePackageStatus !== "package_prepared" || activeCampaign.reviewStatus === "blocked" || campaignRenderingId === activeCampaign.id}
+            data-testid="casahud-render-video-cta"
+          >
+            {campaignRenderingId === activeCampaign.id ? "Rendering..." : "Render Video"}
+          </button>
+        }
+        testId="casahud-publish"
+      >
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
+          <section className="grid gap-4">
+            <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Output State</p>
+                  <p className="mt-2 text-lg font-semibold text-[#0F172A]">
+                    {renderPreviewState === "final_mp4"
+                      ? "Final MP4 ready"
+                      : renderPreviewState === "preview_package"
+                        ? "Preview package ready"
+                        : renderPreviewState === "blocked"
+                          ? "Render blocked"
+                          : "Render not started"}
+                  </p>
+                </div>
+                <StatusPill tone={renderPreviewState === "final_mp4" ? "sage" : renderPreviewState === "preview_package" ? "blue" : renderPreviewState === "blocked" ? "red" : "gold"}>
+                  {renderPreviewState === "final_mp4" ? "Final MP4" : renderPreviewState === "preview_package" ? "Preview" : renderPreviewState === "blocked" ? "Blocked" : "Pending"}
+                </StatusPill>
+              </div>
+              <p className="mt-3 text-sm leading-6 text-[#475569]" data-testid="casahud-video-preview">
+                {renderPreviewState === "final_mp4"
+                  ? "Final MP4 is ready for publish."
+                  : renderPreviewState === "preview_package"
+                    ? "Preview package is ready. This is not a final MP4."
+                    : renderPreviewState === "blocked"
+                      ? "Resolve blockers before rendering."
+                      : "Render has not started yet."}
+              </p>
+              {renderPreviewState === "final_mp4" && renderOutputUrl ? (
+                <div
+                  className="mt-4 overflow-hidden rounded-[1.2rem] border border-[#D9E4F0] bg-[#0F172A]"
+                  data-testid="casahud-video-preview-player"
+                >
+                  <video controls preload="metadata" className="h-full max-h-[420px] w-full bg-black">
+                    <source src={renderOutputUrl} type={activeCampaign.renderOutput?.format || "video/mp4"} />
+                  </video>
+                </div>
+              ) : null}
+              {renderPreviewState !== "final_mp4" && videoScenes.length > 0 ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-3" data-testid="casahud-video-preview-storyboard">
+                  {videoScenes.slice(0, 3).map((scene) => (
+                    <article key={scene.id} className="overflow-hidden rounded-[1.2rem] border border-[#D9E4F0] bg-[#F8FAFC]">
+                      <div className="aspect-[16/10] bg-[#E2E8F0]">
+                        <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                      </div>
+                      <div className="p-4">
+                        <p className="text-sm font-semibold text-[#0F172A]">{scene.title}</p>
+                        <p className="mt-2 text-sm leading-6 text-[#475569]">{scene.onScreenText}</p>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="rounded-[1.3rem] border border-[#FECACA] bg-[#FFF7F7] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#991B1B]">Warnings & Blockers</p>
+              <div className="mt-4 grid gap-2">
+                {[...(activeCampaign.renderBlockers || []), ...(activeCampaign.renderWarnings || [])].length > 0 ? (
+                  [...(activeCampaign.renderBlockers || []), ...(activeCampaign.renderWarnings || [])].map((item) => (
+                    <p key={item} className="rounded-2xl border border-[#FECACA] bg-white px-3 py-2 text-sm text-[#7F1D1D]">
+                      {item}
+                    </p>
+                  ))
+                ) : (
+                  <p className="rounded-2xl border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#475569]">
+                    No render-specific blockers are recorded on this campaign.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+
+          <section className="grid gap-4">
+            <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Publish Controls</p>
+              <p className="mt-3 text-sm leading-6 text-[#475569]">
+                {youtubeConnected ? "YouTube is connected. Publish or schedule once the final MP4 is ready." : "Connect YouTube before publish or scheduling."}
+              </p>
+              <div className="mt-4 grid gap-3">
+                <button
+                  type="button"
+                  className={primaryButtonClass}
+                  onClick={() => void onPublishNow()}
+                  disabled={!youtubeConnected || activeCampaign.renderOutput?.type !== "mp4" || campaignPublishingId === activeCampaign.id}
+                  data-testid="casahud-publish-now-cta"
+                >
+                  {campaignPublishingId === activeCampaign.id ? "Publishing..." : "Publish Now"}
+                </button>
+                <label className="grid gap-2 text-sm text-[#475569]">
+                  Schedule to YouTube
+                  <input
+                    type="datetime-local"
+                    value={scheduledPublishAt}
+                    onChange={(event) => setScheduledPublishAt(event.target.value)}
+                    className="w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className={secondaryButtonClass}
+                  onClick={() => void onScheduleCampaign()}
+                  disabled={!youtubeConnected || activeCampaign.renderOutput?.type !== "mp4" || campaignSchedulingId === activeCampaign.id}
+                  data-testid="casahud-schedule-youtube-cta"
+                >
+                  {campaignSchedulingId === activeCampaign.id ? "Scheduling..." : "Schedule to YouTube"}
+                </button>
+                {!youtubeConnected ? (
+                  <button type="button" className={secondaryButtonClass} onClick={() => openConnections("youtube")}>
+                    Connect YouTube
+                  </button>
+                ) : null}
+              </div>
+            </div>
+
+            <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Output Details</p>
+              <div className="mt-4 grid gap-2 text-sm leading-6 text-[#475569]">
+                <p>
+                  <span className="font-semibold text-[#0F172A]">Publish status:</span> {formatCampaignStatus(activeCampaign.publishStatus)}
+                </p>
+                <p>
+                  <span className="font-semibold text-[#0F172A]">Schedule status:</span> {formatCampaignStatus(activeCampaign.scheduleStatus)}
+                </p>
+                {renderOutputPath ? (
+                  <p>
+                    <span className="font-semibold text-[#0F172A]">Output path:</span> {renderOutputPath}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        </div>
+      </WorkspacePage>
+    ) : (
+      <WorkspacePage eyebrow="Publish" title="No campaign selected" description="Open a campaign to render or publish." testId="casahud-publish">
+        <EmptyState title="No campaign selected" description="Open a campaign first." />
+      </WorkspacePage>
+    );
+  }
+
+  if (activeSection === "settings") {
+    sectionContent = (
+      <WorkspacePage
+        eyebrow="Settings"
+        title="Workspace settings"
+        description="Connection readiness and publishing defaults for the CasaHUD workspace."
+        testId="casahud-settings"
+      >
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Connection Readiness</p>
+            <div className="mt-4 grid gap-2 text-sm leading-6 text-[#475569]">
+              <p>{connectionSummary}</p>
+              <p>{setupMessage || "All required setup guidance is currently satisfied."}</p>
+            </div>
+            <button type="button" className={secondaryButtonClass} onClick={() => openConnections()} style={{ marginTop: "0.75rem" }}>
+              Open Connections
+            </button>
+          </div>
+          <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Default Publish Time</p>
+            <label className="mt-4 grid gap-2 text-sm text-[#475569]">
+              Scheduled publish time
+              <input
+                type="datetime-local"
+                value={scheduledPublishAt}
+                onChange={(event) => setScheduledPublishAt(event.target.value)}
+                className="w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-4 py-3 text-sm text-[#0F172A] outline-none"
+              />
+            </label>
+          </div>
+        </div>
       </WorkspacePage>
     );
   }
@@ -3883,19 +4641,19 @@ export default function StudioCasaHudCommandCenter() {
     selectedListing && activeCampaign ? deriveCasaHudFeaturedPropertyMedia(selectedListing, activeCampaign) : null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(255,242,219,0.72),transparent_34%),linear-gradient(180deg,#FFF7EA_0%,#F7F3EC_42%,#F4F7FB_100%)] text-[#172033]">
-      <div className="mx-auto flex min-h-screen max-w-[1780px]" data-testid="casahud-workspace-shell">
-        <aside className="hidden w-[330px] shrink-0 border-r border-[#E6D8C7] bg-[#FFFBF4]/82 backdrop-blur lg:flex" data-testid="casahud-sidebar">
+    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FBFD_0%,#F1F5F9_100%)] text-[#172033]">
+      <div className="mx-auto flex min-h-screen max-w-[1600px]" data-testid="casahud-workspace-shell">
+        <aside className="hidden w-[290px] shrink-0 border-r border-[#D9E4F0] bg-[#F8FAFC] lg:flex" data-testid="casahud-sidebar">
           {renderSidebarContent()}
         </aside>
 
         <div className="flex min-h-screen flex-1 flex-col">
-          <header className="sticky top-0 z-30 border-b border-[#E6D8C7] bg-[#FFFDF8]/92 px-4 py-4 backdrop-blur lg:hidden">
+          <header className="sticky top-0 z-30 border-b border-[#D9E4F0] bg-white/92 px-4 py-4 backdrop-blur lg:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">CasaHUD Studio</p>
-                <p className="mt-1 truncate text-sm font-semibold text-[#172033]">{currentCampaignLabel}</p>
-                <p className="mt-1 text-xs text-[#6A7687]">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#64748B]">CasaHUD</p>
+                <p className="mt-1 truncate text-sm font-semibold text-[#0F172A]">{currentCampaignLabel}</p>
+                <p className="mt-1 text-xs text-[#64748B]">
                   {activeCampaign ? formatCampaignStatus(activeCampaign.status) : "No campaign selected"}
                 </p>
               </div>
@@ -3913,7 +4671,7 @@ export default function StudioCasaHudCommandCenter() {
           {drawerOpen ? (
             <div className="fixed inset-0 z-40 flex bg-[#172033]/45 lg:hidden" onClick={() => setDrawerOpen(false)}>
               <div
-                className="flex h-[100dvh] max-h-[100dvh] w-[88vw] max-w-[360px] overflow-hidden bg-[#FFFDF8] pb-[env(safe-area-inset-bottom)] shadow-[0_24px_60px_rgba(23,32,51,0.28)]"
+                className="flex h-[100dvh] max-h-[100dvh] w-[88vw] max-w-[340px] overflow-hidden bg-[#F8FAFC] pb-[env(safe-area-inset-bottom)] shadow-[0_24px_60px_rgba(23,32,51,0.28)]"
                 onClick={(event) => event.stopPropagation()}
                 data-testid="casahud-mobile-drawer"
               >
@@ -3922,8 +4680,8 @@ export default function StudioCasaHudCommandCenter() {
             </div>
           ) : null}
 
-          <main className="flex-1 p-4 md:p-6 xl:p-8">
-            <div className="mx-auto grid max-w-7xl gap-4">
+          <main className="flex-1 p-4 md:p-6 xl:p-7">
+            <div className="mx-auto grid max-w-6xl gap-4">
               {campaignNotice ? (
                 <div className="rounded-2xl border border-[#C6DFC9] bg-[#F2FBF3] px-4 py-3 text-sm text-[#0F5132]" data-testid="casahud-campaign-create-success">
                   {campaignNotice}

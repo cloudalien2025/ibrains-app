@@ -19,18 +19,25 @@ vi.mock("next/link", async () => {
 });
 
 describe("CasaHUD entry shell", () => {
-  it("renders the campaign-centered command center shell by default", () => {
+  it("renders the compact CasaHUD workspace shell with the reset sidebar labels", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
     expect(html).toContain("casahud-workspace-shell");
     expect(html).toContain("casahud-sidebar");
+    expect(html).toContain(">Campaigns<");
+    expect(html).toContain(">Viral Titles<");
+    expect(html).toContain(">Properties<");
+    expect(html).toContain(">Connections<");
     expect(html).toContain(">Generate Viral Video Title<");
     expect(html).toContain("No campaign selected.");
-    expect(html).toContain(">Opportunity Brief<");
-    expect(html).toContain(">Property Shortlist<");
-    expect(html).toContain(">Video Builder<");
-    expect(html).not.toContain(">Viral Titles<");
-    expect(html).not.toContain("Generate Mock Viral Titles");
-    expect(html).not.toContain("<form");
+    expect(html).not.toContain(">Dashboard<");
+    expect(html).not.toContain(">Opportunity Brief<");
+    expect(html).not.toContain(">Property Shortlist<");
+    expect(html).not.toContain(">Video Builder<");
+    expect(html).not.toContain("Generate your next viral property video");
+
+    for (const bubble of ["DB", "VT", "PS", "LI", "SS", "ML", "SB", "RP", "PB", "CN", "ST"]) {
+      expect(html).not.toContain(`>${bubble}<`);
+    }
   });
 });
