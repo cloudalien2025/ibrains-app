@@ -139,7 +139,7 @@ describe("CasaHUD campaign persistence", () => {
         return [];
       }
 
-      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3, $4)")) {
+      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3, $4, $5)")) {
         const [storedUserId] = params as [string];
         return Array.from(state.projects.values())
           .filter((row) => row.user_id === storedUserId)
@@ -153,7 +153,7 @@ describe("CasaHUD campaign persistence", () => {
       if (
         normalized.includes("from casahud_projects") &&
         normalized.includes("and id = $2") &&
-        normalized.includes("and provider_metadata->>'phase' in ($3, $4, $5)")
+        normalized.includes("and provider_metadata->>'phase' in ($3, $4, $5, $6)")
       ) {
         const [storedUserId, campaignId] = params as [string, string];
         const row = state.projects.get(campaignId);
@@ -188,6 +188,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(metadata.campaign.listingDiscoveryStatus).toBe("not_started");
     expect(metadata.campaign.approvedListings).toEqual([]);
     expect(metadata.campaign.listingValidationStatus).toBe("not_started");
+    expect(metadata.campaign.locationIntelligenceStatus).toBe("not_started");
   });
 
   it("lists recent campaigns and reopens a saved campaign by id", async () => {
@@ -205,6 +206,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(campaigns[0]?.researchSummary).toBe(opportunity.researchBrief.summary);
     expect(campaigns[0]?.approvedListingCount).toBe(0);
     expect(campaigns[0]?.listingValidationStatus).toBe("not_started");
+    expect(campaigns[0]?.locationIntelligenceStatus).toBe("not_started");
 
     const reopened = await repository.getCasaHudCampaign(userId, first.id);
     expect(reopened?.selectedTitle.title).toBe(opportunity.selectedTitle.title);
@@ -231,6 +233,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(reopened?.listingSearchCriteria?.regionHint).toBe("Southern Italy");
     expect(reopened?.listingProviderStatuses.some((status) => status.provider === "casahud_sample")).toBe(true);
     expect(reopened?.nextPhase.key).toBe("listing_validation");
+    expect(reopened?.locationIntelligenceStatus).toBe("not_started");
 
     const summaries = await repository.listCasaHudCampaignSummaries(userId);
     expect(summaries[0]?.listingCandidateCount).toBe(reopened?.listingCandidates.length);
@@ -258,10 +261,43 @@ describe("CasaHUD campaign persistence", () => {
     expect(reopened?.approvedListings.length).toBeGreaterThan(0);
     expect(typeof reopened?.titleSupportConfidence).toBe("number");
     expect(reopened?.nextPhase.key).toBe("location_intelligence");
+    expect(reopened?.locationIntelligenceStatus).toBe("not_started");
 
     const summaries = await repository.listCasaHudCampaignSummaries(userId);
     expect(summaries[0]?.approvedListingCount).toBe(reopened?.approvedListings.length);
     expect(summaries[0]?.listingValidationStatus).toBe("listing_candidates_validated");
     expect(summaries[0]?.validationSummary).toBe(reopened?.listingValidationSummary?.headline);
+  });
+
+  it("persists location intelligence and reloads the place story on the campaign", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+    const discovery = await import("@/lib/studio/domara/listing-discovery-engine");
+    const validation = await import("@/lib/studio/domara/listing-validation-engine");
+    const location = await import("@/lib/studio/domara/location-intelligence-engine");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const discoveryResult = await discovery.runCasaHudListingDiscovery(created);
+    const discovered = campaigns.applyCasaHudListingDiscovery(created, discoveryResult);
+    const validationResult = validation.runCasaHudListingValidation(discovered);
+    const validated = campaigns.applyCasaHudListingValidation(discovered, validationResult);
+    const locationResult = await location.runCasaHudLocationIntelligence(validated, {});
+    const enriched = campaigns.applyCasaHudLocationIntelligence(validated, locationResult);
+
+    await repository.saveCasaHudCampaign(userId, enriched);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.status).toBe("location_intelligence_completed");
+    expect(reopened?.locationIntelligenceStatus).toBe("location_intelligence_completed");
+    expect(reopened?.locationStory?.headline).toContain("story");
+    expect(reopened?.poiBundle?.cards.length).toBeGreaterThan(0);
+    expect(reopened?.mapSceneIdeas.length).toBeGreaterThan(0);
+    expect(reopened?.listingLocationInsights.length).toBeGreaterThan(0);
+    expect(reopened?.nextPhase.key).toBe("script_narrative_generation");
+
+    const summaries = await repository.listCasaHudCampaignSummaries(userId);
+    expect(summaries[0]?.status).toBe("location_intelligence_completed");
+    expect(summaries[0]?.locationIntelligenceStatus).toBe("location_intelligence_completed");
+    expect(summaries[0]?.locationSummary).toBe(reopened?.locationIntelligenceSummary?.headline);
   });
 });

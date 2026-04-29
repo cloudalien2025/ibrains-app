@@ -111,6 +111,18 @@ const successOutput: CasaHudOpportunityResult = {
   },
 };
 
+const emptyLocationState = {
+  locationIntelligenceStatus: "not_started" as const,
+  locationIntelligenceSummary: null,
+  locationStory: null,
+  localHighlights: [],
+  poiBundle: null,
+  mapSceneIdeas: [],
+  listingLocationInsights: [],
+  locationProviderStatuses: [],
+  locationWarnings: [],
+};
+
 const savedCampaign: CasaHudCampaign = {
   id: "casahud-project-phase3",
   name: "Could You Retire in Southern Italy for Under $300K?",
@@ -141,6 +153,7 @@ const savedCampaign: CasaHudCampaign = {
   listingValidationSummary: null,
   titleSupportConfidence: null,
   validationWarnings: [],
+  ...emptyLocationState,
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -276,6 +289,7 @@ const discoveredCampaign: CasaHudCampaign = {
   listingValidationSummary: null,
   titleSupportConfidence: null,
   validationWarnings: [],
+  ...emptyLocationState,
   nextPhase: {
     key: "listing_validation",
     label: "Validate and rank listings",
@@ -364,6 +378,7 @@ const validatedCampaign: CasaHudCampaign = {
     "The discovered listings only partially support the title promise. Review the rejected listings or rerun property discovery before moving forward.",
     "Some listings are plausible but still need review before CasaHUD can rely on them.",
   ],
+  ...emptyLocationState,
   nextPhase: {
     key: "location_intelligence",
     label: "Location Intelligence",
@@ -377,6 +392,136 @@ const validatedCampaign: CasaHudCampaign = {
     approvedListings: [],
     rejectedListings: [],
     listingRankOrder: ["listing-1"],
+  },
+};
+
+const locationRichCampaign: CasaHudCampaign = {
+  ...validatedCampaign,
+  status: "location_intelligence_completed",
+  locationIntelligenceStatus: "location_intelligence_completed",
+  locationIntelligenceSummary: {
+    headline: "Location story prepared across 1 shortlist anchor.",
+    providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
+    coverageSummary: "CasaHUD connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
+    warningCount: 1,
+    generatedAt: "2026-04-29T00:00:00.000Z",
+    fallbackUsed: true,
+  },
+  locationStory: {
+    headline: "Tropea turns the shortlist into a place-led story.",
+    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
+    narrativeAngles: [
+      "Open with the region before dropping into the strongest listing.",
+      "Use local proof points as support for the property promise instead of generic travel filler.",
+    ],
+    lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
+    regionHighlights: ["Tropea", "Calabria"],
+    fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
+  },
+  localHighlights: [
+    {
+      id: "highlight-1",
+      title: "Regional anchor",
+      description: "Tropea gives the campaign a specific place identity instead of a generic property roundup.",
+      locationText: "Tropea, Calabria, Italy",
+      associatedListingId: "listing-1",
+      provider: "casahud_location_patterns",
+      sourceConfidence: "fallback",
+    },
+  ],
+  poiBundle: {
+    summary: "3 location proof points prepared for the approved shortlist.",
+    cards: [
+      {
+        id: "poi-1",
+        name: "Coastal access context",
+        category: "Beach",
+        locationText: "Tropea, Calabria, Italy",
+        associatedListingId: "listing-1",
+        relevanceReason: "Helps the shortlist read as a day-to-day coastal lifestyle story instead of a price-only claim.",
+        provider: "casahud_location_patterns",
+        sourceConfidence: "fallback",
+      },
+    ],
+    categories: ["Beach"],
+    generatedAt: "2026-04-29T00:00:00.000Z",
+  },
+  mapSceneIdeas: [
+    {
+      id: "scene-1",
+      title: "Open on Tropea",
+      sceneType: "regional_anchor",
+      description: "Start with the region around Tropea to establish the place before the property details arrive.",
+      locationText: "Tropea, Calabria, Italy",
+      suggestedVisual: "Wide regional map pull-back with the strongest listing location highlighted first.",
+      provider: "casahud_location_patterns",
+      confidence: "fallback",
+    },
+  ],
+  listingLocationInsights: [
+    {
+      listingId: "listing-1",
+      summary: "Tropea apartment with sea views plays best as a waterside lifestyle story around Tropea, Calabria, Italy.",
+      highlights: ["Coastal day-to-day context helps the property feel like a lifestyle move, not just a budget win."],
+      nearbyPois: [],
+      locationStrengths: ["Waterside lifestyle context"],
+      warnings: ["Using CasaHUD location patterns until Google Places is connected."],
+    },
+  ],
+  locationProviderStatuses: [
+    {
+      provider: "google_places",
+      label: "Google Places",
+      state: "missing_credentials",
+      configured: false,
+      used: false,
+      detail: "Using CasaHUD location patterns until Google Places is connected for live POIs.",
+      warning: "Connect Google Places for live points of interest and local highlights.",
+      coverage: "No live POIs",
+    },
+    {
+      provider: "mapbox",
+      label: "Mapbox",
+      state: "missing_credentials",
+      configured: false,
+      used: false,
+      detail: "Using listing coordinates and CasaHUD location patterns until Mapbox is connected for live map anchoring.",
+      warning: "Connect Mapbox for live geocoding and richer map scene anchoring.",
+      coverage: "No live map anchoring",
+    },
+    {
+      provider: "casahud_location_patterns",
+      label: "CasaHUD location patterns",
+      state: "fallback",
+      configured: true,
+      used: true,
+      detail: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
+      warning: "Connect location providers for live POIs and richer map context.",
+      coverage: "1 fallback context set",
+    },
+  ],
+  locationWarnings: ["Using CasaHUD location patterns until Google Places is connected."],
+  nextPhase: {
+    key: "script_narrative_generation",
+    label: "Script and Narrative Generation",
+    detail:
+      "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.",
+    implemented: false,
+  },
+  updatedAt: "2026-04-29T00:00:00.000Z",
+  futureState: {
+    ...validatedCampaign.futureState,
+    locationIntelligence: {
+      status: "location_intelligence_completed",
+      storyHeadline: "Tropea turns the shortlist into a place-led story.",
+      generatedAt: "2026-04-29T00:00:00.000Z",
+    },
+    mapPoiBundle: {
+      summary: "3 location proof points prepared for the approved shortlist.",
+      cards: [],
+      categories: ["Beach"],
+      generatedAt: "2026-04-29T00:00:00.000Z",
+    },
   },
 };
 
@@ -500,11 +645,12 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: savedCampaign.createdAt,
               updatedAt: savedCampaign.updatedAt,
               researchSummary: savedCampaign.researchBrief.summary,
-              listingCandidateCount: 0,
-              listingDiscoveryStatus: "not_started",
-              approvedListingCount: 0,
-              listingValidationStatus: "not_started",
-            },
+	              listingCandidateCount: 0,
+	              listingDiscoveryStatus: "not_started",
+	              approvedListingCount: 0,
+	              listingValidationStatus: "not_started",
+	              locationIntelligenceStatus: "not_started",
+	            },
             message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
           }),
           {
@@ -613,11 +759,12 @@ describe("CasaHUD opportunity UI flow", () => {
                 createdAt: savedCampaign.createdAt,
                 updatedAt: savedCampaign.updatedAt,
               researchSummary: savedCampaign.researchBrief.summary,
-              listingCandidateCount: 0,
-              listingDiscoveryStatus: "not_started",
-              approvedListingCount: 0,
-              listingValidationStatus: "not_started",
-            },
+	              listingCandidateCount: 0,
+	              listingDiscoveryStatus: "not_started",
+	              approvedListingCount: 0,
+	              listingValidationStatus: "not_started",
+	              locationIntelligenceStatus: "not_started",
+	            },
               message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
             }),
             {
@@ -693,12 +840,13 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: discoveredCampaign.createdAt,
               updatedAt: discoveredCampaign.updatedAt,
               researchSummary: discoveredCampaign.researchBrief.summary,
-              listingCandidateCount: discoveredCampaign.listingCandidates.length,
-              listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
-              approvedListingCount: 0,
-              listingValidationStatus: "not_started",
-              discoverySummary: discoveredCampaign.discoverySummary?.headline,
-            },
+	              listingCandidateCount: discoveredCampaign.listingCandidates.length,
+	              listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+	              approvedListingCount: 0,
+	              listingValidationStatus: "not_started",
+	              locationIntelligenceStatus: "not_started",
+	              discoverySummary: discoveredCampaign.discoverySummary?.headline,
+	            },
             message: `Property discovery complete. "${discoveredCampaign.name}" is ready for listing validation.`,
           }),
           {
@@ -750,11 +898,12 @@ describe("CasaHUD opportunity UI flow", () => {
                   createdAt: discoveredCampaign.createdAt,
                   updatedAt: discoveredCampaign.updatedAt,
                   researchSummary: discoveredCampaign.researchBrief.summary,
-                  listingCandidateCount: discoveredCampaign.listingCandidates.length,
-                  listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
-                  approvedListingCount: 0,
-                  listingValidationStatus: "not_started",
-                  discoverySummary: discoveredCampaign.discoverySummary?.headline,
+	                  listingCandidateCount: discoveredCampaign.listingCandidates.length,
+	                  listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+	                  approvedListingCount: 0,
+	                  listingValidationStatus: "not_started",
+	                  locationIntelligenceStatus: "not_started",
+	                  discoverySummary: discoveredCampaign.discoverySummary?.headline,
                 },
               ],
             }),
@@ -825,13 +974,14 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: validatedCampaign.createdAt,
               updatedAt: validatedCampaign.updatedAt,
               researchSummary: validatedCampaign.researchBrief.summary,
-              listingCandidateCount: validatedCampaign.listingCandidates.length,
-              listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
-              approvedListingCount: validatedCampaign.approvedListings.length,
-              listingValidationStatus: validatedCampaign.listingValidationStatus,
-              titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
-              discoverySummary: validatedCampaign.discoverySummary?.headline,
-              validationSummary: validatedCampaign.listingValidationSummary?.headline,
+	              listingCandidateCount: validatedCampaign.listingCandidates.length,
+	              listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
+	              approvedListingCount: validatedCampaign.approvedListings.length,
+	              listingValidationStatus: validatedCampaign.listingValidationStatus,
+	              locationIntelligenceStatus: "not_started",
+	              titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
+	              discoverySummary: validatedCampaign.discoverySummary?.headline,
+	              validationSummary: validatedCampaign.listingValidationSummary?.headline,
             },
             message: `Listing validation complete. "${validatedCampaign.name}" is ready for Location Intelligence.`,
           }),
@@ -852,6 +1002,158 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.textContent).toContain("Next: Location Intelligence");
     expect(container.textContent).toContain("Title support confidence: 74%");
     expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("1 approved");
+    expect(container.querySelector('[data-testid="casahud-location-intelligence-cta"]')?.textContent).toContain(
+      "Add Location Intelligence",
+    );
+  });
+
+  it("shows location intelligence progress and renders the saved place story after enrichment", async () => {
+    let resolveLocationIntelligence: ((response: Response) => void) | null = null;
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              campaigns: [
+                {
+                  id: validatedCampaign.id,
+                  name: validatedCampaign.name,
+                  campaignType: validatedCampaign.campaignType,
+                  marketRegionHint: validatedCampaign.marketRegionHint,
+                  status: validatedCampaign.status,
+                  createdAt: validatedCampaign.createdAt,
+                  updatedAt: validatedCampaign.updatedAt,
+                  researchSummary: validatedCampaign.researchBrief.summary,
+                  listingCandidateCount: validatedCampaign.listingCandidates.length,
+                  listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
+                  approvedListingCount: validatedCampaign.approvedListings.length,
+                  listingValidationStatus: validatedCampaign.listingValidationStatus,
+                  locationIntelligenceStatus: "not_started",
+                  titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
+                  validationSummary: validatedCampaign.listingValidationSummary?.headline,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${validatedCampaign.id}`)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, campaign: validatedCampaign }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${validatedCampaign.id}/location-intelligence`) && method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolveLocationIntelligence = resolve;
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const resumeButton = container.querySelector('[data-testid="casahud-resume-campaign"]');
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const locationButton = container.querySelector('[data-testid="casahud-location-intelligence-cta"]');
+    expect(locationButton?.textContent).toContain("Add Location Intelligence");
+
+    await act(async () => {
+      locationButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-location-progress"]')?.textContent).toContain(
+      "Reading approved property locations",
+    );
+    expect(container.textContent).toContain("Preparing map scene ideas");
+
+    await act(async () => {
+      resolveLocationIntelligence?.(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: locationRichCampaign,
+            summary: {
+              id: locationRichCampaign.id,
+              name: locationRichCampaign.name,
+              campaignType: locationRichCampaign.campaignType,
+              marketRegionHint: locationRichCampaign.marketRegionHint,
+              status: locationRichCampaign.status,
+              createdAt: locationRichCampaign.createdAt,
+              updatedAt: locationRichCampaign.updatedAt,
+              researchSummary: locationRichCampaign.researchBrief.summary,
+              listingCandidateCount: locationRichCampaign.listingCandidates.length,
+              listingDiscoveryStatus: locationRichCampaign.listingDiscoveryStatus,
+              approvedListingCount: locationRichCampaign.approvedListings.length,
+              listingValidationStatus: locationRichCampaign.listingValidationStatus,
+              locationIntelligenceStatus: "location_intelligence_completed",
+              titleSupportConfidence: locationRichCampaign.titleSupportConfidence ?? undefined,
+              validationSummary: locationRichCampaign.listingValidationSummary?.headline,
+              locationSummary: locationRichCampaign.locationIntelligenceSummary?.headline,
+            },
+            message: `Location intelligence complete. "${locationRichCampaign.name}" now includes place story, POIs, and map scene ideas.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-location-intelligence-summary"]')?.textContent).toContain(
+      "Location story prepared across 1 shortlist anchor.",
+    );
+    expect(container.querySelector('[data-testid="casahud-location-story"]')?.textContent).toContain(
+      "Tropea turns the shortlist into a place-led story.",
+    );
+    expect(container.querySelector('[data-testid="casahud-local-highlights"]')?.textContent).toContain("Regional anchor");
+    expect(container.querySelector('[data-testid="casahud-poi-bundle"]')?.textContent).toContain("Coastal access context");
+    expect(container.querySelector('[data-testid="casahud-map-scene-ideas"]')?.textContent).toContain("Open on Tropea");
+    expect(container.querySelector('[data-testid="casahud-listing-location-insights"]')?.textContent).toContain(
+      "Tropea apartment with sea views plays best",
+    );
+    expect(container.querySelector('[data-testid="casahud-location-provider-statuses"]')?.textContent).toContain(
+      "CasaHUD location patterns",
+    );
+    expect(container.querySelector('[data-testid="casahud-script-narrative-placeholder"]')?.textContent).toContain(
+      "Script and Narrative Generation",
+    );
+    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Location story ready");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {
