@@ -138,6 +138,10 @@ export type CasaHudListingCandidate = {
   provider: CasaHudListingProvider;
   providerListingId?: string;
   sourceUrl?: string;
+  featuredImageUrl?: string;
+  thumbnailUrl?: string;
+  sourceThumbnailUrl?: string;
+  mediaUrl?: string;
   title: string;
   locationText: string;
   country?: string;
@@ -152,6 +156,11 @@ export type CasaHudListingCandidate = {
   descriptionSnippet?: string;
   features: string[];
   imageUrls: string[];
+  images?: unknown[];
+  photos?: unknown[];
+  gallery?: unknown[];
+  photoUrls?: unknown[];
+  photo_urls?: unknown[];
   imageCount: number;
   photoAvailability: "available" | "limited" | "none";
   coordinates?: {
@@ -612,6 +621,10 @@ function isListingCandidate(value: unknown): value is CasaHudListingCandidate {
     isNonEmptyString(value.preliminaryMatchNotes) &&
     (value.providerListingId === undefined || isNonEmptyString(value.providerListingId)) &&
     (value.sourceUrl === undefined || isNonEmptyString(value.sourceUrl)) &&
+    (value.featuredImageUrl === undefined || isNonEmptyString(value.featuredImageUrl)) &&
+    (value.thumbnailUrl === undefined || isNonEmptyString(value.thumbnailUrl)) &&
+    (value.sourceThumbnailUrl === undefined || isNonEmptyString(value.sourceThumbnailUrl)) &&
+    (value.mediaUrl === undefined || isNonEmptyString(value.mediaUrl)) &&
     (value.country === undefined || isNonEmptyString(value.country)) &&
     (value.region === undefined || isNonEmptyString(value.region)) &&
     (value.city === undefined || isNonEmptyString(value.city)) &&
@@ -622,6 +635,11 @@ function isListingCandidate(value: unknown): value is CasaHudListingCandidate {
     (value.bathrooms === undefined || isFiniteNumber(value.bathrooms)) &&
     (value.sizeSqm === undefined || isFiniteNumber(value.sizeSqm)) &&
     (value.descriptionSnippet === undefined || isNonEmptyString(value.descriptionSnippet)) &&
+    (value.images === undefined || Array.isArray(value.images)) &&
+    (value.photos === undefined || Array.isArray(value.photos)) &&
+    (value.gallery === undefined || Array.isArray(value.gallery)) &&
+    (value.photoUrls === undefined || Array.isArray(value.photoUrls)) &&
+    (value.photo_urls === undefined || Array.isArray(value.photo_urls)) &&
     (value.coordinates === undefined || isCoordinates(value.coordinates)) &&
     (value.rawProviderMetadata === undefined || isRecord(value.rawProviderMetadata))
   );

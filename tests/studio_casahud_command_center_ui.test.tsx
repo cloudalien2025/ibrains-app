@@ -247,6 +247,7 @@ const validatedCampaign: CasaHudCampaign = {
       provider: "idealista",
       providerListingId: "idealista-2",
       sourceUrl: "https://example.com/listing-2",
+      thumbnailUrl: "https://images.example.com/listing-2-thumb.jpg",
       title: "Lecce villa with courtyard",
       locationText: "Lecce, Puglia, Italy",
       country: "Italy",
@@ -316,6 +317,7 @@ const validatedCampaign: CasaHudCampaign = {
       provider: "idealista",
       providerListingId: "idealista-2",
       sourceUrl: "https://example.com/listing-2",
+      thumbnailUrl: "https://images.example.com/listing-2-thumb.jpg",
       title: "Lecce villa with courtyard",
       locationText: "Lecce, Puglia, Italy",
       country: "Italy",
@@ -516,6 +518,34 @@ const scriptedCampaign: CasaHudCampaign = {
 
 const mediaPlannedCampaign = applyCasaHudMediaPlan(scriptedCampaign, runCasaHudMediaPlanning(scriptedCampaign));
 const packagedCampaign = applyCasaHudYouTubePackage(mediaPlannedCampaign, runCasaHudYouTubePackageReview(mediaPlannedCampaign));
+const renderPlanOnlyCampaign: CasaHudCampaign = {
+  ...packagedCampaign,
+  renderStatus: "not_started",
+  renderOutput: null,
+  renderOutputUrl: null,
+  renderOutputPath: null,
+  previewPackage: null,
+  executionRunHistory: [],
+};
+const renderedCampaign: CasaHudCampaign = {
+  ...packagedCampaign,
+  renderStatus: "rendered",
+  renderOutput: {
+    id: "render-output-1",
+    type: "mp4",
+    status: "rendered",
+    url: "https://cdn.example.com/casahud/final.mp4",
+    path: "/generated/casahud/final.mp4",
+    durationSeconds: 104,
+    format: "video/mp4",
+    createdAt: "2026-04-28T00:45:00.000Z",
+    provider: "ffmpeg_local",
+    metadata: { sceneCount: 3, format: "video/mp4" },
+    warnings: [],
+  },
+  renderOutputUrl: "https://cdn.example.com/casahud/final.mp4",
+  renderOutputPath: "/generated/casahud/final.mp4",
+};
 
 function toSummary(campaign: CasaHudCampaign): CasaHudCampaignSummary {
   return {
@@ -590,6 +620,47 @@ describe("CasaHUD command center UI", () => {
     expect(html).not.toContain("CasaHUD Campaign Workflow");
   });
 
+  it("opens a mobile drawer with an independently scrollable navigation container that reaches lower items", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(packagedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-mobile-menu"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const drawer = container.querySelector('[data-testid="casahud-mobile-drawer"]');
+    const scrollRegion = container.querySelector('[data-testid="casahud-mobile-drawer-scroll"]');
+
+    expect(drawer?.textContent).toContain("Render & Publish");
+    expect(drawer?.textContent).toContain("Connections");
+    expect(scrollRegion?.className).toContain("overflow-y-auto");
+  });
+
   it("resumes a campaign, shows the active campaign in the selector, and keeps overview and location story accessible", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -643,7 +714,7 @@ describe("CasaHUD command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain("Phase Progress");
   });
 
-  it("renders featured image areas for approved and rejected property cards and shows a fallback image warning when media is missing", async () => {
+  it("renders featured image areas for approved and rejected property cards and uses source thumbnails before fallback copy", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -691,11 +762,16 @@ describe("CasaHUD command center UI", () => {
     expect(container.querySelectorAll('[data-testid="casahud-approved-listing-card"]').length).toBe(1);
     expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(1);
     expect(container.querySelectorAll('[data-testid="casahud-property-card-media"]').length).toBeGreaterThanOrEqual(2);
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Image needed");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Source thumbnail");
     expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Lecce villa with courtyard");
+    expect(
+      Array.from(container.querySelectorAll('[data-testid="casahud-property-card-media"]')).some(
+        (node) => node.getAttribute("data-media-kind") === "thumbnail",
+      ),
+    ).toBe(true);
   });
 
-  it("shows scene-based Video Builder cards and keeps YouTube Package and Render & Publish accessible", async () => {
+  it("shows scene-based Video Builder cards, keeps package navigation accessible, and renders an honest preview-package state", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -760,5 +836,107 @@ describe("CasaHUD command center UI", () => {
 
     expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Publish Now");
     expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Schedule to YouTube");
+    expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("Preview package");
+    expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("not a final MP4");
+    expect(container.querySelector('[data-testid="casahud-video-preview-storyboard"]')).not.toBeNull();
+    expect((container.querySelector('[data-testid="casahud-publish-now-cta"]') as HTMLButtonElement | null)?.disabled).toBe(true);
+  });
+
+  it("shows storyboard preview details before render starts", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(renderPlanOnlyCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${renderPlanOnlyCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: renderPlanOnlyCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("Render has not started yet");
+    expect(container.querySelector('[data-testid="casahud-video-preview-storyboard"]')).not.toBeNull();
+  });
+
+  it("embeds the final MP4 when it exists", async () => {
+    const fetchRenderedMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(renderedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${renderedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: renderedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchRenderedMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-video-preview"]')?.textContent).toContain("Final MP4");
+    expect(container.querySelector('[data-testid="casahud-video-preview-player"]')?.innerHTML).toContain("https://cdn.example.com/casahud/final.mp4");
   });
 });

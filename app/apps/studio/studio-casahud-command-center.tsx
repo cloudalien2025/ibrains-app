@@ -8,6 +8,10 @@ import type {
   CasaHudValidatedListing,
 } from "@/lib/studio/domara/campaigns";
 import type { CasaHudVisualAsset, CasaHudVisualAssetType } from "@/lib/studio/domara/campaign-media-planning";
+import {
+  deriveCasaHudFeaturedPropertyMedia,
+  type CasaHudFeaturedPropertyMedia,
+} from "@/lib/studio/domara/campaign-featured-media";
 import type {
   CasaHudOpportunityCampaignType,
   CasaHudOpportunityResult,
@@ -170,21 +174,12 @@ type CasaHudNextStep = {
   ctaLabel: string;
 };
 
-type CasaHudListingMedia = {
-  src: string | null;
-  hasRealImage: boolean;
-  sourceLabel: string;
-  stateLabel: string;
-  fallbackLabel: string;
-  fallbackDetail: string;
-};
-
 type CasaHudVideoScene = {
   id: string;
   order: number;
   title: string;
   sceneType: string;
-  preview: CasaHudListingMedia;
+  preview: CasaHudFeaturedPropertyMedia;
   assetType: string;
   narration: string;
   onScreenText: string;
@@ -589,50 +584,6 @@ function getPropertySupportCopy(
   return listing.preliminaryMatchNotes;
 }
 
-function getListingMedia(
-  campaign: CasaHudCampaign | null,
-  listing: CasaHudListingCandidate | CasaHudValidatedListing,
-): CasaHudListingMedia {
-  const directImage = listing.imageUrls.find((value) => value.trim().length > 0) || null;
-  if (directImage) {
-    return {
-      src: directImage,
-      hasRealImage: true,
-      sourceLabel: formatListingProvider(listing.provider),
-      stateLabel: listing.imageCount > 1 ? `${listing.imageCount} listing photos` : "Featured listing image",
-      fallbackLabel: "Image needed",
-      fallbackDetail: "Listing image unavailable.",
-    };
-  }
-
-  const asset = campaign?.visualAssets.find(
-    (candidate) =>
-      candidate.listingId === listing.id &&
-      typeof candidate.sourceUrl === "string" &&
-      candidate.sourceUrl.trim().length > 0,
-  );
-  if (asset?.sourceUrl) {
-    const isRealAsset = asset.type !== "fallback_placeholder" && asset.availabilityStatus !== "placeholder";
-    return {
-      src: asset.sourceUrl,
-      hasRealImage: isRealAsset,
-      sourceLabel: asset.sourceProvider,
-      stateLabel: isRealAsset ? "Source thumbnail" : "Media placeholder",
-      fallbackLabel: "Media placeholder",
-      fallbackDetail: asset.warning || "Listing image unavailable.",
-    };
-  }
-
-  return {
-    src: null,
-    hasRealImage: false,
-    sourceLabel: "CasaHUD fallback",
-    stateLabel: "Image needed",
-    fallbackLabel: "Image needed",
-    fallbackDetail: "Listing image unavailable.",
-  };
-}
-
 function mapVisualType(itemType: "map_scene" | "poi_context" | "location_anchor"): CasaHudVisualAssetType {
   if (itemType === "poi_context") return "poi_visual";
   if (itemType === "location_anchor") return "location_context";
@@ -697,8 +648,8 @@ function onScreenTextForScene(params: {
 function buildFallbackScenes(campaign: CasaHudCampaign): CasaHudVideoScene[] {
   const listings = campaign.approvedListings.length > 0 ? campaign.approvedListings : campaign.listingCandidates;
   return listings.map((listing, index) => {
-    const media = getListingMedia(campaign, listing);
-    const warnings = uniq([!media.hasRealImage ? "Image needed: listing image unavailable." : null]);
+    const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
+    const warnings = uniq([media.warning, media.stateLabel === "Image needed" ? "Image needed: listing image unavailable." : null]);
     return {
       id: `fallback-scene-${listing.id}`,
       order: index + 1,
@@ -761,11 +712,20 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
     if (poi) usedPoiIds.add(poi.id);
 
     const asset = assignedAssets.find((item) => item.sourceUrl) || undefined;
-    const preview = listing
-      ? getListingMedia(campaign, listing)
+    const preview: CasaHudFeaturedPropertyMedia = listing
+      ? deriveCasaHudFeaturedPropertyMedia(listing, campaign)
       : asset?.sourceUrl
         ? {
-            src: asset.sourceUrl,
+            kind:
+              asset.type === "fallback_placeholder" || asset.availabilityStatus === "placeholder" ? "fallback" : "media_asset",
+            url: asset.sourceUrl,
+            label:
+              asset.type === "fallback_placeholder" || asset.availabilityStatus === "placeholder"
+                ? "Media placeholder"
+                : "Source thumbnail",
+            alt: `${segment.title} scene preview`,
+            warning: asset.warning,
+            source: asset.sourceProvider,
             hasRealImage: asset.type !== "fallback_placeholder" && asset.availabilityStatus !== "placeholder",
             sourceLabel: asset.sourceProvider,
             stateLabel:
@@ -776,7 +736,12 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
             fallbackDetail: asset.warning || "Scene preview is using a planning placeholder.",
           }
         : {
-            src: null,
+            kind: "fallback",
+            url: null,
+            label: mapPlan ? "Media placeholder" : poi ? "Media placeholder" : "Image needed",
+            alt: `${segment.title} scene preview`,
+            warning: mapPlan ? "Map preview is still needed." : poi ? "POI visual still needs a source image." : "Scene preview is still missing.",
+            source: mapPlan?.provider || poi?.provider || "CasaHUD fallback",
             hasRealImage: false,
             sourceLabel: mapPlan?.provider || poi?.provider || "CasaHUD fallback",
             stateLabel: mapPlan ? "Map visual planned" : poi ? "POI visual planned" : "Media placeholder",
@@ -794,7 +759,8 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
       asset?.warning,
       coverage?.warning,
       propertySegment?.caution,
-      !preview.hasRealImage && listing ? "Image needed: listing image unavailable." : null,
+      listing ? preview.warning : null,
+      !preview.hasRealImage && listing && preview.stateLabel === "Image needed" ? "Image needed: listing image unavailable." : null,
       !preview.hasRealImage && !listing ? preview.fallbackDetail : null,
     ]);
     const status: CasaHudOperationalState = !preview.hasRealImage
@@ -836,10 +802,15 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
     .filter((item) => !usedMapIds.has(item.id))
     .map((item, index) => {
       const asset = item.assetId ? assetById.get(item.assetId) : undefined;
-      const preview =
+      const preview: CasaHudFeaturedPropertyMedia =
         asset?.sourceUrl && asset.type !== "fallback_placeholder"
           ? {
-              src: asset.sourceUrl,
+              kind: "media_asset",
+              url: asset.sourceUrl,
+              label: "Source thumbnail",
+              alt: `${item.title} map preview`,
+              warning: asset.warning,
+              source: asset.sourceProvider,
               hasRealImage: true,
               sourceLabel: asset.sourceProvider,
               stateLabel: "Scene visual preview",
@@ -847,7 +818,12 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
               fallbackDetail: asset.warning || "Map preview is still needed.",
             }
           : {
-              src: null,
+              kind: "fallback",
+              url: null,
+              label: "Media placeholder",
+              alt: `${item.title} map preview`,
+              warning: "Map preview is still needed.",
+              source: item.provider,
               hasRealImage: false,
               sourceLabel: item.provider,
               stateLabel: "Map visual planned",
@@ -879,10 +855,15 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
       .filter((item) => !usedPoiIds.has(item.id))
       .map((poi, index) => {
         const listing = poi.associatedListingId ? listingById.get(poi.associatedListingId) : undefined;
-        const preview = listing
-          ? getListingMedia(campaign, listing)
+        const preview: CasaHudFeaturedPropertyMedia = listing
+          ? deriveCasaHudFeaturedPropertyMedia(listing, campaign)
           : {
-              src: null,
+              kind: "fallback",
+              url: null,
+              label: "Media placeholder",
+              alt: `${poi.name} POI preview`,
+              warning: "POI visual still needs a source image.",
+              source: poi.provider,
               hasRealImage: false,
               sourceLabel: poi.provider,
               stateLabel: "POI visual planned",
@@ -1178,13 +1159,13 @@ function MediaPreview({
   alt,
   className,
 }: {
-  media: CasaHudListingMedia;
+  media: CasaHudFeaturedPropertyMedia;
   alt: string;
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
 
-  if (!media.src || failed || !media.hasRealImage) {
+  if (!media.url || failed || !media.hasRealImage) {
     return (
       <div
         className={cx(
@@ -1206,7 +1187,7 @@ function MediaPreview({
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src={media.src}
+      src={media.url}
       alt={alt}
       className={cx("h-full w-full object-cover", className)}
       onError={() => setFailed(true)}
@@ -1243,17 +1224,21 @@ function PropertyCard({
   testId: string;
   onSelect: (listingId: string) => void;
 }) {
-  const media = getListingMedia(campaign, listing);
+  const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
   const facts = propertyFacts(listing);
   const supportCopy = getPropertySupportCopy(campaign, listing);
-  const imageWarnings = uniq([!media.hasRealImage ? "Image needed: listing image unavailable." : null]);
+  const imageWarnings = uniq([media.warning, media.stateLabel === "Image needed" ? "Image needed: listing image unavailable." : null]);
 
   return (
     <article
       className="overflow-hidden rounded-[1.65rem] border border-[#E7DCCB] bg-white/95 shadow-[0_18px_38px_rgba(70,55,35,0.08)]"
       data-testid={testId}
     >
-      <div className="relative aspect-[16/10] bg-[#F3EDE4]" data-testid="casahud-property-card-media">
+      <div
+        className="relative aspect-[16/10] bg-[#F3EDE4]"
+        data-testid="casahud-property-card-media"
+        data-media-kind={media.kind}
+      >
         <MediaPreview media={media} alt={`${listing.title} featured image`} className="aspect-[16/10]" />
         <div className="absolute left-4 top-4 flex flex-wrap gap-2">
           <StatusPill tone={listingStatusTone(listing)}>{statusLabelFromListing(listing)}</StatusPill>
@@ -1336,7 +1321,7 @@ function PropertyPreview({
   campaign: CasaHudCampaign;
   listing: CasaHudListingCandidate | CasaHudValidatedListing;
 }) {
-  const media = getListingMedia(campaign, listing);
+  const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
 
   return (
     <div className="overflow-hidden rounded-[1.4rem] border border-[#E7DCCB] bg-white/92">
@@ -1372,6 +1357,7 @@ function VideoSceneCard({ scene }: { scene: CasaHudVideoScene }) {
                 <StatusPill tone="ink">Scene {scene.order}</StatusPill>
                 <StatusPill tone="neutral">{scene.sceneType}</StatusPill>
                 <StatusPill tone={sceneTone(scene.status)}>{formatCampaignStatus(scene.status.replace(/\s/g, "_"))}</StatusPill>
+                <StatusPill tone="neutral">{scene.preview.stateLabel}</StatusPill>
                 <StatusPill tone="blue">{scene.durationLabel}</StatusPill>
               </div>
               <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-[#172033]">{scene.title}</h3>
@@ -2209,7 +2195,7 @@ export default function StudioCasaHudCommandCenter() {
   function renderSidebarContent(mobile = false) {
     const currentStep = nextStep;
     return (
-      <div className={cx("flex h-full flex-col", mobile ? "p-4" : "p-5 xl:p-6")}>
+      <div className={cx("flex h-full min-h-0 flex-col", mobile ? "p-4" : "p-5 xl:p-6")}>
         <div className="rounded-[1.7rem] border border-[#223149] bg-[#172033] p-5 text-white shadow-[0_20px_40px_rgba(23,32,51,0.18)]">
           <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#E9D5B7]">CasaHUD Studio</p>
           <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em]">AI real-estate YouTube content engine</h2>
@@ -2256,13 +2242,22 @@ export default function StudioCasaHudCommandCenter() {
           )}
         </div>
 
-        <nav className="mt-5 grid gap-2">
-          {workspaceNav.map((item) => (
-            <SidebarButton key={item.id} item={item} active={activeSection === item.id} onClick={() => openWorkspace(item.id)} />
-          ))}
-        </nav>
+        <div
+          className={cx(
+            "mt-5",
+            mobile
+              ? "flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain pr-1 pb-[calc(env(safe-area-inset-bottom)+2rem)]"
+              : "flex flex-1 flex-col",
+          )}
+          data-testid={mobile ? "casahud-mobile-drawer-scroll" : undefined}
+        >
+          <nav className="grid gap-2">
+            {workspaceNav.map((item) => (
+              <SidebarButton key={item.id} item={item} active={activeSection === item.id} onClick={() => openWorkspace(item.id)} />
+            ))}
+          </nav>
 
-        <div className="mt-auto pt-5">
+          <div className={cx(mobile ? "mt-5" : "mt-auto pt-5")}>
           <div className="rounded-[1.5rem] border border-[#E7DCCB] bg-white/92 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
@@ -2278,6 +2273,7 @@ export default function StudioCasaHudCommandCenter() {
             </div>
             {setupMessage ? <p className="mt-3 text-xs leading-5 text-[#6A7687]">{setupMessage}</p> : null}
           </div>
+        </div>
         </div>
       </div>
     );
@@ -3164,14 +3160,66 @@ export default function StudioCasaHudCommandCenter() {
     const youtubeCard = connectionCards.find((card) => card.id === "youtube");
     const youtubeConnected = youtubeCard?.status === "connected";
     const renderReady = activeCampaign?.youtubePackageStatus === "package_prepared" && activeCampaign.reviewStatus !== "blocked";
+    const renderOutputUrl = activeCampaign?.renderOutputUrl || activeCampaign?.renderOutput?.url || null;
+    const renderOutputPath = activeCampaign?.renderOutputPath || activeCampaign?.renderOutput?.path || null;
+    const renderSceneCount =
+      activeCampaign?.previewPackage?.sceneCount ||
+      activeCampaign?.renderPlan?.sceneCount ||
+      videoScenes.length ||
+      0;
+    const renderDurationSeconds =
+      activeCampaign?.renderOutput?.durationSeconds ||
+      activeCampaign?.previewPackage?.estimatedDurationSeconds ||
+      activeCampaign?.renderPlan?.estimatedDurationSeconds ||
+      activeCampaign?.estimatedDurationSeconds ||
+      null;
+    const renderRequiredAssetCount = activeCampaign?.renderPlan?.requiredAssets.length || 0;
+    const renderPreviewState =
+      activeCampaign?.renderOutput?.type === "mp4"
+        ? "final_mp4"
+        : activeCampaign?.renderOutput?.type === "preview_package" || activeCampaign?.previewPackage
+          ? "preview_package"
+          : activeCampaign?.renderStatus === "blocked" || (activeCampaign?.renderBlockers.length || 0) > 0
+            ? "blocked"
+            : "not_started";
     const renderOutputType =
       activeCampaign?.renderOutput?.type === "mp4"
         ? "Final MP4"
-        : activeCampaign?.renderOutput?.type === "preview_package"
-          ? "Preview Package"
+        : activeCampaign?.renderOutput?.type === "preview_package" || activeCampaign?.previewPackage
+          ? "Preview package"
           : activeCampaign?.renderOutput?.type === "queued_job"
-            ? "Queued Job"
-            : "No output yet";
+            ? "Queued job"
+            : renderPreviewState === "blocked"
+              ? "Blocked"
+              : "Not started";
+    const renderPreviewTone =
+      renderPreviewState === "final_mp4"
+        ? "sage"
+        : renderPreviewState === "preview_package"
+          ? "blue"
+          : renderPreviewState === "blocked"
+            ? "red"
+            : "gold";
+    const renderPreviewSummary =
+      renderPreviewState === "final_mp4"
+        ? "Final MP4 is ready. Review the output below before publishing."
+        : renderPreviewState === "preview_package"
+          ? "Preview package is ready. This is a preview package, not a final MP4."
+          : renderPreviewState === "blocked"
+            ? "Render is blocked right now. Resolve the blockers before generating a preview or final MP4."
+            : activeCampaign?.renderPlan || videoScenes.length > 0
+              ? "Render has not started yet, but the current package already shows what the video will include."
+              : "Render has not started yet.";
+    const renderNextSteps = uniq([
+      renderPreviewState === "not_started" ? "Run Render Video to create the first preview package." : null,
+      renderPreviewState === "preview_package" ? "Run the final render when you are ready for the Final MP4." : null,
+      renderPreviewState === "blocked" ? activeCampaign?.renderBlockers[0] || "Resolve the listed blockers before rendering." : null,
+      activeCampaign?.renderWarnings[0] || null,
+      activeCampaign?.renderOutput?.type !== "mp4" ? "Publish stays locked until the Final MP4 exists." : null,
+      !youtubeConnected ? "Connect YouTube before publish or scheduling." : null,
+      youtubeConnected && activeCampaign?.renderOutput?.type === "mp4" ? "Choose Publish Now or Schedule to YouTube." : null,
+    ]).slice(0, 4);
+    const previewScenes = videoScenes.slice(0, 3);
 
     sectionContent = activeCampaign ? (
       <WorkspacePage
@@ -3199,26 +3247,121 @@ export default function StudioCasaHudCommandCenter() {
         <div className="grid gap-5 xl:grid-cols-[1.08fr_0.92fr]">
           <section className="grid gap-4">
             <div className="rounded-[1.7rem] border border-[#E7DCCB] bg-white/92 p-5">
-              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Render Status</p>
-              <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
-                <p>
-                  <span className="font-semibold text-[#172033]">Render:</span> {formatCampaignStatus(activeCampaign.renderStatus)}
-                </p>
-                <p>
-                  <span className="font-semibold text-[#172033]">Output:</span> {renderOutputType}
-                </p>
-                <p>
-                  <span className="font-semibold text-[#172033]">Output state:</span>{" "}
-                  {activeCampaign.renderOutput?.type === "preview_package"
-                    ? "Preview package only. This is not a final MP4."
-                    : activeCampaign.renderOutput?.type === "mp4"
-                      ? "Final MP4 recorded."
-                      : "No output recorded yet."}
-                </p>
-                <p>
-                  <span className="font-semibold text-[#172033]">Created:</span>{" "}
-                  {activeCampaign.renderOutput?.createdAt ? formatDateTimeLabel(activeCampaign.renderOutput.createdAt) : "Pending"}
-                </p>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Video Preview</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{renderOutputType}</h2>
+                </div>
+                <StatusPill tone={renderPreviewTone}>{renderOutputType}</StatusPill>
+              </div>
+
+              <p className="mt-3 text-sm leading-6 text-[#526070]" data-testid="casahud-video-preview">
+                {renderPreviewSummary}
+              </p>
+
+              {renderPreviewState === "final_mp4" && renderOutputUrl ? (
+                <div
+                  className="mt-5 overflow-hidden rounded-[1.5rem] border border-[#D4DDF2] bg-[#0F1525]"
+                  data-testid="casahud-video-preview-player"
+                >
+                  <video controls preload="metadata" className="h-full max-h-[420px] w-full bg-black">
+                    <source src={renderOutputUrl} type={activeCampaign.renderOutput?.format || "video/mp4"} />
+                  </video>
+                </div>
+              ) : null}
+
+              {renderPreviewState !== "final_mp4" ? (
+                previewScenes.length > 0 ? (
+                  <div className="mt-5 grid gap-3 md:grid-cols-3" data-testid="casahud-video-preview-storyboard">
+                    {previewScenes.map((scene) => (
+                      <article key={scene.id} className="overflow-hidden rounded-[1.3rem] border border-[#E7DCCB] bg-[#FFF9EF]">
+                        <div className="aspect-[16/10] bg-[#F3EDE4]">
+                          <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                        </div>
+                        <div className="grid gap-2 p-4">
+                          <div className="flex flex-wrap gap-2">
+                            <StatusPill tone="ink">Scene {scene.order}</StatusPill>
+                            <StatusPill tone="neutral">{scene.preview.stateLabel}</StatusPill>
+                          </div>
+                          <p className="text-sm font-semibold text-[#172033]">{scene.title}</p>
+                          <p className="text-sm leading-6 text-[#526070]">{scene.onScreenText}</p>
+                        </div>
+                      </article>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-5 rounded-[1.4rem] border border-dashed border-[#D7CAB8] bg-[#FFF9EF] p-4 text-sm leading-6 text-[#526070]">
+                    CasaHUD does not have a storyboard preview yet. Build the package or render plan first.
+                  </div>
+                )
+              ) : null}
+
+              <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                <div className="rounded-[1.4rem] border border-[#D4DDF2] bg-[#F7FAFF] p-4 text-sm leading-6 text-[#526070]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#41608E]">Preview Details</p>
+                  <div className="mt-3 grid gap-2">
+                    <p>
+                      <span className="font-semibold text-[#172033]">Render status:</span> {formatCampaignStatus(activeCampaign.renderStatus)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Scene count:</span> {renderSceneCount || "Pending"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Estimated duration:</span> {formatDuration(renderDurationSeconds)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Included assets:</span>{" "}
+                      {renderRequiredAssetCount > 0 ? formatCountLabel(renderRequiredAssetCount, "asset") : "Pending"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Created:</span>{" "}
+                      {activeCampaign.renderOutput?.createdAt ? formatDateTimeLabel(activeCampaign.renderOutput.createdAt) : "Pending"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Provider:</span>{" "}
+                      {activeCampaign.renderProviderStatus ? formatCampaignStatus(activeCampaign.renderProviderStatus.provider) : "Pending"}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Output:</span> {renderOutputType}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Asset readiness:</span>{" "}
+                      {activeCampaign.renderPlan?.assetReadinessSummary || activeCampaign.previewPackage?.assetReadinessSummary || "Pending"}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-[1.4rem] border border-[#E7DCCB] bg-[#FFF9EF] p-4 text-sm leading-6 text-[#526070]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#8A5A34]">Before Publish</p>
+                  <div className="mt-3 grid gap-2">
+                    {renderNextSteps.length > 0 ? (
+                      renderNextSteps.map((item) => (
+                        <p key={item} className="rounded-2xl border border-[#E6D8C7] bg-white/92 px-3 py-2 text-sm text-[#526070]">
+                          {item}
+                        </p>
+                      ))
+                    ) : (
+                      <p className="rounded-2xl border border-[#E6D8C7] bg-white/92 px-3 py-2 text-sm text-[#526070]">
+                        No remaining steps are blocking publish readiness right now.
+                      </p>
+                    )}
+                    {renderPreviewState === "final_mp4" && renderOutputUrl ? (
+                      <a
+                        href={renderOutputUrl}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className={secondaryButtonClass}
+                      >
+                        Open Final MP4
+                      </a>
+                    ) : null}
+                    {renderPreviewState === "final_mp4" && !renderOutputUrl && renderOutputPath ? (
+                      <p className="rounded-2xl border border-[#E6D8C7] bg-white/92 px-3 py-2 text-sm text-[#526070]">
+                        <span className="font-semibold text-[#172033]">Output path:</span> {renderOutputPath}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -3276,7 +3419,7 @@ export default function StudioCasaHudCommandCenter() {
                   type="button"
                   className={primaryButtonClass}
                   onClick={() => void onPublishNow()}
-                  disabled={!youtubeConnected || !activeCampaign.renderOutput || campaignPublishingId === activeCampaign.id}
+                  disabled={!youtubeConnected || activeCampaign.renderOutput?.type !== "mp4" || campaignPublishingId === activeCampaign.id}
                   data-testid="casahud-publish-now-cta"
                 >
                   {campaignPublishingId === activeCampaign.id ? "Publishing..." : "Publish Now"}
@@ -3294,7 +3437,7 @@ export default function StudioCasaHudCommandCenter() {
                   type="button"
                   className={secondaryButtonClass}
                   onClick={() => void onScheduleCampaign()}
-                  disabled={!youtubeConnected || !activeCampaign.renderOutput || campaignSchedulingId === activeCampaign.id}
+                  disabled={!youtubeConnected || activeCampaign.renderOutput?.type !== "mp4" || campaignSchedulingId === activeCampaign.id}
                   data-testid="casahud-schedule-youtube-cta"
                 >
                   {campaignSchedulingId === activeCampaign.id ? "Scheduling..." : "Schedule to YouTube"}
@@ -3323,11 +3466,26 @@ export default function StudioCasaHudCommandCenter() {
                   {activeCampaign.previewPackage?.assetReadinessSummary || "Not available yet."}
                 </p>
                 <p>
+                  <span className="font-semibold text-[#172033]">Output state:</span>{" "}
+                  {renderPreviewState === "preview_package"
+                    ? "Preview package only. This is not a final MP4."
+                    : renderPreviewState === "final_mp4"
+                      ? "Final MP4 recorded."
+                      : renderPreviewState === "blocked"
+                        ? "Render is blocked until the blockers are resolved."
+                        : "Render has not started yet."}
+                </p>
+                <p>
                   <span className="font-semibold text-[#172033]">Publish status:</span> {formatCampaignStatus(activeCampaign.publishStatus)}
                 </p>
                 <p>
                   <span className="font-semibold text-[#172033]">Schedule status:</span> {formatCampaignStatus(activeCampaign.scheduleStatus)}
                 </p>
+                {renderOutputPath ? (
+                  <p>
+                    <span className="font-semibold text-[#172033]">Output path:</span> {renderOutputPath}
+                  </p>
+                ) : null}
               </div>
             </div>
           </aside>
@@ -3450,7 +3608,8 @@ export default function StudioCasaHudCommandCenter() {
     );
   }
 
-  const selectedListingMedia = selectedListing && activeCampaign ? getListingMedia(activeCampaign, selectedListing) : null;
+  const selectedListingMedia =
+    selectedListing && activeCampaign ? deriveCasaHudFeaturedPropertyMedia(selectedListing, activeCampaign) : null;
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(255,242,219,0.72),transparent_34%),linear-gradient(180deg,#FFF7EA_0%,#F7F3EC_42%,#F4F7FB_100%)] text-[#172033]">
@@ -3481,9 +3640,9 @@ export default function StudioCasaHudCommandCenter() {
           </header>
 
           {drawerOpen ? (
-            <div className="fixed inset-0 z-40 bg-[#172033]/45 lg:hidden" onClick={() => setDrawerOpen(false)}>
+            <div className="fixed inset-0 z-40 flex bg-[#172033]/45 lg:hidden" onClick={() => setDrawerOpen(false)}>
               <div
-                className="h-full w-[88vw] max-w-[360px] bg-[#FFFDF8] shadow-[0_24px_60px_rgba(23,32,51,0.28)]"
+                className="flex h-[100dvh] max-h-[100dvh] w-[88vw] max-w-[360px] overflow-hidden bg-[#FFFDF8] pb-[env(safe-area-inset-bottom)] shadow-[0_24px_60px_rgba(23,32,51,0.28)]"
                 onClick={(event) => event.stopPropagation()}
                 data-testid="casahud-mobile-drawer"
               >
