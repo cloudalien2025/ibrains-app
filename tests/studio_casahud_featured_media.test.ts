@@ -160,6 +160,28 @@ describe("deriveCasaHudFeaturedPropertyMedia", () => {
     });
   });
 
+  it("treats CasaHUD sample-pattern listing media as a media placeholder instead of a real image", () => {
+    const listing = createListing({
+      provider: "casahud_sample",
+      imageUrls: ["https://images.example.com/casahud/sample/hero.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited",
+      rawProviderMetadata: {
+        discoveryMode: "sample_patterns",
+      },
+    });
+
+    const media = deriveCasaHudFeaturedPropertyMedia(listing, createCampaign(listing));
+
+    expectMedia(media, {
+      kind: "fallback",
+      url: null,
+      stateLabel: "Media placeholder",
+      fallbackLabel: "Media placeholder",
+      hasRealImage: false,
+    });
+  });
+
   it("uses a media-plan listing image asset when the listing record has no direct media", () => {
     const listing = createListing();
     const campaign = createCampaign(listing);

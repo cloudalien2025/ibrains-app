@@ -190,6 +190,20 @@ function imageFromAsset(listing: CasaHudListingCandidate | CasaHudValidatedListi
   });
 }
 
+function sampleListingPlaceholder(listing: CasaHudListingCandidate | CasaHudValidatedListing, sourceLabel: string) {
+  return buildMedia({
+    kind: "fallback",
+    url: null,
+    stateLabel: "Media placeholder",
+    source: sourceLabel,
+    alt: `${listing.title} media placeholder`,
+    warning: "CasaHUD sample listing patterns do not include source imagery.",
+    fallbackLabel: "Media placeholder",
+    fallbackDetail: "CasaHUD sample listing patterns do not include source imagery.",
+    hasRealImage: false,
+  });
+}
+
 export function deriveCasaHudFeaturedPropertyMedia(
   listing: CasaHudListingCandidate | CasaHudValidatedListing,
   campaign: CasaHudCampaign | null,
@@ -197,6 +211,8 @@ export function deriveCasaHudFeaturedPropertyMedia(
   const listingRecord = asRecord(listing);
   const metadataRecord = asRecord(listing.rawProviderMetadata);
   const sourceLabel = humanizeLabel(listing.provider, "Listing source");
+  const usesSampleListingPatterns =
+    listing.provider === "casahud_sample" || asNonEmptyString(metadataRecord.discoveryMode) === "sample_patterns";
 
   const explicitFeaturedImage =
     asNonEmptyString(listingRecord.featuredImageUrl) ||
@@ -221,6 +237,7 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(metadataRecord.media_url);
 
   if (explicitFeaturedImage) {
+    if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
       url: explicitFeaturedImage,
@@ -235,6 +252,7 @@ export function deriveCasaHudFeaturedPropertyMedia(
     firstImageUrl(metadataRecord.imageUrls) ||
     firstImageUrl(metadataRecord.image_urls);
   if (imageUrl) {
+    if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
       url: imageUrl,
@@ -256,6 +274,7 @@ export function deriveCasaHudFeaturedPropertyMedia(
     readFirstImageFromArray(metadataRecord.photoUrls) ||
     readFirstImageFromArray(metadataRecord.photo_urls);
   if (structuredImage) {
+    if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
       url: structuredImage,
@@ -284,6 +303,7 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(metadataRecord.photo_url);
 
   if (sourceThumbnail) {
+    if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "thumbnail",
       url: sourceThumbnail,
