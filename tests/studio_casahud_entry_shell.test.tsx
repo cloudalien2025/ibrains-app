@@ -28,7 +28,8 @@ describe("CasaHUD Phase 1 entry shell", () => {
     expect(html).toContain(">Recent Campaigns<");
     expect(html).toContain("No campaigns yet.");
     expect(html).toContain("Generate your first viral property video title to start a CasaHUD campaign.");
-    expect(html).toContain("What happens after you click generate");
+    expect(html).toContain(">Dashboard<");
+    expect(html).toContain("Current workspace");
     expect(html).toContain("casahud-entry-hero");
     expect(html).toContain("casahud-recent-campaigns");
     expect(html).toContain("casahud-connections-entry");

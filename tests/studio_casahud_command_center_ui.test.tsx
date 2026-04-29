@@ -442,7 +442,8 @@ const activeCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
-    detail: "Phase 8 will organize visuals, maps, and assets around the narrative package.",
+    detail:
+      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   },
   createdAt: "2026-04-29T00:00:00.000Z",
@@ -532,11 +533,12 @@ describe("CasaHUD premium command center UI", () => {
 
     expect(html).toContain("Generate your next viral property video");
     expect(html).toContain(">Generate Viral Video Title<");
-    expect(html).toContain(">Campaigns<");
+    expect(html).toContain(">Dashboard<");
     expect(html).toContain(">Viral Titles<");
     expect(html).toContain(">Review Package<");
     expect(html).toContain(">Publishing<");
     expect(html).toContain(">Connections<");
+    expect(html).toContain("casahud-workspace-shell");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mock-first MVP");
   });
@@ -627,6 +629,7 @@ describe("CasaHUD premium command center UI", () => {
     await flush();
 
     expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Tropea apartment with sea views");
+    expect(container.querySelector('[data-testid="casahud-shortlist-toolbar"]')?.textContent).toContain("Sort: Match");
     const sourceLink = container.querySelector('[data-testid="casahud-property-shortlist"] a[href="https://example.com/listing-1"]');
     expect(sourceLink).not.toBeNull();
     expect(sourceLink?.getAttribute("target")).toBe("_blank");
