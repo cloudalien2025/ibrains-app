@@ -127,6 +127,14 @@ type CasaHudYouTubePackagePayload = {
   error?: { message?: string };
 };
 
+type CasaHudExecutionPayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -396,6 +404,33 @@ function formatCampaignTime(value: string) {
   }).format(date);
 }
 
+function formatDateTimeLabel(value?: string | null) {
+  if (!value) return "Not set";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Not set";
+  return new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function toDateTimeLocalValue(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offsetMs = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
+function nextScheduleInputValue() {
+  const date = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  date.setMinutes(0, 0, 0);
+  return toDateTimeLocalValue(date.toISOString());
+}
+
 function formatCampaignStatus(status?: string | null) {
   if (!status) return "Pending";
   return status
@@ -462,6 +497,10 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     mediaPlanningStatus: campaign.mediaPlanningStatus,
     youtubePackageStatus: campaign.youtubePackageStatus,
     reviewStatus: campaign.reviewStatus,
+    approvalStatus: campaign.approvalStatus,
+    renderStatus: campaign.renderStatus,
+    publishStatus: campaign.publishStatus,
+    scheduleStatus: campaign.scheduleStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
@@ -532,6 +571,30 @@ function getCampaignPrimaryAction(campaign: CasaHudCampaign | null): CasaHudPrim
     };
   }
 
+  if (campaign.publishStatus === "published" || campaign.scheduleStatus === "scheduled") {
+    return {
+      label: "Review Publish Status",
+      helper: "Render, publish, and schedule history are persisted on this campaign.",
+      section: "publishing",
+    };
+  }
+
+  if (campaign.youtubePackageStatus === "package_prepared" && campaign.renderStatus !== "rendered") {
+    return {
+      label: "Render Video",
+      helper: "Use the approved package and render plan to produce a final output or honest preview package.",
+      section: "video_builder",
+    };
+  }
+
+  if (campaign.renderStatus === "rendered") {
+    return {
+      label: "Publish Now",
+      helper: "The render output is ready. CasaHUD can now publish or schedule according to channel readiness.",
+      section: "publishing",
+    };
+  }
+
   if (campaign.youtubePackageStatus === "package_prepared") {
     return {
       label: "Review Package",
@@ -586,7 +649,8 @@ function buildPhaseProgress(campaign: CasaHudCampaign | null, youtubeConnected: 
   if (campaign.youtubePackageStatus === "package_prepared" || campaign.futureState.packaging) completedThrough = 8;
   if (campaign.renderPlanStatus === "render_plan_ready" || campaign.futureState.renderStatus) completedThrough = 9;
   if (campaign.reviewStatus !== "not_started" || campaign.futureState.reviewStatus) completedThrough = 10;
-  if (campaign.futureState.publishStatus || campaign.futureState.scheduleStatus) completedThrough = 11;
+  if (campaign.renderStatus === "rendered") completedThrough = 10;
+  if (campaign.publishStatus === "published" || campaign.scheduleStatus === "scheduled" || campaign.futureState.publishStatus || campaign.futureState.scheduleStatus) completedThrough = 11;
 
   return commandSteps.map((label, index) => {
     if (index <= completedThrough) {
@@ -711,6 +775,9 @@ function buildAgentRows(params: {
   campaignScriptingId: string | null;
   campaignMediaPlanningId: string | null;
   campaignPackagingId: string | null;
+  campaignRenderingId: string | null;
+  campaignPublishingId: string | null;
+  campaignSchedulingId: string | null;
   youtubeCard?: CasaHudConnectionCard;
 }): CasaHudAgentActivityRow[] {
   const {
@@ -723,6 +790,9 @@ function buildAgentRows(params: {
     campaignScriptingId,
     campaignMediaPlanningId,
     campaignPackagingId,
+    campaignRenderingId,
+    campaignPublishingId,
+    campaignSchedulingId,
     youtubeCard,
   } = params;
 
@@ -861,16 +931,24 @@ function buildAgentRows(params: {
     {
       name: "Render Agent",
       state:
-        campaign?.renderPlanStatus === "render_plan_ready" || campaign?.futureState.renderStatus
+        campaignRenderingId
+          ? "running"
+          : campaign?.renderStatus === "failed" || campaign?.renderStatus === "blocked"
+            ? "needs_attention"
+            : campaign?.renderStatus === "rendered"
           ? "complete"
           : campaign?.youtubePackageStatus === "package_prepared"
             ? "pending"
             : "blocked",
       detail:
-        campaign?.renderPlanStatus === "render_plan_ready" || campaign?.futureState.renderStatus
-          ? `Render status: ${formatCampaignStatus(String(campaign.renderPlanStatus || campaign.futureState.renderStatus))}.`
+        campaignRenderingId
+          ? "Rendering the current CasaHUD package into a final output or honest preview package."
+          : campaign?.renderStatus === "rendered"
+          ? `Render status: ${formatCampaignStatus(String(campaign.renderStatus))}.`
+          : campaign?.renderStatus === "failed" || campaign?.renderStatus === "blocked"
+            ? `Render status: ${formatCampaignStatus(String(campaign.renderStatus))}.`
           : campaign?.youtubePackageStatus === "package_prepared"
-            ? "Render execution is still a later phase, but the draft render plan is ready."
+            ? "The reviewed package is ready for render execution."
             : "Render is blocked until the narrative package is ready.",
     },
     {
@@ -901,16 +979,24 @@ function buildAgentRows(params: {
     {
       name: "Publish Agent",
       state:
-        campaign?.futureState.publishStatus || campaign?.futureState.scheduleStatus
+        campaignPublishingId || campaignSchedulingId
+          ? "running"
+          : campaign?.publishStatus === "published" || campaign?.scheduleStatus === "scheduled"
           ? "complete"
-          : params.youtubeCard?.status === "connected" && campaign?.scriptGenerationStatus === "script_generated"
+          : campaign?.publishStatus === "failed" || campaign?.publishStatus === "blocked" || campaign?.scheduleStatus === "failed" || campaign?.scheduleStatus === "blocked"
+            ? "needs_attention"
+          : params.youtubeCard?.status === "connected" && campaign?.renderStatus === "rendered"
             ? "pending"
             : "blocked",
       detail:
-        campaign?.futureState.publishStatus || campaign?.futureState.scheduleStatus
-          ? `Publish status: ${formatCampaignStatus(String(campaign.futureState.publishStatus || campaign.futureState.scheduleStatus))}.`
-          : params.youtubeCard?.status === "connected" && campaign?.scriptGenerationStatus === "script_generated"
-            ? "The channel is connected, but publish still waits on review approval."
+        campaignPublishingId || campaignSchedulingId
+          ? "CasaHUD is processing the current publish or schedule request."
+          : campaign?.publishStatus === "published" || campaign?.scheduleStatus === "scheduled"
+          ? `Publish status: ${formatCampaignStatus(String(campaign.publishStatus === "published" ? campaign.publishStatus : campaign.scheduleStatus))}.`
+          : campaign?.publishStatus === "failed" || campaign?.publishStatus === "blocked" || campaign?.scheduleStatus === "failed" || campaign?.scheduleStatus === "blocked"
+            ? `Publish status: ${formatCampaignStatus(String(campaign.publishStatus !== "not_ready" ? campaign.publishStatus : campaign.scheduleStatus))}.`
+          : params.youtubeCard?.status === "connected" && campaign?.renderStatus === "rendered"
+            ? "The package is rendered, but live channel execution still depends on provider readiness."
             : "YouTube connection or review approval is still missing.",
     },
   ];
@@ -1424,6 +1510,10 @@ export default function StudioCasaHudCommandCenter() {
   const [mediaProgressIndex, setMediaProgressIndex] = useState(0);
   const [campaignPackagingId, setCampaignPackagingId] = useState<string | null>(null);
   const [packageProgressIndex, setPackageProgressIndex] = useState(0);
+  const [campaignRenderingId, setCampaignRenderingId] = useState<string | null>(null);
+  const [campaignPublishingId, setCampaignPublishingId] = useState<string | null>(null);
+  const [campaignSchedulingId, setCampaignSchedulingId] = useState<string | null>(null);
+  const [scheduledPublishAt, setScheduledPublishAt] = useState(nextScheduleInputValue);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -1489,6 +1579,9 @@ export default function StudioCasaHudCommandCenter() {
         campaignScriptingId,
         campaignMediaPlanningId,
         campaignPackagingId,
+        campaignRenderingId,
+        campaignPublishingId,
+        campaignSchedulingId,
         youtubeCard: youtubeConnectionCard,
       }),
     [
@@ -1501,6 +1594,9 @@ export default function StudioCasaHudCommandCenter() {
       campaignScriptingId,
       campaignMediaPlanningId,
       campaignPackagingId,
+      campaignRenderingId,
+      campaignPublishingId,
+      campaignSchedulingId,
       youtubeConnectionCard,
     ],
   );
@@ -1611,6 +1707,10 @@ export default function StudioCasaHudCommandCenter() {
     }, 620);
     return () => window.clearTimeout(timeoutId);
   }, [campaignPackagingId, packageProgressIndex]);
+
+  useEffect(() => {
+    setScheduledPublishAt(toDateTimeLocalValue(activeCampaign?.scheduledPublishAt) || nextScheduleInputValue());
+  }, [activeCampaign?.id, activeCampaign?.scheduledPublishAt]);
 
   useEffect(() => {
     if (!selectedListingId || !activeCampaign) return;
@@ -2007,6 +2107,118 @@ export default function StudioCasaHudCommandCenter() {
     }
   }
 
+  async function onRenderVideo() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignRenderingId(activeCampaign.id);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setActiveSection("video_builder");
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/render`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudExecutionPayload | null;
+
+      if (payload?.campaign) {
+        setActiveCampaign(payload.campaign);
+        setRecentCampaigns((current) => {
+          const summary = payload.summary || summarizeCampaign(payload.campaign!);
+          return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+        });
+      }
+
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || payload?.message || "CasaHUD could not render this campaign right now.");
+      }
+
+      setCampaignNotice(payload.message || `Render ready. "${payload.campaign.name}" now includes the final output metadata.`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not render this campaign right now.");
+    } finally {
+      setCampaignRenderingId(null);
+    }
+  }
+
+  async function onPublishNow() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignPublishingId(activeCampaign.id);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setActiveSection("publishing");
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/publish`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudExecutionPayload | null;
+
+      if (payload?.campaign) {
+        setActiveCampaign(payload.campaign);
+        setRecentCampaigns((current) => {
+          const summary = payload.summary || summarizeCampaign(payload.campaign!);
+          return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+        });
+      }
+
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || payload?.message || "CasaHUD could not publish this campaign right now.");
+      }
+
+      setCampaignNotice(payload.message || `Publish complete. "${payload.campaign.name}" is now live on YouTube.`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not publish this campaign right now.");
+    } finally {
+      setCampaignPublishingId(null);
+    }
+  }
+
+  async function onScheduleCampaign() {
+    if (!activeCampaign) return;
+
+    const scheduledAt = scheduledPublishAt ? new Date(scheduledPublishAt).toISOString() : "";
+    if (!scheduledAt || Number.isNaN(Date.parse(scheduledAt))) {
+      setCampaignError("Choose a valid publish time before scheduling this campaign.");
+      return;
+    }
+
+    try {
+      setCampaignSchedulingId(activeCampaign.id);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setActiveSection("publishing");
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/schedule`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ scheduledAt }),
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudExecutionPayload | null;
+
+      if (payload?.campaign) {
+        setActiveCampaign(payload.campaign);
+        setRecentCampaigns((current) => {
+          const summary = payload.summary || summarizeCampaign(payload.campaign!);
+          return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+        });
+      }
+
+      if (!response.ok || !payload?.ok || !payload?.campaign) {
+        throw new Error(payload?.error?.message || payload?.message || "CasaHUD could not schedule this campaign right now.");
+      }
+
+      setCampaignNotice(payload.message || `Schedule saved. "${payload.campaign.name}" now has a YouTube publish time.`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not schedule this campaign right now.");
+    } finally {
+      setCampaignSchedulingId(null);
+    }
+  }
+
   async function onCopyScript() {
     if (!activeCampaign?.fullScriptText || typeof navigator === "undefined" || !navigator.clipboard) {
       setScriptCopyNotice("Copy Script is unavailable in this browser session.");
@@ -2183,14 +2395,24 @@ export default function StudioCasaHudCommandCenter() {
                       {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
                     </button>
                   ) : (
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
-                      onClick={() => setActiveSection("review_package")}
-                      data-testid="casahud-media-planning-placeholder"
-                    >
-                      {activeCampaign.nextPhase.label}
-                    </button>
+                    <>
+                      <button
+                        type="button"
+                        className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void onRenderVideo()}
+                        disabled={campaignRenderingId === activeCampaign.id || activeCampaign.reviewStatus === "blocked"}
+                        data-testid="casahud-render-video-cta"
+                      >
+                        {campaignRenderingId === activeCampaign.id ? "Rendering..." : "Render Video"}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
+                        onClick={() => setActiveSection("publishing")}
+                      >
+                        Publish Now
+                      </button>
+                    </>
                   )}
                   <button
                     type="button"
@@ -2317,6 +2539,10 @@ export default function StudioCasaHudCommandCenter() {
                               campaign.validationSummary ||
                               campaign.discoverySummary ||
                               campaign.researchSummary}
+                          </p>
+                          <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#7A897E]">
+                            Render {formatCampaignStatus(campaign.renderStatus)} · Publish {formatCampaignStatus(campaign.publishStatus)} · Schedule{" "}
+                            {formatCampaignStatus(campaign.scheduleStatus)}
                           </p>
                         </div>
                         <div className="flex items-center gap-2">
@@ -3317,17 +3543,38 @@ export default function StudioCasaHudCommandCenter() {
   }
 
   if (activeSection === "video_builder") {
-    const renderStatus = activeCampaign?.renderPlanStatus
-      ? formatCampaignStatus(String(activeCampaign.renderPlanStatus))
-      : activeCampaign?.futureState.renderStatus
-        ? formatCampaignStatus(String(activeCampaign.futureState.renderStatus))
-        : "Awaiting package review and render planning";
+    const renderStatus =
+      activeCampaign?.renderStatus && activeCampaign.renderStatus !== "not_started"
+        ? formatCampaignStatus(String(activeCampaign.renderStatus))
+        : activeCampaign?.renderPlanStatus
+          ? formatCampaignStatus(String(activeCampaign.renderPlanStatus))
+          : activeCampaign?.futureState.renderStatus
+            ? formatCampaignStatus(String(activeCampaign.futureState.renderStatus))
+            : "Awaiting package review and render planning";
+    const renderReady =
+      Boolean(activeCampaign) &&
+      activeCampaign?.youtubePackageStatus === "package_prepared" &&
+      activeCampaign?.reviewStatus !== "blocked";
+    const renderOutputType =
+      activeCampaign?.renderOutput?.type === "mp4"
+        ? "Final MP4"
+        : activeCampaign?.renderOutput?.type === "preview_package"
+          ? "Preview Package"
+          : activeCampaign?.renderOutput?.type === "queued_job"
+            ? "Queued Job"
+            : "No output yet";
+    const renderActionLabel =
+      activeCampaign?.renderStatus === "failed"
+        ? "Retry Render"
+        : activeCampaign?.renderOutput?.type === "preview_package"
+          ? "Render Final MP4"
+          : "Render Video";
 
     sectionContent = (
       <WorkspaceCard
         eyebrow="Video Builder"
         title="Render plan and preview state"
-        description="The command center surfaces existing render-related seams without rewriting the render engine."
+        description="Render the reviewed CasaHUD package into a real MP4 when the local renderer is available, or an honest preview package when it is not."
       >
         {activeCampaign ? (
           <div className="grid gap-5 lg:grid-cols-[1.04fr_0.96fr]">
@@ -3337,6 +3584,9 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
                   <p>
                     <span className="font-semibold text-[#172033]">Status:</span> {renderStatus}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Output:</span> {renderOutputType}
                   </p>
                   <p>
                     <span className="font-semibold text-[#172033]">Scene count:</span>{" "}
@@ -3355,6 +3605,9 @@ export default function StudioCasaHudCommandCenter() {
                   <p>
                     <span className="font-semibold text-[#172033]">Estimated duration:</span>{" "}
                     {formatDuration(activeCampaign.renderPlan?.estimatedDurationSeconds || activeCampaign.estimatedDurationSeconds)}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Approval:</span> {formatCampaignStatus(activeCampaign.approvalStatus)}
                   </p>
                 </div>
               </div>
@@ -3375,40 +3628,79 @@ export default function StudioCasaHudCommandCenter() {
                   )}
                 </div>
               </div>
+
+              <div className="rounded-[1.75rem] border border-[#F1C9C9] bg-[#FFF4F4] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Render Run History</p>
+                <div className="mt-4 grid gap-3">
+                  {(activeCampaign.renderRunHistory || []).length > 0 ? (
+                    (activeCampaign.renderRunHistory || []).slice(0, 4).map((run) => (
+                      <div key={run.id} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-4 text-sm leading-6 text-[#7C3030]">
+                        <p className="font-semibold text-[#172033]">{formatCampaignStatus(run.status)}</p>
+                        <p>{run.message}</p>
+                        <p className="text-xs text-[#7C3030]">{formatCampaignTime(run.startedAt)}</p>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-3 text-sm leading-6 text-[#7C3030]">
+                      No render attempts have been recorded yet.
+                    </p>
+                  )}
+                </div>
+              </div>
             </section>
 
             <aside className="grid gap-4">
               <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Preview Controls</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Render Controls</p>
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                    disabled
+                    className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onRenderVideo()}
+                    disabled={!renderReady || campaignRenderingId === activeCampaign.id}
+                    data-testid="casahud-render-video-cta"
                   >
-                    Preview Render
+                    {campaignRenderingId === activeCampaign.id ? "Rendering..." : renderActionLabel}
                   </button>
-                  <button
-                    type="button"
-                    className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                    disabled
-                  >
-                    Download MP4
-                  </button>
+                  {activeCampaign.renderOutputUrl ? (
+                    <Link
+                      href={activeCampaign.renderOutputUrl}
+                      className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
+                    >
+                      Open Output
+                    </Link>
+                  ) : null}
                 </div>
                 <p className="mt-4 text-sm leading-6 text-[#526070]">
-                  CasaHUD does not fake render completion. These controls activate only when later-phase render outputs exist.
+                  {activeCampaign.reviewStatus === "blocked"
+                    ? activeCampaign.reviewBlockers[0] || "Review blockers must be cleared before CasaHUD can render this package."
+                    : renderReady
+                      ? "CasaHUD will render a real MP4 when the local render seam is available. Otherwise it will persist an honest preview-package result."
+                      : "Build the YouTube package first so CasaHUD has the render plan and review summary it needs."}
                 </p>
               </div>
 
-              <PlaceholderVisual
-                label="Render preview"
-                detail={
-                  activeCampaign.youtubePackageStatus === "package_prepared"
-                    ? activeCampaign.renderPlan?.audioPlanPlaceholder || "Scene timing, assets, and approvals are mapped here before Phase 10 execution."
-                    : "Scene timing, assets, and approvals move here after Media Planning and Asset Assembly."
-                }
-              />
+              <div className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Render Output</p>
+                <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
+                  <p>
+                    <span className="font-semibold text-[#172033]">Provider:</span>{" "}
+                    {activeCampaign.renderProviderStatus ? formatCampaignStatus(activeCampaign.renderProviderStatus.provider) : "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Provider state:</span>{" "}
+                    {activeCampaign.renderProviderStatus ? formatCampaignStatus(activeCampaign.renderProviderStatus.state) : "Pending"}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Output path:</span>{" "}
+                    {activeCampaign.renderOutputPath || "No output path has been recorded yet."}
+                  </p>
+                  <p>
+                    <span className="font-semibold text-[#172033]">Created:</span>{" "}
+                    {activeCampaign.renderOutput?.createdAt ? formatDateTimeLabel(activeCampaign.renderOutput.createdAt) : "Pending"}
+                  </p>
+                </div>
+              </div>
             </aside>
           </div>
         ) : (
@@ -3436,6 +3728,25 @@ export default function StudioCasaHudCommandCenter() {
               >
                 {campaignPackagingId === activeCampaign.id ? "Building YouTube Package..." : "Build YouTube Package"}
               </button>
+            ) : activeCampaign?.youtubePackageStatus === "package_prepared" ? (
+              <>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                  onClick={() => void onRenderVideo()}
+                  disabled={campaignRenderingId === activeCampaign.id || activeCampaign.reviewStatus === "blocked"}
+                >
+                  {campaignRenderingId === activeCampaign.id ? "Rendering..." : "Render Video"}
+                </button>
+                <button
+                  type="button"
+                  className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
+                  onClick={() => setActiveSection("publishing")}
+                  disabled={!activeCampaign}
+                >
+                  Publish Now
+                </button>
+              </>
             ) : null}
             <button
               type="button"
@@ -3667,12 +3978,41 @@ export default function StudioCasaHudCommandCenter() {
   }
 
   if (activeSection === "publishing") {
-    const publishStatus = activeCampaign?.futureState.publishStatus
-      ? formatCampaignStatus(String(activeCampaign.futureState.publishStatus))
-      : "No publish job has been run.";
-    const scheduleStatus = activeCampaign?.futureState.scheduleStatus
-      ? formatCampaignStatus(String(activeCampaign.futureState.scheduleStatus))
-      : "No schedule is currently set.";
+    const publishStatus =
+      activeCampaign?.publishStatus && activeCampaign.publishStatus !== "not_ready"
+        ? formatCampaignStatus(String(activeCampaign.publishStatus))
+        : activeCampaign?.renderStatus === "rendered" && activeCampaign.renderOutput?.type === "mp4"
+          ? "Ready"
+          : "No publish job has been run.";
+    const scheduleStatus =
+      activeCampaign?.scheduleStatus && activeCampaign.scheduleStatus !== "not_scheduled"
+        ? formatCampaignStatus(String(activeCampaign.scheduleStatus))
+        : "No schedule is currently set.";
+    const publishReady =
+      Boolean(activeCampaign) &&
+      activeCampaign?.renderStatus === "rendered" &&
+      activeCampaign?.renderOutput?.type === "mp4" &&
+      activeCampaign?.reviewStatus !== "blocked" &&
+      activeCampaign?.reviewStatus !== "needs_revision";
+    const publishReason = !activeCampaign
+      ? "Open a campaign to review publish readiness."
+      : [
+          activeCampaign.reviewStatus === "blocked"
+            ? activeCampaign.reviewBlockers[0] || "Review blockers must be cleared before publishing."
+            : null,
+          activeCampaign.reviewStatus === "needs_revision"
+            ? activeCampaign.reviewWarnings[0] || "Review warnings still need attention before publishing."
+            : null,
+          activeCampaign.renderStatus !== "rendered" || activeCampaign.renderOutput?.type !== "mp4"
+            ? "Render a final MP4 before CasaHUD can publish or schedule this package."
+            : null,
+          youtubeConnectionCard?.status !== "connected"
+            ? "Connect the YouTube channel before CasaHUD can publish or schedule this package."
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .trim() || "The package is ready for YouTube execution.";
 
     sectionContent = (
       <WorkspaceCard
@@ -3708,21 +4048,37 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="mt-4 flex flex-wrap gap-3">
                   <button
                     type="button"
-                    className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                    disabled
+                    className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onPublishNow()}
+                    disabled={!publishReady || campaignPublishingId === activeCampaign.id}
+                    data-testid="casahud-publish-now-cta"
                   >
-                    Publish Now
+                    {campaignPublishingId === activeCampaign.id ? "Publishing..." : "Publish Now"}
                   </button>
                   <button
                     type="button"
-                    className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                    disabled
+                    className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033] disabled:cursor-not-allowed disabled:opacity-60"
+                    onClick={() => void onScheduleCampaign()}
+                    disabled={!publishReady || campaignSchedulingId === activeCampaign.id}
+                    data-testid="casahud-schedule-youtube-cta"
                   >
-                    Schedule
+                    {campaignSchedulingId === activeCampaign.id ? "Scheduling..." : "Schedule to YouTube"}
                   </button>
                 </div>
+                <div className="mt-4 rounded-2xl border border-[#D7CAB8] bg-white/80 p-4">
+                  <label className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]" htmlFor="casahud-schedule-at">
+                    Scheduled Publish Time
+                  </label>
+                  <input
+                    id="casahud-schedule-at"
+                    type="datetime-local"
+                    className="mt-3 w-full rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm text-[#172033] outline-none"
+                    value={scheduledPublishAt}
+                    onChange={(event) => setScheduledPublishAt(event.target.value)}
+                  />
+                </div>
                 <p className="mt-4 text-sm leading-6 text-[#526070]">
-                  Publishing stays gated until review is complete and a publish-ready package exists.
+                  {publishReason}
                 </p>
               </div>
             </section>
@@ -3731,16 +4087,47 @@ export default function StudioCasaHudCommandCenter() {
               <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Publish Status</p>
                 <p className="mt-3 text-sm leading-6 text-[#526070]">{publishStatus}</p>
+                {activeCampaign.publishedVideoUrl ? (
+                  <Link href={activeCampaign.publishedVideoUrl} className="mt-4 inline-flex text-sm font-semibold text-[#172033] underline">
+                    Open YouTube video
+                  </Link>
+                ) : null}
+                {activeCampaign.publishProviderStatus ? (
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.publishProviderStatus.detail}</p>
+                ) : null}
               </div>
               <div className="rounded-[1.75rem] border border-[#D8E2D9] bg-white/90 p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Schedule Status</p>
                 <p className="mt-3 text-sm leading-6 text-[#526070]">{scheduleStatus}</p>
+                <p className="mt-3 text-sm leading-6 text-[#526070]">
+                  Scheduled for: {formatDateTimeLabel(activeCampaign.scheduledPublishAt)}
+                </p>
+                {activeCampaign.scheduleProviderStatus ? (
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.scheduleProviderStatus.detail}</p>
+                ) : null}
               </div>
               <div className="rounded-[1.75rem] border border-[#F1C9C9] bg-[#FFF4F4] p-5 shadow-sm">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Run History</p>
-                <p className="mt-3 text-sm leading-6 text-[#7C3030]">
-                  No publish success is shown unless CasaHUD has a real publish or schedule result to display.
-                </p>
+                <div className="mt-4 grid gap-3">
+                  {(activeCampaign.executionRunHistory || []).filter((run) => run.type === "publish" || run.type === "schedule").length > 0 ? (
+                    (activeCampaign.executionRunHistory || [])
+                      .filter((run) => run.type === "publish" || run.type === "schedule")
+                      .slice(0, 4)
+                      .map((run) => (
+                        <div key={run.id} className="rounded-2xl border border-[#F1C9C9] bg-white/90 p-4 text-sm leading-6 text-[#7C3030]">
+                          <p className="font-semibold text-[#172033]">
+                            {formatCampaignStatus(run.type)} · {formatCampaignStatus(run.status)}
+                          </p>
+                          <p>{run.message}</p>
+                          <p className="text-xs">{formatCampaignTime(run.startedAt)}</p>
+                        </div>
+                      ))
+                  ) : (
+                    <p className="text-sm leading-6 text-[#7C3030]">
+                      No publish success is shown unless CasaHUD has a real publish or schedule result to display.
+                    </p>
+                  )}
+                </div>
               </div>
             </aside>
           </div>

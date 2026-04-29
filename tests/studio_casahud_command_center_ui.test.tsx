@@ -831,4 +831,87 @@ describe("CasaHUD premium command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-render-plan"]')?.textContent).toContain("Render Plan");
     expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Render, Publish, and Schedule");
   });
+
+  it("shows final render, publish, and schedule controls after the Phase 9 package is ready", async () => {
+    const packagedSummary = {
+      ...activeCampaignSummary,
+      status: packagedCampaign.status,
+      updatedAt: packagedCampaign.updatedAt,
+      youtubePackageStatus: packagedCampaign.youtubePackageStatus,
+      reviewStatus: packagedCampaign.reviewStatus,
+      approvalStatus: packagedCampaign.approvalStatus,
+      renderStatus: packagedCampaign.renderStatus,
+      publishStatus: packagedCampaign.publishStatus,
+      scheduleStatus: packagedCampaign.scheduleStatus,
+      packagingSummary: packagedCampaign.packagingSummary ?? undefined,
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [packagedSummary] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: packagedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const reviewNav = container.querySelector('[data-testid="casahud-nav-review_package"]');
+    await act(async () => {
+      reviewNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Render Video");
+    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Publish Now");
+
+    const videoBuilderNav = container.querySelector('[data-testid="casahud-nav-video_builder"]');
+    await act(async () => {
+      videoBuilderNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Render Video");
+
+    const publishingNav = container.querySelector('[data-testid="casahud-nav-publishing"]');
+    await act(async () => {
+      publishingNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-publish-now-cta"]')?.textContent).toContain("Publish Now");
+    expect(container.querySelector('[data-testid="casahud-schedule-youtube-cta"]')?.textContent).toContain("Schedule to YouTube");
+    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).toContain(
+      "Connect the YouTube channel before CasaHUD can publish or schedule this package.",
+    );
+  });
 });

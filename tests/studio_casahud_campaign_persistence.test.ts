@@ -433,4 +433,141 @@ describe("CasaHUD campaign persistence", () => {
     expect(summaries[0]?.reviewStatus).toBe(reopened?.reviewStatus);
     expect(summaries[0]?.packagingSummary).toBe(reopened?.packagingSummary || undefined);
   });
+
+  it("persists render, publish, schedule, and execution run history on the campaign", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+    const discovery = await import("@/lib/studio/domara/listing-discovery-engine");
+    const validation = await import("@/lib/studio/domara/listing-validation-engine");
+    const location = await import("@/lib/studio/domara/location-intelligence-engine");
+    const script = await import("@/lib/studio/domara/script-narrative-engine");
+    const media = await import("@/lib/studio/domara/media-planning-engine");
+    const youtubePackage = await import("@/lib/studio/domara/youtube-package-engine");
+    const execution = await import("@/lib/studio/domara/campaign-execution");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const discoveryResult = await discovery.runCasaHudListingDiscovery(created);
+    const discovered = campaigns.applyCasaHudListingDiscovery(created, discoveryResult);
+    const validationResult = validation.runCasaHudListingValidation(discovered);
+    const validated = campaigns.applyCasaHudListingValidation(discovered, validationResult);
+    const locationResult = await location.runCasaHudLocationIntelligence(validated, {});
+    const enriched = campaigns.applyCasaHudLocationIntelligence(validated, locationResult);
+    const scriptResult = await script.runCasaHudScriptNarrative(enriched, {});
+    const scripted = campaigns.applyCasaHudScriptNarrative(enriched, scriptResult);
+    const mediaPlan = media.runCasaHudMediaPlanning(scripted);
+    const planned = campaigns.applyCasaHudMediaPlan(scripted, mediaPlan);
+    const packageResult = youtubePackage.runCasaHudYouTubePackageReview(planned);
+    const packaged = campaigns.applyCasaHudYouTubePackage(planned, packageResult);
+    const executionState = campaigns.applyCasaHudExecutionUpdate(packaged, {
+      ...execution.createEmptyCasaHudExecutionData(),
+      approvalStatus: "approved",
+      approvedAt: "2026-04-29T10:00:00.000Z",
+      approvedBy: userId,
+      renderStatus: "rendered",
+      renderJobId: "render-1",
+      renderOutput: {
+        id: "render-1",
+        type: "preview_package",
+        status: "rendered",
+        url: null,
+        path: null,
+        durationSeconds: 90,
+        format: "preview_package",
+        createdAt: "2026-04-29T10:00:00.000Z",
+        provider: "preview_package",
+        metadata: { sceneCount: 1 },
+        warnings: [],
+      },
+      renderProviderStatus: {
+        provider: "preview_package",
+        state: "degraded",
+        detail: "Preview package prepared.",
+      },
+      renderRunHistory: [
+        {
+          id: "run-render",
+          type: "render",
+          status: "rendered",
+          startedAt: "2026-04-29T10:00:00.000Z",
+          completedAt: "2026-04-29T10:00:00.000Z",
+          provider: "preview_package",
+          message: "Preview package prepared.",
+        },
+      ],
+      publishStatus: "blocked",
+      publishProviderStatus: {
+        provider: "youtube_unavailable",
+        state: "needs_connection",
+        detail: "Connect YouTube before publishing.",
+      },
+      publishRunHistory: [
+        {
+          id: "run-publish",
+          type: "publish",
+          status: "blocked",
+          startedAt: "2026-04-29T10:05:00.000Z",
+          completedAt: "2026-04-29T10:05:00.000Z",
+          provider: "youtube_unavailable",
+          message: "Connect YouTube before publishing.",
+        },
+      ],
+      scheduleStatus: "blocked",
+      scheduledPublishAt: "2026-05-01T12:00:00.000Z",
+      scheduleProviderStatus: {
+        provider: "youtube_channel",
+        state: "degraded",
+        detail: "Schedule intent saved.",
+      },
+      scheduleRunHistory: [
+        {
+          id: "run-schedule",
+          type: "schedule",
+          status: "blocked",
+          startedAt: "2026-04-29T10:10:00.000Z",
+          completedAt: "2026-04-29T10:10:00.000Z",
+          provider: "youtube_channel",
+          message: "Schedule intent saved.",
+        },
+      ],
+      executionRunHistory: [
+        {
+          id: "run-render",
+          type: "render",
+          status: "rendered",
+          startedAt: "2026-04-29T10:00:00.000Z",
+          completedAt: "2026-04-29T10:00:00.000Z",
+          provider: "preview_package",
+          message: "Preview package prepared.",
+        },
+        {
+          id: "run-publish",
+          type: "publish",
+          status: "blocked",
+          startedAt: "2026-04-29T10:05:00.000Z",
+          completedAt: "2026-04-29T10:05:00.000Z",
+          provider: "youtube_unavailable",
+          message: "Connect YouTube before publishing.",
+        },
+      ],
+      finalState: "rendered",
+    });
+
+    await repository.saveCasaHudCampaign(userId, executionState);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.approvalStatus).toBe("approved");
+    expect(reopened?.renderStatus).toBe("rendered");
+    expect(reopened?.renderOutput?.type).toBe("preview_package");
+    expect(reopened?.publishStatus).toBe("blocked");
+    expect(reopened?.scheduleStatus).toBe("blocked");
+    expect(reopened?.scheduledPublishAt).toBe("2026-05-01T12:00:00.000Z");
+    expect(reopened?.renderRunHistory.length).toBe(1);
+    expect(reopened?.publishRunHistory.length).toBe(1);
+    expect(reopened?.executionRunHistory.length).toBeGreaterThan(1);
+
+    const summaries = await repository.listCasaHudCampaignSummaries(userId);
+    expect(summaries[0]?.renderStatus).toBe("rendered");
+    expect(summaries[0]?.publishStatus).toBe("blocked");
+    expect(summaries[0]?.scheduleStatus).toBe("blocked");
+  });
 });
