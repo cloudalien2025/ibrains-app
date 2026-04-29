@@ -363,6 +363,10 @@ describe("CasaHUD script narrative engine", () => {
     expect(first.scriptSegments.map((segment) => segment.title)).toEqual(second.scriptSegments.map((segment) => segment.title));
     expect(first.propertySegments[0]?.title).toBe("Tropea apartment with sea views");
     expect(first.locationLifestyleLines.join(" ")).toContain("Tropea");
+    expect(first.fullScriptText).not.toContain("title promise");
+    expect(first.fullScriptText).not.toContain("validation phase");
+    expect(first.fullScriptText).not.toContain("candidate listing pattern");
+    expect(first.fullScriptText).not.toContain("location signal");
   });
 
   it("times out slow live providers and falls back without hanging the run", async () => {

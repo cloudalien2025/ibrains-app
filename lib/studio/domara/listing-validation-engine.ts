@@ -208,7 +208,7 @@ function listingCompletenessScore(listing: CasaHudListingCandidate): number {
     typeof listing.price === "number",
     Boolean(listing.sourceUrl),
     Boolean(listing.propertyType),
-    Boolean(listing.city || listing.locationText),
+    Boolean(listing.city || (listing.locationText && listing.locationText !== "Location needs review")),
     typeof listing.bedrooms === "number",
     typeof listing.bathrooms === "number",
     typeof listing.sizeSqm === "number",
@@ -220,6 +220,9 @@ function listingCompletenessScore(listing: CasaHudListingCandidate): number {
 }
 
 function providerQualityScore(listing: CasaHudListingCandidate): number {
+  if (listing.sourceType === "imported_url") {
+    return listing.provider === "generic" ? 74 : 80;
+  }
   if (listing.provider === "idealista") return 92;
   if (listing.provider === "immobiliare") return 90;
   return 64;
@@ -335,21 +338,21 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
 
   if (typeof criteria.maxPrice === "number" && typeof listing.price === "number") {
     if (listing.price <= criteria.maxPrice) {
-      validationReasons.push("Price supports the title budget claim.");
+      validationReasons.push("Price stays inside the budget angle.");
     } else if (listing.price <= criteria.maxPrice * 1.1) {
-      warnings.push("Price is slightly above the title budget claim.");
+      warnings.push("Price lands slightly above the budget angle.");
     } else {
-      validationReasons.push("Price misses the title budget claim.");
+      validationReasons.push("Price sits too far above the budget angle.");
       rejectionCategory = "price_mismatch";
     }
   } else if (typeof listing.price !== "number") {
-    warnings.push("Price is missing, which weakens title truthfulness.");
+    warnings.push("Price needs review before this property can carry the budget angle.");
   }
 
   if (propertyType >= 80) {
     validationReasons.push("Property type fits the selected title angle.");
   } else if (propertyType < 35) {
-    validationReasons.push("Property type does not match the title promise.");
+    validationReasons.push("Property type does not fit the story angle yet.");
     rejectionCategory = rejectionCategory || "property_type_mismatch";
   }
 
@@ -371,8 +374,16 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
   }
 
   if (titleMatch < 45) {
-    validationReasons.push("Overall title truthfulness is too weak.");
+    validationReasons.push("Overall story support is too weak.");
     rejectionCategory = rejectionCategory || "weak_support";
+  }
+
+  if (listing.sourceType === "imported_url" && listing.needsReviewFields?.length) {
+    warnings.push(
+      `Imported URL needs review for ${listing.needsReviewFields
+        .map((field) => field.replace(/_/g, " "))
+        .join(", ")}.`,
+    );
   }
 
   return {
@@ -465,13 +476,13 @@ function buildValidationSummary(
   const titleSupportConfidence = summarizeConfidence(approvedListings, rejectedListings, criteria);
   const headline =
     titleSupportConfidence >= 75
-      ? `Approved ${approvedListings.length} of ${discoveredCount} discovered listings for the title promise.`
-      : "The discovered listings only partially support the title promise.";
+      ? `Approved ${approvedListings.length} of ${discoveredCount} discovered listings for the current story.`
+      : "The discovered listings only partly support the current story.";
 
   return {
     headline,
     rankingExplanation:
-      "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+      "CasaHUD ranked the shortlist by story fit, geography, pricing, feature support, media strength, and duplicate reduction.",
     discoveredCount,
     approvedCount: approvedListings.length,
     rejectedCount: rejectedListings.length,
@@ -557,7 +568,7 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
   const minimumShortlist = criteria.singlePropertyFocus ? 1 : Math.min(Math.max(criteria.targetListingCount, 3), 5);
   if (approvedListings.length < minimumShortlist) {
     validationWarnings.add(
-      "The discovered listings only partially support the title promise. Review the rejected listings or rerun property discovery before moving forward.",
+      "The discovered listings only partly support the current story. Review the rejected listings or refresh the shortlist before moving forward.",
     );
   }
   if (approvedListings.length === 0) {

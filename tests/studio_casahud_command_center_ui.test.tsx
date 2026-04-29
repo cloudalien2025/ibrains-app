@@ -380,6 +380,57 @@ const validatedCampaign: CasaHudCampaign = {
   updatedAt: "2026-04-28T00:25:00.000Z",
 };
 
+const importedCampaign: CasaHudCampaign = {
+  ...savedCampaign,
+  status: "listing_candidates_discovered",
+  listingDiscoveryStatus: "listing_candidates_discovered",
+  discoverySummary: {
+    headline: 'Imported 1 property URL into the shortlist for "Could You Retire in Southern Italy for Under $300K?".',
+    criteriaSummary: "User-provided listing URLs are ready for shortlist review and fact-checking.",
+    providerSummary: "Imported URLs are clearly labeled as user-provided sources.",
+    candidateCount: 1,
+    liveCandidateCount: 0,
+    fallbackCandidateCount: 0,
+    fallbackUsed: false,
+    warnings: [],
+    discoveredAt: "2026-04-29T10:00:00.000Z",
+  },
+  listingCandidates: [
+    {
+      id: "imported-listing-1",
+      provider: "idealista",
+      sourceType: "imported_url",
+      sourceUrl: "https://www.idealista.it/en/annuncio/123",
+      sourceHost: "idealista.it",
+      sourceLabel: "Idealista",
+      importedAt: "2026-04-29T10:00:00.000Z",
+      featuredImageUrl: "https://images.example.com/imported-og.jpg",
+      metadataImageUrl: "https://images.example.com/imported-og.jpg",
+      metadataTitle: "Apartment in Tropea",
+      metadataDescription: "EUR 284000 apartment in Tropea with 2 bedrooms and 88 sqm.",
+      canonicalUrl: "https://www.idealista.it/en/annuncio/123",
+      extractionStatus: "partial",
+      extractionWarnings: [],
+      needsReviewFields: ["property_type"],
+      title: "Apartment in Tropea",
+      locationText: "Tropea",
+      price: 284000,
+      currency: "EUR",
+      bedrooms: 2,
+      bathrooms: 2,
+      sizeSqm: 88,
+      descriptionSnippet: "EUR 284000 apartment in Tropea with 2 bedrooms and 88 sqm.",
+      features: [],
+      imageUrls: ["https://images.example.com/imported-og.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited",
+      discoveredAt: "2026-04-29T10:00:00.000Z",
+      preliminaryMatchNotes: "Imported from a live listing URL with enough public detail to review in the shortlist.",
+    },
+  ],
+  updatedAt: "2026-04-29T10:00:00.000Z",
+};
+
 const scriptedCampaign: CasaHudCampaign = {
   ...validatedCampaign,
   status: "script_narrative_completed",
@@ -661,6 +712,59 @@ describe("CasaHUD command center UI", () => {
     expect(scrollRegion?.className).toContain("overflow-y-auto");
   });
 
+  it("shows the shortlist URL import UI and renders imported URL cards with source preview imagery", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(importedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: importedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-property_shortlist"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-import-listing-urls"]')?.textContent).toContain("Import Properties From URLs");
+
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Imported URL");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Idealista");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Imported URL image");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Property type needs review");
+  });
+
   it("resumes a campaign, shows the active campaign in the selector, and keeps overview and location story accessible", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -711,7 +815,7 @@ describe("CasaHUD command center UI", () => {
     await flush();
 
     expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain(validatedCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain("Phase Progress");
+    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain("Workflow Progress");
   });
 
   it("renders featured image areas for approved and rejected property cards and uses source thumbnails before fallback copy", async () => {
@@ -820,6 +924,8 @@ describe("CasaHUD command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Narration");
     expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("On-screen Text");
     expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Scene 1");
+    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).not.toContain("title promise");
+    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).not.toContain("validation phase");
 
     await act(async () => {
       container.querySelector('[data-testid="casahud-nav-youtube_package"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));

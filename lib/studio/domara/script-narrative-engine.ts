@@ -86,12 +86,12 @@ function listingSetupLine(listing: CasaHudValidatedListing): string {
 }
 
 function titleSupportWarning(campaign: CasaHudCampaign): string | null {
-  if (typeof campaign.titleSupportConfidence !== "number") return "Title-support confidence is still unscored, so the narrative should stay conservative about the title promise.";
+  if (typeof campaign.titleSupportConfidence !== "number") return "Story support is still unscored, so the narration should stay conservative about the main hook.";
   if (campaign.titleSupportConfidence < 55) {
-    return `Title support is weak at ${campaign.titleSupportConfidence}%, so the script should clearly frame the promise as partial rather than proven.`;
+    return `Story support is weak at ${campaign.titleSupportConfidence}%, so the script should frame the hook as an honest exploration rather than a finished verdict.`;
   }
   if (campaign.titleSupportConfidence < 72) {
-    return `Title support is moderate at ${campaign.titleSupportConfidence}%, so avoid overcommitting the hook beyond what the validated listings prove.`;
+    return `Story support is moderate at ${campaign.titleSupportConfidence}%, so keep the hook ambitious but grounded in what the shortlist actually proves.`;
   }
   return null;
 }
@@ -101,7 +101,7 @@ function locationFallbackWarning(campaign: CasaHudCampaign): string | null {
     (status) => status.state === "fallback" || status.state === "missing_credentials",
   );
   if (!fallbackUsed) return null;
-  return "Location storytelling uses fallback or incomplete provider coverage, so the narration should avoid live-distance, venue-recency, or inventory-freshness claims.";
+  return "Location coverage is still partial, so the narration should avoid live-distance, venue-recency, or inventory-freshness claims.";
 }
 
 function listingCoverageWarnings(campaign: CasaHudCampaign, listings: CasaHudValidatedListing[]): string[] {
@@ -150,7 +150,7 @@ function campaignTypePremise(campaign: CasaHudCampaign, listings: CasaHudValidat
   const propertyCount = listings.length;
   switch (campaign.campaignType) {
     case "roundup":
-      return `Frame the video as a moving shortlist of ${propertyCount} validated properties that each reinforce the title promise without turning the piece into a rigid ranking explainer.`;
+      return `Frame the video as a moving shortlist of ${propertyCount} validated properties that all support the central hook without turning the episode into a rigid ranking explainer.`;
     case "single_property_showcase":
       return "Frame the video as a cinematic walkthrough concept centered on the top-ranked property, with place context used only to deepen that one story.";
     case "niche_category":
@@ -167,7 +167,7 @@ function buildOpeningHook(campaign: CasaHudCampaign, listings: CasaHudValidatedL
   const region = campaign.marketRegionHint || leadListing?.region || leadListing?.locationText || "this market";
   switch (campaign.campaignType) {
     case "roundup":
-      return `The hook here is simple: if the title promise is going to hold up, these are the validated properties in ${region} that actually keep the story honest.`;
+      return `The hook here is simple: these are the validated properties in ${region} that make the story feel real, current, and worth watching.`;
     case "single_property_showcase":
       return `${leadListing?.title || "This property"} is the kind of listing that only works on YouTube when the home and the place can carry the same story, and that is exactly what this script sets up.`;
     case "niche_category":
@@ -188,9 +188,9 @@ function buildPropertyNarration(
   const insightLine = insight?.summary || insight?.highlights[0] || insight?.locationStrengths[0];
   const descriptionLead = listing.descriptionSnippet
     ? listing.descriptionSnippet.replace(/\s+/g, " ").trim()
-    : "The source detail is lighter here, so the segment should stay focused on the verified listing facts.";
+    : "Public detail is lighter here, so the segment should stay focused on the verified listing facts.";
 
-  let whyItMadeTheCut = `It keeps the title promise grounded through ${supportedFacts.slice(0, 3).join(", ")}.`;
+  let whyItMadeTheCut = `It keeps the story grounded through ${supportedFacts.slice(0, 3).join(", ")}.`;
   if (campaign.campaignType === "location_led") {
     whyItMadeTheCut = `It works best as proof that the place story holds up once the property facts arrive.`;
   } else if (campaign.campaignType === "single_property_showcase") {
@@ -202,7 +202,7 @@ function buildPropertyNarration(
   const narration = uniqueStrings([
     listingSetupLine(listing),
     descriptionLead,
-    insightLine ? `On the location side, ${insightLine}` : null,
+    insightLine ? insightLine : null,
   ]).join(" ");
 
   const caution = uniqueStrings([
@@ -263,7 +263,7 @@ function buildToneAndPacingNotes(campaign: CasaHudCampaign, propertySegments: Ca
 function buildClosingCta(campaign: CasaHudCampaign): string {
   switch (campaign.campaignType) {
     case "roundup":
-      return "Close by recapping the strongest fit from the shortlist, then invite the viewer to weigh in on which property best delivers on the title promise.";
+      return "Close by recapping the strongest fit from the shortlist, then invite the viewer to weigh in on which property best delivers on the story.";
     case "single_property_showcase":
       return "Close by returning to the lead property's core appeal, then invite the viewer to follow along for the next verified walkthrough package.";
     case "niche_category":
@@ -279,7 +279,7 @@ function buildSummary(campaign: CasaHudCampaign, propertySegments: CasaHudProper
   const count = propertySegments.length;
   switch (campaign.campaignType) {
     case "roundup":
-      return `A premium roundup script built around ${count} validated listings, with a fast-moving structure, concise property beats, and transitions that keep the title promise believable.`;
+      return `A premium roundup script built around ${count} validated listings, with a fast-moving structure, concise property beats, and transitions that keep the story believable.`;
     case "single_property_showcase":
       return "A cinematic showcase script centered on the top-ranked property, with the location story used to deepen the walkthrough instead of distract from it.";
     case "niche_category":
@@ -310,7 +310,7 @@ function buildScriptSegments(
     segmentType: "hook",
     narration: buildOpeningHook(campaign, orderedApprovedListings(campaign)),
     durationSeconds: campaign.campaignType === "single_property_showcase" ? 18 : 14,
-    visualNote: campaign.mapSceneIdeas[0]?.suggestedVisual || "Open on the strongest verified place or listing anchor once Phase 8 assembles assets.",
+    visualNote: campaign.mapSceneIdeas[0]?.suggestedVisual || "Open on the strongest verified place or listing anchor once the visual package is assembled.",
   });
 
   segments.push({
@@ -319,7 +319,7 @@ function buildScriptSegments(
     segmentType: "premise",
     narration: campaignTypePremise(campaign, orderedApprovedListings(campaign)),
     durationSeconds: 16,
-    visualNote: "Use headline overlays and title framing, not raw provider or debug language.",
+    visualNote: "Use headline overlays and premium framing, not raw provider or debug language.",
   });
 
   segments.push({
@@ -328,7 +328,7 @@ function buildScriptSegments(
     segmentType: "location_context",
     narration: locationLead,
     durationSeconds: campaign.campaignType === "location_led" ? 18 : 12,
-    visualNote: campaign.mapSceneIdeas[0]?.suggestedVisual || "Reuse Phase 6 map-scene ideas at a high level only.",
+    visualNote: campaign.mapSceneIdeas[0]?.suggestedVisual || "Reuse the location visual plan at a high level only.",
   });
 
   propertySegments.forEach((segment, index) => {
@@ -339,7 +339,7 @@ function buildScriptSegments(
       narration: segment.narration,
       durationSeconds: campaign.campaignType === "single_property_showcase" ? 32 : 24,
       associatedListingId: segment.listingId,
-      visualNote: "Keep the segment anchored to verified listing facts and location support; asset mapping belongs to Phase 8.",
+      visualNote: "Keep the segment anchored to verified listing facts and place support; final asset mapping belongs in the visual plan.",
     });
 
     const transition = transitions[index];

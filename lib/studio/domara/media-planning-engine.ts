@@ -55,7 +55,13 @@ function takeNarrationExcerpt(input: string, maxLength = 160) {
 
 function buildListingAssets(campaign: CasaHudCampaign, listings: CasaHudValidatedListing[]): CasaHudVisualAsset[] {
   return listings.flatMap<CasaHudVisualAsset>((listing) => {
-    const urls = uniqueStrings(listing.imageUrls);
+    const urls = uniqueStrings([
+      listing.featuredImageUrl,
+      listing.metadataImageUrl,
+      ...listing.imageUrls,
+      listing.thumbnailUrl,
+      listing.sourceThumbnailUrl,
+    ]);
     if (urls.length === 0) {
       return [
         {
@@ -80,11 +86,19 @@ function buildListingAssets(campaign: CasaHudCampaign, listings: CasaHudValidate
       sourceProvider: listing.provider,
       sourceUrl,
       listingId: listing.id,
-      description: `Listing photo ${index + 1} for ${listing.title} in ${listing.locationText}.`,
+      description:
+        listing.sourceType === "imported_url"
+          ? `Source preview image ${index + 1} imported from ${listing.sourceLabel || listing.sourceHost || "the listing URL"} for ${listing.title}.`
+          : `Listing photo ${index + 1} for ${listing.title} in ${listing.locationText}.`,
       usageRightsStatus: "unknown" as const,
       confidence: assetConfidence(listing.photoAvailability),
       availabilityStatus: "available" as const,
-      warning: listing.photoAvailability === "limited" ? "Listing media is thinner than ideal, so scene reuse should stay selective." : undefined,
+      warning:
+        listing.sourceType === "imported_url"
+          ? "This preview image comes from page metadata, so confirm the property details before relying on it across multiple scenes."
+          : listing.photoAvailability === "limited"
+            ? "Listing media is thinner than ideal, so scene reuse should stay selective."
+            : undefined,
     }));
   });
 }
@@ -186,7 +200,7 @@ function buildSceneAssetMappings(campaign: CasaHudCampaign, assets: CasaHudVisua
       case "premise":
         assignedAssetIds = uniqueStrings([...globalMapAssetIds, ...listingAssetIds.slice(0, 1), ...globalLocationIds]).slice(0, 2);
         recommendedAssetType = globalMapAssetIds.length > 0 ? "map_visual" : listingAssetIds.length > 0 ? "listing_image" : "fallback_placeholder";
-        visualPurpose = "Open with the strongest location or lead-property anchor that makes the title promise feel immediate.";
+        visualPurpose = "Open with the strongest location or lead-property anchor that makes the hook feel immediate.";
         break;
       case "location_context":
         assignedAssetIds = uniqueStrings([...relatedMapAssetIds, ...relatedPoiAssetIds, ...globalLocationIds]).slice(0, 3);
@@ -367,7 +381,7 @@ function buildThumbnailCandidates(campaign: CasaHudCampaign, assets: CasaHudVisu
     candidates.push({
       id: stableCasaHudId("casahud-thumbnail-input", `${campaign.id}:location-angle`),
       title: "Location-first angle",
-      rationale: "The title promise is partly carried by place context, so a map or regional anchor can support the click without overloading the frame.",
+      rationale: "The hook is partly carried by place context, so a map or regional anchor can support the click without overloading the frame.",
       associatedAssetIds: uniqueStrings([...mapAsset, ...leadAssets]).slice(0, 2),
       textOverlayIdea: campaign.marketRegionHint || campaign.selectedViralTitle,
       compositionNotes: "Pair the lead property with a location anchor so the frame feels editorial instead of like a raw listing export.",
