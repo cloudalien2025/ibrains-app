@@ -19,17 +19,16 @@ vi.mock("next/link", async () => {
 });
 
 describe("/apps/studio route contract", () => {
-  it("renders the premium CasaHUD entry shell instead of the old mock-first workflow", () => {
+  it("renders the consolidated CasaHUD command center shell instead of the old mock-first workflow", () => {
     const html = renderToStaticMarkup(<StudioAppPage />);
 
     expect(html).toContain(">Generate Viral Video Title<");
-    expect(html).toContain(">Connections<");
-    expect(html).toContain(">Recent Campaigns<");
-    expect(html).toContain(">Campaigns<");
-    expect(html).not.toContain("Generate your next viral property video");
+    expect(html).toContain(">Campaign Overview<");
+    expect(html).toContain(">Opportunity Brief<");
+    expect(html).toContain(">Render &amp; Publish<");
+    expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mode: Mock-first MVP");
     expect(html).not.toContain("CasaHUD Campaign Workflow");
     expect(html).not.toContain("Campaign Setup");
-    expect(html).not.toContain("Generate Mock Viral Titles");
   });
 });
