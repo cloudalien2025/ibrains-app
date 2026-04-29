@@ -139,7 +139,7 @@ describe("CasaHUD campaign persistence", () => {
         return [];
       }
 
-      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3, $4, $5)")) {
+      if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3, $4, $5, $6)")) {
         const [storedUserId] = params as [string];
         return Array.from(state.projects.values())
           .filter((row) => row.user_id === storedUserId)
@@ -153,7 +153,7 @@ describe("CasaHUD campaign persistence", () => {
       if (
         normalized.includes("from casahud_projects") &&
         normalized.includes("and id = $2") &&
-        normalized.includes("and provider_metadata->>'phase' in ($3, $4, $5, $6)")
+        normalized.includes("and provider_metadata->>'phase' in ($3, $4, $5, $6, $7)")
       ) {
         const [storedUserId, campaignId] = params as [string, string];
         const row = state.projects.get(campaignId);
@@ -189,6 +189,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(metadata.campaign.approvedListings).toEqual([]);
     expect(metadata.campaign.listingValidationStatus).toBe("not_started");
     expect(metadata.campaign.locationIntelligenceStatus).toBe("not_started");
+    expect(metadata.campaign.scriptGenerationStatus).toBe("not_started");
   });
 
   it("lists recent campaigns and reopens a saved campaign by id", async () => {
@@ -207,6 +208,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(campaigns[0]?.approvedListingCount).toBe(0);
     expect(campaigns[0]?.listingValidationStatus).toBe("not_started");
     expect(campaigns[0]?.locationIntelligenceStatus).toBe("not_started");
+    expect(campaigns[0]?.scriptGenerationStatus).toBe("not_started");
 
     const reopened = await repository.getCasaHudCampaign(userId, first.id);
     expect(reopened?.selectedTitle.title).toBe(opportunity.selectedTitle.title);
@@ -262,6 +264,7 @@ describe("CasaHUD campaign persistence", () => {
     expect(typeof reopened?.titleSupportConfidence).toBe("number");
     expect(reopened?.nextPhase.key).toBe("location_intelligence");
     expect(reopened?.locationIntelligenceStatus).toBe("not_started");
+    expect(reopened?.scriptGenerationStatus).toBe("not_started");
 
     const summaries = await repository.listCasaHudCampaignSummaries(userId);
     expect(summaries[0]?.approvedListingCount).toBe(reopened?.approvedListings.length);
@@ -294,10 +297,47 @@ describe("CasaHUD campaign persistence", () => {
     expect(reopened?.mapSceneIdeas.length).toBeGreaterThan(0);
     expect(reopened?.listingLocationInsights.length).toBeGreaterThan(0);
     expect(reopened?.nextPhase.key).toBe("script_narrative_generation");
+    expect(reopened?.scriptGenerationStatus).toBe("not_started");
 
     const summaries = await repository.listCasaHudCampaignSummaries(userId);
     expect(summaries[0]?.status).toBe("location_intelligence_completed");
     expect(summaries[0]?.locationIntelligenceStatus).toBe("location_intelligence_completed");
     expect(summaries[0]?.locationSummary).toBe(reopened?.locationIntelligenceSummary?.headline);
+  });
+
+  it("persists script generation and reloads the narrative package on the campaign", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+    const discovery = await import("@/lib/studio/domara/listing-discovery-engine");
+    const validation = await import("@/lib/studio/domara/listing-validation-engine");
+    const location = await import("@/lib/studio/domara/location-intelligence-engine");
+    const script = await import("@/lib/studio/domara/script-narrative-engine");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const discoveryResult = await discovery.runCasaHudListingDiscovery(created);
+    const discovered = campaigns.applyCasaHudListingDiscovery(created, discoveryResult);
+    const validationResult = validation.runCasaHudListingValidation(discovered);
+    const validated = campaigns.applyCasaHudListingValidation(discovered, validationResult);
+    const locationResult = await location.runCasaHudLocationIntelligence(validated, {});
+    const enriched = campaigns.applyCasaHudLocationIntelligence(validated, locationResult);
+    const scriptResult = await script.runCasaHudScriptNarrative(enriched, {});
+    const scripted = campaigns.applyCasaHudScriptNarrative(enriched, scriptResult);
+
+    await repository.saveCasaHudCampaign(userId, scripted);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.status).toBe("script_narrative_completed");
+    expect(reopened?.scriptGenerationStatus).toBe("script_generated");
+    expect(reopened?.scriptSummary).toBeTruthy();
+    expect(reopened?.openingHook).toBeTruthy();
+    expect(reopened?.scriptSegments.length).toBeGreaterThan(0);
+    expect(reopened?.propertySegments.length).toBeGreaterThan(0);
+    expect(reopened?.closingCta).toBeTruthy();
+    expect(reopened?.nextPhase.key).toBe("media_planning_asset_assembly");
+
+    const summaries = await repository.listCasaHudCampaignSummaries(userId);
+    expect(summaries[0]?.status).toBe("script_narrative_completed");
+    expect(summaries[0]?.scriptGenerationStatus).toBe("script_generated");
+    expect(summaries[0]?.scriptSummary).toBe(reopened?.scriptSummary || undefined);
   });
 });

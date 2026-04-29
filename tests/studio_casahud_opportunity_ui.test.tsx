@@ -123,6 +123,23 @@ const emptyLocationState = {
   locationWarnings: [],
 };
 
+const emptyScriptState = {
+  scriptGenerationStatus: "not_started" as const,
+  scriptSummary: null,
+  openingHook: null,
+  estimatedDurationSeconds: null,
+  tone: null,
+  scriptSegments: [],
+  propertySegments: [],
+  locationLifestyleLines: [],
+  transitions: [],
+  closingCta: null,
+  toneAndPacingNotes: [],
+  scriptWarnings: [],
+  scriptProviderStatus: null,
+  fullScriptText: null,
+};
+
 const savedCampaign: CasaHudCampaign = {
   id: "casahud-project-phase3",
   name: "Could You Retire in Southern Italy for Under $300K?",
@@ -154,6 +171,7 @@ const savedCampaign: CasaHudCampaign = {
   titleSupportConfidence: null,
   validationWarnings: [],
   ...emptyLocationState,
+  ...emptyScriptState,
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -525,6 +543,115 @@ const locationRichCampaign: CasaHudCampaign = {
   },
 };
 
+const scriptedCampaign: CasaHudCampaign = {
+  ...locationRichCampaign,
+  status: "script_narrative_completed",
+  scriptGenerationStatus: "script_generated",
+  scriptSummary:
+    "A relocation-oriented narrative that uses the validated shortlist and place story to turn the title into a believable daily-life video concept.",
+  openingHook:
+    "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+  estimatedDurationSeconds: 104,
+  tone: "Premium, clear, cinematic where appropriate, and tightly grounded in validated property and location support.",
+  scriptSegments: [
+    {
+      id: "segment-hook",
+      title: "Opening Hook",
+      segmentType: "hook",
+      narration:
+        "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+      durationSeconds: 14,
+      visualNote: "Open on the strongest place anchor before dropping into the listing.",
+    },
+    {
+      id: "segment-location",
+      title: "Location Story",
+      segmentType: "location_context",
+      narration: "Lead the place story through Tropea and Calabria before drilling into property specifics.",
+      durationSeconds: 14,
+      visualNote: "Reuse the Phase 6 map scene idea at a high level only.",
+    },
+    {
+      id: "segment-property",
+      title: "Property 1: Tropea apartment with sea views",
+      segmentType: "property_focus",
+      narration:
+        "Tropea apartment with sea views in Tropea, Calabria, Italy keeps the segment grounded with USD 284,000, apartment, 2 bedrooms, 2 bathrooms, 88 sqm, Tropea. Move-in ready apartment with sea views and retirement appeal.",
+      durationSeconds: 24,
+      associatedListingId: "listing-1",
+      visualNote: "Keep the segment anchored to verified listing facts and location support.",
+    },
+    {
+      id: "segment-closing",
+      title: "Closing CTA",
+      segmentType: "closing_cta",
+      narration:
+        "Close by summarizing who this move feels best suited for, then invite the viewer to follow for the next relocation-focused shortlist.",
+      durationSeconds: 12,
+      visualNote: "End on a clean editorial CTA and hand forward to media planning.",
+    },
+  ],
+  propertySegments: [
+    {
+      listingId: "listing-1",
+      title: "Tropea apartment with sea views",
+      locationText: "Tropea, Calabria, Italy",
+      narration:
+        "Tropea apartment with sea views in Tropea, Calabria, Italy keeps the segment grounded with USD 284,000, apartment, 2 bedrooms, 2 bathrooms, 88 sqm, Tropea. Move-in ready apartment with sea views and retirement appeal. On the location side, Tropea apartment with sea views plays best as a waterside lifestyle story around Tropea, Calabria, Italy.",
+      whyItMadeTheCut: "It gives the relocation story a believable mix of budget, livability, and location context.",
+      supportedFacts: ["USD 284,000", "apartment", "2 bedrooms", "2 bathrooms", "88 sqm", "Tropea"],
+      locationLine: "Tropea apartment with sea views plays best as a waterside lifestyle story around Tropea, Calabria, Italy.",
+      caution: "Using CasaHUD location patterns until Google Places is connected.",
+    },
+  ],
+  locationLifestyleLines: [
+    "Lead the place story through Tropea and Calabria before drilling into property specifics.",
+    "Keep the lifestyle framing tied to Waterside lifestyle context and Travel-friendly arrival story rather than generic travel copy.",
+  ],
+  transitions: [
+    "Bridge the property segment through daily-life fit so the relocation story keeps moving without restarting the thesis.",
+  ],
+  closingCta:
+    "Close by summarizing who this move feels best suited for, then invite the viewer to follow for the next relocation-focused shortlist.",
+  toneAndPacingNotes: [
+    "Keep the delivery premium and clear; cinematic phrasing is fine, but every claim still needs to trace back to validated listing or location support.",
+    "Move quickly through verified facts first, then let the lifestyle and location framing add texture instead of replacing substance.",
+  ],
+  scriptWarnings: [
+    "Title support is moderate at 74%, so avoid overcommitting the hook beyond what the validated listings prove.",
+    "Location storytelling uses fallback or incomplete provider coverage, so the narration should avoid live-distance, venue-recency, or inventory-freshness claims.",
+  ],
+  scriptProviderStatus: {
+    provider: "casahud_script_patterns",
+    label: "CasaHUD script patterns",
+    state: "fallback",
+    configured: true,
+    used: true,
+    detail:
+      "Using deterministic CasaHUD script composition generated from validated listings and saved location intelligence at 2026-04-29T00:10:00.000Z.",
+    warning:
+      "Title support is moderate at 74%, so avoid overcommitting the hook beyond what the validated listings prove.",
+  },
+  fullScriptText:
+    "Opening Hook\nIf this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?\n\nLocation Story\nLead the place story through Tropea and Calabria before drilling into property specifics.",
+  nextPhase: {
+    key: "media_planning_asset_assembly",
+    label: "Media Planning and Asset Assembly",
+    detail:
+      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+    implemented: false,
+  },
+  updatedAt: "2026-04-29T00:10:00.000Z",
+  futureState: {
+    ...locationRichCampaign.futureState,
+    script: {
+      status: "script_generated",
+      summary:
+        "A relocation-oriented narrative that uses the validated shortlist and place story to turn the title into a believable daily-life video concept.",
+    },
+  },
+};
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -645,12 +772,13 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: savedCampaign.createdAt,
               updatedAt: savedCampaign.updatedAt,
               researchSummary: savedCampaign.researchBrief.summary,
-	              listingCandidateCount: 0,
-	              listingDiscoveryStatus: "not_started",
-	              approvedListingCount: 0,
-	              listingValidationStatus: "not_started",
-	              locationIntelligenceStatus: "not_started",
-	            },
+              listingCandidateCount: 0,
+              listingDiscoveryStatus: "not_started",
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
+              locationIntelligenceStatus: "not_started",
+              scriptGenerationStatus: "not_started",
+            },
             message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
           }),
           {
@@ -759,12 +887,13 @@ describe("CasaHUD opportunity UI flow", () => {
                 createdAt: savedCampaign.createdAt,
                 updatedAt: savedCampaign.updatedAt,
               researchSummary: savedCampaign.researchBrief.summary,
-	              listingCandidateCount: 0,
-	              listingDiscoveryStatus: "not_started",
-	              approvedListingCount: 0,
-	              listingValidationStatus: "not_started",
-	              locationIntelligenceStatus: "not_started",
-	            },
+              listingCandidateCount: 0,
+              listingDiscoveryStatus: "not_started",
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
+              locationIntelligenceStatus: "not_started",
+              scriptGenerationStatus: "not_started",
+            },
               message: `Campaign saved. "${savedCampaign.name}" is ready for Property Discovery.`,
             }),
             {
@@ -840,13 +969,14 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: discoveredCampaign.createdAt,
               updatedAt: discoveredCampaign.updatedAt,
               researchSummary: discoveredCampaign.researchBrief.summary,
-	              listingCandidateCount: discoveredCampaign.listingCandidates.length,
-	              listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
-	              approvedListingCount: 0,
-	              listingValidationStatus: "not_started",
-	              locationIntelligenceStatus: "not_started",
-	              discoverySummary: discoveredCampaign.discoverySummary?.headline,
-	            },
+              listingCandidateCount: discoveredCampaign.listingCandidates.length,
+              listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+              approvedListingCount: 0,
+              listingValidationStatus: "not_started",
+              locationIntelligenceStatus: "not_started",
+              scriptGenerationStatus: "not_started",
+              discoverySummary: discoveredCampaign.discoverySummary?.headline,
+            },
             message: `Property discovery complete. "${discoveredCampaign.name}" is ready for listing validation.`,
           }),
           {
@@ -898,12 +1028,13 @@ describe("CasaHUD opportunity UI flow", () => {
                   createdAt: discoveredCampaign.createdAt,
                   updatedAt: discoveredCampaign.updatedAt,
                   researchSummary: discoveredCampaign.researchBrief.summary,
-	                  listingCandidateCount: discoveredCampaign.listingCandidates.length,
-	                  listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
-	                  approvedListingCount: 0,
-	                  listingValidationStatus: "not_started",
-	                  locationIntelligenceStatus: "not_started",
-	                  discoverySummary: discoveredCampaign.discoverySummary?.headline,
+                  listingCandidateCount: discoveredCampaign.listingCandidates.length,
+                  listingDiscoveryStatus: discoveredCampaign.listingDiscoveryStatus,
+                  approvedListingCount: 0,
+                  listingValidationStatus: "not_started",
+                  locationIntelligenceStatus: "not_started",
+                  scriptGenerationStatus: "not_started",
+                  discoverySummary: discoveredCampaign.discoverySummary?.headline,
                 },
               ],
             }),
@@ -974,14 +1105,15 @@ describe("CasaHUD opportunity UI flow", () => {
               createdAt: validatedCampaign.createdAt,
               updatedAt: validatedCampaign.updatedAt,
               researchSummary: validatedCampaign.researchBrief.summary,
-	              listingCandidateCount: validatedCampaign.listingCandidates.length,
-	              listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
-	              approvedListingCount: validatedCampaign.approvedListings.length,
-	              listingValidationStatus: validatedCampaign.listingValidationStatus,
-	              locationIntelligenceStatus: "not_started",
-	              titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
-	              discoverySummary: validatedCampaign.discoverySummary?.headline,
-	              validationSummary: validatedCampaign.listingValidationSummary?.headline,
+              listingCandidateCount: validatedCampaign.listingCandidates.length,
+              listingDiscoveryStatus: validatedCampaign.listingDiscoveryStatus,
+              approvedListingCount: validatedCampaign.approvedListings.length,
+              listingValidationStatus: validatedCampaign.listingValidationStatus,
+              locationIntelligenceStatus: "not_started",
+              scriptGenerationStatus: "not_started",
+              titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
+              discoverySummary: validatedCampaign.discoverySummary?.headline,
+              validationSummary: validatedCampaign.listingValidationSummary?.headline,
             },
             message: `Listing validation complete. "${validatedCampaign.name}" is ready for Location Intelligence.`,
           }),
@@ -1043,6 +1175,7 @@ describe("CasaHUD opportunity UI flow", () => {
                   approvedListingCount: validatedCampaign.approvedListings.length,
                   listingValidationStatus: validatedCampaign.listingValidationStatus,
                   locationIntelligenceStatus: "not_started",
+                  scriptGenerationStatus: "not_started",
                   titleSupportConfidence: validatedCampaign.titleSupportConfidence ?? undefined,
                   validationSummary: validatedCampaign.listingValidationSummary?.headline,
                 },
@@ -1120,6 +1253,7 @@ describe("CasaHUD opportunity UI flow", () => {
               approvedListingCount: locationRichCampaign.approvedListings.length,
               listingValidationStatus: locationRichCampaign.listingValidationStatus,
               locationIntelligenceStatus: "location_intelligence_completed",
+              scriptGenerationStatus: "not_started",
               titleSupportConfidence: locationRichCampaign.titleSupportConfidence ?? undefined,
               validationSummary: locationRichCampaign.listingValidationSummary?.headline,
               locationSummary: locationRichCampaign.locationIntelligenceSummary?.headline,
@@ -1150,10 +1284,162 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.querySelector('[data-testid="casahud-location-provider-statuses"]')?.textContent).toContain(
       "CasaHUD location patterns",
     );
-    expect(container.querySelector('[data-testid="casahud-script-narrative-placeholder"]')?.textContent).toContain(
-      "Script and Narrative Generation",
+    expect(container.querySelector('[data-testid="casahud-generate-script-cta"]')?.textContent).toContain(
+      "Generate Script",
     );
     expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Location story ready");
+  });
+
+  it("shows script generation progress and renders the saved narrative package after generation", async () => {
+    let resolveScript: ((response: Response) => void) | null = null;
+
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method || "GET";
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, providers: [], saveSupported: true }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && method === "GET") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              campaigns: [
+                {
+                  id: locationRichCampaign.id,
+                  name: locationRichCampaign.name,
+                  campaignType: locationRichCampaign.campaignType,
+                  marketRegionHint: locationRichCampaign.marketRegionHint,
+                  status: locationRichCampaign.status,
+                  createdAt: locationRichCampaign.createdAt,
+                  updatedAt: locationRichCampaign.updatedAt,
+                  researchSummary: locationRichCampaign.researchBrief.summary,
+                  listingCandidateCount: locationRichCampaign.listingCandidates.length,
+                  listingDiscoveryStatus: locationRichCampaign.listingDiscoveryStatus,
+                  approvedListingCount: locationRichCampaign.approvedListings.length,
+                  listingValidationStatus: locationRichCampaign.listingValidationStatus,
+                  locationIntelligenceStatus: "location_intelligence_completed",
+                  scriptGenerationStatus: "not_started",
+                  titleSupportConfidence: locationRichCampaign.titleSupportConfidence ?? undefined,
+                  validationSummary: locationRichCampaign.listingValidationSummary?.headline,
+                  locationSummary: locationRichCampaign.locationIntelligenceSummary?.headline,
+                },
+              ],
+            }),
+            {
+              status: 200,
+              headers: { "Content-Type": "application/json" },
+            },
+          ),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${locationRichCampaign.id}`)) {
+        return Promise.resolve(
+          new Response(JSON.stringify({ ok: true, campaign: locationRichCampaign }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${locationRichCampaign.id}/script`) && method === "POST") {
+        return new Promise<Response>((resolve) => {
+          resolveScript = resolve;
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    const resumeButton = container.querySelector('[data-testid="casahud-resume-campaign"]');
+    await act(async () => {
+      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const scriptButton = container.querySelector('[data-testid="casahud-generate-script-cta"]');
+    expect(scriptButton?.textContent).toContain("Generate Script");
+
+    await act(async () => {
+      scriptButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-script-progress"]')?.textContent).toContain(
+      "Building the opening hook",
+    );
+    expect(container.textContent).toContain("Preparing review-ready script");
+
+    await act(async () => {
+      resolveScript?.(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: scriptedCampaign,
+            summary: {
+              id: scriptedCampaign.id,
+              name: scriptedCampaign.name,
+              campaignType: scriptedCampaign.campaignType,
+              marketRegionHint: scriptedCampaign.marketRegionHint,
+              status: scriptedCampaign.status,
+              createdAt: scriptedCampaign.createdAt,
+              updatedAt: scriptedCampaign.updatedAt,
+              researchSummary: scriptedCampaign.researchBrief.summary,
+              listingCandidateCount: scriptedCampaign.listingCandidates.length,
+              listingDiscoveryStatus: scriptedCampaign.listingDiscoveryStatus,
+              approvedListingCount: scriptedCampaign.approvedListings.length,
+              listingValidationStatus: scriptedCampaign.listingValidationStatus,
+              locationIntelligenceStatus: scriptedCampaign.locationIntelligenceStatus,
+              scriptGenerationStatus: scriptedCampaign.scriptGenerationStatus,
+              titleSupportConfidence: scriptedCampaign.titleSupportConfidence ?? undefined,
+              validationSummary: scriptedCampaign.listingValidationSummary?.headline,
+              locationSummary: scriptedCampaign.locationIntelligenceSummary?.headline,
+              scriptSummary: scriptedCampaign.scriptSummary ?? undefined,
+            },
+            message: `Script ready. "${scriptedCampaign.name}" now includes the review-ready narrative package.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      );
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-script-summary"]')?.textContent).toContain(
+      "A relocation-oriented narrative",
+    );
+    expect(container.querySelector('[data-testid="casahud-script-preview"]')?.textContent).toContain(
+      "what does life in Southern Italy actually look like",
+    );
+    expect(container.querySelector('[data-testid="casahud-script-segments"]')?.textContent).toContain("Opening Hook");
+    expect(container.querySelector('[data-testid="casahud-property-segments"]')?.textContent).toContain(
+      "Tropea apartment with sea views",
+    );
+    expect(container.querySelector('[data-testid="casahud-script-transitions"]')?.textContent).toContain(
+      "Bridge the property segment through daily-life fit",
+    );
+    expect(container.querySelector('[data-testid="casahud-script-warnings"]')?.textContent).toContain(
+      "Title support is moderate at 74%",
+    );
+    expect(container.textContent).toContain("Media Planning and Asset Assembly");
+    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Script ready");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {

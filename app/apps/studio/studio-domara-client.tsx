@@ -82,6 +82,14 @@ type CasaHudLocationIntelligencePayload = {
   error?: { message?: string };
 };
 
+type CasaHudScriptNarrativePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  message?: string;
+  error?: { message?: string };
+};
+
 type CasaHudProgressStep = {
   id: string;
   label: string;
@@ -114,6 +122,14 @@ const locationSteps: CasaHudProgressStep[] = [
   { id: "build_poi_context", label: "Building POI context" },
   { id: "prepare_map_ideas", label: "Preparing map scene ideas" },
   { id: "create_story", label: "Creating location story" },
+];
+
+const scriptSteps: CasaHudProgressStep[] = [
+  { id: "opening_hook", label: "Building the opening hook" },
+  { id: "video_flow", label: "Structuring the video flow" },
+  { id: "property_segments", label: "Writing property segments" },
+  { id: "location_storytelling", label: "Adding location storytelling" },
+  { id: "review_ready", label: "Preparing review-ready script" },
 ];
 
 const providerOptionLabels: Record<DomaraIntegrationProviderId, string> = {
@@ -208,9 +224,11 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     listingValidationStatus: campaign.listingValidationStatus,
     titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
     locationIntelligenceStatus: campaign.locationIntelligenceStatus,
+    scriptGenerationStatus: campaign.scriptGenerationStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
+    scriptSummary: campaign.scriptSummary ?? undefined,
   };
 }
 
@@ -266,6 +284,8 @@ export default function StudioDomaraClient() {
   const [validationProgressIndex, setValidationProgressIndex] = useState(0);
   const [campaignLocatingId, setCampaignLocatingId] = useState<string | null>(null);
   const [locationProgressIndex, setLocationProgressIndex] = useState(0);
+  const [campaignScriptingId, setCampaignScriptingId] = useState<string | null>(null);
+  const [scriptProgressIndex, setScriptProgressIndex] = useState(0);
   const [connectionProviders, setConnectionProviders] = useState<DomaraIntegrationProviderStatus[]>([]);
   const [connectionStatus, setConnectionStatus] = useState<"loading" | "ready" | "error">("loading");
   const [connectionSaveSupported, setConnectionSaveSupported] = useState(true);
@@ -394,6 +414,17 @@ export default function StudioDomaraClient() {
 
     return () => window.clearTimeout(timeoutId);
   }, [campaignLocatingId, locationProgressIndex]);
+
+  useEffect(() => {
+    if (!campaignScriptingId) return;
+    if (scriptProgressIndex >= scriptSteps.length - 1) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setScriptProgressIndex((current) => Math.min(current + 1, scriptSteps.length - 1));
+    }, 620);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [campaignScriptingId, scriptProgressIndex]);
 
   function openSetup(reason?: string, focusCardId?: CasaHudConnectionCardId, cardsOverride?: CasaHudConnectionCard[]) {
     setSetupReason(reason || setupMessage);
@@ -670,6 +701,37 @@ export default function StudioDomaraClient() {
     }
   }
 
+  async function onGenerateScript() {
+    if (!activeCampaign) return;
+
+    try {
+      setCampaignScriptingId(activeCampaign.id);
+      setScriptProgressIndex(0);
+      setCampaignError(null);
+      setCampaignNotice(null);
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/script`, {
+        method: "POST",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudScriptNarrativePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "CasaHUD could not generate the script right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setCampaignNotice(payload.message || `Script ready. "${payload.campaign.name}" now includes the review-ready narrative package.`);
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setScriptProgressIndex(scriptSteps.length - 1);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "CasaHUD could not generate the script right now.");
+    } finally {
+      setCampaignScriptingId(null);
+    }
+  }
+
   const researchModeSummary =
     connectionStatus === "loading"
       ? "Checking whether live YouTube competitive research is available."
@@ -703,10 +765,14 @@ export default function StudioDomaraClient() {
           ? "listing validation"
           : campaignLocatingId
             ? "location intelligence"
+            : campaignScriptingId
+              ? "script generation"
         : opportunityOutput
           ? "opportunity ready"
         : activeCampaign
-          ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+          ? activeCampaign.scriptGenerationStatus === "script_generated"
+            ? "script ready"
+            : activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
             ? "location story ready"
             : activeCampaign.listingValidationStatus === "listing_candidates_validated"
               ? "validation ready"
@@ -900,7 +966,7 @@ export default function StudioDomaraClient() {
                           {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
                         </p>
                         <p className="mt-2 text-sm leading-6 text-[#526070]">
-                          {campaign.locationSummary || campaign.validationSummary || campaign.discoverySummary || campaign.researchSummary}
+                          {campaign.scriptSummary || campaign.locationSummary || campaign.validationSummary || campaign.discoverySummary || campaign.researchSummary}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2 text-xs font-medium text-[#344256]">
                           {campaign.marketRegionHint ? (
@@ -926,6 +992,11 @@ export default function StudioDomaraClient() {
                           {campaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
                             <span className="rounded-full border border-[#D8E2D9] bg-[#F2FBF3] px-3 py-1 text-[#0F5132]">
                               Location story ready
+                            </span>
+                          ) : null}
+                          {campaign.scriptGenerationStatus === "script_generated" ? (
+                            <span className="rounded-full border border-[#C6D7F4] bg-[#EFF4FF] px-3 py-1 text-[#1D4ED8]">
+                              Script ready
                             </span>
                           ) : null}
                           <span className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
@@ -1043,8 +1114,12 @@ export default function StudioDomaraClient() {
                       ? "CasaHUD is validating and ranking listings"
                       : campaignLocatingId
                         ? "CasaHUD is building the location story"
+                        : campaignScriptingId
+                          ? "CasaHUD is writing the video narrative"
                   : activeCampaign
-                    ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+                    ? activeCampaign.scriptGenerationStatus === "script_generated"
+                      ? "Script and narrative are saved on the campaign"
+                      : activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
                       ? "Location intelligence is saved on the campaign"
                       : activeCampaign.listingValidationStatus === "listing_candidates_validated"
                         ? "Validated shortlist is ready for location intelligence"
@@ -1062,8 +1137,12 @@ export default function StudioDomaraClient() {
                       ? "CasaHUD is checking title truthfulness, removing duplicate listings, scoring fit, and ranking the shortlist that can move forward to location intelligence."
                       : campaignLocatingId
                         ? "CasaHUD is reading approved property locations, checking map and places coverage, shaping POI context, and packaging a place-led story for the next script phase."
+                        : campaignScriptingId
+                          ? "CasaHUD is turning the validated listings and saved location intelligence into a review-ready narrative package with hooks, scene beats, transitions, and editorial notes."
                   : activeCampaign
-                    ? activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
+                    ? activeCampaign.scriptGenerationStatus === "script_generated"
+                      ? "The campaign now includes a script summary, opening hook, scene-level narration, property copy, transitions, closing CTA, tone notes, warnings, and the Phase 8 handoff placeholder."
+                      : activeCampaign.locationIntelligenceStatus === "location_intelligence_completed"
                       ? "The campaign now includes a location story, local highlights, POI cards, listing-level context, provider status, warnings, and map scene ideas. CasaHUD can reopen this package and hand it forward to Script and Narrative Generation."
                       : activeCampaign.listingValidationStatus === "listing_candidates_validated"
                         ? "The campaign now includes approved and rejected listing results, ranking context, warnings, and title-support confidence. CasaHUD can reopen this package and hand it forward to Location Intelligence without rerunning validation."
@@ -1080,8 +1159,18 @@ export default function StudioDomaraClient() {
 
           <div className="mt-5 grid gap-3 lg:grid-cols-[1.05fr_0.95fr]">
             <div className="grid gap-2">
-              {(campaignLocatingId ? locationSteps : campaignValidatingId ? validationSteps : campaignDiscoveringId ? discoverySteps : wizardSteps).map((step, index) => {
-                const status = campaignLocatingId
+              {(campaignScriptingId
+                ? scriptSteps
+                : campaignLocatingId
+                  ? locationSteps
+                  : campaignValidatingId
+                    ? validationSteps
+                    : campaignDiscoveringId
+                      ? discoverySteps
+                      : wizardSteps).map((step, index) => {
+                const status = campaignScriptingId
+                  ? getProgressStepStatus("loading", scriptProgressIndex, index)
+                  : campaignLocatingId
                   ? getProgressStepStatus("loading", locationProgressIndex, index)
                   : campaignValidatingId
                   ? getProgressStepStatus("loading", validationProgressIndex, index)
@@ -1506,7 +1595,18 @@ export default function StudioDomaraClient() {
                         {activeCampaign.locationIntelligenceSummary.headline}
                       </p>
                       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
-                        Script and Narrative Generation is next
+                        {activeCampaign.scriptGenerationStatus === "script_generated"
+                          ? "Media Planning and Asset Assembly is next"
+                          : "Script and Narrative Generation is next"}
+                      </p>
+                    </div>
+                  ) : null}
+                  {activeCampaign.scriptSummary ? (
+                    <div className="mt-4 rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] p-4">
+                      <p className="text-sm font-semibold text-[#172033]">Script summary</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.scriptSummary}</p>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#41608E]">
+                        Media Planning and Asset Assembly is next
                       </p>
                     </div>
                   ) : null}
@@ -1567,14 +1667,29 @@ export default function StudioDomaraClient() {
                     <>
                       <button
                         type="button"
-                        className="mt-4 rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#526070]"
-                        disabled
-                        data-testid="casahud-script-narrative-placeholder"
+                        className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                        onClick={() => void onGenerateScript()}
+                        disabled={campaignScriptingId === activeCampaign.id}
+                        data-testid="casahud-generate-script-cta"
                       >
-                        Script and Narrative Generation
+                        {campaignScriptingId === activeCampaign.id ? "Generating Script..." : "Generate Script"}
                       </button>
                       <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
                         Location intelligence is saved. Phase 7 will turn this place story into the actual script and narrative flow.
+                      </p>
+                    </>
+                  ) : activeCampaign.nextPhase.key === "media_planning_asset_assembly" ? (
+                    <>
+                      <button
+                        type="button"
+                        className="mt-4 rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
+                        disabled
+                        data-testid="casahud-media-planning-placeholder"
+                      >
+                        Media Planning and Asset Assembly
+                      </button>
+                      <p className="mt-3 text-xs font-semibold uppercase tracking-[0.12em] text-[#41608E]">
+                        The narrative package is saved. Phase 8 will connect this script to visuals, assets, and scene planning.
                       </p>
                     </>
                   ) : null}
@@ -1641,6 +1756,30 @@ export default function StudioDomaraClient() {
                           <div
                             key={step.id}
                             className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-2xl border border-[#D8E2D9] bg-white/80 px-3 py-3"
+                          >
+                            <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
+                            <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
+                            <span className="text-xs text-[#718096]">{progressStatusLabel(status)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </section>
+                ) : null}
+
+                {campaignScriptingId === activeCampaign.id ? (
+                  <section
+                    className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm"
+                    data-testid="casahud-script-progress"
+                  >
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Script Generation</p>
+                    <div className="mt-4 grid gap-2">
+                      {scriptSteps.map((step, index) => {
+                        const status = getProgressStepStatus("loading", scriptProgressIndex, index);
+                        return (
+                          <div
+                            key={step.id}
+                            className="grid grid-cols-[12px_1fr_auto] items-center gap-3 rounded-2xl border border-[#D4DDF2] bg-white/90 px-3 py-3"
                           >
                             <span className={`h-2.5 w-2.5 rounded-full ${statusDotClass(status)}`} />
                             <span className={`text-sm font-medium ${stageTextClass(status)}`}>{step.label}</span>
@@ -1792,7 +1931,9 @@ export default function StudioDomaraClient() {
                   </div>
                 ) : null}
                 <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#6C7B6D]">
-                  Next: Script and Narrative Generation
+                  {activeCampaign.scriptGenerationStatus === "script_generated"
+                    ? "Next: Media Planning and Asset Assembly"
+                    : "Next: Script and Narrative Generation"}
                 </p>
               </section>
             ) : null}
@@ -2043,6 +2184,214 @@ export default function StudioDomaraClient() {
                       ) : null}
                     </article>
                   ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.scriptSummary ? (
+              <section
+                className="mt-6 rounded-[1.85rem] border border-[#D4DDF2] bg-[linear-gradient(160deg,rgba(247,250,255,0.98),rgba(255,255,255,0.94))] p-5 shadow-sm"
+                data-testid="casahud-script-summary"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Script Summary</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                      {activeCampaign.scriptSummary}
+                    </h3>
+                  </div>
+                  {activeCampaign.estimatedDurationSeconds ? (
+                    <span className="rounded-full border border-[#D4DDF2] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                      {activeCampaign.estimatedDurationSeconds}s
+                    </span>
+                  ) : null}
+                </div>
+                {activeCampaign.tone ? (
+                  <p className="mt-3 max-w-4xl text-sm leading-6 text-[#526070]">{activeCampaign.tone}</p>
+                ) : null}
+                {activeCampaign.scriptProviderStatus ? (
+                  <div className="mt-4 rounded-2xl border border-[#D4DDF2] bg-white/85 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-[#172033]">{activeCampaign.scriptProviderStatus.label}</p>
+                      <span
+                        className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                          activeCampaign.scriptProviderStatus.state === "connected"
+                            ? "bg-[#DFF3E7] text-[#0F5132]"
+                            : activeCampaign.scriptProviderStatus.state === "error"
+                              ? "bg-[#FEE2E2] text-[#991B1B]"
+                              : "bg-[#FFF0D6] text-[#7A4B13]"
+                        }`}
+                      >
+                        {formatCampaignStatus(activeCampaign.scriptProviderStatus.state)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.scriptProviderStatus.detail}</p>
+                  </div>
+                ) : null}
+                <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#41608E]">
+                  Next: Media Planning and Asset Assembly
+                </p>
+              </section>
+            ) : null}
+
+            {activeCampaign.openingHook ? (
+              <section className="mt-6 grid gap-5 lg:grid-cols-[0.98fr_1.02fr]" data-testid="casahud-script-preview">
+                <section className="rounded-[1.85rem] border border-[#D4DDF2] bg-white/[0.94] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Opening Hook</p>
+                  <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">
+                    {activeCampaign.openingHook}
+                  </h3>
+                  {activeCampaign.closingCta ? (
+                    <div className="mt-5 rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] p-4">
+                      <p className="text-sm font-semibold text-[#172033]">Closing CTA</p>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.closingCta}</p>
+                    </div>
+                  ) : null}
+                </section>
+
+                <aside className="grid gap-4">
+                  {activeCampaign.locationLifestyleLines.length > 0 ? (
+                    <section className="rounded-[1.75rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Location Storytelling Lines</p>
+                      <div className="mt-4 grid gap-3">
+                        {activeCampaign.locationLifestyleLines.map((line) => (
+                          <div key={line} className="rounded-2xl border border-[#D4DDF2] bg-white/85 p-4 text-sm leading-6 text-[#526070]">
+                            {line}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+
+                  {activeCampaign.toneAndPacingNotes.length > 0 ? (
+                    <section className="rounded-[1.75rem] border border-[#E4D7C2] bg-[#FFF9EF] p-5 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Tone and Pacing Notes</p>
+                      <div className="mt-4 grid gap-3">
+                        {activeCampaign.toneAndPacingNotes.map((note) => (
+                          <div key={note} className="rounded-2xl border border-[#E4D7C2] bg-white/85 p-4 text-sm leading-6 text-[#526070]">
+                            {note}
+                          </div>
+                        ))}
+                      </div>
+                    </section>
+                  ) : null}
+                </aside>
+              </section>
+            ) : null}
+
+            {activeCampaign.scriptSegments.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-script-segments">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#41608E]">Video Flow</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Scene-level narration</h3>
+                  </div>
+                  <span className="rounded-full border border-[#D4DDF2] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                    {activeCampaign.scriptSegments.length} segments
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.scriptSegments.map((segment) => (
+                    <article key={segment.id} className="rounded-3xl border border-[#D4DDF2] bg-white/[0.95] p-5 shadow-sm">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full border border-[#D4DDF2] bg-[#F7FAFF] px-2.5 py-1 text-[11px] font-semibold text-[#41608E]">
+                            {formatCampaignStatus(segment.segmentType)}
+                          </span>
+                          {segment.associatedListingId ? (
+                            <span className="rounded-full border border-[#D7CAB8] bg-[#FFF9EF] px-2.5 py-1 text-[11px] font-semibold text-[#8A5A34]">
+                              Listing-linked
+                            </span>
+                          ) : null}
+                        </div>
+                        <span className="rounded-full border border-[#D4DDF2] bg-white px-3 py-1 text-xs font-semibold text-[#344256]">
+                          {segment.durationSeconds}s
+                        </span>
+                      </div>
+                      <h4 className="mt-3 text-xl font-semibold tracking-[-0.02em] text-[#172033]">{segment.title}</h4>
+                      <p className="mt-3 text-sm leading-6 text-[#526070]">{segment.narration}</p>
+                      {segment.visualNote ? (
+                        <p className="mt-4 text-sm leading-6 text-[#344256]">
+                          <span className="font-semibold text-[#172033]">Editorial note:</span> {segment.visualNote}
+                        </p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.propertySegments.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-property-segments">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1B8A5A]">Property Segments</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Validated listing copy</h3>
+                  </div>
+                  <span className="rounded-full border border-[#CFE2D2] bg-[#F2FBF3] px-3 py-1 text-xs font-semibold text-[#0F5132]">
+                    {activeCampaign.propertySegments.length} segments
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.propertySegments.map((segment) => (
+                    <article key={segment.listingId} className="rounded-3xl border border-[#CFE2D2] bg-white/[0.95] p-5 shadow-sm">
+                      <h4 className="text-xl font-semibold tracking-[-0.02em] text-[#172033]">{segment.title}</h4>
+                      <p className="mt-2 text-sm leading-6 text-[#526070]">{segment.locationText}</p>
+                      <p className="mt-4 text-sm leading-6 text-[#526070]">{segment.narration}</p>
+                      <div className="mt-4 rounded-2xl border border-[#D8E2D9] bg-[#F7FAF8] p-4">
+                        <p className="text-sm font-semibold text-[#172033]">Why it made the cut</p>
+                        <p className="mt-2 text-sm leading-6 text-[#526070]">{segment.whyItMadeTheCut}</p>
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-2 text-xs font-semibold text-[#344256]">
+                        {segment.supportedFacts.map((fact) => (
+                          <span key={fact} className="rounded-full border border-[#D7CAB8] bg-white px-3 py-1">
+                            {fact}
+                          </span>
+                        ))}
+                      </div>
+                      {segment.locationLine ? (
+                        <p className="mt-4 text-sm leading-6 text-[#344256]">
+                          <span className="font-semibold text-[#172033]">Location line:</span> {segment.locationLine}
+                        </p>
+                      ) : null}
+                      {segment.caution ? (
+                        <p className="mt-4 text-xs font-semibold uppercase tracking-[0.12em] text-[#8A5A34]">{segment.caution}</p>
+                      ) : null}
+                    </article>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.transitions.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-script-transitions">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Transitions</p>
+                    <h3 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">How the story moves</h3>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3">
+                  {activeCampaign.transitions.map((transition) => (
+                    <div key={transition} className="rounded-3xl border border-[#D8E2D9] bg-white/[0.94] p-5 shadow-sm text-sm leading-6 text-[#526070]">
+                      {transition}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {activeCampaign.scriptWarnings.length > 0 ? (
+              <section className="mt-6" data-testid="casahud-script-warnings">
+                <div className="rounded-[1.75rem] border border-[#E7D8C2] bg-[#FFF5DA] p-5 shadow-sm">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Script Warnings</p>
+                  <div className="mt-4 grid gap-3">
+                    {activeCampaign.scriptWarnings.map((warning) => (
+                      <p key={warning} className="text-sm leading-6 text-[#7A4B13]">
+                        {warning}
+                      </p>
+                    ))}
+                  </div>
                 </div>
               </section>
             ) : null}

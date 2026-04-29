@@ -100,6 +100,20 @@ const campaign: CasaHudCampaign = {
   listingLocationInsights: [],
   locationProviderStatuses: [],
   locationWarnings: [],
+  scriptGenerationStatus: "not_started",
+  scriptSummary: null,
+  openingHook: null,
+  estimatedDurationSeconds: null,
+  tone: null,
+  scriptSegments: [],
+  propertySegments: [],
+  locationLifestyleLines: [],
+  transitions: [],
+  closingCta: null,
+  toneAndPacingNotes: [],
+  scriptWarnings: [],
+  scriptProviderStatus: null,
+  fullScriptText: null,
   nextPhase: {
     key: "property_discovery",
     label: "Find matching properties",
@@ -181,6 +195,7 @@ describe("CasaHUD campaign routes", () => {
         approvedListingCount: 0,
         listingValidationStatus: "not_started",
         locationIntelligenceStatus: "not_started",
+        scriptGenerationStatus: "not_started",
       },
     ]);
     mocks.getCasaHudCampaign.mockResolvedValue(campaign);

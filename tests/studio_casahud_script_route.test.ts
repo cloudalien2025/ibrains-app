@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
-import type { CasaHudLocationData } from "@/lib/studio/domara/campaign-location-intelligence";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -62,8 +61,8 @@ const opportunity: CasaHudOpportunityResult = {
   },
 };
 
-const validatedCampaign: CasaHudCampaign = {
-  id: "casahud-project-phase6-route",
+const locationReadyCampaign: CasaHudCampaign = {
+  id: "casahud-project-phase7-route",
   name: opportunity.selectedTitle.title,
   selectedViralTitle: opportunity.selectedTitle.title,
   selectedTitle: opportunity.selectedTitle,
@@ -79,7 +78,7 @@ const validatedCampaign: CasaHudCampaign = {
     selectedTitleReasoning: opportunity.selectedTitle.reasoning,
     selectedTitleConfidence: opportunity.selectedTitle.confidence,
   },
-  status: "listing_candidates_validated",
+  status: "location_intelligence_completed",
   listingCandidates: [],
   listingSearchCriteria: null,
   listingProviderStatuses: [],
@@ -144,9 +143,23 @@ const validatedCampaign: CasaHudCampaign = {
   },
   titleSupportConfidence: 84,
   validationWarnings: [],
-  locationIntelligenceStatus: "not_started",
-  locationIntelligenceSummary: null,
-  locationStory: null,
+  locationIntelligenceStatus: "location_intelligence_completed",
+  locationIntelligenceSummary: {
+    headline: "Location story prepared across 1 shortlist anchor.",
+    providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
+    coverageSummary: "CasaHUD connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
+    warningCount: 1,
+    generatedAt: "2026-04-29T00:00:00.000Z",
+    fallbackUsed: true,
+  },
+  locationStory: {
+    headline: "Tropea turns the shortlist into a place-led story.",
+    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
+    narrativeAngles: ["Open with the region before dropping into the strongest listing."],
+    lifestyleAnchors: ["Waterside lifestyle context"],
+    regionHighlights: ["Tropea", "Calabria"],
+    fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
+  },
   localHighlights: [],
   poiBundle: null,
   mapSceneIdeas: [],
@@ -168,21 +181,25 @@ const validatedCampaign: CasaHudCampaign = {
   scriptProviderStatus: null,
   fullScriptText: null,
   nextPhase: {
-    key: "location_intelligence",
-    label: "Location Intelligence",
+    key: "script_narrative_generation",
+    label: "Script and Narrative Generation",
     detail:
-      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+      "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
-  updatedAt: "2026-04-28T00:25:00.000Z",
+  updatedAt: "2026-04-29T00:00:00.000Z",
   generatedAt: opportunity.generatedAt,
   futureState: {
     listingCandidates: [],
     approvedListings: [],
     rejectedListings: [],
     listingRankOrder: ["listing-1"],
-    locationIntelligence: null,
+    locationIntelligence: {
+      status: "location_intelligence_completed",
+      storyHeadline: "Tropea turns the shortlist into a place-led story.",
+      generatedAt: "2026-04-29T00:00:00.000Z",
+    },
     mapPoiBundle: null,
     script: null,
     storyboard: null,
@@ -195,111 +212,49 @@ const validatedCampaign: CasaHudCampaign = {
   },
 };
 
-const locationIntelligence: CasaHudLocationData = {
-  locationIntelligenceStatus: "location_intelligence_completed",
-  locationIntelligenceSummary: {
-    headline: "Location story prepared across 1 shortlist anchor.",
-    providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
-    coverageSummary: "CasaHUD connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
-    warningCount: 1,
-    generatedAt: "2026-04-29T00:00:00.000Z",
-    fallbackUsed: true,
-  },
-  locationStory: {
-    headline: "Tropea turns the shortlist into a place-led story.",
-    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
-    narrativeAngles: [
-      "Open with the region before dropping into the strongest listing.",
-      "Use local proof points as support for the property promise instead of generic travel filler.",
-      "Keep the location context tightly tied to buyer relevance, convenience, and visual texture.",
-    ],
-    lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
-    regionHighlights: ["Tropea", "Calabria"],
-    fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
-  },
-  localHighlights: [
+const scriptResult = {
+  scriptGenerationStatus: "script_generated" as const,
+  scriptSummary:
+    "A relocation-oriented narrative that uses the validated shortlist and place story to turn the title into a believable daily-life video concept.",
+  openingHook:
+    "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+  estimatedDurationSeconds: 104,
+  tone: "Premium, clear, cinematic where appropriate, and tightly grounded in validated property and location support.",
+  scriptSegments: [
     {
-      id: "highlight-1",
-      title: "Regional anchor",
-      description: "Tropea gives the campaign a specific place identity instead of a generic property roundup.",
-      locationText: "Tropea, Calabria, Italy",
-      associatedListingId: "listing-1",
-      provider: "casahud_location_patterns",
-      sourceConfidence: "fallback",
+      id: "segment-hook",
+      title: "Opening Hook",
+      segmentType: "hook" as const,
+      narration:
+        "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+      durationSeconds: 14,
     },
   ],
-  poiBundle: {
-    summary: "3 location proof points prepared for the approved shortlist.",
-    cards: [
-      {
-        id: "poi-1",
-        name: "Coastal access context",
-        category: "Beach",
-        locationText: "Tropea, Calabria, Italy",
-        associatedListingId: "listing-1",
-        relevanceReason: "Helps the shortlist read as a day-to-day coastal lifestyle story instead of a price-only claim.",
-        provider: "casahud_location_patterns",
-        sourceConfidence: "fallback",
-      },
-    ],
-    categories: ["Beach"],
-    generatedAt: "2026-04-29T00:00:00.000Z",
-  },
-  mapSceneIdeas: [
-    {
-      id: "scene-1",
-      title: "Open on Tropea",
-      sceneType: "regional_anchor",
-      description: "Start with the region around Tropea to establish the place before the property details arrive.",
-      locationText: "Tropea, Calabria, Italy",
-      suggestedVisual: "Wide regional map pull-back with the strongest listing location highlighted first.",
-      provider: "casahud_location_patterns",
-      confidence: "fallback",
-    },
-  ],
-  listingLocationInsights: [
+  propertySegments: [
     {
       listingId: "listing-1",
-      summary: "Tropea apartment with sea views plays best as a waterside lifestyle story around Tropea, Calabria, Italy.",
-      highlights: ["Coastal day-to-day context helps the property feel like a lifestyle move, not just a budget win."],
-      nearbyPois: [],
-      locationStrengths: ["Waterside lifestyle context"],
-      warnings: ["Using CasaHUD location patterns until Google Places is connected."],
+      title: "Tropea apartment with sea views",
+      locationText: "Tropea, Calabria, Italy",
+      narration: "Tropea apartment with sea views keeps the segment grounded in verified listing facts.",
+      whyItMadeTheCut: "It keeps the title promise grounded.",
+      supportedFacts: ["USD 284,000", "apartment"],
     },
   ],
-  locationProviderStatuses: [
-    {
-      provider: "google_places",
-      label: "Google Places",
-      state: "missing_credentials",
-      configured: false,
-      used: false,
-      detail: "Using CasaHUD location patterns until Google Places is connected for live POIs.",
-      warning: "Connect Google Places for live points of interest and local highlights.",
-      coverage: "No live POIs",
-    },
-    {
-      provider: "mapbox",
-      label: "Mapbox",
-      state: "missing_credentials",
-      configured: false,
-      used: false,
-      detail: "Using listing coordinates and CasaHUD location patterns until Mapbox is connected for live map anchoring.",
-      warning: "Connect Mapbox for live geocoding and richer map scene anchoring.",
-      coverage: "No live map anchoring",
-    },
-    {
-      provider: "casahud_location_patterns",
-      label: "CasaHUD location patterns",
-      state: "fallback",
-      configured: true,
-      used: true,
-      detail: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
-      warning: "Connect location providers for live POIs and richer map context.",
-      coverage: "1 fallback context set",
-    },
-  ],
-  locationWarnings: ["Using CasaHUD location patterns until Google Places is connected."],
+  locationLifestyleLines: ["Lead the place story through Tropea and Calabria before drilling into property specifics."],
+  transitions: [],
+  closingCta:
+    "Close by summarizing who this move feels best suited for, then invite the viewer to follow for the next relocation-focused shortlist.",
+  toneAndPacingNotes: ["Keep the delivery premium and clear."],
+  scriptWarnings: [],
+  scriptProviderStatus: {
+    provider: "casahud_script_patterns" as const,
+    label: "CasaHUD script patterns",
+    state: "fallback" as const,
+    configured: true,
+    used: true,
+    detail: "Using deterministic CasaHUD script composition.",
+  },
+  fullScriptText: "Opening Hook\nIf this title is going to resonate...",
 };
 
 const mocks = vi.hoisted(() => ({
@@ -310,9 +265,8 @@ const mocks = vi.hoisted(() => ({
   getCasaHudCampaign: vi.fn(),
   saveCasaHudCampaign: vi.fn(),
   isStudioIntegrationStoreAvailable: vi.fn(),
-  isStudioIntegrationEncryptionConfigured: vi.fn(),
   getStudioIntegrationSecret: vi.fn(),
-  runCasaHudLocationIntelligence: vi.fn(),
+  runCasaHudScriptNarrative: vi.fn(),
 }));
 
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
@@ -329,15 +283,15 @@ vi.mock("@/lib/studio/domara/campaign-repository", () => ({
 
 vi.mock("@/app/api/studio/domara/_utils/integration-settings", () => ({
   isStudioIntegrationStoreAvailable: mocks.isStudioIntegrationStoreAvailable,
-  isStudioIntegrationEncryptionConfigured: mocks.isStudioIntegrationEncryptionConfigured,
+  isStudioIntegrationEncryptionConfigured: () => true,
   getStudioIntegrationSecret: mocks.getStudioIntegrationSecret,
 }));
 
-vi.mock("@/lib/studio/domara/location-intelligence-engine", () => ({
-  runCasaHudLocationIntelligence: mocks.runCasaHudLocationIntelligence,
+vi.mock("@/lib/studio/domara/script-narrative-engine", () => ({
+  runCasaHudScriptNarrative: mocks.runCasaHudScriptNarrative,
 }));
 
-describe("CasaHUD location intelligence route", () => {
+describe("CasaHUD script generation route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -346,60 +300,74 @@ describe("CasaHUD location intelligence route", () => {
     mocks.getCasaHudCampaign.mockReset();
     mocks.saveCasaHudCampaign.mockReset();
     mocks.isStudioIntegrationStoreAvailable.mockReset();
-    mocks.isStudioIntegrationEncryptionConfigured.mockReset();
     mocks.getStudioIntegrationSecret.mockReset();
-    mocks.runCasaHudLocationIntelligence.mockReset();
+    mocks.runCasaHudScriptNarrative.mockReset();
 
     mocks.ensureUser.mockResolvedValue(undefined);
     mocks.resolveUserId.mockReturnValue(userId);
     mocks.isCasaHudCampaignStoreAvailable.mockResolvedValue(true);
     mocks.isCasaHudCampaignStoreUnavailable.mockReturnValue(false);
-    mocks.getCasaHudCampaign.mockResolvedValue(validatedCampaign);
+    mocks.getCasaHudCampaign.mockResolvedValue(locationReadyCampaign);
     mocks.saveCasaHudCampaign.mockImplementation(async (_userId: string, campaign: CasaHudCampaign) => campaign);
     mocks.isStudioIntegrationStoreAvailable.mockResolvedValue(false);
-    mocks.isStudioIntegrationEncryptionConfigured.mockReturnValue(false);
     mocks.getStudioIntegrationSecret.mockResolvedValue(null);
-    mocks.runCasaHudLocationIntelligence.mockResolvedValue(locationIntelligence);
+    mocks.runCasaHudScriptNarrative.mockResolvedValue(scriptResult);
   });
 
-  it("requires approved listings before building location intelligence", async () => {
-    const route = await import("@/app/api/studio/domara/campaigns/[id]/location-intelligence/route");
-    mocks.getCasaHudCampaign.mockResolvedValue({
-      ...validatedCampaign,
+  it("requires approved listings and location intelligence before generating the script", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/script/route");
+
+    mocks.getCasaHudCampaign.mockResolvedValueOnce({
+      ...locationReadyCampaign,
       approvedListings: [],
     });
-
-    const response = await route.POST(
-      new NextRequest(`http://localhost/api/studio/domara/campaigns/${validatedCampaign.id}/location-intelligence`, {
+    const noListingsResponse = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${locationReadyCampaign.id}/script`, {
         method: "POST",
       }),
-      { params: { id: validatedCampaign.id } },
+      { params: { id: locationReadyCampaign.id } },
     );
-    const payload = await response.json();
+    expect(noListingsResponse.status).toBe(409);
 
-    expect(response.status).toBe(409);
-    expect(payload.error.code).toBe("APPROVED_LISTINGS_REQUIRED");
+    mocks.getCasaHudCampaign.mockResolvedValueOnce({
+      ...locationReadyCampaign,
+      locationIntelligenceStatus: "not_started",
+      status: "listing_candidates_validated",
+      nextPhase: {
+        key: "location_intelligence",
+        label: "Location Intelligence",
+        detail: "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+        implemented: false,
+      },
+    });
+    const noLocationResponse = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${locationReadyCampaign.id}/script`, {
+        method: "POST",
+      }),
+      { params: { id: locationReadyCampaign.id } },
+    );
+    expect(noLocationResponse.status).toBe(409);
   });
 
-  it("persists the location bundle and returns the updated campaign on success", async () => {
-    const route = await import("@/app/api/studio/domara/campaigns/[id]/location-intelligence/route");
+  it("persists the script package and returns the updated campaign", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/script/route");
 
     const response = await route.POST(
-      new NextRequest(`http://localhost/api/studio/domara/campaigns/${validatedCampaign.id}/location-intelligence`, {
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${locationReadyCampaign.id}/script`, {
         method: "POST",
       }),
-      { params: { id: validatedCampaign.id } },
+      { params: { id: locationReadyCampaign.id } },
     );
     const payload = await response.json();
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(mocks.runCasaHudLocationIntelligence).toHaveBeenCalledOnce();
-    expect(mocks.saveCasaHudCampaign).toHaveBeenCalledOnce();
-    expect(payload.campaign.status).toBe("location_intelligence_completed");
-    expect(payload.campaign.locationStory.headline).toContain("Tropea");
-    expect(payload.campaign.poiBundle.summary).toContain("location proof points");
-    expect(payload.summary.locationIntelligenceStatus).toBe("location_intelligence_completed");
-    expect(payload.message).toContain("Location intelligence complete");
+    expect(payload.campaign.status).toBe("script_narrative_completed");
+    expect(payload.campaign.scriptSummary).toBe(scriptResult.scriptSummary);
+    expect(payload.campaign.nextPhase.key).toBe("media_planning_asset_assembly");
+    expect(payload.summary.scriptGenerationStatus).toBe("script_generated");
+    expect(payload.summary.scriptSummary).toBe(scriptResult.scriptSummary);
+    expect(mocks.runCasaHudScriptNarrative).toHaveBeenCalledTimes(1);
+    expect(mocks.saveCasaHudCampaign).toHaveBeenCalledTimes(1);
   });
 });
