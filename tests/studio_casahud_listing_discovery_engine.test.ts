@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import {
   deriveCasaHudListingSearchCriteria,
   runCasaHudListingDiscovery,
@@ -98,6 +99,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
     scriptProviderStatus: null,
     fullScriptText: null,
     ...createEmptyCasaHudMediaPlanData(),
+    ...createEmptyCasaHudYouTubePackageData(),
     nextPhase: {
       key: "property_discovery",
       label: "Find matching properties",

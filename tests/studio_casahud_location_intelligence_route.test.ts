@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
 import type { CasaHudLocationData } from "@/lib/studio/domara/campaign-location-intelligence";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -169,6 +170,7 @@ const validatedCampaign: CasaHudCampaign = {
   scriptProviderStatus: null,
   fullScriptText: null,
   ...createEmptyCasaHudMediaPlanData(),
+  ...createEmptyCasaHudYouTubePackageData(),
   nextPhase: {
     key: "location_intelligence",
     label: "Location Intelligence",
