@@ -12,7 +12,10 @@ import {
   type CasaHudCampaign,
   type CasaHudCampaignSummary,
 } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudExecutionData } from "@/lib/studio/domara/campaign-execution";
+import { createEmptyCasaHudLocationData } from "@/lib/studio/domara/campaign-location-intelligence";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudScriptData } from "@/lib/studio/domara/campaign-script-narrative";
 import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
 import { runCasaHudMediaPlanning } from "@/lib/studio/domara/media-planning-engine";
@@ -45,16 +48,6 @@ const connectedProviders: DomaraIntegrationProviderStatus[] = [
     capabilitiesEnabled: ["strategy"],
     configuredBy: "saved",
     maskedKey: "••••1234",
-  },
-  {
-    providerId: "elevenlabs",
-    displayName: "ElevenLabs",
-    category: "voice",
-    requiredEnvVars: [],
-    configured: false,
-    validationStatus: "missing",
-    safeSetupHelp: "Connect ElevenLabs.",
-    capabilitiesEnabled: ["voice"],
   },
   {
     providerId: "mapbox",
@@ -93,16 +86,6 @@ const connectedProviders: DomaraIntegrationProviderStatus[] = [
     maskedKey: "••••4567",
   },
   {
-    providerId: "immobiliare",
-    displayName: "Immobiliare",
-    category: "listing_ingestion",
-    requiredEnvVars: [],
-    configured: false,
-    validationStatus: "missing",
-    safeSetupHelp: "Connect Immobiliare.",
-    capabilitiesEnabled: ["listings"],
-  },
-  {
     providerId: "cloudinary",
     displayName: "Cloudinary",
     category: "media_storage",
@@ -113,16 +96,6 @@ const connectedProviders: DomaraIntegrationProviderStatus[] = [
     capabilitiesEnabled: ["media"],
     configuredBy: "saved",
     maskedKey: "••••5678",
-  },
-  {
-    providerId: "digitalocean_spaces",
-    displayName: "DigitalOcean Spaces",
-    category: "media_storage",
-    requiredEnvVars: [],
-    configured: false,
-    validationStatus: "missing",
-    safeSetupHelp: "Connect Spaces.",
-    capabilitiesEnabled: ["media"],
   },
   {
     providerId: "youtube",
@@ -136,16 +109,22 @@ const connectedProviders: DomaraIntegrationProviderStatus[] = [
   },
 ];
 
-const activeCampaign: CasaHudCampaign = {
-  id: "campaign-scripted",
+const emptyLocationState = createEmptyCasaHudLocationData();
+const emptyScriptState = createEmptyCasaHudScriptData();
+const emptyMediaPlanState = createEmptyCasaHudMediaPlanData();
+const emptyYouTubePackageState = createEmptyCasaHudYouTubePackageData();
+const emptyExecutionState = createEmptyCasaHudExecutionData();
+
+const savedCampaign: CasaHudCampaign = {
+  id: "campaign-phase-3",
   name: "Could You Retire in Southern Italy for Under $300K?",
   selectedViralTitle: "Could You Retire in Southern Italy for Under $300K?",
   selectedTitle: {
     title: "Could You Retire in Southern Italy for Under $300K?",
     score: 92,
     campaignType: "lifestyle_relocation",
-    confidence: 0.88,
-    reasoning: "Strong relocation intent plus believable support.",
+    confidence: 0.89,
+    reasoning: "Strong relocation intent with believable support.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k"],
   },
@@ -164,7 +143,7 @@ const activeCampaign: CasaHudCampaign = {
       campaignType: "lifestyle_relocation",
       regionHint: "Southern Italy",
       listingSearchHints: ["Southern Italy homes under 300k"],
-      reasoning: "Strong relocation intent plus believable support.",
+      reasoning: "Strong relocation intent with believable support.",
     },
   ],
   researchBrief: {
@@ -188,9 +167,56 @@ const activeCampaign: CasaHudCampaign = {
     summary: "CasaHUD picked the most supportable title direction.",
     titleOpportunitySummary: "The title stays specific enough to be validated against the shortlist.",
     selectedTitleReasoning: "It balances click appeal with believable support.",
-    selectedTitleConfidence: 0.88,
+    selectedTitleConfidence: 0.89,
   },
-  status: "script_narrative_completed",
+  status: "campaign_created",
+  listingCandidates: [],
+  listingSearchCriteria: null,
+  listingProviderStatuses: [],
+  discoverySummary: null,
+  listingDiscoveryStatus: "not_started",
+  approvedListings: [],
+  rejectedListings: [],
+  listingRankOrder: [],
+  listingValidationStatus: "not_started",
+  listingValidationSummary: null,
+  titleSupportConfidence: null,
+  validationWarnings: [],
+  ...emptyLocationState,
+  ...emptyScriptState,
+  ...emptyMediaPlanState,
+  ...emptyYouTubePackageState,
+  ...emptyExecutionState,
+  nextPhase: {
+    key: "property_discovery",
+    label: "Find matching properties",
+    detail: "Property discovery comes next.",
+    implemented: false,
+  },
+  createdAt: "2026-04-28T00:00:00.000Z",
+  updatedAt: "2026-04-28T00:00:00.000Z",
+  generatedAt: "2026-04-28T00:00:00.000Z",
+  futureState: {
+    listingCandidates: [],
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    locationIntelligence: null,
+    mapPoiBundle: null,
+    script: null,
+    storyboard: null,
+    mediaPlan: null,
+    packaging: null,
+    renderStatus: null,
+    reviewStatus: null,
+    publishStatus: null,
+    scheduleStatus: null,
+  },
+};
+
+const validatedCampaign: CasaHudCampaign = {
+  ...savedCampaign,
+  status: "listing_candidates_validated",
   listingCandidates: [
     {
       id: "listing-1",
@@ -213,51 +239,34 @@ const activeCampaign: CasaHudCampaign = {
       imageUrls: ["https://images.example.com/1.jpg"],
       imageCount: 1,
       photoAvailability: "limited",
-      coordinates: { latitude: 38.675, longitude: 15.895 },
-      discoveredAt: "2026-04-29T00:00:00.000Z",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
       preliminaryMatchNotes: "Fits the title promise and budget.",
     },
-  ],
-  listingSearchCriteria: {
-    operation: "sale",
-    campaignType: "lifestyle_relocation",
-    titlePromise: "Could You Retire in Southern Italy for Under $300K?",
-    regionHint: "Southern Italy",
-    country: "Italy",
-    cities: ["Tropea"],
-    propertyTypes: ["apartment"],
-    featureTags: ["move-in ready"],
-    lifestyleTags: ["retirement"],
-    searchTerms: ["Southern Italy homes under 300k"],
-    pricePositioning: "affordable",
-    targetListingCount: 4,
-    singlePropertyFocus: false,
-    maxPrice: 300000,
-    currency: "USD",
-  },
-  listingProviderStatuses: [
     {
+      id: "listing-2",
       provider: "idealista",
-      label: "Idealista",
-      state: "connected",
-      configured: true,
-      used: true,
-      candidateCount: 1,
-      detail: "Idealista returned shortlisted properties.",
+      providerListingId: "idealista-2",
+      sourceUrl: "https://example.com/listing-2",
+      title: "Lecce villa with courtyard",
+      locationText: "Lecce, Puglia, Italy",
+      country: "Italy",
+      region: "Puglia",
+      city: "Lecce",
+      price: 296000,
+      currency: "USD",
+      propertyType: "villa",
+      bedrooms: 3,
+      bathrooms: 2,
+      sizeSqm: 112,
+      descriptionSnippet: "Large villa with light renovation needs.",
+      features: ["courtyard"],
+      imageUrls: [],
+      imageCount: 0,
+      photoAvailability: "none",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
+      preliminaryMatchNotes: "Looks plausible but the evidence is weaker.",
     },
   ],
-  discoverySummary: {
-    headline: 'Prepared 1 candidate property for "Could You Retire in Southern Italy for Under $300K?".',
-    criteriaSummary: "Searching Southern Italy up to USD 300,000.",
-    providerSummary: "Using Idealista for source-backed discovery.",
-    candidateCount: 1,
-    liveCandidateCount: 1,
-    fallbackCandidateCount: 0,
-    fallbackUsed: false,
-    warnings: [],
-    discoveredAt: "2026-04-29T00:00:00.000Z",
-  },
-  listingDiscoveryStatus: "listing_candidates_discovered",
   approvedListings: [
     {
       id: "listing-1",
@@ -280,8 +289,7 @@ const activeCampaign: CasaHudCampaign = {
       imageUrls: ["https://images.example.com/1.jpg"],
       imageCount: 1,
       photoAvailability: "limited",
-      coordinates: { latitude: 38.675, longitude: 15.895 },
-      discoveredAt: "2026-04-29T00:00:00.000Z",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
       preliminaryMatchNotes: "Fits the title promise and budget.",
       validationStatus: "approved",
       overallScore: 88,
@@ -290,10 +298,10 @@ const activeCampaign: CasaHudCampaign = {
         geographyScore: 100,
         priceFitScore: 100,
         propertyTypeScore: 100,
-        featureClaimScore: 78,
+        featureClaimScore: 76,
         mediaAvailabilityScore: 52,
-        listingCompletenessScore: 80,
-        providerQualityScore: 84,
+        listingCompletenessScore: 78,
+        providerQualityScore: 64,
         uniquenessScore: 100,
         overallScore: 88,
       },
@@ -302,35 +310,90 @@ const activeCampaign: CasaHudCampaign = {
       rank: 1,
     },
   ],
-  rejectedListings: [],
+  rejectedListings: [
+    {
+      id: "listing-2",
+      provider: "idealista",
+      providerListingId: "idealista-2",
+      sourceUrl: "https://example.com/listing-2",
+      title: "Lecce villa with courtyard",
+      locationText: "Lecce, Puglia, Italy",
+      country: "Italy",
+      region: "Puglia",
+      city: "Lecce",
+      price: 296000,
+      currency: "USD",
+      propertyType: "villa",
+      bedrooms: 3,
+      bathrooms: 2,
+      sizeSqm: 112,
+      descriptionSnippet: "Large villa with light renovation needs.",
+      features: ["courtyard"],
+      imageUrls: [],
+      imageCount: 0,
+      photoAvailability: "none",
+      discoveredAt: "2026-04-28T00:20:00.000Z",
+      preliminaryMatchNotes: "Looks plausible but the evidence is weaker.",
+      validationStatus: "needs_attention",
+      overallScore: 63,
+      scoreBreakdown: {
+        titleMatchScore: 58,
+        geographyScore: 86,
+        priceFitScore: 100,
+        propertyTypeScore: 100,
+        featureClaimScore: 42,
+        mediaAvailabilityScore: 0,
+        listingCompletenessScore: 78,
+        providerQualityScore: 64,
+        uniquenessScore: 100,
+        overallScore: 63,
+      },
+      validationReasons: ["Feature support is thin for this title."],
+      warnings: ["Some listings still need stronger evidence and imagery."],
+      rejectionCategory: "weak_support",
+      duplicateGroupKey: "listing-2",
+    },
+  ],
   listingRankOrder: ["listing-1"],
   listingValidationStatus: "listing_candidates_validated",
   listingValidationSummary: {
-    headline: "Approved 1 of 1 discovered listing for the title promise.",
-    rankingExplanation: "CasaHUD kept the title support tight and reviewable.",
-    discoveredCount: 1,
+    headline: "Approved 1 of 2 discovered listings for the title promise.",
+    rankingExplanation: "CasaHUD ranked the shortlist by truthfulness, price fit, and media coverage.",
+    discoveredCount: 2,
     approvedCount: 1,
-    rejectedCount: 0,
-    needsAttentionCount: 0,
-    titleSupportConfidence: 86,
-    warnings: [],
-    completedAt: "2026-04-29T00:00:00.000Z",
+    rejectedCount: 1,
+    needsAttentionCount: 1,
+    titleSupportConfidence: 74,
+    warnings: ["Some listings still need stronger evidence and imagery."],
+    completedAt: "2026-04-28T00:25:00.000Z",
   },
-  titleSupportConfidence: 86,
-  validationWarnings: [],
+  titleSupportConfidence: 74,
+  validationWarnings: ["Some listings still need stronger evidence and imagery."],
+  nextPhase: {
+    key: "location_intelligence",
+    label: "Location Intelligence",
+    detail: "Location story comes next.",
+    implemented: false,
+  },
+  updatedAt: "2026-04-28T00:25:00.000Z",
+};
+
+const scriptedCampaign: CasaHudCampaign = {
+  ...validatedCampaign,
+  status: "script_narrative_completed",
   locationIntelligenceStatus: "location_intelligence_completed",
   locationIntelligenceSummary: {
-    headline: "Location story prepared across 1 shortlist anchor.",
-    providerSummary: "Google Places and Mapbox coverage are available.",
+    headline: "Location story prepared across the shortlist.",
+    providerSummary: "Maps and POIs are available.",
     coverageSummary: "Tropea anchors the relocation story with coastal lifestyle proof points.",
     warningCount: 0,
-    generatedAt: "2026-04-29T00:00:00.000Z",
+    generatedAt: "2026-04-28T00:30:00.000Z",
     fallbackUsed: false,
   },
   locationStory: {
     headline: "Tropea turns the shortlist into a place-led story.",
     summary: "CasaHUD frames the property through coastal day-to-day life instead of generic travel filler.",
-    narrativeAngles: ["Lead with place before the property."],
+    narrativeAngles: ["Lead with place before property."],
     lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
     regionHighlights: ["Tropea", "Calabria"],
   },
@@ -346,7 +409,7 @@ const activeCampaign: CasaHudCampaign = {
     },
   ],
   poiBundle: {
-    summary: "3 location proof points prepared for the approved shortlist.",
+    summary: "3 location proof points prepared for the shortlist.",
     cards: [
       {
         id: "poi-1",
@@ -360,14 +423,15 @@ const activeCampaign: CasaHudCampaign = {
       },
     ],
     categories: ["Beach"],
-    generatedAt: "2026-04-29T00:00:00.000Z",
+    generatedAt: "2026-04-28T00:30:00.000Z",
   },
   mapSceneIdeas: [
     {
-      id: "scene-1",
+      id: "map-1",
       title: "Open on Tropea",
       sceneType: "regional_anchor",
       description: "Establish Tropea before the property details arrive.",
+      associatedListingId: "listing-1",
       locationText: "Tropea, Calabria, Italy",
       suggestedVisual: "Wide regional map pull-back with the property highlighted.",
       provider: "mapbox",
@@ -384,31 +448,9 @@ const activeCampaign: CasaHudCampaign = {
       warnings: [],
     },
   ],
-  locationProviderStatuses: [
-    {
-      provider: "google_places",
-      label: "Google Places",
-      state: "connected",
-      configured: true,
-      used: true,
-      detail: "Live local highlights are available.",
-      coverage: "POIs ready",
-    },
-    {
-      provider: "mapbox",
-      label: "Mapbox",
-      state: "connected",
-      configured: true,
-      used: true,
-      detail: "Map anchoring is available.",
-      coverage: "Maps ready",
-    },
-  ],
-  locationWarnings: [],
   scriptGenerationStatus: "script_generated",
   scriptSummary: "A relocation-oriented narrative that uses the validated shortlist and place story.",
-  openingHook:
-    "What does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+  openingHook: "What does life in Southern Italy actually look like when the homes are real and the budget still matters?",
   estimatedDurationSeconds: 104,
   tone: "Premium, clear, cinematic where appropriate.",
   scriptSegments: [
@@ -416,10 +458,26 @@ const activeCampaign: CasaHudCampaign = {
       id: "segment-hook",
       title: "Opening Hook",
       segmentType: "hook",
-      narration:
-        "What does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+      narration: "What does life in Southern Italy actually look like when the homes are real and the budget still matters?",
       durationSeconds: 14,
       visualNote: "Open on the region before the listing.",
+    },
+    {
+      id: "segment-location",
+      title: "Location Story",
+      segmentType: "location_context",
+      narration: "Lead the place story through Tropea and Calabria before drilling into property specifics.",
+      durationSeconds: 14,
+      visualNote: "Use the map pull-back and local context.",
+    },
+    {
+      id: "segment-property",
+      title: "Property 1: Tropea apartment with sea views",
+      segmentType: "property_focus",
+      narration: "Ground the story with the validated property and its real price, layout, and coastal location.",
+      durationSeconds: 24,
+      associatedListingId: "listing-1",
+      visualNote: "Keep the segment anchored to verified listing facts.",
     },
   ],
   propertySegments: [
@@ -448,78 +506,49 @@ const activeCampaign: CasaHudCampaign = {
   },
   fullScriptText:
     "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
-  ...createEmptyCasaHudMediaPlanData(),
-  ...createEmptyCasaHudYouTubePackageData(),
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
-    detail:
-      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+    detail: "Build the media plan next.",
     implemented: false,
   },
-  createdAt: "2026-04-29T00:00:00.000Z",
-  updatedAt: "2026-04-29T00:10:00.000Z",
-  generatedAt: "2026-04-29T00:00:00.000Z",
-  futureState: {
-    listingCandidates: [],
-    approvedListings: [],
-    rejectedListings: [],
-    listingRankOrder: ["listing-1"],
-    locationIntelligence: {
-      status: "location_intelligence_completed",
-      storyHeadline: "Tropea turns the shortlist into a place-led story.",
-      generatedAt: "2026-04-29T00:00:00.000Z",
-    },
-    mapPoiBundle: {
-      summary: "3 location proof points prepared for the approved shortlist.",
-      cards: [],
-      categories: ["Beach"],
-      generatedAt: "2026-04-29T00:00:00.000Z",
-    },
-    script: {
-      status: "script_generated",
-      summary: "A relocation-oriented narrative that uses the validated shortlist and place story.",
-      generatedAt: "2026-04-29T00:10:00.000Z",
-    },
-    storyboard: null,
-    mediaPlan: null,
-    packaging: null,
-    renderStatus: null,
-    reviewStatus: null,
-    publishStatus: null,
-    scheduleStatus: null,
-  },
 };
 
-const activeCampaignSummary: CasaHudCampaignSummary = {
-  id: activeCampaign.id,
-  name: activeCampaign.name,
-  campaignType: activeCampaign.campaignType,
-  marketRegionHint: activeCampaign.marketRegionHint,
-  status: activeCampaign.status,
-  createdAt: activeCampaign.createdAt,
-  updatedAt: activeCampaign.updatedAt,
-  researchSummary: activeCampaign.researchBrief.summary,
-  listingCandidateCount: activeCampaign.listingCandidates.length,
-  listingDiscoveryStatus: activeCampaign.listingDiscoveryStatus,
-  approvedListingCount: activeCampaign.approvedListings.length,
-  listingValidationStatus: activeCampaign.listingValidationStatus,
-  titleSupportConfidence: activeCampaign.titleSupportConfidence ?? undefined,
-  locationIntelligenceStatus: activeCampaign.locationIntelligenceStatus,
-  scriptGenerationStatus: activeCampaign.scriptGenerationStatus,
-  mediaPlanningStatus: activeCampaign.mediaPlanningStatus,
-  youtubePackageStatus: activeCampaign.youtubePackageStatus,
-  reviewStatus: activeCampaign.reviewStatus,
-  discoverySummary: activeCampaign.discoverySummary?.headline,
-  validationSummary: activeCampaign.listingValidationSummary?.headline,
-  locationSummary: activeCampaign.locationIntelligenceSummary?.headline,
-  scriptSummary: activeCampaign.scriptSummary ?? undefined,
-  mediaPlanSummary: activeCampaign.mediaPlanSummary ?? undefined,
-  packagingSummary: activeCampaign.packagingSummary ?? undefined,
-};
-
-const mediaPlannedCampaign = applyCasaHudMediaPlan(activeCampaign, runCasaHudMediaPlanning(activeCampaign));
+const mediaPlannedCampaign = applyCasaHudMediaPlan(scriptedCampaign, runCasaHudMediaPlanning(scriptedCampaign));
 const packagedCampaign = applyCasaHudYouTubePackage(mediaPlannedCampaign, runCasaHudYouTubePackageReview(mediaPlannedCampaign));
+
+function toSummary(campaign: CasaHudCampaign): CasaHudCampaignSummary {
+  return {
+    id: campaign.id,
+    name: campaign.name,
+    campaignType: campaign.campaignType,
+    marketRegionHint: campaign.marketRegionHint,
+    status: campaign.status,
+    createdAt: campaign.createdAt,
+    updatedAt: campaign.updatedAt,
+    researchSummary: campaign.researchBrief.summary,
+    listingCandidateCount: campaign.listingCandidates.length,
+    listingDiscoveryStatus: campaign.listingDiscoveryStatus,
+    approvedListingCount: campaign.approvedListings.length,
+    listingValidationStatus: campaign.listingValidationStatus,
+    titleSupportConfidence: campaign.titleSupportConfidence ?? undefined,
+    locationIntelligenceStatus: campaign.locationIntelligenceStatus,
+    scriptGenerationStatus: campaign.scriptGenerationStatus,
+    mediaPlanningStatus: campaign.mediaPlanningStatus,
+    youtubePackageStatus: campaign.youtubePackageStatus,
+    reviewStatus: campaign.reviewStatus,
+    approvalStatus: campaign.approvalStatus,
+    renderStatus: campaign.renderStatus,
+    publishStatus: campaign.publishStatus,
+    scheduleStatus: campaign.scheduleStatus,
+    discoverySummary: campaign.discoverySummary?.headline,
+    validationSummary: campaign.listingValidationSummary?.headline,
+    locationSummary: campaign.locationIntelligenceSummary?.headline,
+    scriptSummary: campaign.scriptSummary ?? undefined,
+    mediaPlanSummary: campaign.mediaPlanSummary ?? undefined,
+    packagingSummary: campaign.packagingSummary ?? undefined,
+  };
+}
 
 async function flush() {
   await act(async () => {
@@ -528,7 +557,7 @@ async function flush() {
   });
 }
 
-describe("CasaHUD premium command center UI", () => {
+describe("CasaHUD command center UI", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -547,29 +576,21 @@ describe("CasaHUD premium command center UI", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders the premium shell with sidebar navigation and no old mock-first copy", () => {
+  it("renders the sidebar and drawer shell with Opportunity Brief navigation and no old mock-first language", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
-    expect(html).toContain(">Generate Viral Video Title<");
-    expect(html).toContain(">Campaigns<");
-    expect(html).toContain(">Viral Titles<");
-    expect(html).toContain(">Review Package<");
-    expect(html).toContain(">Publishing<");
+    expect(html).toContain("casahud-sidebar");
+    expect(html).toContain("casahud-mobile-menu");
+    expect(html).toContain(">Opportunity Brief<");
+    expect(html).toContain(">Render &amp; Publish<");
     expect(html).toContain(">Connections<");
-    expect(html).toContain("casahud-workspace-shell");
-    expect(html).toContain('data-testid="casahud-nav-campaigns" aria-current="page"');
-    expect(html).toContain(">Campaigns</h2>");
-    expect(html).not.toContain("Generate your next viral property video");
-    expect(html).not.toContain(">DB<");
-    expect(html).not.toContain(">VT<");
-    expect(html).not.toContain(">PS<");
-    expect(html).not.toContain(">LI<");
-    expect(html).not.toContain("casahud-entry-hero");
+    expect(html).not.toContain(">Viral Titles<");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mock-first MVP");
+    expect(html).not.toContain("CasaHUD Campaign Workflow");
   });
 
-  it("shows the command header, review package, publishing panel, connections panel, and property shortlist for an active campaign", async () => {
+  it("resumes a campaign, shows the active campaign in the selector, and keeps overview and location story accessible", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -581,130 +602,17 @@ describe("CasaHUD premium command center UI", () => {
       }
 
       if (url.endsWith("/api/studio/domara/campaigns")) {
-        return new Response(JSON.stringify({ ok: true, campaigns: [activeCampaignSummary] }), {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(validatedCampaign)] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
-        return new Response(JSON.stringify({ ok: true, campaign: activeCampaign }), {
+      if (url.endsWith(`/api/studio/domara/campaigns/${validatedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: validatedCampaign }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
-      }
-
-      throw new Error(`Unhandled fetch: ${url}`);
-    });
-
-    vi.stubGlobal("fetch", fetchMock);
-
-    await act(async () => {
-      root.render(<StudioDomaraClient />);
-    });
-    await flush();
-
-    const resumeButton = container.querySelector('[data-testid="casahud-resume-campaign"]');
-    expect(resumeButton?.textContent).toContain("Resume");
-
-    await act(async () => {
-      resumeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-command-header"]')?.textContent).toContain(activeCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-campaign-intelligence"]')?.textContent).toContain("Agent Activity");
-
-    const reviewNav = container.querySelector('[data-testid="casahud-nav-review_package"]');
-    await act(async () => {
-      reviewNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("No review package yet");
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Preview Render Plan");
-
-    const publishingNav = container.querySelector('[data-testid="casahud-nav-publishing"]');
-    await act(async () => {
-      publishingNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).toContain("Publish Now");
-    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).toContain("Schedule");
-    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).toContain("No publish job has been run.");
-    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).not.toContain("Published successfully");
-
-    const connectionsNav = container.querySelector('[data-testid="casahud-nav-connections"]');
-    await act(async () => {
-      connectionsNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Connections");
-    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("OpenAI");
-    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("Listing Sources");
-    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("YouTube Channel");
-    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).not.toContain("OPENAI_API_KEY");
-    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).not.toContain("Manage Connections");
-
-    const shortlistNav = container.querySelector('[data-testid="casahud-nav-property_shortlist"]');
-    await act(async () => {
-      shortlistNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Tropea apartment with sea views");
-    expect(container.querySelector('[data-testid="casahud-shortlist-toolbar"]')?.textContent).toContain("Sort: Match");
-    const sourceLink = container.querySelector('[data-testid="casahud-property-shortlist"] a[href="https://example.com/listing-1"]');
-    expect(sourceLink).not.toBeNull();
-    expect(sourceLink?.getAttribute("target")).toBe("_blank");
-  });
-
-  it("shows Build Media Plan after script generation and renders the persisted media plan after generation", async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input);
-
-      if (url.includes("/api/studio/domara/integrations/status")) {
-        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      if (url.endsWith("/api/studio/domara/campaigns")) {
-        return new Response(JSON.stringify({ ok: true, campaigns: [activeCampaignSummary] }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
-        return new Response(JSON.stringify({ ok: true, campaign: activeCampaign }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        });
-      }
-
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}/media-plan`) && init?.method === "POST") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            campaign: mediaPlannedCampaign,
-            summary: {
-              ...activeCampaignSummary,
-              status: mediaPlannedCampaign.status,
-              updatedAt: mediaPlannedCampaign.updatedAt,
-              mediaPlanningStatus: mediaPlannedCampaign.mediaPlanningStatus,
-              mediaPlanSummary: mediaPlannedCampaign.mediaPlanSummary ?? undefined,
-            },
-            message: `Media plan ready. "${mediaPlannedCampaign.name}" now includes the visual production package.`,
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
       }
 
       throw new Error(`Unhandled fetch: ${url}`);
@@ -722,33 +630,21 @@ describe("CasaHUD premium command center UI", () => {
     });
     await flush();
 
-    const buildButton = container.querySelector('[data-testid="casahud-build-media-plan-cta"]');
-    expect(buildButton?.textContent).toContain("Build Media Plan");
+    expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain(validatedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-current-campaign"]')?.textContent).toContain("Continue to Location Story");
+    expect(container.querySelector('[data-testid="casahud-location-story"]')?.textContent).toContain("Location story not ready");
 
     await act(async () => {
-      buildButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-overview"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-media-plan-summary"]')?.textContent).toContain("production-ready media plan");
-    expect(container.querySelector('[data-testid="casahud-visual-assets"]')?.textContent).toContain("Visual Asset List");
-    expect(container.querySelector('[data-testid="casahud-scene-asset-mapping"]')?.textContent).toContain("Scene-to-Asset Mapping");
-    expect(container.querySelector('[data-testid="casahud-shot-list"]')?.textContent).toContain("Shot List");
-    expect(container.querySelector('[data-testid="casahud-thumbnail-candidates"]')?.textContent).toContain("Thumbnail Candidate Inputs");
-    expect(container.querySelector('[data-testid="casahud-media-warnings"]')?.textContent).toContain("Missing / Weak Media Warnings");
-    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("YouTube Package, Review, and Render Plan");
+    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain(validatedCampaign.name);
+    expect(container.querySelector('[data-testid="casahud-overview"]')?.textContent).toContain("Phase Progress");
   });
 
-  it("shows Build YouTube Package after media planning and renders the persisted review-ready package", async () => {
-    const mediaPlannedSummary = {
-      ...activeCampaignSummary,
-      status: mediaPlannedCampaign.status,
-      updatedAt: mediaPlannedCampaign.updatedAt,
-      mediaPlanningStatus: mediaPlannedCampaign.mediaPlanningStatus,
-      mediaPlanSummary: mediaPlannedCampaign.mediaPlanSummary ?? undefined,
-    };
-
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+  it("renders featured image areas for approved and rejected property cards and shows a fallback image warning when media is missing", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
       if (url.includes("/api/studio/domara/integrations/status")) {
@@ -759,39 +655,17 @@ describe("CasaHUD premium command center UI", () => {
       }
 
       if (url.endsWith("/api/studio/domara/campaigns")) {
-        return new Response(JSON.stringify({ ok: true, campaigns: [mediaPlannedSummary] }), {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(validatedCampaign)] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
-        return new Response(JSON.stringify({ ok: true, campaign: mediaPlannedCampaign }), {
+      if (url.endsWith(`/api/studio/domara/campaigns/${validatedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: validatedCampaign }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
-      }
-
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}/youtube-package`) && init?.method === "POST") {
-        return new Response(
-          JSON.stringify({
-            ok: true,
-            campaign: packagedCampaign,
-            summary: {
-              ...mediaPlannedSummary,
-              status: packagedCampaign.status,
-              updatedAt: packagedCampaign.updatedAt,
-              youtubePackageStatus: packagedCampaign.youtubePackageStatus,
-              reviewStatus: packagedCampaign.reviewStatus,
-              packagingSummary: packagedCampaign.packagingSummary ?? undefined,
-            },
-            message: `YouTube package ready. "${packagedCampaign.name}" now includes the review summary and render plan draft.`,
-          }),
-          {
-            status: 200,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
       }
 
       throw new Error(`Unhandled fetch: ${url}`);
@@ -809,43 +683,19 @@ describe("CasaHUD premium command center UI", () => {
     });
     await flush();
 
-    const reviewNav = container.querySelector('[data-testid="casahud-nav-review_package"]');
     await act(async () => {
-      reviewNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-property_shortlist"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    const buildButton = container.querySelector('[data-testid="casahud-build-youtube-package-cta"]');
-    expect(buildButton?.textContent).toContain("Build YouTube Package");
-
-    await act(async () => {
-      buildButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
-    expect(container.querySelector('[data-testid="casahud-package-title"]')?.textContent).toContain(packagedCampaign.finalTitle || packagedCampaign.name);
-    expect(container.querySelector('[data-testid="casahud-thumbnail-concept"]')?.textContent).toContain("Thumbnail Concept");
-    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain("Final title:");
-    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain(packagedCampaign.youtubeDescription || "");
-    expect(container.querySelector('[data-testid="casahud-review-summary"]')?.textContent).toContain("Review Summary");
-    expect(container.querySelector('[data-testid="casahud-render-plan"]')?.textContent).toContain("Render Plan");
-    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Render, Publish, and Schedule");
+    expect(container.querySelectorAll('[data-testid="casahud-approved-listing-card"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-testid="casahud-property-card-media"]').length).toBeGreaterThanOrEqual(2);
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Image needed");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Lecce villa with courtyard");
   });
 
-  it("shows final render, publish, and schedule controls after the Phase 9 package is ready", async () => {
-    const packagedSummary = {
-      ...activeCampaignSummary,
-      status: packagedCampaign.status,
-      updatedAt: packagedCampaign.updatedAt,
-      youtubePackageStatus: packagedCampaign.youtubePackageStatus,
-      reviewStatus: packagedCampaign.reviewStatus,
-      approvalStatus: packagedCampaign.approvalStatus,
-      renderStatus: packagedCampaign.renderStatus,
-      publishStatus: packagedCampaign.publishStatus,
-      scheduleStatus: packagedCampaign.scheduleStatus,
-      packagingSummary: packagedCampaign.packagingSummary ?? undefined,
-    };
-
+  it("shows scene-based Video Builder cards and keeps YouTube Package and Render & Publish accessible", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -857,13 +707,13 @@ describe("CasaHUD premium command center UI", () => {
       }
 
       if (url.endsWith("/api/studio/domara/campaigns")) {
-        return new Response(JSON.stringify({ ok: true, campaigns: [packagedSummary] }), {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(packagedCampaign)] }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         });
       }
 
-      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
+      if (url.endsWith(`/api/studio/domara/campaigns/${packagedCampaign.id}`)) {
         return new Response(JSON.stringify({ ok: true, campaign: packagedCampaign }), {
           status: 200,
           headers: { "Content-Type": "application/json" },
@@ -885,33 +735,30 @@ describe("CasaHUD premium command center UI", () => {
     });
     await flush();
 
-    const reviewNav = container.querySelector('[data-testid="casahud-nav-review_package"]');
     await act(async () => {
-      reviewNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-video_builder"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Render Video");
-    expect(container.querySelector('[data-testid="casahud-review-package"]')?.textContent).toContain("Publish Now");
+    expect(container.querySelectorAll('[data-testid="casahud-video-scene-card"]').length).toBeGreaterThan(1);
+    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Narration");
+    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("On-screen Text");
+    expect(container.querySelector('[data-testid="casahud-video-builder"]')?.textContent).toContain("Scene 1");
 
-    const videoBuilderNav = container.querySelector('[data-testid="casahud-nav-video_builder"]');
     await act(async () => {
-      videoBuilderNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-youtube_package"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Render Video");
+    expect(container.querySelector('[data-testid="casahud-youtube-package"]')?.textContent).toContain("Final Title");
+    expect(container.querySelector('[data-testid="casahud-thumbnail-concept"]')?.textContent).toContain("Thumbnail Concept");
 
-    const publishingNav = container.querySelector('[data-testid="casahud-nav-publishing"]');
     await act(async () => {
-      publishingNav?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      container.querySelector('[data-testid="casahud-nav-render_publish"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    expect(container.querySelector('[data-testid="casahud-publish-now-cta"]')?.textContent).toContain("Publish Now");
-    expect(container.querySelector('[data-testid="casahud-schedule-youtube-cta"]')?.textContent).toContain("Schedule to YouTube");
-    expect(container.querySelector('[data-testid="casahud-publishing-panel"]')?.textContent).toContain(
-      "Connect the YouTube channel before CasaHUD can publish or schedule this package.",
-    );
+    expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Publish Now");
+    expect(container.querySelector('[data-testid="casahud-render-publish"]')?.textContent).toContain("Schedule to YouTube");
   });
 });
