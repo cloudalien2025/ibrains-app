@@ -464,6 +464,14 @@ function needsReviewLabel(field: CasaHudListingNeedsReviewField) {
   if (field === "location") return "Location needs review";
   if (field === "property_type") return "Property type needs review";
   if (field === "bedrooms_bathrooms") return "Beds and baths need review";
+  if (field === "rooms") return "Rooms need review";
+  if (field === "land_size") return "Land size needs review";
+  if (field === "floor") return "Floor details need review";
+  if (field === "parking") return "Parking needs review";
+  if (field === "condition") return "Condition needs review";
+  if (field === "energy") return "Energy class needs review";
+  if (field === "images") return "Image needed";
+  if (field === "summary") return "Summary needs review";
   return "Size needs review";
 }
 
@@ -580,11 +588,21 @@ function canOpenExternalUrl(url?: string | null) {
 }
 
 function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+  if (listing.sourceType === "imported_url") {
+    if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "Extracted";
+    if (listing.extractionStatus === "partial") return "Partial";
+    return "Needs review";
+  }
   if ("validationStatus" in listing) return formatCampaignStatus(listing.validationStatus);
   return "Discovered";
 }
 
 function listingStatusTone(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+  if (listing.sourceType === "imported_url") {
+    if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "sage" as const;
+    if (listing.extractionStatus === "partial") return "gold" as const;
+    return "red" as const;
+  }
   if (!("validationStatus" in listing)) return "neutral" as const;
   if (listing.validationStatus === "approved") return "sage" as const;
   if (listing.validationStatus === "needs_attention") return "gold" as const;
@@ -592,12 +610,16 @@ function listingStatusTone(listing: CasaHudListingCandidate | CasaHudValidatedLi
 }
 
 function propertyFacts(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
-  return [
-    listing.propertyType ? formatCampaignStatus(listing.propertyType) : null,
+  const facts = [
+    listing.propertyType || null,
+    listing.rooms ? `${listing.rooms}+ rooms` : null,
     listing.bedrooms ? `${listing.bedrooms} bd` : null,
     listing.bathrooms ? `${listing.bathrooms} ba` : null,
     listing.sizeSqm ? `${listing.sizeSqm} sqm` : null,
+    listing.landSizeSqm ? `${listing.landSizeSqm.toLocaleString("en-US")} sqm land` : null,
+    listing.garageParking || null,
   ].filter(Boolean) as string[];
+  return facts.slice(0, 6);
 }
 
 function getPropertySupportCopy(
@@ -1307,6 +1329,11 @@ function PropertyCard({
           <p>
             <span className="font-semibold text-[#172033]">Listing facts:</span> {facts.join(" · ") || "Facts pending"}
           </p>
+          {listing.summary ? (
+            <p>
+              <span className="font-semibold text-[#172033]">Summary:</span> {listing.summary}
+            </p>
+          ) : null}
           <p>
             <span className="font-semibold text-[#172033]">
               {"validationStatus" in listing && listing.validationStatus === "rejected"
@@ -4752,6 +4779,11 @@ export default function StudioCasaHudCommandCenter() {
                   <p>
                     <span className="font-semibold text-[#172033]">Listing facts:</span> {propertyFacts(selectedListing).join(" · ") || "Facts pending"}
                   </p>
+                  {selectedListing.summary ? (
+                    <p>
+                      <span className="font-semibold text-[#172033]">Summary:</span> {selectedListing.summary}
+                    </p>
+                  ) : null}
                   <p>
                     <span className="font-semibold text-[#172033]">Why it matters:</span> {getPropertySupportCopy(activeCampaign, selectedListing)}
                   </p>

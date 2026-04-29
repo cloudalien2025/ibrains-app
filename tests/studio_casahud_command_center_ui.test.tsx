@@ -409,25 +409,32 @@ const importedCampaign: CasaHudCampaign = {
       featuredImageUrl: "https://images.example.com/imported-og.jpg",
       metadataImageUrl: "https://images.example.com/imported-og.jpg",
       metadataTitle: "Apartment in Tropea",
-      metadataDescription: "EUR 284000 apartment in Tropea with 2 bedrooms and 88 sqm.",
+      metadataDescription: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
       canonicalUrl: "https://www.idealista.it/en/annuncio/123",
       extractionStatus: "partial",
+      extractionProvider: "idealista_generic",
+      extractionFields: ["title", "price", "locationText", "bedrooms", "bathrooms", "interiorSizeSqm", "featuredImageUrl"],
       extractionWarnings: [],
-      needsReviewFields: ["property_type"],
+      needsReviewFields: ["rooms", "land_size", "floor", "parking", "condition", "energy"],
       title: "Apartment in Tropea",
-      locationText: "Tropea",
+      locationText: "Tropea, Calabria, Italy",
       price: 284000,
       currency: "EUR",
+      propertyType: "Apartment",
       bedrooms: 2,
       bathrooms: 2,
       sizeSqm: 88,
-      descriptionSnippet: "EUR 284000 apartment in Tropea with 2 bedrooms and 88 sqm.",
-      features: [],
+      descriptionSnippet: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
+      summary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      imageStatus: "available" as const,
+      casaHudShortSummary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      casaHudNarrationSeed: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      features: ["Apartment", "2 bedrooms", "2 bathrooms", "88 m² interior"],
       imageUrls: ["https://images.example.com/imported-og.jpg"],
       imageCount: 1,
       photoAvailability: "limited",
       discoveredAt: "2026-04-29T10:00:00.000Z",
-      preliminaryMatchNotes: "Imported from a live listing URL with enough public detail to review in the shortlist.",
+      preliminaryMatchNotes: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
     },
   ],
   updatedAt: "2026-04-29T10:00:00.000Z",
@@ -803,10 +810,21 @@ describe("CasaHUD command center UI", () => {
 
     expect(container.querySelector('[data-testid="casahud-import-listing-urls"]')?.textContent).toContain("Import Listing URLs");
 
-    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Imported URL");
-    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Idealista");
-    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Imported URL image");
-    expect(container.querySelector('[data-testid="casahud-properties"]')?.textContent).toContain("Property type needs review");
+    const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertyText).toContain("Imported URL");
+    expect(propertyText).toContain("Idealista");
+    expect(propertyText).toContain("Imported URL image");
+    expect(propertyText).toContain("€284,000");
+    expect(propertyText).toContain("Tropea, Calabria, Italy");
+    expect(propertyText).toContain("Apartment");
+    expect(propertyText).toContain("2 bd");
+    expect(propertyText).toContain("2 ba");
+    expect(propertyText).toContain("88 sqm");
+    expect(propertyText).toContain("View Source");
+    expect(propertyText).toContain("Floor details need review");
+    expect(propertyText).not.toContain("Price on request");
+    expect(propertyText).not.toContain("Facts pending");
+    expect(propertyText).not.toContain("Image needed");
   });
 
   it("resumes a campaign, shows the active campaign in the sidebar, and opens the focused location workspace", async () => {
