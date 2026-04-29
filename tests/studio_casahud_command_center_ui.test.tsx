@@ -6,8 +6,10 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import StudioDomaraClient from "@/app/apps/studio/studio-domara-client";
-import type { CasaHudCampaign, CasaHudCampaignSummary } from "@/lib/studio/domara/campaigns";
+import { applyCasaHudMediaPlan, type CasaHudCampaign, type CasaHudCampaignSummary } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
+import { runCasaHudMediaPlanning } from "@/lib/studio/domara/media-planning-engine";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -439,6 +441,7 @@ const activeCampaign: CasaHudCampaign = {
   },
   fullScriptText:
     "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+  ...createEmptyCasaHudMediaPlanData(),
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
@@ -496,11 +499,15 @@ const activeCampaignSummary: CasaHudCampaignSummary = {
   titleSupportConfidence: activeCampaign.titleSupportConfidence ?? undefined,
   locationIntelligenceStatus: activeCampaign.locationIntelligenceStatus,
   scriptGenerationStatus: activeCampaign.scriptGenerationStatus,
+  mediaPlanningStatus: activeCampaign.mediaPlanningStatus,
   discoverySummary: activeCampaign.discoverySummary?.headline,
   validationSummary: activeCampaign.listingValidationSummary?.headline,
   locationSummary: activeCampaign.locationIntelligenceSummary?.headline,
   scriptSummary: activeCampaign.scriptSummary ?? undefined,
+  mediaPlanSummary: activeCampaign.mediaPlanSummary ?? undefined,
 };
+
+const mediaPlannedCampaign = applyCasaHudMediaPlan(activeCampaign, runCasaHudMediaPlanning(activeCampaign));
 
 async function flush() {
   await act(async () => {
@@ -642,5 +649,83 @@ describe("CasaHUD premium command center UI", () => {
     const sourceLink = container.querySelector('[data-testid="casahud-property-shortlist"] a[href="https://example.com/listing-1"]');
     expect(sourceLink).not.toBeNull();
     expect(sourceLink?.getAttribute("target")).toBe("_blank");
+  });
+
+  it("shows Build Media Plan after script generation and renders the persisted media plan after generation", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [activeCampaignSummary] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: activeCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${activeCampaign.id}/media-plan`) && init?.method === "POST") {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: mediaPlannedCampaign,
+            summary: {
+              ...activeCampaignSummary,
+              status: mediaPlannedCampaign.status,
+              updatedAt: mediaPlannedCampaign.updatedAt,
+              mediaPlanningStatus: mediaPlannedCampaign.mediaPlanningStatus,
+              mediaPlanSummary: mediaPlannedCampaign.mediaPlanSummary ?? undefined,
+            },
+            message: `Media plan ready. "${mediaPlannedCampaign.name}" now includes the visual production package.`,
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const buildButton = container.querySelector('[data-testid="casahud-build-media-plan-cta"]');
+    expect(buildButton?.textContent).toContain("Build Media Plan");
+
+    await act(async () => {
+      buildButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="casahud-media-plan-summary"]')?.textContent).toContain("production-ready media plan");
+    expect(container.querySelector('[data-testid="casahud-visual-assets"]')?.textContent).toContain("Visual Asset List");
+    expect(container.querySelector('[data-testid="casahud-scene-asset-mapping"]')?.textContent).toContain("Scene-to-Asset Mapping");
+    expect(container.querySelector('[data-testid="casahud-shot-list"]')?.textContent).toContain("Shot List");
+    expect(container.querySelector('[data-testid="casahud-thumbnail-candidates"]')?.textContent).toContain("Thumbnail Candidate Inputs");
+    expect(container.querySelector('[data-testid="casahud-media-warnings"]')?.textContent).toContain("Missing / Weak Media Warnings");
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("YouTube Package, Review, and Render Plan");
   });
 });

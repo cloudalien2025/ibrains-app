@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import { runCasaHudListingValidation } from "@/lib/studio/domara/listing-validation-engine";
 
 function baseCampaign(): CasaHudCampaign {
@@ -204,6 +205,7 @@ function baseCampaign(): CasaHudCampaign {
     scriptWarnings: [],
     scriptProviderStatus: null,
     fullScriptText: null,
+    ...createEmptyCasaHudMediaPlanData(),
     nextPhase: {
       key: "listing_validation",
       label: "Validate and rank listings",

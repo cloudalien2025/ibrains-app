@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -180,6 +181,7 @@ const locationReadyCampaign: CasaHudCampaign = {
   scriptWarnings: [],
   scriptProviderStatus: null,
   fullScriptText: null,
+  ...createEmptyCasaHudMediaPlanData(),
   nextPhase: {
     key: "script_narrative_generation",
     label: "Script and Narrative Generation",
@@ -255,6 +257,7 @@ const scriptResult = {
     detail: "Using deterministic CasaHUD script composition.",
   },
   fullScriptText: "Opening Hook\nIf this title is going to resonate...",
+  ...createEmptyCasaHudMediaPlanData(),
 };
 
 const mocks = vi.hoisted(() => ({
