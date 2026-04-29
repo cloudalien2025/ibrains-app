@@ -276,6 +276,7 @@ const discoveredCampaign: CasaHudCampaign = {
       provider: "idealista",
       providerListingId: "idealista-2",
       sourceUrl: "https://example.com/listing-2",
+      thumbnailUrl: "https://images.example.com/listing-2-thumb.jpg",
       title: "Lecce villa candidate",
       locationText: "Lecce, Puglia, Italy",
       country: "Italy",
@@ -641,7 +642,7 @@ describe("CasaHUD opportunity flow", () => {
 
     expect(container.querySelectorAll('[data-testid="casahud-listing-candidate-card"]').length).toBe(2);
     expect(container.querySelectorAll('[data-testid="casahud-property-card-media"]').length).toBeGreaterThanOrEqual(2);
-    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Image needed");
+    expect(container.querySelector('[data-testid="casahud-property-shortlist"]')?.textContent).toContain("Source thumbnail");
   });
 
   it("builds the Video Builder from script plus media plan and renders scene cards with paired narration and on-screen text", async () => {
