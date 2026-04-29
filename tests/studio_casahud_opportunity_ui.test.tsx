@@ -725,7 +725,7 @@ describe("CasaHUD opportunity UI flow", () => {
       successOutput.selectedTitle.title,
     );
     expect(container.querySelectorAll('[data-testid="casahud-candidate-card"]').length).toBe(3);
-    expect(container.textContent).toContain("Researching YouTube opportunities");
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Viral Titles");
     expect(container.textContent).toContain("Why this title was chosen");
     expect(container.textContent).toContain("Create Campaign");
     expect(container.querySelector('[data-testid="casahud-create-campaign-cta"]')?.textContent).toContain("Create Campaign");
@@ -1133,7 +1133,7 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(1);
     expect(container.textContent).toContain("Next: Location Intelligence");
     expect(container.textContent).toContain("Title support confidence: 74%");
-    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("1 approved");
+    expect(container.querySelector('[data-testid="casahud-shortlist-toolbar"]')?.textContent).toContain("Search listings");
     expect(container.querySelector('[data-testid="casahud-location-intelligence-cta"]')?.textContent).toContain(
       "Add Location Intelligence",
     );
@@ -1287,7 +1287,7 @@ describe("CasaHUD opportunity UI flow", () => {
     expect(container.querySelector('[data-testid="casahud-generate-script-cta"]')?.textContent).toContain(
       "Generate Script",
     );
-    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Location story ready");
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Location Intelligence");
   });
 
   it("shows script generation progress and renders the saved narrative package after generation", async () => {
@@ -1439,7 +1439,7 @@ describe("CasaHUD opportunity UI flow", () => {
       "Title support is moderate at 74%",
     );
     expect(container.textContent).toContain("Media Planning and Asset Assembly");
-    expect(container.querySelector('[data-testid="casahud-recent-campaigns"]')?.textContent).toContain("Script ready");
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Script Studio");
   });
 
   it("shows a safe recoverable error if campaign creation fails", async () => {

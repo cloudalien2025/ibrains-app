@@ -121,6 +121,7 @@ type CasaHudWorkspaceNavItem = {
   label: string;
   eyebrow: string;
   description: string;
+  icon: string;
 };
 
 type CasaHudPhaseProgressItem = {
@@ -164,75 +165,80 @@ type CasaHudYouTubePackagePreview = {
 const sidebarSections: CasaHudWorkspaceNavItem[] = [
   {
     id: "campaigns",
-    label: "Campaigns",
+    label: "Dashboard",
     eyebrow: "Overview",
-    description: "Active campaign overview and recent work.",
+    description: "Current campaign, workflow stages, and recent work.",
+    icon: "DB",
   },
   {
     id: "viral_titles",
     label: "Viral Titles",
     eyebrow: "Strategy",
     description: "Winning title, candidates, and research brief.",
+    icon: "VT",
   },
   {
     id: "property_shortlist",
     label: "Property Shortlist",
     eyebrow: "Listings",
     description: "Approved properties, ranking, and title support.",
+    icon: "PS",
   },
   {
     id: "location_intelligence",
     label: "Location Intelligence",
     eyebrow: "Place Story",
     description: "POIs, local highlights, and map scene ideas.",
+    icon: "LI",
   },
   {
     id: "script_studio",
     label: "Script Studio",
     eyebrow: "Narrative",
     description: "Hook, segments, narration, transitions, and CTA.",
+    icon: "SS",
   },
   {
     id: "media_library",
     label: "Media Library",
     eyebrow: "Assets",
     description: "Listing images, map visuals, and coverage gaps.",
+    icon: "ML",
   },
   {
     id: "storyboard",
     label: "Storyboard",
     eyebrow: "Scenes",
     description: "Scene-by-scene creative plan for review.",
-  },
-  {
-    id: "video_builder",
-    label: "Video Builder",
-    eyebrow: "Render",
-    description: "Render readiness, preview, and export status.",
+    icon: "SB",
   },
   {
     id: "review_package",
     label: "Review Package",
     eyebrow: "Review",
     description: "Title, properties, script, storyboard, and metadata.",
+    icon: "RP",
   },
   {
     id: "publishing",
     label: "Publishing",
     eyebrow: "Ship",
     description: "Publish now, schedule, and channel status.",
+    icon: "PB",
   },
   {
     id: "connections",
     label: "Connections",
     eyebrow: "Providers",
     description: "Creation and publishing service readiness.",
+    icon: "CN",
   },
   {
     id: "settings",
     label: "Settings",
     eyebrow: "Advanced",
     description: "Preferences and advanced defaults.",
+    icon: "ST",
   },
 ];
 
@@ -1084,14 +1090,14 @@ function WorkspaceCard({
 }) {
   return (
     <section
-      className="rounded-[2rem] border border-white/70 bg-[#FFFDF8]/[0.92] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.14)] backdrop-blur md:p-6"
+      className="rounded-[1.7rem] border border-[#E7DCCB] bg-[#FFFDF8]/[0.96] p-5 shadow-[0_18px_42px_rgba(70,55,35,0.1)] md:p-6"
       data-testid={testId}
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">{eyebrow}</p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-[-0.035em] text-[#172033]">{title}</h2>
-          {description ? <p className="mt-3 max-w-4xl text-sm leading-6 text-[#526070]">{description}</p> : null}
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#8A5A34]">{eyebrow}</p>
+          <h2 className="mt-1 text-[1.9rem] font-semibold tracking-[-0.04em] text-[#172033]">{title}</h2>
+          {description ? <p className="mt-2 max-w-3xl text-sm leading-6 text-[#5A6677]">{description}</p> : null}
         </div>
         {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
       </div>
@@ -1188,20 +1194,20 @@ function PropertyCard({
   const propertySegment = campaign.propertySegments.find((item) => item.listingId === listing.id);
 
   return (
-    <article className="overflow-hidden rounded-[1.8rem] border border-[#E6D8C7] bg-white/95 shadow-sm">
-      <div className="relative h-56 w-full bg-[#F2ECE3]">
+    <article className="overflow-hidden rounded-[1.5rem] border border-[#E7DCCB] bg-white/95 shadow-[0_16px_34px_rgba(70,55,35,0.08)]">
+      <div className="relative h-52 w-full bg-[#F2ECE3]">
         <PropertyImage
           src={featuredImage(listing)}
           alt={`${listing.title} featured listing image`}
           label={listing.locationText}
-          className="h-56 w-full"
+          className="h-52 w-full"
         />
         <div className="absolute left-4 top-4 flex flex-wrap gap-2">
           <StatusPill tone="ink">#{index + 1}</StatusPill>
           <StatusPill tone={listingStatusTone(listing)}>{statusLabelFromListing(listing)}</StatusPill>
         </div>
       </div>
-      <div className="p-5">
+      <div className="p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -1209,8 +1215,8 @@ function PropertyCard({
               <StatusPill tone="neutral">{getPropertySceneRole(campaign, listing, index)}</StatusPill>
               <StatusPill tone="blue">Match {getPropertyMatchScore(listing)}</StatusPill>
             </div>
-            <h3 className="mt-3 text-xl font-semibold tracking-[-0.03em] text-[#172033]">{listing.title}</h3>
-            <p className="mt-2 text-sm leading-6 text-[#526070]">{listing.locationText}</p>
+            <h3 className="mt-3 text-lg font-semibold tracking-[-0.03em] text-[#172033]">{listing.title}</h3>
+            <p className="mt-1 text-sm leading-6 text-[#526070]">{listing.locationText}</p>
           </div>
           <div className="text-right">
             <p className="text-sm font-semibold text-[#172033]">{formatListingPrice(listing.price, listing.currency)}</p>
@@ -1226,7 +1232,7 @@ function PropertyCard({
           ))}
         </div>
 
-        <div className="mt-4 grid gap-3 text-sm leading-6 text-[#526070]">
+        <div className="mt-4 grid gap-2 text-sm leading-6 text-[#526070]">
           <p>
             <span className="font-semibold text-[#172033]">Why this property supports the title:</span>{" "}
             {getPropertySupportCopy(campaign, listing)}
@@ -1922,89 +1928,71 @@ export default function StudioCasaHudCommandCenter() {
 
   if (activeSection === "campaigns") {
     sectionContent = (
-      <div className="space-y-5">
-        <WorkspaceCard
-          eyebrow="Campaign Workspace"
-          title={activeCampaign ? activeCampaign.name : "Premium command center"}
-          description={
-            activeCampaign
-              ? "CasaHUD keeps the full campaign package visible in one place so the user experience stays Generate → Review → Publish."
-              : "CasaHUD hides the orchestration complexity behind a premium creative workspace. Generate the next title, review the package, and publish when the campaign is ready."
-          }
-          testId="casahud-campaign-detail"
-        >
-          {campaignNotice ? (
-            <div
-              className="rounded-2xl border border-[#C6DFC9] bg-[#F2FBF3] p-4 text-sm text-[#0F5132]"
-              data-testid="casahud-campaign-create-success"
-            >
-              {campaignNotice}
-            </div>
-          ) : null}
+      <WorkspaceCard
+        eyebrow="Dashboard"
+        title={activeCampaign ? "Current campaign overview" : "Premium CasaHUD workspace"}
+        description="Keep the default view concise: one campaign summary, one workflow snapshot, and one recent-campaigns area."
+        testId="casahud-workspace"
+      >
+        {campaignNotice ? (
+          <div
+            className="mb-4 rounded-2xl border border-[#C6DFC9] bg-[#F2FBF3] px-4 py-3 text-sm text-[#0F5132]"
+            data-testid="casahud-campaign-create-success"
+          >
+            {campaignNotice}
+          </div>
+        ) : null}
 
-          {campaignError ? (
-            <div className="rounded-2xl border border-[#E9C4A5] bg-[#FFF5DA] p-4 text-sm text-[#7A4B13]">{campaignError}</div>
-          ) : null}
+        {campaignError ? (
+          <div className="mb-4 rounded-2xl border border-[#E9C4A5] bg-[#FFF5DA] px-4 py-3 text-sm text-[#7A4B13]">{campaignError}</div>
+        ) : null}
 
-          {activeCampaign ? (
-            <div className="grid gap-5 lg:grid-cols-[1.12fr_0.88fr]">
-              <section className="rounded-[1.75rem] border border-[#E6D8C7] bg-[linear-gradient(160deg,rgba(255,249,239,0.94),rgba(255,255,255,0.9))] p-5 shadow-sm">
-                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Campaign Summary</p>
-                <h3 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">{activeCampaign.name}</h3>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
-                  {activeCampaign.marketRegionHint ? <StatusPill tone="neutral">{activeCampaign.marketRegionHint}</StatusPill> : null}
-                  <StatusPill tone="blue">{formatSupportConfidence(activeCampaign.titleSupportConfidence)} title support</StatusPill>
-                  <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill>
-                </div>
-                <div className="mt-5 grid gap-3 text-sm leading-6 text-[#526070]">
-                  <p>
-                    <span className="font-semibold text-[#172033]">Research brief:</span> {activeCampaign.researchBrief.summary}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Selected title:</span> {activeCampaign.selectedViralTitle}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Current handoff:</span>{" "}
-                    {activeCampaign.scriptGenerationStatus === "script_generated"
-                      ? "Media Planning and Asset Assembly"
-                      : activeCampaign.nextPhase.label}
-                  </p>
-                </div>
-              </section>
-              <section className="grid gap-4">
-                <div className="rounded-[1.75rem] border border-[#D7E1D8] bg-[#F4FAF5] p-5 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Campaign Readiness</p>
-                  <div className="mt-3 flex items-end justify-between gap-3">
-                    <div>
-                      <p className="text-4xl font-semibold tracking-[-0.04em] text-[#172033]">{readinessScore}</p>
-                      <p className="text-sm text-[#526070]">Readiness score</p>
+        <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+          <section
+            className="rounded-[1.45rem] border border-[#E7DCCB] bg-[linear-gradient(150deg,rgba(255,249,239,0.95),rgba(255,255,255,0.9))] p-5"
+            data-testid="casahud-campaign-detail"
+          >
+            {activeCampaign ? (
+              <div data-testid="casahud-command-header">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current campaign</p>
+                    <h3 className="mt-2 text-3xl font-semibold tracking-[-0.04em] text-[#172033]">{activeCampaign.name}</h3>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
+                      {activeCampaign.marketRegionHint ? <StatusPill tone="neutral">{activeCampaign.marketRegionHint}</StatusPill> : null}
+                      <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill>
                     </div>
-                    <StatusPill tone="sage">{timelineStatus}</StatusPill>
                   </div>
-                  <p className="mt-4 text-sm leading-6 text-[#526070]">{primaryAction.helper}</p>
-                </div>
-                <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-white/90 p-5 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Upcoming Review</p>
-                  <p className="mt-3 text-sm leading-6 text-[#526070]">
-                    {activeCampaign.scriptSummary ||
-                      activeCampaign.locationIntelligenceSummary?.headline ||
-                      activeCampaign.listingValidationSummary?.headline ||
-                      activeCampaign.discoverySummary?.headline ||
-                      "CasaHUD will keep surfacing the next reviewable package as the campaign advances."}
-                  </p>
+
+                  <div className="min-w-[210px] rounded-[1.2rem] border border-[#E3D6C2] bg-white/80 p-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Next action</p>
+                    <p className="mt-2 text-sm font-semibold text-[#172033]">{primaryAction.label}</p>
+                    <p className="mt-2 text-sm leading-6 text-[#526070]">Next: {activeCampaign.nextPhase.label}</p>
+                  </div>
                 </div>
 
-                <div className="rounded-[1.75rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5 shadow-sm">
-                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Next Step</p>
-                  <h4 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
-                    Next: {activeCampaign.nextPhase.label}
-                  </h4>
-                  <p className="mt-3 text-sm leading-6 text-[#526070]">{activeCampaign.nextPhase.detail}</p>
+                <div className="mt-5 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-[1.2rem] border border-[#E7DCCB] bg-white/85 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Opportunity</p>
+                    <p className="mt-2 text-sm leading-6 text-[#526070]">{activeCampaign.researchBrief.summary}</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-[#E7DCCB] bg-white/85 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Title</p>
+                    <p className="mt-2 text-sm font-semibold text-[#172033]">{activeCampaign.selectedViralTitle}</p>
+                  </div>
+                  <div className="rounded-[1.2rem] border border-[#E7DCCB] bg-white/85 p-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Readiness</p>
+                    <p className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-[#172033]">{readinessScore}</p>
+                    <p className="mt-1 text-sm text-[#526070]">{primaryAction.helper}</p>
+                  </div>
+                </div>
+
+                <div className="mt-5 flex flex-wrap gap-3">
                   {activeCampaign.nextPhase.key === "property_discovery" ? (
                     <button
                       type="button"
-                      className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onDiscoverListings()}
                       disabled={campaignDiscoveringId === activeCampaign.id}
                       data-testid="casahud-discover-listings-cta"
@@ -2014,7 +2002,7 @@ export default function StudioCasaHudCommandCenter() {
                   ) : activeCampaign.nextPhase.key === "listing_validation" ? (
                     <button
                       type="button"
-                      className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onValidateListings()}
                       disabled={campaignValidatingId === activeCampaign.id}
                       data-testid="casahud-validate-listings-cta"
@@ -2024,7 +2012,7 @@ export default function StudioCasaHudCommandCenter() {
                   ) : activeCampaign.nextPhase.key === "location_intelligence" ? (
                     <button
                       type="button"
-                      className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onAddLocationIntelligence()}
                       disabled={campaignLocatingId === activeCampaign.id}
                       data-testid="casahud-location-intelligence-cta"
@@ -2034,7 +2022,7 @@ export default function StudioCasaHudCommandCenter() {
                   ) : activeCampaign.nextPhase.key === "script_narrative_generation" ? (
                     <button
                       type="button"
-                      className="mt-4 rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onGenerateScript()}
                       disabled={campaignScriptingId === activeCampaign.id}
                       data-testid="casahud-generate-script-cta"
@@ -2044,97 +2032,26 @@ export default function StudioCasaHudCommandCenter() {
                   ) : (
                     <button
                       type="button"
-                      className="mt-4 rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
+                      className="rounded-2xl border border-[#D4DDF2] bg-[#F7FAFF] px-4 py-3 text-sm font-semibold text-[#41608E]"
                       disabled
                       data-testid="casahud-media-planning-placeholder"
                     >
                       Media Planning and Asset Assembly
                     </button>
                   )}
+                  <button
+                    type="button"
+                    className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
+                    onClick={() => setActiveSection("review_package")}
+                  >
+                    Review Package
+                  </button>
                 </div>
-              </section>
-            </div>
-          ) : (
-            <EmptyState
-              title="No active campaign yet"
-              description="Generate a viral property title, save the campaign, and CasaHUD will turn this command center into a full review and publishing workspace."
-              action={
-                <button
-                  type="button"
-                  className="rounded-2xl border border-[#172033] bg-[#172033] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.2)] transition hover:bg-[#26324B]"
-                  onClick={() => void onGenerateViralVideo()}
-                >
-                  Generate Viral Video Title
-                </button>
-              }
-            />
-          )}
-        </WorkspaceCard>
-
-        <WorkspaceCard
-          eyebrow="Recent Campaigns"
-          title="Campaign history"
-          description="Recent campaigns stay visible so the workspace can reopen at any point in the Generate → Review → Publish flow."
-          testId="casahud-recent-campaigns"
-        >
-          {hasRecentCampaigns ? (
-            <div className="grid gap-3">
-              {campaignCards.map((campaign) => (
-                <article
-                  key={campaign.id}
-                  className="rounded-3xl border border-[#E2E8E0] bg-white/[0.88] p-4 shadow-sm"
-                  data-testid="casahud-campaign-card"
-                >
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-lg font-semibold tracking-[-0.02em] text-[#172033]">{campaign.name}</p>
-                      <p className="mt-2 text-sm leading-6 text-[#526070]">
-                        {formatOpportunityCampaignType(campaign.campaignType)} · Updated {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
-                      </p>
-                      <p className="mt-2 text-sm leading-6 text-[#526070]">
-                        {campaign.scriptSummary ||
-                          campaign.locationSummary ||
-                          campaign.validationSummary ||
-                          campaign.discoverySummary ||
-                          campaign.researchSummary}
-                      </p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {campaign.marketRegionHint ? <StatusPill tone="neutral">{campaign.marketRegionHint}</StatusPill> : null}
-                        {campaign.listingCandidateCount > 0 ? (
-                          <StatusPill tone="neutral">{formatCountLabel(campaign.listingCandidateCount, "candidate")}</StatusPill>
-                        ) : null}
-                        {campaign.approvedListingCount > 0 ? (
-                          <StatusPill tone="neutral">{formatCountLabel(campaign.approvedListingCount, "approved property", "approved properties")}</StatusPill>
-                        ) : null}
-                        {typeof campaign.titleSupportConfidence === "number" ? (
-                          <StatusPill tone="blue">{formatSupportConfidence(campaign.titleSupportConfidence)} support</StatusPill>
-                        ) : null}
-                        {campaign.scriptGenerationStatus === "script_generated" ? (
-                          <StatusPill tone="sage">Script ready</StatusPill>
-                        ) : null}
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-3">
-                      <StatusPill tone="gold">{formatCampaignStatus(campaign.status)}</StatusPill>
-                      <button
-                        type="button"
-                        className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
-                        onClick={() => void onResumeCampaign(campaign.id)}
-                        disabled={campaignOpeningId === campaign.id}
-                        data-testid="casahud-resume-campaign"
-                      >
-                        {campaignOpeningId === campaign.id ? "Opening..." : "Resume"}
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : (
-            <div data-testid="casahud-empty-campaigns">
+              </div>
+            ) : (
               <EmptyState
-                title="No campaigns yet."
-                description="Generate your first viral property video title to start a CasaHUD campaign."
+                title="No active campaign yet"
+                description="Generate a viral property title to start a clean Generate → Review → Publish workflow."
                 action={
                   <button
                     type="button"
@@ -2145,10 +2062,147 @@ export default function StudioCasaHudCommandCenter() {
                   </button>
                 }
               />
+            )}
+          </section>
+
+          <section className="grid gap-4">
+            <div className="rounded-[1.45rem] border border-[#DDE6DA] bg-[#F5F8F2] p-5" data-testid="casahud-campaign-intelligence">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#6C7B6D]">Workflow</p>
+                  <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[#172033]">Opportunity → Properties → Story → Publish</h3>
+                </div>
+                <StatusPill tone={truthfulnessStatus.tone}>{truthfulnessStatus.headline}</StatusPill>
+              </div>
+
+              <div className="mt-4 grid gap-2">
+                {commandProgress.slice(0, 8).map((step) => (
+                  <div key={step.id} className="grid grid-cols-[110px_1fr_auto] items-center gap-3 rounded-2xl border border-[#DDE6DA] bg-white/80 px-3 py-2">
+                    <p className="text-sm font-medium text-[#172033]">{step.label}</p>
+                    <div className="h-1.5 rounded-full bg-[#E8EBE5]">
+                      <div
+                        className={cx(
+                          "h-1.5 rounded-full",
+                          step.status === "complete"
+                            ? "bg-[#233047]"
+                            : step.status === "current"
+                              ? "bg-[#B37A4C]"
+                              : step.status === "blocked"
+                                ? "bg-[#B84C4C]"
+                                : "bg-[#D6DCD3]",
+                        )}
+                        style={{ width: step.status === "complete" ? "100%" : step.status === "current" ? "62%" : step.status === "blocked" ? "44%" : "18%" }}
+                      />
+                    </div>
+                    <StatusPill tone={phaseTone(step.status)} className="px-2 py-0.5">
+                      {formatCampaignStatus(step.status)}
+                    </StatusPill>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-[#DDE6DA] bg-white/80 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Provider health</p>
+                  <p className="mt-2 text-sm text-[#526070]">{connectionSummary}</p>
+                </div>
+                <div className="rounded-2xl border border-[#DDE6DA] bg-white/80 p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Visual readiness</p>
+                  <p className="mt-2 text-sm font-semibold text-[#172033]">{visualReadiness.headline}</p>
+                  <p className="mt-2 text-sm text-[#526070]">{visualReadiness.detail}</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#DDE6DA] bg-white/80 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Agent Activity</p>
+                  <StatusPill tone="neutral">{agentRows.filter((row) => row.state === "complete").length} complete</StatusPill>
+                </div>
+                <div className="mt-3 grid gap-2">
+                  {agentRows.slice(0, 4).map((row) => (
+                    <div key={row.name} className="flex items-center justify-between gap-3 rounded-xl border border-[#E7ECE5] bg-[#FCFDFB] px-3 py-2">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-[#172033]">{row.name}</p>
+                        <p className="truncate text-xs text-[#6A7687]">{row.detail}</p>
+                      </div>
+                      <StatusPill tone={operationalTone(row.state)} className="px-2 py-0.5">
+                        {formatCampaignStatus(row.state)}
+                      </StatusPill>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-[#DDE6DA] bg-white/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Story status</p>
+                <p className="mt-2 text-sm text-[#526070]">
+                  {activeCampaign?.scriptSummary ||
+                    activeCampaign?.locationIntelligenceSummary?.headline ||
+                    activeCampaign?.listingValidationSummary?.headline ||
+                    "Generate a title to open the full CasaHUD workflow."}
+                </p>
+              </div>
             </div>
-          )}
-        </WorkspaceCard>
-      </div>
+
+            <div className="rounded-[1.45rem] border border-[#E7DCCB] bg-white p-5" data-testid="casahud-recent-campaigns">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Recent Campaigns</p>
+                  <h3 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[#172033]">Resume where you left off</h3>
+                </div>
+                {hasRecentCampaigns ? <StatusPill tone="neutral">{campaignCards.length}</StatusPill> : null}
+              </div>
+
+              {hasRecentCampaigns ? (
+                <div className="mt-4 grid gap-3">
+                  {campaignCards.map((campaign) => (
+                    <article
+                      key={campaign.id}
+                      className="rounded-[1.2rem] border border-[#E7DCCB] bg-[#FFFCF6] p-4"
+                      data-testid="casahud-campaign-card"
+                    >
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-base font-semibold tracking-[-0.02em] text-[#172033]">{campaign.name}</p>
+                          <p className="mt-1 text-sm text-[#526070]">
+                            {formatOpportunityCampaignType(campaign.campaignType)} · Updated {formatCampaignTime(campaign.updatedAt || campaign.createdAt)}
+                          </p>
+                          <p className="mt-2 text-sm leading-6 text-[#526070]">
+                            {campaign.scriptSummary ||
+                              campaign.locationSummary ||
+                              campaign.validationSummary ||
+                              campaign.discoverySummary ||
+                              campaign.researchSummary}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <StatusPill tone="gold">{formatCampaignStatus(campaign.status)}</StatusPill>
+                          <button
+                            type="button"
+                            className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
+                            onClick={() => void onResumeCampaign(campaign.id)}
+                            disabled={campaignOpeningId === campaign.id}
+                            data-testid="casahud-resume-campaign"
+                          >
+                            {campaignOpeningId === campaign.id ? "Opening..." : "Resume"}
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div data-testid="casahud-empty-campaigns" className="mt-4">
+                  <EmptyState
+                    title="No campaigns yet."
+                    description="Generate your first viral property video title to start a CasaHUD campaign."
+                  />
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      </WorkspaceCard>
     );
   }
 
@@ -2345,8 +2399,8 @@ export default function StudioCasaHudCommandCenter() {
     sectionContent = (
       <WorkspaceCard
         eyebrow="Property Shortlist"
-        title="Approved properties and title fit"
-        description="Premium listing cards keep the shortlist editorial and image-rich instead of turning CasaHUD into a browser."
+        title="Property Shortlist"
+        description="Image-first listing cards, compact filters, and title-fit reasoning."
         actions={
           activeCampaign?.nextPhase.key === "property_discovery" ? (
             <button
@@ -2391,6 +2445,25 @@ export default function StudioCasaHudCommandCenter() {
 
         {activeCampaign ? (
           <div data-testid="casahud-listing-candidates">
+            <div
+              className="mb-5 grid gap-3 rounded-[1.35rem] border border-[#E7DCCB] bg-[#FFFCF6] p-4 lg:grid-cols-[1.3fr_repeat(4,minmax(0,1fr))_160px]"
+              data-testid="casahud-shortlist-toolbar"
+            >
+              <label className="flex items-center rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2">
+                <span className="sr-only">Search listings</span>
+                <input
+                  type="search"
+                  placeholder="Search listings"
+                  className="w-full bg-transparent text-sm text-[#172033] outline-none placeholder:text-[#7A897E]"
+                />
+              </label>
+              <div className="rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2 text-sm text-[#526070]">Location</div>
+              <div className="rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2 text-sm text-[#526070]">Max price</div>
+              <div className="rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2 text-sm text-[#526070]">Property type</div>
+              <div className="rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2 text-sm text-[#526070]">More filters</div>
+              <div className="rounded-2xl border border-[#E7DCCB] bg-white px-3 py-2 text-sm text-[#526070]">Sort: Match</div>
+            </div>
+
             {activeCampaign.listingValidationSummary ? (
               <div className="mb-5 rounded-[1.6rem] border border-[#D8E2D9] bg-[#F4FAF5] p-5" data-testid="casahud-validation-summary">
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -3397,9 +3470,9 @@ export default function StudioCasaHudCommandCenter() {
 
   return (
     <main className="ibrains-shell min-h-screen overflow-hidden bg-[#EFE8DD] text-[#172033]">
-      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_14%_12%,rgba(255,255,255,0.94),transparent_28%),radial-gradient(circle_at_82%_0%,rgba(204,150,95,0.22),transparent_30%),linear-gradient(135deg,#F9F4EA_0%,#EAE7DF_46%,#E2EEE7_100%)]" />
+      <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_10%_10%,rgba(255,255,255,0.92),transparent_26%),radial-gradient(circle_at_88%_4%,rgba(193,142,87,0.18),transparent_28%),linear-gradient(145deg,#F6F0E5_0%,#EEE7DA_48%,#F4F1EA_100%)]" />
 
-      <div className="mx-auto max-w-[1680px] px-4 py-5 md:px-6 lg:px-8 lg:py-8">
+      <div className="mx-auto max-w-[1520px] px-4 py-5 md:px-6 lg:px-8 lg:py-8">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#8A5A34]">CasaHUD</p>
@@ -3407,138 +3480,96 @@ export default function StudioCasaHudCommandCenter() {
           </div>
           <Link
             href="/apps"
-            className="rounded-full border border-[#CFC4B2] bg-white/70 px-4 py-2 text-sm font-medium text-[#344256] shadow-sm transition hover:bg-white"
+            className="rounded-full border border-[#D7C9B6] bg-white/80 px-4 py-2 text-sm font-medium text-[#344256] shadow-sm transition hover:bg-white"
           >
             Apps
           </Link>
         </div>
 
-        <div className="mt-6 grid gap-5 xl:grid-cols-[270px_minmax(0,1fr)_330px]">
-          <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start">
-            <div className="rounded-[2rem] border border-white/70 bg-white/[0.84] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Command Center</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Generate → Review → Publish</h2>
-              <p className="mt-3 text-sm leading-6 text-[#526070]">
-                CasaHUD presents the full product as a premium workspace without exposing the agent complexity by default.
-              </p>
-              <div className="mt-5 grid gap-2 sm:grid-cols-2 xl:grid-cols-1" data-testid="casahud-sidebar">
+        <div className="mt-6 lg:grid lg:grid-cols-[236px_minmax(0,1fr)] lg:gap-6">
+          <aside className="lg:sticky lg:top-6 lg:self-start">
+            <div className="rounded-[1.8rem] border border-[#1A2233] bg-[#111725] p-4 text-white shadow-[0_28px_70px_rgba(17,23,37,0.28)]">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#CBA16E]">CasaHUD Studio</p>
+                  <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">Generate → Review → Publish</h2>
+                </div>
+              </div>
+
+              <div
+                className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:grid lg:gap-2 lg:overflow-visible"
+                data-testid="casahud-sidebar"
+              >
                 {sidebarSections.map((section) => (
                   <button
                     key={section.id}
                     type="button"
                     className={cx(
-                      "rounded-[1.35rem] border px-4 py-3 text-left transition",
+                      "flex min-w-fit items-center gap-3 rounded-[1rem] border px-3 py-3 text-left transition lg:min-w-0",
                       activeSection === section.id
-                        ? "border-[#172033] bg-[#172033] text-white shadow-[0_18px_34px_rgba(23,32,51,0.24)]"
-                        : "border-[#E6D8C7] bg-[#FFF9EF] text-[#172033] hover:bg-white",
+                        ? "border-[#CBA16E]/80 bg-white text-[#111725] shadow-[0_18px_36px_rgba(0,0,0,0.22)]"
+                        : "border-white/10 bg-white/5 text-white/80 hover:bg-white/10",
                     )}
                     onClick={() => setActiveSection(section.id)}
                     data-testid={`casahud-nav-${section.id}`}
                     aria-current={activeSection === section.id ? "page" : undefined}
                   >
-                    <p className={cx("text-[11px] font-semibold uppercase tracking-[0.16em]", activeSection === section.id ? "text-white/78" : "text-[#8A5A34]")}>
-                      {section.eyebrow}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold">{section.label}</p>
-                    <p className={cx("mt-1 text-xs leading-5", activeSection === section.id ? "text-white/72" : "text-[#657086]")}>
-                      {section.description}
-                    </p>
+                    <span
+                      className={cx(
+                        "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold tracking-[0.08em]",
+                        activeSection === section.id ? "border-[#E7D0AE] bg-[#F7ECD9] text-[#7A5230]" : "border-white/12 bg-white/10 text-white/70",
+                      )}
+                    >
+                      {section.icon}
+                    </span>
+                    <span className="text-sm font-medium">{section.label}</span>
                   </button>
                 ))}
               </div>
-            </div>
 
-            <div
-              className="rounded-[2rem] border border-white/70 bg-white/[0.82] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur"
-              data-testid="casahud-connections-entry"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Connections</p>
-                  <h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-[#172033]">Service readiness</h2>
-                </div>
-                <button
-                  type="button"
-                  className="rounded-2xl border border-[#CFC4B2] bg-[#172033] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#26324B]"
-                  onClick={() => {
-                    setActiveSection("connections");
-                    openSetup();
-                  }}
-                >
-                  Manage
-                </button>
-              </div>
-
-              <p className="mt-4 text-sm leading-6 text-[#526070]">{connectionSummary}</p>
-              <div className="mt-4 grid gap-2">
-                {connectionCards.slice(0, 5).map((card) => (
-                  <div key={card.id} className="flex items-center justify-between gap-3 rounded-2xl border border-[#E8DDCD] bg-[#FFFDF8] px-4 py-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-[#172033]">{card.title}</p>
-                      <p className="mt-1 text-xs leading-5 text-[#718096]">{card.optional ? "Optional premium" : "Core service"}</p>
-                    </div>
-                    <StatusPill tone={connectionTone(card.status)}>{card.statusLabel}</StatusPill>
+              <div className="mt-5 rounded-[1.2rem] border border-white/10 bg-white/5 p-4" data-testid="casahud-connections-entry">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#CBA16E]">Connections</p>
+                    <p className="mt-2 text-sm text-white/74">{connectionSummary}</p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div
-              className="rounded-[2rem] border border-white/70 bg-[#FFF9EF]/85 p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur"
-              data-testid="casahud-recent-campaigns"
-            >
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Recent Campaigns</p>
-              <div className="mt-4 grid gap-3">
-                {campaignCards.length > 0 ? (
-                  campaignCards.slice(0, 3).map((campaign) => (
-                    <button
-                      key={campaign.id}
-                      type="button"
-                      className="rounded-[1.4rem] border border-[#E6D8C7] bg-white/90 p-4 text-left transition hover:bg-white"
-                      onClick={() => void onResumeCampaign(campaign.id)}
-                    >
-                      <p className="text-sm font-semibold text-[#172033]">{campaign.name}</p>
-                      <p className="mt-1 text-xs text-[#657086]">{formatCampaignStatus(campaign.status)}</p>
-                      <p className="mt-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8A5A34]">Resume</p>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {campaign.approvedListingCount > 0 ? <StatusPill tone="neutral">{campaign.approvedListingCount} approved</StatusPill> : null}
-                        {campaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
-                          <StatusPill tone="sage">Location story ready</StatusPill>
-                        ) : null}
-                        {campaign.scriptGenerationStatus === "script_generated" ? <StatusPill tone="sage">Script ready</StatusPill> : null}
-                      </div>
-                    </button>
-                  ))
-                ) : (
-                  <p className="text-sm leading-6 text-[#526070]">Generate your first title to create a reviewable campaign package.</p>
-                )}
+                  <button
+                    type="button"
+                    className="rounded-full border border-white/14 bg-white/10 px-3 py-2 text-xs font-semibold text-white transition hover:bg-white/18"
+                    onClick={() => {
+                      setActiveSection("connections");
+                      openSetup();
+                    }}
+                  >
+                    Open
+                  </button>
+                </div>
               </div>
             </div>
           </aside>
 
-          <div className="min-w-0 space-y-5">
+          <div className="mt-5 min-w-0 space-y-6 lg:mt-0">
             <section
-              className="relative overflow-hidden rounded-[2rem] border border-white/70 bg-[#FFFDF8]/[0.88] p-6 shadow-[0_28px_75px_rgba(70,55,35,0.18)] backdrop-blur md:p-8"
+              className="relative overflow-hidden rounded-[2rem] border border-[#E6D9C8] bg-[#FBF8F1]/95 p-6 shadow-[0_24px_60px_rgba(70,55,35,0.12)] md:p-8"
               data-testid="casahud-entry-hero"
             >
-              <div className="absolute right-[-80px] top-[-90px] h-64 w-64 rounded-full bg-[#D59D63]/25 blur-2xl" />
-              <div className="absolute bottom-[-120px] left-[-80px] h-72 w-72 rounded-full bg-[#6C9A84]/[0.18] blur-2xl" />
-              <div className="relative grid gap-8 lg:grid-cols-[1.08fr_0.92fr] lg:items-end">
-                <div>
-                  <div className="inline-flex rounded-full border border-[#E1D2BC] bg-white/75 px-3 py-1 text-xs font-semibold text-[#8A5A34]">
-                    Premium CasaHUD Command Center
-                  </div>
-                  <h1 className="mt-5 max-w-4xl text-4xl font-semibold leading-[0.98] tracking-[-0.045em] text-[#172033] md:text-6xl">
+              <div className="absolute right-[-72px] top-[-88px] h-60 w-60 rounded-full bg-[#D59D63]/18 blur-3xl" />
+              <div className="absolute bottom-[-130px] left-[-96px] h-72 w-72 rounded-full bg-[#DCCEB9]/40 blur-3xl" />
+
+              <div className="relative grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_360px]">
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#8A5A34]">CasaHUD Studio</p>
+                  <h1 className="mt-4 max-w-4xl text-4xl font-semibold leading-[1.02] tracking-[-0.05em] text-[#172033] md:text-6xl">
                     Generate your next viral property video
                   </h1>
-                  <p className="mt-5 max-w-3xl text-base leading-7 text-[#526070] md:text-lg">
-                    CasaHUD researches winning content angles, finds matching properties, builds the story, and prepares a YouTube-ready package.
+                  <p className="mt-4 max-w-2xl text-base leading-7 text-[#556273]">
+                    AI research. Market insight. Story-driven content that sells.
                   </p>
 
-                  <div className="mt-7 flex flex-wrap items-center gap-3">
+                  <div className="mt-6 flex flex-wrap items-center gap-3">
                     <button
                       type="button"
-                      className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.28)] transition hover:-translate-y-0.5 hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0"
+                      className="rounded-2xl border border-[#172033] bg-[#172033] px-6 py-4 text-sm font-semibold text-white shadow-[0_18px_34px_rgba(23,32,51,0.24)] transition hover:bg-[#26324B] disabled:cursor-not-allowed disabled:opacity-60"
                       onClick={() => void onGenerateViralVideo()}
                       disabled={generationStatus === "loading"}
                       data-testid="casahud-generate-cta"
@@ -3547,7 +3578,7 @@ export default function StudioCasaHudCommandCenter() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-2xl border border-[#CFC4B2] bg-white/75 px-5 py-4 text-sm font-semibold text-[#172033] shadow-sm transition hover:bg-white"
+                      className="rounded-2xl border border-[#D6C7B3] bg-white px-5 py-4 text-sm font-semibold text-[#172033] transition hover:bg-[#FFFEFB]"
                       onClick={() => {
                         setActiveSection("connections");
                         openSetup();
@@ -3558,42 +3589,33 @@ export default function StudioCasaHudCommandCenter() {
                     </button>
                     <button
                       type="button"
-                      className="rounded-2xl border border-transparent px-2 py-3 text-sm font-semibold text-[#526070] transition hover:text-[#172033]"
+                      className="rounded-2xl border border-transparent px-2 py-3 text-sm font-semibold text-[#556273] transition hover:text-[#172033]"
                       onClick={() => setActiveSection("campaigns")}
                     >
                       Recent Campaigns
                     </button>
-
                     {activeCampaign ? (
                       <>
                         <button
                           type="button"
-                          className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-5 py-4 text-sm font-semibold text-[#172033]"
+                          className="rounded-2xl border border-[#D6C7B3] bg-[#F6F0E5] px-5 py-4 text-sm font-semibold text-[#172033]"
                           onClick={() => runPrimaryAction()}
                         >
                           Continue Campaign
                         </button>
                         <button
                           type="button"
-                          className="rounded-2xl border border-[#D7CAB8] bg-[#FFF9EF] px-5 py-4 text-sm font-semibold text-[#172033]"
+                          className="rounded-2xl border border-[#D6C7B3] bg-[#FDF8EE] px-5 py-4 text-sm font-semibold text-[#172033]"
                           onClick={() => setActiveSection("review_package")}
                         >
                           Review Package
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-5 py-4 text-sm font-semibold text-[#7A897E]"
-                          onClick={() => setActiveSection("publishing")}
-                          disabled={youtubeConnectionCard?.status !== "connected"}
-                        >
-                          Publish / Schedule
                         </button>
                       </>
                     ) : null}
                   </div>
 
                   <div
-                    className="mt-5 flex flex-wrap items-center gap-2 rounded-2xl border border-[#E7D8C2] bg-white/[0.58] px-4 py-3 text-sm text-[#526070]"
+                    className="mt-5 inline-flex flex-wrap items-center gap-2 rounded-full border border-[#E3D6C1] bg-white/72 px-4 py-2 text-sm text-[#526070]"
                     data-testid="casahud-research-mode"
                   >
                     <span className="font-semibold text-[#172033]">
@@ -3612,287 +3634,94 @@ export default function StudioCasaHudCommandCenter() {
                   ) : null}
                 </div>
 
-                <aside className="rounded-[1.75rem] border border-[#E4D7C2] bg-[linear-gradient(160deg,rgba(250,243,231,0.9),rgba(255,255,255,0.82))] p-5 shadow-[0_20px_45px_rgba(70,55,35,0.12)]">
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">
-                    {opportunityOutput ? "Winning concept" : activeCampaign ? "Active campaign" : "One-click promise"}
-                  </p>
-                  {selectedHeroTitle ? (
-                    <>
-                      <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedHeroTitle}</h2>
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {activeCampaign ? <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill> : null}
-                        {activeCampaign ? <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill> : null}
-                        {opportunityOutput ? (
-                          <StatusPill tone="blue">{Math.round(opportunityOutput.selectedTitle.confidence * 100)}% confidence</StatusPill>
-                        ) : null}
+                <aside className="overflow-hidden rounded-[1.6rem] border border-[#E3D5C2] bg-white/82 p-4 shadow-[0_18px_42px_rgba(70,55,35,0.1)]">
+                  <div className="relative h-44 overflow-hidden rounded-[1.2rem] bg-[#EFE5D6]">
+                    <PropertyImage
+                      src={activeListings[0] ? featuredImage(activeListings[0]) : null}
+                      alt={selectedHeroTitle ? `${selectedHeroTitle} campaign preview` : "CasaHUD campaign preview"}
+                      label={selectedHeroTitle || "CasaHUD preview"}
+                      className="h-44 w-full"
+                    />
+                    <div className="absolute left-3 top-3">
+                      <StatusPill tone="gold">{opportunityOutput ? "Winning concept" : activeCampaign ? "Current campaign" : "CasaHUD"}</StatusPill>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current summary</p>
+                    <h2 className="mt-2 text-xl font-semibold tracking-[-0.03em] text-[#172033]">
+                      {selectedHeroTitle || "One click creates the next review-ready package."}
+                    </h2>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {activeCampaign ? <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill> : null}
+                      {activeCampaign ? <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill> : null}
+                      {opportunityOutput ? <StatusPill tone="blue">{Math.round(opportunityOutput.selectedTitle.confidence * 100)}% confidence</StatusPill> : null}
+                    </div>
+                    <p className="mt-3 text-sm leading-6 text-[#526070]">
+                      {opportunityOutput?.selectedTitle.reasoning ||
+                        activeCampaign?.scriptSummary ||
+                        activeCampaign?.researchBrief.summary ||
+                        latestSavedCampaign?.researchSummary ||
+                        "CasaHUD keeps the product simple: generate the concept, review the package, then publish when it is ready."}
+                    </p>
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                      <div className="rounded-2xl border border-[#E7DCCB] bg-[#FFFCF6] p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Properties</p>
+                        <p className="mt-1 font-semibold text-[#172033]">{formatCountLabel(activeListings.length, "shortlisted property", "shortlisted properties")}</p>
                       </div>
-                      <p className="mt-4 text-sm leading-6 text-[#526070]">
-                        {opportunityOutput?.selectedTitle.reasoning ||
-                          activeCampaign?.scriptSummary ||
-                          activeCampaign?.researchBrief.summary ||
-                          latestSavedCampaign?.researchSummary ||
-                          "CasaHUD keeps the selected title and campaign package visible at every phase."}
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <h2 className="mt-3 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
-                        One click creates the next reviewable video package.
-                      </h2>
-                      <p className="mt-4 text-sm leading-6 text-[#526070]">
-                        CasaHUD starts with opportunity discovery and carries the campaign forward into property selection, script review, package review, and publish controls.
-                      </p>
-                    </>
-                  )}
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {["Generate", "Review", "Publish"].map((step) => (
-                      <StatusPill key={step} tone="neutral">
-                        {step}
-                      </StatusPill>
-                    ))}
+                      <div className="rounded-2xl border border-[#E7DCCB] bg-[#FFFCF6] p-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#7A897E]">Updated</p>
+                        <p className="mt-1 font-semibold text-[#172033]">
+                          {activeCampaign ? formatCampaignTime(activeCampaign.updatedAt) : latestSavedCampaign ? formatCampaignTime(latestSavedCampaign.updatedAt || latestSavedCampaign.createdAt) : "Ready"}
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </aside>
               </div>
             </section>
 
-            {activeCampaign ? (
-              <section className="rounded-[2rem] border border-white/70 bg-[#FBFCF9]/[0.92] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur md:p-6" data-testid="casahud-command-header">
-                <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C7B6D]">Campaign Command Header</p>
-                    <h2 className="mt-1 text-3xl font-semibold tracking-[-0.035em] text-[#172033]">{activeCampaign.name}</h2>
-                    <div className="mt-4 flex flex-wrap gap-2">
-                      <StatusPill tone="neutral">{formatOpportunityCampaignType(activeCampaign.campaignType)}</StatusPill>
-                      {activeCampaign.marketRegionHint ? <StatusPill tone="neutral">{activeCampaign.marketRegionHint}</StatusPill> : null}
-                      <StatusPill tone="gold">{formatCampaignStatus(activeCampaign.status)}</StatusPill>
-                      <StatusPill tone={truthfulnessStatus.tone}>Review {truthfulnessStatus.headline}</StatusPill>
-                      <StatusPill tone={publishReadiness.tone}>Publish {publishReadiness.headline}</StatusPill>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#172033] bg-[#172033] px-4 py-3 text-sm font-semibold text-white transition hover:bg-[#26324B]"
-                      onClick={() => runPrimaryAction()}
-                    >
-                      {primaryAction.label}
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
-                      onClick={() => setActiveSection("script_studio")}
-                    >
-                      View Script
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
-                      onClick={() => setActiveSection("property_shortlist")}
-                    >
-                      View Shortlist
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                      onClick={() => setActiveSection("video_builder")}
-                      disabled={!activeCampaign.futureState.renderStatus}
-                    >
-                      Preview Render
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D7CAB8] bg-[#F8F3EA] px-4 py-3 text-sm font-semibold text-[#7A897E]"
-                      disabled
-                    >
-                      Create/Refresh YouTube Package
-                    </button>
-                    <button
-                      type="button"
-                      className="rounded-2xl border border-[#D7CAB8] bg-white px-4 py-3 text-sm font-semibold text-[#172033]"
-                      onClick={() => {
-                        setActiveSection("connections");
-                        openSetup();
-                      }}
-                    >
-                      Open Connections
-                    </button>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-4 lg:grid-cols-[1.15fr_0.85fr]">
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    <div className="rounded-2xl border border-[#E6D8C7] bg-white/90 p-4">
-                      <p className="text-xs uppercase tracking-[0.14em] text-[#7A897E]">Overall status</p>
-                      <p className="mt-2 text-sm font-semibold text-[#172033]">{formatCampaignStatus(activeCampaign.status)}</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#E6D8C7] bg-white/90 p-4">
-                      <p className="text-xs uppercase tracking-[0.14em] text-[#7A897E]">Review status</p>
-                      <p className="mt-2 text-sm font-semibold text-[#172033]">{truthfulnessStatus.headline}</p>
-                    </div>
-                    <div className="rounded-2xl border border-[#E6D8C7] bg-white/90 p-4">
-                      <p className="text-xs uppercase tracking-[0.14em] text-[#7A897E]">Publish status</p>
-                      <p className="mt-2 text-sm font-semibold text-[#172033]">{publishReadiness.headline}</p>
-                    </div>
-                  </div>
-                  <div className="rounded-[1.5rem] border border-[#E6D8C7] bg-[#FFF9EF] p-4">
-                    <p className="text-xs uppercase tracking-[0.14em] text-[#7A897E]">Primary next action</p>
-                    <p className="mt-2 text-sm font-semibold text-[#172033]">{primaryAction.label}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#526070]">{primaryAction.helper}</p>
-                  </div>
-                </div>
-
-                <div className="mt-5 grid gap-2 xl:grid-cols-12">
-                  {commandProgress.map((step) => (
-                    <div key={step.id} className="rounded-2xl border border-[#E6D8C7] bg-white/90 px-3 py-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-sm font-semibold text-[#172033]">{step.label}</p>
-                        <StatusPill tone={phaseTone(step.status)} className="px-2 py-0.5">
-                          {formatCampaignStatus(step.status)}
-                        </StatusPill>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ) : null}
-
-            <section
-              className="rounded-[2rem] border border-white/70 bg-[#F4F7F2]/[0.9] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur md:p-6"
-              data-testid="casahud-progress-shell"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
+            <section className="space-y-4" data-testid="casahud-workspace-shell">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C7B6D]">Guided Progress</p>
-                  <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
-                    {generationStatus === "loading"
-                      ? "CasaHUD is discovering the opportunity"
-                      : campaignDiscoveringId
-                        ? "CasaHUD is finding matching properties"
-                        : campaignValidatingId
-                          ? "CasaHUD is validating and ranking listings"
-                          : campaignLocatingId
-                            ? "CasaHUD is building the location story"
-                            : campaignScriptingId
-                              ? "CasaHUD is writing the video narrative"
-                              : activeCampaign
-                                ? `Workspace focus: ${activeSectionItem.label}`
-                                : "What happens after you click generate"}
-                  </h2>
-                  <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]">
-                    {generationStatus === "loading"
-                      ? "CasaHUD is moving through YouTube opportunity research, title strategy, and final concept selection."
-                      : campaignDiscoveringId
-                        ? "CasaHUD is translating the saved title promise into listing search criteria and candidate properties."
-                        : campaignValidatingId
-                          ? "CasaHUD is checking title truthfulness, removing duplicates, and ranking the shortlist."
-                          : campaignLocatingId
-                            ? "CasaHUD is shaping local highlights, POIs, and map ideas into a location story."
-                            : campaignScriptingId
-                              ? "CasaHUD is turning the validated listings and location intelligence into a review-ready script."
-                              : activeCampaign
-                                ? activeSectionItem.description
-                                : "CasaHUD keeps the experience premium and guided instead of dropping the user into forms or debug panels."}
-                  </p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Current workspace</p>
+                  <h2 className="mt-1 text-2xl font-semibold tracking-[-0.04em] text-[#172033]">{activeSectionItem.label}</h2>
                 </div>
-                <StatusPill tone="neutral">{timelineStatus}</StatusPill>
+                <div className="flex flex-wrap gap-2">
+                  <StatusPill tone="neutral">{timelineStatus}</StatusPill>
+                  {activeCampaign ? <StatusPill tone={truthfulnessStatus.tone}>{truthfulnessStatus.headline}</StatusPill> : null}
+                  {activeCampaign ? <StatusPill tone={publishReadiness.tone}>{publishReadiness.headline}</StatusPill> : null}
+                </div>
               </div>
 
-              <div className="mt-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
-                <div>
-                  {campaignScriptingId
-                    ? renderProgressList(scriptSteps, scriptProgressIndex, "loading")
-                    : campaignLocatingId
-                      ? renderProgressList(locationSteps, locationProgressIndex, "loading")
-                      : campaignValidatingId
-                        ? renderProgressList(validationSteps, validationProgressIndex, "loading")
-                        : campaignDiscoveringId
-                          ? renderProgressList(discoverySteps, discoveryProgressIndex, "loading")
-                          : renderProgressList(wizardSteps, progressIndex, generationStatus)}
+              {generationStatus === "loading" ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(wizardSteps, progressIndex, generationStatus)}
                 </div>
+              ) : null}
+              {campaignDiscoveringId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(discoverySteps, discoveryProgressIndex, "loading", "casahud-discovery-progress")}
+                </div>
+              ) : null}
+              {campaignValidatingId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(validationSteps, validationProgressIndex, "loading", "casahud-validation-progress")}
+                </div>
+              ) : null}
+              {campaignLocatingId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(locationSteps, locationProgressIndex, "loading", "casahud-location-progress")}
+                </div>
+              ) : null}
+              {campaignScriptingId ? (
+                <div className="rounded-[1.5rem] border border-[#E1D6C6] bg-white/84 p-4">
+                  {renderProgressList(scriptSteps, scriptProgressIndex, "loading", "casahud-script-progress")}
+                </div>
+              ) : null}
 
-                <div className="grid gap-3">
-                  <div className="rounded-3xl border border-[#E4D7C2] bg-[#FFF9EF] p-4">
-                    <p className="text-sm font-semibold text-[#172033]">Primary workspace focus</p>
-                    <p className="mt-3 text-sm leading-6 text-[#526070]">{activeSectionItem.description}</p>
-                  </div>
-                  <div className="rounded-3xl border border-[#D8E2D9] bg-white/[0.84] p-4">
-                    <p className="text-sm font-semibold text-[#172033]">Current next best action</p>
-                    <p className="mt-3 text-sm leading-6 text-[#526070]">{primaryAction.helper}</p>
-                  </div>
-                </div>
-              </div>
+              {sectionContent}
             </section>
-
-            {sectionContent}
           </div>
-
-          <aside className="space-y-5 xl:sticky xl:top-6 xl:self-start" data-testid="casahud-campaign-intelligence">
-            <section className="rounded-[2rem] border border-white/70 bg-white/[0.86] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Campaign Intelligence</p>
-              <div className="mt-4 rounded-[1.6rem] border border-[#E6D8C7] bg-[#FFF9EF] p-5">
-                <div className="flex items-end justify-between gap-3">
-                  <div>
-                    <p className="text-5xl font-semibold tracking-[-0.05em] text-[#172033]">{readinessScore}</p>
-                    <p className="text-sm text-[#526070]">Readiness score</p>
-                  </div>
-                  <StatusPill tone="ink">{primaryAction.label}</StatusPill>
-                </div>
-                <p className="mt-4 text-sm leading-6 text-[#526070]">{primaryAction.helper}</p>
-              </div>
-
-              <div className="mt-4 grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
-                <div className={cx("rounded-[1.5rem] border p-4", toneClasses(truthfulnessStatus.tone))}>
-                  <p className="text-xs uppercase tracking-[0.14em]">Content truthfulness</p>
-                  <p className="mt-2 text-sm font-semibold">{truthfulnessStatus.headline}</p>
-                  <p className="mt-2 text-sm leading-6 opacity-90">{truthfulnessStatus.detail}</p>
-                </div>
-                <div className={cx("rounded-[1.5rem] border p-4", toneClasses(visualReadiness.tone))}>
-                  <p className="text-xs uppercase tracking-[0.14em]">Visual readiness</p>
-                  <p className="mt-2 text-sm font-semibold">{visualReadiness.headline}</p>
-                  <p className="mt-2 text-sm leading-6 opacity-90">{visualReadiness.detail}</p>
-                </div>
-                <div className={cx("rounded-[1.5rem] border p-4", toneClasses(publishReadiness.tone))}>
-                  <p className="text-xs uppercase tracking-[0.14em]">Publish readiness</p>
-                  <p className="mt-2 text-sm font-semibold">{publishReadiness.headline}</p>
-                  <p className="mt-2 text-sm leading-6 opacity-90">{publishReadiness.detail}</p>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-[2rem] border border-white/70 bg-white/[0.86] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Agent Activity</p>
-              <div className="mt-4 grid gap-3">
-                {agentRows.map((row) => (
-                  <div key={row.name} className="rounded-[1.45rem] border border-[#E6D8C7] bg-[#FFFDF8] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[#172033]">{row.name}</p>
-                        <p className="mt-2 text-sm leading-6 text-[#526070]">{row.detail}</p>
-                      </div>
-                      <StatusPill tone={operationalTone(row.state)}>{formatCampaignStatus(row.state)}</StatusPill>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-[2rem] border border-white/70 bg-white/[0.86] p-5 shadow-[0_24px_64px_rgba(70,55,35,0.12)] backdrop-blur">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Provider Health</p>
-              <div className="mt-4 grid gap-3">
-                {connectionCards.map((card) => (
-                  <div key={card.id} className="rounded-[1.45rem] border border-[#E6D8C7] bg-[#FFFDF8] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-[#172033]">{card.title}</p>
-                        <p className="mt-1 text-sm text-[#526070]">{card.detail}</p>
-                      </div>
-                      <StatusPill tone={connectionTone(card.status)}>{card.statusLabel}</StatusPill>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          </aside>
         </div>
       </div>
 
