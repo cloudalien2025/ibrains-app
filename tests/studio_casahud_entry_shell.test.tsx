@@ -22,17 +22,20 @@ describe("CasaHUD Phase 1 entry shell", () => {
   it("renders the premium title-first entry experience by default", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
-    expect(html).toContain("Generate your next viral property video");
     expect(html).toContain(">Generate Viral Video Title<");
-    expect(html).toContain(">Connections<");
     expect(html).toContain(">Recent Campaigns<");
     expect(html).toContain("No campaigns yet.");
     expect(html).toContain("Generate your first viral property video title to start a CasaHUD campaign.");
-    expect(html).toContain(">Dashboard<");
-    expect(html).toContain("Current workspace");
-    expect(html).toContain("casahud-entry-hero");
+    expect(html).toContain(">Campaigns<");
+    expect(html).toContain(">Viral Titles<");
+    expect(html).toContain("Create, resume, and review CasaHUD video campaigns.");
     expect(html).toContain("casahud-recent-campaigns");
-    expect(html).toContain("casahud-connections-entry");
+    expect(html).toContain("casahud-workspace-shell");
+    expect(html).not.toContain("Generate your next viral property video");
+    expect(html).not.toContain(">DB<");
+    expect(html).not.toContain(">VT<");
+    expect(html).not.toContain(">PS<");
+    expect(html).not.toContain(">LI<");
     expect(html).not.toContain(">Generate Viral Video<");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("<form");

@@ -531,14 +531,21 @@ describe("CasaHUD premium command center UI", () => {
   it("renders the premium shell with sidebar navigation and no old mock-first copy", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
-    expect(html).toContain("Generate your next viral property video");
     expect(html).toContain(">Generate Viral Video Title<");
-    expect(html).toContain(">Dashboard<");
+    expect(html).toContain(">Campaigns<");
     expect(html).toContain(">Viral Titles<");
     expect(html).toContain(">Review Package<");
     expect(html).toContain(">Publishing<");
     expect(html).toContain(">Connections<");
     expect(html).toContain("casahud-workspace-shell");
+    expect(html).toContain('data-testid="casahud-nav-campaigns" aria-current="page"');
+    expect(html).toContain(">Campaigns</h2>");
+    expect(html).not.toContain("Generate your next viral property video");
+    expect(html).not.toContain(">DB<");
+    expect(html).not.toContain(">VT<");
+    expect(html).not.toContain(">PS<");
+    expect(html).not.toContain(">LI<");
+    expect(html).not.toContain("casahud-entry-hero");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mock-first MVP");
   });
@@ -617,10 +624,12 @@ describe("CasaHUD premium command center UI", () => {
     });
     await flush();
 
+    expect(container.querySelector('[data-testid="casahud-workspace-shell"]')?.textContent).toContain("Connections");
     expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("OpenAI");
     expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("Listing Sources");
     expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).toContain("YouTube Channel");
     expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).not.toContain("OPENAI_API_KEY");
+    expect(container.querySelector('[data-testid="casahud-connections-panel"]')?.textContent).not.toContain("Manage Connections");
 
     const shortlistNav = container.querySelector('[data-testid="casahud-nav-property_shortlist"]');
     await act(async () => {
