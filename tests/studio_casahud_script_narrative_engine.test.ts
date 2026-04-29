@@ -418,4 +418,36 @@ describe("CasaHUD script narrative engine", () => {
     expect(propertySegment.narration).not.toContain("sqm");
     expect(propertySegment.narration).not.toContain("airport");
   });
+
+  it("keeps imported listing narration viewer-ready and free of developer phrases", async () => {
+    const campaign = buildLocationReadyCampaign();
+    campaign.approvedListings[0] = {
+      ...campaign.approvedListings[0]!,
+      provider: "immobiliare",
+      sourceType: "imported_url",
+      title: "Altavilla Silentina Country House with Olive Grove",
+      locationText: "Altavilla Silentina, Campania, Italy",
+      price: 198000,
+      currency: "EUR",
+      propertyType: "Country house",
+      bedrooms: 4,
+      bathrooms: 2,
+      sizeSqm: 300,
+      descriptionSnippet:
+        "A country house in Altavilla Silentina with four bedrooms, two bathrooms, 300 m² of interior space, more than 12,000 m² of land, and an olive grove, priced at €198,000.",
+      preliminaryMatchNotes:
+        "A country house in Altavilla Silentina with four bedrooms, two bathrooms, 300 m² of interior space, more than 12,000 m² of land, and an olive grove, priced at €198,000.",
+      features: ["12,900 m² land", "olive grove", "Cilento countryside"],
+    };
+
+    const result = await runCasaHudScriptNarrative(campaign);
+    const narration = result.propertySegments[0]?.narration || "";
+
+    expect(narration).toContain("Country house");
+    expect(narration).toContain("EUR 198,000");
+    expect(narration).toContain("olive grove");
+    expect(narration).not.toContain("Imported URL");
+    expect(narration).not.toContain("candidate listing pattern");
+    expect(narration).not.toContain("location signal");
+  });
 });

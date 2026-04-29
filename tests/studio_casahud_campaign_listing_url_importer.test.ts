@@ -66,7 +66,8 @@ function buildCampaign(): CasaHudCampaign {
     nextPhase: {
       key: "property_discovery",
       label: "Find matching properties",
-      detail: "Find matching properties next.",
+      detail:
+        "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -112,7 +113,7 @@ describe("CasaHUD campaign listing URL importer", () => {
             <head>
               <title>Apartment in Tropea - idealista.it</title>
               <meta property="og:title" content="Apartment in Tropea" />
-              <meta property="og:description" content="EUR 284000 apartment in Tropea with 2 bedrooms, 2 bathrooms, 88 sqm." />
+              <meta property="og:description" content="EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm." />
               <meta property="og:image" content="https://images.example.com/tropea-og.jpg" />
               <link rel="canonical" href="https://www.idealista.it/en/annuncio/123" />
             </head>
@@ -133,12 +134,23 @@ describe("CasaHUD campaign listing URL importer", () => {
     expect(result.importedCandidates[0]?.provider).toBe("idealista");
     expect(result.importedCandidates[0]?.sourceLabel).toBe("Idealista");
     expect(result.importedCandidates[0]?.title).toBe("Apartment in Tropea");
-    expect(result.importedCandidates[0]?.locationText).toBe("Tropea");
+    expect(result.importedCandidates[0]?.locationText).toBe("Tropea, Calabria, Italy");
     expect(result.importedCandidates[0]?.price).toBe(284000);
+    expect(result.importedCandidates[0]?.bedrooms).toBe(2);
+    expect(result.importedCandidates[0]?.bathrooms).toBe(2);
+    expect(result.importedCandidates[0]?.sizeSqm).toBe(88);
     expect(result.importedCandidates[0]?.featuredImageUrl).toBe("https://images.example.com/tropea-og.jpg");
     expect(result.importedCandidates[0]?.canonicalUrl).toBe("https://www.idealista.it/en/annuncio/123");
     expect(result.importedCandidates[0]?.imageUrls).toEqual(["https://images.example.com/tropea-og.jpg"]);
-    expect(result.importedCandidates[0]?.needsReviewFields).toEqual([]);
+    expect(result.importedCandidates[0]?.preliminaryMatchNotes).not.toContain("live listing URL");
+    expect(result.importedCandidates[0]?.needsReviewFields).toEqual([
+      "rooms",
+      "land_size",
+      "floor",
+      "parking",
+      "condition",
+      "energy",
+    ]);
   });
 
   it("marks unsafe protocols as invalid", async () => {
@@ -186,7 +198,7 @@ describe("CasaHUD campaign listing URL importer", () => {
     expect(result.results[0]?.status).toBe("duplicate");
   });
 
-  it("creates a review-needed candidate when source metadata is unavailable", async () => {
+  it("returns a failed result instead of importing a blank candidate when extraction is blocked", async () => {
     const fetchFn = vi.fn(async (input: string) => mockHtmlResponse(input, "<html><head></head><body></body></html>", 403));
 
     const result = await importCasaHudListingUrls({
@@ -196,15 +208,38 @@ describe("CasaHUD campaign listing URL importer", () => {
       importedAt: "2026-04-29T10:00:00.000Z",
     });
 
+    expect(result.importedCount).toBe(0);
+    expect(result.failedCount).toBe(1);
+    expect(result.results[0]?.status).toBe("failed");
+    expect(result.results[0]?.reason).toContain("blocked");
+    expect(result.results[0]?.warnings.join(" ")).toContain("HTTP 403");
+  });
+
+  it("skips a second URL when the extractor resolves to an existing canonical URL", async () => {
+    const fetchFn = vi.fn(async () =>
+      mockHtmlResponse(
+        "https://www.idealista.it/en/annuncio/123",
+        `
+          <html>
+            <head>
+              <meta property="og:title" content="Apartment in Tropea" />
+              <meta property="og:description" content="EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm." />
+              <link rel="canonical" href="https://www.idealista.it/en/annuncio/123" />
+            </head>
+          </html>
+        `,
+      ),
+    );
+
+    const result = await importCasaHudListingUrls({
+      campaign: buildCampaign(),
+      rawUrls: "https://example.com/redirected\nhttps://www.idealista.it/en/annuncio/123",
+      fetchFn,
+      importedAt: "2026-04-29T10:00:00.000Z",
+    });
+
     expect(result.importedCount).toBe(1);
-    expect(result.importedCandidates[0]?.title).toContain("Imported listing from Immobiliare");
-    expect(result.importedCandidates[0]?.needsReviewFields).toEqual([
-      "price",
-      "location",
-      "property_type",
-      "bedrooms_bathrooms",
-      "size",
-    ]);
-    expect(result.importedCandidates[0]?.extractionStatus).toBe("failed");
+    expect(result.duplicateCount).toBe(1);
+    expect(result.results[1]?.status).toBe("duplicate");
   });
 });

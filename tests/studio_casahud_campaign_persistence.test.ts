@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
-import type { CasaHudCampaignMetadata } from "@/lib/studio/domara/campaigns";
+import type { CasaHudCampaignMetadata, CasaHudListingNeedsReviewField } from "@/lib/studio/domara/campaigns";
 
 type StoredProjectRow = {
   id: string;
@@ -587,22 +587,31 @@ describe("CasaHUD campaign persistence", () => {
       featuredImageUrl: "https://images.example.com/imported-1.jpg",
       metadataImageUrl: "https://images.example.com/imported-1.jpg",
       metadataTitle: "Apartment in Tropea",
-      metadataDescription: "EUR 284000 apartment in Tropea.",
+      metadataDescription: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
       canonicalUrl: "https://www.idealista.it/en/annuncio/123",
       extractionStatus: "partial" as const,
-      extractionWarnings: ["Property type needs review."],
-      needsReviewFields: ["property_type"] as const,
+      extractionProvider: "idealista_generic",
+      extractionFields: ["title", "price", "locationText", "bedrooms", "bathrooms", "interiorSizeSqm", "featuredImageUrl"],
+      extractionWarnings: ["Floor details need review."],
+      needsReviewFields: ["rooms", "land_size", "floor", "parking", "condition", "energy"] satisfies CasaHudListingNeedsReviewField[],
       title: "Apartment in Tropea",
-      locationText: "Tropea",
+      locationText: "Tropea, Calabria, Italy",
       price: 284000,
       currency: "EUR",
-      descriptionSnippet: "EUR 284000 apartment in Tropea.",
-      features: [],
+      bedrooms: 2,
+      bathrooms: 2,
+      sizeSqm: 88,
+      descriptionSnippet: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
+      summary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      imageStatus: "available" as const,
+      casaHudShortSummary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      casaHudNarrationSeed: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+      features: ["Apartment", "2 bedrooms", "2 bathrooms", "88 m² interior"],
       imageUrls: ["https://images.example.com/imported-1.jpg"],
       imageCount: 1,
       photoAvailability: "limited" as const,
       discoveredAt: "2026-04-29T10:00:00.000Z",
-      preliminaryMatchNotes: "Imported from a live listing URL with enough public detail to review in the shortlist.",
+      preliminaryMatchNotes: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
     };
 
     const updated = campaigns.applyCasaHudImportedListingCandidates(created, {
@@ -617,6 +626,13 @@ describe("CasaHUD campaign persistence", () => {
     expect(reopened?.listingCandidates[0]?.sourceType).toBe("imported_url");
     expect(reopened?.listingCandidates[0]?.sourceLabel).toBe("Idealista");
     expect(reopened?.listingCandidates[0]?.metadataImageUrl).toBe("https://images.example.com/imported-1.jpg");
-    expect(reopened?.listingCandidates[0]?.needsReviewFields).toEqual(["property_type"]);
+    expect(reopened?.listingCandidates[0]?.needsReviewFields).toEqual([
+      "rooms",
+      "land_size",
+      "floor",
+      "parking",
+      "condition",
+      "energy",
+    ]);
   });
 });

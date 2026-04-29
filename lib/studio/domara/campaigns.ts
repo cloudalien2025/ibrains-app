@@ -115,13 +115,22 @@ export type CasaHudCampaignYouTubePackageStatus = CasaHudYouTubePackageStatus;
 
 export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample" | "generic";
 export type CasaHudListingSourceType = "official_api" | "imported_url" | "sample_pattern";
-export type CasaHudListingExtractionStatus = "extracted" | "partial" | "failed";
+export type CasaHudListingExtractionStatus = "extracted" | "partial" | "failed" | "blocked_or_unavailable";
+export type CasaHudListingImageStatus = "available" | "missing" | "invalid";
 export type CasaHudListingNeedsReviewField =
   | "price"
   | "location"
   | "property_type"
   | "bedrooms_bathrooms"
-  | "size";
+  | "size"
+  | "rooms"
+  | "land_size"
+  | "floor"
+  | "parking"
+  | "condition"
+  | "energy"
+  | "images"
+  | "summary";
 
 export type CasaHudListingSearchCriteria = {
   operation: "sale";
@@ -159,9 +168,12 @@ export type CasaHudListingCandidate = {
   metadataImageUrl?: string;
   canonicalUrl?: string;
   extractionStatus?: CasaHudListingExtractionStatus;
+  extractionProvider?: string;
+  extractionFields?: string[];
   extractionWarnings?: string[];
   needsReviewFields?: CasaHudListingNeedsReviewField[];
   title: string;
+  addressText?: string;
   locationText: string;
   country?: string;
   region?: string;
@@ -169,10 +181,34 @@ export type CasaHudListingCandidate = {
   price?: number;
   currency?: string;
   propertyType?: string;
+  rooms?: number;
   bedrooms?: number;
   bathrooms?: number;
   sizeSqm?: number;
+  commercialSurfaceSqm?: number;
+  landSizeSqm?: number;
+  floorCount?: number;
+  floorText?: string;
+  garageParking?: string;
+  balcony?: boolean;
+  terrace?: boolean;
+  furnished?: string;
+  condition?: string;
+  heating?: string;
+  energyClass?: string;
+  pricePerSquareMeter?: number;
+  referenceCode?: string;
+  updatedDate?: string;
+  photoCount?: number;
+  floorPlanCount?: number;
   descriptionSnippet?: string;
+  summary?: string;
+  keyFeatures?: string[];
+  lifestyleHighlights?: string[];
+  imageStatus?: CasaHudListingImageStatus;
+  casaHudDisplayTitle?: string;
+  casaHudShortSummary?: string;
+  casaHudNarrationSeed?: string;
   features: string[];
   imageUrls: string[];
   images?: unknown[];
@@ -186,7 +222,7 @@ export type CasaHudListingCandidate = {
     latitude: number;
     longitude: number;
   };
-  rawProviderMetadata?: Record<string, string | number | boolean | null>;
+  rawProviderMetadata?: Record<string, unknown>;
   discoveredAt: string;
   preliminaryMatchNotes: string;
 };
@@ -600,7 +636,11 @@ function isListingSourceType(value: unknown): value is CasaHudListingSourceType 
 }
 
 function isListingExtractionStatus(value: unknown): value is CasaHudListingExtractionStatus {
-  return value === "extracted" || value === "partial" || value === "failed";
+  return value === "extracted" || value === "partial" || value === "failed" || value === "blocked_or_unavailable";
+}
+
+function isListingImageStatus(value: unknown): value is CasaHudListingImageStatus {
+  return value === "available" || value === "missing" || value === "invalid";
 }
 
 function isListingNeedsReviewField(value: unknown): value is CasaHudListingNeedsReviewField {
@@ -609,7 +649,15 @@ function isListingNeedsReviewField(value: unknown): value is CasaHudListingNeeds
     value === "location" ||
     value === "property_type" ||
     value === "bedrooms_bathrooms" ||
-    value === "size"
+    value === "size" ||
+    value === "rooms" ||
+    value === "land_size" ||
+    value === "floor" ||
+    value === "parking" ||
+    value === "condition" ||
+    value === "energy" ||
+    value === "images" ||
+    value === "summary"
   );
 }
 
@@ -671,19 +719,46 @@ function isListingCandidate(value: unknown): value is CasaHudListingCandidate {
     (value.metadataImageUrl === undefined || isNonEmptyString(value.metadataImageUrl)) &&
     (value.canonicalUrl === undefined || isNonEmptyString(value.canonicalUrl)) &&
     (value.extractionStatus === undefined || isListingExtractionStatus(value.extractionStatus)) &&
+    (value.extractionProvider === undefined || isNonEmptyString(value.extractionProvider)) &&
+    (value.extractionFields === undefined || isStringArray(value.extractionFields)) &&
     (value.extractionWarnings === undefined || isStringArray(value.extractionWarnings)) &&
     (value.needsReviewFields === undefined ||
       (Array.isArray(value.needsReviewFields) && value.needsReviewFields.every((field) => isListingNeedsReviewField(field)))) &&
+    (value.addressText === undefined || isNonEmptyString(value.addressText)) &&
     (value.country === undefined || isNonEmptyString(value.country)) &&
     (value.region === undefined || isNonEmptyString(value.region)) &&
     (value.city === undefined || isNonEmptyString(value.city)) &&
     (value.price === undefined || isFiniteNumber(value.price)) &&
     (value.currency === undefined || isNonEmptyString(value.currency)) &&
     (value.propertyType === undefined || isNonEmptyString(value.propertyType)) &&
+    (value.rooms === undefined || isFiniteNumber(value.rooms)) &&
     (value.bedrooms === undefined || isFiniteNumber(value.bedrooms)) &&
     (value.bathrooms === undefined || isFiniteNumber(value.bathrooms)) &&
     (value.sizeSqm === undefined || isFiniteNumber(value.sizeSqm)) &&
+    (value.commercialSurfaceSqm === undefined || isFiniteNumber(value.commercialSurfaceSqm)) &&
+    (value.landSizeSqm === undefined || isFiniteNumber(value.landSizeSqm)) &&
+    (value.floorCount === undefined || isFiniteNumber(value.floorCount)) &&
+    (value.floorText === undefined || isNonEmptyString(value.floorText)) &&
+    (value.garageParking === undefined || isNonEmptyString(value.garageParking)) &&
+    (value.balcony === undefined || typeof value.balcony === "boolean") &&
+    (value.terrace === undefined || typeof value.terrace === "boolean") &&
+    (value.furnished === undefined || isNonEmptyString(value.furnished)) &&
+    (value.condition === undefined || isNonEmptyString(value.condition)) &&
+    (value.heating === undefined || isNonEmptyString(value.heating)) &&
+    (value.energyClass === undefined || isNonEmptyString(value.energyClass)) &&
+    (value.pricePerSquareMeter === undefined || isFiniteNumber(value.pricePerSquareMeter)) &&
+    (value.referenceCode === undefined || isNonEmptyString(value.referenceCode)) &&
+    (value.updatedDate === undefined || isNonEmptyString(value.updatedDate)) &&
+    (value.photoCount === undefined || isFiniteNumber(value.photoCount)) &&
+    (value.floorPlanCount === undefined || isFiniteNumber(value.floorPlanCount)) &&
     (value.descriptionSnippet === undefined || isNonEmptyString(value.descriptionSnippet)) &&
+    (value.summary === undefined || isNonEmptyString(value.summary)) &&
+    (value.keyFeatures === undefined || isStringArray(value.keyFeatures)) &&
+    (value.lifestyleHighlights === undefined || isStringArray(value.lifestyleHighlights)) &&
+    (value.imageStatus === undefined || isListingImageStatus(value.imageStatus)) &&
+    (value.casaHudDisplayTitle === undefined || isNonEmptyString(value.casaHudDisplayTitle)) &&
+    (value.casaHudShortSummary === undefined || isNonEmptyString(value.casaHudShortSummary)) &&
+    (value.casaHudNarrationSeed === undefined || isNonEmptyString(value.casaHudNarrationSeed)) &&
     (value.images === undefined || Array.isArray(value.images)) &&
     (value.photos === undefined || Array.isArray(value.photos)) &&
     (value.gallery === undefined || Array.isArray(value.gallery)) &&

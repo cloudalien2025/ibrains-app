@@ -81,6 +81,8 @@ export async function POST(
       importedCount: imported.importedCount,
       duplicateCount: imported.duplicateCount,
       invalidCount: imported.invalidCount,
+      failedCount: imported.failedCount,
+      skippedCount: imported.skippedCount,
       results: imported.results.map((result) => ({
         inputUrl: result.inputUrl,
         normalizedUrl: result.normalizedUrl,
@@ -90,7 +92,7 @@ export async function POST(
         candidateId: result.candidate?.id,
       })),
       warnings: imported.warnings,
-      message: `Imported ${imported.importedCount} listing URL${imported.importedCount === 1 ? "" : "s"}.`,
+      message: `Imported ${imported.importedCount} listing URL${imported.importedCount === 1 ? "" : "s"} and skipped ${imported.skippedCount}.`,
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {

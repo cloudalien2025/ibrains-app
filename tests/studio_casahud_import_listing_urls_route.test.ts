@@ -68,7 +68,8 @@ function buildCampaign(): CasaHudCampaign {
     nextPhase: {
       key: "property_discovery",
       label: "Find matching properties",
-      detail: "Find matching properties next.",
+      detail:
+        "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -105,22 +106,31 @@ const importedCandidate: CasaHudListingCandidate = {
   featuredImageUrl: "https://images.example.com/imported-1.jpg",
   metadataImageUrl: "https://images.example.com/imported-1.jpg",
   metadataTitle: "Apartment in Tropea",
-  metadataDescription: "EUR 284000 apartment in Tropea.",
+  metadataDescription: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
   canonicalUrl: "https://www.idealista.it/en/annuncio/123",
   extractionStatus: "partial",
+  extractionProvider: "idealista_generic",
+  extractionFields: ["title", "price", "locationText", "bedrooms", "bathrooms", "interiorSizeSqm", "featuredImageUrl"],
   extractionWarnings: [],
-  needsReviewFields: ["property_type"],
+  needsReviewFields: ["rooms", "land_size", "floor", "parking", "condition", "energy"],
   title: "Apartment in Tropea",
-  locationText: "Tropea",
+  locationText: "Tropea, Calabria, Italy",
   price: 284000,
   currency: "EUR",
-  descriptionSnippet: "EUR 284000 apartment in Tropea.",
-  features: [],
+  bedrooms: 2,
+  bathrooms: 2,
+  sizeSqm: 88,
+  descriptionSnippet: "EUR 284000 apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, and 88 sqm.",
+  summary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+  imageStatus: "available" as const,
+  casaHudShortSummary: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+  casaHudNarrationSeed: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
+  features: ["Apartment", "2 bedrooms", "2 bathrooms", "88 m² interior"],
   imageUrls: ["https://images.example.com/imported-1.jpg"],
   imageCount: 1,
   photoAvailability: "limited",
   discoveredAt: "2026-04-29T10:00:00.000Z",
-  preliminaryMatchNotes: "Imported from a live listing URL with enough public detail to review in the shortlist.",
+  preliminaryMatchNotes: "An apartment in Tropea, Calabria, Italy with 2 bedrooms, 2 bathrooms, 88 m² of interior space, priced at €284,000.",
 };
 
 const mocks = vi.hoisted(() => ({
@@ -182,6 +192,8 @@ describe("CasaHUD import listing URLs route", () => {
       importedCount: 1,
       duplicateCount: 0,
       invalidCount: 0,
+      failedCount: 0,
+      skippedCount: 0,
       warnings: [],
       importedAt: "2026-04-29T10:00:00.000Z",
     });
@@ -198,6 +210,8 @@ describe("CasaHUD import listing URLs route", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.importedCount).toBe(1);
+    expect(payload.failedCount).toBe(0);
+    expect(payload.skippedCount).toBe(0);
     expect(payload.campaign.listingCandidates[0].sourceType).toBe("imported_url");
     expect(payload.campaign.listingCandidates[0].featuredImageUrl).toBe(importedCandidate.featuredImageUrl);
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledOnce();
@@ -218,6 +232,8 @@ describe("CasaHUD import listing URLs route", () => {
       importedCount: 0,
       duplicateCount: 1,
       invalidCount: 0,
+      failedCount: 0,
+      skippedCount: 1,
       warnings: [],
       importedAt: "2026-04-29T10:00:00.000Z",
     });
@@ -233,5 +249,39 @@ describe("CasaHUD import listing URLs route", () => {
 
     expect(response.status).toBe(409);
     expect(payload.error.code).toBe("DUPLICATE_URLS");
+  });
+
+  it("returns a safe no-usable-urls error when extraction fails without importing a blank candidate", async () => {
+    mocks.importCasaHudListingUrls.mockResolvedValue({
+      results: [
+        {
+          inputUrl: "https://www.immobiliare.it/annunci/456",
+          normalizedUrl: "https://www.immobiliare.it/annunci/456",
+          status: "failed",
+          warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
+          reason: "Source page blocked or unavailable for safe extraction.",
+        },
+      ],
+      importedCandidates: [],
+      importedCount: 0,
+      duplicateCount: 0,
+      invalidCount: 0,
+      failedCount: 1,
+      skippedCount: 1,
+      warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
+      importedAt: "2026-04-29T10:00:00.000Z",
+    });
+
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/import-listing-urls/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-project-import-route/import-listing-urls", {
+      method: "POST",
+      body: JSON.stringify({ rawUrls: "https://www.immobiliare.it/annunci/456" }),
+    });
+
+    const response = await route.POST(request, { params: { id: "casahud-project-import-route" } });
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.error.code).toBe("NO_USABLE_URLS");
   });
 });
