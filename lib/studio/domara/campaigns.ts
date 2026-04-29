@@ -113,7 +113,15 @@ export type CasaHudCampaignScriptGenerationStatus = CasaHudScriptGenerationStatu
 export type CasaHudCampaignMediaPlanningStatus = CasaHudMediaPlanningStatus;
 export type CasaHudCampaignYouTubePackageStatus = CasaHudYouTubePackageStatus;
 
-export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample";
+export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample" | "generic";
+export type CasaHudListingSourceType = "official_api" | "imported_url" | "sample_pattern";
+export type CasaHudListingExtractionStatus = "extracted" | "partial" | "failed";
+export type CasaHudListingNeedsReviewField =
+  | "price"
+  | "location"
+  | "property_type"
+  | "bedrooms_bathrooms"
+  | "size";
 
 export type CasaHudListingSearchCriteria = {
   operation: "sale";
@@ -136,12 +144,23 @@ export type CasaHudListingSearchCriteria = {
 export type CasaHudListingCandidate = {
   id: string;
   provider: CasaHudListingProvider;
+  sourceType?: CasaHudListingSourceType;
   providerListingId?: string;
   sourceUrl?: string;
+  sourceHost?: string;
+  sourceLabel?: string;
+  importedAt?: string;
   featuredImageUrl?: string;
   thumbnailUrl?: string;
   sourceThumbnailUrl?: string;
   mediaUrl?: string;
+  metadataTitle?: string;
+  metadataDescription?: string;
+  metadataImageUrl?: string;
+  canonicalUrl?: string;
+  extractionStatus?: CasaHudListingExtractionStatus;
+  extractionWarnings?: string[];
+  needsReviewFields?: CasaHudListingNeedsReviewField[];
   title: string;
   locationText: string;
   country?: string;
@@ -573,7 +592,25 @@ function isListingValidationStatus(value: unknown): value is CasaHudListingValid
 }
 
 function isListingProvider(value: unknown): value is CasaHudListingProvider {
-  return value === "idealista" || value === "immobiliare" || value === "casahud_sample";
+  return value === "idealista" || value === "immobiliare" || value === "casahud_sample" || value === "generic";
+}
+
+function isListingSourceType(value: unknown): value is CasaHudListingSourceType {
+  return value === "official_api" || value === "imported_url" || value === "sample_pattern";
+}
+
+function isListingExtractionStatus(value: unknown): value is CasaHudListingExtractionStatus {
+  return value === "extracted" || value === "partial" || value === "failed";
+}
+
+function isListingNeedsReviewField(value: unknown): value is CasaHudListingNeedsReviewField {
+  return (
+    value === "price" ||
+    value === "location" ||
+    value === "property_type" ||
+    value === "bedrooms_bathrooms" ||
+    value === "size"
+  );
 }
 
 function isListingSearchCriteria(value: unknown): value is CasaHudListingSearchCriteria {
@@ -619,12 +656,24 @@ function isListingCandidate(value: unknown): value is CasaHudListingCandidate {
     (value.photoAvailability === "available" || value.photoAvailability === "limited" || value.photoAvailability === "none") &&
     isNonEmptyString(value.discoveredAt) &&
     isNonEmptyString(value.preliminaryMatchNotes) &&
+    (value.sourceType === undefined || isListingSourceType(value.sourceType)) &&
     (value.providerListingId === undefined || isNonEmptyString(value.providerListingId)) &&
     (value.sourceUrl === undefined || isNonEmptyString(value.sourceUrl)) &&
+    (value.sourceHost === undefined || isNonEmptyString(value.sourceHost)) &&
+    (value.sourceLabel === undefined || isNonEmptyString(value.sourceLabel)) &&
+    (value.importedAt === undefined || isNonEmptyString(value.importedAt)) &&
     (value.featuredImageUrl === undefined || isNonEmptyString(value.featuredImageUrl)) &&
     (value.thumbnailUrl === undefined || isNonEmptyString(value.thumbnailUrl)) &&
     (value.sourceThumbnailUrl === undefined || isNonEmptyString(value.sourceThumbnailUrl)) &&
     (value.mediaUrl === undefined || isNonEmptyString(value.mediaUrl)) &&
+    (value.metadataTitle === undefined || isNonEmptyString(value.metadataTitle)) &&
+    (value.metadataDescription === undefined || isNonEmptyString(value.metadataDescription)) &&
+    (value.metadataImageUrl === undefined || isNonEmptyString(value.metadataImageUrl)) &&
+    (value.canonicalUrl === undefined || isNonEmptyString(value.canonicalUrl)) &&
+    (value.extractionStatus === undefined || isListingExtractionStatus(value.extractionStatus)) &&
+    (value.extractionWarnings === undefined || isStringArray(value.extractionWarnings)) &&
+    (value.needsReviewFields === undefined ||
+      (Array.isArray(value.needsReviewFields) && value.needsReviewFields.every((field) => isListingNeedsReviewField(field)))) &&
     (value.country === undefined || isNonEmptyString(value.country)) &&
     (value.region === undefined || isNonEmptyString(value.region)) &&
     (value.city === undefined || isNonEmptyString(value.city)) &&
@@ -1024,6 +1073,83 @@ export function applyCasaHudListingDiscovery(
     futureState: {
       ...campaign.futureState,
       listingCandidates: discovery.listingCandidates,
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+      locationIntelligence: null,
+      mapPoiBundle: null,
+      script: null,
+      mediaPlan: null,
+      storyboard: null,
+      packaging: null,
+      renderStatus: null,
+      reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
+    },
+  };
+}
+
+export function applyCasaHudImportedListingCandidates(
+  campaign: CasaHudCampaign,
+  input: {
+    listingCandidates: CasaHudListingCandidate[];
+    discoveredAt: string;
+    warnings: string[];
+  },
+): CasaHudCampaign {
+  const updatedAt = input.discoveredAt || nowIso();
+  const emptyLocationData = createEmptyCasaHudLocationData();
+  const emptyScriptData = createEmptyCasaHudScriptData();
+  const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
+  const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
+  const importedCount = input.listingCandidates.filter((listing) => listing.sourceType === "imported_url").length;
+  const sampleCount = input.listingCandidates.filter((listing) => listing.sourceType === "sample_pattern").length;
+  const officialCount = input.listingCandidates.filter((listing) => listing.sourceType === "official_api").length;
+  const existingSummary = campaign.discoverySummary;
+
+  return {
+    ...campaign,
+    status: "listing_candidates_discovered",
+    listingCandidates: input.listingCandidates,
+    discoverySummary: {
+      headline:
+        importedCount > 0
+          ? `Imported ${importedCount} property URL${importedCount === 1 ? "" : "s"} into the shortlist for "${campaign.selectedViralTitle}".`
+          : existingSummary?.headline || `Prepared ${input.listingCandidates.length} properties for "${campaign.selectedViralTitle}".`,
+      criteriaSummary:
+        existingSummary?.criteriaSummary || "User-provided listing URLs are ready for shortlist review and fact-checking.",
+      providerSummary:
+        importedCount > 0
+          ? `Imported URLs are clearly labeled as user-provided sources. Review missing facts before moving them deeper into the story.`
+          : existingSummary?.providerSummary || "Shortlist sources are ready for review.",
+      candidateCount: input.listingCandidates.length,
+      liveCandidateCount: officialCount,
+      fallbackCandidateCount: sampleCount,
+      fallbackUsed: sampleCount > 0,
+      warnings: Array.from(new Set([...(existingSummary?.warnings || []), ...input.warnings])),
+      discoveredAt: updatedAt,
+    },
+    listingDiscoveryStatus: "listing_candidates_discovered",
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    listingValidationStatus: "not_started",
+    listingValidationSummary: null,
+    titleSupportConfidence: null,
+    validationWarnings: [],
+    ...emptyLocationData,
+    ...emptyScriptData,
+    ...emptyMediaPlanData,
+    ...emptyYouTubePackageData,
+    ...emptyExecutionData,
+    nextPhase: createListingValidationNextPhase(),
+    updatedAt,
+    futureState: {
+      ...campaign.futureState,
+      listingCandidates: input.listingCandidates,
       approvedListings: [],
       rejectedListings: [],
       listingRankOrder: [],

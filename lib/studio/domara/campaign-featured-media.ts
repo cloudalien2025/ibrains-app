@@ -24,7 +24,8 @@ export type CasaHudFeaturedPropertyMedia = {
 const SOURCE_LABEL_OVERRIDES: Record<string, string> = {
   idealista: "Idealista",
   immobiliare: "Immobiliare",
-  casahud_sample: "CasaHUD listing patterns",
+  casahud_sample: "Sample Pattern",
+  generic: "Source domain",
   listing_source_media: "Listing source media",
   location_visual_plan: "Location visual plan",
   casahud_visual_placeholders: "CasaHUD media planning",
@@ -180,12 +181,13 @@ function placeholderMedia(listing: CasaHudListingCandidate | CasaHudValidatedLis
 
 function imageFromAsset(listing: CasaHudListingCandidate | CasaHudValidatedListing, asset: CasaHudVisualAsset) {
   const kind: CasaHudFeaturedPropertyMediaKind = asset.type === "listing_image" ? "real_image" : "media_asset";
+  const isImportedUrl = listing.sourceType === "imported_url";
   return buildMedia({
     kind,
     url: asset.sourceUrl || null,
-    stateLabel: asset.type === "listing_image" ? "Listing image" : "Source thumbnail",
+    stateLabel: asset.type === "listing_image" ? (isImportedUrl ? "Imported URL image" : "Listing image") : "Source preview image",
     source: humanizeLabel(asset.sourceProvider, humanizeLabel(listing.provider, "Listing source")),
-    alt: `${listing.title} ${asset.type === "listing_image" ? "listing image" : "source thumbnail"}`,
+    alt: `${listing.title} ${asset.type === "listing_image" ? (isImportedUrl ? "imported URL image" : "listing image") : "source preview image"}`,
     warning: asset.warning,
   });
 }
@@ -234,16 +236,21 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(metadataRecord.primaryImage) ||
     asNonEmptyString(metadataRecord.primary_image) ||
     asNonEmptyString(metadataRecord.mediaUrl) ||
-    asNonEmptyString(metadataRecord.media_url);
+    asNonEmptyString(metadataRecord.media_url) ||
+    asNonEmptyString(listingRecord.metadataImageUrl) ||
+    asNonEmptyString(listingRecord.metadata_image_url) ||
+    asNonEmptyString(metadataRecord.metadataImageUrl) ||
+    asNonEmptyString(metadataRecord.metadata_image_url);
 
   if (explicitFeaturedImage) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
+    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: explicitFeaturedImage,
-      stateLabel: "Listing image",
+      stateLabel: importedLabel,
       source: sourceLabel,
-      alt: `${listing.title} listing image`,
+      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
     });
   }
 
@@ -253,12 +260,13 @@ export function deriveCasaHudFeaturedPropertyMedia(
     firstImageUrl(metadataRecord.image_urls);
   if (imageUrl) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
+    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: imageUrl,
-      stateLabel: "Listing image",
+      stateLabel: importedLabel,
       source: sourceLabel,
-      alt: `${listing.title} listing image`,
+      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
     });
   }
 
@@ -275,12 +283,13 @@ export function deriveCasaHudFeaturedPropertyMedia(
     readFirstImageFromArray(metadataRecord.photo_urls);
   if (structuredImage) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
+    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: structuredImage,
-      stateLabel: "Listing image",
+      stateLabel: importedLabel,
       source: sourceLabel,
-      alt: `${listing.title} listing image`,
+      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
     });
   }
 
@@ -307,9 +316,9 @@ export function deriveCasaHudFeaturedPropertyMedia(
     return buildMedia({
       kind: "thumbnail",
       url: sourceThumbnail,
-      stateLabel: "Source thumbnail",
+      stateLabel: listing.sourceType === "imported_url" ? "Source preview image" : "Source thumbnail",
       source: sourceLabel,
-      alt: `${listing.title} source thumbnail`,
+      alt: `${listing.title} ${listing.sourceType === "imported_url" ? "source preview image" : "source thumbnail"}`,
     });
   }
 

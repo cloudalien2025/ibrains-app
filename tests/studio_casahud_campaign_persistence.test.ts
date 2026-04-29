@@ -570,4 +570,53 @@ describe("CasaHUD campaign persistence", () => {
     expect(summaries[0]?.publishStatus).toBe("blocked");
     expect(summaries[0]?.scheduleStatus).toBe("blocked");
   });
+
+  it("persists imported URL metadata on campaign listing candidates", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const importedCandidate = {
+      id: "imported-1",
+      provider: "idealista" as const,
+      sourceType: "imported_url" as const,
+      sourceUrl: "https://www.idealista.it/en/annuncio/123",
+      sourceHost: "idealista.it",
+      sourceLabel: "Idealista",
+      importedAt: "2026-04-29T10:00:00.000Z",
+      featuredImageUrl: "https://images.example.com/imported-1.jpg",
+      metadataImageUrl: "https://images.example.com/imported-1.jpg",
+      metadataTitle: "Apartment in Tropea",
+      metadataDescription: "EUR 284000 apartment in Tropea.",
+      canonicalUrl: "https://www.idealista.it/en/annuncio/123",
+      extractionStatus: "partial" as const,
+      extractionWarnings: ["Property type needs review."],
+      needsReviewFields: ["property_type"] as const,
+      title: "Apartment in Tropea",
+      locationText: "Tropea",
+      price: 284000,
+      currency: "EUR",
+      descriptionSnippet: "EUR 284000 apartment in Tropea.",
+      features: [],
+      imageUrls: ["https://images.example.com/imported-1.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited" as const,
+      discoveredAt: "2026-04-29T10:00:00.000Z",
+      preliminaryMatchNotes: "Imported from a live listing URL with enough public detail to review in the shortlist.",
+    };
+
+    const updated = campaigns.applyCasaHudImportedListingCandidates(created, {
+      listingCandidates: [importedCandidate],
+      discoveredAt: "2026-04-29T10:00:00.000Z",
+      warnings: [],
+    });
+
+    await repository.saveCasaHudCampaign(userId, updated);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.listingCandidates[0]?.sourceType).toBe("imported_url");
+    expect(reopened?.listingCandidates[0]?.sourceLabel).toBe("Idealista");
+    expect(reopened?.listingCandidates[0]?.metadataImageUrl).toBe("https://images.example.com/imported-1.jpg");
+    expect(reopened?.listingCandidates[0]?.needsReviewFields).toEqual(["property_type"]);
+  });
 });
