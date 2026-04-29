@@ -49,6 +49,20 @@ import {
   type CasaHudYouTubePackageData,
   type CasaHudYouTubePackageStatus,
 } from "@/lib/studio/domara/campaign-youtube-package";
+import type {
+  CasaHudApprovalStatus,
+  CasaHudExecutionData,
+  CasaHudExecutionRun,
+  CasaHudExecutionProviderStatus,
+  CasaHudPublishStatus,
+  CasaHudRenderOutput,
+  CasaHudRenderStatus,
+  CasaHudScheduleStatus,
+} from "@/lib/studio/domara/campaign-execution";
+import {
+  createEmptyCasaHudExecutionData,
+  parseCasaHudExecutionData,
+} from "@/lib/studio/domara/campaign-execution";
 import {
   buildCasaHudFutureScriptState,
   createEmptyCasaHudScriptData,
@@ -76,7 +90,7 @@ export const CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE = "phase_6_location_intelli
 export const CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE = "phase_5_listing_validation" as const;
 export const CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE = "phase_4_listing_discovery" as const;
 export const CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE = "phase_3_campaign_persistence" as const;
-const CASAHUD_CAMPAIGN_METADATA_VERSION = 7 as const;
+const CASAHUD_CAMPAIGN_METADATA_VERSION = 8 as const;
 
 export type CasaHudCampaignStatus =
   | "opportunity_generated"
@@ -87,7 +101,10 @@ export type CasaHudCampaignStatus =
   | "location_intelligence_completed"
   | "script_narrative_completed"
   | "media_planning_completed"
-  | "youtube_package_review_completed";
+  | "youtube_package_review_completed"
+  | "render_completed"
+  | "youtube_scheduled"
+  | "youtube_published";
 
 export type CasaHudListingDiscoveryStatus = "not_started" | "listing_candidates_discovered";
 export type CasaHudListingValidationStatus = "not_started" | "listing_candidates_validated";
@@ -278,10 +295,11 @@ export type CasaHudCampaignFutureState = {
   storyboard: CasaHudCampaignFutureStoryboardState | null;
   mediaPlan: CasaHudCampaignFutureMediaPlanState | null;
   packaging: CasaHudCampaignFuturePackagingState | null;
-  renderStatus: CasaHudRenderPlanStatus | null;
+  renderStatus: CasaHudRenderPlanStatus | CasaHudRenderStatus | null;
   reviewStatus: CasaHudReviewStatus | null;
-  publishStatus: null;
-  scheduleStatus: null;
+  approvalStatus?: CasaHudApprovalStatus | null;
+  publishStatus: CasaHudPublishStatus | null;
+  scheduleStatus: CasaHudScheduleStatus | null;
 };
 
 export type CasaHudCampaign = {
@@ -371,7 +389,33 @@ export type CasaHudCampaign = {
   renderPlan: CasaHudRenderPlan | null;
   previewPackage: CasaHudPreviewPackage | null;
   renderBlockers: string[];
+  approvalStatus: CasaHudApprovalStatus;
+  approvedAt: string | null;
+  approvedBy: string | null;
+  renderStatus: CasaHudRenderStatus;
+  renderJobId: string | null;
+  renderOutput: CasaHudRenderOutput | null;
+  renderOutputUrl: string | null;
+  renderOutputPath: string | null;
+  renderProviderStatus: CasaHudExecutionProviderStatus | null;
   renderWarnings: string[];
+  renderErrors: string[];
+  renderRunHistory: CasaHudExecutionRun[];
+  publishStatus: CasaHudPublishStatus;
+  publishedVideoId: string | null;
+  publishedVideoUrl: string | null;
+  publishProviderStatus: CasaHudExecutionProviderStatus | null;
+  publishWarnings: string[];
+  publishErrors: string[];
+  publishRunHistory: CasaHudExecutionRun[];
+  scheduleStatus: CasaHudScheduleStatus;
+  scheduledPublishAt: string | null;
+  scheduleProviderStatus: CasaHudExecutionProviderStatus | null;
+  scheduleWarnings: string[];
+  scheduleErrors: string[];
+  scheduleRunHistory: CasaHudExecutionRun[];
+  executionRunHistory: CasaHudExecutionRun[];
+  finalState: CasaHudExecutionData["finalState"];
   nextPhase: CasaHudCampaignNextPhase;
   createdAt: string;
   updatedAt: string;
@@ -398,6 +442,10 @@ export type CasaHudCampaignSummary = {
   mediaPlanningStatus: CasaHudCampaignMediaPlanningStatus;
   youtubePackageStatus: CasaHudCampaignYouTubePackageStatus;
   reviewStatus: CasaHudReviewStatus;
+  approvalStatus?: CasaHudApprovalStatus;
+  renderStatus?: CasaHudRenderStatus;
+  publishStatus?: CasaHudPublishStatus;
+  scheduleStatus?: CasaHudScheduleStatus;
   discoverySummary?: string;
   validationSummary?: string;
   locationSummary?: string;
@@ -500,7 +548,10 @@ function isCampaignStatus(value: unknown): value is CasaHudCampaignStatus {
     value === "location_intelligence_completed" ||
     value === "script_narrative_completed" ||
     value === "media_planning_completed" ||
-    value === "youtube_package_review_completed"
+    value === "youtube_package_review_completed" ||
+    value === "render_completed" ||
+    value === "youtube_scheduled" ||
+    value === "youtube_published"
   );
 }
 
@@ -784,6 +835,7 @@ function createFutureState(): CasaHudCampaignFutureState {
     packaging: null,
     renderStatus: null,
     reviewStatus: null,
+    approvalStatus: null,
     publishStatus: null,
     scheduleStatus: null,
   };
@@ -868,6 +920,7 @@ export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity:
   const emptyScriptData = createEmptyCasaHudScriptData();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     id: stableCasaHudId("casahud-project", `${userId}:${selectedViralTitle}:${timestamp}:${nonce}`),
@@ -903,6 +956,7 @@ export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity:
     ...emptyScriptData,
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createPropertyDiscoveryNextPhase(),
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -925,6 +979,7 @@ export function applyCasaHudListingDiscovery(
   const emptyScriptData = createEmptyCasaHudScriptData();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
@@ -945,6 +1000,7 @@ export function applyCasaHudListingDiscovery(
     ...emptyScriptData,
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createListingValidationNextPhase(),
     updatedAt,
     futureState: {
@@ -961,6 +1017,9 @@ export function applyCasaHudListingDiscovery(
       packaging: null,
       renderStatus: null,
       reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -981,6 +1040,7 @@ export function applyCasaHudListingValidation(
   const emptyScriptData = createEmptyCasaHudScriptData();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
@@ -996,6 +1056,7 @@ export function applyCasaHudListingValidation(
     ...emptyScriptData,
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createLocationIntelligenceNextPhase(),
     updatedAt,
     futureState: {
@@ -1011,6 +1072,9 @@ export function applyCasaHudListingValidation(
       packaging: null,
       renderStatus: null,
       reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -1023,6 +1087,7 @@ export function applyCasaHudLocationIntelligence(
   const emptyScriptData = createEmptyCasaHudScriptData();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
@@ -1031,6 +1096,7 @@ export function applyCasaHudLocationIntelligence(
     ...emptyScriptData,
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createScriptNarrativeGenerationNextPhase(),
     updatedAt,
     futureState: {
@@ -1043,6 +1109,9 @@ export function applyCasaHudLocationIntelligence(
       packaging: null,
       renderStatus: null,
       reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -1054,6 +1123,7 @@ export function applyCasaHudScriptNarrative(
   const updatedAt = nowIso();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
@@ -1061,6 +1131,7 @@ export function applyCasaHudScriptNarrative(
     ...script,
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createMediaPlanningAssetAssemblyNextPhase(),
     updatedAt,
     futureState: {
@@ -1071,6 +1142,9 @@ export function applyCasaHudScriptNarrative(
       packaging: null,
       renderStatus: null,
       reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -1081,12 +1155,14 @@ export function applyCasaHudMediaPlan(
 ): CasaHudCampaign {
   const updatedAt = nowIso();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
     status: "media_planning_completed",
     ...mediaPlan,
     ...emptyYouTubePackageData,
+    ...emptyExecutionData,
     nextPhase: createPackageReviewRenderPlanNextPhase(),
     updatedAt,
     futureState: {
@@ -1096,6 +1172,9 @@ export function applyCasaHudMediaPlan(
       packaging: null,
       renderStatus: null,
       reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -1105,11 +1184,13 @@ export function applyCasaHudYouTubePackage(
   packageData: CasaHudYouTubePackageData,
 ): CasaHudCampaign {
   const updatedAt = nowIso();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
     ...campaign,
     status: "youtube_package_review_completed",
     ...packageData,
+    ...emptyExecutionData,
     nextPhase: createRenderPublishScheduleNextPhase(),
     updatedAt,
     futureState: {
@@ -1117,6 +1198,47 @@ export function applyCasaHudYouTubePackage(
       packaging: buildCasaHudFuturePackagingState(packageData),
       renderStatus: packageData.renderPlanStatus === "not_started" ? null : packageData.renderPlanStatus,
       reviewStatus: packageData.reviewStatus === "not_started" ? null : packageData.reviewStatus,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
+    },
+  };
+}
+
+export function applyCasaHudExecutionUpdate(
+  campaign: CasaHudCampaign,
+  execution: CasaHudExecutionData,
+): CasaHudCampaign {
+  const updatedAt = nowIso();
+  const nextStatus: CasaHudCampaignStatus =
+    execution.publishStatus === "published"
+      ? "youtube_published"
+      : execution.scheduleStatus === "scheduled"
+        ? "youtube_scheduled"
+        : execution.renderStatus === "rendered"
+          ? "render_completed"
+          : execution.finalState === "blocked"
+            ? campaign.status
+            : "youtube_package_review_completed";
+
+  return {
+    ...campaign,
+    ...execution,
+    status: nextStatus,
+    nextPhase: createRenderPublishScheduleNextPhase(),
+    updatedAt,
+    futureState: {
+      ...campaign.futureState,
+      renderStatus:
+        execution.renderStatus !== "not_started"
+          ? execution.renderStatus
+          : campaign.renderPlanStatus === "not_started"
+            ? null
+            : campaign.renderPlanStatus,
+      reviewStatus: campaign.reviewStatus === "not_started" ? null : campaign.reviewStatus,
+      approvalStatus: execution.approvalStatus === "pending" ? null : execution.approvalStatus,
+      publishStatus: execution.publishStatus === "not_ready" ? null : execution.publishStatus,
+      scheduleStatus: execution.scheduleStatus === "not_scheduled" ? null : execution.scheduleStatus,
     },
   };
 }
@@ -1141,6 +1263,10 @@ export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCamp
     mediaPlanningStatus: campaign.mediaPlanningStatus,
     youtubePackageStatus: campaign.youtubePackageStatus,
     reviewStatus: campaign.reviewStatus,
+    approvalStatus: campaign.approvalStatus,
+    renderStatus: campaign.renderStatus,
+    publishStatus: campaign.publishStatus,
+    scheduleStatus: campaign.scheduleStatus,
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
@@ -1254,6 +1380,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
   const scriptData = parseCasaHudScriptData(campaign);
   const mediaData = parseCasaHudMediaPlanData(campaign);
   const packageData = parseCasaHudYouTubePackageData(campaign);
+  const executionData = parseCasaHudExecutionData(campaign);
 
   const normalizedCampaign: CasaHudCampaign = {
     id: campaign.id,
@@ -1292,6 +1419,7 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
     ...scriptData,
     ...mediaData,
     ...packageData,
+    ...executionData,
     nextPhase:
       packageData.youtubePackageStatus === "package_prepared"
         ? createRenderPublishScheduleNextPhase()
@@ -1322,10 +1450,16 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
       storyboard: buildCasaHudFutureStoryboardState(mediaData),
       mediaPlan: buildCasaHudFutureMediaPlanState(mediaData),
       packaging: buildCasaHudFuturePackagingState(packageData),
-      renderStatus: packageData.renderPlanStatus === "not_started" ? null : packageData.renderPlanStatus,
+      renderStatus:
+        executionData.renderStatus !== "not_started"
+          ? executionData.renderStatus
+          : packageData.renderPlanStatus === "not_started"
+            ? null
+            : packageData.renderPlanStatus,
       reviewStatus: packageData.reviewStatus === "not_started" ? null : packageData.reviewStatus,
-      publishStatus: null,
-      scheduleStatus: null,
+      approvalStatus: executionData.approvalStatus === "pending" ? null : executionData.approvalStatus,
+      publishStatus: executionData.publishStatus === "not_ready" ? null : executionData.publishStatus,
+      scheduleStatus: executionData.scheduleStatus === "not_scheduled" ? null : executionData.scheduleStatus,
     },
   };
 
@@ -1345,6 +1479,15 @@ export function parseCasaHudCampaignMetadata(value: unknown): CasaHudCampaignMet
   }
   if (packageData.youtubePackageStatus === "package_prepared") {
     normalizedCampaign.status = "youtube_package_review_completed";
+  }
+  if (executionData.renderStatus === "rendered") {
+    normalizedCampaign.status = "render_completed";
+  }
+  if (executionData.scheduleStatus === "scheduled") {
+    normalizedCampaign.status = "youtube_scheduled";
+  }
+  if (executionData.publishStatus === "published") {
+    normalizedCampaign.status = "youtube_published";
   }
 
   return {
