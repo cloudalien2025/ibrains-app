@@ -27,7 +27,7 @@ export class HeuristicYouTubeResearchProvider implements CasaHudYouTubeResearchP
       credentialRequired: true,
       query,
       opportunitySummary:
-        "YouTube API credentials are not connected, so CasaHUD is using built-in real-estate channel strategy heuristics instead of live ranking data.",
+        "YouTube API credentials are not connected, so CasaFlix is using built-in real-estate channel strategy heuristics instead of live ranking data.",
       titlePatterns: heuristicPatterns(query),
       nicheGaps: [
         "Affordable coastal homes with real listing proof",
@@ -136,7 +136,7 @@ export class YouTubeDataApiResearchProvider implements CasaHudYouTubeResearchPro
       credentialRequired: false,
       query,
       opportunitySummary:
-        "CasaHUD used live YouTube search and video statistics to shape title patterns, ranking fit, and niche opportunity scoring.",
+        "CasaFlix used live YouTube search and video statistics to shape title patterns, ranking fit, and niche opportunity scoring.",
       titlePatterns: livePatterns.length > 0 ? livePatterns : heuristicPatterns(query),
       nicheGaps: [
         "Higher proof density than generic real-estate tours",

@@ -11,7 +11,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+    summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
     opportunityCategories: ["affordable coastal roundups", "retirement relocation", "regional niche inventory"],
     competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
     audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -41,25 +41,25 @@ const opportunity: CasaHudOpportunityResult = {
     score: 92,
     campaignType: "lifestyle_relocation",
     confidence: 0.89,
-    reasoning: "CasaHUD chose this title because it balances click potential with a believable promise.",
+    reasoning: "CasaFlix chose this title because it balances click potential with a believable promise.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k", "relocation-friendly towns"],
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
   confidenceSummary:
-    "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+    detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
   },
 };
 
@@ -125,24 +125,24 @@ const discoveredCampaign: CasaHudCampaign = {
   listingProviderStatuses: [
     {
       provider: "casahud_sample",
-      label: "CasaHUD sample listing patterns",
+      label: "CasaFlix sample listing patterns",
       state: "fallback",
       configured: true,
       used: true,
       candidateCount: 1,
-      detail: "Using CasaHUD sample listing patterns until listing sources are connected.",
+      detail: "Using CasaFlix sample listing patterns until listing sources are connected.",
       warning: "Connect Idealista or Immobiliare to search live listings.",
     },
   ],
   discoverySummary: {
     headline: `Prepared 1 candidate property for "${opportunity.selectedTitle.title}".`,
     criteriaSummary: "Searching sale listings around Southern Italy up to USD 300,000.",
-    providerSummary: "Using CasaHUD sample listing patterns until listing sources are connected.",
+    providerSummary: "Using CasaFlix sample listing patterns until listing sources are connected.",
     candidateCount: 1,
     liveCandidateCount: 0,
     fallbackCandidateCount: 1,
     fallbackUsed: true,
-    warnings: ["Using CasaHUD sample listing patterns until listing sources are connected."],
+    warnings: ["Using CasaFlix sample listing patterns until listing sources are connected."],
     discoveredAt: "2026-04-28T00:20:00.000Z",
   },
   listingDiscoveryStatus: "listing_candidates_discovered",
@@ -182,7 +182,7 @@ const discoveredCampaign: CasaHudCampaign = {
     key: "listing_validation",
     label: "Validate and rank listings",
     detail:
-      "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
+      "Validation and ranking arrive next. CasaFlix will confirm which discovered candidates truly support the title promise.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -232,7 +232,7 @@ vi.mock("@/lib/studio/domara/listing-validation-engine", () => ({
   runCasaHudListingValidation: mocks.runCasaHudListingValidation,
 }));
 
-describe("CasaHUD listing validation route", () => {
+describe("CasaFlix listing validation route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -277,7 +277,7 @@ describe("CasaHUD listing validation route", () => {
       listingValidationSummary: {
         headline: "Approved 1 of 1 discovered listings for the title promise.",
         rankingExplanation:
-          "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+          "CasaFlix ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
         discoveredCount: 1,
         approvedCount: 1,
         rejectedCount: 0,

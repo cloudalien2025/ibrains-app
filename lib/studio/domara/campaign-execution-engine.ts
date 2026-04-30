@@ -194,14 +194,14 @@ function buildDomaraRenderRequest(campaign: CasaHudCampaign) {
     enrichmentSummary: campaign.locationStory?.summary || campaign.locationIntelligenceSummary?.coverageSummary || "Location context is included in the review package.",
     renderPlaceholder: {
       status: "pending_provider_connection" as const,
-      nextStep: "Render the reviewed CasaHUD package into a final preview or MP4.",
-      provider: "CasaHUD Render Agent",
+      nextStep: "Render the reviewed CasaFlix package into a final preview or MP4.",
+      provider: "CasaFlix Render Agent",
     },
   };
 
   const listingInput = {
     listingUrl: listing?.sourceUrl,
-    source: listing?.provider ? `CasaHUD ${listing.provider}` : "CasaHUD shortlist",
+    source: listing?.provider ? `CasaFlix ${listing.provider}` : "CasaFlix shortlist",
     provider: toListingProvider(listing?.provider),
     country: listing?.country || "Italy",
     city: listing?.city,
@@ -304,7 +304,7 @@ export async function runCasaHudRenderAgent(
   }
 
   if (!campaign.renderPlan && !campaign.previewPackage) {
-    const message = "CasaHUD needs the Phase 9 render plan before it can start render execution.";
+    const message = "CasaFlix needs the Phase 9 render plan before it can start render execution.";
     const run = buildRun(campaign.id, "render", "preview_package", "blocked", message);
     execution.renderStatus = "blocked";
     execution.renderErrors = [message];
@@ -314,7 +314,7 @@ export async function runCasaHudRenderAgent(
   }
 
   if (campaign.reviewStatus === "blocked") {
-    const message = campaign.reviewBlockers[0] || "CasaHUD review blockers must be cleared before render execution starts.";
+    const message = campaign.reviewBlockers[0] || "CasaFlix review blockers must be cleared before render execution starts.";
     const run = buildRun(campaign.id, "render", "preview_package", "blocked", message);
     execution.renderStatus = "blocked";
     execution.renderErrors = uniqueStrings([message, ...campaign.reviewBlockers]);
@@ -337,8 +337,8 @@ export async function runCasaHudRenderAgent(
   const forcedPreview = campaign.renderBlockers.length > 0 || (campaign.renderPlan?.missingAssets.length || 0) > 0;
   if (forcedPreview || !(await ffmpegAvailable())) {
     const detail = forcedPreview
-      ? "CasaHUD prepared a preview package because missing assets or render blockers still need attention before a final MP4 is safe."
-      : "CasaHUD prepared a preview package because the local MP4 renderer is not available in this workspace.";
+      ? "CasaFlix prepared a preview package because missing assets or render blockers still need attention before a final MP4 is safe."
+      : "CasaFlix prepared a preview package because the local MP4 renderer is not available in this workspace.";
     const outputWarnings = uniqueStrings([
       detail,
       ...renderWarnings,
@@ -406,7 +406,7 @@ export async function runCasaHudRenderAgent(
     execution.renderProviderStatus = {
       provider: "ffmpeg_local",
       state: "connected",
-      detail: "CasaHUD rendered a final MP4 through the local FFmpeg render seam.",
+      detail: "CasaFlix rendered a final MP4 through the local FFmpeg render seam.",
       externalRef: result.renderId,
     };
     execution.renderWarnings = output.warnings;
@@ -417,7 +417,7 @@ export async function runCasaHudRenderAgent(
     return { ok: true, httpStatus: 200, message, execution: applyRun(execution, run) };
   } catch (error) {
     const detail = error instanceof Error ? error.message : "Unknown rendering failure.";
-    const message = "CasaHUD could not render the final video right now.";
+    const message = "CasaFlix could not render the final video right now.";
     const run = buildRun(campaign.id, "render", "ffmpeg_local", "failed", message, detail);
     execution.renderStatus = "failed";
     execution.renderErrors = [detail];
@@ -479,7 +479,7 @@ export async function runCasaHudPublishAgent(
     const message =
       campaign.reviewBlockers[0] ||
       campaign.reviewWarnings[0] ||
-      "CasaHUD review findings still need attention before publishing can begin.";
+      "CasaFlix review findings still need attention before publishing can begin.";
     return publishBlockedResult(
       campaign,
       execution,
@@ -495,10 +495,10 @@ export async function runCasaHudPublishAgent(
     return publishBlockedResult(
       campaign,
       execution,
-      { provider: "youtube_unavailable", state: "unavailable", detail: "A final MP4 render is required before CasaHUD can publish to YouTube." },
+      { provider: "youtube_unavailable", state: "unavailable", detail: "A final MP4 render is required before CasaFlix can publish to YouTube." },
       "not_ready",
       "publish",
-      "A final MP4 render is required before CasaHUD can publish to YouTube.",
+      "A final MP4 render is required before CasaFlix can publish to YouTube.",
       409,
     ) as PublishAgentResult;
   }
@@ -548,7 +548,7 @@ export async function runCasaHudScheduleAgent(
     const message =
       campaign.reviewBlockers[0] ||
       campaign.reviewWarnings[0] ||
-      "CasaHUD review findings still need attention before scheduling can begin.";
+      "CasaFlix review findings still need attention before scheduling can begin.";
     return publishBlockedResult(
       campaign,
       execution,
@@ -565,10 +565,10 @@ export async function runCasaHudScheduleAgent(
     return publishBlockedResult(
       campaign,
       execution,
-      { provider: "youtube_unavailable", state: "unavailable", detail: "A final MP4 render is required before CasaHUD can schedule to YouTube." },
+      { provider: "youtube_unavailable", state: "unavailable", detail: "A final MP4 render is required before CasaFlix can schedule to YouTube." },
       "blocked",
       "schedule",
-      "A final MP4 render is required before CasaHUD can schedule to YouTube.",
+      "A final MP4 render is required before CasaFlix can schedule to YouTube.",
       409,
       { scheduledAt, saveScheduleIntent: false },
     ) as ScheduleAgentResult;
@@ -591,7 +591,7 @@ export async function runCasaHudScheduleAgent(
   }
 
   if (!youtube.uploadAvailable) {
-    const message = `${youtube.providerStatus.detail} CasaHUD saved the requested schedule intent, but nothing has been queued on YouTube yet.`;
+    const message = `${youtube.providerStatus.detail} CasaFlix saved the requested schedule intent, but nothing has been queued on YouTube yet.`;
     return publishBlockedResult(
       campaign,
       execution,

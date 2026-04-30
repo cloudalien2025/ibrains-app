@@ -33,7 +33,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+    summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
     opportunityCategories: ["affordable coastal roundups", "retirement relocation", "regional niche inventory"],
     competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
     audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -79,29 +79,29 @@ const opportunity: CasaHudOpportunityResult = {
     score: 92,
     campaignType: "lifestyle_relocation",
     confidence: 0.89,
-    reasoning: "CasaHUD chose this title because it balances click potential with a believable promise.",
+    reasoning: "CasaFlix chose this title because it balances click potential with a believable promise.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k", "relocation-friendly towns"],
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
   confidenceSummary:
-    "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+    detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
   },
 };
 
-describe("CasaHUD campaign persistence", () => {
+describe("CasaFlix campaign persistence", () => {
   beforeEach(() => {
     state.available = true;
     state.projects.clear();

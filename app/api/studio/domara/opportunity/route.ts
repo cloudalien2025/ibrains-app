@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     };
 
     if (body.preferredMarket !== undefined && typeof body.preferredMarket !== "string") {
-      return errorResponse(400, "CasaHUD needs a valid market hint to generate title opportunities.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid market hint to generate title opportunities.", "INVALID_INPUT", reqId);
     }
 
     const preferredMarket = body.preferredMarket?.trim() || undefined;
@@ -58,10 +58,10 @@ export async function POST(request: NextRequest) {
       output,
     });
   } catch (error) {
-    console.error("CasaHUD opportunity generation failed", { reqId, error });
+    console.error("CasaFlix opportunity generation failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not generate title opportunities right now. Try again in a moment.",
+      "CasaFlix could not generate title opportunities right now. Try again in a moment.",
       "OPPORTUNITY_GENERATION_FAILED",
       reqId,
     );

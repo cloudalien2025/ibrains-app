@@ -37,7 +37,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
       },
     ],
     researchBrief: {
-      summary: "CasaHUD identified the strongest relocation opportunity in Southern Italy.",
+      summary: "CasaFlix identified the strongest relocation opportunity in Southern Italy.",
       opportunityCategories: ["relocation"],
       competitorPatterns: ["Budget-led relocation videos perform well."],
       audienceIntent: ["retire in Italy"],
@@ -49,8 +49,8 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
@@ -172,7 +172,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
     locationIntelligenceSummary: {
       headline: "Location story prepared across 2 shortlist anchors.",
       providerSummary: "Using saved map and POI seams.",
-      coverageSummary: "CasaHUD connected the shortlist to regional and local proof points.",
+      coverageSummary: "CasaFlix connected the shortlist to regional and local proof points.",
       warningCount: 1,
       generatedAt: "2026-04-29T00:08:00.000Z",
       fallbackUsed: true,
@@ -183,7 +183,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
       narrativeAngles: ["Open with the place before the property details arrive."],
       lifestyleAnchors: ["Coastal day-to-day context", "Historic-center texture"],
       regionHighlights: ["Tropea", "Lecce"],
-      fallbackNotice: "Using CasaHUD location patterns where live providers were limited.",
+      fallbackNotice: "Using CasaFlix location patterns where live providers were limited.",
     },
     localHighlights: [
       {
@@ -255,7 +255,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
       },
       {
         provider: "casahud_location_patterns",
-        label: "CasaHUD location patterns",
+        label: "CasaFlix location patterns",
         state: "fallback",
         configured: true,
         used: true,
@@ -340,11 +340,11 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
     scriptWarnings: ["Keep the hook specific to the approved listing support."],
     scriptProviderStatus: {
       provider: "casahud_script_patterns",
-      label: "CasaHUD script patterns",
+      label: "CasaFlix script patterns",
       state: "fallback",
       configured: true,
       used: true,
-      detail: "Using deterministic CasaHUD script composition.",
+      detail: "Using deterministic CasaFlix script composition.",
     },
     fullScriptText: "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
     ...createEmptyCasaHudMediaPlanData(),
@@ -352,7 +352,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
     nextPhase: {
       key: "media_planning_asset_assembly",
       label: "Media Planning and Asset Assembly",
-      detail: "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+      detail: "Media Planning and Asset Assembly comes next. CasaFlix will organize visuals, map scenes, and asset needs around the approved narrative package.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -384,7 +384,7 @@ function buildScriptReadyCampaign(): CasaHudCampaign {
   };
 }
 
-describe("CasaHUD media planning engine", () => {
+describe("CasaFlix media planning engine", () => {
   it("builds scene mappings, shot list, listing coverage, and thumbnail inputs from the saved script package", () => {
     const result = runCasaHudMediaPlanning(buildScriptReadyCampaign());
 

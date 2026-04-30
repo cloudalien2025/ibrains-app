@@ -78,9 +78,9 @@ function analyzeCompetitorPatterns(videos: CasaHudOpportunityResearchVideo[]): s
 function buildFallbackProviderStatus(detail?: string): CasaHudOpportunityProviderStatus {
   return {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
+    label: "CasaFlix opportunity patterns",
     detail:
-      detail || "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+      detail || "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   };
 }
@@ -97,7 +97,7 @@ function buildFallbackResearch(preferredMarket?: string, detail?: string): CasaH
     providerStatus: buildFallbackProviderStatus(detail),
     similarVideos: [],
     researchBrief: {
-      summary: `${profile.marketLabel} currently favors specific affordability, relocation, and location-led hooks over generic property tours. CasaHUD is using its internal opportunity patterns to focus on repeatable titles that can still be supported by real listings later.`,
+      summary: `${profile.marketLabel} currently favors specific affordability, relocation, and location-led hooks over generic property tours. CasaFlix is using its internal opportunity patterns to focus on repeatable titles that can still be supported by real listings later.`,
       opportunityCategories: profile.opportunityCategories,
       competitorPatterns: [
         "Specific budgets, regions, and buyer personas outperform broad market-overview titles.",
@@ -186,7 +186,7 @@ export class CasaHudYouTubeOpportunityProvider implements CasaHudOpportunityRese
         },
         similarVideos,
         researchBrief: {
-          summary: `${profile.marketLabel} is showing repeatable demand for titles that pair clear geography with affordability, relocation, or inventory-backed specificity. CasaHUD used live competitive results to sharpen the title mix and reduce weak generic directions.`,
+          summary: `${profile.marketLabel} is showing repeatable demand for titles that pair clear geography with affordability, relocation, or inventory-backed specificity. CasaFlix used live competitive results to sharpen the title mix and reduce weak generic directions.`,
           opportunityCategories: profile.opportunityCategories,
           competitorPatterns: analyzeCompetitorPatterns(similarVideos),
           audienceIntent: profile.audienceIntent,
@@ -197,7 +197,7 @@ export class CasaHudYouTubeOpportunityProvider implements CasaHudOpportunityRese
     } catch {
       return buildFallbackResearch(
         market,
-        "Using CasaHUD opportunity patterns while live YouTube research is temporarily unavailable.",
+        "Using CasaFlix opportunity patterns while live YouTube research is temporarily unavailable.",
       );
     }
   }

@@ -258,7 +258,7 @@ const immobiliareEnglishFixtureHtml = `
   </html>
 `;
 
-describe("CasaHUD listing URL extractor", () => {
+describe("CasaFlix listing URL extractor", () => {
   it("accepts localized Immobiliare and Idealista URLs through domain-based classification", () => {
     expect(classifyListingImportUrl("https://www.immobiliare.it/annunci/121869400/").classification).toBe("listing");
     expect(classifyListingImportUrl("https://www.immobiliare.it/en/annunci/121869400/").classification).toBe("listing");

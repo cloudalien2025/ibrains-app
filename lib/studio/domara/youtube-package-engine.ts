@@ -57,7 +57,7 @@ function buildFinalTitle(campaign: CasaHudCampaign, listings: CasaHudValidatedLi
     return {
       finalTitle: baseTitle,
       titleRationale:
-        "The selected viral title already stays aligned with the approved listings, location story, and current media coverage, so CasaHUD kept the promise intact rather than forcing a cosmetic rewrite.",
+        "The selected viral title already stays aligned with the approved listings, location story, and current media coverage, so CasaFlix kept the promise intact rather than forcing a cosmetic rewrite.",
     };
   }
 
@@ -66,7 +66,7 @@ function buildFinalTitle(campaign: CasaHudCampaign, listings: CasaHudValidatedLi
   return {
     finalTitle,
     titleRationale:
-      "CasaHUD kept the original click angle but added an evidence-first framing cue because title support or script warnings suggest the package should signal real approved listing coverage more explicitly.",
+      "CasaFlix kept the original click angle but added an evidence-first framing cue because title support or script warnings suggest the package should signal real approved listing coverage more explicitly.",
   };
 }
 
@@ -84,7 +84,7 @@ function buildDescription(campaign: CasaHudCampaign, finalTitle: string, listing
     .join("; ");
 
   const sections = [
-    `In this video, CasaHUD follows the title promise behind "${finalTitle}" using approved listings and the current location story rather than generic relocation claims.`,
+    `In this video, CasaFlix follows the title promise behind "${finalTitle}" using approved listings and the current location story rather than generic relocation claims.`,
     campaign.scriptSummary || campaign.researchBrief.summary,
     featuredListings ? `Featured properties: ${featuredListings}.` : null,
     campaign.locationStory?.summary || campaign.locationIntelligenceSummary?.coverageSummary || null,
@@ -99,7 +99,7 @@ function buildDescription(campaign: CasaHudCampaign, finalTitle: string, listing
 function buildTags(campaign: CasaHudCampaign, listings: CasaHudValidatedListing[]) {
   const leadListing = listings[0];
   return uniqueStrings([
-    "CasaHUD",
+    "CasaFlix",
     campaign.marketRegionHint,
     campaign.selectedTitle.regionHint,
     campaign.campaignType.replace(/_/g, " "),
@@ -114,7 +114,7 @@ function buildTags(campaign: CasaHudCampaign, listings: CasaHudValidatedListing[
 
 function buildHashtags(campaign: CasaHudCampaign) {
   return uniqueStrings([
-    "#CasaHUD",
+    "#CasaFlix",
     "#RealEstate",
     "#PropertyVideo",
     campaign.campaignType === "lifestyle_relocation" ? "#Relocation" : "#LuxuryHomes",
@@ -322,7 +322,7 @@ function buildReadinessScore(campaign: CasaHudCampaign, findings: CasaHudReviewF
 
 function buildReadinessExplanation(status: CasaHudReviewStatus, score: number, blockers: string[], warnings: string[]) {
   if (status === "blocked") {
-    return `Blocked from render handoff for now. CasaHUD found ${blockers.length} blocker${blockers.length === 1 ? "" : "s"} that should be resolved before the package moves forward.`;
+    return `Blocked from render handoff for now. CasaFlix found ${blockers.length} blocker${blockers.length === 1 ? "" : "s"} that should be resolved before the package moves forward.`;
   }
   if (status === "needs_revision") {
     return `The package is close, but ${warnings.length} warning${warnings.length === 1 ? "" : "s"} still need editorial tightening before final review. Current readiness: ${score}/100.`;
@@ -481,18 +481,18 @@ export function runCasaHudYouTubePackageReview(campaign: CasaHudCampaign): CasaH
     packageWarnings,
     packageProviderStatus: {
       provider: "casahud_package_patterns",
-      label: "CasaHUD packaging patterns",
+      label: "CasaFlix packaging patterns",
       state: "fallback",
       configured: true,
       used: true,
-      detail: "Using deterministic CasaHUD packaging, review, and render-plan composition.",
+      detail: "Using deterministic CasaFlix packaging, review, and render-plan composition.",
     },
     reviewStatus: reviewState.status,
     reviewSummary:
       reviewState.status === "blocked"
-        ? "The package is coherent, but CasaHUD found blockers that should be resolved before final render review."
+        ? "The package is coherent, but CasaFlix found blockers that should be resolved before final render review."
         : reviewState.status === "needs_revision"
-          ? "The package is mostly assembled, but CasaHUD recommends tightening claims or coverage before final review."
+          ? "The package is mostly assembled, but CasaFlix recommends tightening claims or coverage before final review."
           : "The package is aligned enough to move into a human review pass before render execution.",
     reviewFindings,
     reviewBlockers: reviewState.blockers,

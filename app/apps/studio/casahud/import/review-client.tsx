@@ -123,7 +123,7 @@ export default function BrowserImportReviewClient() {
       if (typeof window === "undefined") return;
       const raw = window.name || "";
       if (!raw.trim()) {
-        setError("No browser import payload was found. Run the CasaHUD Importer from the listing page you can already view.");
+        setError("No browser import payload was found. Run the CasaFlix Importer from the listing page you can already view.");
         return;
       }
 
@@ -137,7 +137,7 @@ export default function BrowserImportReviewClient() {
         setCampaignId((current) => current || parsedPayload.campaignId || "");
       }
     } catch (captureError) {
-      setError(captureError instanceof Error ? captureError.message : "CasaHUD could not read the browser import payload.");
+      setError(captureError instanceof Error ? captureError.message : "CasaFlix could not read the browser import payload.");
     }
   }, []);
 
@@ -218,13 +218,13 @@ export default function BrowserImportReviewClient() {
 
       const result = (await response.json().catch(() => null)) as CasaHudBrowserImportSavePayload | null;
       if (!response.ok || !result?.ok) {
-        throw new Error(result?.error?.message || "CasaHUD could not save that browser import.");
+        throw new Error(result?.error?.message || "CasaFlix could not save that browser import.");
       }
 
       setNotice(result.message || "Browser import saved.");
       setSavedTitle(result.listing?.title || preview.candidate.title);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "CasaHUD could not save that browser import.");
+      setError(saveError instanceof Error ? saveError.message : "CasaFlix could not save that browser import.");
     } finally {
       setSaving(false);
     }
@@ -234,10 +234,10 @@ export default function BrowserImportReviewClient() {
     <main className="min-h-screen bg-[linear-gradient(180deg,#F4E6D2_0%,#FFFDF8_24%,#FFF8EE_100%)] px-4 py-8 text-[#172033] md:px-6">
       <div className="mx-auto grid max-w-6xl gap-6">
         <section className="rounded-[2rem] border border-white/70 bg-white/92 p-6 shadow-[0_24px_60px_rgba(23,32,51,0.08)]">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Browser Import Review</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#172033]">Review browser-assisted listing import</h1>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">CasaFlix Browser Import Review</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-[-0.03em] text-[#172033]">Review CasaFlix browser-assisted listing import</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-[#526070]">
-            CasaHUD Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
+            CasaFlix Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
           </p>
         </section>
 
@@ -585,16 +585,16 @@ export default function BrowserImportReviewClient() {
                   {saving ? "Saving Browser Import..." : "Save to Property Shortlist"}
                 </button>
                 <Link
-                  href="/apps/studio/casahud"
+                  href="/apps/studio/casaflix"
                   className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-white px-5 py-3 text-sm font-semibold text-[#172033]"
                 >
-                  {savedTitle ? "Open CasaHUD" : "Back to CasaHUD"}
+                  {savedTitle ? "Open CasaFlix" : "Back to CasaFlix"}
                 </Link>
               </div>
 
               {savedTitle ? (
                 <p className="text-sm leading-6 text-[#526070]">
-                  {savedTitle} is now on the shortlist. You can keep refining it in CasaHUD with <span className="font-semibold text-[#172033]">Edit Details</span> and continue into validation, Video Builder, and publish planning.
+                  {savedTitle} is now on the shortlist. You can keep refining it in CasaFlix with <span className="font-semibold text-[#172033]">Edit Details</span> and continue into validation, Video Builder, and publish planning.
                 </p>
               ) : null}
             </article>

@@ -160,7 +160,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Creates viral titles, video strategy, scripts, storyboards, narration prompts, YouTube packaging, and review checks.",
       detail: "Required for Generate Viral Video, script/storyboard generation, and YouTube package generation.",
-      missingSetupGuidance: "Connect OpenAI so CasaHUD can create the strategy and review-ready video package.",
+      missingSetupGuidance: "Connect OpenAI so CasaFlix can create the strategy and review-ready video package.",
       safeErrorState: providerNeedsAttention(byId, ["openai"]) ? "OpenAI needs to be reconnected before generation." : null,
       providerIds: ["openai"],
       actions: [openAiConnected ? "Manage" : "Connect", "Test Connection"],
@@ -189,7 +189,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Finds real properties for single-property, roundup, niche, and location videos.",
       detail: "Required for finding matching real properties and validating video claims.",
-      missingSetupGuidance: "Connect at least one listing source before CasaHUD selects properties for the video.",
+      missingSetupGuidance: "Connect at least one listing source before CasaFlix selects properties for the video.",
       safeErrorState: providerNeedsAttention(byId, ["idealista", "immobiliare"]) ? "One listing source needs attention." : null,
       supportedSourceLabels: ["Idealista", "Immobiliare", "Manual Listing Import", "Future Listing APIs"],
       providerIds: ["idealista", "immobiliare"],
@@ -207,7 +207,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Creates premium map visuals, property-location scenes, area views, and map sequences for videos.",
       detail: "Required for map visuals and premium location scenes.",
-      missingSetupGuidance: "Connect Mapbox so CasaHUD can prepare premium map scenes.",
+      missingSetupGuidance: "Connect Mapbox so CasaFlix can prepare premium map scenes.",
       safeErrorState: providerNeedsAttention(byId, ["mapbox"]) ? "Map visuals need to be reconnected." : null,
       providerIds: ["mapbox"],
       actions: [mapboxConnected ? "Manage" : "Connect", "Test Connection"],
@@ -224,7 +224,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Finds cafes, restaurants, landmarks, beaches, marinas, airports, train stations, schools, ski areas, golf courses, and local highlights.",
       detail: "Required for POI intelligence, lifestyle context, location storytelling, and local highlights.",
-      missingSetupGuidance: "Connect Google Places so CasaHUD can add local highlights and lifestyle context.",
+      missingSetupGuidance: "Connect Google Places so CasaFlix can add local highlights and lifestyle context.",
       safeErrorState: providerNeedsAttention(byId, ["google_maps_places"]) ? "Local Places needs to be reconnected." : null,
       providerIds: ["google_maps_places"],
       actions: [placesConnected ? "Manage" : "Connect", "Test Connection"],
@@ -249,7 +249,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Stores thumbnails, generated media, render assets, exported packages, and video files.",
       detail: "Required for saving generated media assets and completed packages.",
-      missingSetupGuidance: "Connect media storage so CasaHUD can save generated assets and completed packages.",
+      missingSetupGuidance: "Connect media storage so CasaFlix can save generated assets and completed packages.",
       safeErrorState: providerNeedsAttention(byId, ["cloudinary", "digitalocean_spaces"]) ? "Media Storage needs to be reconnected." : null,
       supportedSourceLabels: ["Cloudinary", "DigitalOcean Spaces"],
       providerIds: ["cloudinary", "digitalocean_spaces"],
@@ -267,7 +267,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       optional: false,
       enables: "Researches ranking videos, analyzes title patterns, prepares uploads, publishes videos, and schedules videos.",
       detail: "Required for YouTube research, upload, publish now, and schedule to YouTube.",
-      missingSetupGuidance: "Connect YouTube Channel before CasaHUD researches live ranking videos or publishes reviewed packages.",
+      missingSetupGuidance: "Connect YouTube Channel before CasaFlix researches live ranking videos or publishes reviewed packages.",
       safeErrorState: providerNeedsAttention(byId, ["youtube"]) ? "YouTube Channel needs to be reconnected." : null,
       providerIds: ["youtube"],
       actions: [youtubeConnected ? "Manage" : "Connect", "Test Connection"],
@@ -283,7 +283,7 @@ export function buildCasaHudConnectionCards(providers: DomaraIntegrationProvider
       required: false,
       optional: true,
       enables: "Creates premium AI voice narration.",
-      detail: "Optional premium narration. CasaHUD can still create scripts and review packages without ElevenLabs.",
+      detail: "Optional premium narration. CasaFlix can still create scripts and review packages without ElevenLabs.",
       missingSetupGuidance: "Connect ElevenLabs when you want premium AI voice narration.",
       safeErrorState: providerNeedsAttention(byId, ["elevenlabs"]) ? "Voice Narration needs to be reconnected." : null,
       providerIds: ["elevenlabs"],
@@ -305,9 +305,9 @@ export function shouldOpenCasaHudSetupForGenerate(cards: CasaHudConnectionCard[]
 export function getCasaHudSetupMessage(cards: CasaHudConnectionCard[]): string {
   const missing = getMissingCasaHudCoreConnections(cards);
   if (missing.length === 0) {
-    return "CasaHUD has the core connections needed to create, save, publish, and schedule a production video.";
+    return "CasaFlix has the core connections needed to create, save, publish, and schedule a production video.";
   }
 
   const names = missing.map((card) => card.title).join(", ");
-  return `Connect ${names} before CasaHUD generates a production video. These services power creative generation, real listing selection, map visuals, local highlights, media storage, publishing, and scheduling.`;
+  return `Connect ${names} before CasaFlix generates a production video. These services power creative generation, real listing selection, map visuals, local highlights, media storage, publishing, and scheduling.`;
 }

@@ -44,14 +44,14 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can schedule.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can schedule.", "INVALID_INPUT", reqId);
     }
 
     const scheduledAt = parseScheduledAt(await request.json().catch(() => null));
     if (!scheduledAt || !isFutureSchedule(scheduledAt)) {
       return errorResponse(
         400,
-        "Choose a future publish time at least one minute ahead before CasaHUD can schedule this campaign.",
+        "Choose a future publish time at least one minute ahead before CasaFlix can schedule this campaign.",
         "INVALID_SCHEDULE_TIME",
         reqId,
       );
@@ -59,18 +59,18 @@ export async function POST(
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     if (campaign.youtubePackageStatus !== "package_prepared") {
       return errorResponse(
         409,
-        "CasaHUD needs the completed YouTube package before it can schedule this campaign.",
+        "CasaFlix needs the completed YouTube package before it can schedule this campaign.",
         "YOUTUBE_PACKAGE_REQUIRED",
         reqId,
       );
@@ -105,13 +105,13 @@ export async function POST(
     );
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD schedule execution failed", { reqId, error });
+    console.error("CasaFlix schedule execution failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not schedule this campaign right now. Try again in a moment.",
+      "CasaFlix could not schedule this campaign right now. Try again in a moment.",
       "SCHEDULE_FAILED",
       reqId,
     );

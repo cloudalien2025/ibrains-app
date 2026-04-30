@@ -26,17 +26,17 @@ export async function GET(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id.", "INVALID_INPUT", reqId);
     }
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     return NextResponse.json({
@@ -46,13 +46,13 @@ export async function GET(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD campaign read failed", { reqId, error });
+    console.error("CasaFlix campaign read failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not reopen this campaign right now. Try again in a moment.",
+      "CasaFlix could not reopen this campaign right now. Try again in a moment.",
       "CAMPAIGN_READ_FAILED",
       reqId,
     );

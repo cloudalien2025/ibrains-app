@@ -100,17 +100,17 @@ export async function PATCH(
     const campaignId = resolvedParams.id?.trim();
     const listingId = resolvedParams.listingId?.trim();
     if (!campaignId || !listingId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id and listing id before it can save listing details.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id and listing id before it can save listing details.", "INVALID_INPUT", reqId);
     }
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     const existing =
@@ -118,7 +118,7 @@ export async function PATCH(
       campaign.approvedListings.find((listing) => listing.id === listingId) ||
       campaign.rejectedListings.find((listing) => listing.id === listingId);
     if (!existing) {
-      return errorResponse(404, "CasaHUD could not find that imported listing.", "LISTING_NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that imported listing.", "LISTING_NOT_FOUND", reqId);
     }
     if (existing.sourceType !== "imported_url" && existing.sourceType !== "browser_assisted_import") {
       return errorResponse(409, "Only user-imported listings can be edited here.", "LISTING_NOT_EDITABLE", reqId);
@@ -126,7 +126,7 @@ export async function PATCH(
 
     const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;
     if (!payload || typeof payload !== "object") {
-      return errorResponse(400, "CasaHUD needs listing details to save.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs listing details to save.", "INVALID_INPUT", reqId);
     }
 
     const title = optionalString(payload.title, "title");
@@ -233,18 +233,18 @@ export async function PATCH(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    const message = error instanceof Error ? error.message : "CasaHUD could not save listing details right now.";
+    const message = error instanceof Error ? error.message : "CasaFlix could not save listing details right now.";
     if (/must be|Add at least one listing detail|Only http\/https|invalid/.test(message)) {
       return errorResponse(400, message, "INVALID_INPUT", reqId);
     }
 
-    console.error("CasaHUD imported listing update failed", { reqId, error });
+    console.error("CasaFlix imported listing update failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not save those listing details right now. Try again in a moment.",
+      "CasaFlix could not save those listing details right now. Try again in a moment.",
       "LISTING_UPDATE_FAILED",
       reqId,
     );

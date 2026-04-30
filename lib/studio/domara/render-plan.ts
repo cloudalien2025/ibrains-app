@@ -115,7 +115,7 @@ export function createDomaraRenderPlan(request: DomaraVideoRenderRequest): Domar
           {
             order: 2,
             title: "Property Highlights",
-            overlayText: request.listingInput.title || "CasaHUD Property Video Engine",
+            overlayText: request.listingInput.title || "CasaFlix Property Video Engine",
             narration:
               "Image gallery is unavailable. Rendering with branded fallback scenes while preserving Expat AI editorial structure.",
             durationSeconds: 7,

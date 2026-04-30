@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import StudioAppPage from "@/app/apps/studio/page";
+import StudioCasaFlixPage from "@/app/apps/studio/casaflix/page";
 import StudioCasaHudPage from "@/app/apps/studio/casahud/page";
 
 vi.mock("next/link", async () => {
@@ -25,10 +26,10 @@ describe("/apps/studio route contract", () => {
 
     expect(html).toContain("studio-app-launcher");
     expect(html).toContain(">Studio<");
-    expect(html).toContain(">CasaHUD<");
+    expect(html).toContain(">CasaFlix<");
     expect(html).toContain("Real-estate YouTube content engine.");
-    expect(html).toContain('href="/apps/studio/casahud"');
-    expect(html).toContain(">Open CasaHUD<");
+    expect(html).toContain('href="/apps/studio/casaflix"');
+    expect(html).toContain(">Open CasaFlix<");
     expect(html).toContain(">UAP Forge<");
     expect(html).toContain(">Coming Soon<");
     expect(html).toContain(">Future Studio Apps<");
@@ -36,11 +37,21 @@ describe("/apps/studio route contract", () => {
     expect(html).not.toContain("Mode: Mock-first MVP");
   });
 
-  it("renders CasaHUD on /apps/studio/casahud instead of the Studio launcher", () => {
+  it("renders CasaFlix on /apps/studio/casaflix instead of the Studio launcher", () => {
+    const html = renderToStaticMarkup(<StudioCasaFlixPage />);
+
+    expect(html).toContain("casahud-workspace-shell");
+    expect(html).toContain(">CasaFlix<");
+    expect(html).toContain(">Campaigns<");
+    expect(html).toContain(">Viral Titles<");
+    expect(html).not.toContain("studio-app-launcher");
+  });
+
+  it("keeps /apps/studio/casahud as backward-compatible alias", () => {
     const html = renderToStaticMarkup(<StudioCasaHudPage />);
 
     expect(html).toContain("casahud-workspace-shell");
-    expect(html).toContain(">CasaHUD<");
+    expect(html).toContain(">CasaFlix<");
     expect(html).toContain(">Campaigns<");
     expect(html).toContain(">Viral Titles<");
     expect(html).not.toContain("studio-app-launcher");

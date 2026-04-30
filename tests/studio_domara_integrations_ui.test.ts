@@ -96,7 +96,7 @@ describe("Domara integrations UI helpers", () => {
     expect(rows.length).toBe(9);
   });
 
-  it("builds premium CasaHUD connection cards around required and optional services", () => {
+  it("builds premium CasaFlix connection cards around required and optional services", () => {
     const cards = buildCasaHudConnectionCards([
       providerStatus("youtube", true),
       providerStatus("openai", true),
@@ -148,10 +148,10 @@ describe("Domara integrations UI helpers", () => {
       "Media Storage",
       "YouTube Channel",
     ]);
-    expect(getCasaHudSetupMessage(cards)).toContain("before CasaHUD generates a production video");
+    expect(getCasaHudSetupMessage(cards)).toContain("before CasaFlix generates a production video");
   });
 
-  it("does not fake connected states for CasaHUD cards", () => {
+  it("does not fake connected states for CasaFlix cards", () => {
     const cards = buildCasaHudConnectionCards([
       providerStatus("youtube", true),
       providerStatus("openai", true),
@@ -166,7 +166,7 @@ describe("Domara integrations UI helpers", () => {
     expect(cards.find((card) => card.id === "elevenlabs")?.ctaLabel).toBe("Connect");
   });
 
-  it("keeps CasaHUD setup card copy user-facing", () => {
+  it("keeps CasaFlix setup card copy user-facing", () => {
     const cards = buildCasaHudConnectionCards([]);
     const cardText = cards
       .flatMap((card) => [

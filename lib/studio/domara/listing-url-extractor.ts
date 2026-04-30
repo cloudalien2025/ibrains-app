@@ -1098,7 +1098,7 @@ async function fetchWithRedirectLimit(url: string, fetchImpl: FetchLike): Promis
       redirect: "manual",
       headers: {
         Accept: "text/html,application/xhtml+xml",
-        "User-Agent": "CasaHUD-ListingExtractor/1.0 (+https://app.ibrains.ai)",
+        "User-Agent": "CasaFlix-ListingExtractor/1.0 (+https://app.ibrains.ai)",
       },
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });

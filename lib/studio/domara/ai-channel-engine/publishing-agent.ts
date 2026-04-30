@@ -23,7 +23,7 @@ export function resolvePublishScheduleGate(params: {
     return Promise.resolve({
       status: "needs_approval",
       provider: "youtube_data_api",
-      message: "Human approval is required before CasaHUD can publish or schedule a YouTube upload.",
+      message: "Human approval is required before CasaFlix can publish or schedule a YouTube upload.",
     });
   }
 
@@ -31,7 +31,7 @@ export function resolvePublishScheduleGate(params: {
     return Promise.resolve({
       status: "needs_credentials",
       provider: "youtube_data_api",
-      message: "YouTube credentials are required before CasaHUD can publish or schedule this package.",
+      message: "YouTube credentials are required before CasaFlix can publish or schedule this package.",
     });
   }
 

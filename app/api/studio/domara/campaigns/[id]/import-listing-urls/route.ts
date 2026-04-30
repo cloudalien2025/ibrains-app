@@ -38,7 +38,7 @@ function buildImportMessage(params: {
     params.failedCount > 0 ? `${params.failedCount} URL${params.failedCount === 1 ? "" : "s"} could not be used` : null,
   ].filter(Boolean);
 
-  if (parts.length === 0) return "CasaHUD processed the submitted listing URLs.";
+  if (parts.length === 0) return "CasaFlix processed the submitted listing URLs.";
   return `${parts.join("; ")}.`;
 }
 
@@ -55,17 +55,17 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can import listing URLs.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can import listing URLs.", "INVALID_INPUT", reqId);
     }
 
     const campaignStoreAvailable = await isCasaHudCampaignStoreAvailable();
     if (!campaignStoreAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     const payload = (await request.json().catch(() => null)) as { rawUrls?: string } | null;
@@ -97,7 +97,7 @@ export async function POST(
           ? "Every URL in this import is already on the campaign."
           : hasOnlySearchPages
             ? "This looks like a search results page. Paste individual listing URLs or choose listings to import."
-            : "CasaHUD could not use any of the submitted URLs.",
+            : "CasaFlix could not use any of the submitted URLs.",
         hasOnlyDuplicates ? "DUPLICATE_URLS" : hasOnlySearchPages ? "SEARCH_PAGE_DETECTED" : "NO_USABLE_URLS",
         reqId,
       );
@@ -151,18 +151,18 @@ export async function POST(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    const message = error instanceof Error ? error.message : "CasaHUD could not import listing URLs right now.";
+    const message = error instanceof Error ? error.message : "CasaFlix could not import listing URLs right now.";
     if (/Paste at least one listing URL|Import up to \d+ listing URLs/.test(message)) {
       return errorResponse(400, message, "INVALID_INPUT", reqId);
     }
 
-    console.error("CasaHUD listing URL import failed", { reqId, error });
+    console.error("CasaFlix listing URL import failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not import those listing URLs right now. Try again in a moment.",
+      "CasaFlix could not import those listing URLs right now. Try again in a moment.",
       "LISTING_URL_IMPORT_FAILED",
       reqId,
     );

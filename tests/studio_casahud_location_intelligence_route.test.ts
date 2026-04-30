@@ -12,7 +12,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+    summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
     opportunityCategories: ["affordable coastal roundups", "retirement relocation", "regional niche inventory"],
     competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
     audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -42,25 +42,25 @@ const opportunity: CasaHudOpportunityResult = {
     score: 92,
     campaignType: "lifestyle_relocation",
     confidence: 0.89,
-    reasoning: "CasaHUD chose this title because it balances click potential with a believable promise.",
+    reasoning: "CasaFlix chose this title because it balances click potential with a believable promise.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k", "relocation-friendly towns"],
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
   confidenceSummary:
-    "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+    detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
   },
 };
 
@@ -135,7 +135,7 @@ const validatedCampaign: CasaHudCampaign = {
   listingValidationSummary: {
     headline: "Approved 1 of 1 discovered listings for the title promise.",
     rankingExplanation:
-      "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+      "CasaFlix ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
     discoveredCount: 1,
     approvedCount: 1,
     rejectedCount: 0,
@@ -175,7 +175,7 @@ const validatedCampaign: CasaHudCampaign = {
     key: "location_intelligence",
     label: "Location Intelligence",
     detail:
-      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+      "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -203,15 +203,15 @@ const locationIntelligence: CasaHudLocationData = {
   locationIntelligenceStatus: "location_intelligence_completed",
   locationIntelligenceSummary: {
     headline: "Location story prepared across 1 shortlist anchor.",
-    providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
-    coverageSummary: "CasaHUD connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
+    providerSummary: "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage.",
+    coverageSummary: "CasaFlix connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
     warningCount: 1,
     generatedAt: "2026-04-29T00:00:00.000Z",
     fallbackUsed: true,
   },
   locationStory: {
     headline: "Tropea turns the shortlist into a place-led story.",
-    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
+    summary: "CasaFlix positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
     narrativeAngles: [
       "Open with the region before dropping into the strongest listing.",
       "Use local proof points as support for the property promise instead of generic travel filler.",
@@ -219,7 +219,7 @@ const locationIntelligence: CasaHudLocationData = {
     ],
     lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
     regionHighlights: ["Tropea", "Calabria"],
-    fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
+    fallbackNotice: "Using CasaFlix location patterns where live provider coverage was limited.",
   },
   localHighlights: [
     {
@@ -268,7 +268,7 @@ const locationIntelligence: CasaHudLocationData = {
       highlights: ["Coastal day-to-day context helps the property feel like a lifestyle move, not just a budget win."],
       nearbyPois: [],
       locationStrengths: ["Waterside lifestyle context"],
-      warnings: ["Using CasaHUD location patterns until Google Places is connected."],
+      warnings: ["Using CasaFlix location patterns until Google Places is connected."],
     },
   ],
   locationProviderStatuses: [
@@ -278,7 +278,7 @@ const locationIntelligence: CasaHudLocationData = {
       state: "missing_credentials",
       configured: false,
       used: false,
-      detail: "Using CasaHUD location patterns until Google Places is connected for live POIs.",
+      detail: "Using CasaFlix location patterns until Google Places is connected for live POIs.",
       warning: "Connect Google Places for live points of interest and local highlights.",
       coverage: "No live POIs",
     },
@@ -288,22 +288,22 @@ const locationIntelligence: CasaHudLocationData = {
       state: "missing_credentials",
       configured: false,
       used: false,
-      detail: "Using listing coordinates and CasaHUD location patterns until Mapbox is connected for live map anchoring.",
+      detail: "Using listing coordinates and CasaFlix location patterns until Mapbox is connected for live map anchoring.",
       warning: "Connect Mapbox for live geocoding and richer map scene anchoring.",
       coverage: "No live map anchoring",
     },
     {
       provider: "casahud_location_patterns",
-      label: "CasaHUD location patterns",
+      label: "CasaFlix location patterns",
       state: "fallback",
       configured: true,
       used: true,
-      detail: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
+      detail: "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage.",
       warning: "Connect location providers for live POIs and richer map context.",
       coverage: "1 fallback context set",
     },
   ],
-  locationWarnings: ["Using CasaHUD location patterns until Google Places is connected."],
+  locationWarnings: ["Using CasaFlix location patterns until Google Places is connected."],
 };
 
 const mocks = vi.hoisted(() => ({
@@ -341,7 +341,7 @@ vi.mock("@/lib/studio/domara/location-intelligence-engine", () => ({
   runCasaHudLocationIntelligence: mocks.runCasaHudLocationIntelligence,
 }));
 
-describe("CasaHUD location intelligence route", () => {
+describe("CasaFlix location intelligence route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();

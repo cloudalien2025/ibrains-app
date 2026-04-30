@@ -480,9 +480,13 @@ function formatListingPrice(price?: number, currency?: string) {
 function formatListingProvider(provider: string) {
   if (provider === "idealista") return "Idealista";
   if (provider === "immobiliare") return "Immobiliare";
-  if (provider === "casahud_sample") return "Sample Pattern";
+  if (provider === "casahud_sample") return "Demo data";
   if (provider === "generic") return "Source domain";
   return provider;
+}
+
+function isDemoListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+  return listing.sourceType === "sample_pattern" || listing.provider === "casahud_sample";
 }
 
 function isUserImportedListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
@@ -492,8 +496,8 @@ function isUserImportedListing(listing: CasaHudListingCandidate | CasaHudValidat
 function formatListingSourceType(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (listing.sourceType === "browser_assisted_import") return "Imported from Browser";
   if (listing.sourceType === "imported_url") return "Imported URL";
-  if (listing.sourceType === "sample_pattern" || listing.provider === "casahud_sample") return "Sample Pattern";
-  if (listing.provider === "idealista" || listing.provider === "immobiliare") return "Official API listing";
+  if (isDemoListing(listing)) return "Demo data";
+  if (listing.provider === "idealista" || listing.provider === "immobiliare") return "Official API";
   return "Listing source";
 }
 
@@ -823,7 +827,9 @@ function onScreenTextForScene(params: {
 }
 
 function buildFallbackScenes(campaign: CasaHudCampaign): CasaHudVideoScene[] {
-  const listings = campaign.approvedListings.length > 0 ? campaign.approvedListings : campaign.listingCandidates;
+  const approved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
+  const candidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
+  const listings = approved.length > 0 ? approved : candidates;
   return listings.map((listing, index) => {
     const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
     const warnings = uniq([media.warning, media.stateLabel === "Image needed" ? "Image needed: listing image unavailable." : null]);
@@ -854,10 +860,13 @@ function buildFallbackScenes(campaign: CasaHudCampaign): CasaHudVideoScene[] {
 
 function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[] {
   if (!campaign) return [];
+  const approved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
+  const candidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
+  const rejected = campaign.rejectedListings.filter((listing) => !isDemoListing(listing));
 
   const assetById = new Map(campaign.visualAssets.map((asset) => [asset.id, asset]));
   const listingById = new Map(
-    [...campaign.listingCandidates, ...campaign.approvedListings, ...campaign.rejectedListings].map((listing) => [
+    [...candidates, ...approved, ...rejected].map((listing) => [
       listing.id,
       listing,
     ]),
@@ -918,9 +927,9 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
             label: mapPlan ? "Media placeholder" : poi ? "Media placeholder" : "Image needed",
             alt: `${segment.title} scene preview`,
             warning: mapPlan ? "Map preview is still needed." : poi ? "POI visual still needs a source image." : "Scene preview is still missing.",
-            source: mapPlan?.provider || poi?.provider || "CasaHUD fallback",
+            source: mapPlan?.provider || poi?.provider || "CasaFlix fallback",
             hasRealImage: false,
-            sourceLabel: mapPlan?.provider || poi?.provider || "CasaHUD fallback",
+            sourceLabel: mapPlan?.provider || poi?.provider || "CasaFlix fallback",
             stateLabel: mapPlan ? "Map visual planned" : poi ? "POI visual planned" : "Media placeholder",
             fallbackLabel: mapPlan ? "Media placeholder" : "Image needed",
             fallbackDetail: mapPlan
@@ -1072,12 +1081,13 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
 }
 
 function buildPhaseProgress(campaign: CasaHudCampaign | null): CasaHudPhaseProgressItem[] {
+  const approvedCount = campaign ? campaign.approvedListings.filter((listing) => !isDemoListing(listing)).length : 0;
   const steps = [
     { id: "opportunity", label: "Viral Titles", complete: Boolean(campaign?.selectedTitle?.title || campaign?.selectedViralTitle) },
     {
       id: "properties",
       label: "Properties",
-      complete: Boolean(campaign?.listingValidationStatus === "listing_candidates_validated" || campaign?.approvedListings.length),
+      complete: Boolean(campaign?.listingValidationStatus === "listing_candidates_validated" || approvedCount > 0),
     },
     {
       id: "location",
@@ -1140,10 +1150,12 @@ function buildCampaignBlockers(campaign: CasaHudCampaign | null) {
 
 function buildCompletedArtifacts(campaign: CasaHudCampaign | null) {
   if (!campaign) return [];
+  const realCandidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
+  const realApproved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
   return [
     campaign.selectedTitle?.title ? "Selected title and opportunity brief" : null,
-    campaign.listingCandidates.length > 0 ? `${formatCountLabel(campaign.listingCandidates.length, "discovered property")}` : null,
-    campaign.approvedListings.length > 0 ? `${formatCountLabel(campaign.approvedListings.length, "approved property")}` : null,
+    realCandidates.length > 0 ? `${formatCountLabel(realCandidates.length, "discovered property")}` : null,
+    realApproved.length > 0 ? `${formatCountLabel(realApproved.length, "approved property")}` : null,
     campaign.locationStory?.headline ? "Location story and map context" : null,
     campaign.scriptGenerationStatus === "script_generated" ? "Scene narration and script package" : null,
     campaign.mediaPlanningStatus === "media_plan_built" ? "Scene asset mapping and media coverage" : null,
@@ -1230,7 +1242,9 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
     };
   }
 
-  if (campaign.listingDiscoveryStatus === "listing_candidates_discovered" || campaign.listingCandidates.length > 0) {
+  const realCandidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
+
+  if (realCandidates.length > 0) {
     return {
       actionId: "validate_listings",
       workspace: "properties",
@@ -1732,21 +1746,41 @@ export default function StudioCasaHudCommandCenter() {
   const blockers = useMemo(() => buildCampaignBlockers(activeCampaign), [activeCampaign]);
   const completedArtifacts = useMemo(() => buildCompletedArtifacts(activeCampaign), [activeCampaign]);
   const videoScenes = useMemo(() => buildVideoScenes(activeCampaign), [activeCampaign]);
+  const visibleCampaignCandidates = useMemo(
+    () => (activeCampaign ? activeCampaign.listingCandidates.filter((listing) => !isDemoListing(listing)) : []),
+    [activeCampaign],
+  );
+  const visibleCampaignApproved = useMemo(
+    () => (activeCampaign ? activeCampaign.approvedListings.filter((listing) => !isDemoListing(listing)) : []),
+    [activeCampaign],
+  );
+  const visibleCampaignRejected = useMemo(
+    () => (activeCampaign ? activeCampaign.rejectedListings.filter((listing) => !isDemoListing(listing)) : []),
+    [activeCampaign],
+  );
+  const legacyDemoListingCount = useMemo(() => {
+    if (!activeCampaign) return 0;
+    return (
+      activeCampaign.listingCandidates.filter((listing) => isDemoListing(listing)).length +
+      activeCampaign.approvedListings.filter((listing) => isDemoListing(listing)).length +
+      activeCampaign.rejectedListings.filter((listing) => isDemoListing(listing)).length
+    );
+  }, [activeCampaign]);
   const activeListings = useMemo(() => {
     if (!activeCampaign) return [];
-    return activeCampaign.approvedListings.length > 0 ? activeCampaign.approvedListings : activeCampaign.listingCandidates;
-  }, [activeCampaign]);
+    return visibleCampaignApproved.length > 0 ? visibleCampaignApproved : visibleCampaignCandidates;
+  }, [activeCampaign, visibleCampaignApproved, visibleCampaignCandidates]);
   const campaignCards = useMemo(() => recentCampaigns.slice(0, 8), [recentCampaigns]);
   const hasRecentCampaigns = campaignCards.length > 0;
   const selectedListing = useMemo(() => {
     if (!activeCampaign || !selectedListingId) return null;
     return (
-      activeCampaign.approvedListings.find((listing) => listing.id === selectedListingId) ||
-      activeCampaign.rejectedListings.find((listing) => listing.id === selectedListingId) ||
-      activeCampaign.listingCandidates.find((listing) => listing.id === selectedListingId) ||
+      visibleCampaignApproved.find((listing) => listing.id === selectedListingId) ||
+      visibleCampaignRejected.find((listing) => listing.id === selectedListingId) ||
+      visibleCampaignCandidates.find((listing) => listing.id === selectedListingId) ||
       null
     );
-  }, [activeCampaign, selectedListingId]);
+  }, [activeCampaign, selectedListingId, visibleCampaignApproved, visibleCampaignRejected, visibleCampaignCandidates]);
   const browserImporterTargetOrigin = useMemo(() => {
     const browserOrigin = typeof window === "undefined" ? undefined : window.location.origin;
     return resolveCasaHudPublicAppOriginFromBrowser(browserOrigin);
@@ -1759,7 +1793,7 @@ export default function StudioCasaHudCommandCenter() {
     }
   }, [browserImporterTargetOrigin]);
   const browserImporterReviewHref = useMemo(() => {
-    const reviewUrl = new URL("/apps/studio/casahud/import", browserImporterTargetOrigin);
+    const reviewUrl = new URL("/apps/studio/casaflix/import", browserImporterTargetOrigin);
     if (activeCampaign?.id) reviewUrl.searchParams.set("campaignId", activeCampaign.id);
     return reviewUrl.toString();
   }, [activeCampaign?.id, browserImporterTargetOrigin]);
@@ -1780,13 +1814,13 @@ export default function StudioCasaHudCommandCenter() {
       }
     >();
 
-    for (const listing of activeCampaign.listingCandidates) {
+    for (const listing of visibleCampaignCandidates) {
       listingMap.set(listing.id, { listing, bucket: "candidate" });
     }
-    for (const listing of activeCampaign.rejectedListings) {
+    for (const listing of visibleCampaignRejected) {
       listingMap.set(listing.id, { listing, bucket: "rejected" });
     }
-    for (const listing of activeCampaign.approvedListings) {
+    for (const listing of visibleCampaignApproved) {
       listingMap.set(listing.id, { listing, bucket: "approved" });
     }
 
@@ -1824,7 +1858,7 @@ export default function StudioCasaHudCommandCenter() {
     });
 
     return filtered;
-  }, [activeCampaign, propertySearch, propertySort, propertyStatusFilter]);
+  }, [activeCampaign, propertySearch, propertySort, propertyStatusFilter, visibleCampaignApproved, visibleCampaignCandidates, visibleCampaignRejected]);
   const currentCampaignLabel = activeCampaign?.name || "No campaign selected";
   const connectionSummary =
     connectionStatus === "loading"
@@ -1976,11 +2010,11 @@ export default function StudioCasaHudCommandCenter() {
   useEffect(() => {
     if (!selectedListingId || !activeCampaign) return;
     const listingStillExists =
-      activeCampaign.approvedListings.some((listing) => listing.id === selectedListingId) ||
-      activeCampaign.rejectedListings.some((listing) => listing.id === selectedListingId) ||
-      activeCampaign.listingCandidates.some((listing) => listing.id === selectedListingId);
+      visibleCampaignApproved.some((listing) => listing.id === selectedListingId) ||
+      visibleCampaignRejected.some((listing) => listing.id === selectedListingId) ||
+      visibleCampaignCandidates.some((listing) => listing.id === selectedListingId);
     if (!listingStillExists) setSelectedListingId(null);
-  }, [activeCampaign, selectedListingId]);
+  }, [activeCampaign, selectedListingId, visibleCampaignApproved, visibleCampaignRejected, visibleCampaignCandidates]);
 
   useEffect(() => {
     if (!selectedListing) {
@@ -2680,7 +2714,7 @@ export default function StudioCasaHudCommandCenter() {
           <div className="min-w-0">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#64748B]">Studio App</p>
             <div className="mt-2 flex items-center gap-2">
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[#0F172A]">CasaHUD</h2>
+              <h2 className="text-xl font-semibold tracking-[-0.03em] text-[#0F172A]">CasaFlix</h2>
               <Link
                 href="/apps/studio"
                 className="inline-flex rounded-full border border-[#D9E4F0] px-2.5 py-1 text-xs font-medium text-[#475569] transition hover:border-[#94A3B8] hover:text-[#0F172A]"
@@ -2767,7 +2801,7 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspacePage
         eyebrow="Campaigns"
         title="Select the campaign you want to run"
-        description="CasaHUD stays campaign-centered. Pick a campaign to resume, or generate a new opportunity when you need a fresh video concept."
+        description="CasaFlix stays campaign-centered. Pick a campaign to resume, or generate a new opportunity when you need a fresh video concept."
         actions={
           <button
             type="button"
@@ -2841,7 +2875,7 @@ export default function StudioCasaHudCommandCenter() {
         ) : (
           <EmptyState
             title="No campaigns yet"
-            description="Select or create a campaign to begin. Generate the next viral video title when you want CasaHUD to open a fresh opportunity."
+            description="Select or create a campaign to begin. Generate the next viral video title when you want CasaFlix to open a fresh opportunity."
             action={
               <button type="button" className={primaryButtonClass} onClick={() => void onGenerateViralVideo()}>
                 Generate Viral Video Title
@@ -2958,7 +2992,7 @@ export default function StudioCasaHudCommandCenter() {
       >
         <EmptyState
           title="No title package yet"
-          description="Use Campaigns to create the next CasaHUD concept."
+          description="Use Campaigns to create the next CasaFlix concept."
           action={
             <button type="button" className={primaryButtonClass} onClick={() => openWorkspace("campaigns")}>
               Open Campaigns
@@ -2992,10 +3026,10 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="max-w-3xl">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Browser-Assisted Import</p>
                   <p className="mt-2 text-sm leading-6 text-[#475569]">
-                    Some listing sites block server-side extraction. If you can already view the property in your browser, use the CasaHUD Importer to capture visible page data and send it into this campaign.
+                    Some listing sites block server-side extraction. If you can already view the property in your browser, use the CasaFlix Importer to capture visible page data and send it into this campaign.
                   </p>
                   <p className="mt-2 text-xs leading-5 text-[#6A7687]">
-                    CasaHUD Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
+                    CasaFlix Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
                   </p>
                 </div>
                 <StatusPill tone="blue">Not Official API</StatusPill>
@@ -3016,7 +3050,7 @@ export default function StudioCasaHudCommandCenter() {
                       className={primaryButtonClass}
                       data-testid="casahud-browser-importer-bookmarklet"
                     >
-                      CasaHUD Importer
+                      CasaFlix Importer
                     </a>
                     <button
                       type="button"
@@ -3044,10 +3078,10 @@ export default function StudioCasaHudCommandCenter() {
                 </div>
                 <div className="grid gap-2 rounded-[1.15rem] border border-[#D9E4F0] bg-white p-4 text-sm leading-6 text-[#475569]">
                   <p className="font-semibold text-[#172033]">How to use it</p>
-                  <p>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</p>
+                  <p>1. Drag <span className="font-semibold text-[#172033]">CasaFlix Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</p>
                   <p>2. Open an Immobiliare or Idealista listing you can already view in your browser.</p>
-                  <p>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</p>
-                  <p>4. Review the imported listing in CasaHUD and save it to the shortlist.</p>
+                  <p>3. Click <span className="font-semibold text-[#172033]">CasaFlix Importer</span>.</p>
+                  <p>4. Review the imported listing in CasaFlix and save it to the shortlist.</p>
                 </div>
               </div>
             </section>
@@ -3102,9 +3136,9 @@ export default function StudioCasaHudCommandCenter() {
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <StatusPill tone="sage">{formatCountLabel(activeCampaign.approvedListings.length, "approved property")}</StatusPill>
-                  <StatusPill tone="neutral">{formatCountLabel(activeCampaign.listingCandidates.length, "candidate")}</StatusPill>
-                  <StatusPill tone="red">{formatCountLabel(activeCampaign.rejectedListings.length, "rejected listing")}</StatusPill>
+                  <StatusPill tone="sage">{formatCountLabel(visibleCampaignApproved.length, "approved property")}</StatusPill>
+                  <StatusPill tone="neutral">{formatCountLabel(visibleCampaignCandidates.length, "candidate")}</StatusPill>
+                  <StatusPill tone="red">{formatCountLabel(visibleCampaignRejected.length, "rejected listing")}</StatusPill>
                 </div>
               </div>
 
@@ -3164,9 +3198,31 @@ export default function StudioCasaHudCommandCenter() {
               </div>
             ) : (
               <EmptyState
-                title="No properties in this view"
-                description="Adjust the search or filter, or discover more matching properties."
-                action={renderNextActionButton(deriveNextStep(activeCampaign))}
+                title="No real property listings added yet"
+                description={
+                  legacyDemoListingCount > 0
+                    ? `This campaign still contains ${legacyDemoListingCount} legacy demo listing${legacyDemoListingCount === 1 ? "" : "s"} hidden from the production shortlist. Import real listings to continue.`
+                    : "Use Import Listing URLs, CasaFlix Importer, or connect a provider to build this shortlist."
+                }
+                action={
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      onClick={() => {
+                        if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      Import Listing URLs
+                    </button>
+                    <a href={browserImporterReviewHref} className={secondaryButtonClass}>
+                      Browser-assisted import
+                    </a>
+                    <button type="button" className={secondaryButtonClass} onClick={() => openConnections()}>
+                      Connections
+                    </button>
+                  </div>
+                }
               />
             )}
           </div>
@@ -3697,7 +3753,7 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspacePage
         eyebrow="Settings"
         title="Workspace settings"
-        description="Connection readiness and publishing defaults for the CasaHUD workspace."
+        description="Connection readiness and publishing defaults for the CasaFlix workspace."
         testId="casahud-settings"
       >
         <div className="grid gap-4 lg:grid-cols-2">
@@ -3819,7 +3875,7 @@ export default function StudioCasaHudCommandCenter() {
                   ))
                 ) : (
                   <p className="rounded-2xl border border-[#EEE3D4] bg-[#FFF9EF] px-4 py-3 text-sm text-[#526070]">
-                    No properties have been added to this campaign yet.
+                    No real property listings have been added to this campaign yet.
                   </p>
                 )}
               </div>
@@ -3848,7 +3904,7 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspacePage
         eyebrow="Campaign Overview"
         title="No active campaign"
-        description="Select a campaign first so CasaHUD can show what is done and what comes next."
+        description="Select a campaign first so CasaFlix can show what is done and what comes next."
         testId="casahud-overview"
       >
         <EmptyState
@@ -3872,7 +3928,7 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspacePage
         eyebrow="Opportunity Brief"
         title={opportunitySource.selectedTitle.title}
-        description="Review the selected concept, why it won, and how CasaHUD expects it to perform before the campaign moves forward."
+        description="Review the selected concept, why it won, and how CasaFlix expects it to perform before the campaign moves forward."
         actions={
           <>
             {opportunityOutput ? (
@@ -3991,7 +4047,7 @@ export default function StudioCasaHudCommandCenter() {
       >
         <EmptyState
           title="Generate the next viral video title"
-          description="CasaHUD will surface the selected title, ranked candidates, confidence reasoning, and the research brief that backs the campaign."
+          description="CasaFlix will surface the selected title, ranked candidates, confidence reasoning, and the research brief that backs the campaign."
           action={
             <button type="button" className={primaryButtonClass} onClick={() => void onGenerateViralVideo()}>
               Generate Viral Video Title
@@ -4025,10 +4081,10 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="max-w-3xl">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Browser-Assisted Import</p>
                   <p className="mt-3 text-sm leading-6 text-[#526070]">
-                    Some listing sites block server-side extraction. If you can view the listing in your browser, use the CasaHUD Importer to capture visible page data and send it straight into this campaign.
+                    Some listing sites block server-side extraction. If you can view the listing in your browser, use the CasaFlix Importer to capture visible page data and send it straight into this campaign.
                   </p>
                   <p className="mt-2 text-xs leading-5 text-[#6A7687]">
-                    CasaHUD Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
+                    CasaFlix Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
                   </p>
                 </div>
                 <StatusPill tone="blue">Not Official API</StatusPill>
@@ -4050,7 +4106,7 @@ export default function StudioCasaHudCommandCenter() {
                       className={primaryButtonClass}
                       data-testid="casahud-browser-importer-bookmarklet"
                     >
-                      CasaHUD Importer
+                      CasaFlix Importer
                     </a>
                     <button
                       type="button"
@@ -4080,10 +4136,10 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="grid gap-3 rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
                   <p className="text-sm font-semibold text-[#172033]">How to use it</p>
                   <ol className="grid gap-2 text-sm leading-6 text-[#526070]">
-                    <li>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</li>
+                    <li>1. Drag <span className="font-semibold text-[#172033]">CasaFlix Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</li>
                     <li>2. Open an Immobiliare or Idealista listing you can already view in your browser.</li>
-                    <li>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</li>
-                    <li>4. Review the imported listing in CasaHUD and save it to the shortlist.</li>
+                    <li>3. Click <span className="font-semibold text-[#172033]">CasaFlix Importer</span>.</li>
+                    <li>4. Review the imported listing in CasaFlix and save it to the shortlist.</li>
                   </ol>
                 </div>
               </div>
@@ -4094,7 +4150,7 @@ export default function StudioCasaHudCommandCenter() {
                 <div className="max-w-3xl">
                   <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Import Properties From URLs</p>
                   <p className="mt-3 text-sm leading-6 text-[#526070]">
-                    Paste listing URLs from Idealista, Immobiliare, or other property sites to test CasaHUD with real properties while API access is pending.
+                    Paste listing URLs from Idealista, Immobiliare, or other property sites to test CasaFlix with real properties while API access is pending.
                   </p>
                   <p className="mt-2 text-xs leading-5 text-[#6A7687]">
                     Imported listings are labeled as user-provided URLs, not official API listings.
@@ -4195,27 +4251,49 @@ export default function StudioCasaHudCommandCenter() {
               </div>
             ) : null}
 
-            {activeCampaign.listingCandidates.length === 0 &&
-            activeCampaign.approvedListings.length === 0 &&
-            activeCampaign.rejectedListings.length === 0 ? (
+            {visibleCampaignCandidates.length === 0 &&
+            visibleCampaignApproved.length === 0 &&
+            visibleCampaignRejected.length === 0 ? (
               <EmptyState
-                title="No listings yet"
-                description="Find matching properties to back this title."
-                action={renderNextActionButton(deriveNextStep(activeCampaign))}
+                title="No real property listings added yet"
+                description={
+                  legacyDemoListingCount > 0
+                    ? `This campaign currently only has legacy demo listings (${legacyDemoListingCount}) hidden from the production shortlist. Import real properties to continue.`
+                    : "Import listing URLs, use the CasaFlix browser importer, or connect a provider to build this shortlist."
+                }
+                action={
+                  <div className="flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className={primaryButtonClass}
+                      onClick={() => {
+                        if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
+                    >
+                      Import Listing URLs
+                    </button>
+                    <a href={browserImporterReviewHref} className={secondaryButtonClass}>
+                      Browser-assisted import
+                    </a>
+                    <button type="button" className={secondaryButtonClass} onClick={() => openConnections()}>
+                      Connections
+                    </button>
+                  </div>
+                }
               />
             ) : (
               <div className="grid gap-6">
-                {activeCampaign.listingCandidates.length > 0 && activeCampaign.approvedListings.length === 0 ? (
+                {visibleCampaignCandidates.length > 0 && visibleCampaignApproved.length === 0 ? (
                   <section className="grid gap-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Discovered Candidates</p>
                         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Candidate properties</h2>
                       </div>
-                      <StatusPill tone="neutral">{formatCountLabel(activeCampaign.listingCandidates.length, "candidate")}</StatusPill>
+                      <StatusPill tone="neutral">{formatCountLabel(visibleCampaignCandidates.length, "candidate")}</StatusPill>
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
-                      {activeCampaign.listingCandidates.map((listing) => (
+                      {visibleCampaignCandidates.map((listing) => (
                         <PropertyCard
                           key={listing.id}
                           campaign={activeCampaign}
@@ -4228,17 +4306,17 @@ export default function StudioCasaHudCommandCenter() {
                   </section>
                 ) : null}
 
-                {activeCampaign.approvedListings.length > 0 ? (
+                {visibleCampaignApproved.length > 0 ? (
                   <section className="grid gap-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#6C7B6D]">Approved Properties</p>
                         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Featured shortlist</h2>
                       </div>
-                      <StatusPill tone="sage">{formatCountLabel(activeCampaign.approvedListings.length, "approved property")}</StatusPill>
+                      <StatusPill tone="sage">{formatCountLabel(visibleCampaignApproved.length, "approved property")}</StatusPill>
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
-                      {activeCampaign.approvedListings.map((listing) => (
+                      {visibleCampaignApproved.map((listing) => (
                         <PropertyCard
                           key={listing.id}
                           campaign={activeCampaign}
@@ -4251,17 +4329,17 @@ export default function StudioCasaHudCommandCenter() {
                   </section>
                 ) : null}
 
-                {activeCampaign.rejectedListings.length > 0 ? (
+                {visibleCampaignRejected.length > 0 ? (
                   <section className="grid gap-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Rejected / Needs Attention</p>
                         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Properties that did not make the cut</h2>
                       </div>
-                      <StatusPill tone="red">{formatCountLabel(activeCampaign.rejectedListings.length, "listing")}</StatusPill>
+                      <StatusPill tone="red">{formatCountLabel(visibleCampaignRejected.length, "listing")}</StatusPill>
                     </div>
                     <div className="grid gap-5 xl:grid-cols-2">
-                      {activeCampaign.rejectedListings.map((listing) => (
+                      {visibleCampaignRejected.map((listing) => (
                         <PropertyCard
                           key={listing.id}
                           campaign={activeCampaign}
@@ -4296,7 +4374,7 @@ export default function StudioCasaHudCommandCenter() {
       <WorkspacePage
         eyebrow="Location Story"
         title="Why this place matters"
-        description="CasaHUD turns local highlights, POIs, and map ideas into a creator-facing place story."
+        description="CasaFlix turns local highlights, POIs, and map ideas into a creator-facing place story."
         actions={renderNextActionButton(deriveNextStep(activeCampaign))}
         testId="casahud-location-story"
       >
@@ -4341,8 +4419,8 @@ export default function StudioCasaHudCommandCenter() {
                   {activeCampaign.listingLocationInsights.map((insight) => (
                     <div key={insight.listingId} className="rounded-2xl border border-[#E7DCCB] bg-[#FFF9EF] p-4">
                       <p className="text-sm font-semibold text-[#172033]">
-                        {activeCampaign.approvedListings.find((listing) => listing.id === insight.listingId)?.title ||
-                          activeCampaign.listingCandidates.find((listing) => listing.id === insight.listingId)?.title ||
+                        {visibleCampaignApproved.find((listing) => listing.id === insight.listingId)?.title ||
+                          visibleCampaignCandidates.find((listing) => listing.id === insight.listingId)?.title ||
                           "Listing insight"}
                       </p>
                       <p className="mt-2 text-sm leading-6 text-[#526070]">{insight.summary}</p>
@@ -4611,7 +4689,7 @@ export default function StudioCasaHudCommandCenter() {
               <div className="rounded-[1.7rem] border border-[#E7DCCB] bg-white/92 p-5" data-testid="casahud-selected-properties-review">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#8A5A34]">Selected Properties</p>
                 <div className="mt-4 grid gap-3">
-                  {(activeCampaign.approvedListings.length > 0 ? activeCampaign.approvedListings : activeCampaign.listingCandidates)
+                  {(visibleCampaignApproved.length > 0 ? visibleCampaignApproved : visibleCampaignCandidates)
                     .slice(0, 3)
                     .map((listing) => (
                       <PropertyPreview key={listing.id} campaign={activeCampaign} listing={listing} />
@@ -4802,7 +4880,7 @@ export default function StudioCasaHudCommandCenter() {
                   </div>
                 ) : (
                   <div className="mt-5 rounded-[1.4rem] border border-dashed border-[#D7CAB8] bg-[#FFF9EF] p-4 text-sm leading-6 text-[#526070]">
-                    CasaHUD does not have a storyboard preview yet. Build the package or render plan first.
+                    CasaFlix does not have a storyboard preview yet. Build the package or render plan first.
                   </div>
                 )
               ) : null}
@@ -4923,7 +5001,7 @@ export default function StudioCasaHudCommandCenter() {
               <p className="mt-3 text-sm leading-6 text-[#526070]">
                 {youtubeConnected
                   ? "YouTube is connected. Publish now or schedule the campaign when the render is ready."
-                  : "YouTube connection required. Buttons stay visible so the next step is clear, but CasaHUD will not fake success."}
+                  : "YouTube connection required. Buttons stay visible so the next step is clear, but CasaFlix will not fake success."}
               </p>
               <div className="mt-4 grid gap-3">
                 <button
@@ -5133,7 +5211,7 @@ export default function StudioCasaHudCommandCenter() {
           <header className="sticky top-0 z-30 border-b border-[#D9E4F0] bg-white/92 px-4 py-4 backdrop-blur lg:hidden">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#64748B]">CasaHUD</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#64748B]">CasaFlix</p>
                 <p className="mt-1 truncate text-sm font-semibold text-[#0F172A]">{currentCampaignLabel}</p>
                 <p className="mt-1 text-xs text-[#64748B]">
                   {activeCampaign ? formatCampaignStatus(activeCampaign.status) : "No campaign selected"}
@@ -5306,7 +5384,7 @@ export default function StudioCasaHudCommandCenter() {
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Manual Listing Details</p>
                       <p className="mt-2 text-sm leading-6 text-[#526070]">
-                        Manual details are user-provided. CasaHUD keeps the source label and extraction warnings intact.
+                        Manual details are user-provided. CasaFlix keeps the source label and extraction warnings intact.
                       </p>
                     </div>
                     {listingEditorNotice ? (

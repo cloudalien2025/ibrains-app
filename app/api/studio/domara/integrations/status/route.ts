@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
       missingConnectionIds: missing.map((card) => card.id),
       message:
         missing.length === 0
-          ? "CasaHUD is ready to create and prepare videos."
+          ? "CasaFlix is ready to create and prepare videos."
           : "Connect the highlighted services before generating a production video.",
     },
     capabilities,

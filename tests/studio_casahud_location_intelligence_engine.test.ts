@@ -37,7 +37,7 @@ function baseValidatedCampaign(): CasaHudCampaign {
       },
     ],
     researchBrief: {
-      summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+      summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
       opportunityCategories: ["affordable coastal roundups", "retirement relocation"],
       competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
       audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -49,14 +49,14 @@ function baseValidatedCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
       summary: "89% confidence.",
       titleOpportunitySummary:
-        "The title gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+        "The title gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
       selectedTitleReasoning: "The price ceiling and geography are strong but still believable.",
       selectedTitleConfidence: 0.89,
     },
@@ -120,7 +120,7 @@ function baseValidatedCampaign(): CasaHudCampaign {
     listingValidationSummary: {
       headline: "Approved 1 of 1 discovered listings for the title promise.",
       rankingExplanation:
-        "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+        "CasaFlix ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
       discoveredCount: 1,
       approvedCount: 1,
       rejectedCount: 0,
@@ -160,7 +160,7 @@ function baseValidatedCampaign(): CasaHudCampaign {
       key: "location_intelligence",
       label: "Location Intelligence",
       detail:
-        "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+        "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.",
       implemented: false,
     },
     createdAt: "2026-04-28T00:10:00.000Z",
@@ -185,7 +185,7 @@ function baseValidatedCampaign(): CasaHudCampaign {
   };
 }
 
-describe("CasaHUD location intelligence engine", () => {
+describe("CasaFlix location intelligence engine", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));
@@ -206,7 +206,7 @@ describe("CasaHUD location intelligence engine", () => {
     expect(first.poiBundle?.cards.every((poi) => poi.provider === "casahud_location_patterns")).toBe(true);
     expect(first.locationProviderStatuses.find((status) => status.provider === "google_places")?.state).toBe("missing_credentials");
     expect(first.locationProviderStatuses.find((status) => status.provider === "mapbox")?.state).toBe("missing_credentials");
-    expect(first.locationStory?.fallbackNotice).toContain("CasaHUD location patterns");
+    expect(first.locationStory?.fallbackNotice).toContain("CasaFlix location patterns");
   });
 
   it("times out slow live providers and falls back without hanging the run", async () => {

@@ -24,11 +24,11 @@ export type CasaHudFeaturedPropertyMedia = {
 const SOURCE_LABEL_OVERRIDES: Record<string, string> = {
   idealista: "Idealista",
   immobiliare: "Immobiliare",
-  casahud_sample: "Sample Pattern",
+  casahud_sample: "Demo data",
   generic: "Source domain",
   listing_source_media: "Listing source media",
   location_visual_plan: "Location visual plan",
-  casahud_visual_placeholders: "CasaHUD media planning",
+  casahud_visual_placeholders: "CasaFlix media planning",
   mapbox_static_images: "Mapbox",
   google_places: "Google Places",
 };
@@ -170,7 +170,7 @@ function placeholderMedia(listing: CasaHudListingCandidate | CasaHudValidatedLis
     kind: "fallback",
     url: null,
     stateLabel: label,
-    source: humanizeLabel(asset?.sourceProvider || listing.provider, "CasaHUD fallback"),
+    source: humanizeLabel(asset?.sourceProvider || listing.provider, "CasaFlix fallback"),
     alt: `${listing.title} ${label.toLowerCase()}`,
     warning,
     fallbackLabel: label,
@@ -200,9 +200,9 @@ function sampleListingPlaceholder(listing: CasaHudListingCandidate | CasaHudVali
     stateLabel: "Media placeholder",
     source: sourceLabel,
     alt: `${listing.title} media placeholder`,
-    warning: "CasaHUD sample listing patterns do not include source imagery.",
+    warning: "Demo data does not include source imagery.",
     fallbackLabel: "Media placeholder",
-    fallbackDetail: "CasaHUD sample listing patterns do not include source imagery.",
+    fallbackDetail: "Demo data does not include source imagery.",
     hasRealImage: false,
   });
 }

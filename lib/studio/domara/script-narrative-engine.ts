@@ -377,7 +377,7 @@ function buildFullScriptText(segments: CasaHudScriptSegment[]): string {
 function buildFallbackProviderStatus(detail: string, warning?: string): CasaHudScriptProviderStatus {
   return {
     provider: "casahud_script_patterns",
-    label: "CasaHUD script patterns",
+    label: "CasaFlix script patterns",
     state: "fallback",
     configured: true,
     used: true,
@@ -431,7 +431,7 @@ function buildFallbackScript(campaign: CasaHudCampaign, generatedAt = nowIso(), 
     toneAndPacingNotes: buildToneAndPacingNotes(campaign, propertySegments),
     scriptWarnings: warnings,
     scriptProviderStatus: buildFallbackProviderStatus(
-      `Using deterministic CasaHUD script composition generated from validated listings and saved location intelligence at ${generatedAt}.`,
+      `Using deterministic CasaFlix script composition generated from validated listings and saved location intelligence at ${generatedAt}.`,
       warnings[0],
     ),
     fullScriptText: buildFullScriptText(scriptSegments),
@@ -476,7 +476,7 @@ function buildOpenAiPrompt(campaign: CasaHudCampaign, fallback: CasaHudScriptDat
   };
 
   return [
-    "You are CasaHUD's real-estate YouTube script agent.",
+    "You are CasaFlix's real-estate YouTube script agent.",
     "Return only JSON.",
     "Do not invent unsupported listing facts, distances, amenities, or live-provider claims.",
     "Respect fallback provider coverage warnings when writing location copy.",
@@ -574,11 +574,11 @@ export async function runCasaHudScriptNarrative(
   } catch (error) {
     const message = error instanceof Error ? error.message : "Live script generation failed.";
     return buildFallbackScript(campaign, generatedAt, [
-      `OpenAI script generation was unavailable (${message}), so CasaHUD used deterministic narrative composition instead.`,
+      `OpenAI script generation was unavailable (${message}), so CasaFlix used deterministic narrative composition instead.`,
     ]);
   }
 
   return buildFallbackScript(campaign, generatedAt, [
-    "OpenAI returned an incomplete narrative payload, so CasaHUD used deterministic narrative composition instead.",
+    "OpenAI returned an incomplete narrative payload, so CasaFlix used deterministic narrative composition instead.",
   ]);
 }

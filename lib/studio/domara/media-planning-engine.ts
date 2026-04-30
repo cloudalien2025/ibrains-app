@@ -70,7 +70,7 @@ function buildListingAssets(campaign: CasaHudCampaign, listings: CasaHudValidate
           title: `${listing.title} placeholder`,
           sourceProvider: "casahud_visual_placeholders",
           listingId: listing.id,
-          description: `Using CasaHUD visual placeholders until listing media is connected for ${listing.title}.`,
+          description: `Using CasaFlix visual placeholders until listing media is connected for ${listing.title}.`,
           usageRightsStatus: "planning_only",
           confidence: assetConfidence(listing.photoAvailability, true),
           availabilityStatus: "placeholder",
@@ -241,7 +241,7 @@ function buildSceneAssetMappings(campaign: CasaHudCampaign, assets: CasaHudVisua
     const placeholderCount = assignedAssets.filter((asset) => asset.availabilityStatus === "placeholder").length;
     const warnings = uniqueStrings([
       ...assignedAssets.flatMap((asset) => (asset.warning ? [asset.warning] : [])),
-      placeholderCount > 0 ? "One or more assigned assets are CasaHUD placeholders, so this scene still needs stronger media coverage before render." : null,
+      placeholderCount > 0 ? "One or more assigned assets are CasaFlix placeholders, so this scene still needs stronger media coverage before render." : null,
       assignedAssets.length === 0 ? "No assets have been matched to this scene yet." : null,
     ]);
 
@@ -300,11 +300,11 @@ function buildListingCoverage(campaign: CasaHudCampaign, assets: CasaHudVisualAs
         coverageStatus === "strong"
           ? `${listing.title} has enough listing imagery to support multiple scenes without leaning on placeholders.`
           : coverageStatus === "partial"
-            ? `${listing.title} has limited image coverage, so CasaHUD should reuse the strongest frame selectively.`
-            : `Using CasaHUD visual placeholders until listing media is connected for ${listing.title}.`,
+            ? `${listing.title} has limited image coverage, so CasaFlix should reuse the strongest frame selectively.`
+            : `Using CasaFlix visual placeholders until listing media is connected for ${listing.title}.`,
       warning:
         coverageStatus === "missing"
-          ? "No listing images were available, so this property currently relies on CasaHUD planning placeholders."
+          ? "No listing images were available, so this property currently relies on CasaFlix planning placeholders."
           : coverageStatus === "partial"
             ? "Photo coverage is usable but thin, so avoid stretching this listing across too many scenes."
             : undefined,
@@ -401,7 +401,7 @@ function buildThumbnailCandidates(campaign: CasaHudCampaign, assets: CasaHudVisu
       textOverlayIdea: `Real ${campaign.marketRegionHint || "shortlist"} options`,
       compositionNotes: "Use two approved properties with clear hierarchy so the frame reads like a curated shortlist rather than a collage.",
       warnings: comparisonAssets.some((assetId) => assets.find((asset) => asset.id === assetId)?.type === "fallback_placeholder")
-        ? ["At least one comparison asset is still a CasaHUD placeholder."]
+        ? ["At least one comparison asset is still a CasaFlix placeholder."]
         : [],
     });
   }
@@ -446,7 +446,7 @@ function buildProviderStatuses(
       detail:
         availableListingImages > 0
           ? `${availableListingImages} listing image${availableListingImages === 1 ? "" : "s"} were normalized into the media plan.`
-          : "No approved listing images were available, so CasaHUD is relying on placeholders until listing media is connected.",
+          : "No approved listing images were available, so CasaFlix is relying on placeholders until listing media is connected.",
       warning: availableListingImages > 0 ? undefined : "Connect stronger listing media coverage to reduce placeholder use.",
     },
     {
@@ -463,7 +463,7 @@ function buildProviderStatuses(
     },
     {
       provider: "casahud_visual_placeholders",
-      label: "CasaHUD visual placeholders",
+      label: "CasaFlix visual placeholders",
       state: placeholderCount > 0 ? "fallback" : "connected",
       configured: true,
       used: placeholderCount > 0,

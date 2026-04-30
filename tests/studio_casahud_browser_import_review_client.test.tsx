@@ -64,7 +64,7 @@ async function flush() {
   });
 }
 
-describe("CasaHUD browser import review client", () => {
+describe("CasaFlix browser import review client", () => {
   let container: HTMLDivElement;
   let root: Root;
 

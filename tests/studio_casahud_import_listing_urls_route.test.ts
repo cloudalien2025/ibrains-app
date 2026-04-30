@@ -37,8 +37,8 @@ function buildCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
@@ -69,7 +69,7 @@ function buildCampaign(): CasaHudCampaign {
       key: "property_discovery",
       label: "Find matching properties",
       detail:
-        "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+        "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -159,7 +159,7 @@ vi.mock("@/lib/studio/domara/campaign-listing-url-importer", () => ({
   importCasaHudListingUrls: mocks.importCasaHudListingUrls,
 }));
 
-describe("CasaHUD import listing URLs route", () => {
+describe("CasaFlix import listing URLs route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -337,7 +337,7 @@ describe("CasaHUD import listing URLs route", () => {
           status: "manual_draft",
           candidate: manualDraft,
           warnings: ["Listing extraction was limited by the source host (HTTP 403)."],
-          reason: "Source page was blocked for safe extraction, so CasaHUD created a manual draft.",
+          reason: "Source page was blocked for safe extraction, so CasaFlix created a manual draft.",
           nextAction: "Open Complete Listing Details to finish the imported property.",
         },
       ],

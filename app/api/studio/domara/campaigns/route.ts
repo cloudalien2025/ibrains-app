@@ -29,7 +29,7 @@ export async function GET(request: NextRequest) {
         reqId,
         campaigns: [],
         storeAvailable: false,
-        message: "CasaHUD storage is not ready yet.",
+        message: "CasaFlix storage is not ready yet.",
       });
     }
 
@@ -47,14 +47,14 @@ export async function GET(request: NextRequest) {
         reqId,
         campaigns: [],
         storeAvailable: false,
-        message: "CasaHUD storage is not ready yet.",
+        message: "CasaFlix storage is not ready yet.",
       });
     }
 
-    console.error("CasaHUD campaign list failed", { reqId, error });
+    console.error("CasaFlix campaign list failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not load recent campaigns right now. Try again in a moment.",
+      "CasaFlix could not load recent campaigns right now. Try again in a moment.",
       "CAMPAIGN_LIST_FAILED",
       reqId,
     );
@@ -70,7 +70,7 @@ export async function POST(request: NextRequest) {
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const body = await request.json().catch(() => ({}));
@@ -89,13 +89,13 @@ export async function POST(request: NextRequest) {
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD campaign creation failed", { reqId, error });
+    console.error("CasaFlix campaign creation failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not save this campaign right now. Try again in a moment.",
+      "CasaFlix could not save this campaign right now. Try again in a moment.",
       "CAMPAIGN_CREATE_FAILED",
       reqId,
     );

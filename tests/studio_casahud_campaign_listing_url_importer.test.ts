@@ -23,7 +23,7 @@ function buildCampaign(): CasaHudCampaign {
     },
     titleCandidates: [],
     researchBrief: {
-      summary: "CasaHUD identified a strong relocation angle for Southern Italy.",
+      summary: "CasaFlix identified a strong relocation angle for Southern Italy.",
       opportunityCategories: ["relocation"],
       competitorPatterns: [],
       audienceIntent: ["retire in Italy"],
@@ -35,8 +35,8 @@ function buildCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
@@ -67,7 +67,7 @@ function buildCampaign(): CasaHudCampaign {
       key: "property_discovery",
       label: "Find matching properties",
       detail:
-        "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+        "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -103,7 +103,7 @@ function mockHtmlResponse(url: string, html: string, status = 200) {
   };
 }
 
-describe("CasaHUD campaign listing URL importer", () => {
+describe("CasaFlix campaign listing URL importer", () => {
   it("imports metadata-backed URLs as imported_url candidates with featured image support", async () => {
     const fetchFn = vi.fn(async (input: string) =>
       mockHtmlResponse(

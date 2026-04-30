@@ -37,8 +37,8 @@ function buildCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
@@ -157,7 +157,7 @@ vi.mock("@/lib/studio/domara/campaign-repository", () => ({
   saveCasaHudCampaign: mocks.saveCasaHudCampaign,
 }));
 
-describe("CasaHUD browser import route", () => {
+describe("CasaFlix browser import route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -248,7 +248,7 @@ describe("CasaHUD browser import route", () => {
   });
 });
 
-describe("CasaHUD bookmarklet loader route", () => {
+describe("CasaFlix bookmarklet loader route", () => {
   beforeEach(() => {
     vi.unstubAllEnvs();
   });
@@ -278,7 +278,7 @@ describe("CasaHUD bookmarklet loader route", () => {
 
     expect(response.status).toBe(200);
     expect(script).toContain('var APP_ORIGIN = "https://app.ibrains.ai"');
-    expect(script).toContain("/apps/studio/casahud/import");
+    expect(script).toContain("/apps/studio/casaflix/import");
     expect(script).toContain("captureMethod");
     expect(script).toContain('var CAMPAIGN_ID_ENCODED = "campaign%20id%2Fwith%20space"');
     expect(script).not.toContain("localhost");
@@ -362,7 +362,7 @@ describe("CasaHUD bookmarklet loader route", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("application/javascript");
-    expect(script).toContain("/apps/studio/casahud/import");
+    expect(script).toContain("/apps/studio/casaflix/import");
     expect(script).toContain("captureMethod");
     expect(script).toContain("test-campaign");
     expect(script).toContain("window.open");

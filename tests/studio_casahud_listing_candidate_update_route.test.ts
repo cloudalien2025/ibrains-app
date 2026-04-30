@@ -37,8 +37,8 @@ function buildCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
@@ -91,7 +91,7 @@ function buildCampaign(): CasaHudCampaign {
       key: "listing_validation",
       label: "Validate and rank listings",
       detail:
-        "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
+        "Validation and ranking arrive next. CasaFlix will confirm which discovered candidates truly support the title promise.",
       implemented: false,
     },
     createdAt: "2026-04-29T00:00:00.000Z",
@@ -138,7 +138,7 @@ vi.mock("@/lib/studio/domara/campaign-repository", () => ({
   saveCasaHudCampaign: mocks.saveCasaHudCampaign,
 }));
 
-describe("CasaHUD imported listing update route", () => {
+describe("CasaFlix imported listing update route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();

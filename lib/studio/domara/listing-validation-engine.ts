@@ -485,7 +485,7 @@ function buildValidationSummary(
   return {
     headline,
     rankingExplanation:
-      "CasaHUD ranked the shortlist by story fit, geography, pricing, feature support, media strength, and duplicate reduction.",
+      "CasaFlix ranked the shortlist by story fit, geography, pricing, feature support, media strength, and duplicate reduction.",
     discoveredCount,
     approvedCount: approvedListings.length,
     rejectedCount: rejectedListings.length,
@@ -525,7 +525,7 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
             rejectionCategory: "duplicate",
             warnings: uniqueStrings([
               ...evaluation.warnings,
-              "Duplicate source overlap detected. CasaHUD kept the stronger candidate.",
+              "Duplicate source overlap detected. CasaFlix kept the stronger candidate.",
             ]),
             validationReasons: uniqueStrings([
               ...evaluation.validationReasons,
@@ -578,7 +578,7 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
     validationWarnings.add("No listing is strong enough to approve yet. Rerun property discovery before moving forward.");
   }
   if (rejectedListings.some((listing) => listing.validationStatus === "needs_attention")) {
-    validationWarnings.add("Some listings are plausible but still need review before CasaHUD can rely on them.");
+    validationWarnings.add("Some listings are plausible but still need review before CasaFlix can rely on them.");
   }
 
   const summary = buildValidationSummary(
