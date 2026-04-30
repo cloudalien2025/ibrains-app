@@ -237,3 +237,25 @@ describe("CasaHUD browser import route", () => {
     expect(payload.error.message).toContain("visible page text, metadata, and image candidates");
   });
 });
+
+describe("CasaHUD bookmarklet loader route", () => {
+  it("returns a campaign-aware loader script for Browser Import Review without secrets", async () => {
+    const route = await import("@/app/api/studio/domara/browser-import/bookmarklet/route");
+    const request = new NextRequest(
+      "https://app.ibrains.ai/api/studio/domara/browser-import/bookmarklet?campaignId=test-campaign",
+      { method: "GET" },
+    );
+
+    const response = await route.GET(request);
+    const script = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("application/javascript");
+    expect(script).toContain("/apps/studio/casahud/import");
+    expect(script).toContain("captureMethod");
+    expect(script).toContain("test-campaign");
+    expect(script).toContain("window.open");
+    expect(script).not.toContain("OPENAI_API_KEY");
+    expect(script).not.toContain("Authorization");
+  });
+});
