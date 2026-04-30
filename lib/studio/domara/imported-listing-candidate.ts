@@ -28,6 +28,22 @@ function cleanText(value?: string | null) {
   return normalized || undefined;
 }
 
+function cleanTrailingPunctuation(value: string): string {
+  return value
+    .replace(/^[,;:|·\-–—\s]+/g, "")
+    .replace(/[,;:|·\-–—\s]+$/g, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .trim();
+}
+
+function cleanParkingText(value?: string | null) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return undefined;
+  const normalized = cleanTrailingPunctuation(cleaned.replace(/[·|/]+/g, ", ").replace(/\s*,\s*/g, ", "));
+  if (!normalized) return undefined;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
 function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return Array.from(
     new Set(
@@ -179,13 +195,13 @@ function buildNarrationSeed(listing: CasaHudListingCandidate): string | undefine
   return sanitizeViewerCopy(`${seed || ""}${lifestyleAngle ? ` ${lifestyleAngle}` : ""}`);
 }
 
-function buildNeedsReviewFields(
+function deriveNeedsReviewFields(
   listing: CasaHudListingCandidate,
   imageStatus: CasaHudListingImageStatus,
 ): CasaHudListingNeedsReviewField[] {
   const fields: CasaHudListingNeedsReviewField[] = [];
   if (listing.price === undefined) fields.push("price");
-  if (!hasMeaningfulValue(listing.locationText)) fields.push("location");
+  if (!hasMeaningfulValue(listing.locationText) || /\b(good condition|parking|terrace|heating)\b/i.test(listing.locationText || "")) fields.push("location");
   if (!hasMeaningfulValue(listing.propertyType)) fields.push("property_type");
   if (listing.bedrooms === undefined || listing.bathrooms === undefined) fields.push("bedrooms_bathrooms");
   if (listing.sizeSqm === undefined && listing.commercialSurfaceSqm === undefined) fields.push("size");
@@ -242,7 +258,9 @@ export function normalizeImportedListingCandidate(
   const normalized: CasaHudListingCandidate = {
     ...listing,
     title: cleanText(listing.title) || cleanText(listing.casaHudDisplayTitle) || `Imported listing from ${listing.sourceLabel || listing.sourceHost || "source URL"}`,
+    locationText: cleanText(listing.locationText) || "Location needs review",
     priceText: formatListingPrice(listing.price, listing.currency, listing.priceText),
+    garageParking: cleanParkingText(listing.garageParking),
     featuredImageUrl: featured.featuredImageUrl || listing.featuredImageUrl,
     imageUrls: featured.imageUrls.length > 0 ? featured.imageUrls : listing.imageUrls,
     imageCount: featured.imageUrls.length > 0 ? Math.max(listing.imageCount || 0, featured.imageUrls.length) : listing.imageCount,
@@ -261,7 +279,7 @@ export function normalizeImportedListingCandidate(
     manualUpdatedAt: options?.manualUpdatedAt || listing.manualUpdatedAt,
   };
 
-  normalized.needsReviewFields = buildNeedsReviewFields(normalized, normalized.imageStatus || "missing");
+  normalized.needsReviewFields = deriveNeedsReviewFields(normalized, normalized.imageStatus || "missing");
   normalized.manualCompletionStatus = deriveManualCompletionStatus(normalized, normalized.imageStatus || "missing");
   normalized.features = uniqueStrings([...(listing.features || []), ...keyFeatures, ...lifestyleHighlights]).slice(0, 10);
   return normalized;

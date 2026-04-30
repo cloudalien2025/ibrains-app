@@ -291,7 +291,10 @@ export default function BrowserImportReviewClient() {
                 </p>
                 {draft.descriptionSnippet ? (
                   <p>
-                    <span className="font-semibold text-[#172033]">Description:</span> {draft.descriptionSnippet}
+                    <span className="font-semibold text-[#172033]">Description:</span>{" "}
+                    <span className="whitespace-pre-wrap" data-testid="casahud-browser-import-description-preview">
+                      {draft.descriptionSnippet}
+                    </span>
                   </p>
                 ) : null}
               </div>
@@ -396,6 +399,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.locationText}
                     onChange={(event) => setDraft((current) => (current ? { ...current, locationText: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-location-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">
@@ -404,6 +408,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.price}
                     onChange={(event) => setDraft((current) => (current ? { ...current, price: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-price-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">
@@ -520,8 +525,9 @@ export default function BrowserImportReviewClient() {
                 <textarea
                   value={draft.descriptionSnippet}
                   onChange={(event) => setDraft((current) => (current ? { ...current, descriptionSnippet: event.target.value } : current))}
-                  rows={4}
+                  rows={8}
                   className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                  data-testid="casahud-browser-import-description-input"
                 />
               </label>
 

@@ -108,21 +108,74 @@ type BrowserParsedDraft = {
 
 const DISALLOWED_CAPTURE_KEYS = ["cookie", "cookies", "localstorage", "sessionstorage", "token", "tokens", "authorization", "password"];
 
+const HTML_ENTITY_MAP: Record<string, string> = {
+  nbsp: " ",
+  amp: "&",
+  quot: '"',
+  apos: "'",
+  lt: "<",
+  gt: ">",
+  euro: "€",
+  ndash: "-",
+  mdash: "-",
+  rsquo: "'",
+  lsquo: "'",
+  rdquo: '"',
+  ldquo: '"',
+};
+
+const LOCATION_FEATURE_FRAGMENT_PATTERN =
+  /\b(good condition|condition|parking|car parking|garage|posto auto|box auto|with terrace|terrace|terrazz[oa]|balcony|balcone|independent heating|heating|riscaldamento|aria condizionata|air conditioning)\b/i;
+
+const FACT_LINE_PATTERN =
+  /^(price|prezzo|address|indirizzo|location|ubicazione|zona|comune|rooms?|locali|bedrooms?|camere(?: da letto)?|bathrooms?|bagni|surface|superficie|interior size|commercial surface|garden|giardino|land|terreno|garage|parking|posti auto|condition|stato|heating|riscaldamento|energy class|classe energetica|reference|riferimento|updated|aggiornato|advertiser|agency|agenzia|description|descrizione)\b/i;
+
+function decodeHtmlEntities(value: string): string {
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityToken) => {
+    const entity = String(entityToken || "").toLowerCase();
+    if (!entity) return match;
+    if (entity.startsWith("#x")) {
+      const codePoint = Number.parseInt(entity.slice(2), 16);
+      return Number.isFinite(codePoint) && codePoint > 0 ? String.fromCodePoint(codePoint) : match;
+    }
+    if (entity.startsWith("#")) {
+      const codePoint = Number.parseInt(entity.slice(1), 10);
+      return Number.isFinite(codePoint) && codePoint > 0 ? String.fromCodePoint(codePoint) : match;
+    }
+    return HTML_ENTITY_MAP[entity] ?? match;
+  });
+}
+
+function normalizeWhitespace(value: string, preserveNewLines = false): string {
+  const normalized = decodeHtmlEntities(value).replace(/\u00a0/g, " ").replace(/\r/g, "\n");
+  if (preserveNewLines) {
+    return normalized
+      .split("\n")
+      .map((line) => line.replace(/\s+/g, " ").trim())
+      .filter(Boolean)
+      .join("\n");
+  }
+  return normalized.replace(/\s+/g, " ").trim();
+}
+
+function cleanTrailingPunctuation(value: string): string {
+  return value
+    .replace(/^[,;:|·\-–—\s]+/g, "")
+    .replace(/[,;:|·\-–—\s]+$/g, "")
+    .replace(/\s+([,.;:!?])/g, "$1")
+    .replace(/([,;:]){2,}/g, "$1")
+    .trim();
+}
+
 function cleanText(value?: string | null) {
   if (typeof value !== "string") return undefined;
-  const cleaned = value.replace(/\s+/g, " ").trim();
+  const cleaned = cleanTrailingPunctuation(normalizeWhitespace(value));
   return cleaned || undefined;
 }
 
 function cleanMultilineText(value?: string | null) {
   if (typeof value !== "string") return undefined;
-  const normalized = value
-    .replace(/\r/g, "\n")
-    .replace(/\u00a0/g, " ")
-    .split("\n")
-    .map((line) => line.replace(/\s+/g, " ").trim())
-    .filter(Boolean)
-    .join("\n");
+  const normalized = normalizeWhitespace(value, true);
   return normalized || undefined;
 }
 
@@ -152,11 +205,9 @@ function containsDisallowedCaptureFields(value: unknown): boolean {
 }
 
 function optionalString(value: unknown) {
-  return typeof value === "string" && value.trim() ? value.trim() : undefined;
-}
-
-function optionalBoolean(value: unknown) {
-  return typeof value === "boolean" ? value : undefined;
+  if (typeof value !== "string") return undefined;
+  const normalized = normalizeWhitespace(value, value.includes("\n"));
+  return normalized || undefined;
 }
 
 function optionalNumber(value: unknown) {
@@ -170,13 +221,28 @@ function optionalNumber(value: unknown) {
 
 function normalizeNumberish(value: string | undefined) {
   if (!value) return undefined;
-  const normalized = value
-    .replace(/\u00a0/g, " ")
-    .replace(/(?<=\d)\.(?=\d{3}\b)/g, "")
-    .replace(/,/g, ".")
-    .replace(/[^\d.+-]/g, "");
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
+  const raw = normalizeWhitespace(value).replace(/[^\d.,+-]/g, "");
+  if (!raw) return undefined;
+  const sign = raw.startsWith("-") ? "-" : "";
+  const numeric = raw.replace(/[+-]/g, "");
+  const commaCount = (numeric.match(/,/g) || []).length;
+  const dotCount = (numeric.match(/\./g) || []).length;
+
+  let normalized = numeric;
+  if (commaCount > 0 && dotCount > 0) {
+    const lastComma = numeric.lastIndexOf(",");
+    const lastDot = numeric.lastIndexOf(".");
+    const decimalSeparator = lastComma > lastDot ? "," : ".";
+    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
+    normalized = numeric.split(thousandsSeparator).join("");
+    if (decimalSeparator === ",") normalized = normalized.replace(",", ".");
+  } else if (commaCount > 0) {
+    normalized = /,\d{1,2}$/.test(numeric) ? numeric.replace(/\./g, "").replace(",", ".") : numeric.replace(/,/g, "");
+  } else if (dotCount > 0) {
+    normalized = /\.\d{1,2}$/.test(numeric) ? numeric.replace(/,/g, "") : numeric.replace(/\./g, "");
+  }
+
+  const parsed = Number(`${sign}${normalized}`);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
@@ -201,12 +267,40 @@ function formatPrice(price?: number, currency?: string) {
   return `${currency || "EUR"} ${price.toLocaleString("en-US")}`;
 }
 
-function parsePrice(text: string | undefined) {
+function extractPriceText(text: string | undefined) {
   if (!text) return {};
-  const match = text.match(/(€|eur|usd|\$)\s*([\d.]+(?:,\d{1,2})?|\d[\d.,]*)/i);
-  if (!match) return {};
-  const currency = match[1] === "$" || match[1]?.toLowerCase() === "usd" ? "USD" : "EUR";
-  const amount = normalizeNumberish(match[2]);
+  const normalized = normalizeWhitespace(text).replace(/\s*\/\s*m².*/i, "").trim();
+  if (!normalized) return {};
+  if (/\b(price on request|prezzo su richiesta)\b/i.test(normalized)) {
+    return { priceOnRequest: true, rawPriceText: "Price on request" };
+  }
+  const currencyBefore = normalized.match(/(€|eur|usd|\$)\s*([0-9][0-9.,\s]*)/i);
+  if (currencyBefore) {
+    return {
+      rawPriceText: `${currencyBefore[1]} ${currencyBefore[2]}`.replace(/\s+/g, " ").trim(),
+      currencyToken: currencyBefore[1],
+      amountToken: currencyBefore[2],
+    };
+  }
+  const currencyAfter = normalized.match(/([0-9][0-9.,\s]*)\s*(€|eur|usd|\$)/i);
+  if (currencyAfter) {
+    return {
+      rawPriceText: `${currencyAfter[1]} ${currencyAfter[2]}`.replace(/\s+/g, " ").trim(),
+      currencyToken: currencyAfter[2],
+      amountToken: currencyAfter[1],
+    };
+  }
+  return {};
+}
+
+function normalizeCurrencyPrice(text: string | undefined) {
+  const extracted = extractPriceText(text);
+  if ("priceOnRequest" in extracted && extracted.priceOnRequest) return { priceText: extracted.rawPriceText };
+  const currencyToken = "currencyToken" in extracted ? extracted.currencyToken : undefined;
+  const amountToken = "amountToken" in extracted ? extracted.amountToken : undefined;
+  if (!currencyToken || !amountToken) return {};
+  const currency = currencyToken === "$" || currencyToken.toLowerCase() === "usd" ? "USD" : "EUR";
+  const amount = normalizeNumberish(amountToken);
   if (amount === undefined) return { currency };
   const price = Math.round(amount);
   return {
@@ -224,12 +318,21 @@ function parseAddressParts(locationText: string | undefined) {
     .filter(Boolean);
 
   if (parts.length === 0) return {};
-  if (parts.length === 1) return { city: parts[0] };
+  if (parts.length === 1) {
+    return {
+      city: parts[0],
+      country: /(?:italy|italia)$/i.test(parts[0]) ? "Italy" : undefined,
+    };
+  }
+
+  const inferredCountry = /^(italy|italia)$/i.test(parts[parts.length - 1] || "") ? "Italy" : parts[parts.length - 1];
+  const inferredCity = parts.find((part, index) => index > 0 && !/\d/.test(part)) || parts[0];
+
   return {
-    city: parts.length >= 5 ? parts[1] : parts[0],
+    city: inferredCity,
     province: parts.length >= 5 ? parts[2] : parts.length >= 4 ? parts[1] : undefined,
     region: parts.length >= 5 ? parts[3] : parts.length >= 4 ? parts[2] : parts.length === 3 ? parts[1] : undefined,
-    country: parts[parts.length - 1],
+    country: inferredCountry,
   };
 }
 
@@ -256,7 +359,7 @@ function normalizePropertyType(value: string | undefined) {
 function splitVisibleLines(text: string | undefined) {
   return (text || "")
     .split(/\n+/)
-    .map((line) => line.replace(/\s+/g, " ").trim())
+    .map((line) => normalizeWhitespace(line))
     .filter(Boolean);
 }
 
@@ -287,7 +390,7 @@ function collectSectionText(lines: string[], headingPatterns: RegExp[], maxLines
     for (let offset = 1; offset <= maxLines; offset += 1) {
       const next = cleanText(lines[index + offset]);
       if (!next) break;
-      if (/^(features|characteristics|price|location|address|bedrooms|bathrooms|rooms|surface|size|reference|updated|energy class)\b/i.test(next)) {
+      if (FACT_LINE_PATTERN.test(next)) {
         break;
       }
       collected.push(next);
@@ -297,6 +400,78 @@ function collectSectionText(lines: string[], headingPatterns: RegExp[], maxLines
   }
 
   return undefined;
+}
+
+function extractDescriptionBlock(lines: string[]) {
+  const section = collectSectionText(lines, [/^(?:description|descrizione|overview|details)\b/i], 30);
+  if (section) return section;
+  const paragraphCandidate = lines.find((line) => line.length >= 120 && /[.!?]/.test(line) && !FACT_LINE_PATTERN.test(line));
+  return cleanText(paragraphCandidate);
+}
+
+function pickBestDescription(candidates: Array<string | undefined>) {
+  const normalized = uniqueStrings(candidates);
+  if (normalized.length === 0) return undefined;
+  normalized.sort((left, right) => {
+    const leftScore = (left.length >= 80 ? 20 : 0) + (/[.!?]$/.test(left) ? 10 : 0) + (/…$|\.{3}$/.test(left) ? -8 : 0);
+    const rightScore = (right.length >= 80 ? 20 : 0) + (/[.!?]$/.test(right) ? 10 : 0) + (/…$|\.{3}$/.test(right) ? -8 : 0);
+    if (leftScore !== rightScore) return rightScore - leftScore;
+    return right.length - left.length;
+  });
+  const best = normalized[0]!;
+  if (best.length <= 1_000) return best;
+  const trimmed = best.slice(0, 1_000);
+  const lastBoundary = Math.max(trimmed.lastIndexOf("."), trimmed.lastIndexOf("!"), trimmed.lastIndexOf("?"), trimmed.lastIndexOf(" "));
+  return cleanText(trimmed.slice(0, lastBoundary > 200 ? lastBoundary : 1_000));
+}
+
+function cleanLocationText(value: string | undefined) {
+  const initial = cleanText(value);
+  if (!initial) return undefined;
+
+  const withoutFeatureSentence = initial
+    .split(/\.\s+/)
+    .filter((part, index) => index === 0 || !LOCATION_FEATURE_FRAGMENT_PATTERN.test(part))
+    .join(". ");
+  const parts = withoutFeatureSentence
+    .split(",")
+    .map((part) => cleanText(part))
+    .filter((part): part is string => {
+      if (!part) return false;
+      return !LOCATION_FEATURE_FRAGMENT_PATTERN.test(part);
+    });
+
+  const joined = cleanTrailingPunctuation(parts.join(", "));
+  return joined || undefined;
+}
+
+function cleanParkingText(value: string | undefined) {
+  const cleaned = cleanText(value);
+  if (!cleaned) return undefined;
+  const normalized = cleanTrailingPunctuation(cleaned.replace(/[·|/]+/g, ", ").replace(/\s*,\s*/g, ", "));
+  if (!normalized) return undefined;
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+}
+
+function extractListingFacts(fullText: string, lines: string[]) {
+  const normalized = normalizeWhitespace(fullText);
+  return {
+    bedrooms:
+      integerFromText(findLineValue(lines, [/^(?:bedrooms?|camere da letto|camere)\b[:\s-]*(.*)$/i])) ||
+      integerFromText(normalized.match(/(\d{1,2})\s*(?:bedrooms?|camere da letto|camere)\b/i)?.[1]),
+    bathrooms:
+      integerFromText(findLineValue(lines, [/^(?:bathrooms?|bagni)\b[:\s-]*(.*)$/i])) ||
+      integerFromText(normalized.match(/(\d{1,2})\s*(?:bathrooms?|bagni)\b/i)?.[1]),
+    rooms:
+      integerFromText(findLineValue(lines, [/^(?:rooms|locali)\b[:\s-]*(.*)$/i])) ||
+      integerFromText(normalized.match(/(\d{1,2}\+?)\s*(?:rooms?|locali)\b/i)?.[1]),
+    sizeSqm:
+      normalizeNumberish(findLineValue(lines, [/^(?:interior size|surface|superficie|size)\b[:\s-]*(.*)$/i])) ||
+      normalizeNumberish(normalized.match(/(\d{2,5}(?:[.,]\d+)?)\s*(?:sqm|sq\.?\s*m|m²|m2)\b/i)?.[1]),
+    landSizeSqm:
+      normalizeNumberish(findLineValue(lines, [/^(?:garden|land|plot|giardino|terreno)\b[:\s-]*(.*)$/i])) ||
+      normalizeNumberish(normalized.match(/(?:garden|land|plot|giardino|terreno)[^\d]{0,16}(\d[\d.,]*)\s*(?:sqm|m²|m2)\b/i)?.[1]),
+  };
 }
 
 function resolveUrl(value: string | undefined, baseUrl: string) {
@@ -379,24 +554,53 @@ function trimVisibleText(value: string | undefined) {
   const sanitized = cleanMultilineText(value);
   if (!sanitized) return undefined;
   if (sanitized.length <= CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS) return sanitized;
-  return `${sanitized.slice(0, CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS).trim()}…`;
+  const clipped = sanitized.slice(0, CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS);
+  const lastBoundary = Math.max(clipped.lastIndexOf("\n"), clipped.lastIndexOf(". "), clipped.lastIndexOf(" "));
+  return cleanText(clipped.slice(0, lastBoundary > 100 ? lastBoundary : CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS));
 }
 
-function deriveLocation(lines: string[], fullText: string, title: string | undefined) {
-  const explicit = findLineValue(lines, [
-    /^(?:address|indirizzo|location|ubicazione)\b[:\s-]*(.*)$/i,
-    /^(?:where)\b[:\s-]*(.*)$/i,
-  ]);
-  if (explicit) return explicit;
+function extractLocationText(lines: string[], fullText: string, title: string | undefined) {
+  const explicitAddress = findLineValue(lines, [/^(?:address|indirizzo)\b[:\s-]*(.*)$/i]);
+  if (explicitAddress) return cleanLocationText(explicitAddress);
+
+  const explicitLocation = findLineValue(lines, [/^(?:location|ubicazione|zona|comune|where)\b[:\s-]*(.*)$/i]);
+  const cleanedExplicitLocation = cleanLocationText(explicitLocation);
+  if (cleanedExplicitLocation && !LOCATION_FEATURE_FRAGMENT_PATTERN.test(cleanedExplicitLocation)) {
+    return cleanedExplicitLocation;
+  }
 
   const addressMatch =
     fullText.match(/\b(?:via|contrada|piazza|viale|corso|strada|loc\.?) [^,\n]+,\s*[A-Za-zÀ-ÿ' -]+(?:,\s*[A-Za-zÀ-ÿ' -]+){1,4}/i) ||
     title?.match(/\b(?:via|contrada|piazza|viale|corso|strada|loc\.?) [^,\n]+,\s*[A-Za-zÀ-ÿ' -]+(?:,\s*[A-Za-zÀ-ÿ' -]+){0,3}/i);
 
-  if (addressMatch?.[0]) return cleanText(addressMatch[0]);
+  if (addressMatch?.[0]) return cleanLocationText(addressMatch[0]);
 
-  const placeLine = lines.find((line) => /,\s*(?:Italy|Italia)\b/i.test(line));
-  return placeLine ? cleanText(placeLine) : undefined;
+  const placeLine = lines.find((line) => /,\s*(?:Italy|Italia)\b/i.test(line) && !LOCATION_FEATURE_FRAGMENT_PATTERN.test(line));
+  if (placeLine) return cleanLocationText(placeLine);
+  const areaLine = lines.find((line) => /\b(?:capaccio|paestum|salerno|calabria|puglia|campania)\b/i.test(line) && !FACT_LINE_PATTERN.test(line));
+  return cleanLocationText(areaLine);
+}
+
+function cleanListingTitle(value: string | undefined, draft: Pick<BrowserParsedDraft, "city" | "propertyType" | "terrace" | "garageParking" | "landSizeSqm">) {
+  const normalized = normalizeTitle(value);
+  if (!normalized) return undefined;
+  const withoutFeatureTail = cleanTrailingPunctuation(
+    normalized
+      .replace(/\.\s*(good condition|excellent|parking|car parking|with terrace|terrace|independent heating).*/i, "")
+      .replace(/\b(good condition|independent heating)\b.*$/i, ""),
+  );
+  const generated = buildDisplayTitle({
+    title: withoutFeatureTail,
+    city: draft.city,
+    propertyType: draft.propertyType,
+    terrace: draft.terrace,
+    garageParking: draft.garageParking,
+    landSizeSqm: draft.landSizeSqm,
+    keyFeatures: [],
+    lifestyleHighlights: [],
+  });
+  if (generated) return generated;
+  return withoutFeatureTail;
 }
 
 function buildDisplayTitle(draft: BrowserParsedDraft) {
@@ -415,58 +619,55 @@ function buildDisplayTitle(draft: BrowserParsedDraft) {
 }
 
 function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): BrowserParsedDraft {
-  const fullText = [payload.title, payload.openGraph?.title, payload.metaDescription, payload.openGraph?.description, payload.visibleText]
+  const fullText = [payload.title, payload.openGraph?.title, payload.metaDescription, payload.openGraph?.description, payload.twitter?.description, payload.visibleText]
     .filter(Boolean)
+    .map((value) => normalizeWhitespace(String(value), true))
     .join("\n");
   const lines = splitVisibleLines(payload.visibleText);
-  const title = normalizeTitle(payload.openGraph?.title || payload.title || payload.twitter?.title);
-  const description =
-    cleanText(payload.openGraph?.description) ||
-    cleanText(payload.twitter?.description) ||
-    cleanText(payload.metaDescription) ||
-    collectSectionText(lines, [/^(?:description|descrizione|overview|details)\b/i], 10);
-  const locationText = deriveLocation(lines, fullText, title);
+  const description = pickBestDescription([
+    extractDescriptionBlock(lines),
+    payload.openGraph?.description,
+    payload.twitter?.description,
+    payload.metaDescription,
+  ]);
+  const locationText = extractLocationText(lines, fullText, payload.title || payload.openGraph?.title || payload.twitter?.title);
   const addressParts = parseAddressParts(locationText);
-  const priceInfo =
-    parsePrice(findLineValue(lines, [/^(?:price|prezzo)\b[:\s-]*(.*)$/i]) || fullText.match(/(€\s?[\d.,]+)/i)?.[1]);
+  const priceLine = findLineValue(lines, [/^(?:price|prezzo)\b[:\s-]*(.*)$/i]);
+  const fallbackPriceText =
+    fullText.match(/(?:price|prezzo)[^\d€$]{0,16}((?:€|eur|usd|\$)?\s*\d[\d.,\s]*\s*(?:€|eur|usd|\$)?)/i)?.[1] ||
+    fullText.match(/((?:€|eur|usd|\$)\s*\d[\d.,\s]*|\d[\d.,\s]*\s*(?:€|eur|usd|\$))/i)?.[1];
+  const priceInfo = normalizeCurrencyPrice(priceLine || fallbackPriceText);
+
+  const facts = extractListingFacts(fullText, lines);
 
   const propertyType =
     normalizePropertyType(
       findLineValue(lines, [/^(?:property type|tipologia|type)\b[:\s-]*(.*)$/i]) ||
-        title ||
+        payload.openGraph?.title ||
+        payload.title ||
         fullText.match(/\b(single family villa|country house|casale|villa|apartment|flat|house)\b/i)?.[1],
     );
 
-  const rooms =
-    integerFromText(findLineValue(lines, [/^(?:rooms|locali)\b[:\s-]*(.*)$/i])) ||
-    integerFromText(fullText.match(/(\d{1,2}\+?)\s*(?:rooms?|locali)\b/i)?.[1]);
-  const bedrooms =
-    integerFromText(findLineValue(lines, [/^(?:bedrooms?|camere da letto|camere)\b[:\s-]*(.*)$/i])) ||
-    integerFromText(fullText.match(/(\d{1,2})\s*(?:bedrooms?|camere da letto)\b/i)?.[1]);
-  const bathrooms =
-    integerFromText(findLineValue(lines, [/^(?:bathrooms?|bagni)\b[:\s-]*(.*)$/i])) ||
-    integerFromText(fullText.match(/(\d{1,2})\s*(?:bathrooms?|bagni)\b/i)?.[1]);
-  const sizeSqm =
-    normalizeNumberish(findLineValue(lines, [/^(?:interior size|surface|superficie|size)\b[:\s-]*(.*)$/i])) ||
-    normalizeNumberish(fullText.match(/(\d{2,5})\s*(?:sqm|sq\.?\s*m|m²|m2)\b/i)?.[1]);
+  const rooms = facts.rooms;
+  const bedrooms = facts.bedrooms;
+  const bathrooms = facts.bathrooms;
+  const sizeSqm = facts.sizeSqm;
   const commercialSurfaceSqm = normalizeNumberish(
     findLineValue(lines, [/^(?:commercial surface|commercial area)\b[:\s-]*(.*)$/i]),
   );
-  const landSizeSqm =
-    normalizeNumberish(findLineValue(lines, [/^(?:garden|land|plot|giardino|terreno)\b[:\s-]*(.*)$/i])) ||
-    normalizeNumberish(fullText.match(/(?:garden|land|plot|giardino|terreno)[^\d]{0,16}(\d[\d.,]*)\s*(?:sqm|m²|m2)\b/i)?.[1]);
+  const landSizeSqm = facts.landSizeSqm;
 
-  const garageParking = findLineValue(lines, [/^(?:garage(?:\s*\/\s*parking)?|parking|posti auto)\b[:\s-]*(.*)$/i]);
+  const garageParking = cleanParkingText(
+    findLineValue(lines, [/^(?:garage(?:\s*\/\s*parking)?|parking|posti auto|box auto)\b[:\s-]*(.*)$/i]) ||
+      fullText.match(/\b(?:garage|parking|posto auto|box auto)\b[:\s-]*([^.\n]{3,80})/i)?.[1],
+  );
   const balcony =
-    optionalBoolean(undefined) ||
     /\bbalcony\b|\bbalcone\b/i.test(fullText) ||
-    /^(?:balcony|balcone)\b/i.test(garageParking || "") ||
     undefined;
   const terrace =
-    /\bterrace\b|\bterrazza\b/i.test(fullText) ||
-    /^(?:terrace|terrazza)\b/i.test(garageParking || "") ||
+    /\bterrace\b|\bterrazz[ao]\b/i.test(fullText) ||
     undefined;
-  const condition = findLineValue(lines, [/^(?:condition|stato)\b[:\s-]*(.*)$/i]) || fullText.match(/\b(excellent|renovated|good condition|to renovate)\b/i)?.[1];
+  const condition = cleanText(findLineValue(lines, [/^(?:condition|stato)\b[:\s-]*(.*)$/i]) || fullText.match(/\b(excellent|renovated|good condition|to renovate)\b/i)?.[1]);
   const heating = findLineValue(lines, [/^(?:heating|riscaldamento)\b[:\s-]*(.*)$/i]);
   const airConditioning = findLineValue(lines, [/^(?:air conditioning|aria condizionata)\b[:\s-]*(.*)$/i]);
   const energyClass =
@@ -488,6 +689,14 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
     integerFromText(fullText.match(/\b(\d{1,2})\s*(?:floor plans?|planimetrie)\b/i)?.[1]);
   const virtualTour = /\bvirtual tour\b/i.test(fullText) || /\b3d tour\b/i.test(fullText) ? true : undefined;
   const advertiser = findLineValue(lines, [/^(?:advertiser|agency|agenzia)\b[:\s-]*(.*)$/i]);
+  const cleanedLocationText = cleanLocationText(locationText);
+  const finalTitle = cleanListingTitle(payload.openGraph?.title || payload.title || payload.twitter?.title, {
+    city: addressParts.city,
+    propertyType,
+    terrace,
+    garageParking,
+    landSizeSqm,
+  });
 
   const keyFeatures = uniqueStrings([
     propertyType,
@@ -513,9 +722,9 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   ]).slice(0, 4);
 
   return {
-    title,
-    addressText: locationText,
-    locationText,
+    title: finalTitle,
+    addressText: cleanedLocationText,
+    locationText: cleanedLocationText,
     ...addressParts,
     ...priceInfo,
     propertyType,
@@ -525,7 +734,7 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
     sizeSqm,
     commercialSurfaceSqm,
     landSizeSqm,
-    garageParking,
+    garageParking: cleanParkingText(garageParking),
     balcony: balcony || undefined,
     terrace: terrace || undefined,
     condition: capitalizeWords(condition),
@@ -540,7 +749,7 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
     floorPlanCount,
     virtualTour,
     advertiser: cleanText(advertiser),
-    descriptionSnippet: cleanText(description),
+    descriptionSnippet: description,
     keyFeatures,
     lifestyleHighlights,
   } satisfies BrowserParsedDraft;
