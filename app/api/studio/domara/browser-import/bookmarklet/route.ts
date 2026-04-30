@@ -5,10 +5,11 @@ import {
   CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS,
   CASAHUD_BROWSER_IMPORT_VERSION,
 } from "@/lib/studio/domara/browser-listing-capture-parser";
+import { resolveCasaHudPublicAppOrigin } from "@/lib/studio/domara/public-app-origin";
 
 export const runtime = "nodejs";
 
-function buildBookmarkletScript(origin: string, campaignId?: string) {
+function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
   return `
 (function () {
   if (window.__CASAHUD_BROWSER_IMPORT_ACTIVE__) {
@@ -17,11 +18,18 @@ function buildBookmarkletScript(origin: string, campaignId?: string) {
   window.__CASAHUD_BROWSER_IMPORT_ACTIVE__ = true;
 
   var APP_ORIGIN = ${JSON.stringify(origin)};
-  var CAMPAIGN_ID = ${JSON.stringify(campaignId || "")};
+  var CAMPAIGN_ID_ENCODED = ${JSON.stringify(encodedCampaignId || "")};
+  var CAMPAIGN_ID = "";
   var CAPTURE_VERSION = ${JSON.stringify(CASAHUD_BROWSER_IMPORT_CAPTURE_VERSION)};
   var PAYLOAD_VERSION = ${JSON.stringify(CASAHUD_BROWSER_IMPORT_VERSION)};
   var MAX_VISIBLE_TEXT_CHARS = ${String(CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS)};
   var MAX_IMAGE_CANDIDATES = ${String(CASAHUD_BROWSER_IMPORT_MAX_IMAGE_CANDIDATES)};
+
+  try {
+    CAMPAIGN_ID = CAMPAIGN_ID_ENCODED ? decodeURIComponent(CAMPAIGN_ID_ENCODED) : "";
+  } catch (_error) {
+    CAMPAIGN_ID = "";
+  }
 
   function cleanText(value) {
     return typeof value === "string" ? value.replace(/\\s+/g, " ").trim() : "";
@@ -166,7 +174,9 @@ function buildBookmarkletScript(origin: string, campaignId?: string) {
 
 export async function GET(request: NextRequest) {
   const campaignId = request.nextUrl.searchParams.get("campaignId")?.trim() || undefined;
-  const script = buildBookmarkletScript(request.nextUrl.origin, campaignId);
+  const encodedCampaignId = campaignId ? encodeURIComponent(campaignId) : undefined;
+  const appOrigin = resolveCasaHudPublicAppOrigin(request);
+  const script = buildBookmarkletScript(appOrigin, encodedCampaignId);
   return new NextResponse(script, {
     headers: {
       "content-type": "application/javascript; charset=utf-8",
