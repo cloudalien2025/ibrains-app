@@ -274,6 +274,29 @@ describe("CasaHUD bookmarklet loader route", () => {
     expect(script).not.toContain("localhost");
   });
 
+  it("defaults public hosts to https when forwarded proto is missing in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("APP_PUBLIC_URL", "");
+    vi.stubEnv("APP_URL", "");
+
+    const route = await import("@/app/api/studio/domara/browser-import/bookmarklet/route");
+    const request = new NextRequest("http://localhost:3001/api/studio/domara/browser-import/bookmarklet?campaignId=test-campaign", {
+      method: "GET",
+      headers: {
+        host: "app.ibrains.ai",
+      },
+    });
+
+    const response = await route.GET(request);
+    const script = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(script).toContain('var APP_ORIGIN = "https://app.ibrains.ai"');
+    expect(script).not.toContain('var APP_ORIGIN = "http://app.ibrains.ai"');
+  });
+
   it("keeps localhost fallback for local development/test when no public origin is configured", async () => {
     vi.stubEnv("NODE_ENV", "test");
     vi.stubEnv("NEXT_PUBLIC_APP_URL", "");

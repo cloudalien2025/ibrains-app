@@ -62,6 +62,29 @@ function normalizeHost(value: string | null | undefined): string | null {
   return first.replace(/^https?:\/\//i, "").split("/")[0]?.trim() || null;
 }
 
+function normalizedProtocol(value: string | null | undefined): "http" | "https" | null {
+  const candidate = firstHeaderValue(value)?.replace(/:$/, "").toLowerCase();
+  if (candidate === "http" || candidate === "https") return candidate;
+  return null;
+}
+
+function isLocalOrPrivateHost(value: string | null | undefined): boolean {
+  const host = normalizeHost(value);
+  if (!host) return true;
+  try {
+    return isLocalOrPrivateHostname(new URL(`http://${host}`).hostname);
+  } catch {
+    return true;
+  }
+}
+
+function selectProtocolForHost(host: string | null | undefined, explicitProto: string | null | undefined, requestProto: string | null | undefined): "http" | "https" {
+  const explicit = normalizedProtocol(explicitProto);
+  if (explicit) return explicit;
+  if (host && !isLocalOrPrivateHost(host)) return "https";
+  return normalizedProtocol(requestProto) || "https";
+}
+
 function toOriginFromHostAndProto(host: string | null | undefined, proto: string | null | undefined): string | null {
   const normalizedHost = normalizeHost(host);
   if (!normalizedHost) return null;
@@ -118,12 +141,12 @@ function resolveRequestOrigin(request: CasaHudOriginRequestLike | undefined): st
 
   const nextUrlProtocol = request.nextUrl?.protocol || extractHttpProtocol(request.nextUrl?.origin);
   const urlProtocol = extractHttpProtocol(request.url);
-  const protocolHint = forwardedProto || nextUrlProtocol || urlProtocol || "https";
+  const requestProtocol = nextUrlProtocol || urlProtocol;
 
-  const forwardedOrigin = toOriginFromHostAndProto(forwardedHost, protocolHint);
+  const forwardedOrigin = toOriginFromHostAndProto(forwardedHost, selectProtocolForHost(forwardedHost, forwardedProto, requestProtocol));
   if (forwardedOrigin) return forwardedOrigin;
 
-  const hostOrigin = toOriginFromHostAndProto(hostHeader, protocolHint);
+  const hostOrigin = toOriginFromHostAndProto(hostHeader, selectProtocolForHost(hostHeader, forwardedProto, requestProtocol));
   if (hostOrigin) return hostOrigin;
 
   const nextUrlOrigin = normalizeHttpOrigin(request.nextUrl?.origin);
