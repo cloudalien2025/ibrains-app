@@ -96,40 +96,44 @@ function buildCampaign(): CasaHudCampaign {
 
 const browserPayload = {
   version: "casahud-browser-import-v1",
-  sourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
-  canonicalUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/114752041/",
   providerHost: "www.immobiliare.it",
   capturedAt: "2026-04-30T10:00:00.000Z",
-  title: "Single family villa via San Berardino, Albanella - immobiliare.it",
+  title: "via Capaccio-Paestum 13 Capaccio Paestum. Good condition Single family villa with Terrace - immobiliare.it",
   metaDescription:
-    "€299.000 single family villa in Albanella, Salerno, Campania with 3 bedrooms, 2 bathrooms, 150 m² interior, 1,106 m² garden, and private parking.",
+    "Don&#39;t miss this opportunity! Capaccio Paestum detached villa, just 500 meters from th...",
   openGraph: {
-    title: "Single family villa via San Berardino, Albanella",
+    title: "Single family villa via Capaccio-Paestum 13, Capaccio Paestum",
     description:
-      "Renovated independent villa with private garden, pool potential, nearby services, and about 25 minutes from the Paestum coast.",
-    image: "https://images.example.com/albanella-og.jpg",
+      "Don&#39;t miss this opportunity! Capaccio Paestum detached villa with terrace and parking near the coast.",
+    image: "https://images.example.com/capaccio-og.jpg",
   },
   visibleText: `
     Price
     €299.000
+    Location
+    via Capaccio-Paestum 13 Capaccio Paestum. Good condition, parking space, with terrace, independent heating,
     Address
-    Via San Berardino, Albanella, Salerno, Campania, Italy
+    Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy
     Property type
     Single family villa
+    Rooms
+    4+
     Bedrooms
-    3
+    4
     Bathrooms
-    2
+    3
     Interior size
-    150 m²
-    Garden
-    1.106 m²
+    200 m²
     Garage / Parking
-    2 garage/box spaces · 3 parking spaces
+    , car parking,
     Energy class
     D
+    Description
+    Don&#39;t miss this opportunity! Capaccio Paestum detached villa with panoramic exposure just 500 meters from the town center and close to the coast.
   `,
-  imageCandidates: [{ url: "https://images.example.com/albanella-og.jpg", source: "og" as const }],
+  imageCandidates: [{ url: "https://images.example.com/capaccio-og.jpg", source: "og" as const }],
 };
 
 const mocks = vi.hoisted(() => ({
@@ -190,8 +194,14 @@ describe("CasaHUD browser import route", () => {
     expect(payload.listing.sourceType).toBe("browser_assisted_import");
     expect(payload.listing.sourceLabel).toBe("Immobiliare");
     expect(payload.listing.price).toBe(299000);
-    expect(payload.listing.locationText).toContain("Albanella");
-    expect(payload.listing.featuredImageUrl).toBe("https://images.example.com/albanella-og.jpg");
+    expect(payload.listing.priceText).toBe("€299,000");
+    expect(payload.listing.locationText).toContain("Capaccio Paestum");
+    expect(payload.listing.locationText).not.toContain("Good condition");
+    expect(payload.listing.garageParking).toBe("Car parking");
+    expect(payload.listing.descriptionSnippet).toContain("Don't miss this opportunity");
+    expect(payload.listing.descriptionSnippet).not.toContain("Don&#39;t");
+    expect(payload.listing.needsReviewFields || []).not.toContain("price");
+    expect(payload.listing.featuredImageUrl).toBe("https://images.example.com/capaccio-og.jpg");
     expect(payload.listing.rawProviderMetadata.importMethod).toBe("browser_assisted");
     expect(payload.listing.casaHudNarrationSeed).toContain("€299,000");
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledOnce();

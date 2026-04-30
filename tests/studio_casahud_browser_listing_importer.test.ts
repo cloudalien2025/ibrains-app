@@ -92,6 +92,53 @@ const albanellaPayload = {
   ],
 };
 
+const capaccioPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-04-30T11:15:00.000Z",
+  captureVersion: "2026-04-30",
+  title: "via Capaccio-Paestum 13 Capaccio Paestum. Good condition Single family villa with Terrace - immobiliare.it",
+  metaDescription: "Don&#39;t miss this opportunity! Capaccio Paestum, panoramic detached villa, just 500 meters from th...",
+  openGraph: {
+    title: "Single family villa via Capaccio-Paestum 13, Capaccio Paestum",
+    description:
+      "Don&#39;t miss this opportunity! Capaccio Paestum detached villa close to the coast, with terrace, parking, and spacious family-ready interiors.",
+    image: "https://images.example.com/capaccio-og.jpg",
+  },
+  visibleText: `
+    Price
+    € 299.000
+    Location
+    via Capaccio-Paestum 13 Capaccio Paestum. Good condition, parking space, with terrace, independent heating,
+    Address
+    Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy
+    Property type
+    Single family villa
+    Bedrooms
+    4
+    Bathrooms
+    3
+    Rooms
+    4+
+    Interior size
+    200 m²
+    Garage / Parking
+    , car parking,
+    Condition
+    Good condition
+    Heating
+    Independent heating
+    Description
+    Don&#39;t miss this opportunity! Capaccio Paestum detached villa with panoramic exposure just 500 meters from the town center and close to the coast. Spacious interiors, terrace, and dedicated parking make it ideal for family living year-round.
+  `,
+  imageCandidates: [
+    { url: "https://images.example.com/capaccio-og.jpg", source: "og" as const, width: 1600, height: 900 },
+    { url: "https://images.example.com/capaccio-gallery.jpg", source: "visible_img" as const, width: 1280, height: 720 },
+  ],
+};
+
 describe("CasaHUD browser listing capture parser", () => {
   it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
     const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
@@ -132,6 +179,68 @@ describe("CasaHUD browser listing capture parser", () => {
 
     expect(parsed.payload.visibleText?.length).toBeLessThanOrEqual(CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS + 1);
     expect(parsed.candidate.imageUrls).toEqual(["https://images.example.com/albanella-og.jpg", "https://images.example.com/albanella-twitter.jpg", "https://images.example.com/safe.jpg"]);
+  });
+
+  it("cleans an Immobiliare-like capaccio payload with decoded description, extracted price, and normalized location", () => {
+    const parsed = parseCasaHudBrowserListingCapture(capaccioPayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.sourceUrl).toBe("https://www.immobiliare.it/en/annunci/114752041/");
+    expect(parsed.candidate.price).toBe(299000);
+    expect(parsed.candidate.priceText).toBe("€299,000");
+    expect(parsed.candidate.propertyType).toBe("Single family villa");
+    expect(parsed.candidate.bedrooms).toBe(4);
+    expect(parsed.candidate.bathrooms).toBe(3);
+    expect(parsed.candidate.rooms).toBe(4);
+    expect(parsed.candidate.sizeSqm).toBe(200);
+    expect(parsed.candidate.locationText).toBe("Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy");
+    expect(parsed.candidate.locationText?.toLowerCase()).not.toContain("good condition");
+    expect(parsed.candidate.locationText?.toLowerCase()).not.toContain("parking");
+    expect(parsed.candidate.garageParking).toBe("Car parking");
+    expect(parsed.candidate.title).toContain("Capaccio Paestum");
+    expect(parsed.candidate.title?.toLowerCase()).not.toContain("good condition");
+    expect(parsed.candidate.descriptionSnippet).toContain("Don't miss this opportunity!");
+    expect(parsed.candidate.descriptionSnippet).toContain("500 meters from the town center");
+    expect(parsed.candidate.descriptionSnippet).not.toContain("Don&#39;t");
+    expect(parsed.candidate.descriptionSnippet).not.toContain("th...");
+    expect(parsed.candidate.imageUrls).toContain("https://images.example.com/capaccio-og.jpg");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.casaHudNarrationSeed?.toLowerCase()).not.toContain("provider metadata");
+  });
+
+  it("extracts price from both leading and trailing currency formats", () => {
+    const euroLeading = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: "Price\n€299,000\nAddress\nVia Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy",
+    });
+    const euroTrailing = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: "Prezzo\n299.000 €\nAddress\nVia Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy",
+    });
+
+    expect(euroLeading.candidate.price).toBe(299000);
+    expect(euroTrailing.candidate.price).toBe(299000);
+  });
+
+  it("keeps price as needs review when no price exists in payload", () => {
+    const parsed = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      metaDescription: "Detached villa in Capaccio Paestum with terrace and parking.",
+      openGraph: { ...capaccioPayload.openGraph, description: "Detached villa in Capaccio Paestum with terrace and parking." },
+      visibleText: `
+        Address
+        Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy
+        Property type
+        Single family villa
+        Bedrooms
+        4
+        Bathrooms
+        3
+      `,
+    });
+
+    expect(parsed.candidate.price).toBeUndefined();
+    expect(parsed.candidate.needsReviewFields).toContain("price");
   });
 
   it("rejects unsafe protocols for the captured source URL", () => {
