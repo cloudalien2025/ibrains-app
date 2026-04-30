@@ -25,7 +25,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest relocation opportunity in Southern Italy.",
+    summary: "CasaFlix identified the strongest relocation opportunity in Southern Italy.",
     opportunityCategories: ["relocation"],
     competitorPatterns: ["Budget-led relocation titles perform well."],
     audienceIntent: ["retire in Italy"],
@@ -61,18 +61,18 @@ const opportunity: CasaHudOpportunityResult = {
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "The title gives CasaHUD a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
-  confidenceSummary: "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "The title gives CasaFlix a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
+  confidenceSummary: "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Turn this winning concept into a saved CasaHUD campaign.",
+    detail: "Turn this winning concept into a saved CasaFlix campaign.",
   },
 };
 
@@ -126,7 +126,7 @@ vi.mock("@/app/api/studio/domara/_utils/execution-context", () => ({
   resolveCasaHudYouTubeExecutionContext: mocks.resolveCasaHudYouTubeExecutionContext,
 }));
 
-describe("CasaHUD execution routes", () => {
+describe("CasaFlix execution routes", () => {
   let packagedCampaign: CasaHudCampaign;
 
   beforeEach(async () => {
@@ -155,7 +155,7 @@ describe("CasaHUD execution routes", () => {
       providerStatus: {
         provider: "youtube_unavailable",
         state: "needs_connection",
-        detail: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+        detail: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
       },
     });
   });
@@ -239,14 +239,14 @@ describe("CasaHUD execution routes", () => {
     mocks.runCasaHudPublishAgent.mockResolvedValueOnce({
       ok: false,
       httpStatus: 503,
-      message: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+      message: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
       execution: {
         ...execution,
         publishStatus: "blocked",
         publishProviderStatus: {
           provider: "youtube_unavailable",
           state: "needs_connection",
-          detail: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+          detail: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
         },
         publishRunHistory: [
           {
@@ -256,7 +256,7 @@ describe("CasaHUD execution routes", () => {
             startedAt: "2026-04-29T10:10:00.000Z",
             completedAt: "2026-04-29T10:10:00.000Z",
             provider: "youtube_unavailable",
-            message: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+            message: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
           },
         ],
         executionRunHistory: [
@@ -267,7 +267,7 @@ describe("CasaHUD execution routes", () => {
             startedAt: "2026-04-29T10:10:00.000Z",
             completedAt: "2026-04-29T10:10:00.000Z",
             provider: "youtube_unavailable",
-            message: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+            message: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
           },
         ],
         finalState: "blocked",

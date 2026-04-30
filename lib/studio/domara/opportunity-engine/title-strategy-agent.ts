@@ -93,7 +93,7 @@ function reasoningForCandidate(
   titleTruthfulness: number,
 ): string {
   const livePrefix =
-    research.providerStatus.mode === "live_youtube" ? "Live research favored" : "CasaHUD opportunity patterns favored";
+    research.providerStatus.mode === "live_youtube" ? "Live research favored" : "CasaFlix opportunity patterns favored";
   const focus =
     campaignType === "single_property_showcase"
       ? "a single standout property hook"
@@ -212,6 +212,6 @@ export function selectWinningCasaHudOpportunityTitle(
     confidence,
     regionHint: winner.regionHint,
     listingSearchHints: winner.listingSearchHints,
-    reasoning: `CasaHUD chose this ${formatCampaignType(winner.campaignType)} title because it balances click potential with search specificity and a believable listing-backed promise. It is the strongest blend of CTR, search intent, realism, and repeatability across the candidate set.`,
+    reasoning: `CasaFlix chose this ${formatCampaignType(winner.campaignType)} title because it balances click potential with search specificity and a believable listing-backed promise. It is the strongest blend of CTR, search intent, realism, and repeatability across the candidate set.`,
   };
 }

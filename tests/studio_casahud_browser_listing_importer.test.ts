@@ -139,7 +139,7 @@ const capaccioPayload = {
   ],
 };
 
-describe("CasaHUD browser listing capture parser", () => {
+describe("CasaFlix browser listing capture parser", () => {
   it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
     const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
 

@@ -337,7 +337,7 @@ function buildManualDraftCandidate(params: {
     discoveredAt: importedAt,
     preliminaryMatchNotes:
       extraction.data.casaHudNarrationSeed ||
-      `Imported URL saved from ${sourceLabel}. Complete the missing listing details so CasaHUD can use it in validation, Video Builder, and publish planning.`,
+      `Imported URL saved from ${sourceLabel}. Complete the missing listing details so CasaFlix can use it in validation, Video Builder, and publish planning.`,
   });
 }
 
@@ -455,7 +455,7 @@ export async function importCasaHudListingUrls(params: {
         discoveredListingUrls,
         reason:
           discoveredListingUrls.length > 0
-            ? `Search results page detected. CasaHUD imported up to ${discoveredListingUrls.length} listing URL${discoveredListingUrls.length === 1 ? "" : "s"} from the public page.`
+            ? `Search results page detected. CasaFlix imported up to ${discoveredListingUrls.length} listing URL${discoveredListingUrls.length === 1 ? "" : "s"} from the public page.`
             : "This looks like a search results page. Paste individual listing URLs or choose listings to import.",
         nextAction:
           discoveredListingUrls.length > 0
@@ -554,8 +554,8 @@ export async function importCasaHudListingUrls(params: {
         warnings: extraction.warnings,
         reason:
           extraction.extractionStatus === "blocked_or_unavailable"
-            ? "Source page was blocked for safe extraction, so CasaHUD created a manual draft."
-            : "CasaHUD created a manual draft because the public page did not expose enough listing detail.",
+            ? "Source page was blocked for safe extraction, so CasaFlix created a manual draft."
+            : "CasaFlix created a manual draft because the public page did not expose enough listing detail.",
         nextAction: "Open Complete Listing Details to finish the imported property.",
       });
       importedCandidates.push(candidate);
@@ -574,7 +574,7 @@ export async function importCasaHudListingUrls(params: {
       reason:
         extraction.extractionStatus === "blocked_or_unavailable"
           ? "Source page blocked or unavailable for safe extraction."
-          : "CasaHUD could not use this URL as a property listing.",
+          : "CasaFlix could not use this URL as a property listing.",
       nextAction:
         extractionClassification === "unsupported_provider_path"
           ? "Paste an individual listing URL instead of a provider navigation page."

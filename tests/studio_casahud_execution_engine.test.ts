@@ -29,7 +29,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest relocation opportunity in Southern Italy.",
+    summary: "CasaFlix identified the strongest relocation opportunity in Southern Italy.",
     opportunityCategories: ["relocation"],
     competitorPatterns: ["Budget-led relocation titles perform well."],
     audienceIntent: ["retire in Italy"],
@@ -65,18 +65,18 @@ const opportunity: CasaHudOpportunityResult = {
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "The title gives CasaHUD a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
-  confidenceSummary: "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "The title gives CasaFlix a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
+  confidenceSummary: "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Turn this winning concept into a saved CasaHUD campaign.",
+    detail: "Turn this winning concept into a saved CasaFlix campaign.",
   },
 };
 
@@ -95,7 +95,7 @@ async function buildPackagedCampaign() {
   return applyCasaHudYouTubePackage(mediaPlanned, runCasaHudYouTubePackageReview(mediaPlanned));
 }
 
-describe("CasaHUD execution engine", () => {
+describe("CasaFlix execution engine", () => {
   it("creates an honest preview-package render result when full render is not yet safe", async () => {
     const packaged = await buildPackagedCampaign();
     const result = await runCasaHudRenderAgent({
@@ -151,7 +151,7 @@ describe("CasaHUD execution engine", () => {
         providerStatus: {
           provider: "youtube_unavailable",
           state: "needs_connection",
-          detail: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+          detail: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
         },
       },
     );

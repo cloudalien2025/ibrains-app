@@ -447,7 +447,7 @@ async function resolveMapContext(
         country: listing.country,
         provider: "casahud_location_patterns",
         confidence: "fallback",
-        warning: "Mapbox returned limited anchoring, so CasaHUD stayed with listing location text.",
+        warning: "Mapbox returned limited anchoring, so CasaFlix stayed with listing location text.",
       };
     }
 
@@ -477,8 +477,8 @@ async function resolveMapContext(
       confidence: "fallback",
       warning:
         error instanceof Error && error.message.includes("timeout")
-          ? "Map context timed out, so CasaHUD used the saved listing location."
-          : "Map context was unavailable, so CasaHUD used the saved listing location.",
+          ? "Map context timed out, so CasaFlix used the saved listing location."
+          : "Map context was unavailable, so CasaFlix used the saved listing location.",
     };
   }
 }
@@ -709,7 +709,7 @@ function buildLocationStory(contexts: ListingLocationContext[], warnings: string
 
   return {
     headline: `${primaryLocationLabel(top)} turns the shortlist into a place-led story.`,
-    summary: `CasaHUD positioned the approved properties around ${joinNatural(regionHighlights)} so the campaign reads as property plus place, with ${joinNatural(lifestyleAnchors.slice(0, 3)).toLowerCase()} carrying the lifestyle context.`,
+    summary: `CasaFlix positioned the approved properties around ${joinNatural(regionHighlights)} so the campaign reads as property plus place, with ${joinNatural(lifestyleAnchors.slice(0, 3)).toLowerCase()} carrying the lifestyle context.`,
     narrativeAngles: [
       "Open with the region before dropping into the strongest listing.",
       "Use local proof points as support for the property promise instead of generic travel filler.",
@@ -719,7 +719,7 @@ function buildLocationStory(contexts: ListingLocationContext[], warnings: string
     regionHighlights,
     fallbackNotice:
       warnings.length > 0
-        ? `Using CasaHUD location patterns where live provider coverage was limited. Updated ${generatedAt}.`
+        ? `Using CasaFlix location patterns where live provider coverage was limited. Updated ${generatedAt}.`
         : undefined,
   };
 }
@@ -727,7 +727,7 @@ function buildLocationStory(contexts: ListingLocationContext[], warnings: string
 function providerStatusLabel(provider: CasaHudLocationProvider): string {
   if (provider === "google_places") return "Google Places";
   if (provider === "mapbox") return "Mapbox";
-  return "CasaHUD location patterns";
+  return "CasaFlix location patterns";
 }
 
 function buildProviderStatuses(
@@ -753,7 +753,7 @@ function buildProviderStatuses(
       configured: Boolean(googlePlacesApiKey),
       used: googleMetrics.used,
       detail: !googlePlacesApiKey
-        ? "Using CasaHUD location patterns until Google Places is connected for live POIs."
+        ? "Using CasaFlix location patterns until Google Places is connected for live POIs."
         : googleCoverage > 0
           ? `Google Places returned live POI context for ${googleCoverage} approved ${googleCoverage === 1 ? "listing" : "listings"}.`
           : "Google Places was available, but live nearby places were limited for the saved shortlist.",
@@ -761,7 +761,7 @@ function buildProviderStatuses(
         !googlePlacesApiKey
           ? "Connect Google Places for live points of interest and local highlights."
           : googleMetrics.errorCount > 0
-            ? "Google Places timed out or failed on part of the shortlist, so CasaHUD leaned on fallback location patterns."
+            ? "Google Places timed out or failed on part of the shortlist, so CasaFlix leaned on fallback location patterns."
             : undefined,
       coverage: googleCoverage > 0 ? `${googleCoverage} live POI set${googleCoverage === 1 ? "" : "s"}` : "No live POIs",
     },
@@ -776,7 +776,7 @@ function buildProviderStatuses(
       configured: Boolean(mapboxAccessToken),
       used: mapboxMetrics.used,
       detail: !mapboxAccessToken
-        ? "Using listing coordinates and CasaHUD location patterns until Mapbox is connected for live map anchoring."
+        ? "Using listing coordinates and CasaFlix location patterns until Mapbox is connected for live map anchoring."
         : mapboxCoverage > 0
           ? `Mapbox anchored ${mapboxCoverage} approved ${mapboxCoverage === 1 ? "listing" : "listings"} for map context and scene ideas.`
           : "Existing listing coordinates were enough, so live Mapbox anchoring was not required on this run.",
@@ -796,7 +796,7 @@ function buildProviderStatuses(
       used: fallbackCoverage > 0 || !googlePlacesApiKey || !mapboxAccessToken,
       detail:
         fallbackCoverage > 0 || !googlePlacesApiKey || !mapboxAccessToken
-          ? "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage."
+          ? "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage."
           : "Fallback location patterns remained on standby during this run.",
       warning:
         fallbackCoverage > 0 || !googlePlacesApiKey || !mapboxAccessToken
@@ -821,7 +821,7 @@ function buildSummary(
   return {
     headline: `Location story prepared across ${locations.length} shortlist ${locations.length === 1 ? "anchor" : "anchors"}.`,
     providerSummary: providerStatuses.map((status) => status.detail).join(" "),
-    coverageSummary: `CasaHUD connected ${joinNatural(locations.slice(0, 3))} to local proof points, regional lifestyle context, and map scene ideas.`,
+    coverageSummary: `CasaFlix connected ${joinNatural(locations.slice(0, 3))} to local proof points, regional lifestyle context, and map scene ideas.`,
     warningCount: warnings.length,
     generatedAt,
     fallbackUsed,
@@ -833,7 +833,7 @@ export async function runCasaHudLocationIntelligence(
   options: CasaHudLocationIntelligenceOptions = {},
 ): Promise<CasaHudLocationData> {
   if (campaign.approvedListings.length === 0) {
-    throw new Error("CasaHUD needs approved listings before it can build location intelligence.");
+    throw new Error("CasaFlix needs approved listings before it can build location intelligence.");
   }
 
   const approvedListings = orderedApprovedListings(campaign);
@@ -875,8 +875,8 @@ export async function runCasaHudLocationIntelligence(
       const poiCards = livePois.length > 0 ? livePois : fallbackPois;
       const warnings = uniqueStrings([
         resolvedLocation.warning,
-        !googlePlacesApiKey ? "Using CasaHUD location patterns until Google Places is connected." : undefined,
-        googlePlacesApiKey && livePois.length === 0 ? "Live POIs were limited, so CasaHUD emphasized broader regional context." : undefined,
+        !googlePlacesApiKey ? "Using CasaFlix location patterns until Google Places is connected." : undefined,
+        googlePlacesApiKey && livePois.length === 0 ? "Live POIs were limited, so CasaFlix emphasized broader regional context." : undefined,
       ]);
 
       return {

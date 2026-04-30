@@ -39,7 +39,7 @@ function buildLocationReadyCampaign(
       },
     ],
     researchBrief: {
-      summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+      summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
       opportunityCategories: ["affordable coastal roundups", "retirement relocation"],
       competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
       audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -51,14 +51,14 @@ function buildLocationReadyCampaign(
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
       summary: "89% confidence.",
       titleOpportunitySummary:
-        "The title gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+        "The title gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
       selectedTitleReasoning: "The price ceiling and geography are strong but still believable.",
       selectedTitleConfidence: 0.89,
     },
@@ -164,7 +164,7 @@ function buildLocationReadyCampaign(
     listingValidationSummary: {
       headline: "Approved 2 of 2 discovered listings for the title promise.",
       rankingExplanation:
-        "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+        "CasaFlix ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
       discoveredCount: 2,
       approvedCount: 2,
       rejectedCount: 0,
@@ -178,22 +178,22 @@ function buildLocationReadyCampaign(
     locationIntelligenceStatus: "location_intelligence_completed",
     locationIntelligenceSummary: {
       headline: "Location story prepared across 2 shortlist anchors.",
-      providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
-      coverageSummary: "CasaHUD connected the shortlist to local proof points, regional lifestyle context, and map scene ideas.",
+      providerSummary: "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage.",
+      coverageSummary: "CasaFlix connected the shortlist to local proof points, regional lifestyle context, and map scene ideas.",
       warningCount: 1,
       generatedAt: "2026-04-29T00:00:00.000Z",
       fallbackUsed: true,
     },
     locationStory: {
       headline: "Southern Italy turns the shortlist into a place-led story.",
-      summary: "CasaHUD positioned the approved properties around coastal and historic-center context so the campaign reads as property plus place.",
+      summary: "CasaFlix positioned the approved properties around coastal and historic-center context so the campaign reads as property plus place.",
       narrativeAngles: [
         "Open with the region before dropping into the strongest listing.",
         "Use local proof points as support for the property promise instead of generic travel filler.",
       ],
       lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
       regionHighlights: ["Tropea", "Calabria", "Lecce"],
-      fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
+      fallbackNotice: "Using CasaFlix location patterns where live provider coverage was limited.",
     },
     localHighlights: [
       {
@@ -242,7 +242,7 @@ function buildLocationReadyCampaign(
         highlights: ["Coastal day-to-day context helps the property feel like a lifestyle move, not just a budget win."],
         nearbyPois: [],
         locationStrengths: ["Waterside lifestyle context"],
-        warnings: ["Using CasaHUD location patterns until Google Places is connected."],
+        warnings: ["Using CasaFlix location patterns until Google Places is connected."],
       },
       {
         listingId: "listing-2",
@@ -260,7 +260,7 @@ function buildLocationReadyCampaign(
         state: "missing_credentials",
         configured: false,
         used: false,
-        detail: "Using CasaHUD location patterns until Google Places is connected for live POIs.",
+        detail: "Using CasaFlix location patterns until Google Places is connected for live POIs.",
         warning: "Connect Google Places for live points of interest and local highlights.",
         coverage: "No live POIs",
       },
@@ -270,22 +270,22 @@ function buildLocationReadyCampaign(
         state: "missing_credentials",
         configured: false,
         used: false,
-        detail: "Using listing coordinates and CasaHUD location patterns until Mapbox is connected for live map anchoring.",
+        detail: "Using listing coordinates and CasaFlix location patterns until Mapbox is connected for live map anchoring.",
         warning: "Connect Mapbox for live geocoding and richer map scene anchoring.",
         coverage: "No live map anchoring",
       },
       {
         provider: "casahud_location_patterns",
-        label: "CasaHUD location patterns",
+        label: "CasaFlix location patterns",
         state: "fallback",
         configured: true,
         used: true,
-        detail: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
+        detail: "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage.",
         warning: "Connect location providers for live POIs and richer map context.",
         coverage: "2 fallback context sets",
       },
     ],
-    locationWarnings: ["Using CasaHUD location patterns until Google Places is connected."],
+    locationWarnings: ["Using CasaFlix location patterns until Google Places is connected."],
     scriptGenerationStatus: "not_started",
     scriptSummary: null,
     openingHook: null,
@@ -306,7 +306,7 @@ function buildLocationReadyCampaign(
       key: "script_narrative_generation",
       label: "Script and Narrative Generation",
       detail:
-        "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.",
+        "Script and Narrative Generation comes next. CasaFlix will turn the validated property story and location intelligence into the video narrative package.",
       implemented: false,
     },
     createdAt: "2026-04-28T00:10:00.000Z",
@@ -340,7 +340,7 @@ function buildLocationReadyCampaign(
   };
 }
 
-describe("CasaHUD script narrative engine", () => {
+describe("CasaFlix script narrative engine", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-29T00:00:00.000Z"));

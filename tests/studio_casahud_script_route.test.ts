@@ -11,7 +11,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+    summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
     opportunityCategories: ["affordable coastal roundups", "retirement relocation", "regional niche inventory"],
     competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
     audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -41,25 +41,25 @@ const opportunity: CasaHudOpportunityResult = {
     score: 92,
     campaignType: "lifestyle_relocation",
     confidence: 0.89,
-    reasoning: "CasaHUD chose this title because it balances click potential with a believable promise.",
+    reasoning: "CasaFlix chose this title because it balances click potential with a believable promise.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k", "relocation-friendly towns"],
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
   confidenceSummary:
-    "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+    detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
   },
 };
 
@@ -134,7 +134,7 @@ const locationReadyCampaign: CasaHudCampaign = {
   listingValidationSummary: {
     headline: "Approved 1 of 1 discovered listings for the title promise.",
     rankingExplanation:
-      "CasaHUD ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
+      "CasaFlix ranked the shortlist by title truthfulness, geography fit, price support, feature alignment, media coverage, and duplicate reduction.",
     discoveredCount: 1,
     approvedCount: 1,
     rejectedCount: 0,
@@ -148,19 +148,19 @@ const locationReadyCampaign: CasaHudCampaign = {
   locationIntelligenceStatus: "location_intelligence_completed",
   locationIntelligenceSummary: {
     headline: "Location story prepared across 1 shortlist anchor.",
-    providerSummary: "Using CasaHUD location patterns until Google Places or Mapbox has full live coverage.",
-    coverageSummary: "CasaHUD connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
+    providerSummary: "Using CasaFlix location patterns until Google Places or Mapbox has full live coverage.",
+    coverageSummary: "CasaFlix connected Tropea to local proof points, regional lifestyle context, and map scene ideas.",
     warningCount: 1,
     generatedAt: "2026-04-29T00:00:00.000Z",
     fallbackUsed: true,
   },
   locationStory: {
     headline: "Tropea turns the shortlist into a place-led story.",
-    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
+    summary: "CasaFlix positioned the approved property around coastal context and everyday convenience so the campaign reads as property plus place.",
     narrativeAngles: ["Open with the region before dropping into the strongest listing."],
     lifestyleAnchors: ["Waterside lifestyle context"],
     regionHighlights: ["Tropea", "Calabria"],
-    fallbackNotice: "Using CasaHUD location patterns where live provider coverage was limited.",
+    fallbackNotice: "Using CasaFlix location patterns where live provider coverage was limited.",
   },
   localHighlights: [],
   poiBundle: null,
@@ -188,7 +188,7 @@ const locationReadyCampaign: CasaHudCampaign = {
     key: "script_narrative_generation",
     label: "Script and Narrative Generation",
     detail:
-      "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.",
+      "Script and Narrative Generation comes next. CasaFlix will turn the validated property story and location intelligence into the video narrative package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -252,11 +252,11 @@ const scriptResult = {
   scriptWarnings: [],
   scriptProviderStatus: {
     provider: "casahud_script_patterns" as const,
-    label: "CasaHUD script patterns",
+    label: "CasaFlix script patterns",
     state: "fallback" as const,
     configured: true,
     used: true,
-    detail: "Using deterministic CasaHUD script composition.",
+    detail: "Using deterministic CasaFlix script composition.",
   },
   fullScriptText: "Opening Hook\nIf this title is going to resonate...",
   ...createEmptyCasaHudMediaPlanData(),
@@ -296,7 +296,7 @@ vi.mock("@/lib/studio/domara/script-narrative-engine", () => ({
   runCasaHudScriptNarrative: mocks.runCasaHudScriptNarrative,
 }));
 
-describe("CasaHUD script generation route", () => {
+describe("CasaFlix script generation route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -341,7 +341,7 @@ describe("CasaHUD script generation route", () => {
       nextPhase: {
         key: "location_intelligence",
         label: "Location Intelligence",
-        detail: "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+        detail: "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.",
         implemented: false,
       },
     });

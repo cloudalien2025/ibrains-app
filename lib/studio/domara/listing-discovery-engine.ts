@@ -27,6 +27,7 @@ type RunCasaHudListingDiscoveryOptions = {
   idealistaCredential?: string | null;
   immobiliareCredential?: string | null;
   timeoutMs?: number;
+  allowDemoData?: boolean;
 };
 
 type RegionProfile = {
@@ -293,7 +294,7 @@ function providerLabel(provider: CasaHudListingProvider): string {
   if (provider === "idealista") return "Idealista";
   if (provider === "immobiliare") return "Immobiliare";
   if (provider === "generic") return "Source domain";
-  return "CasaHUD sample patterns";
+  return "Demo data";
 }
 
 function previewPrice(criteria: CasaHudListingSearchCriteria, index: number): number {
@@ -325,7 +326,7 @@ function candidateHeadline(criteria: CasaHudListingSearchCriteria, city: string,
     return `${city} ${capitalizedType} with Beachfront Position`;
   }
   if (criteria.lifestyleTags.includes("retirement")) {
-    return `${city} ${capitalizedType} for a Southern Italy Reset`;
+    return `${city} ${capitalizedType} with Relocation Appeal`;
   }
   return `${city} ${capitalizedType} Candidate ${index + 1}`;
 }
@@ -361,7 +362,7 @@ function deterministicFallbackCandidates(criteria: CasaHudListingSearchCriteria,
       id: stableCasaHudId("listing", seed),
       provider: "casahud_sample",
       sourceType: "sample_pattern",
-      sourceLabel: "Sample Pattern",
+      sourceLabel: "Demo data",
       title: candidateHeadline(criteria, location.city, propertyType, index),
       locationText: `${location.city}, ${location.region}, ${profile.country}`,
       country: profile.country,
@@ -375,8 +376,8 @@ function deterministicFallbackCandidates(criteria: CasaHudListingSearchCriteria,
       sizeSqm: criteria.singlePropertyFocus ? 190 + index * 18 : 78 + index * 14,
       descriptionSnippet:
         criteria.singlePropertyFocus
-          ? "A cinematic home anchor with strong visual coverage and enough detail to shape the story."
-          : "A sample property anchor with enough public detail to test the shortlist and story flow.",
+          ? "A cinematic demo home anchor with visual coverage for workflow testing."
+          : "A demo property anchor for non-production shortlist workflow testing.",
       features: features.slice(index % 2, index % 2 + 3).length > 0 ? features.slice(index % 2, index % 2 + 3) : features.slice(0, 3),
       imageUrls,
       imageCount: imageUrls.length,
@@ -388,7 +389,7 @@ function deterministicFallbackCandidates(criteria: CasaHudListingSearchCriteria,
       rawProviderMetadata: {
         patternSeed: stableHash(seed),
         discoveryMode: "sample_patterns",
-        sourceNote: "Using CasaHUD sample patterns until live listing sources are connected.",
+        sourceNote: "Using demo data for non-production listing workflows.",
       },
       discoveredAt: nowIso(),
       preliminaryMatchNotes: preliminaryMatchNotes(criteria, location.city, index),
@@ -423,7 +424,7 @@ class IdealistaListingDiscoveryProvider {
           configured: false,
           used: false,
           candidateCount: 0,
-          detail: "Idealista is not connected yet. CasaHUD can still prepare candidate properties with sample patterns.",
+          detail: "Idealista is not connected yet.",
           warning: "Connect Idealista to search live listings.",
         },
         candidates: [],
@@ -439,8 +440,7 @@ class IdealistaListingDiscoveryProvider {
         configured: true,
         used: false,
         candidateCount: 0,
-        detail:
-          "Idealista is connected, but this workspace is still using sample patterns while live search access is pending.",
+        detail: "Idealista is connected, but live provider listing search is not active in this workspace yet.",
         warning: "Live Idealista search is not active in this workspace yet.",
       },
       candidates: [],
@@ -462,7 +462,7 @@ class ImmobiliareListingDiscoveryProvider {
           configured: false,
           used: false,
           candidateCount: 0,
-          detail: "Immobiliare is not connected yet. CasaHUD can still prepare candidate properties with sample patterns.",
+          detail: "Immobiliare is not connected yet.",
           warning: "Connect Immobiliare to search live listings.",
         },
         candidates: [],
@@ -478,8 +478,7 @@ class ImmobiliareListingDiscoveryProvider {
         configured: true,
         used: false,
         candidateCount: 0,
-        detail:
-          "Immobiliare is connected, but this workspace is still using sample patterns while live search access is pending.",
+        detail: "Immobiliare is connected, but live provider listing search is not active in this workspace yet.",
         warning: "Live Immobiliare search is not active in this workspace yet.",
       },
       candidates: [],
@@ -501,26 +500,49 @@ class CasaHudSampleListingProvider {
         configured: true,
         used: true,
         candidateCount: candidates.length,
-        detail: "Using CasaHUD sample patterns until listing sources are connected.",
-        warning: "Connect Idealista or Immobiliare to search live listings.",
+        detail: "Using demo listings for non-production workflows.",
+        warning: "Disable demo data and connect a provider for real listings.",
       },
       candidates,
-      warnings: ["Using CasaHUD sample patterns until listing sources are connected."],
+      warnings: ["Using demo listings for non-production workflow testing."],
     };
   }
 }
 
 function discoveryHeadline(campaign: CasaHudCampaign, candidateCount: number): string {
+  if (candidateCount <= 0) {
+    return `No real property listings found yet for "${campaign.selectedViralTitle}".`;
+  }
   return `Prepared ${candidateCount} candidate propert${candidateCount === 1 ? "y" : "ies"} for "${campaign.selectedViralTitle}".`;
 }
 
-function providerSummary(providerStatuses: CasaHudListingProviderStatus[]): string {
+function providerSummary(
+  providerStatuses: CasaHudListingProviderStatus[],
+  candidateCount: number,
+  demoDataUsed: boolean,
+): string {
   const liveReady = providerStatuses.filter((status) => status.provider !== "casahud_sample" && status.configured).map((status) => status.label);
-  if (liveReady.length > 0) {
-    return `${liveReady.join(" and ")} are connected, but CasaHUD is still using sample patterns until live provider search is enabled in this workspace.`;
+  if (demoDataUsed) {
+    return "Demo listing data is enabled for this workspace run.";
   }
 
-  return "Using CasaHUD sample patterns until listing sources are connected.";
+  if (candidateCount > 0) {
+    return liveReady.length > 0
+      ? `${liveReady.join(" and ")} are connected.`
+      : "Real listing candidates were prepared from available sources.";
+  }
+
+  if (liveReady.length > 0) {
+    return `${liveReady.join(" and ")} are connected, but no real listings were returned yet. Import listing URLs or browser captures while provider search access is pending.`;
+  }
+
+  return "No connected provider returned real listings. Import listing URLs, use browser-assisted import, or connect a provider.";
+}
+
+function resolveDemoDataEnabled(options: RunCasaHudListingDiscoveryOptions): boolean {
+  if (typeof options.allowDemoData === "boolean") return options.allowDemoData;
+  if (process.env.NODE_ENV !== "production") return true;
+  return process.env.CASAFLIX_ENABLE_DEMO_LISTINGS === "true";
 }
 
 export async function runCasaHudListingDiscovery(
@@ -533,6 +555,7 @@ export async function runCasaHudListingDiscovery(
   discoverySummary: CasaHudListingDiscoverySummary;
 }> {
   const timeoutMs = Math.max(300, options.timeoutMs || DEFAULT_PROVIDER_TIMEOUT_MS);
+  const demoDataEnabled = resolveDemoDataEnabled(options);
   const criteria = deriveCasaHudListingSearchCriteria(campaign);
   const providers = [
     new IdealistaListingDiscoveryProvider(),
@@ -557,7 +580,7 @@ export async function runCasaHudListingDiscovery(
             configured: false,
             used: false,
             candidateCount: 0,
-            detail: `${providerLabel(provider.provider)} did not respond in time, so CasaHUD continued without blocking discovery.`,
+            detail: `${providerLabel(provider.provider)} did not respond in time, so discovery continued without blocking.`,
             warning: "Provider timeout",
           },
           candidates: [],
@@ -573,7 +596,7 @@ export async function runCasaHudListingDiscovery(
 
   const fallbackProvider = new CasaHudSampleListingProvider();
   const fallbackResult =
-    liveCandidates.length > 0
+    liveCandidates.length > 0 || !demoDataEnabled
       ? null
       : await fallbackProvider.searchListings({
           campaign,
@@ -583,6 +606,15 @@ export async function runCasaHudListingDiscovery(
 
   const listingCandidates = liveCandidates.length > 0 ? liveCandidates : fallbackResult?.candidates || [];
   const listingProviderStatuses = fallbackResult ? [...providerStatuses, fallbackResult.providerStatus] : providerStatuses;
+  const providerWarnings =
+    listingCandidates.length > 0
+      ? warnings
+      : Array.from(
+          new Set([
+            ...warnings,
+            "No real property listings were added yet. Import listing URLs, use browser-assisted import, or connect a provider.",
+          ]),
+        );
   const discoveredAt = nowIso();
 
   return {
@@ -592,12 +624,12 @@ export async function runCasaHudListingDiscovery(
     discoverySummary: {
       headline: discoveryHeadline(campaign, listingCandidates.length),
       criteriaSummary: summarizeCasaHudListingCriteria(criteria),
-      providerSummary: providerSummary(listingProviderStatuses),
+      providerSummary: providerSummary(listingProviderStatuses, listingCandidates.length, Boolean(fallbackResult)),
       candidateCount: listingCandidates.length,
       liveCandidateCount: liveCandidates.length,
       fallbackCandidateCount: fallbackResult?.candidates.length || 0,
       fallbackUsed: Boolean(fallbackResult),
-      warnings: fallbackResult ? [...warnings, ...fallbackResult.warnings] : warnings,
+      warnings: fallbackResult ? [...providerWarnings, ...fallbackResult.warnings] : providerWarnings,
       discoveredAt,
     },
   };

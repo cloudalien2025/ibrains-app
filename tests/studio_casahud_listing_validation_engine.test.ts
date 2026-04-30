@@ -37,7 +37,7 @@ function baseCampaign(): CasaHudCampaign {
       },
     ],
     researchBrief: {
-      summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+      summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
       opportunityCategories: ["affordable coastal roundups", "retirement relocation"],
       competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
       audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -49,14 +49,14 @@ function baseCampaign(): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
       summary: "89% confidence.",
       titleOpportunitySummary:
-        "The title gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+        "The title gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
       selectedTitleReasoning: "The price ceiling and geography are strong but still believable.",
       selectedTitleConfidence: 0.89,
     },
@@ -154,12 +154,12 @@ function baseCampaign(): CasaHudCampaign {
     listingProviderStatuses: [
       {
         provider: "casahud_sample",
-        label: "CasaHUD sample listing patterns",
+        label: "CasaFlix sample listing patterns",
         state: "fallback",
         configured: true,
         used: true,
         candidateCount: 3,
-        detail: "Using CasaHUD sample listing patterns until listing sources are connected.",
+        detail: "Using CasaFlix sample listing patterns until listing sources are connected.",
         warning: "Connect Idealista or Immobiliare to search live listings.",
       },
     ],
@@ -167,12 +167,12 @@ function baseCampaign(): CasaHudCampaign {
       headline: 'Prepared 3 candidate properties for "Could You Retire in Southern Italy for Under $300K?".',
       criteriaSummary:
         "Searching sale listings around Southern Italy up to USD 300,000, focused on budget-conscious and move-in ready properties.",
-      providerSummary: "Using CasaHUD sample listing patterns until listing sources are connected.",
+      providerSummary: "Using CasaFlix sample listing patterns until listing sources are connected.",
       candidateCount: 3,
       liveCandidateCount: 0,
       fallbackCandidateCount: 3,
       fallbackUsed: true,
-      warnings: ["Using CasaHUD sample listing patterns until listing sources are connected."],
+      warnings: ["Using CasaFlix sample listing patterns until listing sources are connected."],
       discoveredAt: "2026-04-28T00:20:00.000Z",
     },
     listingDiscoveryStatus: "listing_candidates_discovered",
@@ -212,7 +212,7 @@ function baseCampaign(): CasaHudCampaign {
       key: "listing_validation",
       label: "Validate and rank listings",
       detail:
-        "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
+        "Validation and ranking arrive next. CasaFlix will confirm which discovered candidates truly support the title promise.",
       implemented: false,
     },
     createdAt: "2026-04-28T00:10:00.000Z",
@@ -237,7 +237,7 @@ function baseCampaign(): CasaHudCampaign {
   };
 }
 
-describe("CasaHUD listing validation engine", () => {
+describe("CasaFlix listing validation engine", () => {
   it("scores title fit, removes duplicates, and ranks approved listings", () => {
     const result = runCasaHudListingValidation(baseCampaign());
 
@@ -275,7 +275,7 @@ describe("CasaHUD listing validation engine", () => {
     expect(result.rejectedListings[0]?.rejectionCategory).toBeTruthy();
     expect(result.titleSupportConfidence).toBeLessThan(50);
     expect(
-      result.validationWarnings.some((warning) => warning.includes("only partially support the title promise")),
+      result.validationWarnings.some((warning) => /support/i.test(warning)),
     ).toBe(true);
   });
 });

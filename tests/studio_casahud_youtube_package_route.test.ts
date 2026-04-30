@@ -9,7 +9,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest relocation opportunity in Southern Italy.",
+    summary: "CasaFlix identified the strongest relocation opportunity in Southern Italy.",
     opportunityCategories: ["relocation"],
     competitorPatterns: ["Budget-led relocation titles perform well."],
     audienceIntent: ["retire in Italy"],
@@ -45,18 +45,18 @@ const opportunity: CasaHudOpportunityResult = {
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "The title gives CasaHUD a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
-  confidenceSummary: "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "The title gives CasaFlix a clear, searchable relocation angle that can still stay grounded in approved listings and place story.",
+  confidenceSummary: "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Turn this winning concept into a saved CasaHUD campaign.",
+    detail: "Turn this winning concept into a saved CasaFlix campaign.",
   },
 };
 
@@ -102,7 +102,7 @@ vi.mock("@/lib/studio/domara/campaign-repository", () => ({
   saveCasaHudCampaign: mocks.saveCasaHudCampaign,
 }));
 
-describe("CasaHUD youtube package route", () => {
+describe("CasaFlix youtube package route", () => {
   let mediaPlannedCampaign: CasaHudCampaign;
 
   beforeEach(async () => {

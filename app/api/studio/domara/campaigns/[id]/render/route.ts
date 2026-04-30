@@ -32,23 +32,23 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can start rendering.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can start rendering.", "INVALID_INPUT", reqId);
     }
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     if (campaign.youtubePackageStatus !== "package_prepared" || (!campaign.renderPlan && !campaign.previewPackage)) {
       return errorResponse(
         409,
-        "CasaHUD needs the completed YouTube package and render plan before it can render this campaign.",
+        "CasaFlix needs the completed YouTube package and render plan before it can render this campaign.",
         "RENDER_PLAN_REQUIRED",
         reqId,
       );
@@ -71,13 +71,13 @@ export async function POST(
     );
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD render execution failed", { reqId, error });
+    console.error("CasaFlix render execution failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not render this campaign right now. Try again in a moment.",
+      "CasaFlix could not render this campaign right now. Try again in a moment.",
       "RENDER_FAILED",
       reqId,
     );

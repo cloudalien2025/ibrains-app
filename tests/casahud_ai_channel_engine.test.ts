@@ -98,7 +98,7 @@ async function runComplete() {
   return { output, repository };
 }
 
-describe("CasaHUD AI channel engine orchestrator", () => {
+describe("CasaFlix AI channel engine orchestrator", () => {
   it("creates a run and project without manual project naming and uses the viral title as project name", async () => {
     const { output, repository } = await runComplete();
 
@@ -274,7 +274,7 @@ describe("CasaHUD AI channel engine orchestrator", () => {
   });
 });
 
-describe("CasaHUD production contracts", () => {
+describe("CasaFlix production contracts", () => {
   it("adds durable persistence tables for the channel engine", () => {
     const migration = fs.readFileSync(
       path.join(process.cwd(), "db/migrations/20260427_casahud_ai_channel_engine.sql"),
@@ -319,7 +319,7 @@ describe("CasaHUD production contracts", () => {
     expect(route).toContain("latestOutput");
   });
 
-  it("presents CasaHUD as a compact user-facing AI wizard instead of a manual builder", () => {
+  it("presents CasaFlix as a compact user-facing AI wizard instead of a manual builder", () => {
     const source = fs.readFileSync(path.join(process.cwd(), "app/apps/studio/studio-domara-client.tsx"), "utf8");
     const runRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/ai-channel/runs/route.ts"), "utf8");
     const opportunityRoute = fs.readFileSync(path.join(process.cwd(), "app/api/studio/domara/opportunity/route.ts"), "utf8");
@@ -329,7 +329,7 @@ describe("CasaHUD production contracts", () => {
     expect(source).toContain("Generate your next viral property video");
     expect(source).toContain("Generate Viral Video Title");
     expect(source).toContain("Connections");
-    expect(source).toContain("Manage CasaHUD connections");
+    expect(source).toContain("Manage CasaFlix connections");
     expect(source).toContain("Recent Campaigns");
     expect(source).toContain("No campaigns yet.");
     expect(source).toContain("casahud-connect-wizard");

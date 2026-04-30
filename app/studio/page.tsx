@@ -57,14 +57,14 @@ export default async function StudioPage() {
         </section>
 
         <section className={`${brainTheme.glassCard} mt-6 p-6`}>
-          <h2 className="text-lg font-semibold text-[#0F172A]">CasaHUD</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">CasaFlix</h2>
           <p className="mt-2 text-sm text-[#334155]">
             Generate the next viral property video concept, prepare the story package, and move into review inside
             Studio.
           </p>
           <div className="mt-4">
             <Link href="/apps/studio" className={`${brainTheme.glowButton} text-sm`}>
-              Open CasaHUD
+              Open CasaFlix
             </Link>
           </div>
         </section>

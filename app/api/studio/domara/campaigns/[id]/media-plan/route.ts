@@ -32,22 +32,22 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can build the media plan.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can build the media plan.", "INVALID_INPUT", reqId);
     }
 
     const campaignStoreAvailable = await isCasaHudCampaignStoreAvailable();
     if (!campaignStoreAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
     if (campaign.approvedListings.length === 0) {
       return errorResponse(
         409,
-        "CasaHUD needs approved listings before it can assemble the visual plan.",
+        "CasaFlix needs approved listings before it can assemble the visual plan.",
         "APPROVED_LISTINGS_REQUIRED",
         reqId,
       );
@@ -55,7 +55,7 @@ export async function POST(
     if (campaign.locationIntelligenceStatus !== "location_intelligence_completed") {
       return errorResponse(
         409,
-        "CasaHUD needs location intelligence before it can assemble the visual plan.",
+        "CasaFlix needs location intelligence before it can assemble the visual plan.",
         "LOCATION_INTELLIGENCE_REQUIRED",
         reqId,
       );
@@ -63,7 +63,7 @@ export async function POST(
     if (campaign.scriptGenerationStatus !== "script_generated" || campaign.scriptSegments.length === 0) {
       return errorResponse(
         409,
-        "CasaHUD needs the completed script package before it can assemble the visual plan.",
+        "CasaFlix needs the completed script package before it can assemble the visual plan.",
         "SCRIPT_REQUIRED",
         reqId,
       );
@@ -82,13 +82,13 @@ export async function POST(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD media planning failed", { reqId, error });
+    console.error("CasaFlix media planning failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not assemble the visual plan right now. Try again in a moment.",
+      "CasaFlix could not assemble the visual plan right now. Try again in a moment.",
       "MEDIA_PLANNING_FAILED",
       reqId,
     );

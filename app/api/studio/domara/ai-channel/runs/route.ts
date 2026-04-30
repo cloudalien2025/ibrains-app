@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
         reqId,
         runs: [],
         storeAvailable: false,
-        message: "CasaHUD storage is not ready yet.",
+        message: "CasaFlix storage is not ready yet.",
       });
     }
 
@@ -81,7 +81,7 @@ export async function GET(request: NextRequest) {
       storeAvailable: true,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown CasaHUD run read error.";
+    const message = error instanceof Error ? error.message : "Unknown CasaFlix run read error.";
     return errorResponse(500, message, "INTERNAL_ERROR", reqId);
   }
 }
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     if (!(await isCasaHudStoreAvailable())) {
       return errorResponse(
         503,
-        "CasaHUD storage is not ready yet.",
+        "CasaFlix storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );
@@ -156,12 +156,12 @@ export async function POST(request: NextRequest) {
     if (isCasaHudStoreUnavailable(error)) {
       return errorResponse(
         503,
-        "CasaHUD storage is not ready yet.",
+        "CasaFlix storage is not ready yet.",
         "CASAHUD_STORE_UNAVAILABLE",
         reqId,
       );
     }
-    const message = error instanceof Error ? error.message : "Unknown CasaHUD generation error.";
+    const message = error instanceof Error ? error.message : "Unknown CasaFlix generation error.";
     return errorResponse(500, message, "INTERNAL_ERROR", reqId);
   }
 }

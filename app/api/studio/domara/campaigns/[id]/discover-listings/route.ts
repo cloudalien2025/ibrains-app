@@ -41,17 +41,17 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can discover listings.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can discover listings.", "INVALID_INPUT", reqId);
     }
 
     const campaignStoreAvailable = await isCasaHudCampaignStoreAvailable();
     if (!campaignStoreAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     const storedStatuses =
@@ -68,23 +68,26 @@ export async function POST(
     });
     const updatedCampaign = applyCasaHudListingDiscovery(campaign, discovery);
     await saveCasaHudCampaign(userId, updatedCampaign);
+    const hasRealCandidates = updatedCampaign.listingCandidates.length > 0;
 
     return NextResponse.json({
       ok: true,
       reqId,
       campaign: updatedCampaign,
       summary: toCasaHudCampaignSummary(updatedCampaign),
-      message: `Property discovery complete. "${updatedCampaign.name}" is ready for listing validation.`,
+      message: hasRealCandidates
+        ? `Property discovery complete. "${updatedCampaign.name}" is ready for listing validation.`
+        : "No real property listings were found yet. Import Listing URLs, use CasaFlix Importer, or connect a provider.",
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD listing discovery failed", { reqId, error });
+    console.error("CasaFlix listing discovery failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not discover listing candidates right now. Try again in a moment.",
+      "CasaFlix could not discover listing candidates right now. Try again in a moment.",
       "LISTING_DISCOVERY_FAILED",
       reqId,
     );

@@ -82,7 +82,7 @@ function mockListingFromRef(reference: string, country: string): DomaraProviderL
     neighborhood: hash % 2 === 0 ? "Oltrarno" : "Santa Croce",
     title: `${titlePrefix} ${rooms}-Bedroom ${hash % 2 === 0 ? "Apartment" : "Villa"}`,
     description:
-      "Deterministic mock listing for CasaHUD ingestion testing. Replace with official provider APIs when credentials and contracts are available.",
+      "Deterministic mock listing for CasaFlix ingestion testing. Replace with official provider APIs when credentials and contracts are available.",
     price: `€${(220000 + (hash % 700000)).toLocaleString("en-US")}`,
     propertyType: hash % 2 === 0 ? "Apartment" : "Villa",
     bedrooms: rooms,
@@ -96,7 +96,7 @@ function mockListingFromRef(reference: string, country: string): DomaraProviderL
     ],
     latitude: country.toLowerCase() === "italy" ? 43.76956 : 38.72225,
     longitude: country.toLowerCase() === "italy" ? 11.25581 : -9.13934,
-    agency: "CasaHUD Mock Agency",
+    agency: "CasaFlix Mock Agency",
     fetchedAt: new Date().toISOString(),
     providerMetadata: {
       sourceId: `mock-${hash}`,
@@ -208,7 +208,7 @@ export async function fetchListing(request: DomaraListingFetchRequest): Promise<
       fetchStatus: "fallback",
       warnings: [
         error instanceof Error ? error.message : "Listing provider fetch failed.",
-        "Using deterministic mock listing fallback so CasaHUD workflow remains operational.",
+        "Using deterministic mock listing fallback so CasaFlix workflow remains operational.",
       ],
     };
   }

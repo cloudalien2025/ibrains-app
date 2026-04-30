@@ -39,7 +39,7 @@ const liveResearchProvider: CasaHudOpportunityResearchProvider = {
   },
 };
 
-describe("CasaHUD opportunity engine", () => {
+describe("CasaFlix opportunity engine", () => {
   it("generates a stable ranked Phase 2 opportunity package when live YouTube data is unavailable", async () => {
     const output = await generateCasaHudOpportunityResult({
       userId,
@@ -69,6 +69,6 @@ describe("CasaHUD opportunity engine", () => {
     expect(output.providerStatus.label).toBe("Live YouTube research");
     expect(output.titleCandidates[0]?.score).toBeGreaterThan(0);
     expect(output.confidenceSummary).toContain("confidence");
-    expect(output.selectedTitle.reasoning).toContain("CasaHUD chose this");
+    expect(output.selectedTitle.reasoning).toContain("CasaFlix chose this");
   });
 });

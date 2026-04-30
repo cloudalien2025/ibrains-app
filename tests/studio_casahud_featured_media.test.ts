@@ -54,7 +54,7 @@ function createCampaign(listing: CasaHudListingCandidate): CasaHudCampaign {
     },
     titleCandidates: [],
     researchBrief: {
-      summary: "CasaHUD identified a supportable relocation angle.",
+      summary: "CasaFlix identified a supportable relocation angle.",
       opportunityCategories: ["relocation"],
       competitorPatterns: [],
       audienceIntent: [],
@@ -66,12 +66,12 @@ function createCampaign(listing: CasaHudListingCandidate): CasaHudCampaign {
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
-      summary: "CasaHUD picked the most supportable title direction.",
+      summary: "CasaFlix picked the most supportable title direction.",
       titleOpportunitySummary: "The title stays specific enough to be validated against the shortlist.",
       selectedTitleReasoning: "It balances click appeal with believable support.",
       selectedTitleConfidence: 0.89,
@@ -160,7 +160,7 @@ describe("deriveCasaHudFeaturedPropertyMedia", () => {
     });
   });
 
-  it("treats CasaHUD sample-pattern listing media as a media placeholder instead of a real image", () => {
+  it("treats CasaFlix sample-pattern listing media as a media placeholder instead of a real image", () => {
     const listing = createListing({
       provider: "casahud_sample",
       imageUrls: ["https://images.example.com/casahud/sample/hero.jpg"],
@@ -210,7 +210,7 @@ describe("deriveCasaHudFeaturedPropertyMedia", () => {
     });
   });
 
-  it("shows a media placeholder when CasaHUD has a planned asset but no real source image", () => {
+  it("shows a media placeholder when CasaFlix has a planned asset but no real source image", () => {
     const listing = createListing();
     const campaign = createCampaign(listing);
     campaign.visualAssets = [

@@ -147,7 +147,7 @@ const savedCampaign: CasaHudCampaign = {
     },
   ],
   researchBrief: {
-    summary: "CasaHUD identified the strongest relocation opportunity in Southern Italy.",
+    summary: "CasaFlix identified the strongest relocation opportunity in Southern Italy.",
     opportunityCategories: ["relocation"],
     competitorPatterns: ["Budget-led relocation titles perform well."],
     audienceIntent: ["retire in Italy"],
@@ -159,12 +159,12 @@ const savedCampaign: CasaHudCampaign = {
   preferredMarket: "Italian real-estate YouTube",
   generationSource: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns.",
     canImproveWithYouTube: true,
   },
   confidenceReasoning: {
-    summary: "CasaHUD picked the most supportable title direction.",
+    summary: "CasaFlix picked the most supportable title direction.",
     titleOpportunitySummary: "The title stays specific enough to be validated against the shortlist.",
     selectedTitleReasoning: "It balances click appeal with believable support.",
     selectedTitleConfidence: 0.89,
@@ -191,7 +191,7 @@ const savedCampaign: CasaHudCampaign = {
     key: "property_discovery",
     label: "Find matching properties",
     detail:
-      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+      "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:00:00.000Z",
@@ -361,7 +361,7 @@ const validatedCampaign: CasaHudCampaign = {
   listingValidationStatus: "listing_candidates_validated",
   listingValidationSummary: {
     headline: "Approved 1 of 2 discovered listings for the title promise.",
-    rankingExplanation: "CasaHUD ranked the shortlist by truthfulness, price fit, and media coverage.",
+    rankingExplanation: "CasaFlix ranked the shortlist by truthfulness, price fit, and media coverage.",
     discoveredCount: 2,
     approvedCount: 1,
     rejectedCount: 1,
@@ -376,7 +376,7 @@ const validatedCampaign: CasaHudCampaign = {
     key: "location_intelligence",
     label: "Location Intelligence",
     detail:
-      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+      "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.",
     implemented: false,
   },
   updatedAt: "2026-04-28T00:25:00.000Z",
@@ -498,6 +498,49 @@ const browserImportedCampaign: CasaHudCampaign = {
   ],
 };
 
+const legacyDemoOnlyCampaign: CasaHudCampaign = {
+  ...savedCampaign,
+  status: "listing_candidates_discovered",
+  listingDiscoveryStatus: "listing_candidates_discovered",
+  discoverySummary: {
+    headline: 'Prepared 1 candidate property for "Could You Retire in Southern Italy for Under $300K?".',
+    criteriaSummary: "Legacy demo shortlist data exists.",
+    providerSummary: "Demo data is enabled for this workspace run.",
+    candidateCount: 1,
+    liveCandidateCount: 0,
+    fallbackCandidateCount: 1,
+    fallbackUsed: true,
+    warnings: ["Using demo listings for non-production workflow testing."],
+    discoveredAt: "2026-04-30T08:30:00.000Z",
+  },
+  listingCandidates: [
+    {
+      id: "legacy-demo-listing-1",
+      provider: "casahud_sample",
+      sourceType: "sample_pattern",
+      sourceLabel: "Demo data",
+      title: "Bari House for a Southern Italy Reset",
+      locationText: "Bari, Puglia, Italy",
+      country: "Italy",
+      region: "Puglia",
+      city: "Bari",
+      price: 284000,
+      currency: "EUR",
+      propertyType: "House",
+      bedrooms: 3,
+      bathrooms: 2,
+      sizeSqm: 118,
+      descriptionSnippet: "Legacy demo listing.",
+      features: ["Demo data"],
+      imageUrls: [],
+      imageCount: 0,
+      photoAvailability: "none",
+      discoveredAt: "2026-04-30T08:30:00.000Z",
+      preliminaryMatchNotes: "Legacy demo candidate.",
+    },
+  ],
+};
+
 const scriptedCampaign: CasaHudCampaign = {
   ...validatedCampaign,
   status: "script_narrative_completed",
@@ -512,7 +555,7 @@ const scriptedCampaign: CasaHudCampaign = {
   },
   locationStory: {
     headline: "Tropea turns the shortlist into a place-led story.",
-    summary: "CasaHUD frames the property through coastal day-to-day life instead of generic travel filler.",
+    summary: "CasaFlix frames the property through coastal day-to-day life instead of generic travel filler.",
     narrativeAngles: ["Lead with place before property."],
     lifestyleAnchors: ["Waterside lifestyle context", "Travel-friendly arrival story"],
     regionHighlights: ["Tropea", "Calabria"],
@@ -618,11 +661,11 @@ const scriptedCampaign: CasaHudCampaign = {
   scriptWarnings: ["Keep the hook specific to the approved listing support."],
   scriptProviderStatus: {
     provider: "casahud_script_patterns",
-    label: "CasaHUD script patterns",
+    label: "CasaFlix script patterns",
     state: "fallback",
     configured: true,
     used: true,
-    detail: "Using deterministic CasaHUD script composition.",
+    detail: "Using deterministic CasaFlix script composition.",
   },
   fullScriptText:
     "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
@@ -630,7 +673,7 @@ const scriptedCampaign: CasaHudCampaign = {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
     detail:
-      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+      "Media Planning and Asset Assembly comes next. CasaFlix will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   },
 };
@@ -706,7 +749,7 @@ async function flush() {
   });
 }
 
-describe("CasaHUD command center UI", () => {
+describe("CasaFlix command center UI", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -740,7 +783,7 @@ describe("CasaHUD command center UI", () => {
     expect(html).not.toContain(">Render &amp; Publish<");
     expect(html).not.toContain("Generate Mock Viral Titles");
     expect(html).not.toContain("Mock-first MVP");
-    expect(html).not.toContain("CasaHUD Campaign Workflow");
+    expect(html).not.toContain("CasaFlix Campaign Workflow");
     expect(html).not.toContain("Generate your next viral property video");
     expect(html).not.toContain("React has blocked a javascript: URL as a security precaution.");
   });
@@ -936,8 +979,8 @@ describe("CasaHUD command center UI", () => {
 
     const browserUiText = container.textContent || "";
     expect(browserUiText).toContain("Browser-Assisted Import");
-    expect(browserUiText).toContain("CasaHUD Importer captures visible listing text, page metadata, and image candidates");
-    expect(browserUiText).toContain("Drag CasaHUD Importer to your bookmarks bar, or copy the bookmarklet code and create it manually.");
+    expect(browserUiText).toContain("CasaFlix Importer captures visible listing text, page metadata, and image candidates");
+    expect(browserUiText).toContain("Drag CasaFlix Importer to your bookmarks bar, or copy the bookmarklet code and create it manually.");
     expect(browserUiText).toContain("Importer target: app.ibrains.ai");
     expect(browserUiText).toContain("Copy Bookmarklet Code");
     const bookmarkletLink = container.querySelector('[data-testid="casahud-browser-importer-bookmarklet"]') as HTMLAnchorElement | null;
@@ -955,7 +998,7 @@ describe("CasaHUD command center UI", () => {
     expect(bookmarkletCodeField?.value).toContain("campaignId=campaign-phase-3");
     expect(bookmarkletCodeField?.value).not.toContain("localhost");
     const reviewLink = container.querySelector('[data-testid="casahud-browser-import-review-link"]') as HTMLAnchorElement | null;
-    expect(reviewLink?.getAttribute("href")).toBe("https://app.ibrains.ai/apps/studio/casahud/import?campaignId=campaign-phase-3");
+    expect(reviewLink?.getAttribute("href")).toBe("https://app.ibrains.ai/apps/studio/casaflix/import?campaignId=campaign-phase-3");
     expect(reviewLink?.getAttribute("href")).not.toContain("localhost");
 
     const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
@@ -968,6 +1011,60 @@ describe("CasaHUD command center UI", () => {
     expect(propertyText).toContain("View Source");
     expect(propertyText).toContain("Edit Details");
     expect(propertyText).not.toContain("demo workflow");
+  });
+
+  it("hides legacy demo listings from the production shortlist view and prompts real imports", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(legacyDemoOnlyCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${legacyDemoOnlyCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: legacyDemoOnlyCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertyText).toContain("No real property listings added yet");
+    expect(propertyText).toMatch(/legacy demo listing/i);
+    expect(propertyText).toContain("Import Listing URLs");
+    expect(propertyText).toContain("Browser-assisted import");
+    expect(propertyText).not.toContain("Bari House for a Southern Italy Reset");
+    expect(propertyText).not.toContain("Sample Pattern");
   });
 
   it("copies bookmarklet code from the browser-assisted import panel", async () => {

@@ -32,13 +32,13 @@ export async function generateCasaHudOpportunityResult(
     titleCandidates,
     selectedTitle,
     campaignTypePrediction: selectedTitle.campaignType,
-    titleOpportunitySummary: `${selectedTitle.title} rose to the top because it gives CasaHUD a clear, searchable concept that is more likely to stay honest once later listing discovery begins.`,
-    confidenceSummary: `${Math.round(selectedTitle.confidence * 100)}% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims, so the winning concept leans on strong geography, buyer intent, and a listing-backed promise.`,
+    titleOpportunitySummary: `${selectedTitle.title} rose to the top because it gives CasaFlix a clear, searchable concept that is more likely to stay honest once later listing discovery begins.`,
+    confidenceSummary: `${Math.round(selectedTitle.confidence * 100)}% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims, so the winning concept leans on strong geography, buyer intent, and a listing-backed promise.`,
     providerStatus: research.providerStatus,
     nextStep: {
       action: "create_campaign",
       label: "Create campaign",
-      detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+      detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
     },
   };
 }

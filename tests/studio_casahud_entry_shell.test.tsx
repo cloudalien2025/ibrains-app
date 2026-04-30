@@ -18,8 +18,8 @@ vi.mock("next/link", async () => {
   };
 });
 
-describe("CasaHUD entry shell", () => {
-  it("renders the compact CasaHUD workspace shell with the reset sidebar labels", () => {
+describe("CasaFlix entry shell", () => {
+  it("renders the compact CasaFlix workspace shell with the reset sidebar labels", () => {
     const html = renderToStaticMarkup(<StudioDomaraClient />);
 
     expect(html).toContain("casahud-workspace-shell");
@@ -30,6 +30,8 @@ describe("CasaHUD entry shell", () => {
     expect(html).toContain(">Connections<");
     expect(html).toContain(">Generate Viral Video Title<");
     expect(html).toContain("No campaign selected.");
+    expect(html).not.toContain("CasaHUD");
+    expect(html).not.toContain("Domara");
     expect(html).not.toContain(">Dashboard<");
     expect(html).not.toContain(">Opportunity Brief<");
     expect(html).not.toContain(">Property Shortlist<");

@@ -20,7 +20,7 @@ vi.mock("@/app/api/studio/domara/_utils/integration-settings", () => ({
   isStudioIntegrationStoreAvailable: mocks.isStudioIntegrationStoreAvailable,
 }));
 
-describe("CasaHUD opportunity route", () => {
+describe("CasaFlix opportunity route", () => {
   beforeEach(() => {
     delete process.env.YOUTUBE_API_KEY;
     mocks.ensureUser.mockReset();

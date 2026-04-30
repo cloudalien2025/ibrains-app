@@ -173,7 +173,7 @@ export function createCredentialRequiredListingDiscovery(strategy: CasaHudConten
     ],
     credentialRequiredProviders: ["idealista", "immobiliare"],
     notes: [
-      "CasaHUD did not fabricate production listings.",
+      "CasaFlix did not fabricate production listings.",
       "Connect an approved listing provider or import real listings before script/render stages can run.",
     ],
   };
@@ -347,7 +347,7 @@ export function generateScriptPackage(params: {
       title: "Review Gate",
       visualDirection: "Editorial checklist before upload.",
       narration:
-        "Before publishing, CasaHUD flags unsupported claims, missing source data, and any provider gaps for human approval.",
+        "Before publishing, CasaFlix flags unsupported claims, missing source data, and any provider gaps for human approval.",
       overlayText: "Human review required",
       suggestedMedia: ["review checklist", "YouTube package preview"],
       durationSeconds: 9,
@@ -393,7 +393,7 @@ function toPropertyVideoPlan(params: {
     renderPlaceholder: {
       status: "pending_provider_connection",
       nextStep: "Create Studio render job after human review.",
-      provider: "CasaHUD Studio renderer",
+      provider: "CasaFlix Studio renderer",
     },
   };
 }
@@ -470,7 +470,7 @@ export function generateCasaHudYouTubePackage(params: {
     tags: Array.from(
       new Set([
         ...basePackage.tags,
-        "CasaHUD",
+        "CasaFlix",
         "real estate YouTube",
         params.listings[0]?.region || "Italy real estate",
         params.listings[0]?.city || "property roundup",

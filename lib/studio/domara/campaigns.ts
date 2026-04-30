@@ -283,49 +283,49 @@ export type CasaHudListingDiscoverySummary = {
 export type CasaHudCampaignPropertyDiscoveryNextPhase = {
   key: "property_discovery";
   label: "Find matching properties";
-  detail: "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.";
+  detail: "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.";
   implemented: false;
 };
 
 export type CasaHudCampaignListingValidationNextPhase = {
   key: "listing_validation";
   label: "Validate and rank listings";
-  detail: "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.";
+  detail: "Validation and ranking arrive next. CasaFlix will confirm which discovered candidates truly support the title promise.";
   implemented: false;
 };
 
 export type CasaHudCampaignLocationIntelligenceNextPhase = {
   key: "location_intelligence";
   label: "Location Intelligence";
-  detail: "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.";
+  detail: "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.";
   implemented: false;
 };
 
 export type CasaHudCampaignScriptNarrativeGenerationNextPhase = {
   key: "script_narrative_generation";
   label: "Script and Narrative Generation";
-  detail: "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.";
+  detail: "Script and Narrative Generation comes next. CasaFlix will turn the validated property story and location intelligence into the video narrative package.";
   implemented: false;
 };
 
 export type CasaHudCampaignMediaPlanningNextPhase = {
   key: "media_planning_asset_assembly";
   label: "Media Planning and Asset Assembly";
-  detail: "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.";
+  detail: "Media Planning and Asset Assembly comes next. CasaFlix will organize visuals, map scenes, and asset needs around the approved narrative package.";
   implemented: false;
 };
 
 export type CasaHudCampaignPackageReviewRenderNextPhase = {
   key: "youtube_package_review_render_plan";
   label: "YouTube Package, Review, and Render Plan";
-  detail: "YouTube Package, Review, and Render Plan comes next. CasaHUD will refine the package, check visual and claim coverage, and prepare render planning.";
+  detail: "YouTube Package, Review, and Render Plan comes next. CasaFlix will refine the package, check visual and claim coverage, and prepare render planning.";
   implemented: false;
 };
 
 export type CasaHudCampaignRenderPublishScheduleNextPhase = {
   key: "render_publish_schedule";
   label: "Render, Publish, and Schedule";
-  detail: "Render, Publish, and Schedule comes next. CasaHUD will use the approved review package and render plan in the execution layer without regenerating the strategy package.";
+  detail: "Render, Publish, and Schedule comes next. CasaFlix will use the approved review package and render plan in the execution layer without regenerating the strategy package.";
   implemented: false;
 };
 
@@ -961,7 +961,7 @@ export function parseCasaHudCampaignCreateBody(
   if (!isRecord(body) || !isRecord(body.opportunity)) {
     return {
       ok: false,
-      message: "CasaHUD needs the Phase 2 opportunity result before it can create a campaign.",
+      message: "CasaFlix needs the Phase 2 opportunity result before it can create a campaign.",
     };
   }
 
@@ -969,43 +969,43 @@ export function parseCasaHudCampaignCreateBody(
   if (!isSelectedTitle(opportunity.selectedTitle)) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because the selected viral title is missing.",
+      message: "CasaFlix could not save this campaign because the selected viral title is missing.",
     };
   }
   if (!Array.isArray(opportunity.titleCandidates) || opportunity.titleCandidates.length === 0) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because title candidates are missing.",
+      message: "CasaFlix could not save this campaign because title candidates are missing.",
     };
   }
   if (!opportunity.titleCandidates.every((candidate) => isTitleCandidate(candidate))) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because one or more title candidates are invalid.",
+      message: "CasaFlix could not save this campaign because one or more title candidates are invalid.",
     };
   }
   if (!isResearchBrief(opportunity.researchBrief)) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because the research brief is incomplete.",
+      message: "CasaFlix could not save this campaign because the research brief is incomplete.",
     };
   }
   if (!isOpportunityCampaignType(opportunity.campaignTypePrediction)) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because the campaign type is invalid.",
+      message: "CasaFlix could not save this campaign because the campaign type is invalid.",
     };
   }
   if (!isProviderStatus(opportunity.providerStatus)) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because the generation source is invalid.",
+      message: "CasaFlix could not save this campaign because the generation source is invalid.",
     };
   }
   if (!isNonEmptyString(opportunity.confidenceSummary) || !isNonEmptyString(opportunity.titleOpportunitySummary)) {
     return {
       ok: false,
-      message: "CasaHUD could not save this campaign because the confidence summary is missing.",
+      message: "CasaFlix could not save this campaign because the confidence summary is missing.",
     };
   }
 
@@ -1055,7 +1055,7 @@ export function createPropertyDiscoveryNextPhase(): CasaHudCampaignPropertyDisco
     key: "property_discovery",
     label: "Find matching properties",
     detail:
-      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+      "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   };
 }
@@ -1065,7 +1065,7 @@ export function createListingValidationNextPhase(): CasaHudCampaignListingValida
     key: "listing_validation",
     label: "Validate and rank listings",
     detail:
-      "Validation and ranking arrive next. CasaHUD will confirm which discovered candidates truly support the title promise.",
+      "Validation and ranking arrive next. CasaFlix will confirm which discovered candidates truly support the title promise.",
     implemented: false,
   };
 }
@@ -1075,7 +1075,7 @@ export function createLocationIntelligenceNextPhase(): CasaHudCampaignLocationIn
     key: "location_intelligence",
     label: "Location Intelligence",
     detail:
-      "Location Intelligence comes next. CasaHUD will explain why the strongest validated properties work through area and map context.",
+      "Location Intelligence comes next. CasaFlix will explain why the strongest validated properties work through area and map context.",
     implemented: false,
   };
 }
@@ -1085,7 +1085,7 @@ export function createScriptNarrativeGenerationNextPhase(): CasaHudCampaignScrip
     key: "script_narrative_generation",
     label: "Script and Narrative Generation",
     detail:
-      "Script and Narrative Generation comes next. CasaHUD will turn the validated property story and location intelligence into the video narrative package.",
+      "Script and Narrative Generation comes next. CasaFlix will turn the validated property story and location intelligence into the video narrative package.",
     implemented: false,
   };
 }
@@ -1095,7 +1095,7 @@ export function createMediaPlanningAssetAssemblyNextPhase(): CasaHudCampaignMedi
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
     detail:
-      "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+      "Media Planning and Asset Assembly comes next. CasaFlix will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   };
 }
@@ -1105,7 +1105,7 @@ export function createPackageReviewRenderPlanNextPhase(): CasaHudCampaignPackage
     key: "youtube_package_review_render_plan",
     label: "YouTube Package, Review, and Render Plan",
     detail:
-      "YouTube Package, Review, and Render Plan comes next. CasaHUD will refine the package, check visual and claim coverage, and prepare render planning.",
+      "YouTube Package, Review, and Render Plan comes next. CasaFlix will refine the package, check visual and claim coverage, and prepare render planning.",
     implemented: false,
   };
 }
@@ -1115,7 +1115,7 @@ export function createRenderPublishScheduleNextPhase(): CasaHudCampaignRenderPub
     key: "render_publish_schedule",
     label: "Render, Publish, and Schedule",
     detail:
-      "Render, Publish, and Schedule comes next. CasaHUD will use the approved review package and render plan in the execution layer without regenerating the strategy package.",
+      "Render, Publish, and Schedule comes next. CasaFlix will use the approved review package and render plan in the execution layer without regenerating the strategy package.",
     implemented: false,
   };
 }
@@ -1184,6 +1184,7 @@ export function applyCasaHudListingDiscovery(
   },
 ): CasaHudCampaign {
   const updatedAt = discovery.discoverySummary.discoveredAt || nowIso();
+  const hasListings = discovery.listingCandidates.length > 0;
   const emptyLocationData = createEmptyCasaHudLocationData();
   const emptyScriptData = createEmptyCasaHudScriptData();
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
@@ -1192,12 +1193,12 @@ export function applyCasaHudListingDiscovery(
 
   return {
     ...campaign,
-    status: "listing_candidates_discovered",
+    status: hasListings ? "listing_candidates_discovered" : "ready_for_property_discovery",
     listingCandidates: discovery.listingCandidates,
     listingSearchCriteria: discovery.listingSearchCriteria,
     listingProviderStatuses: discovery.listingProviderStatuses,
     discoverySummary: discovery.discoverySummary,
-    listingDiscoveryStatus: "listing_candidates_discovered",
+    listingDiscoveryStatus: hasListings ? "listing_candidates_discovered" : "not_started",
     approvedListings: [],
     rejectedListings: [],
     listingRankOrder: [],
@@ -1210,7 +1211,7 @@ export function applyCasaHudListingDiscovery(
     ...emptyMediaPlanData,
     ...emptyYouTubePackageData,
     ...emptyExecutionData,
-    nextPhase: createListingValidationNextPhase(),
+    nextPhase: hasListings ? createListingValidationNextPhase() : createPropertyDiscoveryNextPhase(),
     updatedAt,
     futureState: {
       ...campaign.futureState,

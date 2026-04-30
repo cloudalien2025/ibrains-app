@@ -4,12 +4,12 @@ export const dynamic = "force-dynamic";
 
 const studioApps = [
   {
-    id: "casahud",
-    name: "CasaHUD",
+    id: "casaflix",
+    name: "CasaFlix",
     description: "Real-estate YouTube content engine.",
     status: "Active",
-    href: "/apps/studio/casahud",
-    actionLabel: "Open CasaHUD",
+    href: "/apps/studio/casaflix",
+    actionLabel: "Open CasaFlix",
     disabled: false,
   },
   {
@@ -60,7 +60,7 @@ export default function StudioAppPage() {
             <article
               key={app.id}
               className="rounded-[1.75rem] border border-[#D9E4F0] bg-white/95 p-6 shadow-[0_20px_45px_rgba(15,23,42,0.08)]"
-              data-testid={app.id === "casahud" ? "studio-app-card-casahud" : app.id === "uap-forge" ? "studio-app-card-uap-forge" : undefined}
+              data-testid={app.id === "casaflix" ? "studio-app-card-casaflix" : app.id === "uap-forge" ? "studio-app-card-uap-forge" : undefined}
             >
               <div className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${statusClasses(app.status)}`}>
                 {app.status}

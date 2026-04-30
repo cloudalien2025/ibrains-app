@@ -11,7 +11,7 @@ const opportunity: CasaHudOpportunityResult = {
   generatedAt: "2026-04-28T00:00:00.000Z",
   preferredMarket: "Italian real-estate YouTube",
   researchBrief: {
-    summary: "CasaHUD identified the strongest opportunity in regional affordability plus relocation intent.",
+    summary: "CasaFlix identified the strongest opportunity in regional affordability plus relocation intent.",
     opportunityCategories: ["affordable coastal roundups", "retirement relocation", "regional niche inventory"],
     competitorPatterns: ["Top videos frequently anchor the title with a price ceiling."],
     audienceIntent: ["buyable Italy homes", "retire in Italy"],
@@ -41,25 +41,25 @@ const opportunity: CasaHudOpportunityResult = {
     score: 92,
     campaignType: "lifestyle_relocation",
     confidence: 0.89,
-    reasoning: "CasaHUD chose this title because it balances click potential with a believable promise.",
+    reasoning: "CasaFlix chose this title because it balances click potential with a believable promise.",
     regionHint: "Southern Italy",
     listingSearchHints: ["Southern Italy homes under 300k", "relocation-friendly towns"],
   },
   campaignTypePrediction: "lifestyle_relocation",
   titleOpportunitySummary:
-    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaHUD a clear, searchable concept that can still hold up when listing discovery begins.",
+    "Could You Retire in Southern Italy for Under $300K? rose to the top because it gives CasaFlix a clear, searchable concept that can still hold up when listing discovery begins.",
   confidenceSummary:
-    "89% confidence. CasaHUD prefers titles that can earn clicks without forcing unsupported claims.",
+    "89% confidence. CasaFlix prefers titles that can earn clicks without forcing unsupported claims.",
   providerStatus: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
     canImproveWithYouTube: true,
   },
   nextStep: {
     action: "create_campaign",
     label: "Create campaign",
-    detail: "Phase 3 will turn this winning concept into a saved CasaHUD campaign with durable workflow state.",
+    detail: "Phase 3 will turn this winning concept into a saved CasaFlix campaign with durable workflow state.",
   },
 };
 
@@ -122,7 +122,7 @@ const savedCampaign: CasaHudCampaign = {
     key: "property_discovery",
     label: "Find matching properties",
     detail:
-      "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+      "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
     implemented: false,
   },
   createdAt: "2026-04-28T00:10:00.000Z",
@@ -181,7 +181,7 @@ vi.mock("@/lib/studio/domara/listing-discovery-engine", () => ({
   runCasaHudListingDiscovery: mocks.runCasaHudListingDiscovery,
 }));
 
-describe("CasaHUD listing discovery route", () => {
+describe("CasaFlix listing discovery route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();
@@ -229,81 +229,27 @@ describe("CasaHUD listing discovery route", () => {
           configured: false,
           used: false,
           candidateCount: 0,
-          detail: "Idealista is not connected yet. CasaHUD can still prepare candidate properties with sample listing patterns.",
+          detail: "Idealista is not connected yet.",
           warning: "Connect Idealista to search live listings.",
         },
-        {
-          provider: "casahud_sample",
-          label: "CasaHUD sample listing patterns",
-          state: "fallback",
-          configured: true,
-          used: true,
-          candidateCount: 2,
-          detail: "Using CasaHUD sample listing patterns until listing sources are connected.",
-          warning: "Connect Idealista or Immobiliare to search live listings.",
-        },
       ],
-      listingCandidates: [
-        {
-          id: "listing-a",
-          provider: "casahud_sample",
-          title: "Tropea apartment candidate",
-          locationText: "Tropea, Calabria, Italy",
-          country: "Italy",
-          region: "Calabria",
-          city: "Tropea",
-          price: 284000,
-          currency: "USD",
-          propertyType: "apartment",
-          bedrooms: 2,
-          bathrooms: 2,
-          sizeSqm: 88,
-          descriptionSnippet: "Candidate listing pattern with strong relocation fit.",
-          features: ["budget-conscious", "move-in ready", "coastal lifestyle"],
-          imageUrls: ["https://images.example.com/1.jpg"],
-          imageCount: 1,
-          photoAvailability: "limited",
-          discoveredAt: "2026-04-28T00:20:00.000Z",
-          preliminaryMatchNotes: "Fits the title promise and budget.",
-        },
-        {
-          id: "listing-b",
-          provider: "casahud_sample",
-          title: "Lecce villa candidate",
-          locationText: "Lecce, Puglia, Italy",
-          country: "Italy",
-          region: "Puglia",
-          city: "Lecce",
-          price: 296000,
-          currency: "USD",
-          propertyType: "villa",
-          bedrooms: 3,
-          bathrooms: 2,
-          sizeSqm: 112,
-          descriptionSnippet: "Candidate listing pattern with strong relocation fit.",
-          features: ["budget-conscious", "move-in ready", "coastal lifestyle"],
-          imageUrls: ["https://images.example.com/2.jpg"],
-          imageCount: 1,
-          photoAvailability: "limited",
-          discoveredAt: "2026-04-28T00:20:00.000Z",
-          preliminaryMatchNotes: "Matches the retirement angle with visual support.",
-        },
-      ],
+      listingCandidates: [],
       discoverySummary: {
-        headline: `Prepared 2 candidate properties for "${savedCampaign.selectedViralTitle}".`,
+        headline: `No real property listings found yet for "${savedCampaign.selectedViralTitle}".`,
         criteriaSummary: "Searching sale listings around Southern Italy up to USD 300,000, focused on budget-conscious and move-in ready properties.",
-        providerSummary: "Using CasaHUD sample listing patterns until listing sources are connected.",
-        candidateCount: 2,
+        providerSummary:
+          "No connected provider returned real listings. Import listing URLs, use browser-assisted import, or connect a provider.",
+        candidateCount: 0,
         liveCandidateCount: 0,
-        fallbackCandidateCount: 2,
-        fallbackUsed: true,
-        warnings: ["Using CasaHUD sample listing patterns until listing sources are connected."],
+        fallbackCandidateCount: 0,
+        fallbackUsed: false,
+        warnings: ["No real property listings were added yet. Import listing URLs, use browser-assisted import, or connect a provider."],
         discoveredAt: "2026-04-28T00:20:00.000Z",
       },
     });
   });
 
-  it("discovers listings, persists them on the campaign, and returns a typed response", async () => {
+  it("persists discovery results and returns a no-real-listings prompt when providers return none", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/discover-listings/route");
     const response = await route.POST(
       new NextRequest(`http://localhost/api/studio/domara/campaigns/${savedCampaign.id}/discover-listings`, {
@@ -315,10 +261,11 @@ describe("CasaHUD listing discovery route", () => {
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
-    expect(payload.campaign.status).toBe("listing_candidates_discovered");
-    expect(payload.campaign.listingCandidates).toHaveLength(2);
-    expect(payload.summary.listingCandidateCount).toBe(2);
-    expect(payload.campaign.nextPhase.key).toBe("listing_validation");
+    expect(payload.campaign.status).toBe("ready_for_property_discovery");
+    expect(payload.campaign.listingCandidates).toHaveLength(0);
+    expect(payload.summary.listingCandidateCount).toBe(0);
+    expect(payload.campaign.nextPhase.key).toBe("property_discovery");
+    expect(payload.message).toContain("No real property listings were found yet");
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledTimes(1);
   });
 

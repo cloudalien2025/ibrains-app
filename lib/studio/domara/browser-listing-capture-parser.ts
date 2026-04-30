@@ -800,14 +800,14 @@ function extractionFieldNames(draft: BrowserParsedDraft, imageUrls: string[]) {
 
 function sanitizePayload(rawPayload: unknown): CasaHudBrowserListingCapturePayload {
   if (!rawPayload || typeof rawPayload !== "object" || Array.isArray(rawPayload)) {
-    throw new Error("CasaHUD needs a browser import payload to continue.");
+    throw new Error("CasaFlix needs a browser import payload to continue.");
   }
   if (containsDisallowedCaptureFields(rawPayload)) {
-    throw new Error("CasaHUD browser import only accepts visible page text, metadata, and image candidates.");
+    throw new Error("CasaFlix browser import only accepts visible page text, metadata, and image candidates.");
   }
   const payload = rawPayload as Record<string, unknown>;
   const sourceUrl = optionalString(payload.sourceUrl);
-  if (!sourceUrl) throw new Error("CasaHUD browser import needs a source URL.");
+  if (!sourceUrl) throw new Error("CasaFlix browser import needs a source URL.");
 
   const visibleText = trimVisibleText(optionalString(payload.visibleText));
   const imageCandidates = Array.isArray(payload.imageCandidates)
@@ -865,7 +865,7 @@ function sanitizePayload(rawPayload: unknown): CasaHudBrowserListingCapturePaylo
   };
 
   if (payloadSize(sanitizedPayload) > CASAHUD_BROWSER_IMPORT_MAX_PAYLOAD_BYTES) {
-    throw new Error("CasaHUD browser import payload is too large. Capture less page text and fewer images.");
+    throw new Error("CasaFlix browser import payload is too large. Capture less page text and fewer images.");
   }
 
   return sanitizedPayload;

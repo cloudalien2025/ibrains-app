@@ -66,7 +66,7 @@ const DEFINITIONS: ProviderDefinition[] = [
     requiredEnvVars: ["ELEVENLABS_API_KEY"],
     optionalEnvVars: ["ELEVENLABS_VOICE_ID"],
     capabilitiesEnabled: ["Premium AI voice narration", "Narration audio preparation"],
-    safeSetupHelp: "Connect ElevenLabs when you want CasaHUD to prepare premium voice narration.",
+    safeSetupHelp: "Connect ElevenLabs when you want CasaFlix to prepare premium voice narration.",
   },
   {
     providerId: "mapbox",
@@ -93,7 +93,7 @@ const DEFINITIONS: ProviderDefinition[] = [
     requiredEnvVars: ["IDEALISTA_API_KEY"],
     optionalEnvVars: ["IDEALISTA_CLIENT_ID", "IDEALISTA_CLIENT_SECRET"],
     capabilitiesEnabled: ["Real property discovery", "Listing claim validation", "Source-backed video ideas"],
-    safeSetupHelp: "Connect Idealista when your account and listing access are approved for CasaHUD.",
+    safeSetupHelp: "Connect Idealista when your account and listing access are approved for CasaFlix.",
   },
   {
     providerId: "immobiliare",
@@ -101,7 +101,7 @@ const DEFINITIONS: ProviderDefinition[] = [
     category: "listing_ingestion",
     requiredEnvVars: ["IMMOBILIARE_API_KEY"],
     capabilitiesEnabled: ["Real property discovery", "Listing claim validation", "Source-backed video ideas"],
-    safeSetupHelp: "Connect Immobiliare when your account and listing access are approved for CasaHUD.",
+    safeSetupHelp: "Connect Immobiliare when your account and listing access are approved for CasaFlix.",
   },
   {
     providerId: "cloudinary",

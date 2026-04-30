@@ -26,7 +26,7 @@ export async function resolveCasaHudYouTubeExecutionContext(userId: string): Pro
       providerStatus: {
         provider: "youtube_unavailable",
         state: "needs_connection",
-        detail: "Connect the YouTube Channel before CasaHUD can publish or schedule this campaign.",
+        detail: "Connect the YouTube Channel before CasaFlix can publish or schedule this campaign.",
       },
     };
   }

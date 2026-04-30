@@ -45,7 +45,7 @@ async function resolveLocationProviderSecrets(userId: string) {
       mapboxAccessToken: mapbox?.secret?.trim() || fallback.mapboxAccessToken,
     };
   } catch (error) {
-    console.warn("CasaHUD location secret resolution fell back to workspace configuration", { error });
+    console.warn("CasaFlix location secret resolution fell back to workspace configuration", { error });
     return fallback;
   }
 }
@@ -63,22 +63,22 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can build location intelligence.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can build location intelligence.", "INVALID_INPUT", reqId);
     }
 
     const campaignStoreAvailable = await isCasaHudCampaignStoreAvailable();
     if (!campaignStoreAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
     if (campaign.approvedListings.length === 0) {
       return errorResponse(
         409,
-        "CasaHUD needs approved listings before it can build location intelligence.",
+        "CasaFlix needs approved listings before it can build location intelligence.",
         "APPROVED_LISTINGS_REQUIRED",
         reqId,
       );
@@ -98,13 +98,13 @@ export async function POST(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    console.error("CasaHUD location intelligence failed", { reqId, error });
+    console.error("CasaFlix location intelligence failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not build location intelligence right now. Try again in a moment.",
+      "CasaFlix could not build location intelligence right now. Try again in a moment.",
       "LOCATION_INTELLIGENCE_FAILED",
       reqId,
     );

@@ -243,17 +243,17 @@ export async function POST(
     const resolvedParams = await Promise.resolve(params);
     const campaignId = resolvedParams.id?.trim();
     if (!campaignId) {
-      return errorResponse(400, "CasaHUD needs a valid campaign id before it can save a browser import.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs a valid campaign id before it can save a browser import.", "INVALID_INPUT", reqId);
     }
 
     const storeAvailable = await isCasaHudCampaignStoreAvailable();
     if (!storeAvailable) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
     const campaign = await getCasaHudCampaign(userId, campaignId);
     if (!campaign) {
-      return errorResponse(404, "CasaHUD could not find that campaign.", "NOT_FOUND", reqId);
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
 
     const body = (await request.json().catch(() => null)) as {
@@ -262,7 +262,7 @@ export async function POST(
     } | null;
 
     if (!body?.payload) {
-      return errorResponse(400, "CasaHUD needs captured browser listing data before it can import anything.", "INVALID_INPUT", reqId);
+      return errorResponse(400, "CasaFlix needs captured browser listing data before it can import anything.", "INVALID_INPUT", reqId);
     }
 
     const importedAt = nowIso();
@@ -322,18 +322,18 @@ export async function POST(
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
-      return errorResponse(503, "CasaHUD storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
     }
 
-    const message = error instanceof Error ? error.message : "CasaHUD could not save that browser import right now.";
+    const message = error instanceof Error ? error.message : "CasaFlix could not save that browser import right now.";
     if (/needs|must be|Only http\/https|invalid|payload|visible page text|Private or local network hosts|not allowed/i.test(message)) {
       return errorResponse(400, message, "INVALID_INPUT", reqId);
     }
 
-    console.error("CasaHUD browser import failed", { reqId, error });
+    console.error("CasaFlix browser import failed", { reqId, error });
     return errorResponse(
       500,
-      "CasaHUD could not save that browser import right now. Try again in a moment.",
+      "CasaFlix could not save that browser import right now. Try again in a moment.",
       "BROWSER_IMPORT_FAILED",
       reqId,
     );

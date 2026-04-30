@@ -38,7 +38,7 @@ const scriptReadyCampaign: CasaHudCampaign = {
     },
   ],
   researchBrief: {
-    summary: "CasaHUD identified the strongest relocation opportunity.",
+    summary: "CasaFlix identified the strongest relocation opportunity.",
     opportunityCategories: ["relocation"],
     competitorPatterns: ["Budget-led relocation titles perform well."],
     audienceIntent: ["retire in Italy"],
@@ -50,8 +50,8 @@ const scriptReadyCampaign: CasaHudCampaign = {
   preferredMarket: "Italian real-estate YouTube",
   generationSource: {
     mode: "casahud_patterns",
-    label: "CasaHUD opportunity patterns",
-    detail: "Using CasaHUD opportunity patterns.",
+    label: "CasaFlix opportunity patterns",
+    detail: "Using CasaFlix opportunity patterns.",
     canImproveWithYouTube: true,
   },
   confidenceReasoning: {
@@ -129,19 +129,19 @@ const scriptReadyCampaign: CasaHudCampaign = {
   locationIntelligenceStatus: "location_intelligence_completed",
   locationIntelligenceSummary: {
     headline: "Location story prepared.",
-    providerSummary: "Using CasaHUD location patterns.",
-    coverageSummary: "CasaHUD connected the shortlist to regional proof points.",
+    providerSummary: "Using CasaFlix location patterns.",
+    coverageSummary: "CasaFlix connected the shortlist to regional proof points.",
     warningCount: 1,
     generatedAt: "2026-04-29T00:08:00.000Z",
     fallbackUsed: true,
   },
   locationStory: {
     headline: "Tropea turns the shortlist into a place-led story.",
-    summary: "CasaHUD positioned the approved property around coastal context and everyday convenience.",
+    summary: "CasaFlix positioned the approved property around coastal context and everyday convenience.",
     narrativeAngles: ["Open with the region before the property details arrive."],
     lifestyleAnchors: ["Waterside lifestyle context"],
     regionHighlights: ["Tropea", "Calabria"],
-    fallbackNotice: "Using CasaHUD location patterns where live providers were limited.",
+    fallbackNotice: "Using CasaFlix location patterns where live providers were limited.",
   },
   localHighlights: [],
   poiBundle: null,
@@ -180,11 +180,11 @@ const scriptReadyCampaign: CasaHudCampaign = {
   scriptWarnings: [],
   scriptProviderStatus: {
     provider: "casahud_script_patterns",
-    label: "CasaHUD script patterns",
+    label: "CasaFlix script patterns",
     state: "fallback",
     configured: true,
     used: true,
-    detail: "Using deterministic CasaHUD script composition.",
+    detail: "Using deterministic CasaFlix script composition.",
   },
   fullScriptText: "Opening Hook\nWhat does life in Southern Italy actually look like when the homes are real and the budget still matters?",
   ...createEmptyCasaHudMediaPlanData(),
@@ -192,7 +192,7 @@ const scriptReadyCampaign: CasaHudCampaign = {
   nextPhase: {
     key: "media_planning_asset_assembly",
     label: "Media Planning and Asset Assembly",
-    detail: "Media Planning and Asset Assembly comes next. CasaHUD will organize visuals, map scenes, and asset needs around the approved narrative package.",
+    detail: "Media Planning and Asset Assembly comes next. CasaFlix will organize visuals, map scenes, and asset needs around the approved narrative package.",
     implemented: false,
   },
   createdAt: "2026-04-29T00:00:00.000Z",
@@ -329,7 +329,7 @@ vi.mock("@/lib/studio/domara/media-planning-engine", () => ({
   runCasaHudMediaPlanning: mocks.runCasaHudMediaPlanning,
 }));
 
-describe("CasaHUD media planning route", () => {
+describe("CasaFlix media planning route", () => {
   beforeEach(() => {
     mocks.ensureUser.mockReset();
     mocks.resolveUserId.mockReset();

@@ -12,10 +12,10 @@ export const runtime = "nodejs";
 function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
   return `
 (function () {
-  if (window.__CASAHUD_BROWSER_IMPORT_ACTIVE__) {
+  if (window.__CASAFLIX_BROWSER_IMPORT_ACTIVE__) {
     return;
   }
-  window.__CASAHUD_BROWSER_IMPORT_ACTIVE__ = true;
+  window.__CASAFLIX_BROWSER_IMPORT_ACTIVE__ = true;
 
   var APP_ORIGIN = ${JSON.stringify(origin)};
   var CAMPAIGN_ID_ENCODED = ${JSON.stringify(encodedCampaignId || "")};
@@ -111,7 +111,7 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
   }
 
   function buildReceiverUrl() {
-    var receiver = new URL("/apps/studio/casahud/import", APP_ORIGIN);
+    var receiver = new URL("/apps/studio/casaflix/import", APP_ORIGIN);
     if (CAMPAIGN_ID) receiver.searchParams.set("campaignId", CAMPAIGN_ID);
     receiver.searchParams.set("captureMethod", "bookmarklet");
     return receiver.toString();
@@ -157,14 +157,14 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
       window.location.href = receiverUrl;
     }
   } catch (error) {
-    window.alert("CasaHUD could not capture this page right now. Open the listing again and retry the browser importer.");
-    console.error("CasaHUD browser importer failed", error);
+    window.alert("CasaFlix could not capture this page right now. Open the listing again and retry the browser importer.");
+    console.error("CasaFlix browser importer failed", error);
   } finally {
     window.setTimeout(function () {
       try {
-        delete window.__CASAHUD_BROWSER_IMPORT_ACTIVE__;
+        delete window.__CASAFLIX_BROWSER_IMPORT_ACTIVE__;
       } catch (_error) {
-        window.__CASAHUD_BROWSER_IMPORT_ACTIVE__ = false;
+        window.__CASAFLIX_BROWSER_IMPORT_ACTIVE__ = false;
       }
     }, 500);
   }

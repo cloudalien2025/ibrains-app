@@ -17,7 +17,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
       score: 92,
       campaignType,
       confidence: 0.9,
-      reasoning: "Strong title fit for CasaHUD.",
+      reasoning: "Strong title fit for CasaFlix.",
       regionHint,
       listingSearchHints: [title],
     },
@@ -40,7 +40,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
       },
     ],
     researchBrief: {
-      summary: "CasaHUD sees a credible listing-backed angle with strong visual potential.",
+      summary: "CasaFlix sees a credible listing-backed angle with strong visual potential.",
       opportunityCategories: ["regional affordability", "home tours", "lifestyle relocation"],
       competitorPatterns: ["Price ceilings and clear geographies perform best."],
       audienceIntent: ["buyable Italy homes", "retire in Italy", "lake villa tours"],
@@ -52,13 +52,13 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
     preferredMarket: "Italian real-estate YouTube",
     generationSource: {
       mode: "casahud_patterns",
-      label: "CasaHUD opportunity patterns",
-      detail: "Using CasaHUD opportunity patterns until YouTube connection is enabled for live competitive research.",
+      label: "CasaFlix opportunity patterns",
+      detail: "Using CasaFlix opportunity patterns until YouTube connection is enabled for live competitive research.",
       canImproveWithYouTube: true,
     },
     confidenceReasoning: {
       summary: "90% confidence.",
-      titleOpportunitySummary: "The title has a clear property promise CasaHUD can search for.",
+      titleOpportunitySummary: "The title has a clear property promise CasaFlix can search for.",
       selectedTitleReasoning: "It balances click potential with supportable listing search criteria.",
       selectedTitleConfidence: 0.9,
     },
@@ -104,7 +104,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
       key: "property_discovery",
       label: "Find matching properties",
       detail:
-        "Property Discovery comes next. CasaHUD will translate the saved title promise into real candidate listings without regenerating the title package.",
+        "Property Discovery comes next. CasaFlix will translate the saved title promise into real candidate listings without regenerating the title package.",
       implemented: false,
     },
     createdAt: "2026-04-28T00:00:00.000Z",
@@ -129,7 +129,7 @@ function campaignFor(title: string, campaignType: CasaHudCampaign["campaignType"
   };
 }
 
-describe("CasaHUD listing discovery engine", () => {
+describe("CasaFlix listing discovery engine", () => {
   it("derives structured search criteria for roundup titles", () => {
     const criteria = deriveCasaHudListingSearchCriteria(
       campaignFor("7 Affordable Beachfront Homes in Southern Italy", "roundup", "Southern Italy"),
@@ -174,24 +174,38 @@ describe("CasaHUD listing discovery engine", () => {
     expect(showcase.featureTags).toContain("stunning views");
   });
 
-  it("returns deterministic fallback candidates when live provider credentials are absent", async () => {
+  it("returns no demo candidates when live provider credentials are absent", async () => {
     const campaign = campaignFor(
       "Could You Retire in Southern Italy for Under $300K?",
       "lifestyle_relocation",
       "Southern Italy",
     );
 
-    const first = await runCasaHudListingDiscovery(campaign);
-    const second = await runCasaHudListingDiscovery(campaign);
+    const result = await runCasaHudListingDiscovery(campaign, { allowDemoData: false });
+
+    expect(result.discoverySummary.fallbackUsed).toBe(false);
+    expect(result.discoverySummary.fallbackCandidateCount).toBe(0);
+    expect(result.listingCandidates.length).toBe(0);
+    expect(result.listingProviderStatuses.some((status) => status.provider === "idealista" && status.state === "missing_credentials")).toBe(true);
+    expect(result.listingProviderStatuses.some((status) => status.provider === "immobiliare" && status.state === "missing_credentials")).toBe(true);
+    expect(result.listingProviderStatuses.some((status) => status.provider === "casahud_sample" && status.state === "fallback")).toBe(false);
+  });
+
+  it("can return deterministic demo candidates only when demo mode is explicitly enabled", async () => {
+    const campaign = campaignFor(
+      "Could You Retire in Southern Italy for Under $300K?",
+      "lifestyle_relocation",
+      "Southern Italy",
+    );
+
+    const first = await runCasaHudListingDiscovery(campaign, { allowDemoData: true });
+    const second = await runCasaHudListingDiscovery(campaign, { allowDemoData: true });
 
     expect(first.discoverySummary.fallbackUsed).toBe(true);
     expect(first.listingCandidates.length).toBeGreaterThan(0);
     expect(first.listingCandidates.map((candidate) => candidate.id)).toEqual(
       second.listingCandidates.map((candidate) => candidate.id),
     );
-    expect(first.listingCandidates[0]?.title).toBe(second.listingCandidates[0]?.title);
-    expect(first.listingProviderStatuses.some((status) => status.provider === "idealista" && status.state === "missing_credentials")).toBe(true);
-    expect(first.listingProviderStatuses.some((status) => status.provider === "immobiliare" && status.state === "missing_credentials")).toBe(true);
     expect(first.listingProviderStatuses.some((status) => status.provider === "casahud_sample" && status.state === "fallback")).toBe(true);
   });
 });

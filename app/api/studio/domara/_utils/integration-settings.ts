@@ -183,7 +183,7 @@ export async function saveStudioIntegrationSecret(params: {
       encrypted,
       last4,
       secret.length,
-      `CasaHUD ${params.providerId}`,
+      `CasaFlix ${params.providerId}`,
       JSON.stringify({ scope: "studio_domara" }),
     ]
   );
