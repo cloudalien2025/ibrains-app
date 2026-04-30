@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type {
   CasaHudCampaign,
   CasaHudCampaignSummary,
@@ -1709,6 +1709,7 @@ export default function StudioCasaHudCommandCenter() {
   const [listingEditorNotice, setListingEditorNotice] = useState<string | null>(null);
   const [listingEditorDraft, setListingEditorDraft] = useState<CasaHudListingEditorDraft | null>(null);
   const [scriptCopyNotice, setScriptCopyNotice] = useState<string | null>(null);
+  const [bookmarkletInstallNotice, setBookmarkletInstallNotice] = useState<string | null>(null);
   const [listingUrlImportText, setListingUrlImportText] = useState("");
   const [listingUrlImporting, setListingUrlImporting] = useState(false);
   const [listingUrlImportNotice, setListingUrlImportNotice] = useState<string | null>(null);
@@ -1745,8 +1746,8 @@ export default function StudioCasaHudCommandCenter() {
       null
     );
   }, [activeCampaign, selectedListingId]);
-  const browserImporterBookmarkletHref = useMemo(() => {
-    if (typeof window === "undefined") return "#";
+  const browserImporterBookmarkletCode = useMemo(() => {
+    if (typeof window === "undefined") return "";
     const bookmarkletUrl = new URL("/api/studio/domara/browser-import/bookmarklet", window.location.origin);
     if (activeCampaign?.id) bookmarkletUrl.searchParams.set("campaignId", activeCampaign.id);
     const src = bookmarkletUrl.toString();
@@ -1950,6 +1951,7 @@ export default function StudioCasaHudCommandCenter() {
     setListingUrlImportNotice(null);
     setListingUrlImportWarnings([]);
     setListingUrlImportResults([]);
+    setBookmarkletInstallNotice(null);
     setListingEditorOpen(false);
     setListingEditorNotice(null);
     setListingEditorDraft(null);
@@ -2524,6 +2526,38 @@ export default function StudioCasaHudCommandCenter() {
     }
   }
 
+  const applyBookmarkletInstallerHref = useCallback(
+    (anchor: HTMLAnchorElement | null) => {
+      if (!anchor || !browserImporterBookmarkletCode) return;
+      anchor.setAttribute("href", browserImporterBookmarkletCode);
+      anchor.setAttribute("draggable", "true");
+      anchor.setAttribute("title", "Drag to bookmarks bar");
+    },
+    [browserImporterBookmarkletCode],
+  );
+
+  function onBookmarkletInstallClick(event: ReactMouseEvent<HTMLAnchorElement>) {
+    event.preventDefault();
+    setBookmarkletInstallNotice("Drag this button to your bookmarks bar, or copy the bookmarklet code.");
+  }
+
+  async function onCopyBookmarkletCode() {
+    if (!browserImporterBookmarkletCode) {
+      setBookmarkletInstallNotice("Bookmarklet code is unavailable right now. Refresh this page and retry.");
+      return;
+    }
+    if (typeof navigator === "undefined" || !navigator.clipboard) {
+      setBookmarkletInstallNotice("Copy is unavailable in this browser session. Use manual install with the code field.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(browserImporterBookmarkletCode);
+      setBookmarkletInstallNotice("Bookmarklet code copied.");
+    } catch {
+      setBookmarkletInstallNotice("Could not copy bookmarklet code right now. Use manual install with the code field.");
+    }
+  }
+
   function renderNextActionButton(step: CasaHudNextStep, fullWidth = false) {
     const className = cx(primaryButtonClass, fullWidth && "w-full");
 
@@ -2958,12 +2992,21 @@ export default function StudioCasaHudCommandCenter() {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <a
-                      href={browserImporterBookmarkletHref}
+                      ref={applyBookmarkletInstallerHref}
+                      onClick={onBookmarkletInstallClick}
                       className={primaryButtonClass}
                       data-testid="casahud-browser-importer-bookmarklet"
                     >
                       CasaHUD Importer
                     </a>
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => void onCopyBookmarkletCode()}
+                      data-testid="casahud-browser-importer-copy"
+                    >
+                      Copy Bookmarklet Code
+                    </button>
                     <a
                       href="/apps/studio/casahud/import"
                       className={secondaryButtonClass}
@@ -2972,10 +3015,17 @@ export default function StudioCasaHudCommandCenter() {
                       Open Browser Import Review
                     </a>
                   </div>
+                  <textarea
+                    value={browserImporterBookmarkletCode}
+                    readOnly
+                    className="min-h-[84px] w-full rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] px-3 py-2 text-xs leading-5 text-[#334155]"
+                    data-testid="casahud-browser-importer-bookmarklet-code"
+                  />
+                  {bookmarkletInstallNotice ? <p className="text-xs text-[#475569]">{bookmarkletInstallNotice}</p> : null}
                 </div>
                 <div className="grid gap-2 rounded-[1.15rem] border border-[#D9E4F0] bg-white p-4 text-sm leading-6 text-[#475569]">
                   <p className="font-semibold text-[#172033]">How to use it</p>
-                  <p>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar.</p>
+                  <p>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</p>
                   <p>2. Open an Immobiliare or Idealista listing you can already view in your browser.</p>
                   <p>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</p>
                   <p>4. Review the imported listing in CasaHUD and save it to the shortlist.</p>
@@ -3973,12 +4023,21 @@ export default function StudioCasaHudCommandCenter() {
                   </p>
                   <div className="flex flex-wrap gap-3">
                     <a
-                      href={browserImporterBookmarkletHref}
+                      ref={applyBookmarkletInstallerHref}
+                      onClick={onBookmarkletInstallClick}
                       className={primaryButtonClass}
                       data-testid="casahud-browser-importer-bookmarklet"
                     >
                       CasaHUD Importer
                     </a>
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => void onCopyBookmarkletCode()}
+                      data-testid="casahud-browser-importer-copy"
+                    >
+                      Copy Bookmarklet Code
+                    </button>
                     <a
                       href="/apps/studio/casahud/import"
                       className={secondaryButtonClass}
@@ -3987,12 +4046,19 @@ export default function StudioCasaHudCommandCenter() {
                       Open Browser Import Review
                     </a>
                   </div>
+                  <textarea
+                    value={browserImporterBookmarkletCode}
+                    readOnly
+                    className="min-h-[84px] w-full rounded-[1rem] border border-[#D9E4F0] bg-[#F8FAFC] px-3 py-2 text-xs leading-5 text-[#334155]"
+                    data-testid="casahud-browser-importer-bookmarklet-code"
+                  />
+                  {bookmarkletInstallNotice ? <p className="text-xs text-[#526070]">{bookmarkletInstallNotice}</p> : null}
                 </div>
 
                 <div className="grid gap-3 rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
                   <p className="text-sm font-semibold text-[#172033]">How to use it</p>
                   <ol className="grid gap-2 text-sm leading-6 text-[#526070]">
-                    <li>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar.</li>
+                    <li>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar, or copy the bookmarklet code and create it manually.</li>
                     <li>2. Open an Immobiliare or Idealista listing you can already view in your browser.</li>
                     <li>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</li>
                     <li>4. Review the imported listing in CasaHUD and save it to the shortlist.</li>

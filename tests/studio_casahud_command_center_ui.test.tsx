@@ -741,6 +741,7 @@ describe("CasaHUD command center UI", () => {
     expect(html).not.toContain("Mock-first MVP");
     expect(html).not.toContain("CasaHUD Campaign Workflow");
     expect(html).not.toContain("Generate your next viral property video");
+    expect(html).not.toContain("React has blocked a javascript: URL as a security precaution.");
   });
 
   it("opens a mobile drawer with an independently scrollable navigation container that reaches lower items", async () => {
@@ -933,8 +934,20 @@ describe("CasaHUD command center UI", () => {
     const browserUiText = container.textContent || "";
     expect(browserUiText).toContain("Browser-Assisted Import");
     expect(browserUiText).toContain("CasaHUD Importer captures visible listing text, page metadata, and image candidates");
+    expect(browserUiText).toContain("Drag CasaHUD Importer to your bookmarks bar, or copy the bookmarklet code and create it manually.");
+    expect(browserUiText).toContain("Copy Bookmarklet Code");
     const bookmarkletLink = container.querySelector('[data-testid="casahud-browser-importer-bookmarklet"]') as HTMLAnchorElement | null;
     expect(bookmarkletLink?.getAttribute("href")).toContain("javascript:");
+    expect(bookmarkletLink?.getAttribute("href")).toContain("/api/studio/domara/browser-import/bookmarklet");
+    expect(bookmarkletLink?.getAttribute("href")).toContain("campaignId=campaign-phase-3");
+    expect(bookmarkletLink?.getAttribute("href")).not.toContain("React has blocked a javascript: URL as a security precaution.");
+    expect(container.innerHTML).not.toContain("React has blocked a javascript: URL as a security precaution.");
+    const bookmarkletCodeField = container.querySelector(
+      '[data-testid="casahud-browser-importer-bookmarklet-code"]',
+    ) as HTMLTextAreaElement | null;
+    expect(bookmarkletCodeField?.value).toContain("javascript:");
+    expect(bookmarkletCodeField?.value).toContain("/api/studio/domara/browser-import/bookmarklet");
+    expect(bookmarkletCodeField?.value).toContain("campaignId=campaign-phase-3");
 
     const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
     expect(propertyText).toContain("Imported from Browser");
@@ -946,6 +959,69 @@ describe("CasaHUD command center UI", () => {
     expect(propertyText).toContain("View Source");
     expect(propertyText).toContain("Edit Details");
     expect(propertyText).not.toContain("demo workflow");
+  });
+
+  it("copies bookmarklet code from the browser-assisted import panel", async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(window.navigator, "clipboard", {
+      configurable: true,
+      value: { writeText },
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(browserImportedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${browserImportedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: browserImportedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-browser-importer-copy"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("javascript:"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/api/studio/domara/browser-import/bookmarklet"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("campaignId=campaign-phase-3"));
+    expect(container.textContent || "").toContain("Bookmarklet code copied.");
   });
 
   it("opens the imported listing editor, saves manual details, and updates the card copy", async () => {
