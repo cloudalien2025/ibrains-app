@@ -722,6 +722,7 @@ describe("CasaHUD command center UI", () => {
     container.remove();
     delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
 
@@ -887,6 +888,8 @@ describe("CasaHUD command center UI", () => {
   });
 
   it("shows the browser-assisted import panel and renders browser-imported cards with source truth", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.ibrains.ai");
+
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -935,19 +938,25 @@ describe("CasaHUD command center UI", () => {
     expect(browserUiText).toContain("Browser-Assisted Import");
     expect(browserUiText).toContain("CasaHUD Importer captures visible listing text, page metadata, and image candidates");
     expect(browserUiText).toContain("Drag CasaHUD Importer to your bookmarks bar, or copy the bookmarklet code and create it manually.");
+    expect(browserUiText).toContain("Importer target: app.ibrains.ai");
     expect(browserUiText).toContain("Copy Bookmarklet Code");
     const bookmarkletLink = container.querySelector('[data-testid="casahud-browser-importer-bookmarklet"]') as HTMLAnchorElement | null;
     expect(bookmarkletLink?.getAttribute("href")).toContain("javascript:");
-    expect(bookmarkletLink?.getAttribute("href")).toContain("/api/studio/domara/browser-import/bookmarklet");
+    expect(bookmarkletLink?.getAttribute("href")).toContain("https://app.ibrains.ai/api/studio/domara/browser-import/bookmarklet");
     expect(bookmarkletLink?.getAttribute("href")).toContain("campaignId=campaign-phase-3");
+    expect(bookmarkletLink?.getAttribute("href")).not.toContain("localhost");
     expect(bookmarkletLink?.getAttribute("href")).not.toContain("React has blocked a javascript: URL as a security precaution.");
     expect(container.innerHTML).not.toContain("React has blocked a javascript: URL as a security precaution.");
     const bookmarkletCodeField = container.querySelector(
       '[data-testid="casahud-browser-importer-bookmarklet-code"]',
     ) as HTMLTextAreaElement | null;
     expect(bookmarkletCodeField?.value).toContain("javascript:");
-    expect(bookmarkletCodeField?.value).toContain("/api/studio/domara/browser-import/bookmarklet");
+    expect(bookmarkletCodeField?.value).toContain("https://app.ibrains.ai/api/studio/domara/browser-import/bookmarklet");
     expect(bookmarkletCodeField?.value).toContain("campaignId=campaign-phase-3");
+    expect(bookmarkletCodeField?.value).not.toContain("localhost");
+    const reviewLink = container.querySelector('[data-testid="casahud-browser-import-review-link"]') as HTMLAnchorElement | null;
+    expect(reviewLink?.getAttribute("href")).toBe("https://app.ibrains.ai/apps/studio/casahud/import?campaignId=campaign-phase-3");
+    expect(reviewLink?.getAttribute("href")).not.toContain("localhost");
 
     const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
     expect(propertyText).toContain("Imported from Browser");
@@ -962,6 +971,8 @@ describe("CasaHUD command center UI", () => {
   });
 
   it("copies bookmarklet code from the browser-assisted import panel", async () => {
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://app.ibrains.ai");
+
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(window.navigator, "clipboard", {
       configurable: true,
@@ -1019,8 +1030,9 @@ describe("CasaHUD command center UI", () => {
 
     expect(writeText).toHaveBeenCalledOnce();
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("javascript:"));
-    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("/api/studio/domara/browser-import/bookmarklet"));
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining("https://app.ibrains.ai/api/studio/domara/browser-import/bookmarklet"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("campaignId=campaign-phase-3"));
+    expect(writeText).toHaveBeenCalledWith(expect.not.stringContaining("localhost"));
     expect(container.textContent || "").toContain("Bookmarklet code copied.");
   });
 

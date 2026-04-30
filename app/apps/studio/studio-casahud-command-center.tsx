@@ -30,6 +30,7 @@ import {
   type CasaHudConnectionCard,
   type CasaHudConnectionCardId,
 } from "@/lib/studio/domara/integrations-ui";
+import { resolveCasaHudPublicAppOriginFromBrowser } from "@/lib/studio/domara/public-app-origin";
 
 type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
 type CasaHudProgressState = "idle" | "running" | "complete" | "failed";
@@ -1746,13 +1747,28 @@ export default function StudioCasaHudCommandCenter() {
       null
     );
   }, [activeCampaign, selectedListingId]);
+  const browserImporterTargetOrigin = useMemo(() => {
+    const browserOrigin = typeof window === "undefined" ? undefined : window.location.origin;
+    return resolveCasaHudPublicAppOriginFromBrowser(browserOrigin);
+  }, []);
+  const browserImporterTargetHost = useMemo(() => {
+    try {
+      return new URL(browserImporterTargetOrigin).host;
+    } catch {
+      return "";
+    }
+  }, [browserImporterTargetOrigin]);
+  const browserImporterReviewHref = useMemo(() => {
+    const reviewUrl = new URL("/apps/studio/casahud/import", browserImporterTargetOrigin);
+    if (activeCampaign?.id) reviewUrl.searchParams.set("campaignId", activeCampaign.id);
+    return reviewUrl.toString();
+  }, [activeCampaign?.id, browserImporterTargetOrigin]);
   const browserImporterBookmarkletCode = useMemo(() => {
-    if (typeof window === "undefined") return "";
-    const bookmarkletUrl = new URL("/api/studio/domara/browser-import/bookmarklet", window.location.origin);
+    const bookmarkletUrl = new URL("/api/studio/domara/browser-import/bookmarklet", browserImporterTargetOrigin);
     if (activeCampaign?.id) bookmarkletUrl.searchParams.set("campaignId", activeCampaign.id);
     const src = bookmarkletUrl.toString();
     return `javascript:(function(){var d=document,s=d.createElement('script');s.src=${JSON.stringify(src)}+'&ts='+(Date.now());s.async=true;(d.head||d.documentElement).appendChild(s);}())`;
-  }, [activeCampaign?.id]);
+  }, [activeCampaign?.id, browserImporterTargetOrigin]);
   const propertyWorkspaceListings = useMemo(() => {
     if (!activeCampaign) return [];
 
@@ -2990,6 +3006,9 @@ export default function StudioCasaHudCommandCenter() {
                   <p className="text-sm leading-6 text-[#475569]">
                     This installer is campaign-aware and routes imports back to <span className="font-semibold text-[#172033]">{activeCampaign.name}</span>.
                   </p>
+                  <p className="text-xs leading-5 text-[#6A7687]">
+                    Importer target: <span className="font-semibold text-[#172033]">{browserImporterTargetHost || "Unavailable"}</span>
+                  </p>
                   <div className="flex flex-wrap gap-3">
                     <a
                       ref={applyBookmarkletInstallerHref}
@@ -3008,7 +3027,7 @@ export default function StudioCasaHudCommandCenter() {
                       Copy Bookmarklet Code
                     </button>
                     <a
-                      href="/apps/studio/casahud/import"
+                      href={browserImporterReviewHref}
                       className={secondaryButtonClass}
                       data-testid="casahud-browser-import-review-link"
                     >
@@ -4021,6 +4040,9 @@ export default function StudioCasaHudCommandCenter() {
                   <p className="text-sm leading-6 text-[#526070]">
                     This installer is campaign-aware and routes imports back to <span className="font-semibold text-[#172033]">{activeCampaign.name}</span>.
                   </p>
+                  <p className="text-xs leading-5 text-[#6A7687]">
+                    Importer target: <span className="font-semibold text-[#172033]">{browserImporterTargetHost || "Unavailable"}</span>
+                  </p>
                   <div className="flex flex-wrap gap-3">
                     <a
                       ref={applyBookmarkletInstallerHref}
@@ -4039,7 +4061,7 @@ export default function StudioCasaHudCommandCenter() {
                       Copy Bookmarklet Code
                     </button>
                     <a
-                      href="/apps/studio/casahud/import"
+                      href={browserImporterReviewHref}
                       className={secondaryButtonClass}
                       data-testid="casahud-browser-import-review-link"
                     >

@@ -239,6 +239,59 @@ describe("CasaHUD browser import route", () => {
 });
 
 describe("CasaHUD bookmarklet loader route", () => {
+  beforeEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("uses forwarded production host and never emits localhost in production", async () => {
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("APP_PUBLIC_URL", "");
+    vi.stubEnv("APP_URL", "");
+
+    const route = await import("@/app/api/studio/domara/browser-import/bookmarklet/route");
+    const request = new NextRequest(
+      "http://localhost:3001/api/studio/domara/browser-import/bookmarklet?campaignId=campaign id/with space",
+      {
+        method: "GET",
+        headers: {
+          host: "localhost:3001",
+          "x-forwarded-host": "app.ibrains.ai",
+          "x-forwarded-proto": "https",
+        },
+      },
+    );
+
+    const response = await route.GET(request);
+    const script = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(script).toContain('var APP_ORIGIN = "https://app.ibrains.ai"');
+    expect(script).toContain("/apps/studio/casahud/import");
+    expect(script).toContain("captureMethod");
+    expect(script).toContain('var CAMPAIGN_ID_ENCODED = "campaign%20id%2Fwith%20space"');
+    expect(script).not.toContain("localhost");
+  });
+
+  it("keeps localhost fallback for local development/test when no public origin is configured", async () => {
+    vi.stubEnv("NODE_ENV", "test");
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    vi.stubEnv("NEXT_PUBLIC_SITE_URL", "");
+    vi.stubEnv("APP_PUBLIC_URL", "");
+    vi.stubEnv("APP_URL", "");
+
+    const route = await import("@/app/api/studio/domara/browser-import/bookmarklet/route");
+    const request = new NextRequest("http://localhost:3001/api/studio/domara/browser-import/bookmarklet?campaignId=test-campaign", { method: "GET" });
+
+    const response = await route.GET(request);
+    const script = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(script).toContain('var APP_ORIGIN = "http://localhost:3001"');
+    expect(script).toContain('var CAMPAIGN_ID_ENCODED = "test-campaign"');
+  });
+
   it("returns a campaign-aware loader script for Browser Import Review without secrets", async () => {
     const route = await import("@/app/api/studio/domara/browser-import/bookmarklet/route");
     const request = new NextRequest(
