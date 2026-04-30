@@ -120,8 +120,8 @@ export async function PATCH(
     if (!existing) {
       return errorResponse(404, "CasaHUD could not find that imported listing.", "LISTING_NOT_FOUND", reqId);
     }
-    if (existing.sourceType !== "imported_url") {
-      return errorResponse(409, "Only imported URL listings can be edited here.", "LISTING_NOT_EDITABLE", reqId);
+    if (existing.sourceType !== "imported_url" && existing.sourceType !== "browser_assisted_import") {
+      return errorResponse(409, "Only user-imported listings can be edited here.", "LISTING_NOT_EDITABLE", reqId);
     }
 
     const payload = (await request.json().catch(() => null)) as Record<string, unknown> | null;

@@ -1,0 +1,176 @@
+import { NextRequest, NextResponse } from "next/server";
+import {
+  CASAHUD_BROWSER_IMPORT_CAPTURE_VERSION,
+  CASAHUD_BROWSER_IMPORT_MAX_IMAGE_CANDIDATES,
+  CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS,
+  CASAHUD_BROWSER_IMPORT_VERSION,
+} from "@/lib/studio/domara/browser-listing-capture-parser";
+
+export const runtime = "nodejs";
+
+function buildBookmarkletScript(origin: string, campaignId?: string) {
+  return `
+(function () {
+  if (window.__CASAHUD_BROWSER_IMPORT_ACTIVE__) {
+    return;
+  }
+  window.__CASAHUD_BROWSER_IMPORT_ACTIVE__ = true;
+
+  var APP_ORIGIN = ${JSON.stringify(origin)};
+  var CAMPAIGN_ID = ${JSON.stringify(campaignId || "")};
+  var CAPTURE_VERSION = ${JSON.stringify(CASAHUD_BROWSER_IMPORT_CAPTURE_VERSION)};
+  var PAYLOAD_VERSION = ${JSON.stringify(CASAHUD_BROWSER_IMPORT_VERSION)};
+  var MAX_VISIBLE_TEXT_CHARS = ${String(CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS)};
+  var MAX_IMAGE_CANDIDATES = ${String(CASAHUD_BROWSER_IMPORT_MAX_IMAGE_CANDIDATES)};
+
+  function cleanText(value) {
+    return typeof value === "string" ? value.replace(/\\s+/g, " ").trim() : "";
+  }
+
+  function cleanMultiline(value) {
+    if (typeof value !== "string") return "";
+    return value
+      .replace(/\\r/g, "\\n")
+      .split(/\\n+/)
+      .map(function (line) {
+        return line.replace(/\\s+/g, " ").trim();
+      })
+      .filter(Boolean)
+      .join("\\n")
+      .trim();
+  }
+
+  function resolveHttpUrl(value) {
+    if (!value || typeof value !== "string") return null;
+    try {
+      var normalized = value.indexOf("//") === 0 ? "https:" + value : value;
+      var resolved = new URL(normalized, window.location.href);
+      if (resolved.protocol !== "http:" && resolved.protocol !== "https:") return null;
+      return resolved.toString();
+    } catch (_error) {
+      return null;
+    }
+  }
+
+  function metaContent(selector) {
+    var node = document.querySelector(selector);
+    if (!node) return "";
+    return cleanText(node.getAttribute("content"));
+  }
+
+  function collectVisibleText() {
+    var root = document.body;
+    if (!root) return "";
+    var text = typeof root.innerText === "string" && root.innerText.trim() ? root.innerText : root.textContent || "";
+    var cleaned = cleanMultiline(text);
+    if (cleaned.length <= MAX_VISIBLE_TEXT_CHARS) return cleaned;
+    return cleaned.slice(0, MAX_VISIBLE_TEXT_CHARS).trim();
+  }
+
+  function collectImages() {
+    var dedupe = Object.create(null);
+    var results = [];
+
+    function push(url, source, alt, width, height) {
+      var normalizedUrl = resolveHttpUrl(url);
+      if (!normalizedUrl) return;
+      if (dedupe[normalizedUrl]) return;
+      if ((source === "visible_img" || source === "srcset") && Math.max(width || 0, height || 0) > 0 && Math.max(width || 0, height || 0) < 140) return;
+      dedupe[normalizedUrl] = true;
+      results.push({
+        url: normalizedUrl,
+        alt: cleanText(alt || ""),
+        width: width || undefined,
+        height: height || undefined,
+        source: source
+      });
+    }
+
+    push(metaContent('meta[property="og:image"]'), "og");
+    push(metaContent('meta[name="twitter:image"]'), "twitter");
+
+    var images = Array.prototype.slice.call(document.images || [], 0, 80);
+    images.forEach(function (image) {
+      push(image.currentSrc || image.src, "visible_img", image.alt, image.naturalWidth || image.width, image.naturalHeight || image.height);
+      var srcset = cleanText(image.getAttribute("srcset"));
+      if (srcset) {
+        var candidate = srcset.split(",")[0];
+        if (candidate) push(candidate.split(/\\s+/)[0], "srcset", image.alt, image.naturalWidth || image.width, image.naturalHeight || image.height);
+      }
+    });
+
+    return results.slice(0, MAX_IMAGE_CANDIDATES);
+  }
+
+  function buildReceiverUrl() {
+    var receiver = new URL("/apps/studio/casahud/import", APP_ORIGIN);
+    if (CAMPAIGN_ID) receiver.searchParams.set("campaignId", CAMPAIGN_ID);
+    receiver.searchParams.set("captureMethod", "bookmarklet");
+    return receiver.toString();
+  }
+
+  function buildPayload() {
+    return {
+      version: PAYLOAD_VERSION,
+      campaignId: CAMPAIGN_ID || undefined,
+      sourceUrl: window.location.href,
+      canonicalUrl: resolveHttpUrl((document.querySelector('link[rel="canonical"]') || {}).href || ""),
+      providerHost: window.location.hostname,
+      capturedAt: new Date().toISOString(),
+      captureVersion: CAPTURE_VERSION,
+      title: cleanText(document.title || ""),
+      metaDescription: metaContent('meta[name="description"]'),
+      openGraph: {
+        title: metaContent('meta[property="og:title"]'),
+        description: metaContent('meta[property="og:description"]'),
+        image: metaContent('meta[property="og:image"]')
+      },
+      twitter: {
+        title: metaContent('meta[name="twitter:title"]'),
+        description: metaContent('meta[name="twitter:description"]'),
+        image: metaContent('meta[name="twitter:image"]')
+      },
+      visibleText: collectVisibleText(),
+      imageCandidates: collectImages()
+    };
+  }
+
+  try {
+    var payload = buildPayload();
+    var serialized = JSON.stringify(payload);
+    var receiverUrl = buildReceiverUrl();
+    var popup = window.open("about:blank", "_blank");
+
+    if (popup) {
+      popup.name = serialized;
+      popup.location = receiverUrl;
+    } else {
+      window.name = serialized;
+      window.location.href = receiverUrl;
+    }
+  } catch (error) {
+    window.alert("CasaHUD could not capture this page right now. Open the listing again and retry the browser importer.");
+    console.error("CasaHUD browser importer failed", error);
+  } finally {
+    window.setTimeout(function () {
+      try {
+        delete window.__CASAHUD_BROWSER_IMPORT_ACTIVE__;
+      } catch (_error) {
+        window.__CASAHUD_BROWSER_IMPORT_ACTIVE__ = false;
+      }
+    }, 500);
+  }
+})();
+  `.trim();
+}
+
+export async function GET(request: NextRequest) {
+  const campaignId = request.nextUrl.searchParams.get("campaignId")?.trim() || undefined;
+  const script = buildBookmarkletScript(request.nextUrl.origin, campaignId);
+  return new NextResponse(script, {
+    headers: {
+      "content-type": "application/javascript; charset=utf-8",
+      "cache-control": "no-store",
+    },
+  });
+}

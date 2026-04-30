@@ -220,7 +220,7 @@ function listingCompletenessScore(listing: CasaHudListingCandidate): number {
 }
 
 function providerQualityScore(listing: CasaHudListingCandidate): number {
-  if (listing.sourceType === "imported_url") {
+  if (listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import") {
     return listing.provider === "generic" ? 74 : 80;
   }
   if (listing.provider === "idealista") return 92;
@@ -378,9 +378,12 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
     rejectionCategory = rejectionCategory || "weak_support";
   }
 
-  if (listing.sourceType === "imported_url" && listing.needsReviewFields?.length) {
+  if (
+    (listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import") &&
+    listing.needsReviewFields?.length
+  ) {
     warnings.push(
-      `Imported URL needs review for ${listing.needsReviewFields
+      `${listing.sourceType === "browser_assisted_import" ? "Browser import" : "Imported URL"} needs review for ${listing.needsReviewFields
         .map((field) => field.replace(/_/g, " "))
         .join(", ")}.`,
     );

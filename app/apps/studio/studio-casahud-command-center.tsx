@@ -484,7 +484,12 @@ function formatListingProvider(provider: string) {
   return provider;
 }
 
+function isUserImportedListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+  return listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import";
+}
+
 function formatListingSourceType(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+  if (listing.sourceType === "browser_assisted_import") return "Imported from Browser";
   if (listing.sourceType === "imported_url") return "Imported URL";
   if (listing.sourceType === "sample_pattern" || listing.provider === "casahud_sample") return "Sample Pattern";
   if (listing.provider === "idealista" || listing.provider === "immobiliare") return "Official API listing";
@@ -566,9 +571,9 @@ function needsReviewLabel(field: CasaHudListingNeedsReviewField) {
 }
 
 function validationReadinessLabel(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
-  if (listing.sourceType === "imported_url") {
+  if (isUserImportedListing(listing)) {
     if (listing.manualCompletionStatus === "incomplete") return "Needs manual details";
-    return listing.needsReviewFields?.length ? "Needs details before validation" : "Ready for validation with imported metadata";
+    return listing.needsReviewFields?.length ? "Needs details before validation" : "Ready for validation with imported details";
   }
   if ("validationStatus" in listing) {
     return listing.validationStatus === "approved" ? "Shortlist approved" : "Needs review";
@@ -679,7 +684,7 @@ function canOpenExternalUrl(url?: string | null) {
 }
 
 function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
-  if (listing.sourceType === "imported_url") {
+  if (isUserImportedListing(listing)) {
     if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "Needs manual details";
     if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "Ready";
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "Extracted";
@@ -691,7 +696,7 @@ function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValida
 }
 
 function listingStatusTone(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
-  if (listing.sourceType === "imported_url") {
+  if (isUserImportedListing(listing)) {
     if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "sage" as const;
     if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "red" as const;
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "sage" as const;
@@ -1429,8 +1434,8 @@ function PropertyCard({
           <div className="flex flex-wrap gap-2">
             <StatusPill tone="gold">{formatListingSourceType(listing)}</StatusPill>
             <StatusPill tone="neutral">{formatListingProviderLabel(listing)}</StatusPill>
-            {listing.sourceType === "imported_url" ? <StatusPill tone="neutral">{formatListingExtractionStatus(listing.extractionStatus)}</StatusPill> : null}
-            {listing.sourceType === "imported_url" ? <StatusPill tone="neutral">{formatManualCompletionStatus(listing.manualCompletionStatus)}</StatusPill> : null}
+            {isUserImportedListing(listing) ? <StatusPill tone="neutral">{formatListingExtractionStatus(listing.extractionStatus)}</StatusPill> : null}
+            {isUserImportedListing(listing) ? <StatusPill tone="neutral">{formatManualCompletionStatus(listing.manualCompletionStatus)}</StatusPill> : null}
             {listing.propertyType ? <StatusPill tone="neutral">{formatCampaignStatus(listing.propertyType)}</StatusPill> : null}
             {"overallScore" in listing && typeof listing.overallScore === "number" ? (
               <StatusPill tone="blue">Score {Math.round(listing.overallScore)}</StatusPill>
@@ -1469,7 +1474,7 @@ function PropertyCard({
           <p>
             <span className="font-semibold text-[#172033]">Media status:</span> {media.stateLabel} via {media.sourceLabel}
           </p>
-          {listing.sourceType === "imported_url" ? (
+          {isUserImportedListing(listing) ? (
             <>
               <p>
                 <span className="font-semibold text-[#172033]">Imported:</span> {formatCampaignTime(listing.importedAt || listing.discoveredAt)}
@@ -1517,7 +1522,7 @@ function PropertyCard({
           ) : (
             <span className={mutedButtonClass}>Source unavailable</span>
           )}
-          {listing.sourceType === "imported_url" ? (
+          {isUserImportedListing(listing) ? (
             <button
               type="button"
               className={secondaryButtonClass}
@@ -1740,6 +1745,13 @@ export default function StudioCasaHudCommandCenter() {
       null
     );
   }, [activeCampaign, selectedListingId]);
+  const browserImporterBookmarkletHref = useMemo(() => {
+    if (typeof window === "undefined") return "#";
+    const bookmarkletUrl = new URL("/api/studio/domara/browser-import/bookmarklet", window.location.origin);
+    if (activeCampaign?.id) bookmarkletUrl.searchParams.set("campaignId", activeCampaign.id);
+    const src = bookmarkletUrl.toString();
+    return `javascript:(function(){var d=document,s=d.createElement('script');s.src=${JSON.stringify(src)}+'&ts='+(Date.now());s.async=true;(d.head||d.documentElement).appendChild(s);}())`;
+  }, [activeCampaign?.id]);
   const propertyWorkspaceListings = useMemo(() => {
     if (!activeCampaign) return [];
 
@@ -2925,6 +2937,52 @@ export default function StudioCasaHudCommandCenter() {
 
         {activeCampaign ? (
           <div className="grid gap-4" data-testid="casahud-listing-candidates">
+            <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-browser-assisted-import">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="max-w-3xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Browser-Assisted Import</p>
+                  <p className="mt-2 text-sm leading-6 text-[#475569]">
+                    Some listing sites block server-side extraction. If you can already view the property in your browser, use the CasaHUD Importer to capture visible page data and send it into this campaign.
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[#6A7687]">
+                    CasaHUD Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
+                  </p>
+                </div>
+                <StatusPill tone="blue">Not Official API</StatusPill>
+              </div>
+              <div className="mt-4 grid gap-3 lg:grid-cols-[minmax(0,0.75fr)_minmax(0,1fr)]">
+                <div className="grid gap-3 rounded-[1.15rem] border border-[#D9E4F0] bg-white p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Install the bookmarklet</p>
+                  <p className="text-sm leading-6 text-[#475569]">
+                    This installer is campaign-aware and routes imports back to <span className="font-semibold text-[#172033]">{activeCampaign.name}</span>.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <a
+                      href={browserImporterBookmarkletHref}
+                      className={primaryButtonClass}
+                      data-testid="casahud-browser-importer-bookmarklet"
+                    >
+                      CasaHUD Importer
+                    </a>
+                    <a
+                      href="/apps/studio/casahud/import"
+                      className={secondaryButtonClass}
+                      data-testid="casahud-browser-import-review-link"
+                    >
+                      Open Browser Import Review
+                    </a>
+                  </div>
+                </div>
+                <div className="grid gap-2 rounded-[1.15rem] border border-[#D9E4F0] bg-white p-4 text-sm leading-6 text-[#475569]">
+                  <p className="font-semibold text-[#172033]">How to use it</p>
+                  <p>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar.</p>
+                  <p>2. Open an Immobiliare or Idealista listing you can already view in your browser.</p>
+                  <p>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</p>
+                  <p>4. Review the imported listing in CasaHUD and save it to the shortlist.</p>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-import-listing-urls">
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="max-w-3xl">
@@ -3893,6 +3951,56 @@ export default function StudioCasaHudCommandCenter() {
 
         {activeCampaign ? (
           <div className="grid gap-6" data-testid="casahud-listing-candidates">
+            <section className="rounded-[1.6rem] border border-[#D9E4F0] bg-[#F8FAFC] p-5" data-testid="casahud-browser-assisted-import">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-3xl">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Browser-Assisted Import</p>
+                  <p className="mt-3 text-sm leading-6 text-[#526070]">
+                    Some listing sites block server-side extraction. If you can view the listing in your browser, use the CasaHUD Importer to capture visible page data and send it straight into this campaign.
+                  </p>
+                  <p className="mt-2 text-xs leading-5 text-[#6A7687]">
+                    CasaHUD Importer captures visible listing text, page metadata, and image candidates from the page you are viewing. It does not collect passwords, cookies, or account data.
+                  </p>
+                </div>
+                <StatusPill tone="blue">Not Official API</StatusPill>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,0.7fr)_minmax(0,1fr)]">
+                <div className="grid gap-3 rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                  <p className="text-sm font-semibold text-[#172033]">Install the bookmarklet</p>
+                  <p className="text-sm leading-6 text-[#526070]">
+                    This installer is campaign-aware and routes imports back to <span className="font-semibold text-[#172033]">{activeCampaign.name}</span>.
+                  </p>
+                  <div className="flex flex-wrap gap-3">
+                    <a
+                      href={browserImporterBookmarkletHref}
+                      className={primaryButtonClass}
+                      data-testid="casahud-browser-importer-bookmarklet"
+                    >
+                      CasaHUD Importer
+                    </a>
+                    <a
+                      href="/apps/studio/casahud/import"
+                      className={secondaryButtonClass}
+                      data-testid="casahud-browser-import-review-link"
+                    >
+                      Open Browser Import Review
+                    </a>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
+                  <p className="text-sm font-semibold text-[#172033]">How to use it</p>
+                  <ol className="grid gap-2 text-sm leading-6 text-[#526070]">
+                    <li>1. Drag <span className="font-semibold text-[#172033]">CasaHUD Importer</span> to your bookmarks bar.</li>
+                    <li>2. Open an Immobiliare or Idealista listing you can already view in your browser.</li>
+                    <li>3. Click <span className="font-semibold text-[#172033]">CasaHUD Importer</span>.</li>
+                    <li>4. Review the imported listing in CasaHUD and save it to the shortlist.</li>
+                  </ol>
+                </div>
+              </div>
+            </section>
+
             <section className="rounded-[1.6rem] border border-[#E7DCCB] bg-white/92 p-5" data-testid="casahud-import-listing-urls">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="max-w-3xl">
@@ -5004,7 +5112,7 @@ export default function StudioCasaHudCommandCenter() {
                 <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedListing.title}</h2>
               </div>
               <div className="flex flex-wrap gap-3">
-                {selectedListing.sourceType === "imported_url" ? (
+                {isUserImportedListing(selectedListing) ? (
                   <button
                     type="button"
                     className={secondaryButtonClass}
@@ -5038,10 +5146,10 @@ export default function StudioCasaHudCommandCenter() {
                   <StatusPill tone="gold">{formatListingSourceType(selectedListing)}</StatusPill>
                   <StatusPill tone="neutral">{formatListingProviderLabel(selectedListing)}</StatusPill>
                   <StatusPill tone="blue">{selectedListingMedia.stateLabel}</StatusPill>
-                  {selectedListing.sourceType === "imported_url" ? (
+                  {isUserImportedListing(selectedListing) ? (
                     <StatusPill tone="neutral">{formatListingExtractionStatus(selectedListing.extractionStatus)}</StatusPill>
                   ) : null}
-                  {selectedListing.sourceType === "imported_url" ? (
+                  {isUserImportedListing(selectedListing) ? (
                     <StatusPill tone="neutral">{formatManualCompletionStatus(selectedListing.manualCompletionStatus)}</StatusPill>
                   ) : null}
                 </div>
@@ -5070,7 +5178,7 @@ export default function StudioCasaHudCommandCenter() {
                   <p>
                     <span className="font-semibold text-[#172033]">Media status:</span> {selectedListingMedia.stateLabel} via {selectedListingMedia.sourceLabel}
                   </p>
-                  {selectedListing.sourceType === "imported_url" ? (
+                  {isUserImportedListing(selectedListing) ? (
                     <>
                       <p>
                         <span className="font-semibold text-[#172033]">Imported:</span> {formatCampaignTime(selectedListing.importedAt || selectedListing.discoveredAt)}
@@ -5105,7 +5213,7 @@ export default function StudioCasaHudCommandCenter() {
                   )}
                 </div>
 
-                {selectedListing.sourceType === "imported_url" && listingEditorOpen && listingEditorDraft ? (
+                {isUserImportedListing(selectedListing) && listingEditorOpen && listingEditorDraft ? (
                   <div className="grid gap-4 rounded-[1.5rem] border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-imported-listing-editor">
                     <div>
                       <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Manual Listing Details</p>
