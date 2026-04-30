@@ -139,6 +139,14 @@ describe("CasaFlix campaign persistence", () => {
         return [];
       }
 
+      if (normalized.startsWith("delete from casahud_projects")) {
+        const [storedUserId, campaignId] = params as [string, string];
+        const row = state.projects.get(campaignId);
+        if (!row || row.user_id !== storedUserId) return [];
+        state.projects.delete(campaignId);
+        return [{ id: campaignId }];
+      }
+
       if (normalized.includes("from casahud_projects") && normalized.includes("and provider_metadata->>'phase' in ($2, $3, $4, $5, $6, $7, $8)")) {
         const [storedUserId] = params as [string];
         return Array.from(state.projects.values())
@@ -221,6 +229,23 @@ describe("CasaFlix campaign persistence", () => {
     expect(reopened?.generationSource.label).toBe(opportunity.providerStatus.label);
     expect(campaigns[0]?.listingCandidateCount).toBe(0);
     expect(campaigns[0]?.listingDiscoveryStatus).toBe("not_started");
+  });
+
+  it("deletes only the current user's campaign rows", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+
+    const own = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const other = await repository.createCasaHudCampaignFromOpportunity("22222222-2222-4222-8222-222222222222", opportunity);
+
+    const ownDeleted = await repository.deleteCasaHudCampaign(userId, own.id);
+    const otherDeleted = await repository.deleteCasaHudCampaign(userId, other.id);
+    expect(ownDeleted).toBe(true);
+    expect(otherDeleted).toBe(false);
+
+    const reopenedOwn = await repository.getCasaHudCampaign(userId, own.id);
+    const reopenedOther = await repository.getCasaHudCampaign("22222222-2222-4222-8222-222222222222", other.id);
+    expect(reopenedOwn).toBeNull();
+    expect(reopenedOther?.id).toBe(other.id);
   });
 
   it("persists discovered listing candidates and reloads them on the campaign", async () => {

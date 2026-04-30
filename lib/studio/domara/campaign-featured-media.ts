@@ -4,12 +4,14 @@ import type {
   CasaHudValidatedListing,
 } from "@/lib/studio/domara/campaigns";
 import type { CasaHudVisualAsset } from "@/lib/studio/domara/campaign-media-planning";
+import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 
 export type CasaHudFeaturedPropertyMediaKind = "real_image" | "thumbnail" | "media_asset" | "fallback";
 
 export type CasaHudFeaturedPropertyMedia = {
   kind: CasaHudFeaturedPropertyMediaKind;
   url: string | null;
+  candidateUrls?: string[];
   label: string;
   alt: string;
   warning?: string;
@@ -72,8 +74,29 @@ function readFirstImageFromArray(value: unknown): string | null {
   return null;
 }
 
+function readAllImagesFromArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const results: string[] = [];
+  for (const item of value) {
+    const candidate = readImageCandidateFromUnknown(item);
+    if (candidate) results.push(candidate);
+  }
+  return results;
+}
+
 function firstImageUrl(value: unknown): string | null {
   return Array.isArray(value) ? asNonEmptyString(value[0]) : null;
+}
+
+function validatedImageUrls(candidates: Array<string | null | undefined>): string[] {
+  const unique = Array.from(
+    new Set(
+      candidates
+        .map((value) => asNonEmptyString(value))
+        .filter((value): value is string => Boolean(value)),
+    ),
+  );
+  return validateDomaraImageUrls(unique).acceptedUrls;
 }
 
 function collectListingSegmentIds(campaign: CasaHudCampaign | null, listingId: string) {
@@ -133,6 +156,7 @@ function collectRelatedAssets(campaign: CasaHudCampaign | null, listingId: strin
 function buildMedia(params: {
   kind: CasaHudFeaturedPropertyMediaKind;
   url: string | null;
+  candidateUrls?: string[];
   stateLabel: string;
   source: string;
   alt: string;
@@ -149,6 +173,7 @@ function buildMedia(params: {
   return {
     kind: params.kind,
     url: hasRealImage ? params.url : null,
+    candidateUrls: hasRealImage ? params.candidateUrls : undefined,
     label: params.stateLabel,
     alt: params.alt,
     warning: params.warning,
@@ -226,6 +251,12 @@ export function deriveCasaHudFeaturedPropertyMedia(
   const previewLabel = listing.sourceType === "browser_assisted_import" ? "Browser import preview" : "Source preview image";
 
   const explicitFeaturedImage =
+    asNonEmptyString(listingRecord.selectedFeaturedImageUrl) ||
+    asNonEmptyString(listingRecord.selected_featured_image_url) ||
+    asNonEmptyString(metadataRecord.selectedFeaturedImageUrl) ||
+    asNonEmptyString(metadataRecord.selected_featured_image_url) ||
+    asNonEmptyString(metadataRecord.browserCaptureSelectedImageUrl) ||
+    asNonEmptyString(metadataRecord.browser_capture_selected_image_url) ||
     asNonEmptyString(listingRecord.manualFeaturedImageUrl) ||
     asNonEmptyString(listingRecord.manual_featured_image_url) ||
     asNonEmptyString(listingRecord.featuredImageUrl) ||
@@ -255,11 +286,20 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(metadataRecord.metadataImageUrl) ||
     asNonEmptyString(metadataRecord.metadata_image_url);
 
-  if (explicitFeaturedImage) {
+  const explicitCandidates = validatedImageUrls([
+    explicitFeaturedImage,
+    asNonEmptyString(listingRecord.featuredImageUrl),
+    asNonEmptyString(metadataRecord.featuredImageUrl),
+    asNonEmptyString(listingRecord.metadataImageUrl),
+    asNonEmptyString(metadataRecord.metadataImageUrl),
+  ]);
+
+  if (explicitCandidates.length > 0) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
-      url: explicitFeaturedImage,
+      url: explicitCandidates[0]!,
+      candidateUrls: explicitCandidates,
       stateLabel: importedMediaLabel,
       source: sourceLabel,
       alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
@@ -269,12 +309,23 @@ export function deriveCasaHudFeaturedPropertyMedia(
   const imageUrl =
     firstImageUrl(listingRecord.imageUrls) ||
     firstImageUrl(metadataRecord.imageUrls) ||
-    firstImageUrl(metadataRecord.image_urls);
-  if (imageUrl) {
+    firstImageUrl(metadataRecord.image_urls) ||
+    readAllImagesFromArray(metadataRecord.browserCaptureImageCandidates)[0] ||
+    readAllImagesFromArray(metadataRecord.browser_capture_image_candidates)[0];
+  const imageCandidates = validatedImageUrls([
+    imageUrl,
+    ...readAllImagesFromArray(listingRecord.imageUrls),
+    ...readAllImagesFromArray(metadataRecord.imageUrls),
+    ...readAllImagesFromArray(metadataRecord.image_urls),
+    ...readAllImagesFromArray(metadataRecord.browserCaptureImageCandidates),
+    ...readAllImagesFromArray(metadataRecord.browser_capture_image_candidates),
+  ]);
+  if (imageCandidates.length > 0) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
-      url: imageUrl,
+      url: imageCandidates[0]!,
+      candidateUrls: imageCandidates,
       stateLabel: importedMediaLabel,
       source: sourceLabel,
       alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
@@ -291,12 +342,30 @@ export function deriveCasaHudFeaturedPropertyMedia(
     readFirstImageFromArray(metadataRecord.photos) ||
     readFirstImageFromArray(metadataRecord.gallery) ||
     readFirstImageFromArray(metadataRecord.photoUrls) ||
-    readFirstImageFromArray(metadataRecord.photo_urls);
-  if (structuredImage) {
+    readFirstImageFromArray(metadataRecord.photo_urls) ||
+    readFirstImageFromArray(metadataRecord.browserCaptureImageCandidates) ||
+    readFirstImageFromArray(metadataRecord.browser_capture_image_candidates);
+  const structuredCandidates = validatedImageUrls([
+    structuredImage,
+    ...readAllImagesFromArray(listingRecord.images),
+    ...readAllImagesFromArray(listingRecord.photos),
+    ...readAllImagesFromArray(listingRecord.gallery),
+    ...readAllImagesFromArray(listingRecord.photoUrls),
+    ...readAllImagesFromArray(listingRecord.photo_urls),
+    ...readAllImagesFromArray(metadataRecord.images),
+    ...readAllImagesFromArray(metadataRecord.photos),
+    ...readAllImagesFromArray(metadataRecord.gallery),
+    ...readAllImagesFromArray(metadataRecord.photoUrls),
+    ...readAllImagesFromArray(metadataRecord.photo_urls),
+    ...readAllImagesFromArray(metadataRecord.browserCaptureImageCandidates),
+    ...readAllImagesFromArray(metadataRecord.browser_capture_image_candidates),
+  ]);
+  if (structuredCandidates.length > 0) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "real_image",
-      url: structuredImage,
+      url: structuredCandidates[0]!,
+      candidateUrls: structuredCandidates,
       stateLabel: importedMediaLabel,
       source: sourceLabel,
       alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
@@ -321,11 +390,19 @@ export function deriveCasaHudFeaturedPropertyMedia(
     asNonEmptyString(metadataRecord.photoUrl) ||
     asNonEmptyString(metadataRecord.photo_url);
 
-  if (sourceThumbnail) {
+  const thumbnailCandidates = validatedImageUrls([
+    sourceThumbnail,
+    asNonEmptyString(metadataRecord.thumbnailUrl),
+    asNonEmptyString(metadataRecord.sourceThumbnailUrl),
+    asNonEmptyString(listingRecord.thumbnailUrl),
+    asNonEmptyString(listingRecord.sourceThumbnailUrl),
+  ]);
+  if (thumbnailCandidates.length > 0) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
     return buildMedia({
       kind: "thumbnail",
-      url: sourceThumbnail,
+      url: thumbnailCandidates[0]!,
+      candidateUrls: thumbnailCandidates,
       stateLabel:
         listing.sourceType === "browser_assisted_import"
           ? previewLabel

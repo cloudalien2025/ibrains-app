@@ -154,6 +154,7 @@ const mocks = vi.hoisted(() => ({
   createCasaHudCampaignFromOpportunity: vi.fn(),
   listCasaHudCampaignSummaries: vi.fn(),
   getCasaHudCampaign: vi.fn(),
+  deleteCasaHudCampaign: vi.fn(),
 }));
 
 vi.mock("@/app/api/ecomviper/_utils/user", () => ({
@@ -167,6 +168,7 @@ vi.mock("@/lib/studio/domara/campaign-repository", () => ({
   createCasaHudCampaignFromOpportunity: mocks.createCasaHudCampaignFromOpportunity,
   listCasaHudCampaignSummaries: mocks.listCasaHudCampaignSummaries,
   getCasaHudCampaign: mocks.getCasaHudCampaign,
+  deleteCasaHudCampaign: mocks.deleteCasaHudCampaign,
 }));
 
 describe("CasaFlix campaign routes", () => {
@@ -178,6 +180,7 @@ describe("CasaFlix campaign routes", () => {
     mocks.createCasaHudCampaignFromOpportunity.mockReset();
     mocks.listCasaHudCampaignSummaries.mockReset();
     mocks.getCasaHudCampaign.mockReset();
+    mocks.deleteCasaHudCampaign.mockReset();
 
     mocks.ensureUser.mockResolvedValue(undefined);
     mocks.resolveUserId.mockReturnValue(userId);
@@ -203,13 +206,14 @@ describe("CasaFlix campaign routes", () => {
       },
     ]);
     mocks.getCasaHudCampaign.mockResolvedValue(campaign);
+    mocks.deleteCasaHudCampaign.mockResolvedValue(true);
   });
 
   it("creates a typed campaign response and uses the selected viral title as the campaign name", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/route");
     const request = new NextRequest("http://localhost/api/studio/domara/campaigns", {
       method: "POST",
-      body: JSON.stringify({ opportunity }),
+      body: JSON.stringify({ opportunity, allowDuplicate: true }),
     });
 
     const response = await route.POST(request);
@@ -235,6 +239,36 @@ describe("CasaFlix campaign routes", () => {
     expect(response.status).toBe(400);
     expect(payload.ok).toBe(false);
     expect(payload.error.code).toBe("INVALID_INPUT");
+  });
+
+  it("prevents silent duplicate campaign creation unless duplicate is explicitly allowed", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/route");
+
+    const duplicateResponse = await route.POST(
+      new NextRequest("http://localhost/api/studio/domara/campaigns", {
+        method: "POST",
+        body: JSON.stringify({ opportunity }),
+      }),
+    );
+    const duplicatePayload = await duplicateResponse.json();
+    expect(duplicateResponse.status).toBe(409);
+    expect(duplicatePayload.error.code).toBe("DUPLICATE_CAMPAIGN_TITLE");
+    expect(duplicatePayload.duplicateCampaignId).toBe(campaign.id);
+
+    mocks.createCasaHudCampaignFromOpportunity.mockResolvedValueOnce({
+      ...campaign,
+      id: "casaflix-renamed-campaign",
+      name: "CasaFlix campaign renamed",
+    });
+    const renamedResponse = await route.POST(
+      new NextRequest("http://localhost/api/studio/domara/campaigns", {
+        method: "POST",
+        body: JSON.stringify({ opportunity, campaignNameOverride: "CasaFlix campaign renamed", allowDuplicate: true }),
+      }),
+    );
+    const renamedPayload = await renamedResponse.json();
+    expect(renamedResponse.status).toBe(200);
+    expect(renamedPayload.campaign.name).toBe("CasaFlix campaign renamed");
   });
 
   it("lists recent campaigns and reads a campaign by id", async () => {
@@ -278,5 +312,36 @@ describe("CasaFlix campaign routes", () => {
     const missingPayload = await missingResponse.json();
     expect(missingResponse.status).toBe(404);
     expect(missingPayload.error.code).toBe("NOT_FOUND");
+  });
+
+  it("deletes campaigns permanently and returns safe errors for missing/delete failures", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/route");
+
+    const deleteResponse = await route.DELETE(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${campaign.id}`, { method: "DELETE" }),
+      { params: { id: campaign.id } },
+    );
+    const deletePayload = await deleteResponse.json();
+    expect(deleteResponse.status).toBe(200);
+    expect(deletePayload.ok).toBe(true);
+    expect(deletePayload.deletedCampaignId).toBe(campaign.id);
+
+    mocks.deleteCasaHudCampaign.mockResolvedValue(false);
+    const missingDeleteResponse = await route.DELETE(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${campaign.id}`, { method: "DELETE" }),
+      { params: { id: campaign.id } },
+    );
+    const missingDeletePayload = await missingDeleteResponse.json();
+    expect(missingDeleteResponse.status).toBe(404);
+    expect(missingDeletePayload.error.code).toBe("NOT_FOUND");
+
+    mocks.isCasaHudCampaignStoreAvailable.mockResolvedValue(false);
+    const unavailableDeleteResponse = await route.DELETE(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${campaign.id}`, { method: "DELETE" }),
+      { params: { id: campaign.id } },
+    );
+    const unavailableDeletePayload = await unavailableDeleteResponse.json();
+    expect(unavailableDeleteResponse.status).toBe(503);
+    expect(unavailableDeletePayload.error.code).toBe("CASAHUD_STORE_UNAVAILABLE");
   });
 });

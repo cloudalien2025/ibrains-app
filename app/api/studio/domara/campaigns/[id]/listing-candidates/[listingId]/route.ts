@@ -7,11 +7,21 @@ import {
   isCasaHudCampaignStoreUnavailable,
   saveCasaHudCampaign,
 } from "@/lib/studio/domara/campaign-repository";
-import { toCasaHudCampaignSummary, type CasaHudCampaign, type CasaHudListingCandidate } from "@/lib/studio/domara/campaigns";
+import {
+  createPropertyDiscoveryNextPhase,
+  toCasaHudCampaignSummary,
+  type CasaHudCampaign,
+  type CasaHudListingCandidate,
+} from "@/lib/studio/domara/campaigns";
 import { nowIso } from "@/lib/studio/domara/ai-channel-engine/ids";
 import { normalizeImportedListingCandidate } from "@/lib/studio/domara/imported-listing-candidate";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 import { normalizeListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
+import { createEmptyCasaHudLocationData } from "@/lib/studio/domara/campaign-location-intelligence";
+import { createEmptyCasaHudScriptData } from "@/lib/studio/domara/campaign-script-narrative";
+import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
+import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
+import { createEmptyCasaHudExecutionData } from "@/lib/studio/domara/campaign-execution";
 
 export const runtime = "nodejs";
 
@@ -83,6 +93,160 @@ function mergeImportedListing(
     approvedListings: campaign.approvedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
     rejectedListings: campaign.rejectedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
     updatedAt: nextListing.manualUpdatedAt || nowIso(),
+  };
+}
+
+function removeListingFromCampaign(campaign: CasaHudCampaign, listingId: string): CasaHudCampaign {
+  const listingCandidates = campaign.listingCandidates.filter((listing) => listing.id !== listingId);
+  const approvedListings = campaign.approvedListings.filter((listing) => listing.id !== listingId);
+  const rejectedListings = campaign.rejectedListings.filter((listing) => listing.id !== listingId);
+  const listingRankOrder = campaign.listingRankOrder.filter((id) => id !== listingId);
+
+  const removedAssetIds = new Set(
+    campaign.visualAssets.filter((asset) => asset.listingId === listingId).map((asset) => asset.id),
+  );
+  const visualAssets = campaign.visualAssets.filter((asset) => asset.listingId !== listingId);
+  const sceneAssetMapping = campaign.sceneAssetMapping.map((mapping) => ({
+    ...mapping,
+    assignedAssetIds: mapping.assignedAssetIds.filter((assetId) => !removedAssetIds.has(assetId)),
+  }));
+  const shotList = campaign.shotList
+    .filter((item) => item.associatedListingId !== listingId)
+    .map((item) => ({
+      ...item,
+      assetIds: item.assetIds.filter((assetId) => !removedAssetIds.has(assetId)),
+    }));
+  const listingImageCoverage = campaign.listingImageCoverage.filter((coverage) => coverage.listingId !== listingId);
+  const mapLocationVisualPlan = campaign.mapLocationVisualPlan.filter((item) => item.associatedListingId !== listingId);
+  const thumbnailCandidateInputs = campaign.thumbnailCandidateInputs
+    .filter((candidate) => candidate.listingId !== listingId)
+    .map((candidate) => ({
+      ...candidate,
+      associatedAssetIds: candidate.associatedAssetIds.filter((assetId) => !removedAssetIds.has(assetId)),
+    }));
+
+  const localHighlights = campaign.localHighlights.filter((highlight) => highlight.associatedListingId !== listingId);
+  const poiCards = (campaign.poiBundle?.cards || []).filter((poi) => poi.associatedListingId !== listingId);
+  const poiBundle = campaign.poiBundle
+    ? {
+        ...campaign.poiBundle,
+        cards: poiCards,
+      }
+    : null;
+  const mapSceneIdeas = campaign.mapSceneIdeas.filter((scene) => scene.associatedListingId !== listingId);
+  const listingLocationInsights = campaign.listingLocationInsights
+    .filter((insight) => insight.listingId !== listingId)
+    .map((insight) => ({
+      ...insight,
+      nearbyPois: insight.nearbyPois.filter((poi) => poi.associatedListingId !== listingId),
+    }));
+
+  const scriptSegments = campaign.scriptSegments.filter((segment) => segment.associatedListingId !== listingId);
+  const propertySegments = campaign.propertySegments.filter((segment) => segment.listingId !== listingId);
+  const timestamp = nowIso();
+  const remainingCount = listingCandidates.length + approvedListings.length + rejectedListings.length;
+
+  if (remainingCount === 0) {
+    const emptyLocationData = createEmptyCasaHudLocationData();
+    const emptyScriptData = createEmptyCasaHudScriptData();
+    const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
+    const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+    const emptyExecutionData = createEmptyCasaHudExecutionData();
+
+    return {
+      ...campaign,
+      status: "ready_for_property_discovery",
+      listingCandidates: [],
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+      listingDiscoveryStatus: "not_started",
+      discoverySummary: {
+        headline: "No real property listings added yet.",
+        criteriaSummary: "Import listing URLs, use CasaFlix Importer, or connect a provider.",
+        providerSummary: "No real property listings are currently attached to this campaign.",
+        candidateCount: 0,
+        liveCandidateCount: 0,
+        fallbackCandidateCount: 0,
+        fallbackUsed: false,
+        warnings: campaign.discoverySummary?.warnings || [],
+        discoveredAt: timestamp,
+      },
+      listingValidationStatus: "not_started",
+      listingValidationSummary: null,
+      titleSupportConfidence: null,
+      validationWarnings: [],
+      ...emptyLocationData,
+      ...emptyScriptData,
+      ...emptyMediaPlanData,
+      ...emptyYouTubePackageData,
+      ...emptyExecutionData,
+      nextPhase: createPropertyDiscoveryNextPhase(),
+      updatedAt: timestamp,
+      futureState: {
+        ...campaign.futureState,
+        listingCandidates: [],
+        approvedListings: [],
+        rejectedListings: [],
+        listingRankOrder: [],
+        locationIntelligence: null,
+        mapPoiBundle: null,
+        script: null,
+        storyboard: null,
+        mediaPlan: null,
+        packaging: null,
+        renderStatus: null,
+        reviewStatus: null,
+        approvalStatus: null,
+        publishStatus: null,
+        scheduleStatus: null,
+      },
+    };
+  }
+
+  return {
+    ...campaign,
+    listingCandidates,
+    approvedListings,
+    rejectedListings,
+    listingRankOrder,
+    scriptSegments,
+    propertySegments,
+    localHighlights,
+    poiBundle,
+    mapSceneIdeas,
+    listingLocationInsights,
+    visualAssets,
+    sceneAssetMapping,
+    shotList,
+    listingImageCoverage,
+    mapLocationVisualPlan,
+    thumbnailCandidateInputs,
+    discoverySummary: campaign.discoverySummary
+      ? {
+          ...campaign.discoverySummary,
+          candidateCount: listingCandidates.length,
+          discoveredAt: timestamp,
+        }
+      : null,
+    listingValidationSummary: campaign.listingValidationSummary
+      ? {
+          ...campaign.listingValidationSummary,
+          discoveredCount: approvedListings.length + rejectedListings.length,
+          approvedCount: approvedListings.length,
+          rejectedCount: rejectedListings.length,
+          needsAttentionCount: rejectedListings.filter((listing) => listing.validationStatus === "needs_attention").length,
+          completedAt: timestamp,
+        }
+      : null,
+    updatedAt: timestamp,
+    futureState: {
+      ...campaign.futureState,
+      listingCandidates,
+      approvedListings,
+      rejectedListings,
+      listingRankOrder,
+    },
   };
 }
 
@@ -212,6 +376,13 @@ export async function PATCH(
         normalizedSourceUrl: normalizedSourceUrl ?? existing.normalizedSourceUrl,
         sourceHost: normalizedSourceUrl ? new URL(normalizedSourceUrl).hostname.replace(/^www\./, "") : existing.sourceHost,
         manualLifestyleAngle: manualLifestyleAngle === undefined ? existing.manualLifestyleAngle : manualLifestyleAngle ?? undefined,
+        rawProviderMetadata:
+          manualFeaturedImageUrl === undefined
+            ? existing.rawProviderMetadata
+            : {
+                ...(existing.rawProviderMetadata || {}),
+                browserCaptureSelectedImageUrl: manualFeaturedImageUrl ?? null,
+              },
         manualUpdatedAt: timestamp,
       },
       {
@@ -246,6 +417,67 @@ export async function PATCH(
       500,
       "CasaFlix could not save those listing details right now. Try again in a moment.",
       "LISTING_UPDATE_FAILED",
+      reqId,
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string; listingId: string }> | { id: string; listingId: string } },
+) {
+  const reqId = crypto.randomUUID();
+
+  try {
+    const userId = resolveUserId(request);
+    await ensureUser(userId);
+
+    const resolvedParams = await Promise.resolve(params);
+    const campaignId = resolvedParams.id?.trim();
+    const listingId = resolvedParams.listingId?.trim();
+    if (!campaignId || !listingId) {
+      return errorResponse(400, "CasaFlix needs a valid campaign id and listing id.", "INVALID_INPUT", reqId);
+    }
+
+    const storeAvailable = await isCasaHudCampaignStoreAvailable();
+    if (!storeAvailable) {
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+    }
+
+    const campaign = await getCasaHudCampaign(userId, campaignId);
+    if (!campaign) {
+      return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
+    }
+
+    const listing =
+      campaign.listingCandidates.find((item) => item.id === listingId) ||
+      campaign.approvedListings.find((item) => item.id === listingId) ||
+      campaign.rejectedListings.find((item) => item.id === listingId);
+    if (!listing) {
+      return errorResponse(404, "CasaFlix could not find that listing on this campaign.", "LISTING_NOT_FOUND", reqId);
+    }
+
+    const updatedCampaign = removeListingFromCampaign(campaign, listingId);
+    await saveCasaHudCampaign(userId, updatedCampaign);
+
+    return NextResponse.json({
+      ok: true,
+      reqId,
+      campaign: updatedCampaign,
+      summary: toCasaHudCampaignSummary(updatedCampaign),
+      deletedListingId: listingId,
+      message: `Removed "${listing.title}" from this shortlist.`,
+    });
+  } catch (error) {
+    if (isCasaHudCampaignStoreUnavailable(error)) {
+      return errorResponse(503, "CasaFlix storage is not ready yet.", "CASAHUD_STORE_UNAVAILABLE", reqId);
+    }
+
+    console.error("CasaFlix imported listing delete failed", { reqId, error });
+    return errorResponse(
+      500,
+      "CasaFlix could not remove that listing right now. Try again in a moment.",
+      "LISTING_DELETE_FAILED",
       reqId,
     );
   }

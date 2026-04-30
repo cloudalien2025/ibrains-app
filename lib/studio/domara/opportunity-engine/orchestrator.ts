@@ -22,12 +22,18 @@ export async function generateCasaHudOpportunityResult(
     dependencies.researchProvider || createCasaHudOpportunityResearchProvider({ apiKey: process.env.YOUTUBE_API_KEY });
   const preferredMarket = request.preferredMarket?.trim() || getDefaultPreferredMarket();
   const research = await researchProvider.research({ preferredMarket });
-  const titleCandidates = buildCasaHudOpportunityTitleCandidates(research);
+  const variationSeed = request.variationSeed?.trim() || `${request.userId}:${preferredMarket}:${nowIso()}`;
+  const titleCandidates = buildCasaHudOpportunityTitleCandidates(research, { variationSeed });
   const selectedTitle = selectWinningCasaHudOpportunityTitle(titleCandidates, research);
+  const fallbackUsed = research.providerStatus.mode !== "live_youtube";
 
   return {
     generatedAt: nowIso(),
     preferredMarket,
+    variationSeed,
+    opportunityResearchSource: fallbackUsed ? "casaflix_strategy_fallback" : "live_youtube",
+    fallbackUsed,
+    youtubeConnected: research.providerStatus.mode === "live_youtube",
     researchBrief: research.researchBrief,
     titleCandidates,
     selectedTitle,
