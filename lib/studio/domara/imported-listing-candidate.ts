@@ -224,7 +224,7 @@ export function normalizeImportedListingCandidate(
     manualUpdatedAt?: string;
   },
 ): CasaHudListingCandidate {
-  if (listing.sourceType !== "imported_url") return listing;
+  if (listing.sourceType !== "imported_url" && listing.sourceType !== "browser_assisted_import") return listing;
 
   const featured = pickFeaturedImage(listing);
   const keyFeatures = listing.keyFeatures?.length ? uniqueStrings(listing.keyFeatures) : buildKeyFeatures(listing);

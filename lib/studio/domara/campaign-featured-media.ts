@@ -181,13 +181,14 @@ function placeholderMedia(listing: CasaHudListingCandidate | CasaHudValidatedLis
 
 function imageFromAsset(listing: CasaHudListingCandidate | CasaHudValidatedListing, asset: CasaHudVisualAsset) {
   const kind: CasaHudFeaturedPropertyMediaKind = asset.type === "listing_image" ? "real_image" : "media_asset";
-  const isImportedUrl = listing.sourceType === "imported_url";
+  const isImportedUrl = listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import";
+  const importedLabel = listing.sourceType === "browser_assisted_import" ? "Browser import image" : "Imported URL image";
   return buildMedia({
     kind,
     url: asset.sourceUrl || null,
-    stateLabel: asset.type === "listing_image" ? (isImportedUrl ? "Imported URL image" : "Listing image") : "Source preview image",
+    stateLabel: asset.type === "listing_image" ? (isImportedUrl ? importedLabel : "Listing image") : "Source preview image",
     source: humanizeLabel(asset.sourceProvider, humanizeLabel(listing.provider, "Listing source")),
-    alt: `${listing.title} ${asset.type === "listing_image" ? (isImportedUrl ? "imported URL image" : "listing image") : "source preview image"}`,
+    alt: `${listing.title} ${asset.type === "listing_image" ? (isImportedUrl ? importedLabel.toLowerCase() : "listing image") : "source preview image"}`,
     warning: asset.warning,
   });
 }
@@ -215,6 +216,14 @@ export function deriveCasaHudFeaturedPropertyMedia(
   const sourceLabel = humanizeLabel(listing.provider, "Listing source");
   const usesSampleListingPatterns =
     listing.provider === "casahud_sample" || asNonEmptyString(metadataRecord.discoveryMode) === "sample_patterns";
+
+  const importedMediaLabel =
+    listing.sourceType === "browser_assisted_import"
+      ? "Browser import image"
+      : listing.sourceType === "imported_url"
+        ? "Imported URL image"
+        : "Listing image";
+  const previewLabel = listing.sourceType === "browser_assisted_import" ? "Browser import preview" : "Source preview image";
 
   const explicitFeaturedImage =
     asNonEmptyString(listingRecord.manualFeaturedImageUrl) ||
@@ -248,13 +257,12 @@ export function deriveCasaHudFeaturedPropertyMedia(
 
   if (explicitFeaturedImage) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
-    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: explicitFeaturedImage,
-      stateLabel: importedLabel,
+      stateLabel: importedMediaLabel,
       source: sourceLabel,
-      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
+      alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
     });
   }
 
@@ -264,13 +272,12 @@ export function deriveCasaHudFeaturedPropertyMedia(
     firstImageUrl(metadataRecord.image_urls);
   if (imageUrl) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
-    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: imageUrl,
-      stateLabel: importedLabel,
+      stateLabel: importedMediaLabel,
       source: sourceLabel,
-      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
+      alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
     });
   }
 
@@ -287,13 +294,12 @@ export function deriveCasaHudFeaturedPropertyMedia(
     readFirstImageFromArray(metadataRecord.photo_urls);
   if (structuredImage) {
     if (usesSampleListingPatterns) return sampleListingPlaceholder(listing, sourceLabel);
-    const importedLabel = listing.sourceType === "imported_url" ? "Imported URL image" : "Listing image";
     return buildMedia({
       kind: "real_image",
       url: structuredImage,
-      stateLabel: importedLabel,
+      stateLabel: importedMediaLabel,
       source: sourceLabel,
-      alt: `${listing.title} ${importedLabel.toLowerCase()}`,
+      alt: `${listing.title} ${importedMediaLabel.toLowerCase()}`,
     });
   }
 
@@ -320,9 +326,16 @@ export function deriveCasaHudFeaturedPropertyMedia(
     return buildMedia({
       kind: "thumbnail",
       url: sourceThumbnail,
-      stateLabel: listing.sourceType === "imported_url" ? "Source preview image" : "Source thumbnail",
+      stateLabel:
+        listing.sourceType === "browser_assisted_import"
+          ? previewLabel
+          : listing.sourceType === "imported_url"
+            ? previewLabel
+            : "Source thumbnail",
       source: sourceLabel,
-      alt: `${listing.title} ${listing.sourceType === "imported_url" ? "source preview image" : "source thumbnail"}`,
+      alt: `${listing.title} ${
+        listing.sourceType === "browser_assisted_import" || listing.sourceType === "imported_url" ? previewLabel.toLowerCase() : "source thumbnail"
+      }`,
     });
   }
 

@@ -89,13 +89,15 @@ function buildListingAssets(campaign: CasaHudCampaign, listings: CasaHudValidate
       description:
         listing.sourceType === "imported_url"
           ? `Source preview image ${index + 1} imported from ${listing.sourceLabel || listing.sourceHost || "the listing URL"} for ${listing.title}.`
-          : `Listing photo ${index + 1} for ${listing.title} in ${listing.locationText}.`,
+          : listing.sourceType === "browser_assisted_import"
+            ? `Browser-captured source image ${index + 1} from ${listing.sourceLabel || listing.sourceHost || "the current listing page"} for ${listing.title}.`
+            : `Listing photo ${index + 1} for ${listing.title} in ${listing.locationText}.`,
       usageRightsStatus: "unknown" as const,
       confidence: assetConfidence(listing.photoAvailability),
       availabilityStatus: "available" as const,
       warning:
-        listing.sourceType === "imported_url"
-          ? "This preview image comes from page metadata, so confirm the property details before relying on it across multiple scenes."
+        listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import"
+          ? "This source image comes from a user-provided import, so confirm the property details before relying on it across multiple scenes."
           : listing.photoAvailability === "limited"
             ? "Listing media is thinner than ideal, so scene reuse should stay selective."
             : undefined,

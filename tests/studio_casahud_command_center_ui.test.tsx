@@ -387,9 +387,9 @@ const importedCampaign: CasaHudCampaign = {
   status: "listing_candidates_discovered",
   listingDiscoveryStatus: "listing_candidates_discovered",
   discoverySummary: {
-    headline: 'Imported 1 property URL into the shortlist for "Could You Retire in Southern Italy for Under $300K?".',
+    headline: 'Imported 1 user-provided property into the shortlist for "Could You Retire in Southern Italy for Under $300K?".',
     criteriaSummary: "User-provided listing URLs are ready for shortlist review and fact-checking.",
-    providerSummary: "Imported URLs are clearly labeled as user-provided sources.",
+    providerSummary: "User-provided imports stay clearly labeled by source type.",
     candidateCount: 1,
     liveCandidateCount: 0,
     fallbackCandidateCount: 0,
@@ -445,6 +445,57 @@ const importedCampaign: CasaHudCampaign = {
     },
   ],
   updatedAt: "2026-04-29T10:00:00.000Z",
+};
+
+const browserImportedCampaign: CasaHudCampaign = {
+  ...importedCampaign,
+  discoverySummary: {
+    headline: 'Imported 1 user-provided property into the shortlist for "Could You Retire in Southern Italy for Under $300K?".',
+    criteriaSummary: "Browser-assisted property imports are ready for shortlist review and fact-checking.",
+    providerSummary: "User-provided imports stay clearly labeled by source type.",
+    candidateCount: 1,
+    liveCandidateCount: 0,
+    fallbackCandidateCount: 0,
+    fallbackUsed: false,
+    warnings: [],
+    discoveredAt: "2026-04-30T08:00:00.000Z",
+  },
+  listingCandidates: [
+    {
+      ...importedCampaign.listingCandidates[0]!,
+      id: "browser-imported-listing-1",
+      provider: "immobiliare",
+      sourceType: "browser_assisted_import",
+      sourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+      originalSourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+      normalizedSourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+      canonicalSourceUrl: "https://www.immobiliare.it/en/annunci/121869400/",
+      sourceHost: "immobiliare.it",
+      sourceLabel: "Immobiliare",
+      featuredImageUrl: "https://images.example.com/browser-import-og.jpg",
+      metadataImageUrl: "https://images.example.com/browser-import-og.jpg",
+      title: "Albanella Single Family Villa with Private Garden",
+      locationText: "Via San Berardino, Albanella, Salerno, Campania, Italy",
+      propertyType: "Single family villa",
+      bedrooms: 3,
+      bathrooms: 2,
+      rooms: 5,
+      sizeSqm: 150,
+      landSizeSqm: 1106,
+      price: 299000,
+      currency: "EUR",
+      extractionStatus: "extracted",
+      manualCompletionStatus: "completed",
+      needsReviewFields: [],
+      imageStatus: "available",
+      imageUrls: ["https://images.example.com/browser-import-og.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited",
+      summary: "In Albanella, this independent villa is listed at €299,000 with three bedrooms, two bathrooms, and a private garden.",
+      casaHudNarrationSeed:
+        "In Albanella, this independent villa brings the Southern Italy lifestyle into a practical frame: €299,000 for a renovated home, private garden, garage space, and room to live both indoors and outside.",
+    },
+  ],
 };
 
 const scriptedCampaign: CasaHudCampaign = {
@@ -832,6 +883,69 @@ describe("CasaHUD command center UI", () => {
     expect(propertyText).not.toContain("Price on request");
     expect(propertyText).not.toContain("Facts pending");
     expect(propertyText).not.toContain("Image needed");
+  });
+
+  it("shows the browser-assisted import panel and renders browser-imported cards with source truth", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(browserImportedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${browserImportedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: browserImportedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const browserUiText = container.textContent || "";
+    expect(browserUiText).toContain("Browser-Assisted Import");
+    expect(browserUiText).toContain("CasaHUD Importer captures visible listing text, page metadata, and image candidates");
+    const bookmarkletLink = container.querySelector('[data-testid="casahud-browser-importer-bookmarklet"]') as HTMLAnchorElement | null;
+    expect(bookmarkletLink?.getAttribute("href")).toContain("javascript:");
+
+    const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertyText).toContain("Imported from Browser");
+    expect(propertyText).toContain("Immobiliare");
+    expect(propertyText).toContain("Browser import image");
+    expect(propertyText).toContain("€299,000");
+    expect(propertyText).toContain("Via San Berardino, Albanella, Salerno, Campania, Italy");
+    expect(propertyText).toContain("Single family villa");
+    expect(propertyText).toContain("View Source");
+    expect(propertyText).toContain("Edit Details");
+    expect(propertyText).not.toContain("demo workflow");
   });
 
   it("opens the imported listing editor, saves manual details, and updates the card copy", async () => {

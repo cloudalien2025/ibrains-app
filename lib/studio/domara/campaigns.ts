@@ -114,7 +114,7 @@ export type CasaHudCampaignMediaPlanningStatus = CasaHudMediaPlanningStatus;
 export type CasaHudCampaignYouTubePackageStatus = CasaHudYouTubePackageStatus;
 
 export type CasaHudListingProvider = "idealista" | "immobiliare" | "casahud_sample" | "generic";
-export type CasaHudListingSourceType = "official_api" | "imported_url" | "sample_pattern";
+export type CasaHudListingSourceType = "official_api" | "imported_url" | "browser_assisted_import" | "sample_pattern";
 export type CasaHudListingExtractionStatus = "extracted" | "partial" | "failed" | "blocked_or_unavailable";
 export type CasaHudListingImageStatus = "available" | "missing" | "invalid";
 export type CasaHudListingUrlClassification =
@@ -1247,7 +1247,10 @@ export function applyCasaHudImportedListingCandidates(
   const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
   const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
   const emptyExecutionData = createEmptyCasaHudExecutionData();
-  const importedCount = input.listingCandidates.filter((listing) => listing.sourceType === "imported_url").length;
+  const importedCount = input.listingCandidates.filter(
+    (listing) => listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import",
+  ).length;
+  const browserImportedCount = input.listingCandidates.filter((listing) => listing.sourceType === "browser_assisted_import").length;
   const sampleCount = input.listingCandidates.filter((listing) => listing.sourceType === "sample_pattern").length;
   const officialCount = input.listingCandidates.filter((listing) => listing.sourceType === "official_api").length;
   const existingSummary = campaign.discoverySummary;
@@ -1259,13 +1262,16 @@ export function applyCasaHudImportedListingCandidates(
     discoverySummary: {
       headline:
         importedCount > 0
-          ? `Imported ${importedCount} property URL${importedCount === 1 ? "" : "s"} into the shortlist for "${campaign.selectedViralTitle}".`
+          ? `Imported ${importedCount} user-provided propert${importedCount === 1 ? "y" : "ies"} into the shortlist for "${campaign.selectedViralTitle}".`
           : existingSummary?.headline || `Prepared ${input.listingCandidates.length} properties for "${campaign.selectedViralTitle}".`,
       criteriaSummary:
-        existingSummary?.criteriaSummary || "User-provided listing URLs are ready for shortlist review and fact-checking.",
+        existingSummary?.criteriaSummary ||
+        (browserImportedCount > 0
+          ? "Browser-assisted property imports are ready for shortlist review and fact-checking."
+          : "User-provided listing URLs are ready for shortlist review and fact-checking."),
       providerSummary:
         importedCount > 0
-          ? `Imported URLs are clearly labeled as user-provided sources. Review missing facts before moving them deeper into the story.`
+          ? `User-provided imports stay clearly labeled by source type. Review missing facts before moving them deeper into the story.`
           : existingSummary?.providerSummary || "Shortlist sources are ready for review.",
       candidateCount: input.listingCandidates.length,
       liveCandidateCount: officialCount,
