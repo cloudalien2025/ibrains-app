@@ -191,6 +191,8 @@ describe("CasaFlix browser import route", () => {
 
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
+    expect(payload.campaign.listingCandidates).toHaveLength(1);
+    expect(payload.summary.listingCandidateCount).toBe(1);
     expect(payload.listing.sourceType).toBe("browser_assisted_import");
     expect(payload.listing.sourceLabel).toBe("Immobiliare");
     expect(payload.listing.price).toBe(299000);
@@ -205,6 +207,43 @@ describe("CasaFlix browser import route", () => {
     expect(payload.listing.rawProviderMetadata.importMethod).toBe("browser_assisted");
     expect(payload.listing.casaHudNarrationSeed).toContain("€299,000");
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledOnce();
+  });
+
+  it("updates existing browser import by source URL instead of creating duplicate candidates", async () => {
+    let storedCampaign = buildCampaign();
+    mocks.getCasaHudCampaign.mockImplementation(async () => storedCampaign);
+    mocks.saveCasaHudCampaign.mockImplementation(async (_userId: string, campaign: CasaHudCampaign) => {
+      storedCampaign = campaign;
+      return campaign;
+    });
+
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/browser-import/route");
+    const first = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {
+      method: "POST",
+      body: JSON.stringify({
+        payload: browserPayload,
+      }),
+    });
+    const second = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {
+      method: "POST",
+      body: JSON.stringify({
+        payload: {
+          ...browserPayload,
+          title: "Updated browser import title",
+        },
+      }),
+    });
+
+    const firstResponse = await route.POST(first, { params: { id: "casahud-browser-import-route" } });
+    const firstPayload = await firstResponse.json();
+    const secondResponse = await route.POST(second, { params: { id: "casahud-browser-import-route" } });
+    const secondPayload = await secondResponse.json();
+
+    expect(firstResponse.status).toBe(200);
+    expect(firstPayload.campaign.listingCandidates).toHaveLength(1);
+    expect(secondResponse.status).toBe(200);
+    expect(secondPayload.duplicate).toBe(true);
+    expect(secondPayload.campaign.listingCandidates).toHaveLength(1);
   });
 
   it("rejects unsafe source URLs", async () => {
