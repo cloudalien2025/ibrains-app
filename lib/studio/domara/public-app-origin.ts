@@ -80,7 +80,12 @@ function isLocalOrPrivateHost(value: string | null | undefined): boolean {
 
 function selectProtocolForHost(host: string | null | undefined, explicitProto: string | null | undefined, requestProto: string | null | undefined): "http" | "https" {
   const explicit = normalizedProtocol(explicitProto);
-  if (explicit) return explicit;
+  if (explicit) {
+    if (explicit === "http" && isProductionRuntime() && host && !isLocalOrPrivateHost(host)) {
+      return "https";
+    }
+    return explicit;
+  }
   if (host && !isLocalOrPrivateHost(host)) return "https";
   return normalizedProtocol(requestProto) || "https";
 }
