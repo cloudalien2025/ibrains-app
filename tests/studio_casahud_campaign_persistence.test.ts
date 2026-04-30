@@ -671,4 +671,75 @@ describe("CasaFlix campaign persistence", () => {
       "energy",
     ]);
   });
+
+  it("keeps browser-assisted listing candidates after save and reopen", async () => {
+    const repository = await import("@/lib/studio/domara/campaign-repository");
+    const campaigns = await import("@/lib/studio/domara/campaigns");
+
+    const created = await repository.createCasaHudCampaignFromOpportunity(userId, opportunity);
+    const browserImportedCandidate = {
+      id: "browser-import-1",
+      provider: "immobiliare" as const,
+      sourceType: "browser_assisted_import" as const,
+      originalSourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+      normalizedSourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+      canonicalSourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+      sourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+      sourceHost: "immobiliare.it",
+      sourceLabel: "Immobiliare",
+      urlClassification: "listing" as const,
+      importedAt: "2026-04-30T10:00:00.000Z",
+      extractionStatus: "partial" as const,
+      extractionProvider: "browser_capture",
+      extractionFields: ["title", "price", "locationText", "descriptionSnippet", "images"],
+      extractionWarnings: [],
+      title: "Capaccio Paestum Single Family Villa with Terrace",
+      locationText: "Via Capaccio-Paestum 13, Capaccio Paestum, Salerno, Campania, Italy",
+      price: 299000,
+      priceText: "€299,000",
+      currency: "EUR",
+      propertyType: "Single family villa",
+      bedrooms: 4,
+      bathrooms: 3,
+      rooms: 4,
+      sizeSqm: 200,
+      garageParking: "Car parking",
+      descriptionSnippet:
+        "Don't miss this opportunity! Capaccio Paestum detached villa with panoramic exposure and a short distance to the coast.",
+      features: ["Single family villa", "4 bedrooms", "3 bathrooms", "200 m² interior", "Car parking", "Terrace"],
+      imageUrls: ["https://images.example.com/capaccio-og.jpg"],
+      imageCount: 1,
+      photoAvailability: "limited" as const,
+      featuredImageUrl: "https://images.example.com/capaccio-og.jpg",
+      metadataImageUrl: "https://images.example.com/capaccio-og.jpg",
+      imageStatus: "available" as const,
+      needsReviewFields: ["land_size", "floor"] satisfies CasaHudListingNeedsReviewField[],
+      manualCompletionStatus: "partially_completed" as const,
+      manuallyCompletedFields: ["title", "locationText", "price"],
+      discoveredAt: "2026-04-30T10:00:00.000Z",
+      preliminaryMatchNotes: "Browser-assisted listing import from Immobiliare.",
+      rawProviderMetadata: {
+        importMethod: "browser_assisted",
+      },
+    };
+
+    const updated = campaigns.applyCasaHudImportedListingCandidates(created, {
+      listingCandidates: [browserImportedCandidate],
+      discoveredAt: "2026-04-30T10:00:00.000Z",
+      warnings: [],
+    });
+
+    await repository.saveCasaHudCampaign(userId, updated);
+
+    const reopened = await repository.getCasaHudCampaign(userId, created.id);
+    expect(reopened?.listingCandidates).toHaveLength(1);
+    expect(reopened?.listingCandidates[0]?.sourceType).toBe("browser_assisted_import");
+    expect(reopened?.listingCandidates[0]?.sourceLabel).toBe("Immobiliare");
+    expect(reopened?.listingCandidates[0]?.featuredImageUrl).toBe("https://images.example.com/capaccio-og.jpg");
+    expect(reopened?.listingCandidates[0]?.price).toBe(299000);
+    expect(reopened?.listingCandidates[0]?.descriptionSnippet).toContain("Don't miss this opportunity");
+
+    const summaries = await repository.listCasaHudCampaignSummaries(userId);
+    expect(summaries[0]?.listingCandidateCount).toBe(1);
+  });
 });

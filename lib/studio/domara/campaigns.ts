@@ -662,7 +662,12 @@ function isListingProvider(value: unknown): value is CasaHudListingProvider {
 }
 
 function isListingSourceType(value: unknown): value is CasaHudListingSourceType {
-  return value === "official_api" || value === "imported_url" || value === "sample_pattern";
+  return (
+    value === "official_api" ||
+    value === "imported_url" ||
+    value === "browser_assisted_import" ||
+    value === "sample_pattern"
+  );
 }
 
 function isListingExtractionStatus(value: unknown): value is CasaHudListingExtractionStatus {

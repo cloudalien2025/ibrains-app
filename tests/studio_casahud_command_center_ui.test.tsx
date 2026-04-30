@@ -541,6 +541,29 @@ const legacyDemoOnlyCampaign: CasaHudCampaign = {
   ],
 };
 
+const mixedLegacyAndBrowserCampaign: CasaHudCampaign = {
+  ...browserImportedCampaign,
+  listingCandidates: [
+    ...Array.from({ length: 6 }).map((_, index) => ({
+      ...legacyDemoOnlyCampaign.listingCandidates[0]!,
+      id: `legacy-demo-listing-${index + 1}`,
+      title: index % 2 === 0 ? "Bari House for a Southern Italy Reset" : "Catania Villa for a Southern Italy Reset",
+    })),
+    browserImportedCampaign.listingCandidates[0]!,
+  ],
+  discoverySummary: {
+    headline: 'Imported 1 user-provided property into the shortlist for "Could You Retire in Southern Italy for Under $300K?".',
+    criteriaSummary: "Browser-assisted property imports are ready for shortlist review and fact-checking.",
+    providerSummary: "User-provided imports stay clearly labeled by source type.",
+    candidateCount: 7,
+    liveCandidateCount: 0,
+    fallbackCandidateCount: 6,
+    fallbackUsed: true,
+    warnings: [],
+    discoveredAt: "2026-04-30T09:00:00.000Z",
+  },
+};
+
 const scriptedCampaign: CasaHudCampaign = {
   ...validatedCampaign,
   status: "script_narrative_completed",
@@ -1065,6 +1088,62 @@ describe("CasaFlix command center UI", () => {
     expect(propertyText).toContain("Browser-assisted import");
     expect(propertyText).not.toContain("Bari House for a Southern Italy Reset");
     expect(propertyText).not.toContain("Sample Pattern");
+  });
+
+  it("shows browser-imported real listings even when legacy demo listings are present", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(mixedLegacyAndBrowserCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${mixedLegacyAndBrowserCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: mixedLegacyAndBrowserCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const propertyText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertyText).toContain("1 candidate");
+    expect(propertyText).toContain("Albanella Single Family Villa with Private Garden");
+    expect(propertyText).toContain("Imported from Browser");
+    expect(propertyText).toContain("Browser import image");
+    expect(propertyText).not.toContain("No real property listings added yet");
+    expect(propertyText).not.toContain("Bari House for a Southern Italy Reset");
+    expect(propertyText).not.toContain("Catania Villa for a Southern Italy Reset");
+    expect(propertyText).not.toContain("Image needed");
   });
 
   it("copies bookmarklet code from the browser-assisted import panel", async () => {
