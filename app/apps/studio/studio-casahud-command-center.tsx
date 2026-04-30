@@ -97,12 +97,21 @@ type CasaHudCampaignCreatePayload = {
   campaign?: CasaHudCampaign;
   summary?: CasaHudCampaignSummary;
   message?: string;
+  duplicateCampaignId?: string;
+  duplicateCampaignName?: string;
   error?: { message?: string };
 };
 
 type CasaHudCampaignDetailPayload = {
   ok?: boolean;
   campaign?: CasaHudCampaign;
+  error?: { message?: string };
+};
+
+type CasaHudCampaignDeletePayload = {
+  ok?: boolean;
+  deletedCampaignId?: string;
+  message?: string;
   error?: { message?: string };
 };
 
@@ -157,6 +166,15 @@ type CasaHudListingManualUpdatePayload = {
   campaign?: CasaHudCampaign;
   summary?: CasaHudCampaignSummary;
   listing?: CasaHudListingCandidate;
+  message?: string;
+  error?: { message?: string };
+};
+
+type CasaHudListingDeletePayload = {
+  ok?: boolean;
+  campaign?: CasaHudCampaign;
+  summary?: CasaHudCampaignSummary;
+  deletedListingId?: string;
   message?: string;
   error?: { message?: string };
 };
@@ -602,6 +620,34 @@ function formatDuration(seconds?: number | null) {
 
 function formatCountLabel(value: number, singular: string, plural = `${singular}s`) {
   return `${value} ${value === 1 ? singular : plural}`;
+}
+
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
+function opportunityProviderSummary(providerStatus?: CasaHudOpportunityResult["providerStatus"]) {
+  if (!providerStatus) {
+    return {
+      label: "Source unavailable",
+      detail: "CasaFlix could not resolve the title research source.",
+      tone: "gold" as const,
+    };
+  }
+  if (providerStatus.mode === "live_youtube") {
+    return {
+      label: "Live YouTube research used",
+      detail: providerStatus.detail || "Live YouTube research was used for this title package.",
+      tone: "sage" as const,
+    };
+  }
+  return {
+    label: "YouTube not connected — CasaFlix strategy fallback",
+    detail:
+      providerStatus.detail ||
+      "YouTube is not connected, so CasaFlix used strategy fallback patterns for this title package.",
+    tone: "gold" as const,
+  };
 }
 
 function toTimestamp(totalSeconds: number) {
@@ -1360,8 +1406,13 @@ function MediaPreview({
   className?: string;
 }) {
   const [failed, setFailed] = useState(false);
+  const [candidateIndex, setCandidateIndex] = useState(0);
+  const candidateUrls = useMemo(() => {
+    return uniq([media.url, ...(media.candidateUrls || [])].filter(Boolean) as string[]);
+  }, [media.candidateUrls, media.url]);
+  const activeUrl = candidateUrls[candidateIndex] || null;
 
-  if (!media.url || failed || !media.hasRealImage) {
+  if (!activeUrl || failed || !media.hasRealImage) {
     return (
       <div
         className={cx(
@@ -1383,10 +1434,16 @@ function MediaPreview({
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src={media.url}
+      src={activeUrl}
       alt={alt}
       className={cx("h-full w-full object-cover", className)}
-      onError={() => setFailed(true)}
+      onError={() => {
+        if (candidateIndex < candidateUrls.length - 1) {
+          setCandidateIndex((current) => current + 1);
+          return;
+        }
+        setFailed(true);
+      }}
     />
   );
 }
@@ -1414,11 +1471,15 @@ function PropertyCard({
   listing,
   testId,
   onSelect,
+  onDelete,
+  deleting,
 }: {
   campaign: CasaHudCampaign;
   listing: CasaHudListingCandidate | CasaHudValidatedListing;
   testId: string;
   onSelect: (listingId: string, editor?: boolean) => void;
+  onDelete: (listing: CasaHudListingCandidate | CasaHudValidatedListing) => void;
+  deleting: boolean;
 }) {
   const media = deriveCasaHudFeaturedPropertyMedia(listing, campaign);
   const facts = propertyFacts(listing);
@@ -1437,7 +1498,12 @@ function PropertyCard({
         data-testid="casahud-property-card-media"
         data-media-kind={media.kind}
       >
-        <MediaPreview media={media} alt={`${listing.title} featured image`} className="aspect-[16/10]" />
+        <MediaPreview
+          key={`media-${media.url || "fallback"}-${(media.candidateUrls || []).join("|")}`}
+          media={media}
+          alt={`${listing.title} featured image`}
+          className="aspect-[16/10]"
+        />
         <div className="absolute left-4 top-4 flex flex-wrap gap-2">
           <StatusPill tone={listingStatusTone(listing)}>{statusLabelFromListing(listing)}</StatusPill>
           <StatusPill tone="neutral">{media.stateLabel}</StatusPill>
@@ -1547,6 +1613,17 @@ function PropertyCard({
               {(listing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
             </button>
           ) : null}
+          {isUserImportedListing(listing) ? (
+            <button
+              type="button"
+              className={secondaryButtonClass}
+              onClick={() => onDelete(listing)}
+              disabled={deleting}
+              data-testid="casahud-remove-listing"
+            >
+              {deleting ? "Removing..." : "Remove Listing"}
+            </button>
+          ) : null}
           <button type="button" className={primaryButtonClass} onClick={() => onSelect(listing.id)}>
             View details
           </button>
@@ -1568,7 +1645,12 @@ function PropertyPreview({
   return (
     <div className="overflow-hidden rounded-[1.4rem] border border-[#E7DCCB] bg-white/92">
       <div className="aspect-[16/10] bg-[#F3EDE4]">
-        <MediaPreview media={media} alt={`${listing.title} preview image`} className="aspect-[16/10]" />
+        <MediaPreview
+          key={`media-${media.url || "fallback"}-${(media.candidateUrls || []).join("|")}`}
+          media={media}
+          alt={`${listing.title} preview image`}
+          className="aspect-[16/10]"
+        />
       </div>
       <div className="grid gap-2 p-4">
         <p className="text-base font-semibold tracking-[-0.02em] text-[#172033]">{listing.title}</p>
@@ -1590,7 +1672,12 @@ function VideoSceneCard({ scene }: { scene: CasaHudVideoScene }) {
     >
       <div className="grid gap-0 lg:grid-cols-[320px_minmax(0,1fr)]">
         <div className="aspect-[16/10] bg-[#F3EDE4] lg:h-full">
-          <MediaPreview media={scene.preview} alt={`${scene.title} preview`} className="h-full w-full" />
+          <MediaPreview
+            key={`media-${scene.preview.url || "fallback"}-${(scene.preview.candidateUrls || []).join("|")}`}
+            media={scene.preview}
+            alt={`${scene.title} preview`}
+            className="h-full w-full"
+          />
         </div>
         <div className="grid gap-4 p-4 md:p-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1691,6 +1778,7 @@ export default function StudioCasaHudCommandCenter() {
   const [campaignError, setCampaignError] = useState<string | null>(null);
   const [campaignCreating, setCampaignCreating] = useState(false);
   const [campaignOpeningId, setCampaignOpeningId] = useState<string | null>(null);
+  const [campaignDeletingId, setCampaignDeletingId] = useState<string | null>(null);
   const [campaignDiscoveringId, setCampaignDiscoveringId] = useState<string | null>(null);
   const [discoveryProgressIndex, setDiscoveryProgressIndex] = useState(0);
   const [campaignValidatingId, setCampaignValidatingId] = useState<string | null>(null);
@@ -1721,6 +1809,7 @@ export default function StudioCasaHudCommandCenter() {
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [listingEditorOpen, setListingEditorOpen] = useState(false);
   const [listingEditorSaving, setListingEditorSaving] = useState(false);
+  const [listingDeletingId, setListingDeletingId] = useState<string | null>(null);
   const [listingEditorNotice, setListingEditorNotice] = useState<string | null>(null);
   const [listingEditorDraft, setListingEditorDraft] = useState<CasaHudListingEditorDraft | null>(null);
   const [scriptCopyNotice, setScriptCopyNotice] = useState<string | null>(null);
@@ -1869,13 +1958,25 @@ export default function StudioCasaHudCommandCenter() {
   const opportunitySource = useMemo(() => {
     if (opportunityOutput) return opportunityOutput;
     if (!activeCampaign) return null;
+    const fallbackUsed = activeCampaign.generationSource.mode !== "live_youtube";
     return {
+      generatedAt: activeCampaign.generatedAt,
+      preferredMarket: activeCampaign.preferredMarket || activeCampaign.marketRegionHint || "Italian real-estate YouTube",
+      variationSeed: `${activeCampaign.id}:${activeCampaign.generatedAt}`,
+      opportunityResearchSource: fallbackUsed ? "casaflix_strategy_fallback" : "live_youtube",
+      fallbackUsed,
+      youtubeConnected: activeCampaign.generationSource.mode === "live_youtube",
       selectedTitle: activeCampaign.selectedTitle,
       titleCandidates: activeCampaign.titleCandidates,
       confidenceSummary: activeCampaign.confidenceReasoning.summary,
       titleOpportunitySummary: activeCampaign.confidenceReasoning.titleOpportunitySummary,
       researchBrief: activeCampaign.researchBrief,
       campaignTypePrediction: activeCampaign.campaignType,
+      nextStep: {
+        action: "create_campaign" as const,
+        label: "Create campaign" as const,
+        detail: "Save this title package as a CasaFlix campaign.",
+      },
       providerStatus: activeCampaign.generationSource,
     };
   }, [activeCampaign, opportunityOutput]);
@@ -2113,7 +2214,10 @@ export default function StudioCasaHudCommandCenter() {
       const response = await fetch("/api/studio/domara/opportunity", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ preferredMarket: "Italian real-estate YouTube" }),
+        body: JSON.stringify({
+          preferredMarket: "Italian real-estate YouTube",
+          variationSeed: `${Date.now()}:${Math.random().toString(36).slice(2, 8)}`,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as CasaHudOpportunityPayload | null;
       if (!response.ok || !payload?.ok || !payload.output) {
@@ -2134,12 +2238,58 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignCreating(true);
       setCampaignError(null);
       setCampaignNotice(null);
+      let allowDuplicate = false;
+      let campaignNameOverride: string | undefined;
+      const selectedTitleName = opportunityOutput.selectedTitle.title.trim();
+      const existingByName = recentCampaigns.find((campaign) => normalizeName(campaign.name) === normalizeName(selectedTitleName));
+      if (existingByName) {
+        const promptText =
+          `A campaign named "${existingByName.name}" already exists.\n` +
+          `Type "resume" to open it, "duplicate" to create another, or enter a new campaign name.`;
+        const decision =
+          typeof window !== "undefined" && typeof window.prompt === "function"
+            ? window.prompt(promptText, "resume")
+            : "resume";
+        if (decision === null) {
+          setCampaignNotice("Campaign creation canceled.");
+          return;
+        }
+        const normalizedDecision = normalizeName(decision);
+        if (normalizedDecision === "resume") {
+          await onResumeCampaign(existingByName.id);
+          return;
+        }
+        if (normalizedDecision === "duplicate") {
+          allowDuplicate = true;
+        } else if (decision.trim()) {
+          campaignNameOverride = decision.trim();
+        } else {
+          setCampaignNotice("Campaign creation canceled.");
+          return;
+        }
+      }
+
       const response = await fetch("/api/studio/domara/campaigns", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ opportunity: opportunityOutput }),
+        body: JSON.stringify({
+          opportunity: opportunityOutput,
+          allowDuplicate,
+          campaignNameOverride,
+        }),
       });
       const payload = (await response.json().catch(() => null)) as CasaHudCampaignCreatePayload | null;
+      if (response.status === 409 && payload?.duplicateCampaignId) {
+        const shouldResume =
+          typeof window !== "undefined" && typeof window.confirm === "function"
+            ? window.confirm(`"${payload.duplicateCampaignName || "This campaign"}" already exists. Resume it now?`)
+            : true;
+        if (shouldResume) {
+          await onResumeCampaign(payload.duplicateCampaignId);
+          return;
+        }
+        throw new Error(payload?.error?.message || "A campaign with this title already exists.");
+      }
       if (!response.ok || !payload?.ok || !payload.campaign) {
         throw new Error(payload?.error?.message || "Could not save this campaign right now.");
       }
@@ -2156,6 +2306,43 @@ export default function StudioCasaHudCommandCenter() {
       setCampaignError(error instanceof Error ? error.message : "Could not save this campaign right now.");
     } finally {
       setCampaignCreating(false);
+    }
+  }
+
+  async function onDeleteCampaign(campaign: CasaHudCampaignSummary) {
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm(`Delete "${campaign.name}" permanently? This cannot be undone.`)
+        : true;
+    if (!confirmed) return;
+
+    try {
+      setCampaignDeletingId(campaign.id);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      const deletedWasActive = activeCampaign?.id === campaign.id;
+
+      const response = await fetch(`/api/studio/domara/campaigns/${encodeURIComponent(campaign.id)}`, {
+        method: "DELETE",
+      });
+      const payload = (await response.json().catch(() => null)) as CasaHudCampaignDeletePayload | null;
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error?.message || "Could not delete this campaign right now.");
+      }
+
+      setRecentCampaigns((current) => current.filter((item) => item.id !== campaign.id));
+      setActiveCampaign((current) => (current?.id === campaign.id ? null : current));
+      setSelectedListingId((current) => (deletedWasActive ? null : current));
+      setListingEditorOpen(false);
+      setListingEditorDraft(null);
+      if (deletedWasActive) {
+        openWorkspace("campaigns");
+      }
+      setCampaignNotice(payload.message || `Deleted "${campaign.name}" permanently.`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "Could not delete this campaign right now.");
+    } finally {
+      setCampaignDeletingId(null);
     }
   }
 
@@ -2343,6 +2530,49 @@ export default function StudioCasaHudCommandCenter() {
       setListingEditorNotice(error instanceof Error ? error.message : "Could not save listing details right now.");
     } finally {
       setListingEditorSaving(false);
+    }
+  }
+
+  async function onDeleteListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
+    if (!activeCampaign) return;
+    const confirmed =
+      typeof window !== "undefined" && typeof window.confirm === "function"
+        ? window.confirm("Remove this listing from the shortlist?")
+        : true;
+    if (!confirmed) return;
+
+    try {
+      setListingDeletingId(listing.id);
+      setCampaignError(null);
+      setCampaignNotice(null);
+      setListingEditorNotice(null);
+
+      const response = await fetch(
+        `/api/studio/domara/campaigns/${encodeURIComponent(activeCampaign.id)}/listing-candidates/${encodeURIComponent(listing.id)}`,
+        {
+          method: "DELETE",
+        },
+      );
+      const payload = (await response.json().catch(() => null)) as CasaHudListingDeletePayload | null;
+      if (!response.ok || !payload?.ok || !payload.campaign) {
+        throw new Error(payload?.error?.message || "Could not remove this listing right now.");
+      }
+
+      setActiveCampaign(payload.campaign);
+      setSelectedListingId((current) => (current === listing.id ? null : current));
+      if (selectedListing?.id === listing.id) {
+        setListingEditorOpen(false);
+        setListingEditorDraft(null);
+      }
+      setRecentCampaigns((current) => {
+        const summary = payload.summary || summarizeCampaign(payload.campaign!);
+        return [summary, ...current.filter((campaign) => campaign.id !== summary.id)];
+      });
+      setCampaignNotice(payload.message || `Removed "${listing.title}" from the shortlist.`);
+    } catch (error) {
+      setCampaignError(error instanceof Error ? error.message : "Could not remove this listing right now.");
+    } finally {
+      setListingDeletingId(null);
     }
   }
 
@@ -2867,6 +3097,15 @@ export default function StudioCasaHudCommandCenter() {
                     >
                       {campaignOpeningId === campaign.id ? "Opening..." : "Resume Campaign"}
                     </button>
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => void onDeleteCampaign(campaign)}
+                      disabled={campaignDeletingId === campaign.id}
+                      data-testid="casahud-delete-campaign"
+                    >
+                      {campaignDeletingId === campaign.id ? "Deleting..." : "Delete Campaign"}
+                    </button>
                   </div>
                 </div>
               </article>
@@ -2889,6 +3128,7 @@ export default function StudioCasaHudCommandCenter() {
 
   if (activeSection === "viral_titles") {
     const winningTitle = opportunitySource?.selectedTitle;
+    const providerSummary = opportunityProviderSummary(opportunitySource?.providerStatus);
 
     sectionContent = opportunitySource && winningTitle ? (
       <WorkspacePage
@@ -2940,6 +3180,12 @@ export default function StudioCasaHudCommandCenter() {
             <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Research Brief</p>
               <p className="mt-3 text-sm leading-6 text-[#475569]">{opportunitySource.researchBrief.summary}</p>
+              <div className="mt-4 rounded-2xl border border-[#D9E4F0] bg-[#F8FAFC] p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusPill tone={providerSummary.tone}>{providerSummary.label}</StatusPill>
+                </div>
+                <p className="mt-2 text-sm leading-6 text-[#475569]">{providerSummary.detail}</p>
+              </div>
               <div className="mt-4 grid gap-2 text-sm text-[#475569]">
                 <p>
                   <span className="font-semibold text-[#0F172A]">Campaign type:</span>{" "}
@@ -3192,6 +3438,8 @@ export default function StudioCasaHudCommandCenter() {
                             : "casahud-listing-candidate-card"
                       }
                       onSelect={openListingDetails}
+                      onDelete={(candidate) => void onDeleteListing(candidate)}
+                      deleting={listingDeletingId === listing.id}
                     />
                   </div>
                 ))}
@@ -3466,7 +3714,12 @@ export default function StudioCasaHudCommandCenter() {
             {videoScenes.map((scene) => (
               <article key={scene.id} className="overflow-hidden rounded-[1.3rem] border border-[#D9E4F0] bg-white">
                 <div className="aspect-[16/10] bg-[#E2E8F0]">
-                  <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                  <MediaPreview
+                    key={`media-${scene.preview.url || "fallback"}-${(scene.preview.candidateUrls || []).join("|")}`}
+                    media={scene.preview}
+                    alt={`${scene.title} storyboard preview`}
+                    className="h-full w-full"
+                  />
                 </div>
                 <div className="grid gap-2 p-4">
                   <div className="flex flex-wrap gap-2">
@@ -3650,7 +3903,12 @@ export default function StudioCasaHudCommandCenter() {
                   {videoScenes.slice(0, 3).map((scene) => (
                     <article key={scene.id} className="overflow-hidden rounded-[1.2rem] border border-[#D9E4F0] bg-[#F8FAFC]">
                       <div className="aspect-[16/10] bg-[#E2E8F0]">
-                        <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                        <MediaPreview
+                          key={`media-${scene.preview.url || "fallback"}-${(scene.preview.candidateUrls || []).join("|")}`}
+                          media={scene.preview}
+                          alt={`${scene.title} storyboard preview`}
+                          className="h-full w-full"
+                        />
                       </div>
                       <div className="p-4">
                         <p className="text-sm font-semibold text-[#0F172A]">{scene.title}</p>
@@ -4300,6 +4558,8 @@ export default function StudioCasaHudCommandCenter() {
                           listing={listing}
                           testId="casahud-listing-candidate-card"
                           onSelect={openListingDetails}
+                          onDelete={(candidate) => void onDeleteListing(candidate)}
+                          deleting={listingDeletingId === listing.id}
                         />
                       ))}
                     </div>
@@ -4323,6 +4583,8 @@ export default function StudioCasaHudCommandCenter() {
                           listing={listing}
                           testId="casahud-approved-listing-card"
                           onSelect={openListingDetails}
+                          onDelete={(candidate) => void onDeleteListing(candidate)}
+                          deleting={listingDeletingId === listing.id}
                         />
                       ))}
                     </div>
@@ -4346,6 +4608,8 @@ export default function StudioCasaHudCommandCenter() {
                           listing={listing}
                           testId="casahud-rejected-listing-card"
                           onSelect={openListingDetails}
+                          onDelete={(candidate) => void onDeleteListing(candidate)}
+                          deleting={listingDeletingId === listing.id}
                         />
                       ))}
                     </div>
@@ -4865,7 +5129,12 @@ export default function StudioCasaHudCommandCenter() {
                     {previewScenes.map((scene) => (
                       <article key={scene.id} className="overflow-hidden rounded-[1.3rem] border border-[#E7DCCB] bg-[#FFF9EF]">
                         <div className="aspect-[16/10] bg-[#F3EDE4]">
-                          <MediaPreview media={scene.preview} alt={`${scene.title} storyboard preview`} className="h-full w-full" />
+                          <MediaPreview
+                            key={`media-${scene.preview.url || "fallback"}-${(scene.preview.candidateUrls || []).join("|")}`}
+                            media={scene.preview}
+                            alt={`${scene.title} storyboard preview`}
+                            className="h-full w-full"
+                          />
                         </div>
                         <div className="grid gap-2 p-4">
                           <div className="flex flex-wrap gap-2">
@@ -5304,7 +5573,12 @@ export default function StudioCasaHudCommandCenter() {
 
             <div className="grid gap-0 lg:grid-cols-[1.02fr_0.98fr]">
               <div className="min-h-[320px] bg-[#F3EDE4]">
-                <MediaPreview media={selectedListingMedia} alt={`${selectedListing.title} detail image`} className="min-h-[320px] w-full" />
+                <MediaPreview
+                  key={`media-${selectedListingMedia.url || "fallback"}-${(selectedListingMedia.candidateUrls || []).join("|")}`}
+                  media={selectedListingMedia}
+                  alt={`${selectedListing.title} detail image`}
+                  className="min-h-[320px] w-full"
+                />
               </div>
               <div className="grid gap-5 p-5 md:p-6">
                 <div className="flex flex-wrap gap-2">

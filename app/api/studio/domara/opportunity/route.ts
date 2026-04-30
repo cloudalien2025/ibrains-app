@@ -35,19 +35,25 @@ export async function POST(request: NextRequest) {
 
     const body = (await request.json().catch(() => ({}))) as {
       preferredMarket?: unknown;
+      variationSeed?: unknown;
     };
 
     if (body.preferredMarket !== undefined && typeof body.preferredMarket !== "string") {
       return errorResponse(400, "CasaFlix needs a valid market hint to generate title opportunities.", "INVALID_INPUT", reqId);
     }
+    if (body.variationSeed !== undefined && typeof body.variationSeed !== "string") {
+      return errorResponse(400, "CasaFlix needs a valid variation seed.", "INVALID_INPUT", reqId);
+    }
 
     const preferredMarket = body.preferredMarket?.trim() || undefined;
+    const variationSeed = body.variationSeed?.trim() || undefined;
     const youtubeApiKey = await resolveYouTubeApiKey(userId);
     const researchProvider = createCasaHudOpportunityResearchProvider({ apiKey: youtubeApiKey });
     const output = await generateCasaHudOpportunityResult(
       {
         userId,
         preferredMarket,
+        variationSeed,
       },
       { researchProvider },
     );

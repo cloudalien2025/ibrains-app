@@ -139,6 +139,37 @@ const capaccioPayload = {
   ],
 };
 
+const quarrataLandPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/119999999/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/119999999/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-04-30T11:45:00.000Z",
+  captureVersion: "2026-04-30",
+  title: "Agricultural land in Quarrata - immobiliare.it",
+  metaDescription:
+    "Prezzo € 95.000 agricultural land in Quarrata with 12.000 m² terreno and road access.",
+  openGraph: {
+    title: "Agricultural land in Quarrata",
+    description:
+      "Agricultural land with olive trees, direct road access, and panoramic countryside views.",
+    image: "https://images.example.com/quarrata-og.jpg",
+  },
+  visibleText: `
+    Prezzo
+    € 95.000
+    Address
+    Quarrata, Pistoia, Tuscany, Italy
+    Property type
+    Agricultural land
+    Land
+    12.000 m²
+    Description
+    Agricultural land with olive trees, direct road access, and panoramic countryside views. Suitable for seasonal cultivation and weekend use.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/quarrata-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
 describe("CasaFlix browser listing capture parser", () => {
   it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
     const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
@@ -220,6 +251,19 @@ describe("CasaFlix browser listing capture parser", () => {
 
     expect(euroLeading.candidate.price).toBe(299000);
     expect(euroTrailing.candidate.price).toBe(299000);
+  });
+
+  it("parses an agricultural land payload with land size, clean description, and image coverage", () => {
+    const parsed = parseCasaHudBrowserListingCapture(quarrataLandPayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.propertyType).toBe("Agricultural Land");
+    expect(parsed.candidate.price).toBe(95000);
+    expect(parsed.candidate.landSizeSqm).toBe(12000);
+    expect(parsed.candidate.locationText).toBe("Quarrata, Pistoia, Tuscany, Italy");
+    expect(parsed.candidate.descriptionSnippet).toContain("olive trees");
+    expect(parsed.candidate.imageUrls).toContain("https://images.example.com/quarrata-og.jpg");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("images");
   });
 
   it("keeps price as needs review when no price exists in payload", () => {

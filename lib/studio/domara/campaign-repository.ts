@@ -100,8 +100,11 @@ export async function saveCasaHudCampaign(userId: string, campaign: CasaHudCampa
 export async function createCasaHudCampaignFromOpportunity(
   userId: string,
   opportunity: CasaHudOpportunityResult,
+  options?: {
+    campaignNameOverride?: string;
+  },
 ): Promise<CasaHudCampaign> {
-  const campaign = buildCasaHudCampaignFromOpportunity(userId, opportunity);
+  const campaign = buildCasaHudCampaignFromOpportunity(userId, opportunity, options);
   return saveCasaHudCampaign(userId, campaign);
 }
 
@@ -177,4 +180,29 @@ export async function getCasaHudCampaign(userId: string, campaignId: string): Pr
 
   const row = rows[0];
   return row ? mapRowToCampaign(row) : null;
+}
+
+export async function deleteCasaHudCampaign(userId: string, campaignId: string): Promise<boolean> {
+  const rows = await query<{ id: string }>(
+    `
+    DELETE FROM casahud_projects
+    WHERE user_id = $1
+      AND id = $2
+      AND provider_metadata->>'phase' IN ($3, $4, $5, $6, $7, $8, $9)
+    RETURNING id
+    `,
+    [
+      userId,
+      campaignId,
+      CASAHUD_CAMPAIGN_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_8_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_7_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_6_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_5_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_PHASE_4_METADATA_PHASE,
+      CASAHUD_CAMPAIGN_LEGACY_METADATA_PHASE,
+    ],
+  );
+
+  return rows.length > 0;
 }

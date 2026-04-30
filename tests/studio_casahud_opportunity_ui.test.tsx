@@ -572,6 +572,9 @@ describe("CasaFlix opportunity flow", () => {
 
     expect(container.querySelector('[data-testid="casahud-viral-titles"]')?.textContent).toContain(opportunity.selectedTitle.title);
     expect(container.querySelector('[data-testid="casahud-viral-titles"]')?.textContent).toContain("Viral Titles");
+    expect(container.querySelector('[data-testid="casahud-viral-titles"]')?.textContent).toContain(
+      "YouTube not connected — CasaFlix strategy fallback",
+    );
     expect(container.querySelectorAll('[data-testid="casahud-candidate-card"]').length).toBe(2);
 
     await act(async () => {

@@ -13,9 +13,9 @@ import { normalizeListingImportUrl } from "@/lib/studio/domara/listing-url-impor
 
 export const CASAHUD_BROWSER_IMPORT_VERSION = "casahud-browser-import-v1";
 export const CASAHUD_BROWSER_IMPORT_CAPTURE_VERSION = "2026-04-30";
-export const CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS = 40_000;
+export const CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS = 80_000;
 export const CASAHUD_BROWSER_IMPORT_MAX_IMAGE_CANDIDATES = 30;
-export const CASAHUD_BROWSER_IMPORT_MAX_PAYLOAD_BYTES = 120_000;
+export const CASAHUD_BROWSER_IMPORT_MAX_PAYLOAD_BYTES = 220_000;
 
 type BrowserCaptureImageSource = "og" | "twitter" | "visible_img" | "srcset";
 
@@ -128,7 +128,7 @@ const LOCATION_FEATURE_FRAGMENT_PATTERN =
   /\b(good condition|condition|parking|car parking|garage|posto auto|box auto|with terrace|terrace|terrazz[oa]|balcony|balcone|independent heating|heating|riscaldamento|aria condizionata|air conditioning)\b/i;
 
 const FACT_LINE_PATTERN =
-  /^(price|prezzo|address|indirizzo|location|ubicazione|zona|comune|rooms?|locali|bedrooms?|camere(?: da letto)?|bathrooms?|bagni|surface|superficie|interior size|commercial surface|garden|giardino|land|terreno|garage|parking|posti auto|condition|stato|heating|riscaldamento|energy class|classe energetica|reference|riferimento|updated|aggiornato|advertiser|agency|agenzia|description|descrizione)\b/i;
+  /^(price|prezzo|address|indirizzo|location|ubicazione|zona|comune|rooms?|locali|bedrooms?|camere(?: da letto)?|bathrooms?|bagni|surface|superficie|interior size|commercial surface|garden|giardino|land|terreno|garage|parking|posti auto|condition|stato|heating|riscaldamento|energy class|classe energetica|reference|riferimento|ref\.?|rif\.?|updated|aggiornato|advertiser|agency|agenzia|description|descrizione)\b/i;
 
 function decodeHtmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityToken) => {
@@ -413,16 +413,20 @@ function pickBestDescription(candidates: Array<string | undefined>) {
   const normalized = uniqueStrings(candidates);
   if (normalized.length === 0) return undefined;
   normalized.sort((left, right) => {
-    const leftScore = (left.length >= 80 ? 20 : 0) + (/[.!?]$/.test(left) ? 10 : 0) + (/…$|\.{3}$/.test(left) ? -8 : 0);
-    const rightScore = (right.length >= 80 ? 20 : 0) + (/[.!?]$/.test(right) ? 10 : 0) + (/…$|\.{3}$/.test(right) ? -8 : 0);
+    const leftScore = (left.length >= 120 ? 26 : 0) + (/[.!?]$/.test(left) ? 12 : 0) + (/…$|\.{3}$/.test(left) ? -28 : 0);
+    const rightScore = (right.length >= 120 ? 26 : 0) + (/[.!?]$/.test(right) ? 12 : 0) + (/…$|\.{3}$/.test(right) ? -28 : 0);
     if (leftScore !== rightScore) return rightScore - leftScore;
     return right.length - left.length;
   });
-  const best = normalized[0]!;
-  if (best.length <= 1_000) return best;
-  const trimmed = best.slice(0, 1_000);
+  let best = normalized[0]!;
+  if (/…$|\.{3}$/.test(best)) {
+    const fuller = normalized.find((candidate) => !/…$|\.{3}$/.test(candidate) && candidate.length >= Math.max(120, best.length - 30));
+    if (fuller) best = fuller;
+  }
+  if (best.length <= 1_200) return best;
+  const trimmed = best.slice(0, 1_200);
   const lastBoundary = Math.max(trimmed.lastIndexOf("."), trimmed.lastIndexOf("!"), trimmed.lastIndexOf("?"), trimmed.lastIndexOf(" "));
-  return cleanText(trimmed.slice(0, lastBoundary > 200 ? lastBoundary : 1_000));
+  return cleanText(trimmed.slice(0, lastBoundary > 220 ? lastBoundary : 1_200));
 }
 
 function cleanLocationText(value: string | undefined) {
@@ -435,7 +439,13 @@ function cleanLocationText(value: string | undefined) {
     .join(". ");
   const parts = withoutFeatureSentence
     .split(",")
-    .map((part) => cleanText(part))
+    .map((part) =>
+      cleanText(
+        part
+          .replace(/\b(?:ref(?:erence)?|rif)\.?\s*[:#-]?\s*[A-Z0-9-]{2,}\b/gi, "")
+          .replace(/\b(?:ref(?:erence)?|rif)\.?\b/gi, ""),
+      ),
+    )
     .filter((part): part is string => {
       if (!part) return false;
       return !LOCATION_FEATURE_FRAGMENT_PATTERN.test(part);

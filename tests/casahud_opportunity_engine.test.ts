@@ -51,9 +51,35 @@ describe("CasaFlix opportunity engine", () => {
     expect(output.titleCandidates.length).toBeLessThanOrEqual(10);
     expect(output.selectedTitle.title).toBeTruthy();
     expect(output.selectedTitle.confidence).toBeGreaterThanOrEqual(0.7);
+    expect(output.fallbackUsed).toBe(true);
     expect(output.researchBrief.opportunityCategories.length).toBeGreaterThan(0);
     expect(output.researchBrief.riskNotes.length).toBeGreaterThan(0);
     expect(getSupportedCasaHudOpportunityCampaignTypes()).toContain(output.campaignTypePrediction);
+  });
+
+  it("varies fallback title directions across different variation seeds and stays deterministic with a fixed seed", async () => {
+    const seedA = await generateCasaHudOpportunityResult({
+      userId,
+      preferredMarket: "Italian real-estate YouTube",
+      variationSeed: "seed-a",
+    });
+    const seedB = await generateCasaHudOpportunityResult({
+      userId,
+      preferredMarket: "Italian real-estate YouTube",
+      variationSeed: "seed-b",
+    });
+    const seedAFixed = await generateCasaHudOpportunityResult({
+      userId,
+      preferredMarket: "Italian real-estate YouTube",
+      variationSeed: "seed-a",
+    });
+
+    expect(seedA.titleCandidates.map((candidate) => candidate.title)).not.toEqual(
+      seedB.titleCandidates.map((candidate) => candidate.title),
+    );
+    expect(seedA.titleCandidates.map((candidate) => candidate.title)).toEqual(
+      seedAFixed.titleCandidates.map((candidate) => candidate.title),
+    );
   });
 
   it("uses the research provider seam to upgrade scoring when live research is available", async () => {

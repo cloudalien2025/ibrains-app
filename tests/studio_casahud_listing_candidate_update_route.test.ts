@@ -204,4 +204,111 @@ describe("CasaFlix imported listing update route", () => {
     expect(payload.listing.manuallyCompletedFields).toContain("manualFeaturedImageUrl");
     expect(payload.listing.casaHudNarrationSeed).toContain("Southern Italy villa living");
   });
+
+  it("removes a listing candidate and updates campaign counts", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
+    const request = new NextRequest(
+      "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+      {
+        method: "DELETE",
+      },
+    );
+
+    const response = await route.DELETE(request, {
+      params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+    });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.deletedListingId).toBe("imported-listing-1");
+    expect(payload.campaign.listingCandidates).toHaveLength(0);
+    expect(payload.campaign.approvedListings).toHaveLength(0);
+    expect(payload.campaign.rejectedListings).toHaveLength(0);
+    expect(payload.campaign.listingDiscoveryStatus).toBe("not_started");
+    expect(payload.campaign.status).toBe("ready_for_property_discovery");
+  });
+
+  it("removes a listing from approved listings and returns listing not found for unknown ids", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
+    const campaign = buildCampaign();
+    campaign.listingCandidates = [];
+    campaign.approvedListings = [
+      {
+        id: "approved-imported-1",
+        provider: "immobiliare",
+        sourceType: "browser_assisted_import",
+        sourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+        normalizedSourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+        canonicalSourceUrl: "https://www.immobiliare.it/en/annunci/114752041/",
+        sourceHost: "immobiliare.it",
+        sourceLabel: "Immobiliare",
+        title: "Capaccio imported listing",
+        locationText: "Capaccio Paestum, Salerno, Campania, Italy",
+        features: ["Terrace"],
+        imageUrls: ["https://images.example.com/capaccio-og.jpg"],
+        imageCount: 1,
+        photoAvailability: "limited",
+        discoveredAt: "2026-04-29T10:00:00.000Z",
+        preliminaryMatchNotes: "Imported via browser flow.",
+        validationStatus: "approved",
+        overallScore: 86,
+        scoreBreakdown: {
+          titleMatchScore: 90,
+          geographyScore: 88,
+          priceFitScore: 80,
+          propertyTypeScore: 82,
+          featureClaimScore: 78,
+          mediaAvailabilityScore: 75,
+          listingCompletenessScore: 80,
+          providerQualityScore: 70,
+          uniquenessScore: 95,
+          overallScore: 86,
+        },
+        validationReasons: ["Strong shortlist fit."],
+        warnings: [],
+      },
+    ];
+    campaign.status = "listing_candidates_validated";
+    campaign.listingValidationStatus = "listing_candidates_validated";
+    campaign.listingValidationSummary = {
+      headline: "Validated shortlist",
+      rankingExplanation: "Ranking complete.",
+      discoveredCount: 1,
+      approvedCount: 1,
+      rejectedCount: 0,
+      needsAttentionCount: 0,
+      titleSupportConfidence: 84,
+      warnings: [],
+      completedAt: "2026-04-29T12:00:00.000Z",
+    };
+    mocks.getCasaHudCampaign.mockResolvedValue(campaign);
+
+    const response = await route.DELETE(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/approved-imported-1",
+        {
+          method: "DELETE",
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "approved-imported-1" },
+      },
+    );
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.campaign.approvedListings).toHaveLength(0);
+
+    const missingResponse = await route.DELETE(
+      new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/missing", {
+        method: "DELETE",
+      }),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "missing" },
+      },
+    );
+    const missingPayload = await missingResponse.json();
+    expect(missingResponse.status).toBe(404);
+    expect(missingPayload.error.code).toBe("LISTING_NOT_FOUND");
+  });
 });

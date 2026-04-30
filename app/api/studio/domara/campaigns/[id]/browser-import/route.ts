@@ -220,6 +220,13 @@ function applyManualDetails(
         normalizedSourceUrl: normalizedSourceUrl ?? listing.normalizedSourceUrl,
         sourceHost: normalizedSourceUrl ? new URL(normalizedSourceUrl).hostname.replace(/^www\./, "") : listing.sourceHost,
         manualLifestyleAngle: manualLifestyleAngle === undefined ? listing.manualLifestyleAngle : manualLifestyleAngle ?? undefined,
+        rawProviderMetadata:
+          manualFeaturedImageUrl === undefined
+            ? listing.rawProviderMetadata
+            : {
+                ...(listing.rawProviderMetadata || {}),
+                browserCaptureSelectedImageUrl: manualFeaturedImageUrl ?? null,
+              },
         manualUpdatedAt: timestamp,
       },
       {

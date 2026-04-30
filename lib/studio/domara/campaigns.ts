@@ -1120,10 +1120,17 @@ export function createRenderPublishScheduleNextPhase(): CasaHudCampaignRenderPub
   };
 }
 
-export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity: CasaHudOpportunityResult): CasaHudCampaign {
+export function buildCasaHudCampaignFromOpportunity(
+  userId: string,
+  opportunity: CasaHudOpportunityResult,
+  options?: {
+    campaignNameOverride?: string;
+  },
+): CasaHudCampaign {
   const timestamp = nowIso();
   const nonce = Math.random().toString(36).slice(2, 10);
   const selectedViralTitle = opportunity.selectedTitle.title.trim();
+  const campaignName = options?.campaignNameOverride?.trim() || selectedViralTitle;
   const marketRegionHint = opportunity.selectedTitle.regionHint?.trim() || opportunity.preferredMarket?.trim() || undefined;
   const emptyLocationData = createEmptyCasaHudLocationData();
   const emptyScriptData = createEmptyCasaHudScriptData();
@@ -1132,8 +1139,8 @@ export function buildCasaHudCampaignFromOpportunity(userId: string, opportunity:
   const emptyExecutionData = createEmptyCasaHudExecutionData();
 
   return {
-    id: stableCasaHudId("casahud-project", `${userId}:${selectedViralTitle}:${timestamp}:${nonce}`),
-    name: selectedViralTitle,
+    id: stableCasaHudId("casahud-project", `${userId}:${selectedViralTitle}:${campaignName}:${timestamp}:${nonce}`),
+    name: campaignName,
     selectedViralTitle,
     selectedTitle: opportunity.selectedTitle,
     titleCandidates: opportunity.titleCandidates,

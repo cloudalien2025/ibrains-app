@@ -1233,6 +1233,171 @@ describe("CasaFlix command center UI", () => {
     expect(propertyText).not.toContain("candidate listing pattern");
   });
 
+  it("requires confirmation and deletes campaigns from the campaign list", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns") && !init?.method) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(savedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}`) && init?.method === "DELETE") {
+        return new Response(JSON.stringify({ ok: true, deletedCampaignId: savedCampaign.id, message: "Campaign deleted permanently." }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    const confirmSpy = vi.spyOn(window, "confirm");
+    confirmSpy.mockReturnValueOnce(false);
+    confirmSpy.mockReturnValueOnce(true);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-delete-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(
+      fetchMock.mock.calls.some(
+        (call) => String(call[0]).endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}`) && (call[1] as RequestInit)?.method === "DELETE",
+      ),
+    ).toBe(false);
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-delete-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(
+      fetchMock.mock.calls.some(
+        (call) => String(call[0]).endsWith(`/api/studio/domara/campaigns/${savedCampaign.id}`) && (call[1] as RequestInit)?.method === "DELETE",
+      ),
+    ).toBe(true);
+    expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain("No campaigns yet");
+    expect(container.textContent || "").toContain("Campaign deleted permanently.");
+  });
+
+  it("removes imported listings from the shortlist and shows the no-real-listings state", async () => {
+    const removedCampaign: CasaHudCampaign = {
+      ...importedCampaign,
+      status: "ready_for_property_discovery",
+      listingCandidates: [],
+      approvedListings: [],
+      rejectedListings: [],
+      listingDiscoveryStatus: "not_started",
+      discoverySummary: {
+        headline: "No real property listings added yet.",
+        criteriaSummary: "Import listing URLs, use CasaFlix Importer, or connect a provider.",
+        providerSummary: "No real property listings are currently attached to this campaign.",
+        candidateCount: 0,
+        liveCandidateCount: 0,
+        fallbackCandidateCount: 0,
+        fallbackUsed: false,
+        warnings: [],
+        discoveredAt: "2026-04-30T09:10:00.000Z",
+      },
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(importedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: importedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (
+        url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}/listing-candidates/${importedCampaign.listingCandidates[0]!.id}`) &&
+        init?.method === "DELETE"
+      ) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaign: removedCampaign,
+            summary: toSummary(removedCampaign),
+            deletedListingId: importedCampaign.listingCandidates[0]!.id,
+            message: "Removed listing from shortlist.",
+          }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+    vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-remove-listing"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const propertiesText = container.querySelector('[data-testid="casahud-properties"]')?.textContent || "";
+    expect(propertiesText).toContain("No real property listings added yet");
+    expect(propertiesText).not.toContain("Apartment in Tropea");
+    expect(
+      fetchMock.mock.calls.some(
+        (call) =>
+          String(call[0]).includes(`/listing-candidates/${importedCampaign.listingCandidates[0]!.id}`) &&
+          (call[1] as RequestInit)?.method === "DELETE",
+      ),
+    ).toBe(true);
+  });
+
   it("resumes a campaign, shows the active campaign in the sidebar, and opens the focused location workspace", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

@@ -79,6 +79,10 @@ export type CasaHudOpportunityNextStep = {
 export type CasaHudOpportunityResult = {
   generatedAt: string;
   preferredMarket: string;
+  variationSeed?: string;
+  opportunityResearchSource?: "live_youtube" | "casaflix_strategy_fallback";
+  fallbackUsed?: boolean;
+  youtubeConnected?: boolean;
   researchBrief: CasaHudOpportunityResearchBrief;
   titleCandidates: CasaHudOpportunityTitleCandidate[];
   selectedTitle: CasaHudOpportunitySelectedTitle;
@@ -92,4 +96,5 @@ export type CasaHudOpportunityResult = {
 export type CasaHudOpportunityRequest = {
   userId: string;
   preferredMarket?: string;
+  variationSeed?: string;
 };

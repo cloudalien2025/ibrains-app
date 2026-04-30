@@ -40,7 +40,7 @@ describe("CasaFlix opportunity route", () => {
     const route = await import("@/app/api/studio/domara/opportunity/route");
     const request = new NextRequest("http://localhost/api/studio/domara/opportunity", {
       method: "POST",
-      body: JSON.stringify({ preferredMarket: "Italian real-estate YouTube" }),
+      body: JSON.stringify({ preferredMarket: "Italian real-estate YouTube", variationSeed: "route-seed-a" }),
     });
 
     const response = await route.POST(request);
@@ -49,6 +49,10 @@ describe("CasaFlix opportunity route", () => {
     expect(response.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.output.providerStatus.mode).toBe("casahud_patterns");
+    expect(payload.output.opportunityResearchSource).toBe("casaflix_strategy_fallback");
+    expect(payload.output.fallbackUsed).toBe(true);
+    expect(payload.output.youtubeConnected).toBe(false);
+    expect(payload.output.variationSeed).toBe("route-seed-a");
     expect(payload.output.titleCandidates.length).toBeGreaterThanOrEqual(3);
     expect(payload.output.titleCandidates.length).toBeLessThanOrEqual(10);
     expect(payload.output.selectedTitle.title).toBeTruthy();
@@ -60,6 +64,21 @@ describe("CasaFlix opportunity route", () => {
     const request = new NextRequest("http://localhost/api/studio/domara/opportunity", {
       method: "POST",
       body: JSON.stringify({ preferredMarket: 42 }),
+    });
+
+    const response = await route.POST(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error.code).toBe("INVALID_INPUT");
+  });
+
+  it("rejects invalid variationSeed input with a safe validation error", async () => {
+    const route = await import("@/app/api/studio/domara/opportunity/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/opportunity", {
+      method: "POST",
+      body: JSON.stringify({ preferredMarket: "Italian real-estate YouTube", variationSeed: 123 }),
     });
 
     const response = await route.POST(request);

@@ -79,7 +79,38 @@ export async function POST(request: NextRequest) {
       return errorResponse(400, parsed.message, "INVALID_INPUT", reqId);
     }
 
-    const campaign = await createCasaHudCampaignFromOpportunity(userId, parsed.opportunity);
+    const allowDuplicate = body && typeof body === "object" && (body as Record<string, unknown>).allowDuplicate === true;
+    const campaignNameOverrideRaw =
+      body && typeof body === "object" && typeof (body as Record<string, unknown>).campaignNameOverride === "string"
+        ? ((body as Record<string, unknown>).campaignNameOverride as string).trim()
+        : "";
+    const campaignNameOverride = campaignNameOverrideRaw || undefined;
+    const requestedCampaignName = campaignNameOverride || parsed.opportunity.selectedTitle.title.trim();
+
+    const existingCampaigns = await listCasaHudCampaignSummaries(userId, 100);
+    const duplicate = existingCampaigns.find(
+      (campaign) => campaign.name.trim().toLowerCase() === requestedCampaignName.trim().toLowerCase(),
+    );
+    if (duplicate && !allowDuplicate) {
+      return NextResponse.json(
+        {
+          ok: false,
+          reqId,
+          error: {
+            message:
+              'A campaign with this title already exists. Resume it, choose a new campaign name, or create a duplicate intentionally.',
+            code: "DUPLICATE_CAMPAIGN_TITLE",
+          },
+          duplicateCampaignId: duplicate.id,
+          duplicateCampaignName: duplicate.name,
+        },
+        { status: 409 },
+      );
+    }
+
+    const campaign = await createCasaHudCampaignFromOpportunity(userId, parsed.opportunity, {
+      campaignNameOverride,
+    });
     return NextResponse.json({
       ok: true,
       reqId,
