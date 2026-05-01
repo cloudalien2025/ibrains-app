@@ -441,6 +441,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.bedrooms}
                     onChange={(event) => setDraft((current) => (current ? { ...current, bedrooms: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-bedrooms-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">
@@ -449,6 +450,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.bathrooms}
                     onChange={(event) => setDraft((current) => (current ? { ...current, bathrooms: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-bathrooms-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">
@@ -457,6 +459,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.rooms}
                     onChange={(event) => setDraft((current) => (current ? { ...current, rooms: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-rooms-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">
@@ -465,6 +468,7 @@ export default function BrowserImportReviewClient() {
                     value={draft.sizeSqm}
                     onChange={(event) => setDraft((current) => (current ? { ...current, sizeSqm: event.target.value } : current))}
                     className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                    data-testid="casahud-browser-import-size-input"
                   />
                 </label>
                 <label className="grid gap-2 text-sm text-[#172033]">

@@ -9,8 +9,45 @@ function sanitizeNumericInput(value: string): { sign: "-" | ""; numeric: string 
     .replace(/[’'`´]/g, "")
     .replace(/\s+/g, "");
 
-  const sign: "-" | "" = normalized.includes("-") ? "-" : "";
-  const numeric = normalized.replace(/[^\d.,]/g, "");
+  const matches = Array.from(normalized.matchAll(/-?\d[\d.,]*/g));
+  if (matches.length === 0) {
+    return {
+      sign: "",
+      numeric: "",
+    };
+  }
+
+  let bestToken = matches[0]![0];
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (const match of matches) {
+    const token = match[0];
+    const index = match.index || 0;
+    const digits = token.replace(/[^\d]/g, "").length;
+    const before = normalized.slice(Math.max(0, index - 6), index).toLowerCase();
+    const after = normalized.slice(index + token.length, index + token.length + 6).toLowerCase();
+    const score =
+      digits +
+      (/[.,]/.test(token) ? 2 : 0) +
+      (/(?:€|eur|usd|\$)$/.test(before) ? 6 : 0) +
+      (/^(?:m2|m²|sqm|sq\.?m|mq)/.test(after) ? 3 : 0) +
+      (digits === 1 ? -1 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestToken = token;
+    }
+  }
+
+  const sign: "-" | "" = bestToken.startsWith("-") ? "-" : "";
+  const numeric = bestToken.replace(/^-/, "").replace(/[^\d.,]/g, "").replace(/[.,]+$/g, "");
+
+  if (!numeric) {
+    return {
+      sign: "",
+      numeric: "",
+    };
+  }
+
   return {
     sign,
     numeric,

@@ -12,6 +12,7 @@ describe("CasaFlix number parsing", () => {
   it("parses size values without collapsing thousands into decimals", () => {
     expect(parseLocalizedNumber("3,700 sqm")).toBe(3700);
     expect(parseLocalizedNumber("3.700 m²")).toBe(3700);
+    expect(parseLocalizedNumber("187 m2")).toBe(187);
     expect(parseLocalizedNumber("165 m²")).toBe(165);
     expect(parseLocalizedNumber("260.6 m²")).toBe(260.6);
   });

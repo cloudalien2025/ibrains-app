@@ -57,6 +57,40 @@ const browserPayload = {
   imageCandidates: [{ url: "https://images.example.com/capaccio-og.jpg", source: "og" as const }],
 };
 
+const immobiliareAccuracyPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T08:20:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+    description:
+      "Detached villa in Messina with visible facts for rooms, bathrooms, and interior surface.",
+    image: "https://images.example.com/acqualadrone-og.jpg",
+  },
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina
+    Price
+    EUR 300,000
+    Rooms
+    5+
+    Surface
+    187 m2
+    Bathrooms
+    2
+    +8 photos
+    11 Photos
+    1/11
+    Listing ID 127142643
+    Ref. 287
+    Description
+    Detached villa with panoramic exposure and outdoor space in the Acqualadrone area of Messina.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const }],
+};
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -137,5 +171,42 @@ describe("CasaFlix browser import review client", () => {
     expect(String((postCall?.[1] as RequestInit)?.body || "")).toContain('"price":"299000"');
     expect(String((postCall?.[1] as RequestInit)?.body || "")).toContain("Don't miss this opportunity");
     expect(container.textContent || "").toContain("Browser import saved.");
+  });
+
+  it("shows corrected Immobiliare parsed fields in review UI before save", async () => {
+    window.name = JSON.stringify(immobiliareAccuracyPayload);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaigns: [{ id: "campaign-parser-quality", name: "Parser Quality Campaign", status: "campaign_created" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<BrowserImportReviewClient />);
+    });
+    await flush();
+
+    const priceInput = container.querySelector('[data-testid="casahud-browser-import-price-input"]') as HTMLInputElement | null;
+    const roomsInput = container.querySelector('[data-testid="casahud-browser-import-rooms-input"]') as HTMLInputElement | null;
+    const bathroomsInput = container.querySelector('[data-testid="casahud-browser-import-bathrooms-input"]') as HTMLInputElement | null;
+    const bedroomsInput = container.querySelector('[data-testid="casahud-browser-import-bedrooms-input"]') as HTMLInputElement | null;
+    const sizeInput = container.querySelector('[data-testid="casahud-browser-import-size-input"]') as HTMLInputElement | null;
+
+    expect(priceInput?.value).toBe("300000");
+    expect(roomsInput?.value).toBe("5");
+    expect(bathroomsInput?.value).toBe("2");
+    expect(sizeInput?.value).toBe("187");
+    expect(sizeInput?.value).not.toBe("187287");
+    expect(bedroomsInput?.value).toBe("");
+    expect(container.textContent || "").not.toContain("8 bedrooms");
   });
 });

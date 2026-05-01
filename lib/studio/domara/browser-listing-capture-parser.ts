@@ -130,6 +130,8 @@ const LOCATION_FEATURE_FRAGMENT_PATTERN =
 
 const FACT_LINE_PATTERN =
   /^(price|prezzo|address|indirizzo|location|ubicazione|zona|comune|rooms?|locali|bedrooms?|camere(?: da letto)?|bathrooms?|bagni|surface|superficie|interior size|commercial surface|garden|giardino|land|terreno|garage|parking|posti auto|condition|stato|heating|riscaldamento|energy class|classe energetica|reference|riferimento|ref\.?|rif\.?|updated|aggiornato|advertiser|agency|agenzia|description|descrizione)\b/i;
+const PHOTO_NOISE_PATTERN = /\b(?:photo|photos|foto|images?|immagini)\b/i;
+const IMMOBILIARE_HOST_PATTERN = /(^|\.)immobiliare\.it$/i;
 
 function decodeHtmlEntities(value: string): string {
   return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entityToken) => {
@@ -218,6 +220,32 @@ function optionalNumber(value: unknown) {
 function normalizeNumberish(value: string | undefined) {
   if (!value) return undefined;
   return parseLocalizedNumber(normalizeWhitespace(value));
+}
+
+function escapeRegex(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function resolvePayloadHost(payload: CasaHudBrowserListingCapturePayload): string | undefined {
+  const explicitHost = cleanText(payload.providerHost);
+  if (explicitHost) return explicitHost.replace(/^www\./i, "").toLowerCase();
+
+  const candidateUrl = payload.canonicalUrl || payload.sourceUrl;
+  try {
+    return new URL(candidateUrl).hostname.replace(/^www\./i, "").toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
+function isImmobiliarePayload(payload: CasaHudBrowserListingCapturePayload): boolean {
+  const host = resolvePayloadHost(payload);
+  return Boolean(host && IMMOBILIARE_HOST_PATTERN.test(host));
+}
+
+function containsPhotoNoise(value: string | undefined): boolean {
+  if (!value) return false;
+  return PHOTO_NOISE_PATTERN.test(value) || /\b\d+\s*\/\s*\d+\b/.test(value);
 }
 
 function integerFromText(value: string | undefined) {
@@ -361,6 +389,29 @@ function findLineValue(lines: string[], patterns: RegExp[]) {
   return undefined;
 }
 
+function findLabeledValue(lines: string[], labels: string[], lookahead = 2) {
+  if (labels.length === 0) return undefined;
+  const labelPattern = new RegExp(`^(?:${labels.map((label) => escapeRegex(label)).join("|")})\\b[\\s:–—-]*(.*)$`, "i");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index]!;
+    const match = line.match(labelPattern);
+    if (!match) continue;
+
+    const inlineValue = cleanText(match[1]);
+    if (inlineValue) return inlineValue;
+
+    for (let offset = 1; offset <= lookahead; offset += 1) {
+      const nextLine = cleanText(lines[index + offset]);
+      if (!nextLine) continue;
+      if (FACT_LINE_PATTERN.test(nextLine)) break;
+      return nextLine;
+    }
+  }
+
+  return undefined;
+}
+
 function collectSectionText(lines: string[], headingPatterns: RegExp[], maxLines = 8) {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]!;
@@ -443,23 +494,84 @@ function cleanParkingText(value: string | undefined) {
   return normalized.charAt(0).toUpperCase() + normalized.slice(1);
 }
 
-function extractListingFacts(fullText: string, lines: string[]) {
+type BrowserListingFacts = {
+  rooms?: number;
+  bedrooms?: number;
+  bathrooms?: number;
+  sizeSqm?: number;
+  commercialSurfaceSqm?: number;
+  landSizeSqm?: number;
+  warnings: string[];
+};
+
+function parseAreaMeasurement(value: string | undefined) {
+  if (!value) return undefined;
+  const normalized = normalizeWhitespace(value);
+  if (!normalized) return undefined;
+
+  const explicitArea = normalized.match(
+    /(\d{1,3}(?:[.,]\d{3})+|\d{2,5}(?:[.,]\d+)?|\d{1,4})\s*(?:sqm|sq\.?\s*m|m²|m2|mq|metri quadrati|square meters?)/i,
+  )?.[1];
+  const parsed = parseLocalizedNumber(explicitArea || normalized);
+  if (parsed === undefined || parsed <= 0) return undefined;
+  if (parsed > 80_000) return undefined;
+  return parsed;
+}
+
+function pickPreferredAreaValue(
+  field: "interior" | "commercial" | "land",
+  primary: number | undefined,
+  fallback: number | undefined,
+  warnings: string[],
+) {
+  if (primary === undefined) return fallback;
+  if (fallback === undefined) return primary;
+
+  if (primary > 20_000 && fallback <= 10_000) {
+    warnings.push(`Used ${Math.round(fallback)} m² for ${field} area and ignored an implausible concatenated value.`);
+    return fallback;
+  }
+
+  if (field !== "land" && primary >= fallback * 15 && fallback >= 20) {
+    warnings.push(`Used ${Math.round(fallback)} m² for ${field} area from nearby clean facts.`);
+    return fallback;
+  }
+
+  return primary;
+}
+
+function extractListingFacts(
+  fullText: string,
+  lines: string[],
+  options?: {
+    strictBedroomLabels?: boolean;
+  },
+): BrowserListingFacts {
+  const warnings: string[] = [];
   const normalized = normalizeWhitespace(fullText);
-  const interiorLine = findLineValue(lines, [/^(?:interior size|interior surface|surface|superficie|size)\b[:\s-]*(.*)$/i]);
-  const commercialLine = findLineValue(lines, [/^(?:commercial surface|commercial area|superficie commerciale)\b[:\s-]*(.*)$/i]);
-  const landLine = findLineValue(lines, [/^(?:garden|land|plot|lot|giardino|terreno)\b[:\s-]*(.*)$/i]);
+  const strictBedroomLabels = Boolean(options?.strictBedroomLabels);
+
+  const interiorLine =
+    findLabeledValue(lines, ["interior size", "interior surface", "surface", "superficie", "size", "metratura"]) ||
+    findLineValue(lines, [/^(?:interior size|interior surface|surface|superficie|size|metratura)\b[:\s-]*(.*)$/i]);
+  const commercialLine =
+    findLabeledValue(lines, ["commercial surface", "commercial area", "superficie commerciale"]) ||
+    findLineValue(lines, [/^(?:commercial surface|commercial area|superficie commerciale)\b[:\s-]*(.*)$/i]);
+  const landLine =
+    findLabeledValue(lines, ["garden", "land", "plot", "lot", "giardino", "terreno"]) ||
+    findLineValue(lines, [/^(?:garden|land|plot|lot|giardino|terreno)\b[:\s-]*(.*)$/i]);
 
   const areaMentions: Array<{
     value: number;
     context: string;
   }> = [];
-  const areaPattern = /(\d[\d.,]*)\s*(?:sqm|sq\.?\s*m|m²|m2|square meters?)/gi;
+  const areaPattern = /(\d[\d.,]*)\s*(?:sqm|sq\.?\s*m|m²|m2|mq|metri quadrati|square meters?)/gi;
   let areaMatch: RegExpExecArray | null;
   while ((areaMatch = areaPattern.exec(normalized)) !== null) {
     const rawValue = areaMatch[1];
     if (!rawValue) continue;
-    const value = normalizeNumberish(rawValue);
-    if (value === undefined) continue;
+    const value = parseLocalizedNumber(rawValue);
+    if (value === undefined || value <= 0 || value > 80_000) continue;
     const index = areaMatch.index || 0;
     const context = normalized.slice(Math.max(0, index - 42), Math.min(normalized.length, index + 34)).toLowerCase();
     areaMentions.push({ value, context });
@@ -478,25 +590,29 @@ function extractListingFacts(fullText: string, lines: string[]) {
       );
     })?.value;
 
+  const bedroomLine = findLabeledValue(lines, ["bedrooms", "bedroom", "camere da letto", "camera da letto"]);
+  const bathroomLine = findLabeledValue(lines, ["bathrooms", "bathroom", "bagni", "bagno"]);
+  const roomLine = findLabeledValue(lines, ["rooms", "room", "locali"]);
+
+  const bedroomsFromLine = containsPhotoNoise(bedroomLine) ? undefined : integerFromText(bedroomLine);
+  const bedroomsFallback = strictBedroomLabels
+    ? undefined
+    : integerFromText(normalized.match(/(\d{1,2})\s*(?:bedrooms?|camere da letto|camere)\b/i)?.[1]);
+
+  const bathroomsFromLine = containsPhotoNoise(bathroomLine) ? undefined : integerFromText(bathroomLine);
+  const bathroomsFallback = integerFromText(normalized.match(/(\d{1,2})\s*(?:bathrooms?|bagni)\b/i)?.[1]);
+
+  const roomsFromLine = containsPhotoNoise(roomLine) ? undefined : integerFromText(roomLine);
+  const roomsFallback = integerFromText(normalized.match(/(\d{1,2}\+?)\s*(?:rooms?|locali)\b/i)?.[1]);
+
   return {
-    bedrooms:
-      integerFromText(findLineValue(lines, [/^(?:bedrooms?|camere da letto|camere)\b[:\s-]*(.*)$/i])) ||
-      integerFromText(normalized.match(/(\d{1,2})\s*(?:bedrooms?|camere da letto|camere)\b/i)?.[1]),
-    bathrooms:
-      integerFromText(findLineValue(lines, [/^(?:bathrooms?|bagni)\b[:\s-]*(.*)$/i])) ||
-      integerFromText(normalized.match(/(\d{1,2})\s*(?:bathrooms?|bagni)\b/i)?.[1]),
-    rooms:
-      integerFromText(findLineValue(lines, [/^(?:rooms|locali)\b[:\s-]*(.*)$/i])) ||
-      integerFromText(normalized.match(/(\d{1,2}\+?)\s*(?:rooms?|locali)\b/i)?.[1]),
-    sizeSqm:
-      normalizeNumberish(interiorLine) ||
-      firstAreaByContext("interior"),
-    commercialSurfaceSqm:
-      normalizeNumberish(commercialLine) ||
-      firstAreaByContext("commercial"),
-    landSizeSqm:
-      normalizeNumberish(landLine) ||
-      firstAreaByContext("land"),
+    bedrooms: bedroomsFromLine ?? bedroomsFallback,
+    bathrooms: bathroomsFromLine ?? bathroomsFallback,
+    rooms: roomsFromLine ?? roomsFallback,
+    sizeSqm: pickPreferredAreaValue("interior", parseAreaMeasurement(interiorLine), firstAreaByContext("interior"), warnings),
+    commercialSurfaceSqm: pickPreferredAreaValue("commercial", parseAreaMeasurement(commercialLine), firstAreaByContext("commercial"), warnings),
+    landSizeSqm: pickPreferredAreaValue("land", parseAreaMeasurement(landLine), firstAreaByContext("land"), warnings),
+    warnings,
   };
 }
 
@@ -644,7 +760,35 @@ function buildDisplayTitle(draft: BrowserParsedDraft) {
   return `${city} ${propertyType}${suffix}`;
 }
 
-function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): BrowserParsedDraft {
+function extractVisiblePriceCandidate(lines: string[], fullText: string, preferStructured = false) {
+  const labeledPrice = findLabeledValue(lines, ["price", "prezzo"]);
+  if (labeledPrice) return labeledPrice;
+
+  const lineBudget = preferStructured ? 140 : 80;
+  const visiblePriceLine = lines
+    .slice(0, lineBudget)
+    .find(
+      (line) =>
+        /((?:€|eur|usd|\$)\s*\d[\d.,\s]*|\d[\d.,\s]*\s*(?:€|eur|usd|\$))/i.test(line) &&
+        !/\b(?:phone|call|contact|telefono|annuncio|listing id|reference|rif)\b/i.test(line) &&
+        !containsPhotoNoise(line),
+    );
+  if (visiblePriceLine) return visiblePriceLine;
+
+  return (
+    fullText.match(/(?:price|prezzo)[^\d€$]{0,16}((?:€|eur|usd|\$)?\s*\d[\d.,\s]*\s*(?:€|eur|usd|\$)?)/i)?.[1] ||
+    fullText.match(/((?:€|eur|usd|\$)\s*\d[\d.,\s]*|\d[\d.,\s]*\s*(?:€|eur|usd|\$))/i)?.[1]
+  );
+}
+
+type BrowserDraftExtraction = {
+  draft: BrowserParsedDraft;
+  warnings: string[];
+};
+
+function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): BrowserDraftExtraction {
+  const warnings: string[] = [];
+  const isImmobiliare = isImmobiliarePayload(payload);
   const fullText = [payload.title, payload.openGraph?.title, payload.metaDescription, payload.openGraph?.description, payload.twitter?.description, payload.visibleText]
     .filter(Boolean)
     .map((value) => normalizeWhitespace(String(value), true))
@@ -658,13 +802,9 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   ]);
   const locationText = extractLocationText(lines, fullText, payload.title || payload.openGraph?.title || payload.twitter?.title);
   const addressParts = parseAddressParts(locationText);
-  const priceLine = findLineValue(lines, [/^(?:price|prezzo)\b[:\s-]*(.*)$/i]);
-  const fallbackPriceText =
-    fullText.match(/(?:price|prezzo)[^\d€$]{0,16}((?:€|eur|usd|\$)?\s*\d[\d.,\s]*\s*(?:€|eur|usd|\$)?)/i)?.[1] ||
-    fullText.match(/((?:€|eur|usd|\$)\s*\d[\d.,\s]*|\d[\d.,\s]*\s*(?:€|eur|usd|\$))/i)?.[1];
-  const priceInfo = normalizeCurrencyPrice(priceLine || fallbackPriceText);
-
-  const facts = extractListingFacts(fullText, lines);
+  const priceInfo = normalizeCurrencyPrice(extractVisiblePriceCandidate(lines, fullText, isImmobiliare));
+  const facts = extractListingFacts(fullText, lines, { strictBedroomLabels: isImmobiliare });
+  warnings.push(...facts.warnings);
 
   const propertyType =
     normalizePropertyType(
@@ -678,9 +818,7 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   const bedrooms = facts.bedrooms;
   const bathrooms = facts.bathrooms;
   const sizeSqm = facts.sizeSqm;
-  const commercialSurfaceSqm =
-    facts.commercialSurfaceSqm ||
-    normalizeNumberish(findLineValue(lines, [/^(?:commercial surface|commercial area)\b[:\s-]*(.*)$/i]));
+  const commercialSurfaceSqm = facts.commercialSurfaceSqm || parseAreaMeasurement(findLabeledValue(lines, ["commercial surface", "commercial area"]));
   const landSizeSqm = facts.landSizeSqm;
 
   const garageParking = cleanParkingText(
@@ -748,37 +886,40 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   ]).slice(0, 4);
 
   return {
-    title: finalTitle,
-    addressText: cleanedLocationText,
-    locationText: cleanedLocationText,
-    ...addressParts,
-    ...priceInfo,
-    propertyType,
-    rooms,
-    bedrooms,
-    bathrooms,
-    sizeSqm,
-    commercialSurfaceSqm,
-    landSizeSqm,
-    garageParking: cleanParkingText(garageParking),
-    balcony: balcony || undefined,
-    terrace: terrace || undefined,
-    condition: capitalizeWords(condition),
-    heating: cleanText(heating),
-    airConditioning: cleanText(airConditioning),
-    energyClass: cleanText(energyClass),
-    energyConsumption: cleanText(energyConsumption),
-    pricePerSquareMeter,
-    referenceCode: cleanText(referenceCode),
-    updatedDate: cleanText(updatedDate),
-    photoCount,
-    floorPlanCount,
-    virtualTour,
-    advertiser: cleanText(advertiser),
-    descriptionSnippet: description,
-    keyFeatures,
-    lifestyleHighlights,
-  } satisfies BrowserParsedDraft;
+    draft: {
+      title: finalTitle,
+      addressText: cleanedLocationText,
+      locationText: cleanedLocationText,
+      ...addressParts,
+      ...priceInfo,
+      propertyType,
+      rooms,
+      bedrooms,
+      bathrooms,
+      sizeSqm,
+      commercialSurfaceSqm,
+      landSizeSqm,
+      garageParking: cleanParkingText(garageParking),
+      balcony: balcony || undefined,
+      terrace: terrace || undefined,
+      condition: capitalizeWords(condition),
+      heating: cleanText(heating),
+      airConditioning: cleanText(airConditioning),
+      energyClass: cleanText(energyClass),
+      energyConsumption: cleanText(energyConsumption),
+      pricePerSquareMeter,
+      referenceCode: cleanText(referenceCode),
+      updatedDate: cleanText(updatedDate),
+      photoCount,
+      floorPlanCount,
+      virtualTour,
+      advertiser: cleanText(advertiser),
+      descriptionSnippet: description,
+      keyFeatures,
+      lifestyleHighlights,
+    } satisfies BrowserParsedDraft,
+    warnings,
+  };
 }
 
 function determineExtractionStatus(fieldCount: number, needsReviewCount: number): {
@@ -913,11 +1054,13 @@ export function parseCasaHudBrowserListingCapture(
   const canonicalSourceUrl = payload.canonicalUrl ? normalizeListingImportUrl(payload.canonicalUrl).toString() : undefined;
   const warnings: string[] = [];
   const images = normalizeImageCandidates(payload, canonicalSourceUrl || normalizedSourceUrl, warnings);
-  const draft = extractDraftFromCapture({
+  const parsedDraft = extractDraftFromCapture({
     ...payload,
     sourceUrl: normalizedSourceUrl,
     canonicalUrl: canonicalSourceUrl,
   });
+  warnings.push(...parsedDraft.warnings);
+  const draft = parsedDraft.draft;
 
   const imageUrls = images.map((candidate) => candidate.normalizedUrl);
   const extractionFields = extractionFieldNames(draft, imageUrls);

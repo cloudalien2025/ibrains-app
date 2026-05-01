@@ -170,6 +170,43 @@ const quarrataLandPayload = {
   imageCandidates: [{ url: "https://images.example.com/quarrata-og.jpg", source: "og" as const, width: 1600, height: 900 }],
 };
 
+const acqualadroneImmobiliarePayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T08:20:00.000Z",
+  captureVersion: "2026-05-01",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+    description:
+      "Detached villa in Messina with visible facts for rooms, bathrooms, and interior surface.",
+    image: "https://images.example.com/acqualadrone-og.jpg",
+  },
+  metaDescription:
+    "EUR 300,000 single family villa in Acqualadrone - Sparta, Messina with 5+ rooms, 2 bathrooms and 187 m2 surface.",
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina
+    Price
+    EUR 300,000
+    Rooms
+    5+
+    Surface
+    187 m2
+    Bathrooms
+    2
+    +8 photos
+    11 Photos
+    1/11
+    Listing ID 127142643
+    Ref. 287
+    Description
+    Detached villa with panoramic exposure and outdoor space in the Acqualadrone area of Messina.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
 describe("CasaFlix browser listing capture parser", () => {
   it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
     const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
@@ -251,6 +288,25 @@ describe("CasaFlix browser listing capture parser", () => {
 
     expect(euroLeading.candidate.price).toBe(299000);
     expect(euroTrailing.candidate.price).toBe(299000);
+  });
+
+  it("uses deterministic Immobiliare facts and avoids photo-count/concatenation corruption", () => {
+    const parsed = parseCasaHudBrowserListingCapture(acqualadroneImmobiliarePayload);
+    const keyFeaturesText = (parsed.candidate.keyFeatures || []).join(" ");
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.title).toContain("Acqualadrone");
+    expect(parsed.candidate.price).toBe(300000);
+    expect(parsed.candidate.currency).toBe("EUR");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.rooms).toBe(5);
+    expect(parsed.candidate.bathrooms).toBe(2);
+    expect(parsed.candidate.sizeSqm).toBe(187);
+    expect(parsed.candidate.sizeSqm).not.toBe(187287);
+    expect(parsed.candidate.bedrooms).toBeUndefined();
+    expect(parsed.candidate.bedrooms).not.toBe(8);
+    expect(keyFeaturesText).not.toMatch(/\b11\s*photos?\b/i);
+    expect(keyFeaturesText).not.toMatch(/\b1\s*\/\s*11\b/i);
   });
 
   it("parses thousands-separated dimensions and routes land/commercial/interior fields correctly", () => {
