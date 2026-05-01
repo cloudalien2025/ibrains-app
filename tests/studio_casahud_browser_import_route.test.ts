@@ -136,6 +136,42 @@ const browserPayload = {
   imageCandidates: [{ url: "https://images.example.com/capaccio-og.jpg", source: "og" as const }],
 };
 
+const immobiliareFieldAccuracyPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T08:20:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina",
+    description:
+      "Detached villa in Messina with visible facts for rooms, bathrooms, and interior surface.",
+    image: "https://images.example.com/acqualadrone-og.jpg",
+  },
+  metaDescription:
+    "EUR 300,000 single family villa in Acqualadrone - Sparta, Messina with 5+ rooms, 2 bathrooms and 187 m2 surface.",
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Sparta, Messina
+    Price
+    EUR 300,000
+    Rooms
+    5+
+    Surface
+    187 m2
+    Bathrooms
+    2
+    +8 photos
+    11 Photos
+    1/11
+    Listing ID 127142643
+    Ref. 287
+    Description
+    Detached villa with panoramic exposure and outdoor space in the Acqualadrone area of Messina.
+  `,
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const }],
+};
+
 const mocks = vi.hoisted(() => ({
   ensureUser: vi.fn(),
   resolveUserId: vi.fn(),
@@ -207,6 +243,30 @@ describe("CasaFlix browser import route", () => {
     expect(payload.listing.rawProviderMetadata.importMethod).toBe("browser_assisted");
     expect(payload.listing.casaHudNarrationSeed).toContain("€299,000");
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledOnce();
+  });
+
+  it("persists Immobiliare visible facts without photo-count or concatenated-size corruption", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/browser-import/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {
+      method: "POST",
+      body: JSON.stringify({
+        payload: immobiliareFieldAccuracyPayload,
+      }),
+    });
+
+    const response = await route.POST(request, { params: { id: "casahud-browser-import-route" } });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.listing.price).toBe(300000);
+    expect(payload.listing.currency).toBe("EUR");
+    expect(payload.listing.rooms).toBe(5);
+    expect(payload.listing.bathrooms).toBe(2);
+    expect(payload.listing.sizeSqm).toBe(187);
+    expect(payload.listing.sizeSqm).not.toBe(187287);
+    expect(payload.listing.bedrooms).toBeUndefined();
+    expect(payload.listing.needsReviewFields || []).not.toContain("price");
   });
 
   it("updates existing browser import by source URL instead of creating duplicate candidates", async () => {

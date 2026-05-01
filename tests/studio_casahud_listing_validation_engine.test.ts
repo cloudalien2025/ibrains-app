@@ -279,7 +279,7 @@ describe("CasaFlix listing validation engine", () => {
     ).toBe(true);
   });
 
-  it("does not auto-reject browser-assisted imports that have usable price, image, and dimensions", () => {
+  it("does not auto-reject browser-assisted imports when bedrooms are unknown but core facts are present", () => {
     const campaign = baseCampaign();
     campaign.listingCandidates = [
       {
@@ -295,6 +295,9 @@ describe("CasaFlix listing validation engine", () => {
         price: 260000,
         currency: "EUR",
         propertyType: "Single family villa",
+        bedrooms: undefined,
+        rooms: 5,
+        bathrooms: 2,
         sizeSqm: 165,
         landSizeSqm: 3700,
         descriptionSnippet: "Family villa with garden and strong relocation fit.",
@@ -315,6 +318,7 @@ describe("CasaFlix listing validation engine", () => {
     expect(listing?.scoreBreakdown.mediaAvailabilityScore).toBeGreaterThan(35);
     expect(listing?.scoreBreakdown.listingCompletenessScore).toBeGreaterThan(40);
     expect(listing?.validationStatus).not.toBe("rejected");
+    expect(listing?.bedrooms).toBeUndefined();
     expect(listing?.warnings.join(" ")).toContain("Manual edits can clear");
   });
 });
