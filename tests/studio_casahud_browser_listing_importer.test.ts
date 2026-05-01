@@ -207,6 +207,41 @@ const acqualadroneImmobiliarePayload = {
   imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const, width: 1600, height: 900 }],
 };
 
+const immobiliareBookmarkletCapturePayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T14:30:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+    description:
+      "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of",
+    image: "https://images.example.com/acqualadrone-bookmarklet-og.jpg",
+  },
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina
+    Single family villa
+    5+ rooms
+    2 bathrooms
+    187 m²
+    +8 photos
+    11 Photos
+    1/11
+    Description
+    Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of
+  `,
+  priceCandidates: [
+    "€ 300,000",
+    "300.000 €",
+  ],
+  descriptionCandidates: [
+    "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of living on the water. Set directly on the shoreline, it offers uninterrupted sea views, private outdoor terraces, and large living spaces designed for year-round comfort.",
+  ],
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-bookmarklet-og.jpg", source: "og" as const, width: 1600, height: 900 }],
+};
+
 describe("CasaFlix browser listing capture parser", () => {
   it("parses an Immobiliare-like browser payload into a browser-assisted listing candidate", () => {
     const parsed = parseCasaHudBrowserListingCapture(albanellaPayload);
@@ -307,6 +342,23 @@ describe("CasaFlix browser listing capture parser", () => {
     expect(parsed.candidate.bedrooms).not.toBe(8);
     expect(keyFeaturesText).not.toMatch(/\b11\s*photos?\b/i);
     expect(keyFeaturesText).not.toMatch(/\b1\s*\/\s*11\b/i);
+  });
+
+  it("prefers bookmarklet price/description candidates when visibleText is clipped", () => {
+    const parsed = parseCasaHudBrowserListingCapture(immobiliareBookmarkletCapturePayload);
+
+    expect(parsed.provider).toBe("immobiliare");
+    expect(parsed.candidate.price).toBe(300000);
+    expect(parsed.candidate.currency).toBe("EUR");
+    expect(parsed.candidate.priceText).toBe("€300,000");
+    expect(parsed.candidate.needsReviewFields || []).not.toContain("price");
+    expect(parsed.candidate.rooms).toBe(5);
+    expect(parsed.candidate.bathrooms).toBe(2);
+    expect(parsed.candidate.sizeSqm).toBe(187);
+    expect(parsed.candidate.bedrooms).toBeUndefined();
+    expect(parsed.candidate.descriptionSnippet).toContain("privilege of living on the water");
+    expect(parsed.candidate.descriptionSnippet).toContain("private outdoor terraces");
+    expect(parsed.candidate.descriptionSnippet).not.toMatch(/privilege of\\s*$/i);
   });
 
   it("parses thousands-separated dimensions and routes land/commercial/interior fields correctly", () => {

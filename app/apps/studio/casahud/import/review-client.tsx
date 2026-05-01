@@ -104,6 +104,14 @@ function formatExtractionStatus(status: CasaHudBrowserListingCapturePreview["ext
   return "Needs review";
 }
 
+function descriptionLooksIncomplete(value: string) {
+  const cleaned = value.trim();
+  if (!cleaned) return true;
+  if (cleaned.length < 100) return true;
+  if (/…$|\.{3}$/.test(cleaned)) return true;
+  return /\b(of|with|and|for|to|the|a|an|in|on)\s*$/i.test(cleaned);
+}
+
 export default function BrowserImportReviewClient() {
   const searchParams = useSearchParams();
   const initialCampaignId = searchParams.get("campaignId") || "";
@@ -170,6 +178,17 @@ export default function BrowserImportReviewClient() {
     () => campaigns.find((campaign) => campaign.id === campaignId) || null,
     [campaignId, campaigns],
   );
+  const actionableWarnings = useMemo(() => {
+    if (!preview || !draft) return [] as string[];
+    const warnings = [...(preview.warnings || [])];
+    if (!draft.price.trim()) {
+      warnings.push("Price was not detected from the visible page. Please enter it manually.");
+    }
+    if (descriptionLooksIncomplete(draft.descriptionSnippet || "")) {
+      warnings.push("Description may be incomplete. Review and paste the full listing description if needed.");
+    }
+    return Array.from(new Set(warnings));
+  }, [preview, draft]);
 
   async function onSave() {
     if (!payload || !preview || !draft) return;
@@ -257,6 +276,14 @@ export default function BrowserImportReviewClient() {
                   {formatExtractionStatus(preview.extractionStatus)}
                 </span>
               </div>
+
+              {actionableWarnings.length > 0 ? (
+                <div className="grid gap-2 rounded-[1.2rem] border border-[#F1C9C9] bg-[#FFF8F0] p-3 text-xs text-[#7C3030]" data-testid="casahud-browser-import-warnings">
+                  {actionableWarnings.slice(0, 4).map((warning) => (
+                    <p key={warning}>{warning}</p>
+                  ))}
+                </div>
+              ) : null}
 
               <div className="overflow-hidden rounded-[1.6rem] border border-[#E7DCCB] bg-[#F6F1E8]">
                 {draft.manualFeaturedImageUrl ? (

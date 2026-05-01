@@ -48,6 +48,8 @@ export type CasaHudBrowserListingCapturePayload = {
     description?: string;
     image?: string;
   };
+  priceCandidates?: string[];
+  descriptionCandidates?: string[];
   visibleText?: string;
   imageCandidates?: CasaHudBrowserListingCaptureImageCandidate[];
 };
@@ -217,6 +219,20 @@ function optionalNumber(value: unknown) {
   return parseLocalizedNumber(value);
 }
 
+function optionalStringList(value: unknown, options?: { maxItems?: number; maxChars?: number }): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const maxItems = options?.maxItems ?? 12;
+  const maxChars = options?.maxChars ?? 2_400;
+  return Array.from(
+    new Set(
+      value
+        .map((entry) => optionalString(entry))
+        .filter((entry): entry is string => Boolean(entry))
+        .map((entry) => (entry.length <= maxChars ? entry : `${entry.slice(0, maxChars)}…`)),
+    ),
+  ).slice(0, maxItems);
+}
+
 function normalizeNumberish(value: string | undefined) {
   if (!value) return undefined;
   return parseLocalizedNumber(normalizeWhitespace(value));
@@ -246,6 +262,15 @@ function isImmobiliarePayload(payload: CasaHudBrowserListingCapturePayload): boo
 function containsPhotoNoise(value: string | undefined): boolean {
   if (!value) return false;
   return PHOTO_NOISE_PATTERN.test(value) || /\b\d+\s*\/\s*\d+\b/.test(value);
+}
+
+function descriptionLooksIncomplete(value: string | undefined): boolean {
+  const cleaned = cleanText(value);
+  if (!cleaned) return true;
+  if (cleaned.length < 100) return true;
+  if (/…$|\.{3}$/.test(cleaned)) return true;
+  if (/\b(of|with|and|for|to|the|a|an|in|on)\s*$/i.test(cleaned)) return true;
+  return false;
 }
 
 function integerFromText(value: string | undefined) {
@@ -444,8 +469,16 @@ function pickBestDescription(candidates: Array<string | undefined>) {
   const normalized = uniqueStrings(candidates);
   if (normalized.length === 0) return undefined;
   normalized.sort((left, right) => {
-    const leftScore = (left.length >= 120 ? 26 : 0) + (/[.!?]$/.test(left) ? 12 : 0) + (/…$|\.{3}$/.test(left) ? -28 : 0);
-    const rightScore = (right.length >= 120 ? 26 : 0) + (/[.!?]$/.test(right) ? 12 : 0) + (/…$|\.{3}$/.test(right) ? -28 : 0);
+    const leftScore =
+      (left.length >= 120 ? 26 : 0) +
+      (/[.!?]$/.test(left) ? 12 : 0) +
+      (/…$|\.{3}$/.test(left) ? -28 : 0) +
+      (descriptionLooksIncomplete(left) ? -22 : 0);
+    const rightScore =
+      (right.length >= 120 ? 26 : 0) +
+      (/[.!?]$/.test(right) ? 12 : 0) +
+      (/…$|\.{3}$/.test(right) ? -28 : 0) +
+      (descriptionLooksIncomplete(right) ? -22 : 0);
     if (leftScore !== rightScore) return rightScore - leftScore;
     return right.length - left.length;
   });
@@ -456,8 +489,13 @@ function pickBestDescription(candidates: Array<string | undefined>) {
   }
   if (best.length <= 1_200) return best;
   const trimmed = best.slice(0, 1_200);
-  const lastBoundary = Math.max(trimmed.lastIndexOf("."), trimmed.lastIndexOf("!"), trimmed.lastIndexOf("?"), trimmed.lastIndexOf(" "));
-  return cleanText(trimmed.slice(0, lastBoundary > 220 ? lastBoundary : 1_200));
+  const punctuationBoundary = Math.max(trimmed.lastIndexOf("."), trimmed.lastIndexOf("!"), trimmed.lastIndexOf("?"));
+  const paragraphBoundary = trimmed.lastIndexOf("\n");
+  const wordBoundary = trimmed.lastIndexOf(" ");
+  const lastBoundary = Math.max(punctuationBoundary, paragraphBoundary, wordBoundary);
+  const bounded = cleanText(trimmed.slice(0, lastBoundary > 220 ? lastBoundary : 1_200));
+  if (!bounded) return undefined;
+  return /[.!?]$/.test(bounded) ? bounded : `${bounded}…`;
 }
 
 function cleanLocationText(value: string | undefined) {
@@ -760,7 +798,21 @@ function buildDisplayTitle(draft: BrowserParsedDraft) {
   return `${city} ${propertyType}${suffix}`;
 }
 
-function extractVisiblePriceCandidate(lines: string[], fullText: string, preferStructured = false) {
+function extractVisiblePriceCandidate(
+  payload: CasaHudBrowserListingCapturePayload,
+  lines: string[],
+  fullText: string,
+  preferStructured = false,
+) {
+  for (const candidate of payload.priceCandidates || []) {
+    if (
+      /((?:€|eur|usd|\$)\s*\d[\d.,\s]*|\d[\d.,\s]*\s*(?:€|eur|usd|\$))/i.test(candidate) &&
+      !/\b(?:photos?|foto|rooms?|bagni?|bathrooms?|bedrooms?|sqm|m²|m2)\b/i.test(candidate)
+    ) {
+      return candidate;
+    }
+  }
+
   const labeledPrice = findLabeledValue(lines, ["price", "prezzo"]);
   if (labeledPrice) return labeledPrice;
 
@@ -789,12 +841,22 @@ type BrowserDraftExtraction = {
 function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): BrowserDraftExtraction {
   const warnings: string[] = [];
   const isImmobiliare = isImmobiliarePayload(payload);
-  const fullText = [payload.title, payload.openGraph?.title, payload.metaDescription, payload.openGraph?.description, payload.twitter?.description, payload.visibleText]
+  const fullText = [
+    payload.title,
+    payload.openGraph?.title,
+    payload.metaDescription,
+    payload.openGraph?.description,
+    payload.twitter?.description,
+    ...(payload.descriptionCandidates || []),
+    ...(payload.priceCandidates || []),
+    payload.visibleText,
+  ]
     .filter(Boolean)
     .map((value) => normalizeWhitespace(String(value), true))
     .join("\n");
   const lines = splitVisibleLines(payload.visibleText);
   const description = pickBestDescription([
+    ...(payload.descriptionCandidates || []),
     extractDescriptionBlock(lines),
     payload.openGraph?.description,
     payload.twitter?.description,
@@ -802,9 +864,15 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   ]);
   const locationText = extractLocationText(lines, fullText, payload.title || payload.openGraph?.title || payload.twitter?.title);
   const addressParts = parseAddressParts(locationText);
-  const priceInfo = normalizeCurrencyPrice(extractVisiblePriceCandidate(lines, fullText, isImmobiliare));
+  const priceInfo = normalizeCurrencyPrice(extractVisiblePriceCandidate(payload, lines, fullText, isImmobiliare));
   const facts = extractListingFacts(fullText, lines, { strictBedroomLabels: isImmobiliare });
   warnings.push(...facts.warnings);
+  if (priceInfo.price === undefined) {
+    warnings.push("Price was not detected from the visible page. Please enter it manually.");
+  }
+  if (descriptionLooksIncomplete(description)) {
+    warnings.push("Description may be incomplete. Review and paste the full listing description if needed.");
+  }
 
   const propertyType =
     normalizePropertyType(
@@ -976,6 +1044,8 @@ function sanitizePayload(rawPayload: unknown): CasaHudBrowserListingCapturePaylo
   const sourceUrl = optionalString(payload.sourceUrl);
   if (!sourceUrl) throw new Error("CasaFlix browser import needs a source URL.");
 
+  const priceCandidates = optionalStringList(payload.priceCandidates, { maxItems: 12, maxChars: 240 });
+  const descriptionCandidates = optionalStringList(payload.descriptionCandidates, { maxItems: 8, maxChars: 6_000 });
   const visibleText = trimVisibleText(optionalString(payload.visibleText));
   const imageCandidates = Array.isArray(payload.imageCandidates)
     ? payload.imageCandidates
@@ -1027,6 +1097,8 @@ function sanitizePayload(rawPayload: unknown): CasaHudBrowserListingCapturePaylo
             image: optionalString((payload.twitter as Record<string, unknown>).image),
           }
         : undefined,
+    priceCandidates,
+    descriptionCandidates,
     visibleText,
     imageCandidates,
   };
@@ -1141,6 +1213,8 @@ export function parseCasaHudBrowserListingCapture(
       browserCaptureCanonicalUrl: canonicalSourceUrl || null,
       browserCaptureProviderHost: payload.providerHost || new URL(normalizedSourceUrl).hostname.replace(/^www\./, ""),
       browserCaptureVisibleTextLength: payload.visibleText?.length || 0,
+      browserCapturePriceCandidates: payload.priceCandidates || [],
+      browserCaptureDescriptionCandidates: payload.descriptionCandidates || [],
       browserCaptureImageCandidates: images.map((candidate) => ({
         url: candidate.normalizedUrl,
         alt: candidate.alt,
