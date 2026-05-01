@@ -165,7 +165,10 @@ function priceFitScore(listing: CasaHudListingCandidate, criteria: CasaHudListin
 function propertyTypeScore(listing: CasaHudListingCandidate, criteria: CasaHudListingSearchCriteria): number {
   if (criteria.propertyTypes.length === 0) return 70;
   const listingType = normalizePropertyType(listing.propertyType);
-  if (!listingType) return 34;
+  if (!listingType) {
+    if (listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import") return 52;
+    return 34;
+  }
 
   const normalizedCriteria = criteria.propertyTypes.map((type) => normalizePropertyType(type));
   if (normalizedCriteria.includes(listingType)) return 100;
@@ -328,6 +331,7 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
   const validationReasons: string[] = [];
   const warnings: string[] = [];
   let rejectionCategory: CasaHudValidatedListing["rejectionCategory"] | undefined;
+  const isImported = listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import";
 
   if (geography >= 80) {
     validationReasons.push("Location aligns with the campaign region.");
@@ -353,7 +357,9 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
     validationReasons.push("Property type fits the selected title angle.");
   } else if (propertyType < 35) {
     validationReasons.push("Property type does not fit the story angle yet.");
-    rejectionCategory = rejectionCategory || "property_type_mismatch";
+    if (!isImported || Boolean(listing.propertyType)) {
+      rejectionCategory = rejectionCategory || "property_type_mismatch";
+    }
   }
 
   if (feature >= 70) {
@@ -370,12 +376,16 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
 
   if (completeness < 45) {
     warnings.push("Listing details are incomplete.");
-    rejectionCategory = rejectionCategory || "incomplete";
+    if (!isImported || listing.manualCompletionStatus === "incomplete") {
+      rejectionCategory = rejectionCategory || "incomplete";
+    }
   }
 
   if (titleMatch < 45) {
     validationReasons.push("Overall story support is too weak.");
-    rejectionCategory = rejectionCategory || "weak_support";
+    if (!isImported || titleMatch < 35) {
+      rejectionCategory = rejectionCategory || "weak_support";
+    }
   }
 
   if (
@@ -387,6 +397,7 @@ function evaluateListing(listing: CasaHudListingCandidate, criteria: CasaHudList
         .map((field) => field.replace(/_/g, " "))
         .join(", ")}.`,
     );
+    warnings.push("Manual edits can clear these review fields and improve this listing's validation status.");
   }
 
   return {
@@ -423,26 +434,44 @@ function validationDecision(evaluation: ListingValidationEvaluation): {
   status: CasaHudValidatedListingStatus;
   rejectionCategory?: CasaHudValidatedListing["rejectionCategory"];
 } {
-  const { scoreBreakdown, rejectionCategory } = evaluation;
-  const hasHardMiss =
-    scoreBreakdown.titleMatchScore < 45 ||
-    scoreBreakdown.geographyScore < 35 ||
-    scoreBreakdown.propertyTypeScore < 35 ||
-    scoreBreakdown.priceFitScore < 20 ||
-    (scoreBreakdown.listingCompletenessScore < 35 && scoreBreakdown.mediaAvailabilityScore < 35);
+  const { scoreBreakdown, rejectionCategory, listing } = evaluation;
+  const isImported = listing.sourceType === "imported_url" || listing.sourceType === "browser_assisted_import";
+  const hardGeographyMiss = scoreBreakdown.geographyScore < 25;
+  const hardPriceMiss = scoreBreakdown.priceFitScore < 10;
+  const hardPropertyTypeMiss = scoreBreakdown.propertyTypeScore < 20 && Boolean(listing.propertyType);
+  const hardSupportMiss = scoreBreakdown.titleMatchScore < 35 && scoreBreakdown.overallScore < 48;
+  const hardDataGapMiss = scoreBreakdown.listingCompletenessScore < 22 && scoreBreakdown.mediaAvailabilityScore < 18;
+  const hasHardMiss = hardGeographyMiss || hardPriceMiss || hardPropertyTypeMiss || hardSupportMiss || hardDataGapMiss;
 
   if (hasHardMiss) {
+    if (isImported && !hardGeographyMiss && !hardPriceMiss && !hardPropertyTypeMiss) {
+      return { status: "needs_attention", rejectionCategory: rejectionCategory || "weak_support" };
+    }
     return {
       status: "rejected",
       rejectionCategory: rejectionCategory || "weak_support",
     };
   }
 
+  const approvalThresholds = isImported
+    ? {
+        overallScore: 64,
+        titleMatchScore: 54,
+        geographyScore: 46,
+        propertyTypeScore: 40,
+      }
+    : {
+        overallScore: 72,
+        titleMatchScore: 62,
+        geographyScore: 58,
+        propertyTypeScore: 48,
+      };
+
   if (
-    scoreBreakdown.overallScore >= 72 &&
-    scoreBreakdown.titleMatchScore >= 62 &&
-    scoreBreakdown.geographyScore >= 58 &&
-    scoreBreakdown.propertyTypeScore >= 48
+    scoreBreakdown.overallScore >= approvalThresholds.overallScore &&
+    scoreBreakdown.titleMatchScore >= approvalThresholds.titleMatchScore &&
+    scoreBreakdown.geographyScore >= approvalThresholds.geographyScore &&
+    scoreBreakdown.propertyTypeScore >= approvalThresholds.propertyTypeScore
   ) {
     return { status: "approved" };
   }

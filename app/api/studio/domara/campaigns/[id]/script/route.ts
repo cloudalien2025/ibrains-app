@@ -68,7 +68,7 @@ export async function POST(
     if (campaign.approvedListings.length === 0) {
       return errorResponse(
         409,
-        "CasaFlix needs approved listings before it can write the script.",
+        "CasaFlix needs approved listings before it can write the script. Run Validate and Rank Listings first.",
         "APPROVED_LISTINGS_REQUIRED",
         reqId,
       );

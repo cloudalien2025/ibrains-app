@@ -1,3 +1,5 @@
+import { parseLocalizedNumber } from "@/lib/studio/domara/number-parsing";
+
 export type DomaraListingHtmlExtraction = {
   title?: string;
   description?: string;
@@ -41,9 +43,7 @@ function resolveUrl(value: string, baseUrl: string): string | null {
 }
 
 function normalizeNumberish(value: unknown): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  const parsed = Number(String(value).replace(/,/g, ".").replace(/[^0-9.\-]/g, ""));
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return parseLocalizedNumber(value);
 }
 
 function readJsonPath(source: Record<string, unknown>, paths: string[]): unknown {

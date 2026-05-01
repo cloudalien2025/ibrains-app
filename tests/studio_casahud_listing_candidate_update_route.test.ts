@@ -205,6 +205,140 @@ describe("CasaFlix imported listing update route", () => {
     expect(payload.listing.casaHudNarrationSeed).toContain("Southern Italy villa living");
   });
 
+  it("normalizes manual price strings so thousands separators are preserved", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
+
+    const commaResponse = await route.PATCH(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            price: "260,000",
+          }),
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+      },
+    );
+    const commaPayload = await commaResponse.json();
+    expect(commaResponse.status).toBe(200);
+    expect(commaPayload.listing.price).toBe(260000);
+    expect(commaPayload.listing.price).not.toBe(260);
+
+    const currencyResponse = await route.PATCH(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            price: "€260,000",
+            currency: "EUR",
+          }),
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+      },
+    );
+    const currencyPayload = await currencyResponse.json();
+    expect(currencyResponse.status).toBe(200);
+    expect(currencyPayload.listing.price).toBe(260000);
+    expect(currencyPayload.listing.currency).toBe("EUR");
+
+    const dotResponse = await route.PATCH(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            price: "260.000",
+          }),
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+      },
+    );
+    const dotPayload = await dotResponse.json();
+    expect(dotResponse.status).toBe(200);
+    expect(dotPayload.listing.price).toBe(260000);
+    expect(dotPayload.listing.price).not.toBe(260);
+  });
+
+  it("revalidates corrected imported listings so they can move out of rejected", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
+    const campaign = buildCampaign();
+    campaign.status = "listing_candidates_validated";
+    campaign.listingValidationStatus = "listing_candidates_validated";
+    campaign.approvedListings = [];
+    campaign.rejectedListings = [
+      {
+        ...campaign.listingCandidates[0]!,
+        validationStatus: "rejected",
+        overallScore: 33,
+        scoreBreakdown: {
+          titleMatchScore: 34,
+          geographyScore: 40,
+          priceFitScore: 36,
+          propertyTypeScore: 34,
+          featureClaimScore: 30,
+          mediaAvailabilityScore: 8,
+          listingCompletenessScore: 16,
+          providerQualityScore: 80,
+          uniquenessScore: 100,
+          overallScore: 33,
+        },
+        validationReasons: ["Overall story support is too weak."],
+        warnings: ["Listing details are incomplete."],
+        rejectionCategory: "weak_support",
+      },
+    ];
+    campaign.listingValidationSummary = {
+      headline: "The discovered listings only partly support the current story.",
+      rankingExplanation: "Validation run complete.",
+      discoveredCount: 1,
+      approvedCount: 0,
+      rejectedCount: 1,
+      needsAttentionCount: 0,
+      titleSupportConfidence: 30,
+      warnings: [],
+      completedAt: "2026-04-29T12:00:00.000Z",
+    };
+    mocks.getCasaHudCampaign.mockResolvedValue(campaign);
+
+    const response = await route.PATCH(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            title: "Albanella Villa with Garden",
+            price: "260,000",
+            locationText: "Albanella, Salerno, Campania, Italy",
+            propertyType: "Single family villa",
+            bedrooms: 3,
+            bathrooms: 2,
+            sizeSqm: 165,
+            landSizeSqm: "3,700",
+            descriptionSnippet: "Spacious villa with outdoor space and strong relocation fit.",
+            manualFeaturedImageUrl: "https://images.example.com/albanella-villa-manual.jpg",
+          }),
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+      },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.campaign.listingValidationStatus).toBe("listing_candidates_validated");
+    expect(payload.campaign.approvedListings.some((listing: { id: string }) => listing.id === "imported-listing-1")).toBe(true);
+    expect(payload.campaign.rejectedListings.some((listing: { id: string }) => listing.id === "imported-listing-1")).toBe(false);
+  });
+
   it("removes a listing candidate and updates campaign counts", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
     const request = new NextRequest(
@@ -282,6 +416,29 @@ describe("CasaFlix imported listing update route", () => {
       warnings: [],
       completedAt: "2026-04-29T12:00:00.000Z",
     };
+    campaign.scriptGenerationStatus = "script_generated";
+    campaign.scriptSummary = "A script that still references the old approved listing.";
+    campaign.fullScriptText = "We are reviewing 6 validated listings...";
+    campaign.scriptSegments = [
+      {
+        id: "segment-property",
+        title: "Property 1",
+        segmentType: "property_focus",
+        narration: "Old listing narration",
+        durationSeconds: 20,
+        associatedListingId: "approved-imported-1",
+      },
+    ];
+    campaign.propertySegments = [
+      {
+        listingId: "approved-imported-1",
+        title: "Capaccio imported listing",
+        locationText: "Capaccio Paestum, Salerno, Campania, Italy",
+        narration: "Old listing narration",
+        whyItMadeTheCut: "Old rationale",
+        supportedFacts: ["EUR 299,000"],
+      },
+    ];
     mocks.getCasaHudCampaign.mockResolvedValue(campaign);
 
     const response = await route.DELETE(
@@ -298,6 +455,10 @@ describe("CasaFlix imported listing update route", () => {
     const payload = await response.json();
     expect(response.status).toBe(200);
     expect(payload.campaign.approvedListings).toHaveLength(0);
+    expect(payload.campaign.scriptGenerationStatus).toBe("not_started");
+    expect(payload.campaign.fullScriptText).toBeNull();
+    expect(payload.campaign.scriptSegments).toHaveLength(0);
+    expect(payload.campaign.propertySegments).toHaveLength(0);
 
     const missingResponse = await route.DELETE(
       new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/missing", {

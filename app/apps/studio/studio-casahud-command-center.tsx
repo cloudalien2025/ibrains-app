@@ -218,7 +218,7 @@ type CasaHudScriptNarrativePayload = {
   campaign?: CasaHudCampaign;
   summary?: CasaHudCampaignSummary;
   message?: string;
-  error?: { message?: string };
+  error?: { message?: string; code?: string };
 };
 
 type CasaHudMediaPlanPayload = {
@@ -1150,12 +1150,17 @@ function buildPhaseProgress(campaign: CasaHudCampaign | null): CasaHudPhaseProgr
     {
       id: "script",
       label: "Script",
-      complete: Boolean(campaign?.scriptGenerationStatus === "script_generated"),
+      complete: Boolean(campaign?.scriptGenerationStatus === "script_generated" && campaign && !isScriptStale(campaign)),
     },
     {
       id: "media",
       label: "Media",
-      complete: Boolean(campaign?.scriptGenerationStatus === "script_generated" && campaign?.mediaPlanningStatus === "media_plan_built"),
+      complete: Boolean(
+        campaign?.scriptGenerationStatus === "script_generated" &&
+          campaign &&
+          !isScriptStale(campaign) &&
+          campaign?.mediaPlanningStatus === "media_plan_built",
+      ),
     },
     {
       id: "review",
@@ -1205,16 +1210,32 @@ function buildCompletedArtifacts(campaign: CasaHudCampaign | null) {
   if (!campaign) return [];
   const realCandidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
   const realApproved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
+  const scriptStale = isScriptStale(campaign);
   return [
     campaign.selectedTitle?.title ? "Selected title and opportunity brief" : null,
     realCandidates.length > 0 ? `${formatCountLabel(realCandidates.length, "discovered property")}` : null,
     realApproved.length > 0 ? `${formatCountLabel(realApproved.length, "approved property")}` : null,
     campaign.locationStory?.headline ? "Location story and map context" : null,
-    campaign.scriptGenerationStatus === "script_generated" ? "Scene narration and script package" : null,
+    campaign.scriptGenerationStatus === "script_generated" && !scriptStale ? "Scene narration and script package" : null,
     campaign.mediaPlanningStatus === "media_plan_built" ? "Scene asset mapping and media coverage" : null,
     campaign.youtubePackageStatus === "package_prepared" ? "YouTube package and review summary" : null,
     campaign.renderOutput ? "Render output or preview package" : null,
   ].filter(Boolean) as string[];
+}
+
+function isScriptStale(campaign: CasaHudCampaign): boolean {
+  const staleWarning = (campaign.scriptWarnings || []).some((warning) =>
+    /Regenerate Script from Current Listings/i.test(warning),
+  );
+  const approvedIds = campaign.approvedListings.filter((listing) => !isDemoListing(listing)).map((listing) => listing.id);
+  const scriptListingIds = Array.from(new Set(campaign.propertySegments.map((segment) => segment.listingId)));
+  const hasGeneratedScript = campaign.scriptGenerationStatus === "script_generated";
+
+  if (!hasGeneratedScript) return staleWarning;
+  if (approvedIds.length === 0) return true;
+  if (scriptListingIds.length === 0) return true;
+  if (approvedIds.length !== scriptListingIds.length) return true;
+  return approvedIds.some((id) => !scriptListingIds.includes(id));
 }
 
 function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
@@ -1262,7 +1283,8 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
     };
   }
 
-  if (campaign.scriptGenerationStatus === "script_generated") {
+  const scriptStale = isScriptStale(campaign);
+  if (campaign.scriptGenerationStatus === "script_generated" && !scriptStale) {
     return {
       actionId: "build_media_plan",
       workspace: "media",
@@ -1277,10 +1299,12 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
     return {
       actionId: "generate_script",
       workspace: "script",
-      statusLabel: "Needs script",
-      title: "Generate the scene-by-scene script",
-      detail: "Use the validated shortlist and location story to build narration, scene flow, and on-screen text.",
-      ctaLabel: "Generate Script",
+      statusLabel: scriptStale ? "Script stale" : "Needs script",
+      title: scriptStale ? "Regenerate from current listings" : "Generate the scene-by-scene script",
+      detail: scriptStale
+        ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and counts match the current approved shortlist."
+        : "Use the validated shortlist and location story to build narration, scene flow, and on-screen text.",
+      ctaLabel: scriptStale ? "Regenerate Script from Current Listings" : "Generate Script",
     };
   }
 
@@ -1842,11 +1866,8 @@ export default function StudioCasaHudCommandCenter() {
   const warnings = useMemo(() => buildCampaignWarnings(activeCampaign), [activeCampaign]);
   const blockers = useMemo(() => buildCampaignBlockers(activeCampaign), [activeCampaign]);
   const completedArtifacts = useMemo(() => buildCompletedArtifacts(activeCampaign), [activeCampaign]);
+  const scriptIsStale = useMemo(() => (activeCampaign ? isScriptStale(activeCampaign) : false), [activeCampaign]);
   const videoScenes = useMemo(() => buildVideoScenes(activeCampaign), [activeCampaign]);
-  const visibleCampaignCandidates = useMemo(
-    () => (activeCampaign ? activeCampaign.listingCandidates.filter((listing) => !isDemoListing(listing)) : []),
-    [activeCampaign],
-  );
   const visibleCampaignApproved = useMemo(
     () => (activeCampaign ? activeCampaign.approvedListings.filter((listing) => !isDemoListing(listing)) : []),
     [activeCampaign],
@@ -1855,6 +1876,14 @@ export default function StudioCasaHudCommandCenter() {
     () => (activeCampaign ? activeCampaign.rejectedListings.filter((listing) => !isDemoListing(listing)) : []),
     [activeCampaign],
   );
+  const visibleCampaignCandidates = useMemo(() => {
+    if (!activeCampaign) return [];
+    const classifiedIds = new Set<string>([
+      ...activeCampaign.approvedListings.map((listing) => listing.id),
+      ...activeCampaign.rejectedListings.map((listing) => listing.id),
+    ]);
+    return activeCampaign.listingCandidates.filter((listing) => !isDemoListing(listing) && !classifiedIds.has(listing.id));
+  }, [activeCampaign]);
   const legacyDemoListingCount = useMemo(() => {
     if (!activeCampaign) return 0;
     return (
@@ -2628,6 +2657,14 @@ export default function StudioCasaHudCommandCenter() {
       });
       const payload = (await response.json().catch(() => null)) as CasaHudScriptNarrativePayload | null;
       if (!response.ok || !payload?.ok || !payload.campaign) {
+        if (payload?.error?.code === "APPROVED_LISTINGS_REQUIRED") {
+          openWorkspace("properties");
+          throw new Error(`${payload?.error?.message || "Approved listings are required."} Validate and Rank Listings to continue.`);
+        }
+        if (payload?.error?.code === "LOCATION_INTELLIGENCE_REQUIRED") {
+          openWorkspace("location");
+          throw new Error(payload?.error?.message || "Location intelligence is required before script generation.");
+        }
         throw new Error(payload?.error?.message || "Could not generate the script right now.");
       }
       setActiveCampaign(payload.campaign);
@@ -3593,7 +3630,7 @@ export default function StudioCasaHudCommandCenter() {
       >
         {campaignScriptingId === activeCampaign.id ? renderProgressList(scriptSteps, scriptProgressIndex, "loading", "casahud-script-progress") : null}
 
-        {activeCampaign.scriptGenerationStatus === "script_generated" ? (
+        {activeCampaign.scriptGenerationStatus === "script_generated" && !scriptIsStale ? (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
             <section className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
               <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Master Script</p>
@@ -3628,9 +3665,35 @@ export default function StudioCasaHudCommandCenter() {
           </div>
         ) : (
           <EmptyState
-            title="Script not ready"
-            description="Generate the script after location is complete."
-            action={renderNextActionButton(deriveNextStep(activeCampaign))}
+            title={
+              visibleCampaignApproved.length === 0
+                ? "Approved listings required"
+                : scriptIsStale
+                  ? "Script is stale"
+                  : "Script not ready"
+            }
+            description={
+              visibleCampaignApproved.length === 0
+                ? "Validate and Rank Listings before script generation so CasaFlix uses the current approved shortlist."
+                : scriptIsStale
+                  ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and listing counts stay accurate."
+                  : "Generate the script after location is complete."
+            }
+            action={
+              visibleCampaignApproved.length === 0 ? (
+                <button
+                  type="button"
+                  className={primaryButtonClass}
+                  onClick={() => void onValidateListings()}
+                  disabled={!activeCampaign || campaignValidatingId === activeCampaign.id}
+                  data-testid="casahud-validate-listings-cta"
+                >
+                  {campaignValidatingId === activeCampaign?.id ? "Validating Listings..." : "Validate and Rank Listings"}
+                </button>
+              ) : (
+                renderNextActionButton(deriveNextStep(activeCampaign))
+              )
+            }
           />
         )}
       </WorkspacePage>
@@ -3652,7 +3715,7 @@ export default function StudioCasaHudCommandCenter() {
       >
         {campaignMediaPlanningId === activeCampaign.id ? <div className="mt-4">{renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress")}</div> : null}
 
-        {activeCampaign.scriptGenerationStatus === "script_generated" ? (
+        {activeCampaign.scriptGenerationStatus === "script_generated" && !scriptIsStale ? (
           <div className="grid gap-4">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.06fr)_minmax(0,0.94fr)]">
               <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4">
@@ -4786,7 +4849,7 @@ export default function StudioCasaHudCommandCenter() {
         {campaignScriptingId === activeCampaign.id ? renderProgressList(scriptSteps, scriptProgressIndex, "loading", "casahud-script-progress") : null}
         {campaignMediaPlanningId === activeCampaign.id ? <div className="mt-4">{renderProgressList(mediaSteps, mediaProgressIndex, "loading", "casahud-media-progress")}</div> : null}
 
-        {activeCampaign.scriptGenerationStatus === "script_generated" ? (
+        {activeCampaign.scriptGenerationStatus === "script_generated" && !scriptIsStale ? (
           <div className="grid gap-6">
             <div className="grid gap-4 xl:grid-cols-[1.08fr_0.92fr]">
               <div className="rounded-[1.6rem] border border-[#D4DDF2] bg-[#F7FAFF] p-5">

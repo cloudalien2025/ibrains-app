@@ -278,4 +278,43 @@ describe("CasaFlix listing validation engine", () => {
       result.validationWarnings.some((warning) => /support/i.test(warning)),
     ).toBe(true);
   });
+
+  it("does not auto-reject browser-assisted imports that have usable price, image, and dimensions", () => {
+    const campaign = baseCampaign();
+    campaign.listingCandidates = [
+      {
+        ...campaign.listingCandidates[0]!,
+        id: "browser-import-1",
+        sourceType: "browser_assisted_import",
+        provider: "immobiliare",
+        title: "Capaccio family villa",
+        locationText: "Capaccio Paestum, Salerno, Campania, Italy",
+        city: "Capaccio Paestum",
+        region: "Campania",
+        country: "Italy",
+        price: 260000,
+        currency: "EUR",
+        propertyType: "Single family villa",
+        sizeSqm: 165,
+        landSizeSqm: 3700,
+        descriptionSnippet: "Family villa with garden and strong relocation fit.",
+        imageUrls: ["https://images.example.com/capaccio-og.jpg"],
+        imageCount: 1,
+        photoAvailability: "limited",
+        needsReviewFields: ["energy"],
+        manualCompletionStatus: "partially_completed",
+        features: ["165 m² interior", "3,700 m² land", "garden"],
+      },
+    ];
+
+    const result = runCasaHudListingValidation(campaign);
+    const listing = result.approvedListings[0] || result.rejectedListings[0];
+
+    expect(listing?.id).toBe("browser-import-1");
+    expect(listing?.scoreBreakdown.priceFitScore).toBeGreaterThan(60);
+    expect(listing?.scoreBreakdown.mediaAvailabilityScore).toBeGreaterThan(35);
+    expect(listing?.scoreBreakdown.listingCompletenessScore).toBeGreaterThan(40);
+    expect(listing?.validationStatus).not.toBe("rejected");
+    expect(listing?.warnings.join(" ")).toContain("Manual edits can clear");
+  });
 });

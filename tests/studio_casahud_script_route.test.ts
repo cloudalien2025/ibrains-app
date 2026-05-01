@@ -218,10 +218,9 @@ const locationReadyCampaign: CasaHudCampaign = {
 
 const scriptResult = {
   scriptGenerationStatus: "script_generated" as const,
-  scriptSummary:
-    "A relocation-oriented narrative that uses the validated shortlist and place story to turn the title into a believable daily-life video concept.",
+  scriptSummary: "A relocation-focused script built from the current approved shortlist and location context.",
   openingHook:
-    "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+    "Could you really build a comfortable life in Southern Italy without blowing your budget? That's what we're testing today.",
   estimatedDurationSeconds: 104,
   tone: "Premium, clear, cinematic where appropriate, and tightly grounded in validated property and location support.",
   scriptSegments: [
@@ -230,7 +229,7 @@ const scriptResult = {
       title: "Opening Hook",
       segmentType: "hook" as const,
       narration:
-        "If this title is going to resonate, the opening has to answer one question fast: what does life in Southern Italy actually look like when the homes are real and the budget still matters?",
+        "Could you really build a comfortable life in Southern Italy without blowing your budget? That's what we're testing today.",
       durationSeconds: 14,
     },
   ],
@@ -258,7 +257,7 @@ const scriptResult = {
     used: true,
     detail: "Using deterministic CasaFlix script composition.",
   },
-  fullScriptText: "Opening Hook\nIf this title is going to resonate...",
+  fullScriptText: "Could you really build a comfortable life in Southern Italy without blowing your budget? That's what we're testing today.",
   ...createEmptyCasaHudMediaPlanData(),
 };
 
@@ -332,7 +331,10 @@ describe("CasaFlix script generation route", () => {
       }),
       { params: { id: locationReadyCampaign.id } },
     );
+    const noListingsPayload = await noListingsResponse.json();
     expect(noListingsResponse.status).toBe(409);
+    expect(noListingsPayload.error.code).toBe("APPROVED_LISTINGS_REQUIRED");
+    expect(noListingsPayload.error.message).toContain("Validate and Rank Listings");
 
     mocks.getCasaHudCampaign.mockResolvedValueOnce({
       ...locationReadyCampaign,
@@ -351,7 +353,9 @@ describe("CasaFlix script generation route", () => {
       }),
       { params: { id: locationReadyCampaign.id } },
     );
+    const noLocationPayload = await noLocationResponse.json();
     expect(noLocationResponse.status).toBe(409);
+    expect(noLocationPayload.error.code).toBe("LOCATION_INTELLIGENCE_REQUIRED");
   });
 
   it("persists the script package and returns the updated campaign", async () => {
@@ -372,6 +376,9 @@ describe("CasaFlix script generation route", () => {
     expect(payload.campaign.nextPhase.key).toBe("media_planning_asset_assembly");
     expect(payload.summary.scriptGenerationStatus).toBe("script_generated");
     expect(payload.summary.scriptSummary).toBe(scriptResult.scriptSummary);
+    expect(payload.campaign.propertySegments).toHaveLength(payload.campaign.approvedListings.length);
+    expect(payload.campaign.fullScriptText).not.toContain("Video Premise");
+    expect(payload.campaign.fullScriptText).not.toContain("If this title is going to resonate");
     expect(mocks.runCasaHudScriptNarrative).toHaveBeenCalledTimes(1);
     expect(mocks.saveCasaHudCampaign).toHaveBeenCalledTimes(1);
   });
