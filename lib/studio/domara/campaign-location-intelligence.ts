@@ -87,6 +87,8 @@ export type CasaHudLocationIntelligenceSummary = {
   warningCount: number;
   generatedAt: string;
   fallbackUsed: boolean;
+  listingFingerprint?: string;
+  sourceLocations?: string[];
 };
 
 export type CasaHudCampaignFutureLocationState = {
@@ -249,7 +251,9 @@ function isLocationIntelligenceSummary(value: unknown): value is CasaHudLocation
     isNonEmptyString(value.coverageSummary) &&
     isFiniteNumber(value.warningCount) &&
     isNonEmptyString(value.generatedAt) &&
-    typeof value.fallbackUsed === "boolean"
+    typeof value.fallbackUsed === "boolean" &&
+    (value.listingFingerprint === undefined || isNonEmptyString(value.listingFingerprint)) &&
+    (value.sourceLocations === undefined || isStringArray(value.sourceLocations))
   );
 }
 

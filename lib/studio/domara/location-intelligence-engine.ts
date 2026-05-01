@@ -10,6 +10,10 @@ import {
   createEmptyCasaHudLocationData,
 } from "@/lib/studio/domara/campaign-location-intelligence";
 import type { CasaHudCampaign, CasaHudValidatedListing } from "@/lib/studio/domara/campaigns";
+import {
+  computeApprovedListingsLocationFingerprint,
+  deriveApprovedListingLocationLabels,
+} from "@/lib/studio/domara/location-intelligence-fingerprint";
 
 type FetchLike = typeof fetch;
 
@@ -814,6 +818,8 @@ function buildSummary(
   providerStatuses: CasaHudLocationProviderStatus[],
   warnings: string[],
   generatedAt: string,
+  sourceLocations: string[],
+  listingFingerprint: string,
 ): CasaHudLocationData["locationIntelligenceSummary"] {
   const locations = uniqueStrings(contexts.map((context) => primaryLocationLabel(context)));
   const fallbackUsed = providerStatuses.some((status) => status.provider === "casahud_location_patterns" && status.used);
@@ -825,6 +831,8 @@ function buildSummary(
     warningCount: warnings.length,
     generatedAt,
     fallbackUsed,
+    listingFingerprint,
+    sourceLocations,
   };
 }
 
@@ -892,6 +900,8 @@ export async function runCasaHudLocationIntelligence(
   );
 
   const providerStatuses = buildProviderStatuses(listingContexts, googlePlacesApiKey, mapboxAccessToken, googleMetrics, mapboxMetrics);
+  const listingFingerprint = computeApprovedListingsLocationFingerprint(approvedListings);
+  const sourceLocations = deriveApprovedListingLocationLabels(approvedListings);
   const locationWarnings = uniqueStrings([
     ...listingContexts.flatMap((context) => context.warnings),
     ...providerStatuses.flatMap((status) => [status.warning]),
@@ -901,7 +911,14 @@ export async function runCasaHudLocationIntelligence(
   const localHighlights = buildLocalHighlights(listingContexts);
   const mapSceneIdeas = buildMapSceneIdeas(listingContexts);
   const listingLocationInsights: CasaHudListingLocationInsight[] = listingContexts.map((context) => buildListingInsight(context));
-  const locationIntelligenceSummary = buildSummary(listingContexts, providerStatuses, locationWarnings, generatedAt);
+  const locationIntelligenceSummary = buildSummary(
+    listingContexts,
+    providerStatuses,
+    locationWarnings,
+    generatedAt,
+    sourceLocations,
+    listingFingerprint,
+  );
   const emptyState = createEmptyCasaHudLocationData();
 
   return {

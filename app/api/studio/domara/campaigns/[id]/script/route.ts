@@ -16,6 +16,7 @@ import {
   applyCasaHudScriptNarrative,
   toCasaHudCampaignSummary,
 } from "@/lib/studio/domara/campaigns";
+import { isCasaHudLocationIntelligenceStale } from "@/lib/studio/domara/location-intelligence-fingerprint";
 import { runCasaHudScriptNarrative } from "@/lib/studio/domara/script-narrative-engine";
 
 export const runtime = "nodejs";
@@ -78,6 +79,14 @@ export async function POST(
         409,
         "CasaFlix needs location intelligence before it can write the script.",
         "LOCATION_INTELLIGENCE_REQUIRED",
+        reqId,
+      );
+    }
+    if (isCasaHudLocationIntelligenceStale(campaign)) {
+      return errorResponse(
+        409,
+        "Location intelligence no longer matches the current approved properties. Regenerate Location Intelligence from current listings before writing the script.",
+        "LOCATION_INTELLIGENCE_STALE",
         reqId,
       );
     }
