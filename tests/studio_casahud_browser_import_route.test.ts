@@ -172,6 +172,36 @@ const immobiliareFieldAccuracyPayload = {
   imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const }],
 };
 
+const bookmarkletTruncatedPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T14:30:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+    description:
+      "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of",
+    image: "https://images.example.com/acqualadrone-bookmarklet-og.jpg",
+  },
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina
+    Single family villa
+    5+ rooms
+    2 bathrooms
+    187 m²
+    +8 photos
+    Description
+    Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of
+  `,
+  priceCandidates: ["€ 300,000"],
+  descriptionCandidates: [
+    "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of living on the water. Set directly on the shoreline, it offers uninterrupted sea views, private outdoor terraces, and large living spaces designed for year-round comfort.",
+  ],
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-bookmarklet-og.jpg", source: "og" as const }],
+};
+
 const mocks = vi.hoisted(() => ({
   ensureUser: vi.fn(),
   resolveUserId: vi.fn(),
@@ -267,6 +297,27 @@ describe("CasaFlix browser import route", () => {
     expect(payload.listing.sizeSqm).not.toBe(187287);
     expect(payload.listing.bedrooms).toBeUndefined();
     expect(payload.listing.needsReviewFields || []).not.toContain("price");
+  });
+
+  it("keeps bookmarklet imports from showing blank price or clipped description when structured candidates are present", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/browser-import/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {
+      method: "POST",
+      body: JSON.stringify({
+        payload: bookmarkletTruncatedPayload,
+      }),
+    });
+
+    const response = await route.POST(request, { params: { id: "casahud-browser-import-route" } });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.listing.price).toBe(300000);
+    expect(payload.listing.currency).toBe("EUR");
+    expect(payload.listing.priceText).toBe("€300,000");
+    expect(payload.listing.needsReviewFields || []).not.toContain("price");
+    expect(payload.listing.descriptionSnippet).toContain("privilege of living on the water");
+    expect(payload.listing.descriptionSnippet).not.toMatch(/privilege of\\s*$/i);
   });
 
   it("updates existing browser import by source URL instead of creating duplicate candidates", async () => {
@@ -407,6 +458,8 @@ describe("CasaFlix bookmarklet loader route", () => {
     expect(script).toContain('var APP_ORIGIN = "https://app.ibrains.ai"');
     expect(script).toContain("/apps/studio/casaflix/import");
     expect(script).toContain("captureMethod");
+    expect(script).toContain("priceCandidates");
+    expect(script).toContain("descriptionCandidates");
     expect(script).toContain('var CAMPAIGN_ID_ENCODED = "campaign%20id%2Fwith%20space"');
     expect(script).not.toContain("localhost");
   });
@@ -491,6 +544,8 @@ describe("CasaFlix bookmarklet loader route", () => {
     expect(response.headers.get("content-type")).toContain("application/javascript");
     expect(script).toContain("/apps/studio/casaflix/import");
     expect(script).toContain("captureMethod");
+    expect(script).toContain("priceCandidates");
+    expect(script).toContain("descriptionCandidates");
     expect(script).toContain("test-campaign");
     expect(script).toContain("window.open");
     expect(script).not.toContain("OPENAI_API_KEY");

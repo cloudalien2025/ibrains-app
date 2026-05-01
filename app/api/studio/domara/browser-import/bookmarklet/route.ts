@@ -24,6 +24,8 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
   var PAYLOAD_VERSION = ${JSON.stringify(CASAHUD_BROWSER_IMPORT_VERSION)};
   var MAX_VISIBLE_TEXT_CHARS = ${String(CASAHUD_BROWSER_IMPORT_MAX_VISIBLE_TEXT_CHARS)};
   var MAX_IMAGE_CANDIDATES = ${String(CASAHUD_BROWSER_IMPORT_MAX_IMAGE_CANDIDATES)};
+  var MAX_PRICE_CANDIDATES = 12;
+  var MAX_DESCRIPTION_CANDIDATES = 8;
 
   try {
     CAMPAIGN_ID = CAMPAIGN_ID_ENCODED ? decodeURIComponent(CAMPAIGN_ID_ENCODED) : "";
@@ -76,8 +78,14 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
       var cleaned = cleanMultiline(raw);
       if (!cleaned) return;
       var key = cleaned.slice(0, 220);
-      if (dedupe[key]) return;
-      dedupe[key] = true;
+      if (dedupe[key] !== undefined) {
+        var existingIndex = dedupe[key];
+        if (cleaned.length > (chunks[existingIndex] || "").length) {
+          chunks[existingIndex] = cleaned;
+        }
+        return;
+      }
+      dedupe[key] = chunks.length;
       chunks.push(cleaned);
     }
 
@@ -106,6 +114,110 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
     var clipped = joined.slice(0, MAX_VISIBLE_TEXT_CHARS);
     var boundary = Math.max(clipped.lastIndexOf("\\n"), clipped.lastIndexOf(". "), clipped.lastIndexOf(" "));
     return cleanMultiline(clipped.slice(0, boundary > 200 ? boundary : MAX_VISIBLE_TEXT_CHARS));
+  }
+
+  function collectPriceCandidates() {
+    var dedupe = Object.create(null);
+    var results = [];
+    var pricePattern = /((?:€|eur)\\s*\\d[\\d.,\\s]*|\\d[\\d.,\\s]*\\s*(?:€|eur))/i;
+
+    function push(raw) {
+      var cleaned = cleanMultiline(raw);
+      if (!cleaned) return;
+      if (!pricePattern.test(cleaned)) return;
+      if (/\\/(?:\\s*)m²|\\/(?:\\s*)sqm|\\/(?:\\s*)m2/i.test(cleaned)) return;
+      if (/\\b(?:photo|photos|foto|rooms?|bagni?|bathrooms?|bedrooms?|sqm|m²|m2)\\b/i.test(cleaned) && !/\\b(?:price|prezzo|€|eur)\\b/i.test(cleaned)) return;
+      var key = cleaned.toLowerCase().slice(0, 220);
+      if (dedupe[key]) return;
+      dedupe[key] = true;
+      results.push(cleaned);
+    }
+
+    [
+      "[data-cy*='price']",
+      "[data-testid*='price']",
+      "[class*='price']",
+      "[id*='price']",
+      "[aria-label*='price']",
+      "[aria-label*='prezzo']"
+    ].forEach(function (selector) {
+      var nodes = Array.prototype.slice.call(document.querySelectorAll(selector), 0, 40);
+      nodes.forEach(function (node) {
+        var text = typeof node.innerText === "string" && node.innerText.trim() ? node.innerText : node.textContent || "";
+        push(text);
+      });
+    });
+
+    push(metaContent('meta[property="product:price:amount"]'));
+    push(metaContent('meta[property="product:price:currency"]') + " " + metaContent('meta[property="product:price:amount"]'));
+
+    var root = document.body;
+    var bodyText = root ? (typeof root.innerText === "string" && root.innerText.trim() ? root.innerText : root.textContent || "") : "";
+    cleanMultiline(bodyText)
+      .split(/\\n+/)
+      .slice(0, 120)
+      .forEach(function (line) {
+        push(line);
+      });
+
+    return results.slice(0, MAX_PRICE_CANDIDATES);
+  }
+
+  function collectDescriptionCandidates() {
+    var dedupe = Object.create(null);
+    var results = [];
+
+    function push(raw) {
+      var cleaned = cleanMultiline(raw);
+      if (!cleaned || cleaned.length < 100) return;
+      if (/\\b(?:contact advertiser|invia messaggio|send message|whatsapp|phone|chiama|email|cookie|privacy policy)\\b/i.test(cleaned)) return;
+      var key = cleaned.slice(0, 260).toLowerCase();
+      if (dedupe[key] !== undefined) {
+        var existingIndex = dedupe[key];
+        if (cleaned.length > (results[existingIndex] || "").length) {
+          results[existingIndex] = cleaned;
+        }
+        return;
+      }
+      dedupe[key] = results.length;
+      results.push(cleaned);
+    }
+
+    [
+      "[data-cy*='description']",
+      "[data-testid*='description']",
+      "[id*='description']",
+      "[class*='description']",
+      "[id*='details']",
+      "[class*='details']",
+      "section",
+      "article"
+    ].forEach(function (selector) {
+      var nodes = Array.prototype.slice.call(document.querySelectorAll(selector), 0, 40);
+      nodes.forEach(function (node) {
+        var text = typeof node.innerText === "string" && node.innerText.trim() ? node.innerText : node.textContent || "";
+        push(text);
+      });
+    });
+
+    var headingNodes = Array.prototype.slice.call(document.querySelectorAll("h1, h2, h3, h4, dt, strong"), 0, 80);
+    headingNodes.forEach(function (node) {
+      var heading = cleanText(node.textContent || "");
+      if (!/^(description|descrizione|details|dettagli)$/i.test(heading)) return;
+      var sibling = node.nextElementSibling;
+      var hops = 0;
+      while (sibling && hops < 4) {
+        var text = typeof sibling.innerText === "string" && sibling.innerText.trim() ? sibling.innerText : sibling.textContent || "";
+        push(text);
+        sibling = sibling.nextElementSibling;
+        hops += 1;
+      }
+    });
+
+    push(metaContent('meta[property="og:description"]'));
+    push(metaContent('meta[name="twitter:description"]'));
+    push(metaContent('meta[name="description"]'));
+    return results.slice(0, MAX_DESCRIPTION_CANDIDATES);
   }
 
   function collectImages() {
@@ -184,6 +296,8 @@ function buildBookmarkletScript(origin: string, encodedCampaignId?: string) {
         description: metaContent('meta[name="twitter:description"]'),
         image: metaContent('meta[name="twitter:image"]')
       },
+      priceCandidates: collectPriceCandidates(),
+      descriptionCandidates: collectDescriptionCandidates(),
       visibleText: collectVisibleText(),
       imageCandidates: collectImages()
     };

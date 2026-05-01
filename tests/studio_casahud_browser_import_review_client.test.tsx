@@ -91,6 +91,48 @@ const immobiliareAccuracyPayload = {
   imageCandidates: [{ url: "https://images.example.com/acqualadrone-og.jpg", source: "og" as const }],
 };
 
+const bookmarkletPriceDescriptionPayload = {
+  version: "casahud-browser-import-v1",
+  sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  canonicalUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+  providerHost: "www.immobiliare.it",
+  capturedAt: "2026-05-01T14:30:00.000Z",
+  title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+  openGraph: {
+    title: "Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina",
+    description:
+      "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of",
+    image: "https://images.example.com/acqualadrone-bookmarklet-og.jpg",
+  },
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina
+    5+ rooms
+    2 bathrooms
+    187 m²
+    +8 photos
+    Description
+    Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of
+  `,
+  priceCandidates: ["€ 300,000"],
+  descriptionCandidates: [
+    "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea This exceptional independent property embodies the perfect fusion of 1970s Mediterranean elegance and the privilege of living on the water. Set directly on the shoreline, it offers uninterrupted sea views and private outdoor terraces.",
+  ],
+  imageCandidates: [{ url: "https://images.example.com/acqualadrone-bookmarklet-og.jpg", source: "og" as const }],
+};
+
+const incompleteCapturePayload = {
+  ...bookmarkletPriceDescriptionPayload,
+  priceCandidates: [],
+  visibleText: `
+    Single family villa Contrada Lacagnina, Acqualadrone - Spartà, Messina
+    Description
+    Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea ... privilege of
+  `,
+  descriptionCandidates: [
+    "Exclusive Seaside Retreat in Acqualadrone – Direct Access to the Sea ... privilege of",
+  ],
+};
+
 async function flush() {
   await act(async () => {
     await Promise.resolve();
@@ -208,5 +250,62 @@ describe("CasaFlix browser import review client", () => {
     expect(sizeInput?.value).not.toBe("187287");
     expect(bedroomsInput?.value).toBe("");
     expect(container.textContent || "").not.toContain("8 bedrooms");
+  });
+
+  it("prefills bookmarklet review with detected price and full description when visibleText is clipped", async () => {
+    window.name = JSON.stringify(bookmarkletPriceDescriptionPayload);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaigns: [{ id: "campaign-parser-quality", name: "Parser Quality Campaign", status: "campaign_created" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<BrowserImportReviewClient />);
+    });
+    await flush();
+
+    const priceInput = container.querySelector('[data-testid="casahud-browser-import-price-input"]') as HTMLInputElement | null;
+    const descriptionInput = container.querySelector('[data-testid="casahud-browser-import-description-input"]') as HTMLTextAreaElement | null;
+    expect(priceInput?.value).toBe("300000");
+    expect(descriptionInput?.value).toContain("privilege of living on the water");
+    expect(descriptionInput?.value).not.toMatch(/privilege of\\s*$/i);
+    expect(container.textContent || "").not.toContain("Price: Needs review");
+  });
+
+  it("shows actionable warnings when price is missing or description looks incomplete", async () => {
+    window.name = JSON.stringify(incompleteCapturePayload);
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            campaigns: [{ id: "campaign-parser-quality", name: "Parser Quality Campaign", status: "campaign_created" }],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<BrowserImportReviewClient />);
+    });
+    await flush();
+
+    const warningPanel = container.querySelector('[data-testid="casahud-browser-import-warnings"]');
+    expect(warningPanel?.textContent || "").toContain("Price was not detected from the visible page. Please enter it manually.");
+    expect(warningPanel?.textContent || "").toContain("Description may be incomplete. Review and paste the full listing description if needed.");
   });
 });
