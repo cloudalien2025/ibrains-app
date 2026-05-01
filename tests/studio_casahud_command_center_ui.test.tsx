@@ -1212,6 +1212,111 @@ describe("CasaFlix command center UI", () => {
     expect(container.textContent || "").toContain("Bookmarklet code copied.");
   });
 
+  it("renders the imported listing modal with close controls, scrolling container, and keyboard/backdrop-safe dismiss behavior", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(importedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${importedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: importedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-edit-imported-listing"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const modal = container.querySelector('[data-testid="casaflix-property-edit-modal"]') as HTMLElement | null;
+    const scrollBody = container.querySelector('[data-testid="casaflix-property-edit-scroll-body"]') as HTMLElement | null;
+    const closeButton = container.querySelector('[data-testid="casaflix-property-edit-close"]') as HTMLButtonElement | null;
+    const cancelButton = container.querySelector('[data-testid="casaflix-property-edit-cancel"] button') as HTMLButtonElement | null;
+    const saveButton = container.querySelector('[data-testid="casaflix-property-edit-save"] button') as HTMLButtonElement | null;
+    const editorTitleInput = container.querySelector('[data-testid="casahud-listing-editor-title"]') as HTMLInputElement | null;
+    const detailImage = modal?.querySelector("img");
+    const modalText = modal?.textContent || "";
+
+    expect(modal).not.toBeNull();
+    expect(scrollBody).not.toBeNull();
+    expect(closeButton).not.toBeNull();
+    expect(cancelButton).not.toBeNull();
+    expect(saveButton?.textContent).toContain("Save Changes");
+    expect(detailImage).not.toBeNull();
+    expect(editorTitleInput).not.toBeNull();
+    expect(modalText).toContain("Description");
+    expect(modalText).toContain("Featured image URL");
+    expect(modalText).toContain("Price");
+    expect(modalText).toContain("Location");
+    expect(modalText).toContain("Bedrooms");
+    expect(modalText).toContain("Bathrooms");
+    expect(modalText).toContain("Interior size (m²)");
+
+    const closeModalButton = container.querySelector('[data-testid="casaflix-property-edit-close"]') as HTMLButtonElement | null;
+    expect(closeModalButton).not.toBeNull();
+    await act(async () => {
+      closeModalButton!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    expect(container.querySelector('[data-testid="casaflix-property-edit-modal"]')).toBeNull();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-edit-imported-listing"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    await act(async () => {
+      (container.querySelector('[data-testid="casaflix-property-edit-cancel"] button') as HTMLButtonElement | null)?.dispatchEvent(
+        new MouseEvent("click", { bubbles: true }),
+      );
+    });
+    await flush();
+    expect(container.querySelector('[data-testid="casaflix-property-edit-modal"]')).toBeNull();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-edit-imported-listing"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    await act(async () => {
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    await flush();
+    expect(container.querySelector('[data-testid="casaflix-property-edit-modal"]')).toBeNull();
+  });
+
   it("opens the imported listing editor, saves manual details, and updates the card copy", async () => {
     const editedCampaign: CasaHudCampaign = {
       ...importedCampaign,

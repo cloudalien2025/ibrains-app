@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type ReactNode } from "react";
 import type {
   CasaHudCampaign,
   CasaHudCampaignSummary,
@@ -797,6 +797,13 @@ function buildListingEditorDraft(listing: CasaHudListingCandidate | CasaHudValid
     sourceUrl: listing.sourceUrl || "",
     manualLifestyleAngle: listing.manualLifestyleAngle || listing.summary || "",
   };
+}
+
+function listingEditorDraftSignature(draft: CasaHudListingEditorDraft) {
+  return JSON.stringify({
+    ...draft,
+    keyFeatures: draft.keyFeatures.replace(/\r\n/g, "\n"),
+  });
 }
 
 function getPropertySupportCopy(
@@ -1812,6 +1819,7 @@ export default function StudioCasaHudCommandCenter() {
   const [listingDeletingId, setListingDeletingId] = useState<string | null>(null);
   const [listingEditorNotice, setListingEditorNotice] = useState<string | null>(null);
   const [listingEditorDraft, setListingEditorDraft] = useState<CasaHudListingEditorDraft | null>(null);
+  const listingModalCloseButtonRef = useRef<HTMLButtonElement | null>(null);
   const [scriptCopyNotice, setScriptCopyNotice] = useState<string | null>(null);
   const [bookmarkletInstallNotice, setBookmarkletInstallNotice] = useState<string | null>(null);
   const [listingUrlImportText, setListingUrlImportText] = useState("");
@@ -5468,6 +5476,42 @@ export default function StudioCasaHudCommandCenter() {
 
   const selectedListingMedia =
     selectedListing && activeCampaign ? deriveCasaHudFeaturedPropertyMedia(selectedListing, activeCampaign) : null;
+  const listingEditorDirty = useMemo(() => {
+    if (!listingEditorOpen || !selectedListing || !listingEditorDraft) return false;
+    return listingEditorDraftSignature(listingEditorDraft) !== listingEditorDraftSignature(buildListingEditorDraft(selectedListing));
+  }, [listingEditorDraft, listingEditorOpen, selectedListing]);
+
+  const confirmDiscardListingEditorChanges = useCallback(() => {
+    if (!listingEditorDirty) return true;
+    if (typeof window === "undefined" || typeof window.confirm !== "function") return true;
+    return window.confirm("Discard unsaved property detail changes?");
+  }, [listingEditorDirty]);
+
+  const closePropertyModal = useCallback(() => {
+    if (listingEditorOpen && !confirmDiscardListingEditorChanges()) return;
+    setSelectedListingId(null);
+    setListingEditorOpen(false);
+    setListingEditorNotice(null);
+    setListingEditorDraft(null);
+  }, [confirmDiscardListingEditorChanges, listingEditorOpen]);
+
+  useEffect(() => {
+    if (!selectedListing) return;
+    listingModalCloseButtonRef.current?.focus();
+  }, [selectedListing]);
+
+  useEffect(() => {
+    if (!selectedListing) return;
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || listingEditorSaving) return;
+      event.preventDefault();
+      closePropertyModal();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [closePropertyModal, listingEditorSaving, selectedListing]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FBFD_0%,#F1F5F9_100%)] text-[#172033]">
@@ -5534,331 +5578,377 @@ export default function StudioCasaHudCommandCenter() {
       </div>
 
       {selectedListing && activeCampaign && selectedListingMedia ? (
-        <div className="fixed inset-0 z-40 flex items-end justify-center bg-[#172033]/45 p-4 md:items-center">
+        <div
+          className="fixed inset-0 z-40 flex items-end justify-center bg-[#172033]/45 p-2 sm:p-4 md:items-center md:p-6"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) closePropertyModal();
+          }}
+        >
           <div
-            className="w-full max-w-5xl overflow-hidden rounded-[2rem] border border-white/70 bg-[#FFFDF8] shadow-[0_30px_80px_rgba(23,32,51,0.28)]"
+            className="flex max-h-[calc(100dvh-1rem)] w-full max-w-5xl flex-col overflow-hidden rounded-[2rem] border border-white/70 bg-[#FFFDF8] shadow-[0_30px_80px_rgba(23,32,51,0.28)] md:max-h-[calc(100dvh-3rem)]"
             role="dialog"
             aria-modal="true"
-            aria-label="Property details"
+            aria-labelledby="casaflix-property-edit-title"
+            data-testid="casaflix-property-edit-modal"
           >
-            <div className="flex items-center justify-between border-b border-[#E6D8C7] px-5 py-4 md:px-6">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Property Detail</p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">{selectedListing.title}</h2>
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {isUserImportedListing(selectedListing) ? (
+            <div className="shrink-0 border-b border-[#E6D8C7] px-5 py-4 md:px-6">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#8A5A34]">Property Detail</p>
+                  <h2 id="casaflix-property-edit-title" className="mt-1 truncate text-2xl font-semibold tracking-[-0.03em] text-[#172033]">
+                    {selectedListing.title}
+                  </h2>
+                </div>
+                <div className="flex items-center gap-2">
+                  {isUserImportedListing(selectedListing) && !listingEditorOpen ? (
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => {
+                        setListingEditorOpen(true);
+                        setListingEditorNotice(null);
+                      }}
+                    >
+                      {(selectedListing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
+                    </button>
+                  ) : null}
                   <button
+                    ref={listingModalCloseButtonRef}
                     type="button"
-                    className={secondaryButtonClass}
-                    onClick={() => setListingEditorOpen((current) => !current)}
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#E6D8C7] bg-white text-xl leading-none text-[#475569] transition hover:bg-[#F8FAFC]"
+                    onClick={closePropertyModal}
+                    aria-label="Close property details"
+                    data-testid="casaflix-property-edit-close"
                   >
-                    {listingEditorOpen ? "Cancel Edit" : (selectedListing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
+                    ×
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={secondaryButtonClass}
-                  onClick={() => {
-                    setSelectedListingId(null);
-                    setListingEditorOpen(false);
-                    setListingEditorNotice(null);
-                  }}
-                  aria-label="Close property details"
-                >
-                  Close
-                </button>
+                </div>
               </div>
             </div>
 
-            <div className="grid gap-0 lg:grid-cols-[1.02fr_0.98fr]">
-              <div className="min-h-[320px] bg-[#F3EDE4]">
-                <MediaPreview
-                  key={`media-${selectedListingMedia.url || "fallback"}-${(selectedListingMedia.candidateUrls || []).join("|")}`}
-                  media={selectedListingMedia}
-                  alt={`${selectedListing.title} detail image`}
-                  className="min-h-[320px] w-full"
-                />
-              </div>
-              <div className="grid gap-5 p-5 md:p-6">
-                <div className="flex flex-wrap gap-2">
-                  <StatusPill tone={listingStatusTone(selectedListing)}>{statusLabelFromListing(selectedListing)}</StatusPill>
-                  <StatusPill tone="gold">{formatListingSourceType(selectedListing)}</StatusPill>
-                  <StatusPill tone="neutral">{formatListingProviderLabel(selectedListing)}</StatusPill>
-                  <StatusPill tone="blue">{selectedListingMedia.stateLabel}</StatusPill>
-                  {isUserImportedListing(selectedListing) ? (
-                    <StatusPill tone="neutral">{formatListingExtractionStatus(selectedListing.extractionStatus)}</StatusPill>
-                  ) : null}
-                  {isUserImportedListing(selectedListing) ? (
-                    <StatusPill tone="neutral">{formatManualCompletionStatus(selectedListing.manualCompletionStatus)}</StatusPill>
-                  ) : null}
-                </div>
-
-                <div className="grid gap-3 text-sm leading-6 text-[#526070]">
-                  <p>
-                    <span className="font-semibold text-[#172033]">Source:</span> {formatListingSourceType(selectedListing)} via {formatListingProviderLabel(selectedListing)}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Location:</span> {selectedListing.locationText}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Price:</span> {formatListingPrice(selectedListing.price, selectedListing.currency)}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Listing facts:</span> {propertyFacts(selectedListing).join(" · ") || "Facts pending"}
-                  </p>
-                  {selectedListing.summary ? (
-                    <p>
-                      <span className="font-semibold text-[#172033]">Summary:</span> {selectedListing.summary}
-                    </p>
-                  ) : null}
-                  <p>
-                    <span className="font-semibold text-[#172033]">Why it matters:</span> {getPropertySupportCopy(activeCampaign, selectedListing)}
-                  </p>
-                  <p>
-                    <span className="font-semibold text-[#172033]">Media status:</span> {selectedListingMedia.stateLabel} via {selectedListingMedia.sourceLabel}
-                  </p>
-                  {isUserImportedListing(selectedListing) ? (
-                    <>
-                      <p>
-                        <span className="font-semibold text-[#172033]">Imported:</span> {formatCampaignTime(selectedListing.importedAt || selectedListing.discoveredAt)}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#172033]">Validation readiness:</span> {validationReadinessLabel(selectedListing)}
-                      </p>
-                      <p>
-                        <span className="font-semibold text-[#172033]">Manual completion:</span> {formatManualCompletionStatus(selectedListing.manualCompletionStatus)}
-                      </p>
-                    </>
-                  ) : null}
-                </div>
-
-                {selectedListing.needsReviewFields?.length ? (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedListing.needsReviewFields.map((field) => (
-                      <StatusPill key={field} tone="red">
-                        {needsReviewLabel(field)}
-                      </StatusPill>
-                    ))}
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-4 md:px-6 md:pb-6"
+              data-testid="casaflix-property-edit-scroll-body"
+            >
+              <div className="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                <div className="grid content-start gap-4">
+                  <div className="overflow-hidden rounded-[1.4rem] border border-[#E6D8C7] bg-[#F3EDE4]">
+                    <MediaPreview
+                      key={`media-${selectedListingMedia.url || "fallback"}-${(selectedListingMedia.candidateUrls || []).join("|")}`}
+                      media={selectedListingMedia}
+                      alt={`${selectedListing.title} detail image`}
+                      className="h-56 w-full object-cover sm:h-72 lg:h-[320px]"
+                    />
                   </div>
-                ) : null}
 
-                <div className="flex flex-wrap gap-3">
-                  {canOpenExternalUrl(listingSourceHref(selectedListing)) ? (
-                    <a href={listingSourceHref(selectedListing)!} target="_blank" rel="noreferrer noopener" className={primaryButtonClass}>
-                      View Source
-                    </a>
+                  <div className="flex flex-wrap gap-3">
+                    {canOpenExternalUrl(listingSourceHref(selectedListing)) ? (
+                      <a href={listingSourceHref(selectedListing)!} target="_blank" rel="noreferrer noopener" className={primaryButtonClass}>
+                        View Source
+                      </a>
+                    ) : (
+                      <span className={mutedButtonClass}>Source unavailable</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid content-start gap-5">
+                  <div className="flex flex-wrap gap-2">
+                    <StatusPill tone={listingStatusTone(selectedListing)}>{statusLabelFromListing(selectedListing)}</StatusPill>
+                    <StatusPill tone="gold">{formatListingSourceType(selectedListing)}</StatusPill>
+                    <StatusPill tone="neutral">{formatListingProviderLabel(selectedListing)}</StatusPill>
+                    <StatusPill tone="blue">{selectedListingMedia.stateLabel}</StatusPill>
+                    {isUserImportedListing(selectedListing) ? (
+                      <StatusPill tone="neutral">{formatListingExtractionStatus(selectedListing.extractionStatus)}</StatusPill>
+                    ) : null}
+                    {isUserImportedListing(selectedListing) ? (
+                      <StatusPill tone="neutral">{formatManualCompletionStatus(selectedListing.manualCompletionStatus)}</StatusPill>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 text-sm leading-6 text-[#526070]">
+                    <p>
+                      <span className="font-semibold text-[#172033]">Source:</span> {formatListingSourceType(selectedListing)} via {formatListingProviderLabel(selectedListing)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Location:</span> {selectedListing.locationText}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Price:</span> {formatListingPrice(selectedListing.price, selectedListing.currency)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Listing facts:</span> {propertyFacts(selectedListing).join(" · ") || "Facts pending"}
+                    </p>
+                    {selectedListing.summary ? (
+                      <p>
+                        <span className="font-semibold text-[#172033]">Summary:</span> {selectedListing.summary}
+                      </p>
+                    ) : null}
+                    <p>
+                      <span className="font-semibold text-[#172033]">Why it matters:</span> {getPropertySupportCopy(activeCampaign, selectedListing)}
+                    </p>
+                    <p>
+                      <span className="font-semibold text-[#172033]">Media status:</span> {selectedListingMedia.stateLabel} via {selectedListingMedia.sourceLabel}
+                    </p>
+                    {isUserImportedListing(selectedListing) ? (
+                      <>
+                        <p>
+                          <span className="font-semibold text-[#172033]">Imported:</span> {formatCampaignTime(selectedListing.importedAt || selectedListing.discoveredAt)}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-[#172033]">Validation readiness:</span> {validationReadinessLabel(selectedListing)}
+                        </p>
+                        <p>
+                          <span className="font-semibold text-[#172033]">Manual completion:</span> {formatManualCompletionStatus(selectedListing.manualCompletionStatus)}
+                        </p>
+                      </>
+                    ) : null}
+                  </div>
+
+                  {selectedListing.needsReviewFields?.length ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedListing.needsReviewFields.map((field) => (
+                        <StatusPill key={field} tone="red">
+                          {needsReviewLabel(field)}
+                        </StatusPill>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {isUserImportedListing(selectedListing) && listingEditorOpen && listingEditorDraft ? (
+                    <div className="grid gap-4 rounded-[1.5rem] border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-imported-listing-editor">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Manual Listing Details</p>
+                        <p className="mt-2 text-sm leading-6 text-[#526070]">
+                          Manual details are user-provided. CasaFlix keeps the source label and extraction warnings intact.
+                        </p>
+                      </div>
+                      {listingEditorNotice ? (
+                        <p className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#475569]">{listingEditorNotice}</p>
+                      ) : null}
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Display title</span>
+                          <input
+                            value={listingEditorDraft.title}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, title: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                            data-testid="casahud-listing-editor-title"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Location</span>
+                          <input
+                            value={listingEditorDraft.locationText}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, locationText: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                            data-testid="casahud-listing-editor-location"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Price</span>
+                          <input
+                            value={listingEditorDraft.price}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, price: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Currency</span>
+                          <input
+                            value={listingEditorDraft.currency}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, currency: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Property type</span>
+                          <input
+                            value={listingEditorDraft.propertyType}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, propertyType: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Garage / parking</span>
+                          <input
+                            value={listingEditorDraft.garageParking}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, garageParking: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Bedrooms</span>
+                          <input
+                            value={listingEditorDraft.bedrooms}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bedrooms: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Bathrooms</span>
+                          <input
+                            value={listingEditorDraft.bathrooms}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bathrooms: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Rooms</span>
+                          <input
+                            value={listingEditorDraft.rooms}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, rooms: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Interior size (m²)</span>
+                          <input
+                            value={listingEditorDraft.sizeSqm}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sizeSqm: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Commercial surface (m²)</span>
+                          <input
+                            value={listingEditorDraft.commercialSurfaceSqm}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, commercialSurfaceSqm: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Garden / land size (m²)</span>
+                          <input
+                            value={listingEditorDraft.landSizeSqm}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, landSizeSqm: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Condition</span>
+                          <input
+                            value={listingEditorDraft.condition}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, condition: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Energy class</span>
+                          <input
+                            value={listingEditorDraft.energyClass}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, energyClass: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                      </div>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
+                          <input
+                            type="checkbox"
+                            checked={listingEditorDraft.balcony}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, balcony: event.target.checked } : current))}
+                          />
+                          Balcony
+                        </label>
+                        <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
+                          <input
+                            type="checkbox"
+                            checked={listingEditorDraft.terrace}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, terrace: event.target.checked } : current))}
+                          />
+                          Terrace
+                        </label>
+                      </div>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Description</span>
+                        <textarea
+                          value={listingEditorDraft.descriptionSnippet}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, descriptionSnippet: event.target.value } : current))}
+                          rows={4}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Key features</span>
+                        <textarea
+                          value={listingEditorDraft.keyFeatures}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, keyFeatures: event.target.value } : current))}
+                          rows={3}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <label className="grid gap-2 text-sm text-[#172033]">
+                        <span className="font-medium">Lifestyle angle / notes</span>
+                        <textarea
+                          value={listingEditorDraft.manualLifestyleAngle}
+                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualLifestyleAngle: event.target.value } : current))}
+                          rows={3}
+                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                        />
+                      </label>
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Featured image URL</span>
+                          <input
+                            value={listingEditorDraft.manualFeaturedImageUrl}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualFeaturedImageUrl: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                            data-testid="casahud-listing-editor-image-url"
+                          />
+                        </label>
+                        <label className="grid gap-2 text-sm text-[#172033]">
+                          <span className="font-medium">Source URL</span>
+                          <input
+                            value={listingEditorDraft.sourceUrl}
+                            onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sourceUrl: event.target.value } : current))}
+                            className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
+                          />
+                        </label>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {isUserImportedListing(selectedListing) ? (
+              <div className="shrink-0 border-t border-[#E6D8C7] bg-white/95 px-5 py-4 md:px-6">
+                <div className="flex flex-wrap justify-end gap-3">
+                  {listingEditorOpen ? (
+                    <>
+                      <div data-testid="casaflix-property-edit-cancel">
+                        <button type="button" className={secondaryButtonClass} onClick={closePropertyModal} disabled={listingEditorSaving}>
+                          Cancel
+                        </button>
+                      </div>
+                      <div data-testid="casaflix-property-edit-save">
+                        <button
+                          type="button"
+                          className={primaryButtonClass}
+                          onClick={() => void onSaveListingDetails()}
+                          disabled={listingEditorSaving}
+                          data-testid="casahud-listing-editor-save"
+                        >
+                          {listingEditorSaving ? "Saving Changes..." : "Save Changes"}
+                        </button>
+                      </div>
+                    </>
                   ) : (
-                    <span className={mutedButtonClass}>Source unavailable</span>
+                    <button
+                      type="button"
+                      className={secondaryButtonClass}
+                      onClick={() => {
+                        setListingEditorOpen(true);
+                        setListingEditorNotice(null);
+                      }}
+                    >
+                      {(selectedListing.manualCompletionStatus || "incomplete") === "completed" ? "Edit Details" : "Complete Listing Details"}
+                    </button>
                   )}
                 </div>
-
-                {isUserImportedListing(selectedListing) && listingEditorOpen && listingEditorDraft ? (
-                  <div className="grid gap-4 rounded-[1.5rem] border border-[#D9E4F0] bg-[#F8FAFC] p-4" data-testid="casahud-imported-listing-editor">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#475569]">Manual Listing Details</p>
-                      <p className="mt-2 text-sm leading-6 text-[#526070]">
-                        Manual details are user-provided. CasaFlix keeps the source label and extraction warnings intact.
-                      </p>
-                    </div>
-                    {listingEditorNotice ? (
-                      <p className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#475569]">{listingEditorNotice}</p>
-                    ) : null}
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Display title</span>
-                        <input
-                          value={listingEditorDraft.title}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, title: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                          data-testid="casahud-listing-editor-title"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Location</span>
-                        <input
-                          value={listingEditorDraft.locationText}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, locationText: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                          data-testid="casahud-listing-editor-location"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Price</span>
-                        <input
-                          value={listingEditorDraft.price}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, price: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Currency</span>
-                        <input
-                          value={listingEditorDraft.currency}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, currency: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Property type</span>
-                        <input
-                          value={listingEditorDraft.propertyType}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, propertyType: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Garage / parking</span>
-                        <input
-                          value={listingEditorDraft.garageParking}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, garageParking: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Bedrooms</span>
-                        <input
-                          value={listingEditorDraft.bedrooms}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bedrooms: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Bathrooms</span>
-                        <input
-                          value={listingEditorDraft.bathrooms}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, bathrooms: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Rooms</span>
-                        <input
-                          value={listingEditorDraft.rooms}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, rooms: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Interior size (m²)</span>
-                        <input
-                          value={listingEditorDraft.sizeSqm}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sizeSqm: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Commercial surface (m²)</span>
-                        <input
-                          value={listingEditorDraft.commercialSurfaceSqm}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, commercialSurfaceSqm: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Garden / land size (m²)</span>
-                        <input
-                          value={listingEditorDraft.landSizeSqm}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, landSizeSqm: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Condition</span>
-                        <input
-                          value={listingEditorDraft.condition}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, condition: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Energy class</span>
-                        <input
-                          value={listingEditorDraft.energyClass}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, energyClass: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                    </div>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
-                        <input
-                          type="checkbox"
-                          checked={listingEditorDraft.balcony}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, balcony: event.target.checked } : current))}
-                        />
-                        Balcony
-                      </label>
-                      <label className="flex items-center gap-3 rounded-2xl border border-[#D9E4F0] bg-white px-3 py-3 text-sm text-[#172033]">
-                        <input
-                          type="checkbox"
-                          checked={listingEditorDraft.terrace}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, terrace: event.target.checked } : current))}
-                        />
-                        Terrace
-                      </label>
-                    </div>
-                    <label className="grid gap-2 text-sm text-[#172033]">
-                      <span className="font-medium">Description</span>
-                      <textarea
-                        value={listingEditorDraft.descriptionSnippet}
-                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, descriptionSnippet: event.target.value } : current))}
-                        rows={4}
-                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm text-[#172033]">
-                      <span className="font-medium">Key features</span>
-                      <textarea
-                        value={listingEditorDraft.keyFeatures}
-                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, keyFeatures: event.target.value } : current))}
-                        rows={3}
-                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                      />
-                    </label>
-                    <label className="grid gap-2 text-sm text-[#172033]">
-                      <span className="font-medium">Lifestyle angle / notes</span>
-                      <textarea
-                        value={listingEditorDraft.manualLifestyleAngle}
-                        onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualLifestyleAngle: event.target.value } : current))}
-                        rows={3}
-                        className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                      />
-                    </label>
-                    <div className="grid gap-3 md:grid-cols-2">
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Featured image URL</span>
-                        <input
-                          value={listingEditorDraft.manualFeaturedImageUrl}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, manualFeaturedImageUrl: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                          data-testid="casahud-listing-editor-image-url"
-                        />
-                      </label>
-                      <label className="grid gap-2 text-sm text-[#172033]">
-                        <span className="font-medium">Source URL</span>
-                        <input
-                          value={listingEditorDraft.sourceUrl}
-                          onChange={(event) => setListingEditorDraft((current) => (current ? { ...current, sourceUrl: event.target.value } : current))}
-                          className="rounded-2xl border border-[#D9E4F0] bg-white px-3 py-2"
-                        />
-                      </label>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      <button
-                        type="button"
-                        className={primaryButtonClass}
-                        onClick={() => void onSaveListingDetails()}
-                        disabled={listingEditorSaving}
-                        data-testid="casahud-listing-editor-save"
-                      >
-                        {listingEditorSaving ? "Saving Details..." : "Save Details"}
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
               </div>
-            </div>
+            ) : null}
           </div>
         </div>
       ) : null}
