@@ -30,6 +30,10 @@ import {
   type CasaHudConnectionCard,
   type CasaHudConnectionCardId,
 } from "@/lib/studio/domara/integrations-ui";
+import {
+  isCasaHudLocationIntelligenceStale,
+  resolveLocationSourceLabels,
+} from "@/lib/studio/domara/location-intelligence-fingerprint";
 import { resolveCasaHudPublicAppOriginFromBrowser } from "@/lib/studio/domara/public-app-origin";
 
 type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
@@ -370,6 +374,13 @@ function cx(...values: Array<string | false | null | undefined>) {
 
 function uniq(values: Array<string | null | undefined>) {
   return Array.from(new Set(values.filter((value): value is string => Boolean(value && value.trim().length > 0))));
+}
+
+function joinNatural(values: string[]): string {
+  if (values.length === 0) return "";
+  if (values.length === 1) return values[0]!;
+  if (values.length === 2) return `${values[0]} and ${values[1]}`;
+  return `${values.slice(0, -1).join(", ")}, and ${values[values.length - 1]}`;
 }
 
 function statusDotClass(status: CasaHudProgressState) {
@@ -1211,11 +1222,12 @@ function buildCompletedArtifacts(campaign: CasaHudCampaign | null) {
   const realCandidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
   const realApproved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
   const scriptStale = isScriptStale(campaign);
+  const locationStale = isCasaHudLocationIntelligenceStale(campaign);
   return [
     campaign.selectedTitle?.title ? "Selected title and opportunity brief" : null,
     realCandidates.length > 0 ? `${formatCountLabel(realCandidates.length, "discovered property")}` : null,
     realApproved.length > 0 ? `${formatCountLabel(realApproved.length, "approved property")}` : null,
-    campaign.locationStory?.headline ? "Location story and map context" : null,
+    campaign.locationStory?.headline && !locationStale ? "Location story and map context" : null,
     campaign.scriptGenerationStatus === "script_generated" && !scriptStale ? "Scene narration and script package" : null,
     campaign.mediaPlanningStatus === "media_plan_built" ? "Scene asset mapping and media coverage" : null,
     campaign.youtubePackageStatus === "package_prepared" ? "YouTube package and review summary" : null,
@@ -1284,6 +1296,7 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
   }
 
   const scriptStale = isScriptStale(campaign);
+  const locationStale = isCasaHudLocationIntelligenceStale(campaign);
   if (campaign.scriptGenerationStatus === "script_generated" && !scriptStale) {
     return {
       actionId: "build_media_plan",
@@ -1295,7 +1308,7 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
     };
   }
 
-  if (campaign.locationIntelligenceStatus === "location_intelligence_completed") {
+  if (campaign.locationIntelligenceStatus === "location_intelligence_completed" && !locationStale) {
     return {
       actionId: "generate_script",
       workspace: "script",
@@ -1312,10 +1325,12 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
     return {
       actionId: "build_location_story",
       workspace: "location",
-      statusLabel: "Needs place context",
-      title: "Add the location story",
-      detail: "Build local highlights, POIs, and map scenes that explain why this place matters.",
-      ctaLabel: "Build Location",
+      statusLabel: locationStale ? "Location stale" : "Needs place context",
+      title: locationStale ? "Regenerate from current properties" : "Add the location story",
+      detail: locationStale
+        ? "Approved property locations changed after the previous location run. Regenerate Location Intelligence from the current properties."
+        : "Build local highlights, POIs, and map scenes that explain why this place matters.",
+      ctaLabel: locationStale ? "Regenerate Location Intelligence" : "Build Location",
     };
   }
 
@@ -1867,6 +1882,14 @@ export default function StudioCasaHudCommandCenter() {
   const blockers = useMemo(() => buildCampaignBlockers(activeCampaign), [activeCampaign]);
   const completedArtifacts = useMemo(() => buildCompletedArtifacts(activeCampaign), [activeCampaign]);
   const scriptIsStale = useMemo(() => (activeCampaign ? isScriptStale(activeCampaign) : false), [activeCampaign]);
+  const locationIntelligenceStale = useMemo(
+    () => (activeCampaign ? isCasaHudLocationIntelligenceStale(activeCampaign) : false),
+    [activeCampaign],
+  );
+  const locationSourceLabels = useMemo(
+    () => (activeCampaign ? resolveLocationSourceLabels(activeCampaign) : []),
+    [activeCampaign],
+  );
   const videoScenes = useMemo(() => buildVideoScenes(activeCampaign), [activeCampaign]);
   const visibleCampaignApproved = useMemo(
     () => (activeCampaign ? activeCampaign.approvedListings.filter((listing) => !isDemoListing(listing)) : []),
@@ -3551,14 +3574,14 @@ export default function StudioCasaHudCommandCenter() {
     sectionContent = activeCampaign ? (
       <WorkspacePage
         eyebrow="Location"
-        title={activeCampaign.locationStory?.headline || "Location context"}
+        title={locationIntelligenceStale ? "Location context needs regeneration" : activeCampaign.locationStory?.headline || "Location context"}
         description="Local story, POIs, and map scenes that explain why this place matters for the campaign."
         actions={renderNextActionButton(deriveNextStep(activeCampaign))}
         testId="casahud-location"
       >
         {campaignLocatingId === activeCampaign.id ? renderProgressList(locationSteps, locationProgressIndex, "loading", "casahud-location-progress") : null}
 
-        {activeCampaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
+        {activeCampaign.locationIntelligenceStatus === "location_intelligence_completed" && !locationIntelligenceStale ? (
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="grid gap-4">
               <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-location-intelligence-summary">
@@ -3566,6 +3589,11 @@ export default function StudioCasaHudCommandCenter() {
                 <p className="mt-2 text-sm leading-6 text-[#475569]">
                   {activeCampaign.locationStory?.summary || activeCampaign.locationIntelligenceSummary?.coverageSummary}
                 </p>
+                {locationSourceLabels.length > 0 ? (
+                  <p className="mt-2 text-xs uppercase tracking-[0.13em] text-[#6B7280]">
+                    Based on current approved properties in {joinNatural(locationSourceLabels.slice(0, 3))}
+                  </p>
+                ) : null}
               </div>
               <div className="rounded-[1.3rem] border border-[#D9E4F0] bg-white p-4" data-testid="casahud-local-highlights">
                 <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#64748B]">Local Highlights</p>
@@ -3607,8 +3635,12 @@ export default function StudioCasaHudCommandCenter() {
           </div>
         ) : (
           <EmptyState
-            title="Location not ready"
-            description="Run the location pass after properties are validated."
+            title={locationIntelligenceStale ? "Location context is stale" : "Location not ready"}
+            description={
+              locationIntelligenceStale
+                ? "The saved location story no longer matches current approved properties. Regenerate Location Intelligence from current properties."
+                : "Run the location pass after properties are validated."
+            }
             action={renderNextActionButton(deriveNextStep(activeCampaign))}
           />
         )}
@@ -3681,6 +3713,8 @@ export default function StudioCasaHudCommandCenter() {
             title={
               visibleCampaignApproved.length === 0
                 ? "Approved listings required"
+                : locationIntelligenceStale
+                  ? "Location context is stale"
                 : scriptIsStale
                   ? "Script is stale"
                   : "Script not ready"
@@ -3688,6 +3722,8 @@ export default function StudioCasaHudCommandCenter() {
             description={
               visibleCampaignApproved.length === 0
                 ? "Validate and Rank Listings before script generation so CasaFlix uses the current approved shortlist."
+                : locationIntelligenceStale
+                  ? "Regenerate Location Intelligence from current approved properties before writing a script."
                 : scriptIsStale
                   ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and listing counts stay accurate."
                   : "Generate the script after location is complete."
@@ -4728,7 +4764,7 @@ export default function StudioCasaHudCommandCenter() {
       >
         {campaignLocatingId === activeCampaign.id ? renderProgressList(locationSteps, locationProgressIndex, "loading", "casahud-location-progress") : null}
 
-        {activeCampaign.locationIntelligenceStatus === "location_intelligence_completed" ? (
+        {activeCampaign.locationIntelligenceStatus === "location_intelligence_completed" && !locationIntelligenceStale ? (
           <div className="grid gap-5 xl:grid-cols-[1.06fr_0.94fr]">
             <section className="grid gap-4">
               <div className="rounded-[1.7rem] border border-[#E7DCCB] bg-white/92 p-5" data-testid="casahud-location-intelligence-summary">
@@ -4739,6 +4775,11 @@ export default function StudioCasaHudCommandCenter() {
                 <p className="mt-3 text-sm leading-6 text-[#526070]">
                   {activeCampaign.locationStory?.summary || activeCampaign.locationIntelligenceSummary?.coverageSummary}
                 </p>
+                {locationSourceLabels.length > 0 ? (
+                  <p className="mt-2 text-xs uppercase tracking-[0.13em] text-[#7C6A54]">
+                    Based on current approved properties in {joinNatural(locationSourceLabels.slice(0, 3))}
+                  </p>
+                ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
                   {(activeCampaign.locationStory?.lifestyleAnchors || []).map((anchor) => (
                     <StatusPill key={anchor} tone="neutral">
@@ -4820,8 +4861,12 @@ export default function StudioCasaHudCommandCenter() {
           </div>
         ) : (
           <EmptyState
-            title="Location story not ready"
-            description="Add location intelligence to explain why the place matters."
+            title={locationIntelligenceStale ? "Location story needs regeneration" : "Location story not ready"}
+            description={
+              locationIntelligenceStale
+                ? "Approved property locations changed after the previous location run. Regenerate Location Intelligence from current properties before using POIs or map scenes."
+                : "Add location intelligence to explain why the place matters."
+            }
             action={renderNextActionButton(deriveNextStep(activeCampaign))}
           />
         )}

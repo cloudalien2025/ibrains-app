@@ -1716,6 +1716,92 @@ describe("CasaFlix command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-validate-listings-cta"]')).toBeTruthy();
   });
 
+  it("flags stale Tropea location context when current approved properties are in Messina", async () => {
+    const staleLocationCampaign: CasaHudCampaign = {
+      ...scriptedCampaign,
+      approvedListings: [
+        {
+          ...scriptedCampaign.approvedListings[0]!,
+          id: "listing-messina",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+        },
+      ],
+      locationIntelligenceSummary: scriptedCampaign.locationIntelligenceSummary
+        ? {
+            ...scriptedCampaign.locationIntelligenceSummary,
+            listingFingerprint: "approved:stale-tropea",
+          }
+        : null,
+      locationStory: scriptedCampaign.locationStory
+        ? {
+            ...scriptedCampaign.locationStory,
+            headline: "Tropea turns the shortlist into a place-led story.",
+            summary: "Legacy location context around Tropea and Calabria.",
+          }
+        : null,
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(staleLocationCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${staleLocationCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: staleLocationCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-location"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const locationText = container.querySelector('[data-testid="casahud-location"]')?.textContent || "";
+    expect(locationText).toContain("Location context is stale");
+    expect(locationText).toContain("Regenerate Location Intelligence");
+    expect(locationText).not.toContain("Tropea turns the shortlist into a place-led story.");
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-script"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const scriptText = container.querySelector('[data-testid="casahud-script"]')?.textContent || "";
+    expect(scriptText).toContain("Location context is stale");
+  });
+
   it("renders featured image areas for approved and rejected property cards and uses source thumbnails before fallback copy", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

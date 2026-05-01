@@ -231,4 +231,33 @@ describe("CasaFlix location intelligence engine", () => {
     expect(result.locationProviderStatuses.find((status) => status.provider === "mapbox")?.state).toBe("connected");
     expect(result.locationWarnings.length).toBeGreaterThan(0);
   });
+
+  it("uses current approved property locations as the location source of truth", async () => {
+    const campaign = baseValidatedCampaign();
+    campaign.approvedListings = [
+      {
+        ...campaign.approvedListings[0]!,
+        id: "listing-messina",
+        title: "Contrada Lacagnina Messina Single family villa with Terrace",
+        locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+        city: "Messina",
+        region: "Sicily",
+      },
+    ];
+
+    const result = await runCasaHudLocationIntelligence(campaign, {});
+    const corpus = [
+      result.locationStory?.headline,
+      result.locationStory?.summary,
+      result.locationIntelligenceSummary?.coverageSummary,
+      ...(result.poiBundle?.cards || []).map((poi) => poi.locationText),
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    expect(corpus).toMatch(/Messina|Sicily/i);
+    expect(corpus).not.toMatch(/Tropea|Calabria/i);
+    expect(result.locationIntelligenceSummary?.listingFingerprint).toBeTruthy();
+    expect(result.locationIntelligenceSummary?.sourceLocations?.join(" ")).toMatch(/Messina|Sicily/i);
+  });
 });

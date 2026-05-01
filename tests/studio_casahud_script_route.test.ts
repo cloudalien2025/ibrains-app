@@ -356,6 +356,39 @@ describe("CasaFlix script generation route", () => {
     const noLocationPayload = await noLocationResponse.json();
     expect(noLocationResponse.status).toBe(409);
     expect(noLocationPayload.error.code).toBe("LOCATION_INTELLIGENCE_REQUIRED");
+
+    mocks.getCasaHudCampaign.mockResolvedValueOnce({
+      ...locationReadyCampaign,
+      approvedListings: [
+        {
+          ...locationReadyCampaign.approvedListings[0]!,
+          id: "listing-messina",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+        },
+      ],
+      locationIntelligenceSummary: {
+        ...locationReadyCampaign.locationIntelligenceSummary!,
+        listingFingerprint: "approved:stale-tropea",
+      },
+      locationStory: {
+        ...locationReadyCampaign.locationStory!,
+        headline: "Tropea turns the shortlist into a place-led story.",
+        summary: "Legacy Tropea story that no longer matches current properties.",
+      },
+    });
+    const staleLocationResponse = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${locationReadyCampaign.id}/script`, {
+        method: "POST",
+      }),
+      { params: { id: locationReadyCampaign.id } },
+    );
+    const staleLocationPayload = await staleLocationResponse.json();
+    expect(staleLocationResponse.status).toBe(409);
+    expect(staleLocationPayload.error.code).toBe("LOCATION_INTELLIGENCE_STALE");
+    expect(staleLocationPayload.error.message).toContain("Regenerate Location Intelligence");
   });
 
   it("persists the script package and returns the updated campaign", async () => {
