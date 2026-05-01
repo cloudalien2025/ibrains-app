@@ -10,6 +10,7 @@ import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 import { normalizeImportedListingCandidate } from "@/lib/studio/domara/imported-listing-candidate";
 import { classifyListingImportUrl } from "@/lib/studio/domara/listing-url-extractor";
 import { normalizeListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
+import { parseLocalizedNumber, parseRealEstatePrice } from "@/lib/studio/domara/number-parsing";
 
 export const CASAHUD_BROWSER_IMPORT_VERSION = "casahud-browser-import-v1";
 export const CASAHUD_BROWSER_IMPORT_CAPTURE_VERSION = "2026-04-30";
@@ -211,39 +212,12 @@ function optionalString(value: unknown) {
 }
 
 function optionalNumber(value: unknown) {
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string" && value.trim()) {
-    const parsed = Number(value.replace(/[^\d.+-]/g, ""));
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
+  return parseLocalizedNumber(value);
 }
 
 function normalizeNumberish(value: string | undefined) {
   if (!value) return undefined;
-  const raw = normalizeWhitespace(value).replace(/[^\d.,+-]/g, "");
-  if (!raw) return undefined;
-  const sign = raw.startsWith("-") ? "-" : "";
-  const numeric = raw.replace(/[+-]/g, "");
-  const commaCount = (numeric.match(/,/g) || []).length;
-  const dotCount = (numeric.match(/\./g) || []).length;
-
-  let normalized = numeric;
-  if (commaCount > 0 && dotCount > 0) {
-    const lastComma = numeric.lastIndexOf(",");
-    const lastDot = numeric.lastIndexOf(".");
-    const decimalSeparator = lastComma > lastDot ? "," : ".";
-    const thousandsSeparator = decimalSeparator === "," ? "." : ",";
-    normalized = numeric.split(thousandsSeparator).join("");
-    if (decimalSeparator === ",") normalized = normalized.replace(",", ".");
-  } else if (commaCount > 0) {
-    normalized = /,\d{1,2}$/.test(numeric) ? numeric.replace(/\./g, "").replace(",", ".") : numeric.replace(/,/g, "");
-  } else if (dotCount > 0) {
-    normalized = /\.\d{1,2}$/.test(numeric) ? numeric.replace(/,/g, "") : numeric.replace(/\./g, "");
-  }
-
-  const parsed = Number(`${sign}${normalized}`);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return parseLocalizedNumber(normalizeWhitespace(value));
 }
 
 function integerFromText(value: string | undefined) {
@@ -290,6 +264,13 @@ function extractPriceText(text: string | undefined) {
       amountToken: currencyAfter[1],
     };
   }
+  const amountOnly = normalized.match(/([0-9][0-9.,\s]{2,})/);
+  if (amountOnly) {
+    return {
+      rawPriceText: amountOnly[1].replace(/\s+/g, " ").trim(),
+      amountToken: amountOnly[1],
+    };
+  }
   return {};
 }
 
@@ -298,11 +279,10 @@ function normalizeCurrencyPrice(text: string | undefined) {
   if ("priceOnRequest" in extracted && extracted.priceOnRequest) return { priceText: extracted.rawPriceText };
   const currencyToken = "currencyToken" in extracted ? extracted.currencyToken : undefined;
   const amountToken = "amountToken" in extracted ? extracted.amountToken : undefined;
-  if (!currencyToken || !amountToken) return {};
-  const currency = currencyToken === "$" || currencyToken.toLowerCase() === "usd" ? "USD" : "EUR";
-  const amount = normalizeNumberish(amountToken);
-  if (amount === undefined) return { currency };
-  const price = Math.round(amount);
+  if (!amountToken) return {};
+  const currency = currencyToken ? (currencyToken === "$" || currencyToken.toLowerCase() === "usd" ? "USD" : "EUR") : "EUR";
+  const price = parseRealEstatePrice(amountToken);
+  if (price === undefined) return { currency };
   return {
     price,
     currency,
@@ -465,6 +445,39 @@ function cleanParkingText(value: string | undefined) {
 
 function extractListingFacts(fullText: string, lines: string[]) {
   const normalized = normalizeWhitespace(fullText);
+  const interiorLine = findLineValue(lines, [/^(?:interior size|interior surface|surface|superficie|size)\b[:\s-]*(.*)$/i]);
+  const commercialLine = findLineValue(lines, [/^(?:commercial surface|commercial area|superficie commerciale)\b[:\s-]*(.*)$/i]);
+  const landLine = findLineValue(lines, [/^(?:garden|land|plot|lot|giardino|terreno)\b[:\s-]*(.*)$/i]);
+
+  const areaMentions: Array<{
+    value: number;
+    context: string;
+  }> = [];
+  const areaPattern = /(\d[\d.,]*)\s*(?:sqm|sq\.?\s*m|m²|m2|square meters?)/gi;
+  let areaMatch: RegExpExecArray | null;
+  while ((areaMatch = areaPattern.exec(normalized)) !== null) {
+    const rawValue = areaMatch[1];
+    if (!rawValue) continue;
+    const value = normalizeNumberish(rawValue);
+    if (value === undefined) continue;
+    const index = areaMatch.index || 0;
+    const context = normalized.slice(Math.max(0, index - 42), Math.min(normalized.length, index + 34)).toLowerCase();
+    areaMentions.push({ value, context });
+  }
+
+  const firstAreaByContext = (context: "land" | "commercial" | "interior") =>
+    areaMentions.find((mention) => {
+      if (context === "land") {
+        return /(?:land|garden|plot|lot|giardino|terreno|agricultural|olive grove)/i.test(mention.context);
+      }
+      if (context === "commercial") {
+        return /(?:commercial surface|commercial area|superficie commerciale|retail|shop|office|ufficio)/i.test(mention.context);
+      }
+      return !/(?:land|garden|plot|lot|giardino|terreno|agricultural|commercial surface|commercial area|superficie commerciale)/i.test(
+        mention.context,
+      );
+    })?.value;
+
   return {
     bedrooms:
       integerFromText(findLineValue(lines, [/^(?:bedrooms?|camere da letto|camere)\b[:\s-]*(.*)$/i])) ||
@@ -476,11 +489,14 @@ function extractListingFacts(fullText: string, lines: string[]) {
       integerFromText(findLineValue(lines, [/^(?:rooms|locali)\b[:\s-]*(.*)$/i])) ||
       integerFromText(normalized.match(/(\d{1,2}\+?)\s*(?:rooms?|locali)\b/i)?.[1]),
     sizeSqm:
-      normalizeNumberish(findLineValue(lines, [/^(?:interior size|surface|superficie|size)\b[:\s-]*(.*)$/i])) ||
-      normalizeNumberish(normalized.match(/(\d{2,5}(?:[.,]\d+)?)\s*(?:sqm|sq\.?\s*m|m²|m2)\b/i)?.[1]),
+      normalizeNumberish(interiorLine) ||
+      firstAreaByContext("interior"),
+    commercialSurfaceSqm:
+      normalizeNumberish(commercialLine) ||
+      firstAreaByContext("commercial"),
     landSizeSqm:
-      normalizeNumberish(findLineValue(lines, [/^(?:garden|land|plot|giardino|terreno)\b[:\s-]*(.*)$/i])) ||
-      normalizeNumberish(normalized.match(/(?:garden|land|plot|giardino|terreno)[^\d]{0,16}(\d[\d.,]*)\s*(?:sqm|m²|m2)\b/i)?.[1]),
+      normalizeNumberish(landLine) ||
+      firstAreaByContext("land"),
   };
 }
 
@@ -662,9 +678,9 @@ function extractDraftFromCapture(payload: CasaHudBrowserListingCapturePayload): 
   const bedrooms = facts.bedrooms;
   const bathrooms = facts.bathrooms;
   const sizeSqm = facts.sizeSqm;
-  const commercialSurfaceSqm = normalizeNumberish(
-    findLineValue(lines, [/^(?:commercial surface|commercial area)\b[:\s-]*(.*)$/i]),
-  );
+  const commercialSurfaceSqm =
+    facts.commercialSurfaceSqm ||
+    normalizeNumberish(findLineValue(lines, [/^(?:commercial surface|commercial area)\b[:\s-]*(.*)$/i]));
   const landSizeSqm = facts.landSizeSqm;
 
   const garageParking = cleanParkingText(

@@ -10,10 +10,26 @@ import {
 import {
   applyCasaHudListingValidation,
   toCasaHudCampaignSummary,
+  type CasaHudCampaign,
+  type CasaHudListingCandidate,
 } from "@/lib/studio/domara/campaigns";
 import { runCasaHudListingValidation } from "@/lib/studio/domara/listing-validation-engine";
 
 export const runtime = "nodejs";
+
+function buildListingCandidatePool(campaign: CasaHudCampaign): CasaHudListingCandidate[] {
+  const byId = new Map<string, CasaHudListingCandidate>();
+  for (const listing of campaign.listingCandidates) {
+    byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.approvedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.rejectedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  return Array.from(byId.values());
+}
 
 function errorResponse(status: number, message: string, code: string, reqId = crypto.randomUUID()) {
   return NextResponse.json({ ok: false, error: { message, code, reqId } }, { status });
@@ -44,7 +60,8 @@ export async function POST(
     if (!campaign) {
       return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
-    if (campaign.listingCandidates.length === 0) {
+    const listingCandidates = buildListingCandidatePool(campaign);
+    if (listingCandidates.length === 0) {
       return errorResponse(
         409,
         "CasaFlix needs discovered listing candidates before it can validate and rank them.",
@@ -53,8 +70,12 @@ export async function POST(
       );
     }
 
-    const validation = runCasaHudListingValidation(campaign);
-    const updatedCampaign = applyCasaHudListingValidation(campaign, validation);
+    const validationCampaign = {
+      ...campaign,
+      listingCandidates,
+    };
+    const validation = runCasaHudListingValidation(validationCampaign);
+    const updatedCampaign = applyCasaHudListingValidation(validationCampaign, validation);
     await saveCasaHudCampaign(userId, updatedCampaign);
 
     return NextResponse.json({

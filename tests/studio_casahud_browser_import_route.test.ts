@@ -246,6 +246,34 @@ describe("CasaFlix browser import route", () => {
     expect(secondPayload.campaign.listingCandidates).toHaveLength(1);
   });
 
+  it("normalizes manual browser-import price strings with thousands separators", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/browser-import/route");
+    const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {
+      method: "POST",
+      body: JSON.stringify({
+        payload: {
+          ...browserPayload,
+          visibleText: browserPayload.visibleText.replace("€299.000", "Price on request"),
+        },
+        manualDetails: {
+          price: "260,000",
+          currency: "EUR",
+          sizeSqm: "165",
+          landSizeSqm: "3.700",
+        },
+      }),
+    });
+
+    const response = await route.POST(request, { params: { id: "casahud-browser-import-route" } });
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.listing.price).toBe(260000);
+    expect(payload.listing.currency).toBe("EUR");
+    expect(payload.listing.sizeSqm).toBe(165);
+    expect(payload.listing.landSizeSqm).toBe(3700);
+  });
+
   it("rejects unsafe source URLs", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/browser-import/route");
     const request = new NextRequest("http://localhost/api/studio/domara/campaigns/casahud-browser-import-route/browser-import", {

@@ -367,6 +367,11 @@ describe("CasaFlix script narrative engine", () => {
     expect(first.fullScriptText).not.toContain("validation phase");
     expect(first.fullScriptText).not.toContain("candidate listing pattern");
     expect(first.fullScriptText).not.toContain("location signal");
+    expect(first.fullScriptText).not.toContain("If this title is going to resonate");
+    expect(first.fullScriptText).not.toContain("Keep the narrative anchored");
+    expect(first.fullScriptText).not.toContain("provider metadata");
+    expect(first.fullScriptText).not.toContain("deterministic fallback");
+    expect(first.fullScriptText).not.toContain("Video Premise");
   });
 
   it("times out slow live providers and falls back without hanging the run", async () => {

@@ -701,6 +701,36 @@ const scriptedCampaign: CasaHudCampaign = {
   },
 };
 
+const scriptBlockedCampaign: CasaHudCampaign = {
+  ...validatedCampaign,
+  status: "location_intelligence_completed",
+  locationIntelligenceStatus: "location_intelligence_completed",
+  locationIntelligenceSummary: {
+    headline: "Location story prepared.",
+    providerSummary: "Maps are available.",
+    coverageSummary: "Location context is complete and ready for script generation.",
+    warningCount: 0,
+    generatedAt: "2026-04-28T00:30:00.000Z",
+    fallbackUsed: false,
+  },
+  approvedListings: [],
+  rejectedListings: [...validatedCampaign.rejectedListings],
+  scriptGenerationStatus: "not_started",
+  scriptSummary: null,
+  openingHook: null,
+  fullScriptText: null,
+  scriptSegments: [],
+  propertySegments: [],
+  scriptWarnings: [],
+  nextPhase: {
+    key: "script_narrative_generation",
+    label: "Script and Narrative Generation",
+    detail:
+      "Script and Narrative Generation comes next. CasaFlix will turn the validated property story and location intelligence into the video narrative package.",
+    implemented: false,
+  },
+};
+
 const mediaPlannedCampaign = applyCasaHudMediaPlan(scriptedCampaign, runCasaHudMediaPlanning(scriptedCampaign));
 const packagedCampaign = applyCasaHudYouTubePackage(mediaPlannedCampaign, runCasaHudYouTubePackageReview(mediaPlannedCampaign));
 const renderPlanOnlyCampaign: CasaHudCampaign = {
@@ -1633,6 +1663,57 @@ describe("CasaFlix command center UI", () => {
 
     expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain(validatedCampaign.name);
     expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain("Resume Campaign");
+  });
+
+  it("prompts validation from the Script workspace when no approved listings are available", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(scriptBlockedCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${scriptBlockedCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: scriptBlockedCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-script"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const scriptText = container.querySelector('[data-testid="casahud-script"]')?.textContent || "";
+    expect(scriptText).toContain("Approved listings required");
+    expect(scriptText).toContain("Validate and Rank Listings");
+    expect(container.querySelector('[data-testid="casahud-validate-listings-cta"]')).toBeTruthy();
   });
 
   it("renders featured image areas for approved and rejected property cards and uses source thumbnails before fallback copy", async () => {

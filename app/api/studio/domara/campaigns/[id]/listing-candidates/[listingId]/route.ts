@@ -8,6 +8,8 @@ import {
   saveCasaHudCampaign,
 } from "@/lib/studio/domara/campaign-repository";
 import {
+  applyCasaHudListingValidation,
+  createListingValidationNextPhase,
   createPropertyDiscoveryNextPhase,
   toCasaHudCampaignSummary,
   type CasaHudCampaign,
@@ -22,6 +24,8 @@ import { createEmptyCasaHudScriptData } from "@/lib/studio/domara/campaign-scrip
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import { createEmptyCasaHudExecutionData } from "@/lib/studio/domara/campaign-execution";
+import { runCasaHudListingValidation } from "@/lib/studio/domara/listing-validation-engine";
+import { parseLocalizedNumber, parseRealEstatePrice } from "@/lib/studio/domara/number-parsing";
 
 export const runtime = "nodejs";
 
@@ -37,14 +41,22 @@ function optionalString(value: unknown, field: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function optionalNumber(value: unknown, field: string) {
+function optionalNumber(
+  value: unknown,
+  field: string,
+  options: {
+    integer?: boolean;
+    realEstatePrice?: boolean;
+  } = {},
+) {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const normalized = Number(value.replace(/,/g, ".").replace(/[^\d.+-]/g, ""));
-    if (Number.isFinite(normalized)) return normalized;
-  }
+
+  const parsed = options.realEstatePrice
+    ? parseRealEstatePrice(value)
+    : parseLocalizedNumber(value, { integer: options.integer });
+  if (parsed !== undefined) return parsed;
+
   throw new Error(`${field} must be a number.`);
 }
 
@@ -82,71 +94,47 @@ function resolveManualImage(value: string | null | undefined) {
   return accepted;
 }
 
+const SCRIPT_STALE_WARNING =
+  "Listings changed after the last script run. Regenerate Script from Current Listings before relying on script output.";
+
 function mergeImportedListing(
   campaign: CasaHudCampaign,
   listingId: string,
   nextListing: CasaHudListingCandidate,
 ): CasaHudCampaign {
+  const listingCandidates = campaign.listingCandidates.some((listing) => listing.id === listingId)
+    ? campaign.listingCandidates.map((listing) => (listing.id === listingId ? nextListing : listing))
+    : [...campaign.listingCandidates, nextListing];
+
   return {
     ...campaign,
-    listingCandidates: campaign.listingCandidates.map((listing) => (listing.id === listingId ? nextListing : listing)),
+    listingCandidates,
     approvedListings: campaign.approvedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
     rejectedListings: campaign.rejectedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
     updatedAt: nextListing.manualUpdatedAt || nowIso(),
   };
 }
 
-function removeListingFromCampaign(campaign: CasaHudCampaign, listingId: string): CasaHudCampaign {
-  const listingCandidates = campaign.listingCandidates.filter((listing) => listing.id !== listingId);
-  const approvedListings = campaign.approvedListings.filter((listing) => listing.id !== listingId);
-  const rejectedListings = campaign.rejectedListings.filter((listing) => listing.id !== listingId);
-  const listingRankOrder = campaign.listingRankOrder.filter((id) => id !== listingId);
+function buildListingCandidatePool(campaign: CasaHudCampaign): CasaHudListingCandidate[] {
+  const byId = new Map<string, CasaHudListingCandidate>();
+  for (const listing of campaign.listingCandidates) {
+    byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.approvedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.rejectedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  return Array.from(byId.values());
+}
 
-  const removedAssetIds = new Set(
-    campaign.visualAssets.filter((asset) => asset.listingId === listingId).map((asset) => asset.id),
-  );
-  const visualAssets = campaign.visualAssets.filter((asset) => asset.listingId !== listingId);
-  const sceneAssetMapping = campaign.sceneAssetMapping.map((mapping) => ({
-    ...mapping,
-    assignedAssetIds: mapping.assignedAssetIds.filter((assetId) => !removedAssetIds.has(assetId)),
-  }));
-  const shotList = campaign.shotList
-    .filter((item) => item.associatedListingId !== listingId)
-    .map((item) => ({
-      ...item,
-      assetIds: item.assetIds.filter((assetId) => !removedAssetIds.has(assetId)),
-    }));
-  const listingImageCoverage = campaign.listingImageCoverage.filter((coverage) => coverage.listingId !== listingId);
-  const mapLocationVisualPlan = campaign.mapLocationVisualPlan.filter((item) => item.associatedListingId !== listingId);
-  const thumbnailCandidateInputs = campaign.thumbnailCandidateInputs
-    .filter((candidate) => candidate.listingId !== listingId)
-    .map((candidate) => ({
-      ...candidate,
-      associatedAssetIds: candidate.associatedAssetIds.filter((assetId) => !removedAssetIds.has(assetId)),
-    }));
-
-  const localHighlights = campaign.localHighlights.filter((highlight) => highlight.associatedListingId !== listingId);
-  const poiCards = (campaign.poiBundle?.cards || []).filter((poi) => poi.associatedListingId !== listingId);
-  const poiBundle = campaign.poiBundle
-    ? {
-        ...campaign.poiBundle,
-        cards: poiCards,
-      }
-    : null;
-  const mapSceneIdeas = campaign.mapSceneIdeas.filter((scene) => scene.associatedListingId !== listingId);
-  const listingLocationInsights = campaign.listingLocationInsights
-    .filter((insight) => insight.listingId !== listingId)
-    .map((insight) => ({
-      ...insight,
-      nearbyPois: insight.nearbyPois.filter((poi) => poi.associatedListingId !== listingId),
-    }));
-
-  const scriptSegments = campaign.scriptSegments.filter((segment) => segment.associatedListingId !== listingId);
-  const propertySegments = campaign.propertySegments.filter((segment) => segment.listingId !== listingId);
-  const timestamp = nowIso();
-  const remainingCount = listingCandidates.length + approvedListings.length + rejectedListings.length;
-
-  if (remainingCount === 0) {
+function applyListingMutation(
+  campaign: CasaHudCampaign,
+  listingCandidates: CasaHudListingCandidate[],
+  timestamp: string,
+): CasaHudCampaign {
+  if (listingCandidates.length === 0) {
     const emptyLocationData = createEmptyCasaHudLocationData();
     const emptyScriptData = createEmptyCasaHudScriptData();
     const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
@@ -204,48 +192,87 @@ function removeListingFromCampaign(campaign: CasaHudCampaign, listingId: string)
     };
   }
 
+  const discoverySummary = campaign.discoverySummary
+    ? {
+        ...campaign.discoverySummary,
+        candidateCount: listingCandidates.length,
+        discoveredAt: timestamp,
+      }
+    : null;
+  const hadGeneratedScript = campaign.scriptGenerationStatus === "script_generated";
+  const shouldRevalidate =
+    campaign.listingValidationStatus === "listing_candidates_validated" ||
+    campaign.approvedListings.length > 0 ||
+    campaign.rejectedListings.length > 0;
+
+  if (shouldRevalidate) {
+    const baseline: CasaHudCampaign = {
+      ...campaign,
+      listingCandidates,
+      discoverySummary,
+      listingDiscoveryStatus: "listing_candidates_discovered",
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+      listingValidationStatus: "not_started",
+      listingValidationSummary: null,
+      titleSupportConfidence: null,
+      validationWarnings: [],
+      updatedAt: timestamp,
+    };
+    const validation = runCasaHudListingValidation(baseline);
+    const revalidated = applyCasaHudListingValidation(baseline, validation);
+    return {
+      ...revalidated,
+      discoverySummary,
+      scriptWarnings: hadGeneratedScript ? Array.from(new Set([SCRIPT_STALE_WARNING, ...revalidated.scriptWarnings])) : revalidated.scriptWarnings,
+    };
+  }
+
+  const emptyLocationData = createEmptyCasaHudLocationData();
+  const emptyScriptData = createEmptyCasaHudScriptData();
+  const emptyMediaPlanData = createEmptyCasaHudMediaPlanData();
+  const emptyYouTubePackageData = createEmptyCasaHudYouTubePackageData();
+  const emptyExecutionData = createEmptyCasaHudExecutionData();
+
   return {
     ...campaign,
     listingCandidates,
-    approvedListings,
-    rejectedListings,
-    listingRankOrder,
-    scriptSegments,
-    propertySegments,
-    localHighlights,
-    poiBundle,
-    mapSceneIdeas,
-    listingLocationInsights,
-    visualAssets,
-    sceneAssetMapping,
-    shotList,
-    listingImageCoverage,
-    mapLocationVisualPlan,
-    thumbnailCandidateInputs,
-    discoverySummary: campaign.discoverySummary
-      ? {
-          ...campaign.discoverySummary,
-          candidateCount: listingCandidates.length,
-          discoveredAt: timestamp,
-        }
-      : null,
-    listingValidationSummary: campaign.listingValidationSummary
-      ? {
-          ...campaign.listingValidationSummary,
-          discoveredCount: approvedListings.length + rejectedListings.length,
-          approvedCount: approvedListings.length,
-          rejectedCount: rejectedListings.length,
-          needsAttentionCount: rejectedListings.filter((listing) => listing.validationStatus === "needs_attention").length,
-          completedAt: timestamp,
-        }
-      : null,
+    status: "listing_candidates_discovered",
+    discoverySummary,
+    listingDiscoveryStatus: "listing_candidates_discovered",
+    approvedListings: [],
+    rejectedListings: [],
+    listingRankOrder: [],
+    listingValidationStatus: "not_started",
+    listingValidationSummary: null,
+    titleSupportConfidence: null,
+    validationWarnings: [],
+    ...emptyLocationData,
+    ...emptyScriptData,
+    ...emptyMediaPlanData,
+    ...emptyYouTubePackageData,
+    ...emptyExecutionData,
+    nextPhase: createListingValidationNextPhase(),
     updatedAt: timestamp,
+    scriptWarnings: hadGeneratedScript ? [SCRIPT_STALE_WARNING] : [],
     futureState: {
       ...campaign.futureState,
       listingCandidates,
-      approvedListings,
-      rejectedListings,
-      listingRankOrder,
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+      locationIntelligence: null,
+      mapPoiBundle: null,
+      script: null,
+      storyboard: null,
+      mediaPlan: null,
+      packaging: null,
+      renderStatus: null,
+      reviewStatus: null,
+      approvalStatus: null,
+      publishStatus: null,
+      scheduleStatus: null,
     },
   };
 }
@@ -294,16 +321,16 @@ export async function PATCH(
     }
 
     const title = optionalString(payload.title, "title");
-    const price = optionalNumber(payload.price, "price");
+    const price = optionalNumber(payload.price, "price", { realEstatePrice: true });
     const currency = optionalString(payload.currency, "currency");
     const locationText = optionalString(payload.locationText, "locationText");
     const propertyType = optionalString(payload.propertyType, "propertyType");
-    const bedrooms = optionalNumber(payload.bedrooms, "bedrooms");
-    const bathrooms = optionalNumber(payload.bathrooms, "bathrooms");
-    const rooms = optionalNumber(payload.rooms, "rooms");
-    const sizeSqm = optionalNumber(payload.sizeSqm, "sizeSqm");
+    const bedrooms = optionalNumber(payload.bedrooms, "bedrooms", { integer: true });
+    const bathrooms = optionalNumber(payload.bathrooms, "bathrooms", { integer: true });
+    const rooms = optionalNumber(payload.rooms, "rooms", { integer: true });
+    const sizeSqm = optionalNumber(payload.sizeSqm, "sizeSqm", { integer: true });
     const commercialSurfaceSqm = optionalNumber(payload.commercialSurfaceSqm, "commercialSurfaceSqm");
-    const landSizeSqm = optionalNumber(payload.landSizeSqm, "landSizeSqm");
+    const landSizeSqm = optionalNumber(payload.landSizeSqm, "landSizeSqm", { integer: true });
     const garageParking = optionalString(payload.garageParking, "garageParking");
     const balcony = optionalBoolean(payload.balcony, "balcony");
     const terrace = optionalBoolean(payload.terrace, "terrace");
@@ -391,7 +418,17 @@ export async function PATCH(
       },
     );
 
-    const updatedCampaign = mergeImportedListing(campaign, listingId, nextListing);
+    const mergedCampaign = mergeImportedListing(campaign, listingId, nextListing);
+    const updatedCampaign = applyListingMutation(
+      mergedCampaign,
+      buildListingCandidatePool(mergedCampaign),
+      timestamp,
+    );
+    const updatedListing =
+      updatedCampaign.listingCandidates.find((listing) => listing.id === listingId) ||
+      updatedCampaign.approvedListings.find((listing) => listing.id === listingId) ||
+      updatedCampaign.rejectedListings.find((listing) => listing.id === listingId) ||
+      nextListing;
     await saveCasaHudCampaign(userId, updatedCampaign);
 
     return NextResponse.json({
@@ -399,8 +436,8 @@ export async function PATCH(
       reqId,
       campaign: updatedCampaign,
       summary: toCasaHudCampaignSummary(updatedCampaign),
-      listing: nextListing,
-      message: `Saved listing details for "${nextListing.title}".`,
+      listing: updatedListing,
+      message: `Saved listing details for "${updatedListing.title}".`,
     });
   } catch (error) {
     if (isCasaHudCampaignStoreUnavailable(error)) {
@@ -457,7 +494,8 @@ export async function DELETE(
       return errorResponse(404, "CasaFlix could not find that listing on this campaign.", "LISTING_NOT_FOUND", reqId);
     }
 
-    const updatedCampaign = removeListingFromCampaign(campaign, listingId);
+    const listingCandidates = buildListingCandidatePool(campaign).filter((item) => item.id !== listingId);
+    const updatedCampaign = applyListingMutation(campaign, listingCandidates, nowIso());
     await saveCasaHudCampaign(userId, updatedCampaign);
 
     return NextResponse.json({

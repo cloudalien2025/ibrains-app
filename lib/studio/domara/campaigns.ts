@@ -1549,6 +1549,9 @@ export function applyCasaHudExecutionUpdate(
 }
 
 export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCampaignSummary {
+  const classifiedIds = new Set([...campaign.approvedListings.map((listing) => listing.id), ...campaign.rejectedListings.map((listing) => listing.id)]);
+  const pendingCandidateCount = campaign.listingCandidates.filter((listing) => !classifiedIds.has(listing.id)).length;
+
   return {
     id: campaign.id,
     name: campaign.name,
@@ -1558,7 +1561,7 @@ export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCamp
     createdAt: campaign.createdAt,
     updatedAt: campaign.updatedAt,
     researchSummary: campaign.researchBrief.summary,
-    listingCandidateCount: campaign.listingCandidates.length,
+    listingCandidateCount: pendingCandidateCount,
     listingDiscoveryStatus: campaign.listingDiscoveryStatus,
     approvedListingCount: campaign.approvedListings.length,
     listingValidationStatus: campaign.listingValidationStatus,

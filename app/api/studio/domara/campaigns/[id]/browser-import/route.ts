@@ -21,8 +21,11 @@ import {
 import { normalizeImportedListingCandidate } from "@/lib/studio/domara/imported-listing-candidate";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 import { normalizeListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
+import { parseLocalizedNumber, parseRealEstatePrice } from "@/lib/studio/domara/number-parsing";
 
 export const runtime = "nodejs";
+const SCRIPT_STALE_WARNING =
+  "Listings changed after the last script run. Regenerate Script from Current Listings before relying on script output.";
 
 function errorResponse(status: number, message: string, code: string, reqId = crypto.randomUUID()) {
   return NextResponse.json({ ok: false, error: { message, code, reqId } }, { status });
@@ -36,14 +39,20 @@ function optionalString(value: unknown, field: string) {
   return trimmed.length > 0 ? trimmed : null;
 }
 
-function optionalNumber(value: unknown, field: string) {
+function optionalNumber(
+  value: unknown,
+  field: string,
+  options: {
+    integer?: boolean;
+    realEstatePrice?: boolean;
+  } = {},
+) {
   if (value === undefined) return undefined;
   if (value === null || value === "") return null;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  if (typeof value === "string") {
-    const normalized = Number(value.replace(/,/g, ".").replace(/[^\d.+-]/g, ""));
-    if (Number.isFinite(normalized)) return normalized;
-  }
+  const parsed = options.realEstatePrice
+    ? parseRealEstatePrice(value)
+    : parseLocalizedNumber(value, { integer: options.integer });
+  if (parsed !== undefined) return parsed;
   throw new Error(`${field} must be a number.`);
 }
 
@@ -111,14 +120,28 @@ function findExistingListing(campaign: CasaHudCampaign, candidate: CasaHudListin
   );
 }
 
-function replaceListing(campaign: CasaHudCampaign, listingId: string, nextListing: CasaHudListingCandidate): CasaHudCampaign {
-  return {
-    ...campaign,
-    listingCandidates: campaign.listingCandidates.map((listing) => (listing.id === listingId ? nextListing : listing)),
-    approvedListings: campaign.approvedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
-    rejectedListings: campaign.rejectedListings.map((listing) => (listing.id === listingId ? { ...listing, ...nextListing } : listing)),
-    updatedAt: nowIso(),
-  };
+function buildListingCandidatePool(campaign: CasaHudCampaign): CasaHudListingCandidate[] {
+  const byId = new Map<string, CasaHudListingCandidate>();
+  for (const listing of campaign.listingCandidates) {
+    byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.approvedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  for (const listing of campaign.rejectedListings) {
+    if (!byId.has(listing.id)) byId.set(listing.id, listing);
+  }
+  return Array.from(byId.values());
+}
+
+function replaceListingCandidate(
+  listingCandidates: CasaHudListingCandidate[],
+  listingId: string,
+  nextListing: CasaHudListingCandidate,
+): CasaHudListingCandidate[] {
+  return listingCandidates.some((listing) => listing.id === listingId)
+    ? listingCandidates.map((listing) => (listing.id === listingId ? nextListing : listing))
+    : [...listingCandidates, nextListing];
 }
 
 function applyManualDetails(
@@ -134,16 +157,16 @@ function applyManualDetails(
   }
 
   const title = optionalString(payload.title, "title");
-  const price = optionalNumber(payload.price, "price");
+  const price = optionalNumber(payload.price, "price", { realEstatePrice: true });
   const currency = optionalString(payload.currency, "currency");
   const locationText = optionalString(payload.locationText, "locationText");
   const propertyType = optionalString(payload.propertyType, "propertyType");
-  const bedrooms = optionalNumber(payload.bedrooms, "bedrooms");
-  const bathrooms = optionalNumber(payload.bathrooms, "bathrooms");
-  const rooms = optionalNumber(payload.rooms, "rooms");
-  const sizeSqm = optionalNumber(payload.sizeSqm, "sizeSqm");
+  const bedrooms = optionalNumber(payload.bedrooms, "bedrooms", { integer: true });
+  const bathrooms = optionalNumber(payload.bathrooms, "bathrooms", { integer: true });
+  const rooms = optionalNumber(payload.rooms, "rooms", { integer: true });
+  const sizeSqm = optionalNumber(payload.sizeSqm, "sizeSqm", { integer: true });
   const commercialSurfaceSqm = optionalNumber(payload.commercialSurfaceSqm, "commercialSurfaceSqm");
-  const landSizeSqm = optionalNumber(payload.landSizeSqm, "landSizeSqm");
+  const landSizeSqm = optionalNumber(payload.landSizeSqm, "landSizeSqm", { integer: true });
   const garageParking = optionalString(payload.garageParking, "garageParking");
   const balcony = optionalBoolean(payload.balcony, "balcony");
   const terrace = optionalBoolean(payload.terrace, "terrace");
@@ -282,8 +305,10 @@ export async function POST(
       return errorResponse(409, "A listing with that source URL already exists on this campaign.", "DUPLICATE_LISTING", reqId);
     }
 
+    const hadGeneratedScript = campaign.scriptGenerationStatus === "script_generated";
     let updatedCampaign: CasaHudCampaign;
     let duplicate = false;
+    let savedListing: CasaHudListingCandidate | null = null;
     if (existing) {
       duplicate = true;
       const merged = normalizeImportedListingCandidate({
@@ -302,15 +327,29 @@ export async function POST(
           ...(nextListing.rawProviderMetadata || {}),
         },
       });
-      updatedCampaign = replaceListing(campaign, existing.id, merged);
-    } else {
+      const listingCandidates = replaceListingCandidate(buildListingCandidatePool(campaign), existing.id, merged);
       updatedCampaign = applyCasaHudImportedListingCandidates(campaign, {
-        listingCandidates: [...campaign.listingCandidates, nextListing],
+        listingCandidates,
         discoveredAt: importedAt,
         warnings: preview.warnings,
       });
+      savedListing = listingCandidates.find((listing) => listing.id === existing.id) || merged;
+    } else {
+      const listingCandidates = [...buildListingCandidatePool(campaign), nextListing];
+      updatedCampaign = applyCasaHudImportedListingCandidates(campaign, {
+        listingCandidates,
+        discoveredAt: importedAt,
+        warnings: preview.warnings,
+      });
+      savedListing = nextListing;
     }
 
+    if (hadGeneratedScript) {
+      updatedCampaign = {
+        ...updatedCampaign,
+        scriptWarnings: Array.from(new Set([SCRIPT_STALE_WARNING, ...updatedCampaign.scriptWarnings])),
+      };
+    }
     await saveCasaHudCampaign(userId, updatedCampaign);
 
     return NextResponse.json({
@@ -319,7 +358,7 @@ export async function POST(
       duplicate,
       campaign: updatedCampaign,
       summary: toCasaHudCampaignSummary(updatedCampaign),
-      listing: duplicate ? findExistingListing(updatedCampaign, nextListing) : nextListing,
+      listing: savedListing || findExistingListing(updatedCampaign, nextListing),
       extractionStatus: preview.extractionStatus,
       extractionFields: preview.extractionFields,
       warnings: preview.warnings,

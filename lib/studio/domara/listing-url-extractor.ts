@@ -7,6 +7,7 @@ import type {
 } from "@/lib/studio/domara/campaigns";
 import { validateDomaraImageUrls } from "@/lib/studio/domara/image-handling";
 import { normalizeListingImportUrl, validateListingImportUrl } from "@/lib/studio/domara/listing-url-importer";
+import { parseLocalizedNumber, parseRealEstatePrice } from "@/lib/studio/domara/number-parsing";
 
 const MAX_HTML_BYTES = 500_000;
 const MAX_REDIRECTS = 3;
@@ -235,19 +236,7 @@ function readJsonPath(source: JsonRecord, paths: string[]): unknown {
 }
 
 function normalizeNumberish(value: unknown): number | undefined {
-  if (value === undefined || value === null) return undefined;
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-
-  const raw = String(value).trim();
-  if (!raw) return undefined;
-  const normalized = raw
-    .replace(/\u00a0/g, " ")
-    .replace(/(?<=\d)\.(?=\d{3}\b)/g, "")
-    .replace(/,/g, ".")
-    .replace(/[^\d.+-]/g, "");
-  if (!normalized) return undefined;
-  const parsed = Number(normalized);
-  return Number.isFinite(parsed) ? parsed : undefined;
+  return parseLocalizedNumber(value);
 }
 
 function integerFromText(value: string | undefined): number | undefined {
@@ -295,14 +284,22 @@ function formatPrice(price?: number, currency?: string): string | undefined {
 
 function parsePrice(value: string | undefined): { price?: number; currency?: string; priceText?: string } {
   if (!value) return {};
-  const match = value.match(/(€|eur|usd|\$)\s*([\d.]+(?:,\d{1,2})?|\d[\d.,]*)/i);
-  if (!match) return {};
+  const currencyBefore = value.match(/(€|eur|usd|\$)\s*([\d][\d.,\s]*)/i);
+  const currencyAfter = value.match(/([\d][\d.,\s]*)\s*(€|eur|usd|\$)/i);
+  const amountOnly = value.match(/([\d][\d.,\s]{2,})/);
 
-  const currency = match[1] === "$" || match[1]?.toLowerCase() === "usd" ? "USD" : "EUR";
-  const amount = normalizeNumberish(match[2]);
-  if (amount === undefined) return { currency };
+  const currencyToken = currencyBefore?.[1] || currencyAfter?.[2];
+  const amountToken = currencyBefore?.[2] || currencyAfter?.[1] || amountOnly?.[1];
+  if (!amountToken) return {};
 
-  const price = Math.round(amount);
+  const currency = currencyToken
+    ? currencyToken === "$" || currencyToken.toLowerCase() === "usd"
+      ? "USD"
+      : "EUR"
+    : "EUR";
+  const price = parseRealEstatePrice(amountToken);
+  if (price === undefined) return { currency };
+
   return {
     price,
     currency,

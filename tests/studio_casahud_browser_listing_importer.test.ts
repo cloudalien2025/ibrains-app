@@ -253,6 +253,48 @@ describe("CasaFlix browser listing capture parser", () => {
     expect(euroTrailing.candidate.price).toBe(299000);
   });
 
+  it("parses thousands-separated dimensions and routes land/commercial/interior fields correctly", () => {
+    const withCommaThousands = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: `
+        Price
+        260,000 EUR
+        Address
+        Via Test 1, Capaccio Paestum, Salerno, Campania, Italy
+        Interior size
+        165 m²
+        Commercial surface
+        200 m²
+        Land
+        land of approx. 3,700 sqm
+        Description
+        Spacious family property with approx. 3700 sqm land and a separate 89 square meters annex.
+      `,
+    });
+
+    const withDotThousands = parseCasaHudBrowserListingCapture({
+      ...capaccioPayload,
+      visibleText: `
+        Price
+        € 260.000
+        Address
+        Via Test 2, Capaccio Paestum, Salerno, Campania, Italy
+        Property type
+        Single family villa
+        land of approx. 3.700 m²
+        commercial surface 200 m²
+      `,
+    });
+
+    expect(withCommaThousands.candidate.price).toBe(260000);
+    expect(withCommaThousands.candidate.sizeSqm).toBe(165);
+    expect(withCommaThousands.candidate.commercialSurfaceSqm).toBe(200);
+    expect(withCommaThousands.candidate.landSizeSqm).toBe(3700);
+    expect(withDotThousands.candidate.price).toBe(260000);
+    expect(withDotThousands.candidate.landSizeSqm).toBe(3700);
+    expect(withDotThousands.candidate.commercialSurfaceSqm).toBe(200);
+  });
+
   it("parses an agricultural land payload with land size, clean description, and image coverage", () => {
     const parsed = parseCasaHudBrowserListingCapture(quarrataLandPayload);
 
