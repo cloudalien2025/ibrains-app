@@ -249,6 +249,7 @@ describe("CasaFlix listing validation route", () => {
     mocks.getCasaHudCampaign.mockResolvedValue(discoveredCampaign);
     mocks.saveCasaHudCampaign.mockImplementation(async (_userId: string, campaign: CasaHudCampaign) => campaign);
     mocks.runCasaHudListingValidation.mockReturnValue({
+      candidateListings: [],
       approvedListings: [
         {
           ...discoveredCampaign.listingCandidates[0]!,
@@ -345,5 +346,62 @@ describe("CasaFlix listing validation route", () => {
       { params: { id: discoveredCampaign.id } },
     );
     expect(unavailableResponse.status).toBe(503);
+  });
+
+  it("stores needs-attention listings as candidates instead of rejected entries", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/validate-listings/route");
+    mocks.runCasaHudListingValidation.mockReturnValueOnce({
+      candidateListings: [
+        {
+          ...discoveredCampaign.listingCandidates[0]!,
+          validationStatus: "needs_attention",
+          overallScore: 69,
+          scoreBreakdown: {
+            titleMatchScore: 58,
+            geographyScore: 86,
+            priceFitScore: 80,
+            propertyTypeScore: 82,
+            featureClaimScore: 44,
+            mediaAvailabilityScore: 40,
+            listingCompletenessScore: 72,
+            providerQualityScore: 64,
+            uniquenessScore: 100,
+            overallScore: 69,
+          },
+          validationReasons: ["Feature support is thin for this title."],
+          warnings: ["Some listing details still need review."],
+          rejectionCategory: "weak_support",
+        },
+      ],
+      approvedListings: [],
+      rejectedListings: [],
+      listingRankOrder: [],
+      listingValidationSummary: {
+        headline: "The discovered listings only partly support the current story.",
+        rankingExplanation: "Validation run complete.",
+        discoveredCount: 1,
+        approvedCount: 0,
+        rejectedCount: 0,
+        needsAttentionCount: 1,
+        titleSupportConfidence: 60,
+        warnings: ["Some listing details still need review."],
+        completedAt: "2026-04-28T00:25:00.000Z",
+      },
+      titleSupportConfidence: 60,
+      validationWarnings: ["Some listing details still need review."],
+    });
+
+    const response = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${discoveredCampaign.id}/validate-listings`, {
+        method: "POST",
+      }),
+      { params: { id: discoveredCampaign.id } },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.campaign.listingCandidates).toHaveLength(1);
+    expect(payload.campaign.listingCandidates[0]?.validationStatus).toBe("needs_attention");
+    expect(payload.campaign.rejectedListings).toHaveLength(0);
   });
 });

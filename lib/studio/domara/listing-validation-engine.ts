@@ -23,6 +23,7 @@ type ListingValidationEvaluation = {
 };
 
 export type CasaHudListingValidationResult = {
+  candidateListings?: CasaHudValidatedListing[];
   approvedListings: CasaHudValidatedListing[];
   rejectedListings: CasaHudValidatedListing[];
   listingRankOrder: string[];
@@ -484,13 +485,12 @@ function validationDecision(evaluation: ListingValidationEvaluation): {
 }
 
 function summarizeConfidence(
+  candidateListings: CasaHudValidatedListing[],
   approvedListings: CasaHudValidatedListing[],
-  rejectedListings: CasaHudValidatedListing[],
   criteria: CasaHudListingSearchCriteria,
 ): number {
   const approvedAverage = average(approvedListings.map((listing) => listing.overallScore));
-  const needsAttention = rejectedListings.filter((listing) => listing.validationStatus === "needs_attention");
-  const needsAttentionAverage = average(needsAttention.map((listing) => listing.overallScore));
+  const needsAttentionAverage = average(candidateListings.map((listing) => listing.overallScore));
   const expectedCount = criteria.singlePropertyFocus ? 1 : Math.min(Math.max(criteria.targetListingCount, 3), 6);
   const coverage = Math.min(1, approvedListings.length / expectedCount);
 
@@ -498,14 +498,15 @@ function summarizeConfidence(
 }
 
 function buildValidationSummary(
+  candidateListings: CasaHudValidatedListing[],
   approvedListings: CasaHudValidatedListing[],
   rejectedListings: CasaHudValidatedListing[],
   criteria: CasaHudListingSearchCriteria,
   validationWarnings: string[],
 ): CasaHudListingValidationSummary {
-  const discoveredCount = approvedListings.length + rejectedListings.length;
-  const needsAttentionCount = rejectedListings.filter((listing) => listing.validationStatus === "needs_attention").length;
-  const titleSupportConfidence = summarizeConfidence(approvedListings, rejectedListings, criteria);
+  const discoveredCount = approvedListings.length + candidateListings.length + rejectedListings.length;
+  const needsAttentionCount = candidateListings.length;
+  const titleSupportConfidence = summarizeConfidence(candidateListings, approvedListings, criteria);
   const headline =
     titleSupportConfidence >= 75
       ? `Approved ${approvedListings.length} of ${discoveredCount} discovered listings for the current story.`
@@ -536,6 +537,7 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
     groups.set(evaluation.duplicateGroupKey, current);
   }
 
+  const candidateListings: CasaHudValidatedListing[] = [];
   const approvedListings: CasaHudValidatedListing[] = [];
   const rejectedListings: CasaHudValidatedListing[] = [];
   const validationWarnings = new Set<string>();
@@ -582,6 +584,8 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
 
       if (decision.status === "approved") {
         approvedListings.push(listing);
+      } else if (decision.status === "needs_attention") {
+        candidateListings.push(listing);
       } else {
         rejectedListings.push(listing);
       }
@@ -593,24 +597,26 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
     listing.rank = index + 1;
   });
 
+  candidateListings.sort((left, right) => right.overallScore - left.overallScore);
   rejectedListings.sort((left, right) => right.overallScore - left.overallScore);
 
   const listingRankOrder = approvedListings.map((listing) => listing.id);
-  const titleSupportConfidence = summarizeConfidence(approvedListings, rejectedListings, criteria);
+  const titleSupportConfidence = summarizeConfidence(candidateListings, approvedListings, criteria);
   const minimumShortlist = criteria.singlePropertyFocus ? 1 : Math.min(Math.max(criteria.targetListingCount, 3), 5);
   if (approvedListings.length < minimumShortlist) {
     validationWarnings.add(
-      "The discovered listings only partly support the current story. Review the rejected listings or refresh the shortlist before moving forward.",
+      "The discovered listings only partly support the current story. Review candidate and rejected listings or refresh the shortlist before moving forward.",
     );
   }
   if (approvedListings.length === 0) {
     validationWarnings.add("No listing is strong enough to approve yet. Rerun property discovery before moving forward.");
   }
-  if (rejectedListings.some((listing) => listing.validationStatus === "needs_attention")) {
+  if (candidateListings.length > 0) {
     validationWarnings.add("Some listings are plausible but still need review before CasaFlix can rely on them.");
   }
 
   const summary = buildValidationSummary(
+    candidateListings,
     approvedListings,
     rejectedListings,
     criteria,
@@ -618,6 +624,7 @@ export function runCasaHudListingValidation(campaign: CasaHudCampaign): CasaHudL
   );
 
   return {
+    candidateListings,
     approvedListings,
     rejectedListings,
     listingRankOrder,

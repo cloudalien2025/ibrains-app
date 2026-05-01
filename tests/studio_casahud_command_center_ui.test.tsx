@@ -337,7 +337,7 @@ const validatedCampaign: CasaHudCampaign = {
       photoAvailability: "none",
       discoveredAt: "2026-04-28T00:20:00.000Z",
       preliminaryMatchNotes: "Looks plausible but the evidence is weaker.",
-      validationStatus: "needs_attention",
+      validationStatus: "rejected",
       overallScore: 63,
       scoreBreakdown: {
         titleMatchScore: 58,
@@ -365,7 +365,7 @@ const validatedCampaign: CasaHudCampaign = {
     discoveredCount: 2,
     approvedCount: 1,
     rejectedCount: 1,
-    needsAttentionCount: 1,
+    needsAttentionCount: 0,
     titleSupportConfidence: 74,
     warnings: ["Some listings still need stronger evidence and imagery."],
     completedAt: "2026-04-28T00:25:00.000Z",
@@ -1771,6 +1771,76 @@ describe("CasaFlix command center UI", () => {
         (node) => node.getAttribute("data-media-kind") === "thumbnail",
       ),
     ).toBe(true);
+  });
+
+  it("treats legacy needs-attention listings as candidates instead of rejected cards", async () => {
+    const legacyNeedsAttentionCampaign: CasaHudCampaign = {
+      ...validatedCampaign,
+      approvedListings: [],
+      listingCandidates: [],
+      rejectedListings: [
+        {
+          ...validatedCampaign.rejectedListings[0]!,
+          validationStatus: "needs_attention",
+          rejectionCategory: "weak_support",
+        },
+      ],
+      listingValidationSummary: validatedCampaign.listingValidationSummary
+        ? {
+            ...validatedCampaign.listingValidationSummary,
+            approvedCount: 0,
+            rejectedCount: 0,
+            needsAttentionCount: 1,
+          }
+        : null,
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(legacyNeedsAttentionCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${legacyNeedsAttentionCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: legacyNeedsAttentionCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-properties"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.querySelectorAll('[data-testid="casahud-listing-candidate-card"]').length).toBe(1);
+    expect(container.querySelectorAll('[data-testid="casahud-rejected-listing-card"]').length).toBe(0);
   });
 
   it("shows scene-based media cards, keeps review navigation accessible, and renders an honest preview-package state", async () => {

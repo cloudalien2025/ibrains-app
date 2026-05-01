@@ -1873,16 +1873,29 @@ export default function StudioCasaHudCommandCenter() {
     [activeCampaign],
   );
   const visibleCampaignRejected = useMemo(
-    () => (activeCampaign ? activeCampaign.rejectedListings.filter((listing) => !isDemoListing(listing)) : []),
+    () =>
+      activeCampaign
+        ? activeCampaign.rejectedListings.filter(
+            (listing) => !isDemoListing(listing) && listing.validationStatus !== "needs_attention",
+          )
+        : [],
     [activeCampaign],
   );
   const visibleCampaignCandidates = useMemo(() => {
     if (!activeCampaign) return [];
+    const candidateById = new Map<string, CasaHudListingCandidate | CasaHudValidatedListing>();
+    const promotedNeedsAttention = activeCampaign.rejectedListings.filter((listing) => listing.validationStatus === "needs_attention");
+    for (const listing of [...activeCampaign.listingCandidates, ...promotedNeedsAttention]) {
+      if (!isDemoListing(listing)) candidateById.set(listing.id, listing);
+    }
+
     const classifiedIds = new Set<string>([
       ...activeCampaign.approvedListings.map((listing) => listing.id),
-      ...activeCampaign.rejectedListings.map((listing) => listing.id),
+      ...activeCampaign.rejectedListings
+        .filter((listing) => listing.validationStatus !== "needs_attention")
+        .map((listing) => listing.id),
     ]);
-    return activeCampaign.listingCandidates.filter((listing) => !isDemoListing(listing) && !classifiedIds.has(listing.id));
+    return Array.from(candidateById.values()).filter((listing) => !classifiedIds.has(listing.id));
   }, [activeCampaign]);
   const legacyDemoListingCount = useMemo(() => {
     if (!activeCampaign) return 0;
@@ -4666,7 +4679,7 @@ export default function StudioCasaHudCommandCenter() {
                   <section className="grid gap-4">
                     <div className="flex items-center justify-between gap-3">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Rejected / Needs Attention</p>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#9A2727]">Rejected Listings</p>
                         <h2 className="mt-2 text-2xl font-semibold tracking-[-0.03em] text-[#172033]">Properties that did not make the cut</h2>
                       </div>
                       <StatusPill tone="red">{formatCountLabel(visibleCampaignRejected.length, "listing")}</StatusPill>
