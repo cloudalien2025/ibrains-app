@@ -339,6 +339,96 @@ describe("CasaFlix imported listing update route", () => {
     expect(payload.campaign.rejectedListings.some((listing: { id: string }) => listing.id === "imported-listing-1")).toBe(false);
   });
 
+  it("moves corrected imported listings into candidate review instead of leaving stale rejected status", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
+    const campaign = buildCampaign();
+    campaign.status = "listing_candidates_validated";
+    campaign.listingValidationStatus = "listing_candidates_validated";
+    campaign.listingSearchCriteria = {
+      operation: "sale",
+      campaignType: "lifestyle_relocation",
+      titlePromise: "Could You Retire in Southern Italy for Under $300K?",
+      regionHint: "Southern Italy",
+      country: "Italy",
+      cities: ["Tropea", "Lecce", "Bari"],
+      propertyTypes: ["apartment", "villa", "house"],
+      featureTags: ["budget-conscious", "move-in ready"],
+      lifestyleTags: ["retirement", "relocation"],
+      searchTerms: ["Southern Italy homes under 300k"],
+      pricePositioning: "affordable",
+      targetListingCount: 6,
+      singlePropertyFocus: false,
+      maxPrice: 300000,
+      currency: "EUR",
+    };
+    campaign.rejectedListings = [
+      {
+        ...campaign.listingCandidates[0]!,
+        validationStatus: "rejected",
+        overallScore: 30,
+        scoreBreakdown: {
+          titleMatchScore: 32,
+          geographyScore: 34,
+          priceFitScore: 24,
+          propertyTypeScore: 34,
+          featureClaimScore: 28,
+          mediaAvailabilityScore: 8,
+          listingCompletenessScore: 16,
+          providerQualityScore: 80,
+          uniquenessScore: 100,
+          overallScore: 30,
+        },
+        validationReasons: ["Overall story support is too weak."],
+        warnings: ["Listing details are incomplete."],
+        rejectionCategory: "weak_support",
+      },
+    ];
+    campaign.listingValidationSummary = {
+      headline: "The discovered listings only partly support the current story.",
+      rankingExplanation: "Validation run complete.",
+      discoveredCount: 1,
+      approvedCount: 0,
+      rejectedCount: 1,
+      needsAttentionCount: 0,
+      titleSupportConfidence: 30,
+      warnings: [],
+      completedAt: "2026-04-29T12:00:00.000Z",
+    };
+    mocks.getCasaHudCampaign.mockResolvedValue(campaign);
+
+    const response = await route.PATCH(
+      new NextRequest(
+        "http://localhost/api/studio/domara/campaigns/casahud-project-edit-route/listing-candidates/imported-listing-1",
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            title: "Messina Villa with Sea Access",
+            price: "340,000",
+            currency: "EUR",
+            locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+            propertyType: "Single family villa",
+            rooms: 5,
+            bathrooms: 2,
+            sizeSqm: 187,
+            descriptionSnippet: "Seaside villa with usable data but still above the title budget angle.",
+            manualFeaturedImageUrl: "https://images.example.com/immobiliare-villa-manual.jpg",
+          }),
+        },
+      ),
+      {
+        params: { id: "casahud-project-edit-route", listingId: "imported-listing-1" },
+      },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.campaign.listingCandidates.some((listing: { id: string; validationStatus?: string }) => listing.id === "imported-listing-1")).toBe(true);
+    expect(payload.campaign.approvedListings.some((listing: { id: string }) => listing.id === "imported-listing-1")).toBe(false);
+    expect(payload.campaign.rejectedListings.some((listing: { id: string }) => listing.id === "imported-listing-1")).toBe(false);
+    const moved = payload.campaign.listingCandidates.find((listing: { id: string }) => listing.id === "imported-listing-1");
+    expect(moved?.validationStatus).toBe("needs_attention");
+  });
+
   it("removes a listing candidate and updates campaign counts", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/listing-candidates/[listingId]/route");
     const request = new NextRequest(

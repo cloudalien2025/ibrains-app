@@ -311,7 +311,7 @@ describe("CasaFlix listing validation engine", () => {
     ];
 
     const result = runCasaHudListingValidation(campaign);
-    const listing = result.approvedListings[0] || result.rejectedListings[0];
+    const listing = result.approvedListings[0] || result.candidateListings[0] || result.rejectedListings[0];
 
     expect(listing?.id).toBe("browser-import-1");
     expect(listing?.scoreBreakdown.priceFitScore).toBeGreaterThan(60);
@@ -320,5 +320,47 @@ describe("CasaFlix listing validation engine", () => {
     expect(listing?.validationStatus).not.toBe("rejected");
     expect(listing?.bedrooms).toBeUndefined();
     expect(listing?.warnings.join(" ")).toContain("Manual edits can clear");
+  });
+
+  it("keeps borderline browser imports as candidates instead of rejected when hard invalid reasons are absent", () => {
+    const campaign = baseCampaign();
+    campaign.listingCandidates = [
+      {
+        ...campaign.listingCandidates[0]!,
+        id: "browser-borderline-69",
+        sourceType: "browser_assisted_import",
+        provider: "immobiliare",
+        title: "Single family villa Contrada Lacagnina, Messina",
+        locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+        city: "Messina",
+        region: "Sicily",
+        country: "Italy",
+        price: 300000,
+        currency: "EUR",
+        propertyType: "Single family villa",
+        bedrooms: undefined,
+        rooms: 5,
+        bathrooms: 2,
+        sizeSqm: 187,
+        descriptionSnippet: "Seaside villa with strong relocation appeal and direct sea access.",
+        features: ["5+ rooms", "187 sqm", "2 bathrooms", "seaside"],
+        imageUrls: ["https://images.example.com/immobiliare-127142643.jpg"],
+        imageCount: 1,
+        photoAvailability: "limited",
+        extractionStatus: "partial",
+        manualCompletionStatus: "completed",
+        needsReviewFields: ["energy"],
+      },
+    ];
+
+    const result = runCasaHudListingValidation(campaign);
+    const candidate = result.candidateListings.find((listing) => listing.id === "browser-borderline-69")
+      || result.approvedListings.find((listing) => listing.id === "browser-borderline-69");
+
+    expect(candidate).toBeTruthy();
+    expect(candidate?.validationStatus).not.toBe("rejected");
+    expect(candidate?.overallScore).toBeGreaterThanOrEqual(56);
+    expect(result.rejectedListings.some((listing) => listing.id === "browser-borderline-69")).toBe(false);
+    expect(result.listingValidationSummary.rejectedCount).toBe(0);
   });
 });

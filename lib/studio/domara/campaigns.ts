@@ -1332,6 +1332,7 @@ export function applyCasaHudImportedListingCandidates(
 export function applyCasaHudListingValidation(
   campaign: CasaHudCampaign,
   validation: {
+    candidateListings?: CasaHudValidatedListing[];
     approvedListings: CasaHudValidatedListing[];
     rejectedListings: CasaHudValidatedListing[];
     listingRankOrder: string[];
@@ -1340,6 +1341,10 @@ export function applyCasaHudListingValidation(
     validationWarnings: string[];
   },
 ): CasaHudCampaign {
+  const candidateListings =
+    validation.candidateListings ||
+    validation.rejectedListings.filter((listing) => listing.validationStatus === "needs_attention");
+  const rejectedListings = validation.rejectedListings.filter((listing) => listing.validationStatus !== "needs_attention");
   const updatedAt = validation.listingValidationSummary.completedAt || nowIso();
   const emptyLocationData = createEmptyCasaHudLocationData();
   const emptyScriptData = createEmptyCasaHudScriptData();
@@ -1350,8 +1355,9 @@ export function applyCasaHudListingValidation(
   return {
     ...campaign,
     status: "listing_candidates_validated",
+    listingCandidates: candidateListings,
     approvedListings: validation.approvedListings,
-    rejectedListings: validation.rejectedListings,
+    rejectedListings,
     listingRankOrder: validation.listingRankOrder,
     listingValidationStatus: "listing_candidates_validated",
     listingValidationSummary: validation.listingValidationSummary,
@@ -1366,8 +1372,9 @@ export function applyCasaHudListingValidation(
     updatedAt,
     futureState: {
       ...campaign.futureState,
+      listingCandidates: candidateListings,
       approvedListings: validation.approvedListings,
-      rejectedListings: validation.rejectedListings,
+      rejectedListings,
       listingRankOrder: validation.listingRankOrder,
       locationIntelligence: null,
       mapPoiBundle: null,
