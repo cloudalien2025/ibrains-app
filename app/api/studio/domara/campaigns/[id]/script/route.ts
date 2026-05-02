@@ -86,7 +86,7 @@ export async function POST(
     if (isCasaHudLocationIntelligenceStale(campaign)) {
       return errorResponse(
         409,
-        "Location intelligence no longer matches the current approved properties. Regenerate Location Intelligence from current listings before writing the script.",
+        "Location intelligence no longer matches the current listings. Regenerate Location Intelligence from current listings before writing the script.",
         "LOCATION_INTELLIGENCE_STALE",
         reqId,
       );
