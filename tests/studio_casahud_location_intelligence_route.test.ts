@@ -366,7 +366,7 @@ describe("CasaFlix location intelligence route", () => {
     mocks.runCasaHudLocationIntelligence.mockResolvedValue(locationIntelligence);
   });
 
-  it("requires approved listings before building location intelligence", async () => {
+  it("requires at least one complete listing before building location intelligence", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/location-intelligence/route");
     mocks.getCasaHudCampaign.mockResolvedValue({
       ...validatedCampaign,
@@ -383,6 +383,55 @@ describe("CasaFlix location intelligence route", () => {
 
     expect(response.status).toBe(409);
     expect(payload.error.code).toBe("APPROVED_LISTINGS_REQUIRED");
+    expect(payload.error.message).toContain("complete listing");
+  });
+
+  it("allows location intelligence when a complete browser import is script-ready", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/location-intelligence/route");
+    mocks.getCasaHudCampaign.mockResolvedValue({
+      ...validatedCampaign,
+      approvedListings: [],
+      listingCandidates: [
+        {
+          id: "listing-browser-ready",
+          provider: "immobiliare",
+          sourceType: "browser_assisted_import",
+          sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+          country: "Italy",
+          price: 300000,
+          currency: "EUR",
+          propertyType: "Single family villa",
+          rooms: 5,
+          bathrooms: 2,
+          sizeSqm: 187,
+          descriptionSnippet: "Seaside villa with complete listing details.",
+          features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+          imageUrls: ["https://images.example.com/messina-villa.jpg"],
+          imageCount: 1,
+          photoAvailability: "limited",
+          featuredImageUrl: "https://images.example.com/messina-villa.jpg",
+          manualCompletionStatus: "completed",
+          discoveredAt: "2026-05-02T00:00:00.000Z",
+          preliminaryMatchNotes: "Complete browser import.",
+        },
+      ],
+    });
+
+    const response = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${validatedCampaign.id}/location-intelligence`, {
+        method: "POST",
+      }),
+      { params: { id: validatedCampaign.id } },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(mocks.runCasaHudLocationIntelligence).toHaveBeenCalledOnce();
   });
 
   it("persists the location bundle and returns the updated campaign on success", async () => {

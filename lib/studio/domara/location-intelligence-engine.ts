@@ -14,6 +14,7 @@ import {
   computeApprovedListingsLocationFingerprint,
   deriveApprovedListingLocationLabels,
 } from "@/lib/studio/domara/location-intelligence-fingerprint";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 
 type FetchLike = typeof fetch;
 
@@ -158,9 +159,9 @@ function haversineDistanceKm(from: Coordinates, to: Coordinates): number {
   return earthRadiusKm * c;
 }
 
-function orderedApprovedListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
+function orderedWorkingListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
   const rankMap = new Map(campaign.listingRankOrder.map((id, index) => [id, index]));
-  return [...campaign.approvedListings].sort((left, right) => {
+  return [...deriveCasaHudWorkingListings(campaign)].sort((left, right) => {
     const leftRank = rankMap.get(left.id) ?? left.rank ?? Number.MAX_SAFE_INTEGER;
     const rightRank = rankMap.get(right.id) ?? right.rank ?? Number.MAX_SAFE_INTEGER;
     if (leftRank !== rightRank) return leftRank - rightRank;
@@ -713,7 +714,7 @@ function buildLocationStory(contexts: ListingLocationContext[], warnings: string
 
   return {
     headline: `${primaryLocationLabel(top)} turns the shortlist into a place-led story.`,
-    summary: `CasaFlix positioned the approved properties around ${joinNatural(regionHighlights)} so the campaign reads as property plus place, with ${joinNatural(lifestyleAnchors.slice(0, 3)).toLowerCase()} carrying the lifestyle context.`,
+    summary: `CasaFlix positioned the current shortlist around ${joinNatural(regionHighlights)} so the campaign reads as property plus place, with ${joinNatural(lifestyleAnchors.slice(0, 3)).toLowerCase()} carrying the lifestyle context.`,
     narrativeAngles: [
       "Open with the region before dropping into the strongest listing.",
       "Use local proof points as support for the property promise instead of generic travel filler.",
@@ -759,7 +760,7 @@ function buildProviderStatuses(
       detail: !googlePlacesApiKey
         ? "Using CasaFlix location patterns until Google Places is connected for live POIs."
         : googleCoverage > 0
-          ? `Google Places returned live POI context for ${googleCoverage} approved ${googleCoverage === 1 ? "listing" : "listings"}.`
+          ? `Google Places returned live POI context for ${googleCoverage} current ${googleCoverage === 1 ? "listing" : "listings"}.`
           : "Google Places was available, but live nearby places were limited for the saved shortlist.",
       warning:
         !googlePlacesApiKey
@@ -782,7 +783,7 @@ function buildProviderStatuses(
       detail: !mapboxAccessToken
         ? "Using listing coordinates and CasaFlix location patterns until Mapbox is connected for live map anchoring."
         : mapboxCoverage > 0
-          ? `Mapbox anchored ${mapboxCoverage} approved ${mapboxCoverage === 1 ? "listing" : "listings"} for map context and scene ideas.`
+          ? `Mapbox anchored ${mapboxCoverage} current ${mapboxCoverage === 1 ? "listing" : "listings"} for map context and scene ideas.`
           : "Existing listing coordinates were enough, so live Mapbox anchoring was not required on this run.",
       warning:
         !mapboxAccessToken
@@ -840,11 +841,11 @@ export async function runCasaHudLocationIntelligence(
   campaign: CasaHudCampaign,
   options: CasaHudLocationIntelligenceOptions = {},
 ): Promise<CasaHudLocationData> {
-  if (campaign.approvedListings.length === 0) {
-    throw new Error("CasaFlix needs approved listings before it can build location intelligence.");
+  const workingListings = orderedWorkingListings(campaign);
+  if (workingListings.length === 0) {
+    throw new Error("CasaFlix needs at least one script-ready listing before it can build location intelligence.");
   }
 
-  const approvedListings = orderedApprovedListings(campaign);
   const fetchImpl = options.fetchImpl ?? fetch;
   const googlePlacesApiKey = options.googlePlacesApiKey?.trim() || null;
   const mapboxAccessToken = options.mapboxAccessToken?.trim() || null;
@@ -867,7 +868,7 @@ export async function runCasaHudLocationIntelligence(
   };
 
   const listingContexts = await Promise.all(
-    approvedListings.map(async (listing) => {
+    workingListings.map(async (listing) => {
       const signals = deriveSignals(campaign, listing);
       const resolvedLocation = await resolveMapContext(listing, mapboxAccessToken, fetchImpl, mapboxTimeoutMs, mapboxMetrics);
       const livePois = await fetchGooglePois(
@@ -900,8 +901,8 @@ export async function runCasaHudLocationIntelligence(
   );
 
   const providerStatuses = buildProviderStatuses(listingContexts, googlePlacesApiKey, mapboxAccessToken, googleMetrics, mapboxMetrics);
-  const listingFingerprint = computeApprovedListingsLocationFingerprint(approvedListings);
-  const sourceLocations = deriveApprovedListingLocationLabels(approvedListings);
+  const listingFingerprint = computeApprovedListingsLocationFingerprint(workingListings);
+  const sourceLocations = deriveApprovedListingLocationLabels(workingListings);
   const locationWarnings = uniqueStrings([
     ...listingContexts.flatMap((context) => context.warnings),
     ...providerStatuses.flatMap((status) => [status.warning]),
@@ -928,7 +929,7 @@ export async function runCasaHudLocationIntelligence(
     locationStory,
     localHighlights,
     poiBundle: {
-      summary: `${poiCards.length} location proof point${poiCards.length === 1 ? "" : "s"} prepared for the approved shortlist.`,
+      summary: `${poiCards.length} location proof point${poiCards.length === 1 ? "" : "s"} prepared for the current shortlist.`,
       cards: poiCards,
       categories: uniqueStrings(poiCards.map((poi) => poi.category)),
       generatedAt,

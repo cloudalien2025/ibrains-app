@@ -11,6 +11,7 @@ import {
   applyCasaHudYouTubePackage,
   toCasaHudCampaignSummary,
 } from "@/lib/studio/domara/campaigns";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 import { runCasaHudYouTubePackageReview } from "@/lib/studio/domara/youtube-package-engine";
 
 export const runtime = "nodejs";
@@ -44,10 +45,10 @@ export async function POST(
     if (!campaign) {
       return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
-    if (campaign.approvedListings.length === 0) {
+    if (deriveCasaHudWorkingListings(campaign).length === 0) {
       return errorResponse(
         409,
-        "CasaFlix needs approved listings before it can build the YouTube package.",
+        "CasaFlix needs at least one complete listing before it can build the YouTube package.",
         "APPROVED_LISTINGS_REQUIRED",
         reqId,
       );

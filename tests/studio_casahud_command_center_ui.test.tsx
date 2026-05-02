@@ -18,6 +18,8 @@ import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-me
 import { createEmptyCasaHudScriptData } from "@/lib/studio/domara/campaign-script-narrative";
 import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
 import type { DomaraIntegrationProviderStatus } from "@/lib/studio/domara/integrations";
+import { computeApprovedListingsLocationFingerprint } from "@/lib/studio/domara/location-intelligence-fingerprint";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 import { runCasaHudMediaPlanning } from "@/lib/studio/domara/media-planning-engine";
 import { runCasaHudYouTubePackageReview } from "@/lib/studio/domara/youtube-package-engine";
 
@@ -1665,7 +1667,7 @@ describe("CasaFlix command center UI", () => {
     expect(container.querySelector('[data-testid="casahud-campaigns"]')?.textContent).toContain("Resume Campaign");
   });
 
-  it("prompts validation from the Script workspace when no approved listings are available", async () => {
+  it("prompts listing completion from the Script workspace when no script-ready listings are available", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
 
@@ -1711,9 +1713,110 @@ describe("CasaFlix command center UI", () => {
     await flush();
 
     const scriptText = container.querySelector('[data-testid="casahud-script"]')?.textContent || "";
-    expect(scriptText).toContain("Approved listings required");
-    expect(scriptText).toContain("Validate and Rank Listings");
-    expect(container.querySelector('[data-testid="casahud-validate-listings-cta"]')).toBeTruthy();
+    expect(scriptText).toContain("Complete listing required");
+    expect(scriptText).toContain("Add at least one complete listing");
+    expect(container.querySelector('[data-testid="casahud-complete-listings-cta"]')).toBeTruthy();
+  });
+
+  it("unblocks script workspace when a complete browser import is script-ready", async () => {
+    const scriptReadyCandidateCampaign: CasaHudCampaign = {
+      ...scriptBlockedCampaign,
+      listingCandidates: [
+        {
+          id: "listing-browser-ready",
+          provider: "immobiliare",
+          sourceType: "browser_assisted_import",
+          sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+          country: "Italy",
+          price: 300000,
+          currency: "EUR",
+          propertyType: "Single family villa",
+          rooms: 5,
+          bathrooms: 2,
+          sizeSqm: 187,
+          descriptionSnippet: "Seaside villa with complete listing facts.",
+          features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+          imageUrls: ["https://images.example.com/messina-villa.jpg"],
+          imageCount: 1,
+          photoAvailability: "limited",
+          featuredImageUrl: "https://images.example.com/messina-villa.jpg",
+          manualCompletionStatus: "completed",
+          discoveredAt: "2026-05-02T00:00:00.000Z",
+          preliminaryMatchNotes: "Complete browser import.",
+        },
+      ],
+      locationStory: {
+        headline: "Messina turns the shortlist into a place-led story.",
+        summary: "Location context is already prepared for the Messina shortlist.",
+        narrativeAngles: ["Open with the coast."],
+        lifestyleAnchors: ["Coastal day-to-day context"],
+        regionHighlights: ["Messina", "Sicily"],
+      },
+      locationIntelligenceSummary: {
+        headline: "Location story prepared across 1 shortlist anchor.",
+        providerSummary: "Maps are available.",
+        coverageSummary: "Location context is complete and ready for script generation.",
+        warningCount: 0,
+        generatedAt: "2026-05-02T00:00:00.000Z",
+        fallbackUsed: false,
+      },
+    };
+    scriptReadyCandidateCampaign.locationIntelligenceSummary = {
+      ...scriptReadyCandidateCampaign.locationIntelligenceSummary!,
+      listingFingerprint: computeApprovedListingsLocationFingerprint(deriveCasaHudWorkingListings(scriptReadyCandidateCampaign)),
+    };
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+
+      if (url.includes("/api/studio/domara/integrations/status")) {
+        return new Response(JSON.stringify({ ok: true, providers: connectedProviders, saveSupported: true }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith("/api/studio/domara/campaigns")) {
+        return new Response(JSON.stringify({ ok: true, campaigns: [toSummary(scriptReadyCandidateCampaign)] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      if (url.endsWith(`/api/studio/domara/campaigns/${scriptReadyCandidateCampaign.id}`)) {
+        return new Response(JSON.stringify({ ok: true, campaign: scriptReadyCandidateCampaign }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      throw new Error(`Unhandled fetch: ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<StudioDomaraClient />);
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-resume-campaign"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    await act(async () => {
+      container.querySelector('[data-testid="casahud-nav-script"]')?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const scriptText = container.querySelector('[data-testid="casahud-script"]')?.textContent || "";
+    expect(scriptText).not.toContain("Complete listing required");
+    expect(scriptText).toContain("Generate Script");
   });
 
   it("flags stale Tropea location context when current approved properties are in Messina", async () => {

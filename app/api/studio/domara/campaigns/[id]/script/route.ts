@@ -17,6 +17,7 @@ import {
   toCasaHudCampaignSummary,
 } from "@/lib/studio/domara/campaigns";
 import { isCasaHudLocationIntelligenceStale } from "@/lib/studio/domara/location-intelligence-fingerprint";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 import { runCasaHudScriptNarrative } from "@/lib/studio/domara/script-narrative-engine";
 
 export const runtime = "nodejs";
@@ -66,10 +67,10 @@ export async function POST(
     if (!campaign) {
       return errorResponse(404, "CasaFlix could not find that campaign.", "NOT_FOUND", reqId);
     }
-    if (campaign.approvedListings.length === 0) {
+    if (deriveCasaHudWorkingListings(campaign).length === 0) {
       return errorResponse(
         409,
-        "CasaFlix needs approved listings before it can write the script. Run Validate and Rank Listings first.",
+        "CasaFlix needs at least one complete listing before it can write the script.",
         "APPROVED_LISTINGS_REQUIRED",
         reqId,
       );

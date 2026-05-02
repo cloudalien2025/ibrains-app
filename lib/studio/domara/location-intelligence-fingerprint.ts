@@ -1,5 +1,6 @@
 import { stableCasaHudHash } from "@/lib/studio/domara/ai-channel-engine/ids";
 import type { CasaHudCampaign, CasaHudValidatedListing } from "@/lib/studio/domara/campaigns";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 
 function normalizeText(value: string | undefined): string {
   return (value || "")
@@ -90,8 +91,8 @@ const NON_DISTINCTIVE_LOCATION_LABELS = new Set([
   "region",
 ]);
 
-function hasLegacyLocationMatch(campaign: CasaHudCampaign): boolean {
-  const anchors = deriveApprovedListingLocationLabels(campaign.approvedListings)
+function hasLegacyLocationMatch(listings: CasaHudValidatedListing[], campaign: CasaHudCampaign): boolean {
+  const anchors = deriveApprovedListingLocationLabels(listings)
     .map((value) => normalizeText(value))
     .filter((value) => value.length >= 4 && !NON_DISTINCTIVE_LOCATION_LABELS.has(value));
 
@@ -102,20 +103,21 @@ function hasLegacyLocationMatch(campaign: CasaHudCampaign): boolean {
 
 export function isCasaHudLocationIntelligenceStale(campaign: CasaHudCampaign): boolean {
   if (campaign.locationIntelligenceStatus !== "location_intelligence_completed") return false;
-  if (campaign.approvedListings.length === 0) return true;
+  const workingListings = deriveCasaHudWorkingListings(campaign);
+  if (workingListings.length === 0) return true;
 
-  const expectedFingerprint = computeApprovedListingsLocationFingerprint(campaign.approvedListings);
+  const expectedFingerprint = computeApprovedListingsLocationFingerprint(workingListings);
   const storedFingerprint = campaign.locationIntelligenceSummary?.listingFingerprint?.trim();
   if (storedFingerprint) {
     return storedFingerprint !== expectedFingerprint;
   }
 
   // Backward-compatible fallback for legacy location records that predate fingerprinting.
-  return !hasLegacyLocationMatch(campaign);
+  return !hasLegacyLocationMatch(workingListings, campaign);
 }
 
 export function resolveLocationSourceLabels(campaign: CasaHudCampaign): string[] {
   const fromSummary = campaign.locationIntelligenceSummary?.sourceLocations || [];
   if (fromSummary.length > 0) return fromSummary;
-  return deriveApprovedListingLocationLabels(campaign.approvedListings);
+  return deriveApprovedListingLocationLabels(deriveCasaHudWorkingListings(campaign));
 }

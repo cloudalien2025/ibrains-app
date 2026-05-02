@@ -74,6 +74,7 @@ import {
   type CasaHudScriptProviderStatus,
   type CasaHudScriptSegment,
 } from "@/lib/studio/domara/campaign-script-narrative";
+import { isCasaHudScriptPackageStale } from "@/lib/studio/domara/listing-working-set";
 import type {
   CasaHudOpportunityCampaignType,
   CasaHudOpportunityProviderStatus,
@@ -1558,6 +1559,7 @@ export function applyCasaHudExecutionUpdate(
 export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCampaignSummary {
   const classifiedIds = new Set([...campaign.approvedListings.map((listing) => listing.id), ...campaign.rejectedListings.map((listing) => listing.id)]);
   const pendingCandidateCount = campaign.listingCandidates.filter((listing) => !classifiedIds.has(listing.id)).length;
+  const scriptIsStale = isCasaHudScriptPackageStale(campaign);
 
   return {
     id: campaign.id,
@@ -1585,7 +1587,7 @@ export function toCasaHudCampaignSummary(campaign: CasaHudCampaign): CasaHudCamp
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
-    scriptSummary: campaign.scriptSummary ?? undefined,
+    scriptSummary: scriptIsStale ? undefined : campaign.scriptSummary ?? undefined,
     mediaPlanSummary: campaign.mediaPlanSummary ?? undefined,
     packagingSummary: campaign.packagingSummary ?? undefined,
   };

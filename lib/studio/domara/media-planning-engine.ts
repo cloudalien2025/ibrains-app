@@ -13,6 +13,7 @@ import {
   type CasaHudVisualAssetType,
 } from "@/lib/studio/domara/campaign-media-planning";
 import type { CasaHudCampaign, CasaHudValidatedListing } from "@/lib/studio/domara/campaigns";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 
 function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return Array.from(
@@ -24,9 +25,9 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   );
 }
 
-function orderedApprovedListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
+function orderedWorkingListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
   const rankMap = new Map(campaign.listingRankOrder.map((id, index) => [id, index]));
-  return [...campaign.approvedListings].sort((left, right) => {
+  return [...deriveCasaHudWorkingListings(campaign)].sort((left, right) => {
     const leftRank = rankMap.get(left.id) ?? left.rank ?? Number.MAX_SAFE_INTEGER;
     const rightRank = rankMap.get(right.id) ?? right.rank ?? Number.MAX_SAFE_INTEGER;
     if (leftRank !== rightRank) return leftRank - rightRank;
@@ -179,7 +180,7 @@ function relatedPoiIdsForListing(pois: CasaHudPoi[], listingId?: string) {
 
 function buildSceneAssetMappings(campaign: CasaHudCampaign, assets: CasaHudVisualAsset[]): CasaHudSceneAssetMapping[] {
   const poiCards = campaign.poiBundle?.cards || [];
-  const leadListing = orderedApprovedListings(campaign)[0];
+  const leadListing = orderedWorkingListings(campaign)[0];
 
   return campaign.scriptSegments.map((segment, index) => {
     const listingId = segment.associatedListingId || campaign.propertySegments[index - 2]?.listingId || leadListing?.id;
@@ -220,7 +221,7 @@ function buildSceneAssetMappings(campaign: CasaHudCampaign, assets: CasaHudVisua
           ...globalMapAssetIds,
         ]).slice(0, 3);
         recommendedAssetType = "listing_image";
-        visualPurpose = "Cut between multiple approved listings so the viewer can feel the differences without a ranking monologue.";
+        visualPurpose = "Cut between multiple shortlist listings so the viewer can feel the differences without a ranking monologue.";
         break;
       case "transition":
         assignedAssetIds = uniqueStrings([...relatedMapAssetIds, ...globalLocationIds, ...listingAssetIds.slice(0, 1)]).slice(0, 2);
@@ -487,7 +488,7 @@ function buildSummary(
 }
 
 export function runCasaHudMediaPlanning(campaign: CasaHudCampaign): CasaHudMediaPlanData {
-  const listings = orderedApprovedListings(campaign);
+  const listings = orderedWorkingListings(campaign);
   if (listings.length === 0 || campaign.scriptSegments.length === 0) {
     return createEmptyCasaHudMediaPlanData();
   }
