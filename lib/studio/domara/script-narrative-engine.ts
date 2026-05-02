@@ -9,6 +9,7 @@ import {
   type CasaHudScriptSegment,
 } from "@/lib/studio/domara/campaign-script-narrative";
 import type { CasaHudCampaign, CasaHudValidatedListing } from "@/lib/studio/domara/campaigns";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 
 type FetchLike = typeof fetch;
 
@@ -76,9 +77,9 @@ function formatListingPrice(price?: number, currency?: string): string | null {
   return `${currency || "EUR"} ${price.toLocaleString("en-US")}`;
 }
 
-function orderedApprovedListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
+function orderedWorkingListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
   const rankMap = new Map(campaign.listingRankOrder.map((id, index) => [id, index]));
-  return [...campaign.approvedListings].sort((left, right) => {
+  return [...deriveCasaHudWorkingListings(campaign)].sort((left, right) => {
     const leftRank = rankMap.get(left.id) ?? left.rank ?? Number.MAX_SAFE_INTEGER;
     const rightRank = rankMap.get(right.id) ?? right.rank ?? Number.MAX_SAFE_INTEGER;
     if (leftRank !== rightRank) return leftRank - rightRank;
@@ -131,20 +132,20 @@ function locationFallbackWarning(campaign: CasaHudCampaign): string | null {
 function listingCoverageWarnings(campaign: CasaHudCampaign, listings: CasaHudValidatedListing[]): string[] {
   const warnings: string[] = [];
   if (listings.length === 0) {
-    warnings.push("No approved listings are available for script generation.");
+    warnings.push("No script-ready listings are available for script generation.");
     return warnings;
   }
   if (campaign.campaignType === "roundup" && listings.length < 2) {
-    warnings.push("This roundup only has one approved listing, so the narrative should frame it as a focused shortlist rather than a broad countdown.");
+    warnings.push("This roundup only has one script-ready listing, so the narrative should frame it as a focused shortlist rather than a broad countdown.");
   }
   if (campaign.campaignType === "single_property_showcase" && listings.length > 1) {
-    warnings.push("More than one approved listing exists, but the script should keep the first-ranked property as the clear primary focus.");
+    warnings.push("More than one script-ready listing exists, but the script should keep the first-ranked property as the clear primary focus.");
   }
   if (listings.some((listing) => listing.photoAvailability === "none")) {
-    warnings.push("One or more approved listings have no photo coverage, so the script should avoid overly visual line reads for those segments.");
+    warnings.push("One or more script-ready listings have no photo coverage, so the script should avoid overly visual line reads for those segments.");
   }
   if (listings.some((listing) => !listing.descriptionSnippet && listing.features.length === 0)) {
-    warnings.push("At least one approved listing has thin source detail, so keep that property segment concise and factual.");
+    warnings.push("At least one script-ready listing has thin source detail, so keep that property segment concise and factual.");
   }
   return warnings;
 }
@@ -177,15 +178,15 @@ function campaignTypePremise(campaign: CasaHudCampaign, listings: CasaHudValidat
   const propertyCount = listings.length;
   switch (campaign.campaignType) {
     case "roundup":
-      return `Today we're touring ${propertyCount} approved homes that all fit the same story, so you can compare real options side by side.`;
+      return `Today we're touring ${propertyCount} script-ready homes that all fit the same story, so you can compare real options side by side.`;
     case "single_property_showcase":
       return "Today we're focusing on one standout home, then using local context to show what life around that property would actually feel like.";
     case "niche_category":
-      return `We'll define this niche first, then test it against ${propertyCount} approved homes to see whether the category really holds up.`;
+      return `We'll define this niche first, then test it against ${propertyCount} script-ready homes to see whether the category really holds up.`;
     case "location_led":
-      return `This is a place-first episode: we'll start with the location, then use ${propertyCount} approved homes to show what you actually get there.`;
+      return `This is a place-first episode: we'll start with the location, then use ${propertyCount} script-ready homes to show what you actually get there.`;
     case "lifestyle_relocation":
-      return `This episode is about relocation fit: budget, daily routine, and the tradeoffs behind ${propertyCount} approved listings.`;
+      return `This episode is about relocation fit: budget, daily routine, and the tradeoffs behind ${propertyCount} script-ready listings.`;
   }
 }
 
@@ -194,11 +195,11 @@ function buildOpeningHook(campaign: CasaHudCampaign, listings: CasaHudValidatedL
   const region = campaign.marketRegionHint || leadListing?.region || leadListing?.locationText || "this market";
   switch (campaign.campaignType) {
     case "roundup":
-      return `Can you still find real opportunities in ${region}? In this video, we're looking at approved listings and what each one gets you.`;
+      return `Can you still find real opportunities in ${region}? In this video, we're looking at the current shortlist and what each one gets you.`;
     case "single_property_showcase":
       return `${leadListing?.title || "This home"} is our focus today, and we're breaking down why it stands out once you factor in price, space, and location.`;
     case "niche_category":
-      return `Is this niche actually buyable in ${region}? Let's test it using real, approved listings instead of wishful examples.`;
+      return `Is this niche actually buyable in ${region}? Let's test it using real, current listings instead of wishful examples.`;
     case "location_led":
       return `Before we talk floor plans and pricing, we need to understand ${region} itself, because place is the real headline of this episode.`;
     case "lifestyle_relocation":
@@ -312,15 +313,15 @@ function buildSummary(campaign: CasaHudCampaign, propertySegments: CasaHudProper
   const count = propertySegments.length;
   switch (campaign.campaignType) {
     case "roundup":
-      return `A viewer-facing roundup script built around ${count} approved listings with fast transitions and clear comparisons.`;
+      return `A viewer-facing roundup script built around ${count} script-ready listings with fast transitions and clear comparisons.`;
     case "single_property_showcase":
       return "A viewer-facing showcase script centered on one lead property with supporting local context.";
     case "niche_category":
       return `A category-led script that tests the niche against ${count} approved property examples.`;
     case "location_led":
-      return `A place-first script that uses ${count} approved listings to ground the location story in real options.`;
+      return `A place-first script that uses ${count} script-ready listings to ground the location story in real options.`;
     case "lifestyle_relocation":
-      return `A relocation-focused script that translates ${count} approved listings into practical day-to-day tradeoffs for viewers.`;
+      return `A relocation-focused script that translates ${count} script-ready listings into practical day-to-day tradeoffs for viewers.`;
   }
 }
 
@@ -341,7 +342,7 @@ function buildScriptSegments(
     id: stableCasaHudId("casahud-script-segment", `${campaign.id}:hook`),
     title: "Opening Hook",
     segmentType: "hook",
-    narration: buildOpeningHook(campaign, orderedApprovedListings(campaign)),
+    narration: buildOpeningHook(campaign, orderedWorkingListings(campaign)),
     durationSeconds: campaign.campaignType === "single_property_showcase" ? 18 : 14,
     visualNote: campaign.mapSceneIdeas[0]?.suggestedVisual || "Open on the strongest verified place or listing anchor once the visual package is assembled.",
   });
@@ -350,7 +351,7 @@ function buildScriptSegments(
     id: stableCasaHudId("casahud-script-segment", `${campaign.id}:premise`),
     title: "What We'll Explore",
     segmentType: "premise",
-    narration: campaignTypePremise(campaign, orderedApprovedListings(campaign)),
+    narration: campaignTypePremise(campaign, orderedWorkingListings(campaign)),
     durationSeconds: 16,
     visualNote: "Use headline overlays and premium framing, not raw provider or debug language.",
   });
@@ -470,8 +471,8 @@ function buildLiveProviderStatus(detail: string): CasaHudScriptProviderStatus {
 
 function buildFallbackScript(campaign: CasaHudCampaign, generatedAt = nowIso(), extraWarnings: string[] = []): CasaHudScriptData {
   const listings = campaign.campaignType === "single_property_showcase"
-    ? orderedApprovedListings(campaign).slice(0, 1)
-    : orderedApprovedListings(campaign);
+    ? orderedWorkingListings(campaign).slice(0, 1)
+    : orderedWorkingListings(campaign);
   const insightMap = listingInsightById(campaign);
   const propertySegments = listings.map((listing) => buildPropertyNarration(campaign, listing, insightMap.get(listing.id)));
   const locationLifestyleLines = buildLocationLifestyleLines(campaign, listings);
@@ -510,7 +511,7 @@ function buildFallbackScript(campaign: CasaHudCampaign, generatedAt = nowIso(), 
 }
 
 function buildOpenAiPrompt(campaign: CasaHudCampaign, fallback: CasaHudScriptData): string {
-  const listings = orderedApprovedListings(campaign).map((listing) => ({
+  const listings = orderedWorkingListings(campaign).map((listing) => ({
     id: listing.id,
     title: listing.title,
     locationText: listing.locationText,

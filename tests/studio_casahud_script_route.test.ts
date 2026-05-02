@@ -3,6 +3,8 @@ import { NextRequest } from "next/server";
 import type { CasaHudCampaign } from "@/lib/studio/domara/campaigns";
 import { createEmptyCasaHudMediaPlanData } from "@/lib/studio/domara/campaign-media-planning";
 import { createEmptyCasaHudYouTubePackageData } from "@/lib/studio/domara/campaign-youtube-package";
+import { computeApprovedListingsLocationFingerprint } from "@/lib/studio/domara/location-intelligence-fingerprint";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 import type { CasaHudOpportunityResult } from "@/lib/studio/domara/opportunity-engine/types";
 
 const userId = "11111111-1111-4111-8111-111111111111";
@@ -318,7 +320,7 @@ describe("CasaFlix script generation route", () => {
     mocks.runCasaHudScriptNarrative.mockResolvedValue(scriptResult);
   });
 
-  it("requires approved listings and location intelligence before generating the script", async () => {
+  it("requires at least one complete listing and location intelligence before generating the script", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/script/route");
 
     mocks.getCasaHudCampaign.mockResolvedValueOnce({
@@ -334,7 +336,7 @@ describe("CasaFlix script generation route", () => {
     const noListingsPayload = await noListingsResponse.json();
     expect(noListingsResponse.status).toBe(409);
     expect(noListingsPayload.error.code).toBe("APPROVED_LISTINGS_REQUIRED");
-    expect(noListingsPayload.error.message).toContain("Validate and Rank Listings");
+    expect(noListingsPayload.error.message).toContain("complete listing");
 
     mocks.getCasaHudCampaign.mockResolvedValueOnce({
       ...locationReadyCampaign,
@@ -389,6 +391,69 @@ describe("CasaFlix script generation route", () => {
     expect(staleLocationResponse.status).toBe(409);
     expect(staleLocationPayload.error.code).toBe("LOCATION_INTELLIGENCE_STALE");
     expect(staleLocationPayload.error.message).toContain("Regenerate Location Intelligence");
+  });
+
+  it("accepts a complete browser import as script-ready even when approvedListings is empty", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/script/route");
+    const scriptReadyCampaign: CasaHudCampaign = {
+      ...locationReadyCampaign,
+      approvedListings: [],
+      listingCandidates: [
+        {
+          id: "listing-browser-ready",
+          provider: "immobiliare",
+          sourceType: "browser_assisted_import",
+          sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+          country: "Italy",
+          price: 300000,
+          currency: "EUR",
+          propertyType: "Single family villa",
+          rooms: 5,
+          bathrooms: 2,
+          sizeSqm: 187,
+          descriptionSnippet: "Seaside villa with direct access and complete viewer-facing details.",
+          features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+          imageUrls: ["https://images.example.com/messina-villa.jpg"],
+          imageCount: 1,
+          photoAvailability: "limited",
+          featuredImageUrl: "https://images.example.com/messina-villa.jpg",
+          manualCompletionStatus: "completed",
+          discoveredAt: "2026-05-02T00:00:00.000Z",
+          preliminaryMatchNotes: "Complete browser import.",
+        },
+      ],
+      locationStory: {
+        ...locationReadyCampaign.locationStory!,
+        headline: "Messina turns the shortlist into a place-led story.",
+        summary: "Location intelligence now reflects Messina and Sicily.",
+        regionHighlights: ["Messina", "Sicily"],
+      },
+      locationIntelligenceSummary: {
+        ...locationReadyCampaign.locationIntelligenceSummary!,
+        sourceLocations: ["Messina", "Sicily"],
+      },
+    };
+    scriptReadyCampaign.locationIntelligenceSummary = {
+      ...scriptReadyCampaign.locationIntelligenceSummary!,
+      listingFingerprint: computeApprovedListingsLocationFingerprint(deriveCasaHudWorkingListings(scriptReadyCampaign)),
+    };
+    mocks.getCasaHudCampaign.mockResolvedValueOnce(scriptReadyCampaign);
+
+    const response = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${locationReadyCampaign.id}/script`, {
+        method: "POST",
+      }),
+      { params: { id: locationReadyCampaign.id } },
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(mocks.runCasaHudScriptNarrative).toHaveBeenCalled();
   });
 
   it("persists the script package and returns the updated campaign", async () => {

@@ -260,4 +260,50 @@ describe("CasaFlix location intelligence engine", () => {
     expect(result.locationIntelligenceSummary?.listingFingerprint).toBeTruthy();
     expect(result.locationIntelligenceSummary?.sourceLocations?.join(" ")).toMatch(/Messina|Sicily/i);
   });
+
+  it("uses complete browser imports as location source when approved listings are empty", async () => {
+    const campaign = baseValidatedCampaign();
+    campaign.approvedListings = [];
+    campaign.listingCandidates = [
+      {
+        id: "listing-browser-ready",
+        provider: "immobiliare",
+        sourceType: "browser_assisted_import",
+        sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+        title: "Contrada Lacagnina Messina Single family villa with Terrace",
+        locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+        city: "Messina",
+        region: "Sicily",
+        country: "Italy",
+        price: 300000,
+        currency: "EUR",
+        propertyType: "Single family villa",
+        rooms: 5,
+        bathrooms: 2,
+        sizeSqm: 187,
+        descriptionSnippet: "Seaside villa with complete browser-import details.",
+        features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+        imageUrls: ["https://images.example.com/messina-villa.jpg"],
+        featuredImageUrl: "https://images.example.com/messina-villa.jpg",
+        imageCount: 1,
+        photoAvailability: "limited",
+        manualCompletionStatus: "completed",
+        discoveredAt: "2026-05-02T00:00:00.000Z",
+        preliminaryMatchNotes: "Complete browser import.",
+      },
+    ];
+
+    const result = await runCasaHudLocationIntelligence(campaign, {});
+    const corpus = [
+      result.locationStory?.headline,
+      result.locationStory?.summary,
+      result.locationIntelligenceSummary?.coverageSummary,
+      ...(result.poiBundle?.cards || []).map((poi) => poi.locationText),
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    expect(corpus).toMatch(/Messina|Sicily/i);
+    expect(result.locationIntelligenceSummary?.listingFingerprint).toBeTruthy();
+  });
 });

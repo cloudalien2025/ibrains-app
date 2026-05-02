@@ -12,6 +12,7 @@ import {
   type CasaHudYouTubePackageData,
 } from "@/lib/studio/domara/campaign-youtube-package";
 import type { CasaHudCampaign, CasaHudValidatedListing } from "@/lib/studio/domara/campaigns";
+import { deriveCasaHudWorkingListings } from "@/lib/studio/domara/listing-working-set";
 
 function uniqueStrings(values: Array<string | undefined | null>): string[] {
   return Array.from(
@@ -23,9 +24,9 @@ function uniqueStrings(values: Array<string | undefined | null>): string[] {
   );
 }
 
-function orderedApprovedListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
+function orderedWorkingListings(campaign: CasaHudCampaign): CasaHudValidatedListing[] {
   const rankMap = new Map(campaign.listingRankOrder.map((id, index) => [id, index]));
-  return [...campaign.approvedListings].sort((left, right) => {
+  return [...deriveCasaHudWorkingListings(campaign)].sort((left, right) => {
     const leftRank = rankMap.get(left.id) ?? left.rank ?? Number.MAX_SAFE_INTEGER;
     const rightRank = rankMap.get(right.id) ?? right.rank ?? Number.MAX_SAFE_INTEGER;
     if (leftRank !== rightRank) return leftRank - rightRank;
@@ -57,7 +58,7 @@ function buildFinalTitle(campaign: CasaHudCampaign, listings: CasaHudValidatedLi
     return {
       finalTitle: baseTitle,
       titleRationale:
-        "The selected viral title already stays aligned with the approved listings, location story, and current media coverage, so CasaFlix kept the promise intact rather than forcing a cosmetic rewrite.",
+        "The selected viral title already stays aligned with the current shortlist, location story, and current media coverage, so CasaFlix kept the promise intact rather than forcing a cosmetic rewrite.",
     };
   }
 
@@ -66,7 +67,7 @@ function buildFinalTitle(campaign: CasaHudCampaign, listings: CasaHudValidatedLi
   return {
     finalTitle,
     titleRationale:
-      "CasaFlix kept the original click angle but added an evidence-first framing cue because title support or script warnings suggest the package should signal real approved listing coverage more explicitly.",
+      "CasaFlix kept the original click angle but added an evidence-first framing cue because title support or script warnings suggest the package should signal real shortlist coverage more explicitly.",
   };
 }
 
@@ -84,7 +85,7 @@ function buildDescription(campaign: CasaHudCampaign, finalTitle: string, listing
     .join("; ");
 
   const sections = [
-    `In this video, CasaFlix follows the title promise behind "${finalTitle}" using approved listings and the current location story rather than generic relocation claims.`,
+    `In this video, CasaFlix follows the title promise behind "${finalTitle}" using the current shortlist and location story rather than generic relocation claims.`,
     campaign.scriptSummary || campaign.researchBrief.summary,
     featuredListings ? `Featured properties: ${featuredListings}.` : null,
     campaign.locationStory?.summary || campaign.locationIntelligenceSummary?.coverageSummary || null,
@@ -140,7 +141,7 @@ function buildChapters(campaign: CasaHudCampaign): CasaHudYouTubeChapter[] {
 
 function buildThumbnailConcept(campaign: CasaHudCampaign, finalTitle: string): CasaHudThumbnailConcept | null {
   const leadCandidate = campaign.thumbnailCandidateInputs[0];
-  const leadListing = orderedApprovedListings(campaign)[0];
+  const leadListing = orderedWorkingListings(campaign)[0];
   if (!leadCandidate && !leadListing) return null;
 
   return {
@@ -187,7 +188,8 @@ function buildPublishMetadataDraft(
 }
 
 function buildPackagingSummary(campaign: CasaHudCampaign, finalTitle: string, chapters: CasaHudYouTubeChapter[]) {
-  return `A review-ready YouTube package built around "${finalTitle}", ${campaign.approvedListings.length} approved listing${campaign.approvedListings.length === 1 ? "" : "s"}, ${chapters.length} chapter${chapters.length === 1 ? "" : "s"}, and the current media plan.`;
+  const listings = orderedWorkingListings(campaign);
+  return `A review-ready YouTube package built around "${finalTitle}", ${listings.length} shortlist listing${listings.length === 1 ? "" : "s"}, ${chapters.length} chapter${chapters.length === 1 ? "" : "s"}, and the current media plan.`;
 }
 
 function buildPackageWarnings(campaign: CasaHudCampaign, thumbnailConcept: CasaHudThumbnailConcept | null) {
@@ -245,7 +247,7 @@ function buildReviewFindings(
       category: "weak_listings",
       headline: "Rejected listings remain outside the package",
       detail: `${campaign.rejectedListings.length} listing${campaign.rejectedListings.length === 1 ? "" : "s"} were excluded because they weakened the title promise or data support.`,
-      recommendedFix: "Keep the default package focused on the approved shortlist.",
+      recommendedFix: "Keep the default package focused on the current shortlist.",
     });
   }
 
@@ -281,7 +283,7 @@ function buildReviewFindings(
       category: "thumbnail_alignment",
       headline: "Thumbnail concept still has media constraints",
       detail: thumbnailConcept.warnings[0],
-      recommendedFix: "Use the strongest approved hero asset or simplify the concept until better media is available.",
+      recommendedFix: "Use the strongest current hero asset or simplify the concept until better media is available.",
     });
   }
 
@@ -290,8 +292,8 @@ function buildReviewFindings(
       id: stableCasaHudId("casahud-review-finding", `${campaign.id}:script-package-consistency`),
       severity: "info",
       category: "script_package_consistency",
-      headline: "Package stays aligned with the approved narrative",
-      detail: "The title, metadata, thumbnail direction, and scene plan remain aligned with the script and approved listings.",
+      headline: "Package stays aligned with the shortlist narrative",
+      detail: "The title, metadata, thumbnail direction, and scene plan remain aligned with the script and current shortlist.",
     });
   }
 
@@ -420,15 +422,15 @@ function buildRenderPlan(
 }
 
 export function runCasaHudYouTubePackageReview(campaign: CasaHudCampaign): CasaHudYouTubePackageData {
+  const listings = orderedWorkingListings(campaign);
   if (
-    campaign.approvedListings.length === 0 ||
+    listings.length === 0 ||
     campaign.scriptGenerationStatus !== "script_generated" ||
     campaign.mediaPlanningStatus !== "media_plan_built"
   ) {
     return createEmptyCasaHudYouTubePackageData();
   }
 
-  const listings = orderedApprovedListings(campaign);
   const { finalTitle, titleRationale } = buildFinalTitle(campaign, listings);
   const youtubeDescription = buildDescription(campaign, finalTitle, listings);
   const youtubeTags = buildTags(campaign, listings);

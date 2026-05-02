@@ -157,6 +157,68 @@ describe("CasaFlix location intelligence fingerprint", () => {
     expect(isCasaHudLocationIntelligenceStale(campaign)).toBe(true);
   });
 
+  it("uses complete user-imported candidates as the current location source of truth when no real approved listings exist", () => {
+    const tropeaFingerprint = computeApprovedListingsLocationFingerprint([
+      approvedListing({
+        id: "listing-tropea",
+        city: "Tropea",
+        region: "Calabria",
+        locationText: "Tropea, Calabria, Italy",
+      }),
+    ]);
+    const campaign = campaignWithLocation({
+      approvedListings: [
+        approvedListing({
+          id: "demo-approved",
+          provider: "casahud_sample",
+          sourceType: "sample_pattern",
+          city: "Tropea",
+          region: "Calabria",
+          locationText: "Tropea, Calabria, Italy",
+        }),
+      ],
+      listingCandidates: [
+        {
+          id: "listing-messina-browser",
+          provider: "immobiliare",
+          sourceType: "browser_assisted_import",
+          sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+          title: "Contrada Lacagnina Messina Single family villa with Terrace",
+          locationText: "Acqualadrone - Sparta, Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+          country: "Italy",
+          price: 300000,
+          currency: "EUR",
+          propertyType: "Single family villa",
+          rooms: 5,
+          bathrooms: 2,
+          sizeSqm: 187,
+          descriptionSnippet: "Seaside villa with complete listing details.",
+          features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+          imageUrls: ["https://images.example.com/messina-villa.jpg"],
+          imageCount: 1,
+          photoAvailability: "limited",
+          featuredImageUrl: "https://images.example.com/messina-villa.jpg",
+          manualCompletionStatus: "completed",
+          discoveredAt: "2026-05-02T00:00:00.000Z",
+          preliminaryMatchNotes: "Complete browser import.",
+        },
+      ] as unknown as CasaHudCampaign["listingCandidates"],
+      locationIntelligenceSummary: {
+        headline: "Location story prepared across 1 shortlist anchor.",
+        providerSummary: "Fallback provider.",
+        coverageSummary: "CasaFlix connected Tropea to local proof points.",
+        warningCount: 0,
+        generatedAt: "2026-05-01T00:00:00.000Z",
+        fallbackUsed: true,
+        listingFingerprint: tropeaFingerprint,
+      },
+    });
+
+    expect(isCasaHudLocationIntelligenceStale(campaign)).toBe(true);
+  });
+
   it("resolves source labels from summary first, then approved listings", () => {
     const campaign = campaignWithLocation({
       locationIntelligenceSummary: {

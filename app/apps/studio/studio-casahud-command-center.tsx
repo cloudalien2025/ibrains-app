@@ -34,6 +34,11 @@ import {
   isCasaHudLocationIntelligenceStale,
   resolveLocationSourceLabels,
 } from "@/lib/studio/domara/location-intelligence-fingerprint";
+import {
+  deriveCasaHudWorkingListings,
+  isCasaHudScriptPackageStale,
+  isCompleteUserImportedListing,
+} from "@/lib/studio/domara/listing-working-set";
 import { resolveCasaHudPublicAppOriginFromBrowser } from "@/lib/studio/domara/public-app-origin";
 
 type CasaHudGenerationStatus = "idle" | "loading" | "ready" | "error";
@@ -606,6 +611,7 @@ function needsReviewLabel(field: CasaHudListingNeedsReviewField) {
 
 function validationReadinessLabel(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (isUserImportedListing(listing)) {
+    if (isCompleteUserImportedListing(listing)) return "Script-ready from imported details";
     if (listing.manualCompletionStatus === "incomplete") return "Needs manual details";
     return listing.needsReviewFields?.length ? "Needs details before validation" : "Ready for validation with imported details";
   }
@@ -669,6 +675,7 @@ function toTimestamp(totalSeconds: number) {
 }
 
 function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
+  const scriptIsStale = isCasaHudScriptPackageStale(campaign);
   return {
     id: campaign.id,
     name: campaign.name,
@@ -695,7 +702,7 @@ function summarizeCampaign(campaign: CasaHudCampaign): CasaHudCampaignSummary {
     discoverySummary: campaign.discoverySummary?.headline,
     validationSummary: campaign.listingValidationSummary?.headline,
     locationSummary: campaign.locationIntelligenceSummary?.headline,
-    scriptSummary: campaign.scriptSummary ?? undefined,
+    scriptSummary: scriptIsStale ? undefined : campaign.scriptSummary ?? undefined,
     mediaPlanSummary: campaign.mediaPlanSummary ?? undefined,
     packagingSummary: campaign.packagingSummary ?? undefined,
   };
@@ -747,6 +754,7 @@ function canOpenExternalUrl(url?: string | null) {
 
 function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (isUserImportedListing(listing)) {
+    if (isCompleteUserImportedListing(listing)) return "Script-ready";
     if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "Needs manual details";
     if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "Ready";
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "Extracted";
@@ -759,6 +767,7 @@ function statusLabelFromListing(listing: CasaHudListingCandidate | CasaHudValida
 
 function listingStatusTone(listing: CasaHudListingCandidate | CasaHudValidatedListing) {
   if (isUserImportedListing(listing)) {
+    if (isCompleteUserImportedListing(listing)) return "blue" as const;
     if (listing.manualCompletionStatus === "completed" && !(listing.needsReviewFields || []).length) return "sage" as const;
     if (listing.manualCompletionStatus === "incomplete" || listing.extractionStatus === "blocked_or_unavailable") return "red" as const;
     if (listing.extractionStatus === "extracted" && !(listing.needsReviewFields || []).length) return "sage" as const;
@@ -1145,13 +1154,13 @@ function buildVideoScenes(campaign: CasaHudCampaign | null): CasaHudVideoScene[]
 }
 
 function buildPhaseProgress(campaign: CasaHudCampaign | null): CasaHudPhaseProgressItem[] {
-  const approvedCount = campaign ? campaign.approvedListings.filter((listing) => !isDemoListing(listing)).length : 0;
+  const workingCount = campaign ? deriveCasaHudWorkingListings(campaign).length : 0;
   const steps = [
     { id: "opportunity", label: "Viral Titles", complete: Boolean(campaign?.selectedTitle?.title || campaign?.selectedViralTitle) },
     {
       id: "properties",
       label: "Properties",
-      complete: Boolean(campaign?.listingValidationStatus === "listing_candidates_validated" || approvedCount > 0),
+      complete: Boolean(campaign?.listingValidationStatus === "listing_candidates_validated" || workingCount > 0),
     },
     {
       id: "location",
@@ -1220,13 +1229,13 @@ function buildCampaignBlockers(campaign: CasaHudCampaign | null) {
 function buildCompletedArtifacts(campaign: CasaHudCampaign | null) {
   if (!campaign) return [];
   const realCandidates = campaign.listingCandidates.filter((listing) => !isDemoListing(listing));
-  const realApproved = campaign.approvedListings.filter((listing) => !isDemoListing(listing));
+  const workingListings = deriveCasaHudWorkingListings(campaign);
   const scriptStale = isScriptStale(campaign);
   const locationStale = isCasaHudLocationIntelligenceStale(campaign);
   return [
     campaign.selectedTitle?.title ? "Selected title and opportunity brief" : null,
     realCandidates.length > 0 ? `${formatCountLabel(realCandidates.length, "discovered property")}` : null,
-    realApproved.length > 0 ? `${formatCountLabel(realApproved.length, "approved property")}` : null,
+    workingListings.length > 0 ? `${formatCountLabel(workingListings.length, "script-ready property")}` : null,
     campaign.locationStory?.headline && !locationStale ? "Location story and map context" : null,
     campaign.scriptGenerationStatus === "script_generated" && !scriptStale ? "Scene narration and script package" : null,
     campaign.mediaPlanningStatus === "media_plan_built" ? "Scene asset mapping and media coverage" : null,
@@ -1236,18 +1245,7 @@ function buildCompletedArtifacts(campaign: CasaHudCampaign | null) {
 }
 
 function isScriptStale(campaign: CasaHudCampaign): boolean {
-  const staleWarning = (campaign.scriptWarnings || []).some((warning) =>
-    /Regenerate Script from Current Listings/i.test(warning),
-  );
-  const approvedIds = campaign.approvedListings.filter((listing) => !isDemoListing(listing)).map((listing) => listing.id);
-  const scriptListingIds = Array.from(new Set(campaign.propertySegments.map((segment) => segment.listingId)));
-  const hasGeneratedScript = campaign.scriptGenerationStatus === "script_generated";
-
-  if (!hasGeneratedScript) return staleWarning;
-  if (approvedIds.length === 0) return true;
-  if (scriptListingIds.length === 0) return true;
-  if (approvedIds.length !== scriptListingIds.length) return true;
-  return approvedIds.some((id) => !scriptListingIds.includes(id));
+  return isCasaHudScriptPackageStale(campaign);
 }
 
 function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
@@ -1297,6 +1295,7 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
 
   const scriptStale = isScriptStale(campaign);
   const locationStale = isCasaHudLocationIntelligenceStale(campaign);
+  const workingListings = deriveCasaHudWorkingListings(campaign);
   if (campaign.scriptGenerationStatus === "script_generated" && !scriptStale) {
     return {
       actionId: "build_media_plan",
@@ -1315,20 +1314,20 @@ function deriveNextStep(campaign: CasaHudCampaign | null): CasaHudNextStep {
       statusLabel: scriptStale ? "Script stale" : "Needs script",
       title: scriptStale ? "Regenerate from current listings" : "Generate the scene-by-scene script",
       detail: scriptStale
-        ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and counts match the current approved shortlist."
+        ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and counts match the current shortlist."
         : "Use the validated shortlist and location story to build narration, scene flow, and on-screen text.",
       ctaLabel: scriptStale ? "Regenerate Script from Current Listings" : "Generate Script",
     };
   }
 
-  if (campaign.listingValidationStatus === "listing_candidates_validated") {
+  if (campaign.listingValidationStatus === "listing_candidates_validated" || workingListings.length > 0) {
     return {
       actionId: "build_location_story",
       workspace: "location",
       statusLabel: locationStale ? "Location stale" : "Needs place context",
       title: locationStale ? "Regenerate from current properties" : "Add the location story",
       detail: locationStale
-        ? "Approved property locations changed after the previous location run. Regenerate Location Intelligence from the current properties."
+        ? "Current shortlist locations changed after the previous location run. Regenerate Location Intelligence from the current properties."
         : "Build local highlights, POIs, and map scenes that explain why this place matters.",
       ctaLabel: locationStale ? "Regenerate Location Intelligence" : "Build Location",
     };
@@ -1891,6 +1890,10 @@ export default function StudioCasaHudCommandCenter() {
     [activeCampaign],
   );
   const videoScenes = useMemo(() => buildVideoScenes(activeCampaign), [activeCampaign]);
+  const workingListings = useMemo(
+    () => (activeCampaign ? deriveCasaHudWorkingListings(activeCampaign) : []),
+    [activeCampaign],
+  );
   const visibleCampaignApproved = useMemo(
     () => (activeCampaign ? activeCampaign.approvedListings.filter((listing) => !isDemoListing(listing)) : []),
     [activeCampaign],
@@ -1920,6 +1923,10 @@ export default function StudioCasaHudCommandCenter() {
     ]);
     return Array.from(candidateById.values()).filter((listing) => !classifiedIds.has(listing.id));
   }, [activeCampaign]);
+  const scriptReadyCandidateCount = useMemo(
+    () => visibleCampaignCandidates.filter((listing) => isCompleteUserImportedListing(listing)).length,
+    [visibleCampaignCandidates],
+  );
   const legacyDemoListingCount = useMemo(() => {
     if (!activeCampaign) return 0;
     return (
@@ -1930,8 +1937,8 @@ export default function StudioCasaHudCommandCenter() {
   }, [activeCampaign]);
   const activeListings = useMemo(() => {
     if (!activeCampaign) return [];
-    return visibleCampaignApproved.length > 0 ? visibleCampaignApproved : visibleCampaignCandidates;
-  }, [activeCampaign, visibleCampaignApproved, visibleCampaignCandidates]);
+    return workingListings.length > 0 ? workingListings : visibleCampaignCandidates;
+  }, [activeCampaign, workingListings, visibleCampaignCandidates]);
   const campaignCards = useMemo(() => recentCampaigns.slice(0, 8), [recentCampaigns]);
   const hasRecentCampaigns = campaignCards.length > 0;
   const selectedListing = useMemo(() => {
@@ -2695,7 +2702,7 @@ export default function StudioCasaHudCommandCenter() {
       if (!response.ok || !payload?.ok || !payload.campaign) {
         if (payload?.error?.code === "APPROVED_LISTINGS_REQUIRED") {
           openWorkspace("properties");
-          throw new Error(`${payload?.error?.message || "Approved listings are required."} Validate and Rank Listings to continue.`);
+          throw new Error(payload?.error?.message || "At least one complete listing is required before script generation.");
         }
         if (payload?.error?.code === "LOCATION_INTELLIGENCE_REQUIRED") {
           openWorkspace("location");
@@ -3591,7 +3598,7 @@ export default function StudioCasaHudCommandCenter() {
                 </p>
                 {locationSourceLabels.length > 0 ? (
                   <p className="mt-2 text-xs uppercase tracking-[0.13em] text-[#6B7280]">
-                    Based on current approved properties in {joinNatural(locationSourceLabels.slice(0, 3))}
+                    Based on the current shortlist in {joinNatural(locationSourceLabels.slice(0, 3))}
                   </p>
                 ) : null}
               </div>
@@ -3638,8 +3645,8 @@ export default function StudioCasaHudCommandCenter() {
             title={locationIntelligenceStale ? "Location context is stale" : "Location not ready"}
             description={
               locationIntelligenceStale
-                ? "The saved location story no longer matches current approved properties. Regenerate Location Intelligence from current properties."
-                : "Run the location pass after properties are validated."
+                ? "The saved location story no longer matches the current shortlist. Regenerate Location Intelligence from current properties."
+                : "Run the location pass after at least one complete listing is available."
             }
             action={renderNextActionButton(deriveNextStep(activeCampaign))}
           />
@@ -3656,7 +3663,7 @@ export default function StudioCasaHudCommandCenter() {
     sectionContent = activeCampaign ? (
       <WorkspacePage
         eyebrow="Script"
-        title={activeCampaign.scriptSummary || "Scene-by-scene script"}
+        title={scriptIsStale ? "Script needs regeneration" : activeCampaign.scriptSummary || "Scene-by-scene script"}
         description="Narration, hook, and current script package for the selected campaign."
         actions={
           <>
@@ -3711,8 +3718,8 @@ export default function StudioCasaHudCommandCenter() {
         ) : (
           <EmptyState
             title={
-              visibleCampaignApproved.length === 0
-                ? "Approved listings required"
+              workingListings.length === 0
+                ? "Complete listing required"
                 : locationIntelligenceStale
                   ? "Location context is stale"
                 : scriptIsStale
@@ -3720,24 +3727,24 @@ export default function StudioCasaHudCommandCenter() {
                   : "Script not ready"
             }
             description={
-              visibleCampaignApproved.length === 0
-                ? "Validate and Rank Listings before script generation so CasaFlix uses the current approved shortlist."
+              workingListings.length === 0
+                ? "Add at least one complete listing so CasaFlix can generate script narration from the current shortlist."
                 : locationIntelligenceStale
-                  ? "Regenerate Location Intelligence from current approved properties before writing a script."
+                  ? "Regenerate Location Intelligence from the current shortlist before writing a script."
                 : scriptIsStale
                   ? "Listings changed after the previous script run. Regenerate Script from Current Listings so narration and listing counts stay accurate."
                   : "Generate the script after location is complete."
             }
             action={
-              visibleCampaignApproved.length === 0 ? (
+              workingListings.length === 0 ? (
                 <button
                   type="button"
                   className={primaryButtonClass}
-                  onClick={() => void onValidateListings()}
-                  disabled={!activeCampaign || campaignValidatingId === activeCampaign.id}
-                  data-testid="casahud-validate-listings-cta"
+                  onClick={() => openWorkspace("properties")}
+                  disabled={!activeCampaign}
+                  data-testid="casahud-complete-listings-cta"
                 >
-                  {campaignValidatingId === activeCampaign?.id ? "Validating Listings..." : "Validate and Rank Listings"}
+                  Complete Listing Details
                 </button>
               ) : (
                 renderNextActionButton(deriveNextStep(activeCampaign))
@@ -4670,6 +4677,11 @@ export default function StudioCasaHudCommandCenter() {
                       </div>
                       <StatusPill tone="neutral">{formatCountLabel(visibleCampaignCandidates.length, "candidate")}</StatusPill>
                     </div>
+                    {scriptReadyCandidateCount > 0 ? (
+                      <p className="rounded-2xl border border-[#CDE4D3] bg-[#F3FBF5] px-4 py-3 text-sm text-[#0F5132]">
+                        {formatCountLabel(scriptReadyCandidateCount, "complete imported listing")} {scriptReadyCandidateCount === 1 ? "is" : "are"} script-ready and can power Location and Script generation without an extra Validate and Rank step.
+                      </p>
+                    ) : null}
                     <div className="grid gap-5 xl:grid-cols-2">
                       {visibleCampaignCandidates.map((listing) => (
                         <PropertyCard
@@ -4777,7 +4789,7 @@ export default function StudioCasaHudCommandCenter() {
                 </p>
                 {locationSourceLabels.length > 0 ? (
                   <p className="mt-2 text-xs uppercase tracking-[0.13em] text-[#7C6A54]">
-                    Based on current approved properties in {joinNatural(locationSourceLabels.slice(0, 3))}
+                    Based on the current shortlist in {joinNatural(locationSourceLabels.slice(0, 3))}
                   </p>
                 ) : null}
                 <div className="mt-4 flex flex-wrap gap-2">
@@ -4864,7 +4876,7 @@ export default function StudioCasaHudCommandCenter() {
             title={locationIntelligenceStale ? "Location story needs regeneration" : "Location story not ready"}
             description={
               locationIntelligenceStale
-                ? "Approved property locations changed after the previous location run. Regenerate Location Intelligence from current properties before using POIs or map scenes."
+                ? "Current shortlist locations changed after the previous location run. Regenerate Location Intelligence from current properties before using POIs or map scenes."
                 : "Add location intelligence to explain why the place matters."
             }
             action={renderNextActionButton(deriveNextStep(activeCampaign))}

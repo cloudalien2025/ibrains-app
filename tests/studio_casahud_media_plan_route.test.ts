@@ -391,6 +391,53 @@ describe("CasaFlix media planning route", () => {
     expect(noScriptResponse.status).toBe(409);
   });
 
+  it("accepts a complete browser import as script-ready when approvedListings is empty", async () => {
+    const route = await import("@/app/api/studio/domara/campaigns/[id]/media-plan/route");
+
+    mocks.getCasaHudCampaign.mockResolvedValueOnce({
+      ...scriptReadyCampaign,
+      approvedListings: [],
+      listingCandidates: [
+        {
+          id: "listing-browser-ready",
+          provider: "immobiliare",
+          sourceType: "browser_assisted_import",
+          sourceUrl: "https://www.immobiliare.it/en/annunci/127142643/",
+          title: "Messina villa",
+          locationText: "Messina, Sicily, Italy",
+          city: "Messina",
+          region: "Sicily",
+          country: "Italy",
+          price: 300000,
+          currency: "EUR",
+          propertyType: "Single family villa",
+          rooms: 5,
+          bathrooms: 2,
+          sizeSqm: 187,
+          descriptionSnippet: "Complete browser import.",
+          features: ["5+ rooms", "2 bathrooms", "187 sqm"],
+          imageUrls: ["https://images.example.com/messina.jpg"],
+          featuredImageUrl: "https://images.example.com/messina.jpg",
+          imageCount: 1,
+          photoAvailability: "limited",
+          manualCompletionStatus: "completed",
+          discoveredAt: "2026-05-02T00:00:00.000Z",
+          preliminaryMatchNotes: "Complete browser import.",
+        },
+      ],
+    });
+
+    const response = await route.POST(
+      new NextRequest(`http://localhost/api/studio/domara/campaigns/${scriptReadyCampaign.id}/media-plan`, {
+        method: "POST",
+      }),
+      { params: { id: scriptReadyCampaign.id } },
+    );
+    const payload = await response.json();
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+  });
+
   it("persists the media plan and returns the updated campaign", async () => {
     const route = await import("@/app/api/studio/domara/campaigns/[id]/media-plan/route");
 
