@@ -11,7 +11,14 @@ export async function POST(req: NextRequest) {
     await ensureUser(userId);
 
     const result = importWalmartProducts();
-    return ok({ ok: true, ...result, message: `Imported ${result.importedCount} Walmart product(s).` });
+    return ok({
+      ok: true,
+      ...result,
+      message:
+        result.importedCount > 0
+          ? `Imported ${result.importedCount} Walmart product(s).`
+          : "No Walmart products imported yet. Production catalog read import is not configured.",
+    });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to import Walmart products.");
   }

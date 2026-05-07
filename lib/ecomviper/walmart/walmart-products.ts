@@ -5,24 +5,39 @@ import { getWalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-auth
 import {
   getDashboardCounts,
   getLastImportAt,
+  getProductBySku,
   getWalmartRuntimeMode,
-  getMockProductBySku,
-  importMockProducts,
   listDrafts,
-  listMockProducts,
-} from "@/lib/ecomviper/walmart/walmart-mock-data";
+  listProducts,
+  replaceProducts,
+} from "@/lib/ecomviper/walmart/walmart-store";
 import type { WalmartDashboardSnapshot, WalmartImportResult, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 export function listWalmartProducts(): WalmartProductRecord[] {
-  return listMockProducts();
+  return listProducts();
 }
 
 export function getWalmartProductBySku(sku: string): WalmartProductRecord | null {
-  return getMockProductBySku(sku);
+  return getProductBySku(sku);
 }
 
 export function importWalmartProducts(): WalmartImportResult {
-  return importMockProducts();
+  const now = new Date().toISOString();
+  // Production import seam: replace with Walmart item list/search read implementation.
+  replaceProducts([], now);
+
+  appendActivityLog({
+    marketplace: "walmart",
+    actionType: "product_import",
+    result: "warning",
+    message: "Production product import is not configured yet. No products were imported.",
+  });
+
+  return {
+    importedCount: 0,
+    lastImportAt: now,
+    mode: getWalmartRuntimeMode(),
+  };
 }
 
 export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
@@ -44,9 +59,10 @@ export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
 }
 
 export function getEcomViperMarketplaceMetrics() {
-  const products = listMockProducts();
+  const products = listProducts();
   const drafts = listDrafts();
   const attention = products.filter((item) => item.issues.length > 0 || item.status !== "active");
+
   return {
     connectedMarketplaces: getWalmartConnectionHealth().connectionStatus === "connected" ? 1 : 0,
     productsImported: products.length,

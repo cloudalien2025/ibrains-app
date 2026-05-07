@@ -37,9 +37,12 @@ export async function POST(req: NextRequest) {
         maskedClientId: health.summary.maskedClientId,
         clientSecretStored: health.summary.clientSecretStored,
         tokenStatus: health.summary.tokenStatus,
+        safeReadStatus: health.summary.safeReadStatus,
         lastSuccessfulAuth: health.summary.lastSuccessfulAuth,
+        lastSuccessfulRead: health.summary.lastSuccessfulRead,
         lastApiError: health.lastApiError,
         permissionChecks: health.summary.permissionChecks,
+        diagnostic: health.summary.diagnostic,
         connectionStatus: health.connectionStatus,
         summary: health.summary,
       });
@@ -57,10 +60,13 @@ export async function POST(req: NextRequest) {
         maskedClientId: health.summary.maskedClientId,
         clientSecretStored: health.summary.clientSecretStored,
         tokenStatus: health.summary.tokenStatus,
+        safeReadStatus: health.summary.safeReadStatus,
         lastSuccessfulAuth: health.summary.lastSuccessfulAuth,
+        lastSuccessfulRead: health.summary.lastSuccessfulRead,
         lastApiError: health.lastApiError,
         permissions: getWalmartPermissionChecklist(),
         permissionChecks: health.summary.permissionChecks,
+        diagnostic: health.summary.diagnostic,
         connectionStatus: health.connectionStatus,
         summary: health.summary,
         lastSuccessfulApiCall: health.lastSuccessfulApiCall,
@@ -79,13 +85,20 @@ export async function POST(req: NextRequest) {
       maskedClientId: health.summary.maskedClientId,
       clientSecretStored: health.summary.clientSecretStored,
       tokenStatus: health.summary.tokenStatus,
+      safeReadStatus: health.summary.safeReadStatus,
       lastSuccessfulAuth: health.summary.lastSuccessfulAuth,
+      lastSuccessfulRead: health.summary.lastSuccessfulRead,
       lastApiError: health.lastApiError,
       permissionChecks: health.summary.permissionChecks,
+      diagnostic: health.summary.diagnostic,
       connectionStatus: health.connectionStatus,
       summary: health.summary,
       lastSuccessfulApiCall: health.lastSuccessfulApiCall,
-      securityNote: "Client secret is not returned and is never exposed to the browser.",
+      message:
+        health.connectionStatus === "connected"
+          ? "Connected. Production OAuth token and safe read check succeeded."
+          : health.lastApiError?.message ?? "Credential save completed with warnings.",
+      securityNote: "Client secret and access token are never returned to the browser.",
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to save Walmart connection.");

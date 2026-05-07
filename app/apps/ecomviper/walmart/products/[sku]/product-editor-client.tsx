@@ -7,7 +7,6 @@ import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types
 
 interface ProductEditorClientProps {
   product: WalmartProductRecord;
-  mode: string;
 }
 
 const tabs = [
@@ -21,7 +20,7 @@ const tabs = [
   "Sync History",
 ] as const;
 
-export default function ProductEditorClient({ product, mode }: ProductEditorClientProps) {
+export default function ProductEditorClient({ product }: ProductEditorClientProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
   const [form, setForm] = useState({
     title: product.title,
@@ -98,7 +97,6 @@ export default function ProductEditorClient({ product, mode }: ProductEditorClie
       <WalmartPageHeader
         title={`Product Editor • ${product.sku}`}
         subtitle="Stage content, pricing, and inventory changes before any submit flow."
-        mode={mode}
       />
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

@@ -8,10 +8,9 @@ interface PricingClientProps {
   products: WalmartProductRecord[];
   warnings: Array<{ sku: string; message: string }>;
   recentChanges: Array<{ createdAt: string; sku: string | null; message: string }>;
-  mode: string;
 }
 
-export default function WalmartPricingClient({ products, warnings, recentChanges, mode }: PricingClientProps) {
+export default function WalmartPricingClient({ products, warnings, recentChanges }: PricingClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
   const [price, setPrice] = useState("0");
   const [message, setMessage] = useState<string | null>(null);
@@ -47,8 +46,13 @@ export default function WalmartPricingClient({ products, warnings, recentChanges
       <WalmartPageHeader
         title="Pricing"
         subtitle="Prepare price updates with optional draft-first flow."
-        mode={mode}
       />
+
+      {!products.length ? (
+        <section className="rounded-2xl border border-dashed border-[#D9E4F0] bg-white/95 p-5 text-sm text-[#64748B]">
+          No Walmart products imported yet. Connect Walmart, then import your products before price updates.
+        </section>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

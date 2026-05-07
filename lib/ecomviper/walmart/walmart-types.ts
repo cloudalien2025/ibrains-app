@@ -1,10 +1,17 @@
 import type { RuntimeMode } from "@/lib/ecomviper/core/marketplace-types";
 
-export type WalmartEnvironment = "sandbox" | "production";
+export type WalmartEnvironment = "production";
 export type WalmartRegion = "US";
 
-export type WalmartConnectionStatus = "connected" | "not_connected";
+export type WalmartConnectionStatus =
+  | "not_connected"
+  | "token_valid"
+  | "token_valid_read_not_configured"
+  | "connected"
+  | "failed";
+
 export type WalmartTokenStatus = "valid" | "invalid" | "expired" | "unknown";
+export type WalmartSafeReadStatus = "valid" | "invalid" | "not_configured" | "unknown";
 
 export interface WalmartApiError {
   code: string;
@@ -31,10 +38,21 @@ export interface WalmartConnectionInput {
   accountNickname: string;
   clientId: string;
   clientSecret: string;
-  environment: WalmartEnvironment;
   marketplaceRegion?: WalmartRegion;
-  region: WalmartRegion;
+  region?: WalmartRegion;
   notes?: string;
+}
+
+export interface WalmartConnectionDiagnostic {
+  environment: WalmartEnvironment;
+  baseUrl: string;
+  tokenStatus: WalmartTokenStatus;
+  safeReadStatus: WalmartSafeReadStatus;
+  httpStatus: number | null;
+  correlationId: string | null;
+  walmartErrorCode: string | null;
+  walmartErrorMessage: string | null;
+  timestamp: string | null;
 }
 
 export interface WalmartConnectionSummary {
@@ -44,11 +62,14 @@ export interface WalmartConnectionSummary {
   maskedClientId: string;
   clientSecretStored: boolean;
   lastSuccessfulAuth: string | null;
+  lastSuccessfulRead: string | null;
   lastApiError: WalmartApiError | null;
   tokenStatus: WalmartTokenStatus;
+  safeReadStatus: WalmartSafeReadStatus;
   permissionChecks: WalmartPermissionCheck[];
   credentialStorageMode: "env" | "memory" | "encrypted-db";
   mode: RuntimeMode;
+  diagnostic: WalmartConnectionDiagnostic;
 }
 
 export interface WalmartConnectionHealth {
@@ -144,7 +165,7 @@ export interface WalmartDashboardSnapshot {
 
 export interface WalmartImportResult {
   importedCount: number;
-  lastImportAt: string;
+  lastImportAt: string | null;
   mode: RuntimeMode;
 }
 
@@ -163,7 +184,7 @@ export interface WalmartPriceUpdateRequest {
 export interface WalmartMutationResult {
   ok: boolean;
   mode: RuntimeMode;
-  dryRun: boolean;
+  writeEnabled: boolean;
   message: string;
   sku: string;
 }

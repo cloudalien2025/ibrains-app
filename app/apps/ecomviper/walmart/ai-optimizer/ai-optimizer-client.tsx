@@ -8,10 +8,9 @@ import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/
 interface AiOptimizerClientProps {
   products: WalmartProductRecord[];
   suggestions: WalmartAiSuggestion[];
-  mode: string;
 }
 
-export default function WalmartAiOptimizerClient({ products, suggestions, mode }: AiOptimizerClientProps) {
+export default function WalmartAiOptimizerClient({ products, suggestions }: AiOptimizerClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
   const [message, setMessage] = useState<string | null>(null);
 
@@ -46,7 +45,9 @@ export default function WalmartAiOptimizerClient({ products, suggestions, mode }
 
   if (!suggestion) {
     return (
-      <div className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5">No products available for AI optimizer.</div>
+      <div className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 text-sm text-[#64748B]">
+        Import Walmart products first, then select a real SKU to generate optimization suggestions.
+      </div>
     );
   }
 
@@ -55,7 +56,6 @@ export default function WalmartAiOptimizerClient({ products, suggestions, mode }
       <WalmartPageHeader
         title="AI Optimizer"
         subtitle="Generate compliant listing improvements and apply to drafts only."
-        mode={mode}
       />
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

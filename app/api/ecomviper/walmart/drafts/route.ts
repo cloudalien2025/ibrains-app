@@ -3,14 +3,13 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { listDrafts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-mock-data";
-import { getWalmartRuntimeMode } from "@/lib/ecomviper/walmart/walmart-mock-data";
+import { listDrafts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
 
 export async function GET(req: NextRequest) {
   try {
     const userId = resolveUserId(req);
     await ensureUser(userId);
-    return ok({ ok: true, mode: getWalmartRuntimeMode(), drafts: listDrafts() });
+    return ok({ ok: true, drafts: listDrafts() });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to list drafts.");
   }
@@ -35,7 +34,7 @@ export async function POST(req: NextRequest) {
     }
 
     const draft = upsertDraftForSku({ sku: body.sku, draftPayload: body.draftPayload, createdBy: userId });
-    return ok({ ok: true, mode: getWalmartRuntimeMode(), draft }, 201);
+    return ok({ ok: true, draft }, 201);
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to save draft.");
   }

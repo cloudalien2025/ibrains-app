@@ -14,14 +14,20 @@ export default function WalmartDashboardPage() {
   const snapshot = getWalmartDashboardSnapshot();
 
   const connectionStatus =
-    snapshot.connection.connectionStatus === "connected" ? "Connected" : "Not Connected";
+    snapshot.connection.connectionStatus === "connected"
+      ? "Connected"
+      : snapshot.connection.connectionStatus === "token_valid" ||
+          snapshot.connection.connectionStatus === "token_valid_read_not_configured"
+        ? "Token Valid"
+        : snapshot.connection.connectionStatus === "failed"
+          ? "Failed"
+          : "Not Connected";
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-dashboard">
       <WalmartPageHeader
         title="Walmart Marketplace Manager"
         subtitle="Edit, optimize, and sync your Walmart catalog from iBrains."
-        mode={snapshot.mode}
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -50,9 +56,7 @@ export default function WalmartDashboardPage() {
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Connection Health</p>
           <div className="mt-2"><StatusBadge status={connectionStatus} /></div>
-          <p className="mt-2 text-sm text-[#334155]">
-            {snapshot.connection.summary.environment === "production" ? "Production" : "Sandbox"}
-          </p>
+          <p className="mt-2 text-sm text-[#334155]">Production</p>
           <p className="mt-1 text-xs text-[#64748B]">Last auth: {snapshot.connection.summary.lastSuccessfulAuth ?? "Never"}</p>
           <p className="mt-1 text-xs text-[#64748B]">Last error: {apiErrorMessage(snapshot.connection.lastApiError)}</p>
         </article>
@@ -100,6 +104,13 @@ export default function WalmartDashboardPage() {
                     <td className="py-2">{product.inventoryQuantity}</td>
                   </tr>
                 ))}
+                {!snapshot.recentProducts.length ? (
+                  <tr className="border-t border-[#E2E8F0]">
+                    <td colSpan={4} className="py-6 text-center text-sm text-[#64748B]">
+                      No Walmart products imported yet. Connect Walmart, then import your products.
+                    </td>
+                  </tr>
+                ) : null}
               </tbody>
             </table>
           </div>

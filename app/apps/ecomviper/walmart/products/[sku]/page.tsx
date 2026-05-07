@@ -1,6 +1,5 @@
 import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
 import { getWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-products";
-import { getWalmartRuntimeMode } from "@/lib/ecomviper/walmart/walmart-mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -17,5 +16,5 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
     );
   }
 
-  return <ProductEditorClient product={product} mode={getWalmartRuntimeMode()} />;
+  return <ProductEditorClient product={product} />;
 }

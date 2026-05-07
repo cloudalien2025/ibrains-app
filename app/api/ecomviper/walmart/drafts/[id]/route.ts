@@ -3,8 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { discardDraft, getDraftById, submitDraft, validateDraft } from "@/lib/ecomviper/walmart/walmart-mock-data";
-import { getWalmartRuntimeMode } from "@/lib/ecomviper/walmart/walmart-mock-data";
+import { discardDraft, getDraftById, submitDraft, validateDraft } from "@/lib/ecomviper/walmart/walmart-store";
 
 export async function GET(
   req: NextRequest,
@@ -18,7 +17,7 @@ export async function GET(
     const draft = getDraftById(id);
     if (!draft) return fail(404, "Draft not found.", "NOT_FOUND");
 
-    return ok({ ok: true, mode: getWalmartRuntimeMode(), draft });
+    return ok({ ok: true, draft });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to load draft.");
   }
@@ -38,7 +37,7 @@ export async function PATCH(
     const action = body.action ?? "validate";
     const draft = action === "submit" ? submitDraft(id) : validateDraft(id);
 
-    return ok({ ok: true, action, mode: getWalmartRuntimeMode(), draft });
+    return ok({ ok: true, action, draft });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to update draft.");
   }
@@ -54,7 +53,7 @@ export async function DELETE(
 
     const { id } = await Promise.resolve(params);
     const draft = discardDraft(id);
-    return ok({ ok: true, mode: getWalmartRuntimeMode(), draft });
+    return ok({ ok: true, draft });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to discard draft.");
   }

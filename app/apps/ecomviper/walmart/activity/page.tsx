@@ -1,7 +1,6 @@
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { listActivityLogs } from "@/lib/ecomviper/core/activity-log";
-import { getWalmartRuntimeMode } from "@/lib/ecomviper/walmart/walmart-mock-data";
 
 export const dynamic = "force-dynamic";
 
@@ -13,7 +12,6 @@ export default function WalmartActivityPage() {
       <WalmartPageHeader
         title="Activity Log"
         subtitle="Audit trail for connection tests, imports, drafts, updates, feeds, and AI actions."
-        mode={getWalmartRuntimeMode()}
       />
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -40,6 +38,13 @@ export default function WalmartActivityPage() {
                   <td className="py-2 text-[#334155]">{entry.message}</td>
                 </tr>
               ))}
+              {!entries.length ? (
+                <tr className="border-t border-[#E2E8F0]">
+                  <td colSpan={6} className="py-6 text-center text-sm text-[#64748B]">
+                    No activity yet.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
