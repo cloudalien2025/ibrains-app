@@ -5,7 +5,6 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { listWalmartProducts } from "@/lib/ecomviper/walmart/walmart-products";
 import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
-import { getWalmartRuntimeMode } from "@/lib/ecomviper/walmart/walmart-mock-data";
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,7 +18,6 @@ export async function GET(req: NextRequest) {
 
     return ok({
       ok: true,
-      mode: getWalmartRuntimeMode(),
       count: products.length,
       products,
     });

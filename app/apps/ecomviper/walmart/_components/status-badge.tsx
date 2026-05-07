@@ -5,11 +5,19 @@ interface StatusBadgeProps {
 export default function StatusBadge({ status }: StatusBadgeProps) {
   const normalized = status.toLowerCase();
   const cls =
-    normalized === "active" || normalized === "connected" || normalized === "processed" || normalized === "synced"
+    normalized === "active" ||
+      normalized === "connected" ||
+      normalized === "processed" ||
+      normalized === "synced" ||
+      normalized === "granted"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : normalized === "warning" || normalized === "received" || normalized === "inprogress" || normalized === "validated"
+      : normalized === "warning" ||
+          normalized === "received" ||
+          normalized === "inprogress" ||
+          normalized === "validated" ||
+          normalized === "token valid"
         ? "border-amber-200 bg-amber-50 text-amber-700"
-        : normalized === "error" || normalized === "failed" || normalized === "not connected"
+        : normalized === "error" || normalized === "failed" || normalized === "not connected" || normalized === "missing"
           ? "border-rose-200 bg-rose-50 text-rose-700"
           : "border-slate-200 bg-slate-50 text-slate-600";
 

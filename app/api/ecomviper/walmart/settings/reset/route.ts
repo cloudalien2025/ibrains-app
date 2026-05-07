@@ -3,8 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { clearDrafts, clearMockProducts } from "@/lib/ecomviper/walmart/walmart-mock-data";
 import { disconnectWalmart } from "@/lib/ecomviper/walmart/walmart-auth";
+import { clearDrafts, clearProducts } from "@/lib/ecomviper/walmart/walmart-store";
 
 type ResetAction = "disconnect_marketplace" | "clear_products" | "reset_drafts";
 
@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "clear_products") {
-      clearMockProducts();
+      clearProducts();
       return ok({ ok: true, action: body.action });
     }
 

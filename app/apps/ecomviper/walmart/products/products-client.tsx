@@ -9,7 +9,6 @@ import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types
 
 interface ProductsClientProps {
   products: WalmartProductRecord[];
-  mode: string;
 }
 
 const filters = [
@@ -24,7 +23,7 @@ const filters = [
   { id: "draft_pending", label: "Draft pending" },
 ] as const;
 
-export default function WalmartProductsClient({ products, mode }: ProductsClientProps) {
+export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [message, setMessage] = useState<string | null>(null);
@@ -40,7 +39,8 @@ export default function WalmartProductsClient({ products, mode }: ProductsClient
       setMessage("Import failed.");
       return;
     }
-    setMessage("Products imported. Refresh to view latest snapshot.");
+    const payload = (await response.json()) as { message?: string };
+    setMessage(payload.message ?? "Import completed.");
   }
 
   return (
@@ -48,7 +48,6 @@ export default function WalmartProductsClient({ products, mode }: ProductsClient
       <WalmartPageHeader
         title="Products"
         subtitle="Search and manage Walmart catalog products with safe staging and sync workflows."
-        mode={mode}
         actions={
           <button
             type="button"
@@ -128,6 +127,13 @@ export default function WalmartProductsClient({ products, mode }: ProductsClient
                   </td>
                 </tr>
               ))}
+              {!filtered.length ? (
+                <tr className="border-t border-[#E2E8F0]">
+                  <td colSpan={10} className="py-6 text-center text-sm text-[#64748B]">
+                    No Walmart products imported yet. Connect Walmart, then import your products.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

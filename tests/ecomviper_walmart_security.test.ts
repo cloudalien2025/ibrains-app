@@ -9,20 +9,29 @@ describe("EcomViper Walmart security rules", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
     vi.restoreAllMocks();
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ access_token: "wm_access_token_value", expires_in: 900 }), {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.includes("/v3/token")) {
+        return new Response(JSON.stringify({ access_token: "wm_access_token_value", expires_in: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ items: [] }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
-      })
-    );
+      });
+    });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it("connect test/save routes never return raw client secret", async () => {
+  it("connect test/save routes never return raw client secret, token, or auth header", async () => {
     const secret = "super-secret-walmart-client-secret";
 
     const testReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
@@ -31,7 +40,6 @@ describe("EcomViper Walmart security rules", () => {
         accountNickname: "OPA Nutrition Walmart",
         clientId: "wm-client-id-123456",
         clientSecret: secret,
-        environment: "sandbox",
         region: "US",
       }),
     });
@@ -45,7 +53,6 @@ describe("EcomViper Walmart security rules", () => {
         accountNickname: "OPA Nutrition Walmart",
         clientId: "wm-client-id-123456",
         clientSecret: secret,
-        environment: "sandbox",
         region: "US",
       }),
     });
@@ -58,6 +65,8 @@ describe("EcomViper Walmart security rules", () => {
     expect(savePayload.summary?.maskedClientId).toBeDefined();
     expect(JSON.stringify(testPayload)).not.toContain("wm_access_token_value");
     expect(JSON.stringify(savePayload)).not.toContain("wm_access_token_value");
+    expect(JSON.stringify(testPayload)).not.toContain("Authorization");
+    expect(JSON.stringify(savePayload)).not.toContain("Authorization");
   });
 
   it("walmart auth masks client id and does not expose client secret", async () => {
@@ -69,14 +78,12 @@ describe("EcomViper Walmart security rules", () => {
       accountNickname: "OPA Nutrition Walmart",
       clientId: "ab1234567890",
       clientSecret: secret,
-      environment: "sandbox",
       region: "US",
     });
     const saved = await saveWalmartConnection({
       accountNickname: "OPA Nutrition Walmart",
       clientId: "ab1234567890",
       clientSecret: secret,
-      environment: "sandbox",
       region: "US",
     });
 
@@ -86,6 +93,8 @@ describe("EcomViper Walmart security rules", () => {
     expect(JSON.stringify(saved)).not.toContain("wm_access_token_value");
     expect(tested.summary.maskedClientId).toBe("ab***7890");
     expect(saved.summary.maskedClientId).toBe("ab***7890");
+    expect(tested.summary.environment).toBe("production");
+    expect(saved.summary.environment).toBe("production");
   });
 
   it("activity log redacts secrets", () => {

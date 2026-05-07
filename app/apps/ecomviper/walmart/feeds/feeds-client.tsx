@@ -7,10 +7,9 @@ import type { WalmartFeedSubmission } from "@/lib/ecomviper/walmart/walmart-type
 
 interface FeedsClientProps {
   initialFeeds: WalmartFeedSubmission[];
-  mode: string;
 }
 
-export default function WalmartFeedsClient({ initialFeeds, mode }: FeedsClientProps) {
+export default function WalmartFeedsClient({ initialFeeds }: FeedsClientProps) {
   const [feeds, setFeeds] = useState(initialFeeds);
   const [message, setMessage] = useState<string | null>(null);
   const [previewPayload, setPreviewPayload] = useState<string | null>(null);
@@ -19,7 +18,12 @@ export default function WalmartFeedsClient({ initialFeeds, mode }: FeedsClientPr
     const response = await fetch("/api/ecomviper/walmart/feeds/submit", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ sku: "OPA-OMEGA3-120" }),
+      body: JSON.stringify({
+        payload: {
+          feedType: "MP_MAINTENANCE",
+          note: "Manual maintenance feed request from EcomViper.",
+        },
+      }),
     });
 
     if (!response.ok) {
@@ -49,7 +53,6 @@ export default function WalmartFeedsClient({ initialFeeds, mode }: FeedsClientPr
       <WalmartPageHeader
         title="Feeds"
         subtitle="Submit maintenance feeds, track status, and review payload/error history safely."
-        mode={mode}
         actions={
           <button type="button" onClick={submitFeed} className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white">
             Submit maintenance feed
@@ -92,6 +95,13 @@ export default function WalmartFeedsClient({ initialFeeds, mode }: FeedsClientPr
                   </td>
                 </tr>
               ))}
+              {!feeds.length ? (
+                <tr className="border-t border-[#E2E8F0]">
+                  <td colSpan={7} className="py-6 text-center text-sm text-[#64748B]">
+                    No feed submissions yet.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>

@@ -7,7 +7,8 @@ import WalmartLayout from "@/app/apps/ecomviper/walmart/layout";
 import WalmartDashboardPage from "@/app/apps/ecomviper/walmart/page";
 import WalmartConnectPage from "@/app/apps/ecomviper/walmart/connect/page";
 import WalmartFeedsPage from "@/app/apps/ecomviper/walmart/feeds/page";
-import { submitWalmartMaintenanceFeed } from "@/lib/ecomviper/walmart/walmart-feeds";
+import WalmartProductsPage from "@/app/apps/ecomviper/walmart/products/page";
+import WalmartActivityPage from "@/app/apps/ecomviper/walmart/activity/page";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -29,6 +30,7 @@ describe("EcomViper Walmart route contracts", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
   });
 
   it("shows EcomViper in /apps launcher", () => {
@@ -57,9 +59,10 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("ecomviper-walmart-sidebar");
     expect(html).toContain("ecomviper-walmart-metric-cards");
     expect(html).toContain("Walmart Marketplace Manager");
+    expect(html).toContain("No Walmart products imported yet");
   });
 
-  it("renders walmart connect credential form", () => {
+  it("renders walmart connect credential form in production-only mode", () => {
     const html = renderToStaticMarkup(<WalmartConnectPage />);
     expect(html).toContain("ecomviper-walmart-connect-page");
     expect(html).toContain("Account nickname");
@@ -67,12 +70,24 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("Client Secret");
     expect(html).toContain("Test Connection");
     expect(html).toContain("Save Credentials");
+    expect(html).toContain("Production");
+    expect(html).not.toContain("Sandbox");
   });
 
-  it("renders feeds page statuses", () => {
-    submitWalmartMaintenanceFeed({ sku: "OPA-OMEGA3-120", feedType: "MP_MAINTENANCE" });
+  it("renders feeds page empty state when no submissions exist", () => {
     const html = renderToStaticMarkup(<WalmartFeedsPage />);
     expect(html).toContain("ecomviper-walmart-feeds-page");
-    expect(html).toMatch(/RECEIVED|INPROGRESS|PROCESSED|ERROR|UNKNOWN/);
+    expect(html).toContain("No feed submissions yet.");
+  });
+
+  it("renders products page empty state without mock SKUs", () => {
+    const html = renderToStaticMarkup(<WalmartProductsPage />);
+    expect(html).toContain("No Walmart products imported yet");
+    expect(html).not.toContain("OPA-OMEGA3-120");
+  });
+
+  it("renders activity page with empty state when no activity exists", () => {
+    const html = renderToStaticMarkup(<WalmartActivityPage />);
+    expect(html).toContain("No activity yet.");
   });
 });

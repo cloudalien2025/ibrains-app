@@ -36,6 +36,6 @@ export function buildMaintenancePayload(params: {
           : product.imageUrl,
     },
     modeNote:
-      "Maintenance payload is prepared server-side. In mock/dry-run modes this payload is stored and previewed only.",
+      "Maintenance payload is prepared server-side. Production write remains disabled until preview/validation is complete.",
   };
 }

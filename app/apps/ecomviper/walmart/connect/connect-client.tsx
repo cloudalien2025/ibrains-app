@@ -3,7 +3,12 @@
 import { useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import type { WalmartApiError, WalmartConnectionHealth, WalmartConnectionSummary } from "@/lib/ecomviper/walmart/walmart-types";
+import type {
+  WalmartApiError,
+  WalmartConnectionDiagnostic,
+  WalmartConnectionHealth,
+  WalmartConnectionSummary,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ConnectClientProps {
   initialHealth: WalmartConnectionHealth;
@@ -13,7 +18,6 @@ type ConnectForm = {
   accountNickname: string;
   clientId: string;
   clientSecret: string;
-  environment: "sandbox" | "production";
   marketplaceRegion: "US";
   notes: string;
 };
@@ -27,12 +31,16 @@ type ConnectApiPayload = {
   maskedClientId: string;
   clientSecretStored: boolean;
   tokenStatus: WalmartConnectionSummary["tokenStatus"];
+  safeReadStatus: WalmartConnectionSummary["safeReadStatus"];
   lastSuccessfulAuth: string | null;
+  lastSuccessfulRead: string | null;
   lastApiError: WalmartApiError | null;
   permissionChecks: WalmartConnectionSummary["permissionChecks"];
+  diagnostic: WalmartConnectionDiagnostic;
   summary: WalmartConnectionSummary;
   connectionStatus: WalmartConnectionHealth["connectionStatus"];
   lastSuccessfulApiCall: string | null;
+  message?: string;
 };
 
 class ApiRequestError extends Error {
@@ -77,9 +85,12 @@ function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
       maskedClientId: response.maskedClientId,
       clientSecretStored: response.clientSecretStored,
       tokenStatus: response.tokenStatus,
+      safeReadStatus: response.safeReadStatus,
       lastSuccessfulAuth: response.lastSuccessfulAuth,
+      lastSuccessfulRead: response.lastSuccessfulRead,
       lastApiError: response.lastApiError,
       permissionChecks: response.permissionChecks,
+      diagnostic: response.diagnostic,
     },
     lastSuccessfulApiCall: response.lastSuccessfulApiCall,
     lastApiError: response.lastApiError,
@@ -91,12 +102,36 @@ function formatApiError(error: WalmartApiError | null | undefined): string {
   return `${error.message} (${error.code})`;
 }
 
+function statusLabel(status: WalmartConnectionHealth["connectionStatus"]): string {
+  if (status === "connected") return "Connected";
+  if (status === "token_valid" || status === "token_valid_read_not_configured") return "Token Valid";
+  if (status === "failed") return "Failed";
+  return "Not Connected";
+}
+
+function buildDiagnosticText(diagnostic: WalmartConnectionDiagnostic): string {
+  return JSON.stringify(
+    {
+      environment: diagnostic.environment,
+      baseUrl: diagnostic.baseUrl,
+      tokenStatus: diagnostic.tokenStatus,
+      safeReadStatus: diagnostic.safeReadStatus,
+      httpStatus: diagnostic.httpStatus,
+      correlationId: diagnostic.correlationId,
+      walmartErrorCode: diagnostic.walmartErrorCode,
+      walmartErrorMessage: diagnostic.walmartErrorMessage,
+      timestamp: diagnostic.timestamp,
+    },
+    null,
+    2
+  );
+}
+
 export default function WalmartConnectClient({ initialHealth }: ConnectClientProps) {
   const [form, setForm] = useState<ConnectForm>({
     accountNickname: initialHealth.summary.accountNickname,
     clientId: "",
     clientSecret: "",
-    environment: initialHealth.summary.environment,
     marketplaceRegion: initialHealth.summary.region,
     notes: "",
   });
@@ -115,16 +150,12 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       });
 
       setHealth(toHealth(response));
-      setMessage(
-        response.ok
-          ? "Walmart connection test succeeded."
-          : response.lastApiError?.message ?? "Walmart connection test failed."
-      );
+      setMessage(response.message ?? response.lastApiError?.message ?? "Connection test completed.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);
       } else {
-        setMessage("Walmart token request failed: network error.");
+        setMessage("Production token request failed: network error.");
       }
     } finally {
       setLoading(false);
@@ -147,19 +178,17 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       if (action !== "permissions") {
         setForm((current) => ({ ...current, clientSecret: "" }));
       }
-      if (!response.ok && response.lastApiError) {
-        setMessage(response.lastApiError.message);
-      } else {
-        setMessage(
-          action === "save"
+
+      setMessage(
+        response.message ??
+          (action === "save"
             ? "Credential summary saved safely."
             : action === "rotate"
               ? "Credential rotation request stored safely."
               : action === "disconnect"
                 ? "Walmart disconnected."
-                : "Permissions refreshed."
-        );
-      }
+                : "Permissions refreshed.")
+      );
     } catch {
       setMessage("Action failed. Please retry.");
     } finally {
@@ -167,12 +196,21 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     }
   }
 
+  async function copyDiagnostic() {
+    try {
+      const text = buildDiagnosticText(health.summary.diagnostic);
+      await navigator.clipboard.writeText(text);
+      setMessage("Diagnostic copied.");
+    } catch {
+      setMessage("Unable to copy diagnostic in this browser context.");
+    }
+  }
+
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-connect-page">
       <WalmartPageHeader
         title="Walmart Connection"
-        subtitle="Save and verify Walmart Marketplace credentials with server-side only secret handling."
-        mode={health.summary.mode}
+        subtitle="Production connectivity doctor for Walmart Marketplace credentials and API health."
       />
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
@@ -214,19 +252,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
 
             <label className="text-sm text-[#334155]">
               Environment
-              <select
-                value={form.environment}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    environment: event.target.value === "production" ? "production" : "sandbox",
-                  }))
-                }
-                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-              >
-                <option value="sandbox">Sandbox</option>
-                <option value="production">Production</option>
-              </select>
+              <input value="Production" readOnly className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2" />
             </label>
 
             <label className="text-sm text-[#334155]">
@@ -292,6 +318,14 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             >
               View API Permissions
             </button>
+            <button
+              type="button"
+              onClick={copyDiagnostic}
+              disabled={loading}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+            >
+              Copy Diagnostic
+            </button>
           </div>
 
           {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
@@ -299,11 +333,11 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
 
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
           <h2 className="text-lg font-semibold text-[#0F172A]">Connection Status</h2>
-          <div className="mt-3"><StatusBadge status={health.connectionStatus === "connected" ? "Connected" : "Not Connected"} /></div>
+          <div className="mt-3"><StatusBadge status={statusLabel(health.connectionStatus)} /></div>
           <dl className="mt-3 space-y-2 text-sm text-[#334155]">
             <div className="flex items-start justify-between gap-3">
               <dt>Environment</dt>
-              <dd className="font-medium">{health.summary.environment}</dd>
+              <dd className="font-medium">Production</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Marketplace region</dt>
@@ -319,15 +353,23 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Client Secret</dt>
-              <dd className="font-medium">{health.summary.clientSecretStored ? "Stored server-side indicator" : "Not stored"}</dd>
+              <dd className="font-medium">{health.summary.clientSecretStored ? "Accepted" : "Not stored"}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Token status</dt>
               <dd className="font-medium">{health.summary.tokenStatus}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
+              <dt>Safe read status</dt>
+              <dd className="font-medium">{health.summary.safeReadStatus}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
               <dt>Last successful auth</dt>
               <dd className="font-medium">{health.summary.lastSuccessfulAuth ?? "Never"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last successful read</dt>
+              <dd className="font-medium">{health.summary.lastSuccessfulRead ?? "Never"}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Last API error</dt>

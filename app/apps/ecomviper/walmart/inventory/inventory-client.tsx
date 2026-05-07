@@ -9,10 +9,9 @@ interface InventoryClientProps {
   lowStock: WalmartProductRecord[];
   outOfStock: WalmartProductRecord[];
   recentChanges: Array<{ createdAt: string; sku: string | null; message: string }>;
-  mode: string;
 }
 
-export default function WalmartInventoryClient({ products, lowStock, outOfStock, recentChanges, mode }: InventoryClientProps) {
+export default function WalmartInventoryClient({ products, lowStock, outOfStock, recentChanges }: InventoryClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
   const [quantity, setQuantity] = useState("0");
   const [message, setMessage] = useState<string | null>(null);
@@ -48,8 +47,13 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
       <WalmartPageHeader
         title="Inventory"
         subtitle="Update inventory safely with draft or direct update paths."
-        mode={mode}
       />
+
+      {!products.length ? (
+        <section className="rounded-2xl border border-dashed border-[#D9E4F0] bg-white/95 p-5 text-sm text-[#64748B]">
+          No Walmart products imported yet. Connect Walmart, then import your products before inventory updates.
+        </section>
+      ) : null}
 
       <section className="grid gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -107,6 +111,9 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
                 <span className="font-medium">{product.inventoryQuantity}</span>
               </li>
             ))}
+            {!lowStock.length ? (
+              <li className="rounded-lg border border-dashed border-[#D9E4F0] px-3 py-2 text-[#64748B]">No low-stock products.</li>
+            ) : null}
           </ul>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -118,6 +125,9 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
                 <span className="font-medium">{product.inventoryQuantity}</span>
               </li>
             ))}
+            {!outOfStock.length ? (
+              <li className="rounded-lg border border-dashed border-[#D9E4F0] px-3 py-2 text-[#64748B]">No out-of-stock products.</li>
+            ) : null}
           </ul>
         </article>
       </section>

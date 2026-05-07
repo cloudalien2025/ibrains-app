@@ -23,13 +23,20 @@ export async function POST(req: NextRequest) {
       maskedClientId: health.summary.maskedClientId,
       clientSecretStored: health.summary.clientSecretStored,
       tokenStatus: health.summary.tokenStatus,
+      safeReadStatus: health.summary.safeReadStatus,
       lastSuccessfulAuth: health.summary.lastSuccessfulAuth,
+      lastSuccessfulRead: health.summary.lastSuccessfulRead,
       lastApiError: health.lastApiError,
       permissionChecks: health.summary.permissionChecks,
+      diagnostic: health.summary.diagnostic,
       summary: health.summary,
       connectionStatus: health.connectionStatus,
       lastSuccessfulApiCall: health.lastSuccessfulApiCall,
-      securityNote: "Client secret is processed server-side and never returned.",
+      message:
+        health.connectionStatus === "connected"
+          ? "Connected. Production OAuth token and safe read check succeeded."
+          : health.lastApiError?.message ?? "Connection test did not complete.",
+      securityNote: "Client secret and access token are processed server-side and never returned.",
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to test Walmart connection.");

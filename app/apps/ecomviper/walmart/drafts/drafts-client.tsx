@@ -8,10 +8,9 @@ import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface DraftsClientProps {
   initialDrafts: WalmartDraftRecord[];
-  mode: string;
 }
 
-export default function WalmartDraftsClient({ initialDrafts, mode }: DraftsClientProps) {
+export default function WalmartDraftsClient({ initialDrafts }: DraftsClientProps) {
   const [drafts, setDrafts] = useState(initialDrafts);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -44,7 +43,6 @@ export default function WalmartDraftsClient({ initialDrafts, mode }: DraftsClien
       <WalmartPageHeader
         title="Drafts"
         subtitle="Review staged edits before submitting updates."
-        mode={mode}
       />
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -93,6 +91,13 @@ export default function WalmartDraftsClient({ initialDrafts, mode }: DraftsClien
                   </td>
                 </tr>
               ))}
+              {!drafts.length ? (
+                <tr className="border-t border-[#E2E8F0]">
+                  <td colSpan={8} className="py-6 text-center text-sm text-[#64748B]">
+                    No staged drafts yet.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
         </div>
