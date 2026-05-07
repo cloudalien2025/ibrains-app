@@ -25,6 +25,14 @@ const apps = [
     description: "Directory intelligence workspace for readiness, ingestion operations, and authority workflows.",
     status: "Live",
   },
+  {
+    id: "ecomviper",
+    name: "EcomViper",
+    href: "/apps/ecomviper",
+    description:
+      "Marketplace operations workspace for editing, optimizing, and syncing ecommerce product listings across Walmart, Amazon, eBay, and Shopify.",
+    status: "Live",
+  },
 ] as const;
 
 export default function AppsIndexPage() {
