@@ -1,12 +1,9 @@
 import "server-only";
 
-import type { RuntimeMode } from "@/lib/ecomviper/core/marketplace-types";
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
+import type { RuntimeMode } from "@/lib/ecomviper/core/marketplace-types";
 import { createDraftRecord, validateDraftPayload } from "@/lib/ecomviper/core/draft-workflow";
 import type {
-  WalmartApiError,
-  WalmartConnectionStatus,
-  WalmartConnectionSummary,
   WalmartDraftRecord,
   WalmartFeedSubmission,
   WalmartProductRecord,
@@ -14,10 +11,6 @@ import type {
 
 interface WalmartStore {
   mode: RuntimeMode;
-  connectionStatus: WalmartConnectionStatus;
-  connectionSummary: WalmartConnectionSummary;
-  lastSuccessfulApiCall: string | null;
-  lastApiError: WalmartApiError | null;
   products: WalmartProductRecord[];
   drafts: WalmartDraftRecord[];
   feeds: WalmartFeedSubmission[];
@@ -32,53 +25,10 @@ function resolveRuntimeMode(): RuntimeMode {
   return "live-ready";
 }
 
-function defaultConnectionSummary(mode: RuntimeMode): WalmartConnectionSummary {
-  const clientId = process.env.WALMART_CLIENT_ID?.trim() ?? "";
-
-  return {
-    accountNickname: process.env.WALMART_ACCOUNT_NICKNAME?.trim() || "Walmart Account",
-    environment: "production",
-    region: "US",
-    maskedClientId: clientId ? `${clientId.slice(0, 2)}***${clientId.slice(-4)}` : "Not configured",
-    clientSecretStored: Boolean(process.env.WALMART_CLIENT_SECRET),
-    lastSuccessfulAuth: null,
-    lastSuccessfulRead: null,
-    lastApiError: null,
-    tokenStatus: "unknown",
-    safeReadStatus: "unknown",
-    permissionChecks: [
-      { id: "catalog_read", label: "Items / Catalog read", state: "unknown" },
-      { id: "item_maintenance", label: "Item maintenance / content update", state: "unknown" },
-      { id: "inventory_update", label: "Inventory update", state: "unknown" },
-      { id: "pricing_update", label: "Pricing update", state: "unknown" },
-      { id: "feeds_submit_read", label: "Feeds submit/read", state: "unknown" },
-      { id: "feed_error_reports", label: "Feed error reports", state: "unknown" },
-    ],
-    credentialStorageMode: process.env.WALMART_CLIENT_SECRET ? "env" : "memory",
-    mode,
-    diagnostic: {
-      environment: "production",
-      baseUrl: "https://marketplace.walmartapis.com",
-      tokenStatus: "unknown",
-      safeReadStatus: "unknown",
-      httpStatus: null,
-      correlationId: null,
-      walmartErrorCode: null,
-      walmartErrorMessage: null,
-      timestamp: null,
-    },
-  };
-}
-
 function getStore(): WalmartStore {
   if (!globalThis.__ecomviper_walmart_store__) {
-    const mode = resolveRuntimeMode();
     globalThis.__ecomviper_walmart_store__ = {
-      mode,
-      connectionStatus: "not_connected",
-      connectionSummary: defaultConnectionSummary(mode),
-      lastSuccessfulApiCall: null,
-      lastApiError: null,
+      mode: resolveRuntimeMode(),
       products: [],
       drafts: [],
       feeds: [],
@@ -91,62 +41,6 @@ function getStore(): WalmartStore {
 
 export function getWalmartRuntimeMode(): RuntimeMode {
   return getStore().mode;
-}
-
-export function getWalmartConnectionState() {
-  const store = getStore();
-  return {
-    connectionStatus: store.connectionStatus,
-    summary: store.connectionSummary,
-    lastSuccessfulApiCall: store.lastSuccessfulApiCall,
-    lastApiError: store.lastApiError,
-  };
-}
-
-export function setWalmartConnectionState(params: {
-  summary: WalmartConnectionSummary;
-  connectionStatus: WalmartConnectionStatus;
-  lastSuccessfulApiCall: string | null;
-  lastApiError: WalmartApiError | null;
-}) {
-  const store = getStore();
-  store.connectionSummary = {
-    ...params.summary,
-    mode: store.mode,
-  };
-  store.connectionStatus = params.connectionStatus;
-  store.lastSuccessfulApiCall = params.lastSuccessfulApiCall;
-  store.lastApiError = params.lastApiError;
-  return store.connectionSummary;
-}
-
-export function disconnectWalmartConnection(): void {
-  const store = getStore();
-  store.connectionStatus = "not_connected";
-  store.lastSuccessfulApiCall = null;
-  store.lastApiError = null;
-  store.connectionSummary = {
-    ...store.connectionSummary,
-    environment: "production",
-    tokenStatus: "unknown",
-    safeReadStatus: "unknown",
-    clientSecretStored: false,
-    maskedClientId: "Not configured",
-    lastSuccessfulAuth: null,
-    lastSuccessfulRead: null,
-    lastApiError: null,
-    diagnostic: {
-      ...store.connectionSummary.diagnostic,
-      environment: "production",
-      tokenStatus: "unknown",
-      safeReadStatus: "unknown",
-      httpStatus: null,
-      correlationId: null,
-      walmartErrorCode: null,
-      walmartErrorMessage: null,
-      timestamp: new Date().toISOString(),
-    },
-  };
 }
 
 export function listProducts(): WalmartProductRecord[] {

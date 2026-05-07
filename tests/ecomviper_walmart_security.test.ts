@@ -5,11 +5,17 @@ import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import { maskClientId, saveWalmartConnection, testWalmartConnection } from "@/lib/ecomviper/walmart/walmart-auth";
 
+const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 11).toString("base64");
+
 describe("EcomViper Walmart security rules", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
+
+    process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+
     vi.restoreAllMocks();
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.url;
@@ -29,9 +35,10 @@ describe("EcomViper Walmart security rules", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY;
   });
 
-  it("connect test/save routes never return raw client secret, token, or auth header", async () => {
+  it("connect test/save routes never return raw client secret, token, auth header, or encrypted secret", async () => {
     const secret = "super-secret-walmart-client-secret";
 
     const testReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
@@ -59,14 +66,20 @@ describe("EcomViper Walmart security rules", () => {
     const saveResp = await saveConnectionRoute(saveReq);
     const savePayload = await saveResp.json();
 
-    expect(JSON.stringify(testPayload)).not.toContain(secret);
-    expect(JSON.stringify(savePayload)).not.toContain(secret);
+    const serializedTest = JSON.stringify(testPayload);
+    const serializedSave = JSON.stringify(savePayload);
+
+    expect(serializedTest).not.toContain(secret);
+    expect(serializedSave).not.toContain(secret);
+    expect(serializedTest).not.toContain("wm_access_token_value");
+    expect(serializedSave).not.toContain("wm_access_token_value");
+    expect(serializedTest).not.toContain("Authorization");
+    expect(serializedSave).not.toContain("Authorization");
+    expect(serializedTest).not.toContain("encrypted_client_secret");
+    expect(serializedSave).not.toContain("encrypted_client_secret");
     expect(testPayload.summary?.maskedClientId).toBeDefined();
     expect(savePayload.summary?.maskedClientId).toBeDefined();
-    expect(JSON.stringify(testPayload)).not.toContain("wm_access_token_value");
-    expect(JSON.stringify(savePayload)).not.toContain("wm_access_token_value");
-    expect(JSON.stringify(testPayload)).not.toContain("Authorization");
-    expect(JSON.stringify(savePayload)).not.toContain("Authorization");
+    expect(savePayload.clientSecretStored).toBe(true);
   });
 
   it("walmart auth masks client id and does not expose client secret", async () => {
@@ -74,18 +87,24 @@ describe("EcomViper Walmart security rules", () => {
     expect(masked).toBe("ab***7890");
 
     const secret = "secret-value-should-never-echo";
-    const tested = await testWalmartConnection({
-      accountNickname: "OPA Nutrition Walmart",
-      clientId: "ab1234567890",
-      clientSecret: secret,
-      region: "US",
-    });
-    const saved = await saveWalmartConnection({
-      accountNickname: "OPA Nutrition Walmart",
-      clientId: "ab1234567890",
-      clientSecret: secret,
-      region: "US",
-    });
+    const tested = await testWalmartConnection(
+      {
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "ab1234567890",
+        clientSecret: secret,
+        region: "US",
+      },
+      "security-user"
+    );
+    const saved = await saveWalmartConnection(
+      {
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "ab1234567890",
+        clientSecret: secret,
+        region: "US",
+      },
+      "security-user"
+    );
 
     expect(JSON.stringify(tested)).not.toContain(secret);
     expect(JSON.stringify(saved)).not.toContain(secret);
@@ -105,8 +124,10 @@ describe("EcomViper Walmart security rules", () => {
       message: "Saved",
       afterPayload: {
         clientSecret: "very-secret",
+        encryptedClientSecret: "ciphertext",
         nested: {
           accessToken: "token-value",
+          authorization: "Basic abc",
           ok: true,
         },
       },
@@ -117,6 +138,8 @@ describe("EcomViper Walmart security rules", () => {
 
     expect(body).toContain("[REDACTED]");
     expect(body).not.toContain("very-secret");
+    expect(body).not.toContain("ciphertext");
     expect(body).not.toContain("token-value");
+    expect(body).not.toContain("Basic abc");
   });
 });

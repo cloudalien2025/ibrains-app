@@ -20,12 +20,18 @@ function parseEncryptionKey(raw: string): Buffer {
 }
 
 function resolveEncryptionKeys(): Buffer[] {
-  const rawKeys = [process.env.INTEGRATIONS_ENCRYPTION_KEY, process.env.SERVER_ENCRYPTION_KEY]
+  const rawKeys = [
+    process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY,
+    process.env.INTEGRATIONS_ENCRYPTION_KEY,
+    process.env.SERVER_ENCRYPTION_KEY,
+  ]
     .filter((value): value is string => Boolean(value && value.trim()))
     .map((value) => value.trim());
 
   if (rawKeys.length === 0) {
-    throw new Error("INTEGRATIONS_ENCRYPTION_KEY not configured");
+    throw new Error(
+      "Missing encryption key. Set ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY (or INTEGRATIONS_ENCRYPTION_KEY / SERVER_ENCRYPTION_KEY)."
+    );
   }
 
   const uniqueRawKeys = Array.from(new Set(rawKeys));

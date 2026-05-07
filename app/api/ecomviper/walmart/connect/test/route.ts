@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
     await ensureUser(userId);
 
     const body = (await req.json().catch(() => ({}))) as Partial<WalmartConnectionInput>;
-    const health = await testWalmartConnection(body);
+    const health = await testWalmartConnection(body, userId);
 
     return ok({
       ok: health.connectionStatus === "connected",

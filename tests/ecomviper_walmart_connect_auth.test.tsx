@@ -3,8 +3,12 @@ import { NextRequest } from "next/server";
 import { renderToStaticMarkup } from "react-dom/server";
 import WalmartConnectClient from "@/app/apps/ecomviper/walmart/connect/connect-client";
 import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect/test/route";
+import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect/save/route";
+import { GET as healthRoute } from "@/app/api/ecomviper/walmart/health/route";
 import { requestServerSideWalmartToken } from "@/lib/ecomviper/walmart/walmart-auth";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
+
+const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
 
 function buildInitialHealth(): WalmartConnectionHealth {
   return {
@@ -13,7 +17,7 @@ function buildInitialHealth(): WalmartConnectionHealth {
       accountNickname: "OPA Nutrition Walmart",
       environment: "production",
       region: "US",
-      maskedClientId: "ab***7890",
+      maskedClientId: "Not configured",
       clientSecretStored: false,
       lastSuccessfulAuth: null,
       lastSuccessfulRead: null,
@@ -52,13 +56,17 @@ describe("EcomViper Walmart connect auth", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
+
     vi.restoreAllMocks();
     delete process.env.WALMART_CLIENT_ID;
     delete process.env.WALMART_CLIENT_SECRET;
+    process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    delete process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY;
   });
 
   it("connect/test uses submitted credentials with production token URL and production safe read URL", async () => {
@@ -122,6 +130,119 @@ describe("EcomViper Walmart connect auth", () => {
     expect(safeReadHeaders["WM_SVC.NAME"]).toBe("Walmart Marketplace");
   });
 
+  it("save persists credentials and test can use stored credentials when form fields are blank", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.includes("/v3/token")) {
+        return new Response(JSON.stringify({ access_token: "wm_live_access_token", expires_in: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ elements: [] }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    const secret = "stored_secret_123";
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "save",
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "stored_client_id",
+        clientSecret: secret,
+        marketplaceRegion: "US",
+      }),
+    });
+
+    const saveResp = await saveConnectionRoute(saveReq);
+    const savePayload = await saveResp.json();
+
+    expect(savePayload.maskedClientId).toBe("st***t_id");
+    expect(savePayload.clientSecretStored).toBe(true);
+    expect(savePayload.message).toBe("Credentials saved securely.");
+    expect(JSON.stringify(savePayload)).not.toContain(secret);
+    expect(JSON.stringify(savePayload)).not.toContain("encryptedClientSecret");
+
+    fetchSpy.mockClear();
+
+    const testReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
+      method: "POST",
+      body: JSON.stringify({
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "",
+        clientSecret: "",
+        marketplaceRegion: "US",
+      }),
+    });
+
+    const testResp = await testConnectionRoute(testReq);
+    const testPayload = await testResp.json();
+
+    expect(testPayload.status).toBe("connected");
+    expect(testPayload.clientSecretStored).toBe(true);
+    expect(testPayload.maskedClientId).toBe("st***t_id");
+
+    const [tokenUrl, tokenInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(tokenUrl).toBe("https://marketplace.walmartapis.com/v3/token");
+
+    const tokenHeaders = tokenInit.headers as Record<string, string>;
+    expect(tokenHeaders.Authorization).toBe(
+      `Basic ${Buffer.from("stored_client_id:stored_secret_123").toString("base64")}`
+    );
+  });
+
+  it("health route returns persisted safe summary and disconnect clears stored credentials", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "wm_live_access_token", expires_in: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ elements: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "save",
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "persisted_client_id",
+        clientSecret: "persisted_secret",
+        marketplaceRegion: "US",
+      }),
+    });
+    await saveConnectionRoute(saveReq);
+
+    const healthResp = await healthRoute(new NextRequest("http://localhost/api/ecomviper/walmart/health"));
+    const healthPayload = await healthResp.json();
+
+    expect(healthPayload.connectionHealth.summary.clientSecretStored).toBe(true);
+    expect(healthPayload.connectionHealth.summary.maskedClientId).toBe("pe***t_id");
+    expect(JSON.stringify(healthPayload)).not.toContain("persisted_secret");
+
+    const disconnectReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+      method: "POST",
+      body: JSON.stringify({ action: "disconnect" }),
+    });
+    await saveConnectionRoute(disconnectReq);
+
+    const healthAfterDisconnectResp = await healthRoute(new NextRequest("http://localhost/api/ecomviper/walmart/health"));
+    const healthAfterDisconnectPayload = await healthAfterDisconnectResp.json();
+
+    expect(healthAfterDisconnectPayload.connectionHealth.connectionStatus).toBe("not_connected");
+    expect(healthAfterDisconnectPayload.connectionHealth.summary.clientSecretStored).toBe(false);
+    expect(healthAfterDisconnectPayload.connectionHealth.summary.maskedClientId).toBe("Not configured");
+  });
+
   it("token request returns sanitized failure details and never leaks secret/token/auth", async () => {
     const secret = "submitted_secret_do_not_leak";
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
@@ -160,6 +281,8 @@ describe("EcomViper Walmart connect auth", () => {
     expect(serialized).not.toContain("wm_live_access_token");
     expect(serialized).not.toContain("Authorization");
     expect(serialized).not.toContain("Basic ");
+    expect(serialized).not.toContain("access_token");
+    expect(serialized).not.toContain("encryptedClientSecret");
   });
 
   it("missing credentials returns explicit safe error and skips network call", async () => {
@@ -177,7 +300,11 @@ describe("EcomViper Walmart connect auth", () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it("token success with safe read not configured returns token_valid_read_not_configured", async () => {
+  it("save fails safely when credential encryption key is missing", async () => {
+    delete process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY;
+    delete process.env.INTEGRATIONS_ENCRYPTION_KEY;
+    delete process.env.SERVER_ENCRYPTION_KEY;
+
     vi.spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ access_token: "wm_live_access_token", expires_in: 900 }), {
@@ -186,14 +313,16 @@ describe("EcomViper Walmart connect auth", () => {
         })
       )
       .mockResolvedValueOnce(
-        new Response("Not Found", {
-          status: 404,
+        new Response(JSON.stringify({ elements: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
         })
       );
 
-    const req = new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
       method: "POST",
       body: JSON.stringify({
+        action: "save",
         accountNickname: "OPA Nutrition Walmart",
         clientId: "submitted_client_id",
         clientSecret: "submitted_client_secret",
@@ -201,19 +330,15 @@ describe("EcomViper Walmart connect auth", () => {
       }),
     });
 
-    const resp = await testConnectionRoute(req);
+    const resp = await saveConnectionRoute(req);
     const payload = await resp.json();
 
-    expect(payload.status).toBe("token_valid_read_not_configured");
-    expect(payload.tokenStatus).toBe("valid");
-    expect(payload.safeReadStatus).toBe("not_configured");
-    expect(payload.environment).toBe("production");
+    expect(resp.status).toBe(500);
+    expect(payload.error.message).toContain("ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY");
   });
 
   it("connect status panel renders Production and no Sandbox option", () => {
-    const html = renderToStaticMarkup(
-      <WalmartConnectClient initialHealth={buildInitialHealth()} />
-    );
+    const html = renderToStaticMarkup(<WalmartConnectClient initialHealth={buildInitialHealth()} />);
 
     expect(html).toContain("Environment");
     expect(html).toContain("Production");
