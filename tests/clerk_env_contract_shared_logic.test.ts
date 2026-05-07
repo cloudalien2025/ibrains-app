@@ -52,4 +52,11 @@ describe("clerk shared env contract", () => {
     expect(routes.signInFallbackRedirectUrl).toBe("/runs");
     expect(routes.signUpFallbackRedirectUrl).toBe("/mission-control");
   });
+
+  it("defaults sign-in and sign-up fallback redirects to /apps", () => {
+    const routes = resolveClerkRouteContract({});
+
+    expect(routes.signInFallbackRedirectUrl).toBe("/apps");
+    expect(routes.signUpFallbackRedirectUrl).toBe("/apps");
+  });
 });

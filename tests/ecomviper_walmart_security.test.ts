@@ -1,9 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect/test/route";
 import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect/save/route";
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import { maskClientId, saveWalmartConnection, testWalmartConnection } from "@/lib/ecomviper/walmart/walmart-auth";
+
+const authMocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: authMocks.requireSignedInUser,
+}));
 
 const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 11).toString("base64");
 
@@ -14,9 +22,10 @@ describe("EcomViper Walmart security rules", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
 
-    process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
-
     vi.restoreAllMocks();
+    process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    authMocks.requireSignedInUser.mockReset();
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "security-user", unauthorizedResponse: null });
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input.url;
       if (url.includes("/v3/token")) {
@@ -36,6 +45,37 @@ describe("EcomViper Walmart security rules", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     delete process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY;
+  });
+
+  it("health/connect routes return auth-specific 401 messages when unauthenticated", async () => {
+    authMocks.requireSignedInUser.mockResolvedValueOnce({
+      userId: null,
+      unauthorizedResponse: NextResponse.json(
+        {
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Sign-in required",
+          },
+        },
+        { status: 401 }
+      ),
+    });
+
+    const response = await testConnectionRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
+        method: "POST",
+        body: JSON.stringify({
+          accountNickname: "OPA Nutrition Walmart",
+          clientId: "wm-client-id-123456",
+          clientSecret: "super-secret-walmart-client-secret",
+          region: "US",
+        }),
+      })
+    );
+
+    expect(response.status).toBe(401);
+    const payload = await response.json();
+    expect(payload.error?.message).toBe("Please sign in before testing Walmart credentials.");
   });
 
   it("connect test/save routes never return raw client secret, token, auth header, or encrypted secret", async () => {

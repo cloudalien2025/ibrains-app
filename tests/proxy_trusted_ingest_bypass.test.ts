@@ -79,7 +79,7 @@ describe("proxy trusted service bypass", () => {
     expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
   });
 
-  it("bypasses Clerk middleware on the app launcher so public entry routes do not self-proxy", async () => {
+  it("keeps Clerk middleware on the app launcher so app routes require auth checks", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -89,10 +89,10 @@ describe("proxy trusted service bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
 
-  it("bypasses Clerk middleware on public Studio app routes", async () => {
+  it("keeps Clerk middleware on Studio app routes so app routes require auth checks", async () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -102,7 +102,7 @@ describe("proxy trusted service bypass", () => {
 
     const res = await handler(req);
     expect(res.status).toBe(200);
-    expect(mocks.clerkProxyHandler).not.toHaveBeenCalled();
+    expect(mocks.clerkProxyHandler).toHaveBeenCalledTimes(1);
   });
 
   it("bypasses Clerk middleware on Studio API routes so they do not self-proxy", async () => {

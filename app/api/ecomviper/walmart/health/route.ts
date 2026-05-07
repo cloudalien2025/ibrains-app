@@ -1,15 +1,22 @@
 export const runtime = "nodejs";
 
-import { NextRequest } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) {
+        return unauthorizedResponse;
+      }
+      return fail(401, "Please sign in before loading Walmart connection health.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before loading Walmart connection health.", "UNAUTHORIZED");
+    }
 
     const health = await getWalmartConnectionHealthForUser(userId);
     const dashboard = getWalmartDashboardSnapshot();

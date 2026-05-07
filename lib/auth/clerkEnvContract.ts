@@ -25,8 +25,8 @@ export function resolveClerkRouteContract(env: ClerkContractEnv = process.env) {
   return {
     signInUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_IN_URL, "/sign-in"),
     signUpUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_UP_URL, "/sign-up"),
-    signInFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL, "/"),
-    signUpFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL, "/"),
+    signInFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_IN_FALLBACK_REDIRECT_URL, "/apps"),
+    signUpFallbackRedirectUrl: ensureLeadingSlash(env.NEXT_PUBLIC_CLERK_SIGN_UP_FALLBACK_REDIRECT_URL, "/apps"),
   };
 }
 

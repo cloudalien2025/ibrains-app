@@ -1,11 +1,17 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import type { NextFetchEvent, NextRequest } from "next/server";
-import { buildClerkProductionConfigError, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
+import {
+  buildClerkProductionConfigError,
+  resolveClerkRouteContract,
+  resolveClerkRuntimeContract,
+} from "@/lib/auth/clerkEnvContract";
 
 const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
 
 const isProtectedRoute = createRouteMatcher([
+  "/apps(.*)",
+  "/api/ecomviper(.*)",
   "/brains(.*)",
   "/runs(.*)",
   "/mission-control(.*)",
@@ -14,6 +20,7 @@ const isProtectedRoute = createRouteMatcher([
 
 const e2eMockGraph = process.env.E2E_MOCK_GRAPH === "1";
 const clerkRuntimeContract = resolveClerkRuntimeContract();
+const clerkRouteContract = resolveClerkRouteContract();
 const isClerkConfigured = clerkRuntimeContract.configuredForProxy;
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
@@ -27,12 +34,18 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
     pathname === "/api/meta/release" ||
     pathname === "/api/_meta/release" ||
     pathname.startsWith("/api/studio/domara/") ||
-    pathname.startsWith("/apps") ||
     pathname === "/sign-in" ||
     pathname.startsWith("/sign-in/") ||
     pathname === "/sign-up" ||
     pathname.startsWith("/sign-up/")
   );
+}
+
+function buildSignInRedirect(req: NextRequest): NextResponse {
+  const redirectUrl = `${req.nextUrl.pathname}${req.nextUrl.search}`;
+  const signInUrl = new URL(clerkRouteContract.signInUrl, req.url);
+  signInUrl.searchParams.set("redirect_url", redirectUrl);
+  return NextResponse.redirect(signInUrl);
 }
 
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
@@ -119,7 +132,7 @@ export default e2eMockGraph
       }
       if (!isClerkConfigured) {
         if (isProtectedRoute(req)) {
-          return NextResponse.redirect(new URL("/sign-in", req.url));
+          return buildSignInRedirect(req);
         }
         return NextResponse.next();
       }
@@ -131,7 +144,7 @@ export default e2eMockGraph
         return await clerkProxy(req, event);
       } catch {
         if (isProtectedRoute(req)) {
-          return NextResponse.redirect(new URL("/sign-in", req.url));
+          return buildSignInRedirect(req);
         }
         return NextResponse.next();
       }
