@@ -2,17 +2,46 @@ import "server-only";
 
 import crypto from "crypto";
 import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
-import { getWalmartConnectionState, getWalmartRuntimeMode, setWalmartConnectionSummary, disconnectWalmartConnection } from "@/lib/ecomviper/walmart/walmart-mock-data";
-import type { WalmartConnectionHealth, WalmartConnectionInput, WalmartConnectionSummary, WalmartEnvironment, WalmartPermissionCheck, WalmartRegion } from "@/lib/ecomviper/walmart/walmart-types";
+import {
+  disconnectWalmartConnection,
+  getWalmartConnectionState,
+  getWalmartRuntimeMode,
+  setWalmartConnectionSummary,
+} from "@/lib/ecomviper/walmart/walmart-mock-data";
+import type {
+  WalmartApiError,
+  WalmartConnectionHealth,
+  WalmartConnectionInput,
+  WalmartConnectionSummary,
+  WalmartEnvironment,
+  WalmartPermissionCheck,
+  WalmartRegion,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 interface WalmartTokenCache {
   token: string;
   expiresAt: number;
+  environment: WalmartEnvironment;
+  region: WalmartRegion;
+}
+
+interface WalmartTokenRequestResult {
+  ok: boolean;
+  tokenStatus: WalmartConnectionSummary["tokenStatus"];
+  lastError: WalmartApiError | null;
+  accessToken: string | null;
+  environment: WalmartEnvironment;
+  marketplaceRegion: WalmartRegion;
 }
 
 declare global {
   var __ecomviper_walmart_token_cache__: WalmartTokenCache | undefined;
 }
+
+const WALMART_TOKEN_URL: Record<WalmartEnvironment, string> = {
+  production: "https://marketplace.walmartapis.com/v3/token",
+  sandbox: "https://sandbox.walmartapis.com/v3/token",
+};
 
 function permissionsDefault(): WalmartPermissionCheck[] {
   return [
@@ -32,14 +61,49 @@ export function maskClientId(clientId: string): string {
   return `${trimmed.slice(0, 2)}***${trimmed.slice(-4)}`;
 }
 
+function resolveEnvironment(value: string | null | undefined): WalmartEnvironment {
+  return value?.trim().toLowerCase() === "production" ? "production" : "sandbox";
+}
+
+function resolveRegion(value: string | null | undefined): WalmartRegion {
+  return value?.trim().toUpperCase() === "US" ? "US" : "US";
+}
+
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeFailureMessage(params: {
+  status?: number;
+  payload?: unknown;
+  fallback: string;
+}): string {
+  const { status, fallback } = params;
+  if (status === 401) {
+    return "Walmart token request failed: HTTP 401 unauthorized. Check that the Client ID/Secret pair is active and belongs to the selected environment.";
+  }
+  if (status === 403) {
+    return "Walmart token request failed: HTTP 403 forbidden. Verify app permissions and environment access.";
+  }
+  if (status) {
+    return `Walmart token request failed: HTTP ${status}.`;
+  }
+  return fallback;
+}
+
+function buildApiError(code: string, message: string): WalmartApiError {
+  return { code, message };
+}
+
 export function getWalmartEnvConfig() {
   const clientId = process.env.WALMART_CLIENT_ID?.trim() ?? "";
   const clientSecret = process.env.WALMART_CLIENT_SECRET?.trim() ?? "";
-  const environment =
-    process.env.WALMART_MARKETPLACE_ENV?.trim().toLowerCase() === "production"
-      ? ("production" as const)
-      : ("sandbox" as const);
-  const region = (process.env.WALMART_MARKETPLACE_REGION?.trim().toUpperCase() === "US" ? "US" : "US") as WalmartRegion;
+  const environment = resolveEnvironment(process.env.WALMART_MARKETPLACE_ENV);
+  const region = resolveRegion(process.env.WALMART_MARKETPLACE_REGION);
   const accountNickname = process.env.WALMART_ACCOUNT_NICKNAME?.trim() || "Walmart Account";
 
   const missingRequired = [
@@ -65,7 +129,7 @@ function buildSummary(input: {
   region: WalmartRegion;
   clientSecretStored: boolean;
   lastSuccessfulAuth: string | null;
-  lastApiError: string | null;
+  lastApiError: WalmartApiError | null;
   tokenStatus: WalmartConnectionSummary["tokenStatus"];
   credentialStorageMode: WalmartConnectionSummary["credentialStorageMode"];
 }): WalmartConnectionSummary {
@@ -87,26 +151,26 @@ function buildSummary(input: {
   };
 }
 
-function cacheServerToken(): string {
+function cacheServerToken(token: string, environment: WalmartEnvironment, region: WalmartRegion, expiresInSeconds: number): void {
   const now = Date.now();
-  if (globalThis.__ecomviper_walmart_token_cache__ && globalThis.__ecomviper_walmart_token_cache__.expiresAt > now) {
-    return globalThis.__ecomviper_walmart_token_cache__.token;
-  }
-
-  const token = `wm_mock_${crypto.randomUUID().replace(/-/g, "")}`;
   globalThis.__ecomviper_walmart_token_cache__ = {
     token,
-    expiresAt: now + 15 * 60_000,
+    environment,
+    region,
+    expiresAt: now + Math.max(expiresInSeconds - 15, 30) * 1_000,
   };
-  return token;
 }
 
 export async function requestServerSideWalmartToken(params?: {
   clientId?: string;
   clientSecret?: string;
-}): Promise<{ ok: boolean; tokenStatus: WalmartConnectionSummary["tokenStatus"]; lastError: string | null }> {
-  const mode = getWalmartRuntimeMode();
+  environment?: WalmartEnvironment;
+  marketplaceRegion?: WalmartRegion;
+  region?: WalmartRegion;
+}): Promise<WalmartTokenRequestResult> {
   const env = getWalmartEnvConfig();
+  const environment = resolveEnvironment(params?.environment ?? env.environment);
+  const marketplaceRegion = resolveRegion(params?.marketplaceRegion ?? params?.region ?? env.region);
   const clientId = params?.clientId?.trim() || env.clientId;
   const clientSecret = params?.clientSecret?.trim() || env.clientSecret;
 
@@ -114,35 +178,132 @@ export async function requestServerSideWalmartToken(params?: {
     return {
       ok: false,
       tokenStatus: "unknown",
-      lastError: "Walmart credentials are missing.",
+      lastError: buildApiError("MISSING_CREDENTIALS", "Missing Walmart Client ID or Client Secret."),
+      accessToken: null,
+      environment,
+      marketplaceRegion,
     };
   }
 
-  if (mode === "live-ready") {
-    cacheServerToken();
+  const tokenUrl = WALMART_TOKEN_URL[environment];
+  const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
+  const body = new URLSearchParams({ grant_type: "client_credentials" }).toString();
+
+  try {
+    const response = await fetch(tokenUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${basicAuth}`,
+        Accept: "application/json",
+        "Content-Type": "application/x-www-form-urlencoded",
+        "WM_QOS.CORRELATION_ID": crypto.randomUUID(),
+        "WM_SVC.NAME": "Walmart Marketplace",
+      },
+      body,
+      cache: "no-store",
+    });
+
+    const raw = await response.text();
+    const payload = raw ? safeJsonParse(raw) : null;
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        tokenStatus: "invalid",
+        lastError: buildApiError(
+          `WALMART_TOKEN_HTTP_${response.status}`,
+          sanitizeFailureMessage({
+            status: response.status,
+            payload,
+            fallback: "Walmart token request failed.",
+          })
+        ),
+        accessToken: null,
+        environment,
+        marketplaceRegion,
+      };
+    }
+
+    const token =
+      payload && typeof payload === "object" && typeof (payload as { access_token?: unknown }).access_token === "string"
+        ? (payload as { access_token: string }).access_token
+        : "";
+
+    const expiresIn =
+      payload && typeof payload === "object" && typeof (payload as { expires_in?: unknown }).expires_in === "number"
+        ? (payload as { expires_in: number }).expires_in
+        : 900;
+
+    if (!token) {
+      return {
+        ok: false,
+        tokenStatus: "invalid",
+        lastError: buildApiError("WALMART_TOKEN_INVALID_RESPONSE", "Walmart token request failed: invalid response payload."),
+        accessToken: null,
+        environment,
+        marketplaceRegion,
+      };
+    }
+
+    cacheServerToken(token, environment, marketplaceRegion, expiresIn);
+
     return {
       ok: true,
       tokenStatus: "valid",
       lastError: null,
+      accessToken: token,
+      environment,
+      marketplaceRegion,
+    };
+  } catch {
+    return {
+      ok: false,
+      tokenStatus: "unknown",
+      lastError: buildApiError("WALMART_TOKEN_NETWORK_ERROR", "Walmart token request failed: network error."),
+      accessToken: null,
+      environment,
+      marketplaceRegion,
     };
   }
-
-  cacheServerToken();
-  return {
-    ok: true,
-    tokenStatus: mode === "dry-run" ? "valid" : "unknown",
-    lastError: null,
-  };
 }
 
 function sanitizeInput(input: Partial<WalmartConnectionInput>): WalmartConnectionInput {
+  const fallback = getWalmartEnvConfig();
   return {
-    accountNickname: (input.accountNickname ?? "Walmart Account").trim() || "Walmart Account",
+    accountNickname: (input.accountNickname ?? fallback.accountNickname).trim() || "Walmart Account",
     clientId: (input.clientId ?? "").trim(),
     clientSecret: (input.clientSecret ?? "").trim(),
-    environment: input.environment === "production" ? "production" : "sandbox",
-    region: input.region === "US" ? "US" : "US",
+    environment: resolveEnvironment(input.environment),
+    marketplaceRegion: resolveRegion(input.marketplaceRegion ?? input.region),
+    region: resolveRegion(input.marketplaceRegion ?? input.region),
     notes: typeof input.notes === "string" ? input.notes.trim() : "",
+  };
+}
+
+function buildConnectionHealthFromResult(params: {
+  sanitized: WalmartConnectionInput;
+  token: WalmartTokenRequestResult;
+  credentialStorageMode: WalmartConnectionSummary["credentialStorageMode"];
+}): WalmartConnectionHealth {
+  const now = params.token.ok ? new Date().toISOString() : null;
+
+  const summary = buildSummary({
+    accountNickname: params.sanitized.accountNickname,
+    clientId: params.sanitized.clientId,
+    environment: params.token.environment,
+    region: params.token.marketplaceRegion,
+    clientSecretStored: Boolean(params.sanitized.clientSecret),
+    lastSuccessfulAuth: now,
+    lastApiError: params.token.lastError,
+    tokenStatus: params.token.tokenStatus,
+    credentialStorageMode: params.credentialStorageMode,
+  });
+
+  return {
+    connectionStatus: params.token.ok ? "connected" : "not_connected",
+    summary,
+    lastSuccessfulApiCall: now,
+    lastApiError: params.token.lastError,
   };
 }
 
@@ -151,18 +312,13 @@ export async function testWalmartConnection(input: Partial<WalmartConnectionInpu
   const token = await requestServerSideWalmartToken({
     clientId: sanitized.clientId,
     clientSecret: sanitized.clientSecret,
-  });
-  const now = token.ok ? new Date().toISOString() : null;
-
-  const summary = buildSummary({
-    accountNickname: sanitized.accountNickname,
-    clientId: sanitized.clientId,
     environment: sanitized.environment,
-    region: sanitized.region,
-    clientSecretStored: Boolean(sanitized.clientSecret),
-    lastSuccessfulAuth: now,
-    lastApiError: token.lastError,
-    tokenStatus: token.tokenStatus,
+    marketplaceRegion: sanitized.marketplaceRegion,
+  });
+
+  const health = buildConnectionHealthFromResult({
+    sanitized,
+    token,
     credentialStorageMode: "memory",
   });
 
@@ -170,22 +326,20 @@ export async function testWalmartConnection(input: Partial<WalmartConnectionInpu
     marketplace: "walmart",
     actionType: "connection_test",
     result: token.ok ? "success" : "error",
-    message: token.ok ? "Walmart connection test succeeded." : `Walmart connection test failed: ${token.lastError}`,
+    message: token.ok
+      ? "Walmart connection test succeeded."
+      : `Walmart connection test failed: ${token.lastError?.code ?? "UNKNOWN"}`,
     afterPayload: {
       accountNickname: sanitized.accountNickname,
-      environment: sanitized.environment,
-      region: sanitized.region,
-      maskedClientId: summary.maskedClientId,
-      tokenStatus: summary.tokenStatus,
+      environment: health.summary.environment,
+      region: health.summary.region,
+      maskedClientId: health.summary.maskedClientId,
+      tokenStatus: health.summary.tokenStatus,
+      lastApiError: health.summary.lastApiError,
     },
   });
 
-  return {
-    connectionStatus: token.ok ? "connected" : "not_connected",
-    summary,
-    lastSuccessfulApiCall: now,
-    lastApiError: token.lastError,
-  };
+  return health;
 }
 
 export async function saveWalmartConnection(input: Partial<WalmartConnectionInput>): Promise<WalmartConnectionHealth> {
@@ -193,22 +347,17 @@ export async function saveWalmartConnection(input: Partial<WalmartConnectionInpu
   const token = await requestServerSideWalmartToken({
     clientId: sanitized.clientId,
     clientSecret: sanitized.clientSecret,
-  });
-  const now = token.ok ? new Date().toISOString() : null;
-
-  const summary = buildSummary({
-    accountNickname: sanitized.accountNickname,
-    clientId: sanitized.clientId,
     environment: sanitized.environment,
-    region: sanitized.region,
-    clientSecretStored: Boolean(sanitized.clientSecret),
-    lastSuccessfulAuth: now,
-    lastApiError: token.lastError,
-    tokenStatus: token.tokenStatus,
+    marketplaceRegion: sanitized.marketplaceRegion,
+  });
+
+  const health = buildConnectionHealthFromResult({
+    sanitized,
+    token,
     credentialStorageMode: "memory",
   });
 
-  const saved = setWalmartConnectionSummary(summary, token.ok ? "connected" : "not_connected");
+  const saved = setWalmartConnectionSummary(health.summary, health.connectionStatus);
 
   appendActivityLog({
     marketplace: "walmart",
@@ -216,21 +365,21 @@ export async function saveWalmartConnection(input: Partial<WalmartConnectionInpu
     result: token.ok ? "success" : "warning",
     message: token.ok
       ? "Walmart credential summary saved without storing raw secret."
-      : "Walmart credential save captured with unresolved auth check.",
+      : `Walmart credential save failed token check: ${token.lastError?.code ?? "UNKNOWN"}`,
     afterPayload: {
       accountNickname: saved.accountNickname,
       environment: saved.environment,
       region: saved.region,
       maskedClientId: saved.maskedClientId,
       clientSecretStored: saved.clientSecretStored,
+      tokenStatus: saved.tokenStatus,
+      lastApiError: saved.lastApiError,
     },
   });
 
   return {
-    connectionStatus: token.ok ? "connected" : "not_connected",
+    ...health,
     summary: saved,
-    lastSuccessfulApiCall: now,
-    lastApiError: token.lastError,
   };
 }
 

@@ -4,7 +4,12 @@ export type WalmartEnvironment = "sandbox" | "production";
 export type WalmartRegion = "US";
 
 export type WalmartConnectionStatus = "connected" | "not_connected";
-export type WalmartTokenStatus = "valid" | "expired" | "unknown";
+export type WalmartTokenStatus = "valid" | "invalid" | "expired" | "unknown";
+
+export interface WalmartApiError {
+  code: string;
+  message: string;
+}
 
 export type WalmartPermissionId =
   | "catalog_read"
@@ -27,6 +32,7 @@ export interface WalmartConnectionInput {
   clientId: string;
   clientSecret: string;
   environment: WalmartEnvironment;
+  marketplaceRegion?: WalmartRegion;
   region: WalmartRegion;
   notes?: string;
 }
@@ -38,7 +44,7 @@ export interface WalmartConnectionSummary {
   maskedClientId: string;
   clientSecretStored: boolean;
   lastSuccessfulAuth: string | null;
-  lastApiError: string | null;
+  lastApiError: WalmartApiError | null;
   tokenStatus: WalmartTokenStatus;
   permissionChecks: WalmartPermissionCheck[];
   credentialStorageMode: "env" | "memory" | "encrypted-db";
@@ -49,7 +55,7 @@ export interface WalmartConnectionHealth {
   connectionStatus: WalmartConnectionStatus;
   summary: WalmartConnectionSummary;
   lastSuccessfulApiCall: string | null;
-  lastApiError: string | null;
+  lastApiError: WalmartApiError | null;
 }
 
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";

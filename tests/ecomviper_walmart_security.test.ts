@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect/test/route";
 import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect/save/route";
@@ -9,6 +9,17 @@ describe("EcomViper Walmart security rules", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ access_token: "wm_access_token_value", expires_in: 900 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("connect test/save routes never return raw client secret", async () => {
@@ -45,6 +56,8 @@ describe("EcomViper Walmart security rules", () => {
     expect(JSON.stringify(savePayload)).not.toContain(secret);
     expect(testPayload.summary?.maskedClientId).toBeDefined();
     expect(savePayload.summary?.maskedClientId).toBeDefined();
+    expect(JSON.stringify(testPayload)).not.toContain("wm_access_token_value");
+    expect(JSON.stringify(savePayload)).not.toContain("wm_access_token_value");
   });
 
   it("walmart auth masks client id and does not expose client secret", async () => {
@@ -69,6 +82,8 @@ describe("EcomViper Walmart security rules", () => {
 
     expect(JSON.stringify(tested)).not.toContain(secret);
     expect(JSON.stringify(saved)).not.toContain(secret);
+    expect(JSON.stringify(tested)).not.toContain("wm_access_token_value");
+    expect(JSON.stringify(saved)).not.toContain("wm_access_token_value");
     expect(tested.summary.maskedClientId).toBe("ab***7890");
     expect(saved.summary.maskedClientId).toBe("ab***7890");
   });

@@ -5,6 +5,11 @@ import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-pro
 
 export const dynamic = "force-dynamic";
 
+function apiErrorMessage(value: { code: string; message: string } | null): string {
+  if (!value) return "None";
+  return `${value.message} (${value.code})`;
+}
+
 export default function WalmartDashboardPage() {
   const snapshot = getWalmartDashboardSnapshot();
 
@@ -49,7 +54,7 @@ export default function WalmartDashboardPage() {
             {snapshot.connection.summary.environment === "production" ? "Production" : "Sandbox"}
           </p>
           <p className="mt-1 text-xs text-[#64748B]">Last auth: {snapshot.connection.summary.lastSuccessfulAuth ?? "Never"}</p>
-          <p className="mt-1 text-xs text-[#64748B]">Last error: {snapshot.connection.lastApiError ?? "None"}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Last error: {apiErrorMessage(snapshot.connection.lastApiError)}</p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products Imported</p>
