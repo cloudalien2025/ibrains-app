@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import type {
@@ -41,6 +41,11 @@ type ConnectApiPayload = {
   connectionStatus: WalmartConnectionHealth["connectionStatus"];
   lastSuccessfulApiCall: string | null;
   message?: string;
+};
+
+type WalmartHealthResponse = {
+  ok: boolean;
+  connectionHealth?: WalmartConnectionHealth;
 };
 
 class ApiRequestError extends Error {
@@ -141,6 +146,35 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
 
   const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPersistedHealth() {
+      try {
+        const response = await fetch("/api/ecomviper/walmart/health", { cache: "no-store" });
+        if (!response.ok) return;
+
+        const payload = (await response.json()) as WalmartHealthResponse;
+        if (!payload.connectionHealth || cancelled) return;
+
+        setHealth(payload.connectionHealth);
+        setForm((current) => ({
+          ...current,
+          accountNickname: payload.connectionHealth?.summary.accountNickname ?? current.accountNickname,
+          marketplaceRegion: payload.connectionHealth?.summary.region ?? current.marketplaceRegion,
+        }));
+      } catch {
+        // Intentionally silent; form remains usable with initial server snapshot.
+      }
+    }
+
+    void loadPersistedHealth();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function handleTest() {
     try {
       setLoading(true);
@@ -182,7 +216,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       setMessage(
         response.message ??
           (action === "save"
-            ? "Credential summary saved safely."
+            ? "Credentials saved securely."
             : action === "rotate"
               ? "Credential rotation request stored safely."
               : action === "disconnect"
@@ -246,7 +280,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
                 value={form.clientSecret}
                 onChange={(event) => setForm((current) => ({ ...current, clientSecret: event.target.value }))}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                placeholder="Walmart client secret"
+                placeholder="Leave blank to keep stored secret"
               />
             </label>
 
@@ -353,7 +387,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Client Secret</dt>
-              <dd className="font-medium">{health.summary.clientSecretStored ? "Accepted" : "Not stored"}</dd>
+              <dd className="font-medium">{health.summary.clientSecretStored ? "Stored" : "Not stored"}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Token status</dt>

@@ -12,6 +12,7 @@ describe("EcomViper Walmart workflows", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
   });
 
   it("product table source starts empty and product API returns zero records", async () => {

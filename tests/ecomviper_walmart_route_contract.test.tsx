@@ -31,6 +31,7 @@ describe("EcomViper Walmart route contracts", () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
   });
 
   it("shows EcomViper in /apps launcher", () => {

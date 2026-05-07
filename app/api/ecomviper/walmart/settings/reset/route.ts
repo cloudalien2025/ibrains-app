@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { action?: ResetAction };
 
     if (body.action === "disconnect_marketplace") {
-      const health = disconnectWalmart();
+      const health = await disconnectWalmart(userId);
       return ok({ ok: true, action: body.action, connectionStatus: health.connectionStatus });
     }
 

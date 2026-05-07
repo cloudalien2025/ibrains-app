@@ -5,8 +5,8 @@ import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import {
   disconnectWalmart,
-  getWalmartConnectionHealth,
-  getWalmartPermissionChecklist,
+  getWalmartConnectionHealthForUser,
+  getWalmartPermissionChecklistForUser,
   rotateWalmartCredentials,
   saveWalmartConnection,
 } from "@/lib/ecomviper/walmart/walmart-auth";
@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const action = body.action ?? "save";
 
     if (action === "disconnect") {
-      const health = disconnectWalmart();
+      const health = await disconnectWalmart(userId);
       return ok({
         ok: health.connectionStatus === "connected",
         action,
@@ -49,7 +49,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "permissions") {
-      const health = getWalmartConnectionHealth();
+      const health = await getWalmartConnectionHealthForUser(userId);
       return ok({
         ok: health.connectionStatus === "connected",
         action,
@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         lastSuccessfulAuth: health.summary.lastSuccessfulAuth,
         lastSuccessfulRead: health.summary.lastSuccessfulRead,
         lastApiError: health.lastApiError,
-        permissions: getWalmartPermissionChecklist(),
+        permissions: await getWalmartPermissionChecklistForUser(userId),
         permissionChecks: health.summary.permissionChecks,
         diagnostic: health.summary.diagnostic,
         connectionStatus: health.connectionStatus,
@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const health = action === "rotate" ? await rotateWalmartCredentials(body) : await saveWalmartConnection(body);
+    const health =
+      action === "rotate"
+        ? await rotateWalmartCredentials(body, userId)
+        : await saveWalmartConnection(body, userId);
 
     return ok({
       ok: health.connectionStatus === "connected",
@@ -95,9 +98,11 @@ export async function POST(req: NextRequest) {
       summary: health.summary,
       lastSuccessfulApiCall: health.lastSuccessfulApiCall,
       message:
-        health.connectionStatus === "connected"
-          ? "Connected. Production OAuth token and safe read check succeeded."
-          : health.lastApiError?.message ?? "Credential save completed with warnings.",
+        action === "save" && health.summary.clientSecretStored
+          ? "Credentials saved securely."
+          : health.connectionStatus === "connected"
+            ? "Connected. Production OAuth token and safe read check succeeded."
+            : health.lastApiError?.message ?? "Credential save completed with warnings.",
       securityNote: "Client secret and access token are never returned to the browser.",
     });
   } catch (error) {
