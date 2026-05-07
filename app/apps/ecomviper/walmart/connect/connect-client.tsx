@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import type { WalmartConnectionHealth, WalmartConnectionSummary } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartApiError, WalmartConnectionHealth, WalmartConnectionSummary } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ConnectClientProps {
   initialHealth: WalmartConnectionHealth;
@@ -14,9 +14,37 @@ type ConnectForm = {
   clientId: string;
   clientSecret: string;
   environment: "sandbox" | "production";
-  region: "US";
+  marketplaceRegion: "US";
   notes: string;
 };
+
+type ConnectApiPayload = {
+  ok: boolean;
+  status: WalmartConnectionHealth["connectionStatus"];
+  environment: WalmartConnectionSummary["environment"];
+  marketplaceRegion: WalmartConnectionSummary["region"];
+  accountNickname: string;
+  maskedClientId: string;
+  clientSecretStored: boolean;
+  tokenStatus: WalmartConnectionSummary["tokenStatus"];
+  lastSuccessfulAuth: string | null;
+  lastApiError: WalmartApiError | null;
+  permissionChecks: WalmartConnectionSummary["permissionChecks"];
+  summary: WalmartConnectionSummary;
+  connectionStatus: WalmartConnectionHealth["connectionStatus"];
+  lastSuccessfulApiCall: string | null;
+};
+
+class ApiRequestError extends Error {
+  readonly status: number;
+  readonly payload: unknown;
+
+  constructor(message: string, status: number, payload: unknown) {
+    super(message);
+    this.status = status;
+    this.payload = payload;
+  }
+}
 
 async function postJson<T>(url: string, payload: unknown): Promise<T> {
   const response = await fetch(url, {
@@ -25,11 +53,42 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
     body: JSON.stringify(payload),
   });
 
-  const data = (await response.json().catch(() => null)) as T | null;
+  const data = (await response.json().catch(() => null)) as
+    | (T & { error?: { message?: string } })
+    | null;
   if (!response.ok || !data) {
-    throw new Error("Request failed");
+    const message =
+      data && typeof data === "object" && data.error && typeof data.error.message === "string"
+        ? data.error.message
+        : "Request failed";
+    throw new ApiRequestError(message, response.status, data);
   }
-  return data;
+  return data as T;
+}
+
+function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
+  return {
+    connectionStatus: response.connectionStatus,
+    summary: {
+      ...response.summary,
+      environment: response.environment,
+      region: response.marketplaceRegion,
+      accountNickname: response.accountNickname,
+      maskedClientId: response.maskedClientId,
+      clientSecretStored: response.clientSecretStored,
+      tokenStatus: response.tokenStatus,
+      lastSuccessfulAuth: response.lastSuccessfulAuth,
+      lastApiError: response.lastApiError,
+      permissionChecks: response.permissionChecks,
+    },
+    lastSuccessfulApiCall: response.lastSuccessfulApiCall,
+    lastApiError: response.lastApiError,
+  };
+}
+
+function formatApiError(error: WalmartApiError | null | undefined): string {
+  if (!error) return "None";
+  return `${error.message} (${error.code})`;
 }
 
 export default function WalmartConnectClient({ initialHealth }: ConnectClientProps) {
@@ -38,34 +97,35 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     clientId: "",
     clientSecret: "",
     environment: initialHealth.summary.environment,
-    region: initialHealth.summary.region,
+    marketplaceRegion: initialHealth.summary.region,
     notes: "",
   });
   const [health, setHealth] = useState(initialHealth);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
-  const canSubmit = useMemo(() => Boolean(form.accountNickname.trim() && form.clientId.trim() && form.clientSecret.trim()), [form]);
+  const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
 
   async function handleTest() {
     try {
       setLoading(true);
-      const response = await postJson<{
-        connectionStatus: WalmartConnectionHealth["connectionStatus"];
-        summary: WalmartConnectionSummary;
-        lastSuccessfulApiCall: string | null;
-        lastApiError: string | null;
-      }>("/api/ecomviper/walmart/connect/test", form);
-
-      setHealth({
-        connectionStatus: response.connectionStatus,
-        summary: response.summary,
-        lastSuccessfulApiCall: response.lastSuccessfulApiCall,
-        lastApiError: response.lastApiError,
+      const response = await postJson<ConnectApiPayload>("/api/ecomviper/walmart/connect/test", {
+        ...form,
+        region: form.marketplaceRegion,
       });
-      setMessage("Connection test completed.");
-    } catch {
-      setMessage("Connection test failed.");
+
+      setHealth(toHealth(response));
+      setMessage(
+        response.ok
+          ? "Walmart connection test succeeded."
+          : response.lastApiError?.message ?? "Walmart connection test failed."
+      );
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Walmart token request failed: network error.");
+      }
     } finally {
       setLoading(false);
     }
@@ -74,46 +134,32 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   async function handleSave(action: "save" | "rotate" | "disconnect" | "permissions") {
     try {
       setLoading(true);
-      const response = await postJson<{
-        connectionStatus?: WalmartConnectionHealth["connectionStatus"];
-        summary?: WalmartConnectionSummary;
-        permissions?: WalmartConnectionSummary["permissionChecks"];
+      const response = await postJson<ConnectApiPayload & {
+        action?: "save" | "rotate" | "disconnect" | "permissions";
       }>("/api/ecomviper/walmart/connect/save", {
         ...form,
+        region: form.marketplaceRegion,
         action,
       });
 
-      if (response.summary && response.connectionStatus) {
-        setHealth((current) => ({
-          ...current,
-          summary: response.summary ?? current.summary,
-          connectionStatus: response.connectionStatus ?? current.connectionStatus,
-        }));
-      }
-
-      const permissions = response.permissions;
-      if (permissions) {
-        setHealth((current) => ({
-          ...current,
-          summary: {
-            ...current.summary,
-            permissionChecks: permissions,
-          },
-        }));
-      }
+      setHealth(toHealth(response));
 
       if (action !== "permissions") {
         setForm((current) => ({ ...current, clientSecret: "" }));
       }
-      setMessage(
-        action === "save"
-          ? "Credential summary saved safely."
-          : action === "rotate"
-            ? "Credential rotation request stored safely."
-            : action === "disconnect"
-              ? "Walmart disconnected."
-              : "Permissions refreshed."
-      );
+      if (!response.ok && response.lastApiError) {
+        setMessage(response.lastApiError.message);
+      } else {
+        setMessage(
+          action === "save"
+            ? "Credential summary saved safely."
+            : action === "rotate"
+              ? "Credential rotation request stored safely."
+              : action === "disconnect"
+                ? "Walmart disconnected."
+                : "Permissions refreshed."
+        );
+      }
     } catch {
       setMessage("Action failed. Please retry.");
     } finally {
@@ -186,8 +232,8 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             <label className="text-sm text-[#334155]">
               Marketplace region
               <select
-                value={form.region}
-                onChange={() => setForm((current) => ({ ...current, region: "US" }))}
+                value={form.marketplaceRegion}
+                onChange={() => setForm((current) => ({ ...current, marketplaceRegion: "US" }))}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
               >
                 <option value="US">US</option>
@@ -285,7 +331,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Last API error</dt>
-              <dd className="font-medium">{health.summary.lastApiError ?? "None"}</dd>
+              <dd className="font-medium">{formatApiError(health.summary.lastApiError)}</dd>
             </div>
           </dl>
 
