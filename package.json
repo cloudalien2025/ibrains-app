@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "guard:next-origin": "node scripts/guard-next-origin-config.mjs",
     "lint:directoryiq": "echo \"DirectoryIQ scope removed from this repository\"",
     "test": "vitest run",
     "test:watch": "vitest",
