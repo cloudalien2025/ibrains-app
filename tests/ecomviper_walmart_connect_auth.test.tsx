@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { renderToStaticMarkup } from "react-dom/server";
 import WalmartConnectClient from "@/app/apps/ecomviper/walmart/connect/connect-client";
 import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect/test/route";
@@ -7,6 +7,14 @@ import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect
 import { GET as healthRoute } from "@/app/api/ecomviper/walmart/health/route";
 import { requestServerSideWalmartToken } from "@/lib/ecomviper/walmart/walmart-auth";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
+
+const authMocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: authMocks.requireSignedInUser,
+}));
 
 const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 7).toString("base64");
 
@@ -62,6 +70,8 @@ describe("EcomViper Walmart connect auth", () => {
     delete process.env.WALMART_CLIENT_ID;
     delete process.env.WALMART_CLIENT_SECRET;
     process.env.ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY = TEST_ENCRYPTION_KEY;
+    authMocks.requireSignedInUser.mockReset();
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "user_ibrains", unauthorizedResponse: null });
   });
 
   afterEach(() => {
@@ -128,6 +138,75 @@ describe("EcomViper Walmart connect auth", () => {
     const safeReadHeaders = safeReadInit.headers as Record<string, string>;
     expect(safeReadHeaders["WM_SEC.ACCESS_TOKEN"]).toBe("wm_live_access_token");
     expect(safeReadHeaders["WM_SVC.NAME"]).toBe("Walmart Marketplace");
+  });
+
+  it("save rejects unauthenticated requests with a clear 401 and skips Walmart calls", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    authMocks.requireSignedInUser.mockResolvedValueOnce({
+      userId: null,
+      unauthorizedResponse: NextResponse.json(
+        {
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Sign-in required",
+          },
+        },
+        { status: 401 }
+      ),
+    });
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+      method: "POST",
+      body: JSON.stringify({
+        action: "save",
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "submitted_client_id",
+        clientSecret: "submitted_client_secret",
+        marketplaceRegion: "US",
+      }),
+    });
+
+    const resp = await saveConnectionRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(401);
+    expect(payload.error?.code).toBe("UNAUTHORIZED");
+    expect(payload.error?.message).toBe("Please sign in before saving Walmart credentials.");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("connect/test rejects unauthenticated requests with a clear 401", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    authMocks.requireSignedInUser.mockResolvedValueOnce({
+      userId: null,
+      unauthorizedResponse: NextResponse.json(
+        {
+          error: {
+            code: "UNAUTHORIZED",
+            message: "Sign-in required",
+          },
+        },
+        { status: 401 }
+      ),
+    });
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/connect/test", {
+      method: "POST",
+      body: JSON.stringify({
+        accountNickname: "OPA Nutrition Walmart",
+        clientId: "submitted_client_id",
+        clientSecret: "submitted_client_secret",
+        marketplaceRegion: "US",
+      }),
+    });
+
+    const resp = await testConnectionRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(401);
+    expect(payload.error?.code).toBe("UNAUTHORIZED");
+    expect(payload.error?.message).toBe("Please sign in before testing Walmart credentials.");
+    expect(fetchSpy).not.toHaveBeenCalled();
   });
 
   it("save persists credentials and test can use stored credentials when form fields are blank", async () => {

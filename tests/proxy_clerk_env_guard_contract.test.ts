@@ -13,7 +13,9 @@ describe("proxy clerk env guard contract", () => {
     expect(source.includes("status: 503")).toBe(true);
     expect(source.includes("\"x-ibrains-auth-status\": \"misconfigured\"")).toBe(true);
     expect(source.includes("if (!isClerkConfigured)")).toBe(true);
-    expect(source.includes("return NextResponse.redirect(new URL(\"/sign-in\", req.url));")).toBe(true);
+    expect(source.includes("function buildSignInRedirect(req: NextRequest): NextResponse")).toBe(true);
+    expect(source.includes("signInUrl.searchParams.set(\"redirect_url\", redirectUrl)")).toBe(true);
+    expect(source.includes("return buildSignInRedirect(req);")).toBe(true);
     expect(source.includes("return await clerkProxy(req, event);")).toBe(true);
   });
 });

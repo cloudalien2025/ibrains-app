@@ -1,8 +1,8 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import {
   disconnectWalmart,
   getWalmartConnectionHealthForUser,
@@ -16,8 +16,16 @@ type SaveAction = "save" | "rotate" | "disconnect" | "permissions";
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) {
+        return unauthorizedResponse;
+      }
+      return fail(401, "Please sign in before saving Walmart credentials.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before saving Walmart credentials.", "UNAUTHORIZED");
+    }
 
     const body = (await req.json().catch(() => ({}))) as Partial<WalmartConnectionInput> & {
       action?: SaveAction;

@@ -152,7 +152,15 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     async function loadPersistedHealth() {
       try {
         const response = await fetch("/api/ecomviper/walmart/health", { cache: "no-store" });
-        if (!response.ok) return;
+        if (!response.ok) {
+          if (response.status === 401) {
+            const payload = (await response.json().catch(() => null)) as
+              | { error?: { message?: string } }
+              | null;
+            setMessage(payload?.error?.message ?? "Please sign in before loading Walmart connection health.");
+          }
+          return;
+        }
 
         const payload = (await response.json()) as WalmartHealthResponse;
         if (!payload.connectionHealth || cancelled) return;
@@ -223,8 +231,12 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
                 ? "Walmart disconnected."
                 : "Permissions refreshed.")
       );
-    } catch {
-      setMessage("Action failed. Please retry.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Action failed. Please retry.");
+      }
     } finally {
       setLoading(false);
     }
