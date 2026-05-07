@@ -25,6 +25,10 @@ const isClerkConfigured = clerkRuntimeContract.configuredForProxy;
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
+const BAD_LOCALHOST_REWRITE_PROTOCOL = "https:";
+const BAD_LOCALHOST_REWRITE_HOST = "localhost:3001";
+const SAFE_INTERNAL_REWRITE_ORIGIN = "http://127.0.0.1:3001";
+type MiddlewareResultLike = Response | null | undefined | void;
 
 function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
@@ -68,6 +72,34 @@ function isTrustedRunStatusServiceRequest(req: NextRequest): boolean {
   if (req.method !== "GET") return false;
   if (!trustedRunStatusPathRegex.test(req.nextUrl.pathname)) return false;
   return hasServiceApiKey(req);
+}
+
+function normalizeBadLocalhostRewrite(result: MiddlewareResultLike): MiddlewareResultLike {
+  if (!result || !("headers" in result)) return result;
+
+  const rewrite = result.headers.get("x-middleware-rewrite");
+  if (!rewrite) {
+    return result;
+  }
+
+  try {
+    const rewriteUrl = new URL(rewrite);
+    if (
+      rewriteUrl.protocol !== BAD_LOCALHOST_REWRITE_PROTOCOL ||
+      rewriteUrl.host !== BAD_LOCALHOST_REWRITE_HOST
+    ) {
+      return result;
+    }
+    const safeOrigin = new URL(SAFE_INTERNAL_REWRITE_ORIGIN);
+    rewriteUrl.protocol = safeOrigin.protocol;
+    rewriteUrl.hostname = safeOrigin.hostname;
+    rewriteUrl.port = safeOrigin.port;
+    result.headers.set("x-middleware-rewrite", rewriteUrl.toString());
+  } catch {
+    return result;
+  }
+
+  return result;
 }
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
@@ -141,7 +173,8 @@ export default e2eMockGraph
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
       try {
-        return await clerkProxy(req, event);
+        const response = await clerkProxy(req, event);
+        return normalizeBadLocalhostRewrite(response);
       } catch {
         if (isProtectedRoute(req)) {
           return buildSignInRedirect(req);
