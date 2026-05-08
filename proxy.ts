@@ -53,12 +53,51 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   );
 }
 
+function isDirectoryIqApiRoute(req: NextRequest): boolean {
+  return (
+    req.nextUrl.pathname.startsWith("/api/directoryiq") ||
+    req.nextUrl.pathname.startsWith("/api/ingest/directoryiq")
+  );
+}
+
+function isSiteforgeApiRoute(req: NextRequest): boolean {
+  return req.nextUrl.pathname.startsWith("/api/siteforge");
+}
+
 function buildSignInRedirect(req: NextRequest): NextResponse {
   const appBaseUrl = resolveAppBaseUrlOrigin();
   const signInUrl = new URL(clerkRouteContract.signInUrl, appBaseUrl);
   const redirectUrl = new URL(`${req.nextUrl.pathname}${req.nextUrl.search}`, appBaseUrl);
   signInUrl.searchParams.set("redirect_url", redirectUrl.toString());
   return NextResponse.redirect(signInUrl);
+}
+
+function maybeHandleDirectoryIqCors(req: NextRequest): NextResponse | null {
+  if (!isDirectoryIqApiRoute(req)) return null;
+
+  const origin = req.headers.get("origin");
+  const isAllowedOrigin = origin === DIRECTORYIQ_CORS_ORIGIN;
+  if (isAllowedOrigin && req.method === "OPTIONS") {
+    const headers = new Headers();
+    headers.set("Access-Control-Allow-Origin", DIRECTORYIQ_CORS_ORIGIN);
+    headers.set("Access-Control-Allow-Credentials", "true");
+    headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    headers.set(
+      "Access-Control-Allow-Headers",
+      req.headers.get("access-control-request-headers") ?? "Content-Type, Authorization"
+    );
+    headers.set("Access-Control-Max-Age", "86400");
+    headers.set("Vary", "Origin");
+    return new NextResponse(null, { status: 204, headers });
+  }
+
+  const response = NextResponse.next();
+  if (isAllowedOrigin) {
+    response.headers.set("Access-Control-Allow-Origin", DIRECTORYIQ_CORS_ORIGIN);
+    response.headers.set("Access-Control-Allow-Credentials", "true");
+    response.headers.set("Vary", "Origin");
+  }
+  return response;
 }
 
 function hasClerkSessionCookie(req: NextRequest): boolean {
@@ -92,37 +131,6 @@ function isTrustedRunStatusServiceRequest(req: NextRequest): boolean {
 }
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
-
-  if (
-    req.nextUrl.pathname.startsWith("/api/directoryiq") ||
-    req.nextUrl.pathname.startsWith("/api/ingest/directoryiq")
-  ) {
-    const origin = req.headers.get("origin");
-    const isAllowedOrigin = origin === DIRECTORYIQ_CORS_ORIGIN;
-
-    if (isAllowedOrigin && req.method === "OPTIONS") {
-      const headers = new Headers();
-      headers.set("Access-Control-Allow-Origin", DIRECTORYIQ_CORS_ORIGIN);
-      headers.set("Access-Control-Allow-Credentials", "true");
-      headers.set("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
-      headers.set(
-        "Access-Control-Allow-Headers",
-        req.headers.get("access-control-request-headers") ?? "Content-Type, Authorization"
-      );
-      headers.set("Access-Control-Max-Age", "86400");
-      headers.set("Vary", "Origin");
-      return new NextResponse(null, { status: 204, headers });
-    }
-
-    const response = NextResponse.next();
-    if (isAllowedOrigin) {
-      response.headers.set("Access-Control-Allow-Origin", DIRECTORYIQ_CORS_ORIGIN);
-      response.headers.set("Access-Control-Allow-Credentials", "true");
-      response.headers.set("Vary", "Origin");
-    }
-    return response;
-  }
-
   if (req.nextUrl.pathname === "/api/_meta/release") {
     const url = req.nextUrl.clone();
     url.pathname = "/api/meta/release";
@@ -162,6 +170,9 @@ export default e2eMockGraph
         }
         return NextResponse.next();
       }
+      const directoryIqCorsResponse = maybeHandleDirectoryIqCors(req);
+      if (directoryIqCorsResponse) return directoryIqCorsResponse;
+      if (isSiteforgeApiRoute(req)) return NextResponse.next();
       if (req.nextUrl.pathname.startsWith("/apps")) {
         if (!hasClerkSessionCookie(req)) {
           return buildSignInRedirect(req);
