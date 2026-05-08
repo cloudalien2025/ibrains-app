@@ -5,9 +5,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   auth: vi.fn<[], Promise<{ userId: string | null }>>(),
-  redirect: vi.fn((url: string) => {
-    throw new Error(`NEXT_REDIRECT:${url}`);
-  }),
+  redirect: vi.fn(),
+  providerProps: [] as Array<{ publishableKey?: string }>,
 }));
 
 vi.mock("@clerk/nextjs/server", () => ({
@@ -19,7 +18,10 @@ vi.mock("next/navigation", () => ({
 }));
 
 vi.mock("@/components/auth/configured-clerk-provider", () => ({
-  default: ({ children }: { children: ReactNode }) => createElement("div", { "data-testid": "clerk-provider" }, children),
+  default: ({ children, publishableKey }: { children: ReactNode; publishableKey?: string }) => {
+    mocks.providerProps.push({ publishableKey });
+    return createElement("div", { "data-testid": "clerk-provider" }, children);
+  },
 }));
 
 describe("apps layout auth contract", () => {
@@ -27,29 +29,18 @@ describe("apps layout auth contract", () => {
     vi.resetModules();
     mocks.auth.mockReset();
     mocks.redirect.mockClear();
-    delete process.env.E2E_MOCK_GRAPH;
+    mocks.providerProps.length = 0;
     process.env.CLERK_PUBLISHABLE_KEY = "pk_test_apps_layout";
   });
 
-  it("renders children when a user session exists", async () => {
-    mocks.auth.mockResolvedValue({ userId: "user_test_123" });
-
+  it("renders children without server-side auth() dependency", async () => {
     const { default: AppsLayout } = await import("@/app/apps/layout");
-    const tree = await AppsLayout({ children: createElement("span", null, "launcher-ready") });
+    const tree = AppsLayout({ children: createElement("span", null, "launcher-ready") });
     const html = renderToString(tree);
 
     expect(html).toContain("launcher-ready");
+    expect(mocks.providerProps.at(0)?.publishableKey).toBe("pk_test_apps_layout");
+    expect(mocks.auth).not.toHaveBeenCalled();
     expect(mocks.redirect).not.toHaveBeenCalled();
-  });
-
-  it("redirects signed-out requests to /sign-in", async () => {
-    mocks.auth.mockResolvedValue({ userId: null });
-
-    const { default: AppsLayout } = await import("@/app/apps/layout");
-
-    await expect(async () => {
-      const tree = await AppsLayout({ children: createElement("span", null, "launcher") });
-      renderToString(tree);
-    }).rejects.toThrow("NEXT_REDIRECT:/sign-in");
   });
 });
