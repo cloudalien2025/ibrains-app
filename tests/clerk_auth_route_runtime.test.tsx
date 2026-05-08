@@ -26,6 +26,7 @@ describe("clerk auth route runtime", () => {
     vi.resetModules();
     mocks.clerkProviderProps = null;
     process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_runtime_contract";
+    delete process.env.NEXT_PUBLIC_CLERK_PROXY_URL;
     delete process.env.CLERK_PUBLISHABLE_KEY;
     delete process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL;
     delete process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL;
@@ -70,6 +71,26 @@ describe("clerk auth route runtime", () => {
 
     expect(mocks.clerkProviderProps).toMatchObject({
       publishableKey: "pk_live_server_runtime",
+    });
+  });
+
+  it("omits proxyUrl when NEXT_PUBLIC_CLERK_PROXY_URL is blank", async () => {
+    process.env.NEXT_PUBLIC_CLERK_PROXY_URL = "";
+
+    const { default: SignInPage } = await import("@/app/sign-in/[[...sign-in]]/page");
+    renderToStaticMarkup(<SignInPage />);
+
+    expect(mocks.clerkProviderProps).not.toHaveProperty("proxyUrl");
+  });
+
+  it("passes proxyUrl when NEXT_PUBLIC_CLERK_PROXY_URL is non-empty", async () => {
+    process.env.NEXT_PUBLIC_CLERK_PROXY_URL = "  https://app.ibrains.ai/__clerk/  ";
+
+    const { default: SignInPage } = await import("@/app/sign-in/[[...sign-in]]/page");
+    renderToStaticMarkup(<SignInPage />);
+
+    expect(mocks.clerkProviderProps).toMatchObject({
+      proxyUrl: "https://app.ibrains.ai/__clerk/",
     });
   });
 });
