@@ -8,6 +8,7 @@ import {
 } from "@/lib/auth/clerkEnvContract";
 
 const DIRECTORYIQ_CORS_ORIGIN = "https://app.ibrains.ai";
+const APP_BASE_URL_FALLBACK = "https://app.ibrains.ai";
 
 const isProtectedRoute = createRouteMatcher([
   "/apps(.*)",
@@ -25,10 +26,17 @@ const isClerkConfigured = clerkRuntimeContract.configuredForProxy;
 const trustedIngestPathRegex = /^\/api\/brains\/[^/]+\/ingest$/;
 const trustedRetrievePathRegex = /^\/api\/brains\/[^/]+\/retrieve$/;
 const trustedRunStatusPathRegex = /^\/api\/runs\/[^/]+$/;
-const BAD_LOCALHOST_REWRITE_PROTOCOL = "https:";
-const BAD_LOCALHOST_REWRITE_HOST = "localhost:3001";
-const SAFE_INTERNAL_REWRITE_ORIGIN = "http://127.0.0.1:3001";
-type MiddlewareResultLike = Response | null | undefined | void;
+
+function resolveAppBaseUrlOrigin(): string {
+  const configured = process.env.APP_BASE_URL?.trim();
+  if (!configured) return APP_BASE_URL_FALLBACK;
+
+  try {
+    return new URL(configured).origin;
+  } catch {
+    return APP_BASE_URL_FALLBACK;
+  }
+}
 
 function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
   const pathname = req.nextUrl.pathname;
@@ -46,9 +54,10 @@ function isPublicClerkPassthroughRoute(req: NextRequest): boolean {
 }
 
 function buildSignInRedirect(req: NextRequest): NextResponse {
-  const redirectUrl = `${req.nextUrl.pathname}${req.nextUrl.search}`;
-  const signInUrl = new URL(clerkRouteContract.signInUrl, req.url);
-  signInUrl.searchParams.set("redirect_url", redirectUrl);
+  const appBaseUrl = resolveAppBaseUrlOrigin();
+  const signInUrl = new URL(clerkRouteContract.signInUrl, appBaseUrl);
+  const redirectUrl = new URL(`${req.nextUrl.pathname}${req.nextUrl.search}`, appBaseUrl);
+  signInUrl.searchParams.set("redirect_url", redirectUrl.toString());
   return NextResponse.redirect(signInUrl);
 }
 
@@ -72,34 +81,6 @@ function isTrustedRunStatusServiceRequest(req: NextRequest): boolean {
   if (req.method !== "GET") return false;
   if (!trustedRunStatusPathRegex.test(req.nextUrl.pathname)) return false;
   return hasServiceApiKey(req);
-}
-
-function normalizeBadLocalhostRewrite(result: MiddlewareResultLike): MiddlewareResultLike {
-  if (!result || !("headers" in result)) return result;
-
-  const rewrite = result.headers.get("x-middleware-rewrite");
-  if (!rewrite) {
-    return result;
-  }
-
-  try {
-    const rewriteUrl = new URL(rewrite);
-    if (
-      rewriteUrl.protocol !== BAD_LOCALHOST_REWRITE_PROTOCOL ||
-      rewriteUrl.host !== BAD_LOCALHOST_REWRITE_HOST
-    ) {
-      return result;
-    }
-    const safeOrigin = new URL(SAFE_INTERNAL_REWRITE_ORIGIN);
-    rewriteUrl.protocol = safeOrigin.protocol;
-    rewriteUrl.hostname = safeOrigin.hostname;
-    rewriteUrl.port = safeOrigin.port;
-    result.headers.set("x-middleware-rewrite", rewriteUrl.toString());
-  } catch {
-    return result;
-  }
-
-  return result;
 }
 
 const clerkProxy = clerkMiddleware(async (auth, req) => {
@@ -145,6 +126,8 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   }
 
   return NextResponse.next();
+}, {
+  frontendApiProxy: { enabled: true },
 });
 
 export default e2eMockGraph
@@ -173,8 +156,7 @@ export default e2eMockGraph
       if (isTrustedRetrieveServiceRequest(req)) return NextResponse.next();
       if (isTrustedRunStatusServiceRequest(req)) return NextResponse.next();
       try {
-        const response = await clerkProxy(req, event);
-        return normalizeBadLocalhostRewrite(response);
+        return await clerkProxy(req, event);
       } catch {
         if (isProtectedRoute(req)) {
           return buildSignInRedirect(req);
@@ -186,6 +168,6 @@ export default e2eMockGraph
 export const config = {
   matcher: [
     "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
-    "/(api|trpc)(.*)",
+    "/(api|trpc|__clerk)(.*)",
   ],
 };
