@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveFrontdoorAuthState } from "@/lib/auth/frontdoorAuthState";
 
-const { authMock, cookiesMock, cookieGetMock } = vi.hoisted(() => ({
+const { authMock, verifyTokenMock, cookiesMock, cookieGetMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
+  verifyTokenMock: vi.fn(),
   cookiesMock: vi.fn(),
   cookieGetMock: vi.fn(),
 }));
@@ -11,6 +12,7 @@ const originalVitestEnv = process.env.VITEST;
 
 vi.mock("@clerk/nextjs/server", () => ({
   auth: authMock,
+  verifyToken: verifyTokenMock,
 }));
 
 vi.mock("next/headers", () => ({
@@ -20,6 +22,7 @@ vi.mock("next/headers", () => ({
 describe("frontdoor auth state", () => {
   beforeEach(() => {
     authMock.mockReset();
+    verifyTokenMock.mockReset();
     cookiesMock.mockReset();
     cookieGetMock.mockReset();
     cookiesMock.mockResolvedValue({
@@ -56,10 +59,11 @@ describe("frontdoor auth state", () => {
     process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
     authMock.mockRejectedValue(new Error("Clerk middleware unavailable"));
     cookieGetMock.mockReturnValue({ value: "session_cookie_value" });
+    verifyTokenMock.mockResolvedValue({ sub: "user_cookie_fallback" });
 
     await expect(resolveFrontdoorAuthState()).resolves.toEqual({
       status: "signed-in",
-      userId: "session_cookie",
+      userId: "user_cookie_fallback",
     });
   });
 
@@ -68,10 +72,11 @@ describe("frontdoor auth state", () => {
     process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
     authMock.mockResolvedValue({ userId: null });
     cookieGetMock.mockReturnValue({ value: "session_cookie_value" });
+    verifyTokenMock.mockResolvedValue({ sub: "user_cookie_fallback" });
 
     await expect(resolveFrontdoorAuthState()).resolves.toEqual({
       status: "signed-in",
-      userId: "session_cookie",
+      userId: "user_cookie_fallback",
     });
   });
 

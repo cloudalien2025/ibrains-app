@@ -1,5 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
+import { hasClerkSessionCookie, resolveVerifiedClerkSessionUserId } from "@/lib/auth/clerkSessionToken";
 
 type RequireSignedInUserResult = {
   userId: string | null;
@@ -15,6 +16,26 @@ export async function requireSignedInUser(): Promise<RequireSignedInUserResult> 
   try {
     ({ userId } = await auth());
   } catch (error: unknown) {
+    const verifiedUserId = await resolveVerifiedClerkSessionUserId();
+    if (verifiedUserId) {
+      return { userId: verifiedUserId, unauthorizedResponse: null };
+    }
+
+    if (await hasClerkSessionCookie()) {
+      return {
+        userId: null,
+        unauthorizedResponse: NextResponse.json(
+          {
+            error: {
+              code: "UNAUTHORIZED",
+              message: "Sign-in required",
+            },
+          },
+          { status: 401 }
+        ),
+      };
+    }
+
     const message = error instanceof Error ? error.message : "Authentication unavailable.";
     return {
       userId: null,
