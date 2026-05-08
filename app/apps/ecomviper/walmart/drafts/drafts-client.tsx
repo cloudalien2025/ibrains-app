@@ -22,11 +22,17 @@ export default function WalmartDraftsClient({ initialDrafts }: DraftsClientProps
     });
 
     if (!response.ok) {
-      setMessage("Draft action failed.");
+      const payload = (await response.json().catch(() => ({}))) as { error?: { message?: string } };
+      setMessage(payload.error?.message ?? "Draft action failed.");
       return;
     }
 
-    const payload = (await response.json()) as { draft: WalmartDraftRecord };
+    const payload = (await response.json()) as {
+      draft: WalmartDraftRecord;
+      blocked?: boolean;
+      violations?: string[];
+      warnings?: string[];
+    };
 
     if (method === "DELETE") {
       setDrafts((current) => current.map((draft) => (draft.id === payload.draft.id ? payload.draft : draft)));
@@ -35,6 +41,12 @@ export default function WalmartDraftsClient({ initialDrafts }: DraftsClientProps
     }
 
     setDrafts((current) => current.map((draft) => (draft.id === payload.draft.id ? payload.draft : draft)));
+    if (action === "submit" && payload.blocked) {
+      const firstIssue = payload.violations?.[0] ?? payload.warnings?.[0] ?? "Resolve validation issues before submitting.";
+      setMessage(`Draft submit blocked: ${firstIssue}`);
+      return;
+    }
+
     setMessage(action === "validate" ? "Draft validated." : "Draft submitted.");
   }
 

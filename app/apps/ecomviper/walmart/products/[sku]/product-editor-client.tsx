@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
+import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ProductEditorClientProps {
   product: WalmartProductRecord;
@@ -36,6 +37,7 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
   });
   const [validated, setValidated] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
 
   const preview = useMemo(() => {
     let parsedAttributes: Record<string, string> = {};
@@ -68,14 +70,18 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
     };
   }, [form]);
 
-  const validationWarnings = useMemo(() => {
-    const warnings: string[] = [];
-    if (!preview.title) warnings.push("Title is required");
-    if (!Number.isFinite(preview.price) || preview.price <= 0) warnings.push("Price must be greater than zero");
-    if (!Number.isFinite(preview.inventoryQuantity) || preview.inventoryQuantity < 0) warnings.push("Inventory must be 0 or greater");
-    if (!preview.imageUrl) warnings.push("Primary image URL is missing");
-    return warnings;
-  }, [preview]);
+  const complianceValidation = useMemo(() => evaluateWalmartListingCompliance(preview), [preview]);
+
+  const validationViolations = useMemo(() => {
+    const violations: string[] = [];
+    if (!preview.title) violations.push("Title is required");
+    if (!Number.isFinite(preview.price) || preview.price <= 0) violations.push("Price must be greater than zero");
+    if (!Number.isFinite(preview.inventoryQuantity) || preview.inventoryQuantity < 0) violations.push("Inventory must be 0 or greater");
+    if (!preview.imageUrl) violations.push("Primary image URL is missing");
+    return Array.from(new Set([...violations, ...complianceValidation.violations]));
+  }, [preview, complianceValidation]);
+
+  const validationWarnings = useMemo(() => complianceValidation.warnings, [complianceValidation]);
 
   async function handleSaveDraft() {
     const response = await fetch("/api/ecomviper/walmart/drafts", {
@@ -89,7 +95,22 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
       return;
     }
 
-    setMessage("Draft saved.");
+    const payload = (await response.json()) as { draft?: WalmartDraftRecord };
+    const validation = payload.draft?.validationResult;
+    const violations = validation?.violations ?? [];
+    const warnings = validation?.warnings ?? [];
+    setSavedSuggestions(validation?.suggestions ?? []);
+
+    if (violations.length > 0) {
+      setMessage(`Draft saved with policy blockers: ${violations[0]}`);
+      return;
+    }
+    if (warnings.length > 0) {
+      setMessage(`Draft saved with compliance warnings: ${warnings[0]}`);
+      return;
+    }
+
+    setMessage("Draft saved and passed policy checks.");
   }
 
   return (
@@ -173,7 +194,7 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
           </button>
           <button
             type="button"
-            disabled={!validated || validationWarnings.length > 0}
+            disabled={!validated || validationViolations.length > 0}
             className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
           >
             Submit Update
@@ -196,15 +217,23 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
         <article className="mt-4 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
           <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">Validation status</h2>
           <div className="mt-2">
-            {validationWarnings.length ? <StatusBadge status="warning" /> : <StatusBadge status="validated" />}
+            {validationViolations.length ? <StatusBadge status="warning" /> : <StatusBadge status="validated" />}
           </div>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-            {validationWarnings.length ? (
-              validationWarnings.map((warning) => <li key={warning}>{warning}</li>)
-            ) : (
-              <li>No validation warnings.</li>
-            )}
-          </ul>
+          <div className="mt-2 space-y-3 text-sm text-[#334155]">
+            <ul className="list-disc space-y-1 pl-5">
+              {validationViolations.length ? validationViolations.map((violation) => <li key={violation}>{violation}</li>) : <li>No blocking policy violations.</li>}
+            </ul>
+            <ul className="list-disc space-y-1 pl-5">
+              {validationWarnings.length ? validationWarnings.map((warning) => <li key={warning}>{warning}</li>) : <li>No compliance warnings.</li>}
+            </ul>
+            {savedSuggestions.length ? (
+              <ul className="list-disc space-y-1 pl-5">
+                {savedSuggestions.map((suggestion) => (
+                  <li key={suggestion}>{suggestion}</li>
+                ))}
+              </ul>
+            ) : null}
+          </div>
         </article>
       </section>
     </div>

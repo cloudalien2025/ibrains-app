@@ -119,7 +119,9 @@ export interface WalmartDraftRecord {
   status: WalmartDraftStatus;
   validationResult: {
     valid: boolean;
+    violations?: string[];
     warnings: string[];
+    suggestions?: string[];
   };
   publishStatus: "pending" | "submitted" | "failed" | "synced";
   createdAt: string;

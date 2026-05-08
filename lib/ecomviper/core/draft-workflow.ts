@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 import type { WalmartDraftRecord, WalmartDraftStatus, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
 
 export interface DraftDiffItem {
   field: string;
@@ -31,8 +32,11 @@ export function summarizeDraftChanges(diff: DraftDiffItem[]): string {
 export function validateDraftPayload(draftPayload: Record<string, unknown>): {
   status: WalmartDraftStatus;
   valid: boolean;
+  violations: string[];
   warnings: string[];
+  suggestions: string[];
 } {
+  const violations: string[] = [];
   const warnings: string[] = [];
   const title = typeof draftPayload.title === "string" ? draftPayload.title.trim() : "";
   const price = typeof draftPayload.price === "number" ? draftPayload.price : Number.NaN;
@@ -43,23 +47,37 @@ export function validateDraftPayload(draftPayload: Record<string, unknown>): {
         ? draftPayload.inventory
         : Number.NaN;
 
-  if (!title) warnings.push("Title is empty");
-  if (title.length > 200) warnings.push("Title exceeds Walmart recommended length");
-  if (!Number.isFinite(price) || price <= 0) warnings.push("Price must be greater than zero");
-  if (!Number.isFinite(inventory) || inventory < 0) warnings.push("Inventory must be zero or greater");
+  if (!title) violations.push("Title cannot be empty.");
+  if (!Number.isFinite(price) || price <= 0) violations.push("Price must be greater than zero.");
+  if (!Number.isFinite(inventory) || inventory < 0) violations.push("Inventory must be zero or greater.");
 
-  if (warnings.length) {
+  const imageUrl = typeof draftPayload.imageUrl === "string" ? draftPayload.imageUrl.trim() : null;
+  if (imageUrl !== null && !imageUrl) {
+    violations.push("Primary image URL cannot be empty.");
+  } else if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
+    warnings.push("Primary image URL should use an http/https URL.");
+  }
+
+  const compliance = evaluateWalmartListingCompliance(draftPayload);
+  const mergedViolations = Array.from(new Set([...violations, ...compliance.violations]));
+  const mergedWarnings = Array.from(new Set([...warnings, ...compliance.warnings]));
+
+  if (mergedViolations.length) {
     return {
       status: "failed",
       valid: false,
-      warnings,
+      violations: mergedViolations,
+      warnings: mergedWarnings,
+      suggestions: compliance.suggestions,
     };
   }
 
   return {
     status: "validated",
     valid: true,
-    warnings,
+    violations: mergedViolations,
+    warnings: mergedWarnings,
+    suggestions: compliance.suggestions,
   };
 }
 
@@ -71,7 +89,12 @@ export function createDraftRecord(params: {
   changeSummary: string;
   createdBy?: string | null;
   status?: WalmartDraftStatus;
-  validationResult?: { valid: boolean; warnings: string[] };
+  validationResult?: {
+    valid: boolean;
+    violations?: string[];
+    warnings: string[];
+    suggestions?: string[];
+  };
 }): WalmartDraftRecord {
   const now = new Date().toISOString();
   return {
@@ -86,7 +109,9 @@ export function createDraftRecord(params: {
     status: params.status ?? "draft",
     validationResult: params.validationResult ?? {
       valid: false,
+      violations: ["Not validated"],
       warnings: ["Not validated"],
+      suggestions: [],
     },
     publishStatus: params.status === "synced" ? "synced" : "pending",
     createdAt: now,
