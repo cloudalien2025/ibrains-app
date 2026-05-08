@@ -542,6 +542,35 @@ export async function requestServerSideWalmartToken(params?: {
   }
 }
 
+export async function requestWalmartTokenForUser(
+  userId: string,
+  params?: { forceRefresh?: boolean }
+): Promise<WalmartTokenRequestResult> {
+  const resolvedUserId = resolveConnectionUserId(userId);
+  const resolved = await resolveConnectionCredentials({}, resolvedUserId);
+
+  if ("error" in resolved) {
+    return {
+      ok: false,
+      tokenStatus: "unknown",
+      lastError: resolved.error,
+      accessToken: null,
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: null,
+      correlationId: crypto.randomUUID(),
+    };
+  }
+
+  return requestServerSideWalmartToken({
+    clientId: resolved.clientId,
+    clientSecret: resolved.clientSecret,
+    marketplaceRegion: resolved.marketplaceRegion,
+    region: resolved.marketplaceRegion,
+    forceRefresh: params?.forceRefresh ?? false,
+  });
+}
+
 export async function testWalmartConnection(
   input: Partial<WalmartConnectionInput>,
   userId?: string

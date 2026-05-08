@@ -20,6 +20,9 @@ vi.mock("next/link", async () => {
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/apps/ecomviper/walmart",
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
 }));
 
 vi.mock("@/components/frontdoor/frontdoor-header-actions", () => ({

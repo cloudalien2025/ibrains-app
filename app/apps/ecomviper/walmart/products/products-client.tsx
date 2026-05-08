@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
@@ -24,9 +25,11 @@ const filters = [
 ] as const;
 
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
+  const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [message, setMessage] = useState<string | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
 
   const filtered = useMemo(
     () => filterWalmartProducts(products, { query, filter }),
@@ -34,13 +37,27 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
   );
 
   async function handleImport() {
-    const response = await fetch("/api/ecomviper/walmart/products/import", { method: "POST" });
-    if (!response.ok) {
+    setIsImporting(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/ecomviper/walmart/products/import", { method: "POST" });
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+        error?: { message?: string };
+      };
+
+      if (!response.ok) {
+        setMessage(payload.error?.message ?? "Import failed.");
+        return;
+      }
+
+      setMessage(payload.message ?? "Import completed.");
+      router.refresh();
+    } catch {
       setMessage("Import failed.");
-      return;
+    } finally {
+      setIsImporting(false);
     }
-    const payload = (await response.json()) as { message?: string };
-    setMessage(payload.message ?? "Import completed.");
   }
 
   return (
@@ -52,9 +69,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           <button
             type="button"
             onClick={handleImport}
+            disabled={isImporting}
             className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
           >
-            Import Products
+            {isImporting ? "Importing..." : "Import Products"}
           </button>
         }
       />

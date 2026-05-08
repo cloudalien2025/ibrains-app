@@ -167,6 +167,8 @@ export interface WalmartImportResult {
   importedCount: number;
   lastImportAt: string | null;
   mode: RuntimeMode;
+  fetchedCount?: number;
+  skippedCount?: number;
 }
 
 export interface WalmartInventoryUpdateRequest {

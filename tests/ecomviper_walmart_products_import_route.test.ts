@@ -1,0 +1,62 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
+
+const mocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+  importWalmartProducts: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: mocks.requireSignedInUser,
+}));
+
+vi.mock("@/lib/ecomviper/walmart/walmart-products", () => ({
+  importWalmartProducts: mocks.importWalmartProducts,
+}));
+
+describe("walmart products import route", () => {
+  beforeEach(() => {
+    vi.resetModules();
+    mocks.requireSignedInUser.mockReset();
+    mocks.importWalmartProducts.mockReset();
+  });
+
+  it("returns 401 when the caller is unauthenticated", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: null,
+      unauthorizedResponse: new Response(null, { status: 401 }),
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(401);
+    expect(payload?.error?.code).toBe("UNAUTHORIZED");
+    expect(payload?.error?.message).toContain("sign in");
+  });
+
+  it("returns import counts and message when import succeeds", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 3,
+      fetchedCount: 3,
+      skippedCount: 0,
+      lastImportAt: "2026-05-08T05:00:00.000Z",
+      mode: "live-ready",
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.importedCount).toBe(3);
+    expect(payload.fetchedCount).toBe(3);
+    expect(payload.message).toContain("Imported 3 Walmart product");
+    expect(mocks.importWalmartProducts).toHaveBeenCalledWith("user_clerk_1");
+  });
+});
