@@ -23,7 +23,10 @@ export default async function ShellLayout({ children }: { children: ReactNode })
   }
 
   return (
-    <ConfiguredClerkProvider>
+    <ConfiguredClerkProvider
+      publishableKey={runtimeContract.publishableKey}
+      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL}
+    >
       <div className="ecomviper-hud min-h-screen text-[#0F172A]">
         <div className="ecomviper-vignette pointer-events-none fixed inset-0" />
         <div className="ecomviper-grid pointer-events-none fixed inset-0 opacity-40" />
