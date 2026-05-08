@@ -165,18 +165,22 @@ deploy_production:
         release_probe_args=(-H "Host: ${release_probe_host}")
       fi
 
+      release_probe_attempts="${RELEASE_PROBE_ATTEMPTS:-30}"
+      release_probe_sleep_seconds="${RELEASE_PROBE_SLEEP_SECONDS:-2}"
       ready=0
-      for attempt in $(seq 1 10); do
-        echo "release readiness probe ${attempt}/10"
+      for attempt in $(seq 1 "${release_probe_attempts}"); do
+        echo "release readiness probe ${attempt}/${release_probe_attempts}"
         if curl -fsS "${release_probe_args[@]}" "${release_probe_url}"; then
           ready=1
           break
         fi
-        sleep 2
+        sleep "${release_probe_sleep_seconds}"
       done
 
       if [ "$ready" -ne 1 ]; then
         echo "release endpoint did not become ready after restart"
+        echo "release probe attempts: ${release_probe_attempts}"
+        echo "release probe sleep seconds: ${release_probe_sleep_seconds}"
         echo "release probe url: ${release_probe_url}"
         if [ -n "${release_probe_host}" ]; then
           echo "release probe host: ${release_probe_host}"
