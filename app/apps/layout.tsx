@@ -6,10 +6,7 @@ export default function AppsLayout({ children }: { children: ReactNode }) {
   const runtimeContract = resolveClerkRuntimeContract();
 
   return (
-    <ConfiguredClerkProvider
-      publishableKey={runtimeContract.publishableKey}
-      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL}
-    >
+    <ConfiguredClerkProvider publishableKey={runtimeContract.publishableKey}>
       {children}
     </ConfiguredClerkProvider>
   );

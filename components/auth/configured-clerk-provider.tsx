@@ -15,7 +15,7 @@ export default function ConfiguredClerkProvider({
   publishableKey,
 }: ConfiguredClerkProviderProps) {
   const resolvedPublishableKey = publishableKey ?? process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
-  const resolvedProxyUrl = proxyUrl ?? process.env.NEXT_PUBLIC_CLERK_PROXY_URL;
+  const resolvedProxyUrl = (proxyUrl ?? process.env.NEXT_PUBLIC_CLERK_PROXY_URL)?.trim();
 
   if (!resolvedPublishableKey) {
     return <>{children}</>;
@@ -24,7 +24,7 @@ export default function ConfiguredClerkProvider({
   return (
     <ClerkProvider
       publishableKey={resolvedPublishableKey}
-      proxyUrl={resolvedProxyUrl}
+      {...(resolvedProxyUrl ? { proxyUrl: resolvedProxyUrl } : {})}
       signInUrl="/sign-in"
       signUpUrl="/sign-up"
       signInFallbackRedirectUrl="/apps"
