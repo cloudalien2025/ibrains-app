@@ -122,7 +122,10 @@ const clerkProxy = clerkMiddleware(async (auth, req) => {
   }
 
   if (isProtectedRoute(req)) {
-    await auth.protect();
+    const authState = await auth();
+    if (!authState.userId) {
+      return buildSignInRedirect(req);
+    }
   }
 
   return NextResponse.next();

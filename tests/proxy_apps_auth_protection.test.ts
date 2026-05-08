@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const state = vi.hoisted(() => ({
   clerkProxyCalls: 0,
   denyProtect: false,
+  throwAuth: false,
 }));
 
 function toPathRegex(pattern: string): RegExp {
@@ -17,17 +18,26 @@ vi.mock("@clerk/nextjs/server", () => ({
     const regexes = patterns.map(toPathRegex);
     return (req: NextRequest) => regexes.some((regex) => regex.test(req.nextUrl.pathname));
   }),
-  clerkMiddleware: vi.fn((handler: (auth: { protect: () => Promise<void> }, req: NextRequest) => Promise<Response>) => {
+  clerkMiddleware: vi.fn((handler: (auth: (() => Promise<{ userId: string | null }>) & { protect: () => Promise<void> }, req: NextRequest) => Promise<Response>) => {
     return async (req: NextRequest) => {
       state.clerkProxyCalls += 1;
+      const authFn = async () => {
+        if (state.throwAuth) {
+          throw new Error("Auth unavailable");
+        }
+        if (state.denyProtect) {
+          return { userId: null };
+        }
+        return { userId: "user_test_123" };
+      };
       return handler(
-        {
+        Object.assign(authFn, {
           protect: async () => {
             if (state.denyProtect) {
               throw new Error("Unauthenticated");
             }
           },
-        },
+        }),
         req
       );
     };
@@ -39,6 +49,7 @@ describe("proxy app/auth protection", () => {
     vi.resetModules();
     state.clerkProxyCalls = 0;
     state.denyProtect = false;
+    state.throwAuth = false;
     delete process.env.E2E_MOCK_GRAPH;
   });
 
@@ -66,7 +77,9 @@ describe("proxy app/auth protection", () => {
     expect(response.status).toBe(307);
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
-    expect(location).toContain("redirect_url=%2Fapps%2Fecomviper%2Fwalmart%2Fconnect");
+    expect(location).toContain(
+      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapps%2Fecomviper%2Fwalmart%2Fconnect"
+    );
     expect(state.clerkProxyCalls).toBe(1);
   });
 
@@ -80,7 +93,9 @@ describe("proxy app/auth protection", () => {
     expect(response.status).toBe(307);
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
-    expect(location).toContain("redirect_url=%2Fapi%2Fecomviper%2Fwalmart%2Fconnect%2Fsave");
+    expect(location).toContain(
+      "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapi%2Fecomviper%2Fwalmart%2Fconnect%2Fsave"
+    );
     expect(state.clerkProxyCalls).toBe(1);
   });
 
@@ -93,5 +108,18 @@ describe("proxy app/auth protection", () => {
 
     expect(response.status).toBe(200);
     expect(state.clerkProxyCalls).toBe(1);
+  });
+
+  it("redirects protected routes to sign-in when auth() throws", async () => {
+    state.throwAuth = true;
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(new NextRequest("https://app.ibrains.ai/apps"));
+
+    expect(response.status).toBe(307);
+    const location = response.headers.get("location");
+    expect(location).toContain("/sign-in");
+    expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapps");
   });
 });
