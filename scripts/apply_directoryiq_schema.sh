@@ -27,7 +27,10 @@ if [ -n "${DIRECTORYIQ_DATABASE_URL:-}" ] && [ -n "${DATABASE_URL:-}" ] && [ "${
 fi
 
 sanitize_url() {
-  printf '%s' "$1" | sed -E 's/([?&])sslaccept=[^&]*&?/\1/g; s/[?&]$//'
+  printf '%s' "$1" | sed -E \
+    -e 's/([?&])sslaccept=[^&]*&?/\1/g' \
+    -e 's/([?&])sslmode=no-verify([&]|$)/\1sslmode=require\2/g' \
+    -e 's/[?&]$//'
 }
 
 CLEAN_URL="$(sanitize_url "${CONNECTION_STRING}")"

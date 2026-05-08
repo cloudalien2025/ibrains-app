@@ -29,6 +29,8 @@ describe("DirectoryIQ schema parity", () => {
     expect(script).toContain("DATABASE_URL");
     expect(script).toContain("001_directoryiq_schema_from_shared.sql");
     expect(script).toContain("psql");
+    expect(script).toContain("sslmode=no-verify");
+    expect(script).toContain("sslmode=require");
     expect(script).toContain("directoryiq_settings");
     expect(script).toContain("directoryiq_signal_source_credentials");
     expect(script).toContain("DirectoryIQ schema parity verified.");
