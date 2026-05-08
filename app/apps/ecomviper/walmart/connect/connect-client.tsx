@@ -8,6 +8,7 @@ import type {
   WalmartConnectionDiagnostic,
   WalmartConnectionHealth,
   WalmartConnectionSummary,
+  WalmartOpenAiConnectionStatus,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ConnectClientProps {
@@ -20,6 +21,10 @@ type ConnectForm = {
   clientSecret: string;
   marketplaceRegion: "US";
   notes: string;
+};
+
+type OpenAiForm = {
+  apiKey: string;
 };
 
 type ConnectApiPayload = {
@@ -48,6 +53,17 @@ type WalmartHealthResponse = {
   connectionHealth?: WalmartConnectionHealth;
 };
 
+type OpenAiConnectionApiPayload = {
+  ok: boolean;
+  provider: "openai";
+  connected: boolean;
+  status: WalmartOpenAiConnectionStatus["status"];
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+  message?: string;
+};
+
 class ApiRequestError extends Error {
   readonly status: number;
   readonly payload: unknown;
@@ -64,6 +80,25 @@ async function postJson<T>(url: string, payload: unknown): Promise<T> {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+
+  const data = (await response.json().catch(() => null)) as
+    | (T & { error?: { message?: string } })
+    | null;
+  if (!response.ok || !data) {
+    const message =
+      data && typeof data === "object" && data.error && typeof data.error.message === "string"
+        ? data.error.message
+        : "Request failed";
+    throw new ApiRequestError(message, response.status, data);
+  }
+  return data as T;
+}
+
+async function deleteJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
   });
 
   const data = (await response.json().catch(() => null)) as
@@ -99,6 +134,16 @@ function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
     },
     lastSuccessfulApiCall: response.lastSuccessfulApiCall,
     lastApiError: response.lastApiError,
+  };
+}
+
+function toOpenAiStatus(response: OpenAiConnectionApiPayload): WalmartOpenAiConnectionStatus {
+  return {
+    connected: response.connected,
+    status: response.status,
+    maskedApiKey: response.maskedApiKey,
+    updatedAt: response.updatedAt,
+    saveSupported: response.saveSupported,
   };
 }
 
@@ -140,11 +185,21 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     marketplaceRegion: initialHealth.summary.region,
     notes: "",
   });
+  const [openAiForm, setOpenAiForm] = useState<OpenAiForm>({ apiKey: "" });
   const [health, setHealth] = useState(initialHealth);
+  const [openAiStatus, setOpenAiStatus] = useState<WalmartOpenAiConnectionStatus>({
+    connected: false,
+    status: "disconnected",
+    maskedApiKey: "Not configured",
+    updatedAt: null,
+    saveSupported: true,
+  });
   const [loading, setLoading] = useState(false);
+  const [openAiLoading, setOpenAiLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
+  const canSaveOpenAi = useMemo(() => Boolean(openAiForm.apiKey.trim()), [openAiForm.apiKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,7 +231,20 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     }
 
+    async function loadOpenAiConnection() {
+      try {
+        const response = await fetch("/api/ecomviper/walmart/connect/openai", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json().catch(() => null)) as OpenAiConnectionApiPayload | null;
+        if (!payload || cancelled) return;
+        setOpenAiStatus(toOpenAiStatus(payload));
+      } catch {
+        // Intentionally silent; operator can still submit credentials manually.
+      }
+    }
+
     void loadPersistedHealth();
+    void loadOpenAiConnection();
 
     return () => {
       cancelled = true;
@@ -207,9 +275,11 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   async function handleSave(action: "save" | "rotate" | "disconnect" | "permissions") {
     try {
       setLoading(true);
-      const response = await postJson<ConnectApiPayload & {
-        action?: "save" | "rotate" | "disconnect" | "permissions";
-      }>("/api/ecomviper/walmart/connect/save", {
+      const response = await postJson<
+        ConnectApiPayload & {
+          action?: "save" | "rotate" | "disconnect" | "permissions";
+        }
+      >("/api/ecomviper/walmart/connect/save", {
         ...form,
         region: form.marketplaceRegion,
         action,
@@ -239,6 +309,71 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleOpenAiTest() {
+    try {
+      setOpenAiLoading(true);
+      const response = await postJson<OpenAiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/openai/test",
+        {
+          apiKey: openAiForm.apiKey,
+        }
+      );
+      setOpenAiStatus(toOpenAiStatus(response));
+      setMessage(response.message ?? "OpenAI API test completed.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("OpenAI API test failed.");
+      }
+    } finally {
+      setOpenAiLoading(false);
+    }
+  }
+
+  async function handleOpenAiSave() {
+    try {
+      setOpenAiLoading(true);
+      const response = await postJson<OpenAiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/openai",
+        {
+          apiKey: openAiForm.apiKey,
+        }
+      );
+      setOpenAiStatus(toOpenAiStatus(response));
+      setOpenAiForm({ apiKey: "" });
+      setMessage(response.message ?? "OpenAI API key saved securely.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to save OpenAI API key.");
+      }
+    } finally {
+      setOpenAiLoading(false);
+    }
+  }
+
+  async function handleOpenAiDisconnect() {
+    try {
+      setOpenAiLoading(true);
+      const response = await deleteJson<OpenAiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/openai"
+      );
+      setOpenAiStatus(toOpenAiStatus(response));
+      setOpenAiForm({ apiKey: "" });
+      setMessage(response.message ?? "OpenAI API disconnected.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to disconnect OpenAI API key.");
+      }
+    } finally {
+      setOpenAiLoading(false);
     }
   }
 
@@ -432,6 +567,84 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               </li>
             ))}
           </ul>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">OpenAI API</h2>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Bring your own OpenAI API key. EcomViper uses your key to generate Walmart listing content and never returns the raw key.
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            <label className="text-sm text-[#334155]">
+              OpenAI API key
+              <input
+                type="password"
+                value={openAiForm.apiKey}
+                onChange={(event) => setOpenAiForm({ apiKey: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="sk-..."
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleOpenAiTest}
+              disabled={openAiLoading}
+              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Test API Key
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenAiSave}
+              disabled={openAiLoading || !canSaveOpenAi || !openAiStatus.saveSupported}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save OpenAI Key
+            </button>
+            <button
+              type="button"
+              onClick={handleOpenAiDisconnect}
+              disabled={openAiLoading || !openAiStatus.saveSupported}
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 disabled:opacity-50"
+            >
+              Disconnect OpenAI
+            </button>
+          </div>
+
+          {!openAiStatus.saveSupported ? (
+            <p className="mt-3 text-sm text-amber-700">
+              Walmart OpenAI credential saving is not available in this environment.
+            </p>
+          ) : null}
+        </article>
+
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">OpenAI Status</h2>
+          <div className="mt-3"><StatusBadge status={openAiStatus.connected ? "Connected" : "Not Connected"} /></div>
+          <dl className="mt-3 space-y-2 text-sm text-[#334155]">
+            <div className="flex items-start justify-between gap-3">
+              <dt>Provider</dt>
+              <dd className="font-medium">OpenAI API</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Connection</dt>
+              <dd className="font-medium">{openAiStatus.connected ? "Connected" : "Disconnected"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>API key</dt>
+              <dd className="font-medium">{openAiStatus.maskedApiKey}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last updated</dt>
+              <dd className="font-medium">{openAiStatus.updatedAt ?? "Never"}</dd>
+            </div>
+          </dl>
         </article>
       </section>
     </div>

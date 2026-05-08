@@ -79,6 +79,14 @@ export interface WalmartConnectionHealth {
   lastApiError: WalmartApiError | null;
 }
 
+export interface WalmartOpenAiConnectionStatus {
+  connected: boolean;
+  status: "connected" | "disconnected";
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+}
+
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 
 export interface WalmartProductRecord {
