@@ -61,6 +61,10 @@ function buildSignInRedirect(req: NextRequest): NextResponse {
   return NextResponse.redirect(signInUrl);
 }
 
+function hasClerkSessionCookie(req: NextRequest): boolean {
+  return Boolean(req.cookies.get("__session")?.value?.trim());
+}
+
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
@@ -150,6 +154,12 @@ export default e2eMockGraph
       }
       if (!isClerkConfigured) {
         if (isProtectedRoute(req)) {
+          return buildSignInRedirect(req);
+        }
+        return NextResponse.next();
+      }
+      if (req.nextUrl.pathname.startsWith("/apps")) {
+        if (!hasClerkSessionCookie(req)) {
           return buildSignInRedirect(req);
         }
         return NextResponse.next();
