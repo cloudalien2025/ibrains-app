@@ -95,7 +95,9 @@ export function upsertDraftForSku(params: {
     existing.draftPayload = params.draftPayload;
     existing.validationResult = {
       valid: validation.valid,
+      violations: validation.violations,
       warnings: validation.warnings,
+      suggestions: validation.suggestions,
     };
     existing.status = validation.valid ? "validated" : "draft";
     existing.changeSummary = `${Object.keys(params.draftPayload).length} staged field(s)`;
@@ -123,7 +125,9 @@ export function upsertDraftForSku(params: {
     status: validation.valid ? "validated" : "draft",
     validationResult: {
       valid: validation.valid,
+      violations: validation.violations,
       warnings: validation.warnings,
+      suggestions: validation.suggestions,
     },
   });
 
@@ -150,7 +154,9 @@ export function validateDraft(id: string): WalmartDraftRecord {
   const validation = validateDraftPayload(draft.draftPayload);
   draft.validationResult = {
     valid: validation.valid,
+    violations: validation.violations,
     warnings: validation.warnings,
+    suggestions: validation.suggestions,
   };
   draft.status = validation.valid ? "validated" : "failed";
   draft.updatedAt = new Date().toISOString();
@@ -173,7 +179,8 @@ export function submitDraft(id: string): WalmartDraftRecord {
     throw new Error("Draft not found");
   }
 
-  if (!draft.validationResult.valid) {
+  const hasBlockingIssues = !draft.validationResult.valid || (draft.validationResult.violations?.length ?? 0) > 0;
+  if (hasBlockingIssues) {
     draft.status = "failed";
     draft.publishStatus = "failed";
     draft.updatedAt = new Date().toISOString();
@@ -183,7 +190,7 @@ export function submitDraft(id: string): WalmartDraftRecord {
       sku: draft.sku,
       actionType: "draft_submit",
       result: "error",
-      message: "Draft submit blocked by validation warnings.",
+      message: "Draft submit blocked by validation/compliance issues.",
     });
 
     return draft;

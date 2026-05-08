@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartAiSuggestion, WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface AiOptimizerClientProps {
   products: WalmartProductRecord[];
@@ -40,7 +40,21 @@ export default function WalmartAiOptimizerClient({ products, suggestions }: AiOp
       return;
     }
 
-    setMessage("AI suggestion applied to draft (not published). ");
+    const payload = (await response.json()) as { draft?: WalmartDraftRecord };
+    const violations = payload.draft?.validationResult.violations ?? [];
+    const warnings = payload.draft?.validationResult.warnings ?? [];
+
+    if (violations.length > 0) {
+      setMessage(`Draft saved with policy blockers: ${violations[0]}`);
+      return;
+    }
+
+    if (warnings.length > 0) {
+      setMessage(`Draft saved with compliance warnings: ${warnings[0]}`);
+      return;
+    }
+
+    setMessage("AI suggestion applied to draft and passed policy checks.");
   }
 
   if (!suggestion) {

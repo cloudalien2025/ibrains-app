@@ -35,7 +35,28 @@ export async function PATCH(
     const body = (await req.json().catch(() => ({}))) as { action?: "validate" | "submit" };
 
     const action = body.action ?? "validate";
-    const draft = action === "submit" ? submitDraft(id) : validateDraft(id);
+    if (action === "submit") {
+      const revalidatedDraft = validateDraft(id);
+      const hasViolations = !revalidatedDraft.validationResult.valid || (revalidatedDraft.validationResult.violations?.length ?? 0) > 0;
+
+      if (hasViolations) {
+        const blockedDraft = submitDraft(id);
+        return ok({
+          ok: false,
+          action,
+          blocked: true,
+          draft: blockedDraft,
+          violations: blockedDraft.validationResult.violations ?? [],
+          warnings: blockedDraft.validationResult.warnings,
+          suggestions: blockedDraft.validationResult.suggestions ?? [],
+        });
+      }
+
+      const draft = submitDraft(id);
+      return ok({ ok: true, action, draft });
+    }
+
+    const draft = validateDraft(id);
 
     return ok({ ok: true, action, draft });
   } catch (error) {
