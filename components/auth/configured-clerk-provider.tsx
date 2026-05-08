@@ -1,6 +1,8 @@
+"use client";
+
 import type { ReactNode } from "react";
 import { ClerkProvider } from "@clerk/nextjs";
-import { resolveClerkRouteContract, resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
+import { resolveClerkRuntimeContract } from "@/lib/auth/clerkEnvContract";
 
 type ConfiguredClerkProviderProps = {
   children: ReactNode;
@@ -8,7 +10,6 @@ type ConfiguredClerkProviderProps = {
 
 export default function ConfiguredClerkProvider({ children }: ConfiguredClerkProviderProps) {
   const runtimeContract = resolveClerkRuntimeContract();
-  const routeContract = resolveClerkRouteContract();
 
   if (!runtimeContract.publishableKey) {
     return <>{children}</>;
@@ -17,10 +18,11 @@ export default function ConfiguredClerkProvider({ children }: ConfiguredClerkPro
   return (
     <ClerkProvider
       publishableKey={runtimeContract.publishableKey}
-      signInUrl={routeContract.signInUrl}
-      signUpUrl={routeContract.signUpUrl}
-      signInFallbackRedirectUrl={routeContract.signInFallbackRedirectUrl}
-      signUpFallbackRedirectUrl={routeContract.signUpFallbackRedirectUrl}
+      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL}
+      signInUrl="/sign-in"
+      signUpUrl="/sign-up"
+      signInFallbackRedirectUrl="/apps"
+      signUpFallbackRedirectUrl="/apps"
     >
       {children}
     </ClerkProvider>
