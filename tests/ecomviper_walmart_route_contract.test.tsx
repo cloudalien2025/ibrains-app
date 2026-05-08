@@ -72,6 +72,8 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("Account nickname");
     expect(html).toContain("Client ID");
     expect(html).toContain("Client Secret");
+    expect(html).toContain("OpenAI API");
+    expect(html).toContain("Save OpenAI Key");
     expect(html).toContain("Test Connection");
     expect(html).toContain("Save Credentials");
     expect(html).toContain("Production");
