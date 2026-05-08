@@ -83,7 +83,6 @@ describe("proxy app/auth protection", () => {
   });
 
   it("keeps /api/ecomviper/walmart/connect/save behind auth checks", async () => {
-    state.denyProtect = true;
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
@@ -95,7 +94,24 @@ describe("proxy app/auth protection", () => {
     expect(location).toContain(
       "redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapi%2Fecomviper%2Fwalmart%2Fconnect%2Fsave"
     );
-    expect(state.clerkProxyCalls).toBe(1);
+    expect(state.clerkProxyCalls).toBe(0);
+  });
+
+  it("allows authenticated users through /api/ecomviper/walmart/connect/save without Clerk self-proxy", async () => {
+    const mod = await import("@/proxy");
+    const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
+
+    const response = await handler(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/connect/save", {
+        method: "POST",
+        headers: {
+          cookie: "__session=valid_cookie",
+        },
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(state.clerkProxyCalls).toBe(0);
   });
 
   it("allows authenticated users into /apps/ecomviper/walmart/connect", async () => {
@@ -119,12 +135,12 @@ describe("proxy app/auth protection", () => {
     const mod = await import("@/proxy");
     const handler = mod.default as (req: NextRequest) => Promise<Response> | Response;
 
-    const response = await handler(new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products"));
+    const response = await handler(new NextRequest("https://app.ibrains.ai/runs/run_123"));
 
     expect(response.status).toBe(307);
     const location = response.headers.get("location");
     expect(location).toContain("/sign-in");
-    expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fapi%2Fecomviper%2Fwalmart%2Fproducts");
+    expect(location).toContain("redirect_url=https%3A%2F%2Fapp.ibrains.ai%2Fruns%2Frun_123");
     expect(state.clerkProxyCalls).toBe(1);
   });
 });

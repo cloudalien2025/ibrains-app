@@ -65,6 +65,10 @@ function hasClerkSessionCookie(req: NextRequest): boolean {
   return Boolean(req.cookies.get("__session")?.value?.trim());
 }
 
+function isEcomviperApiRoute(req: NextRequest): boolean {
+  return req.nextUrl.pathname.startsWith("/api/ecomviper");
+}
+
 function isTrustedIngestServiceRequest(req: NextRequest): boolean {
   if (req.method !== "POST") return false;
   if (!trustedIngestPathRegex.test(req.nextUrl.pathname)) return false;
@@ -159,6 +163,12 @@ export default e2eMockGraph
         return NextResponse.next();
       }
       if (req.nextUrl.pathname.startsWith("/apps")) {
+        if (!hasClerkSessionCookie(req)) {
+          return buildSignInRedirect(req);
+        }
+        return NextResponse.next();
+      }
+      if (isEcomviperApiRoute(req)) {
         if (!hasClerkSessionCookie(req)) {
           return buildSignInRedirect(req);
         }
