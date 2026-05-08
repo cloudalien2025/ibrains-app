@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveFrontdoorAuthState } from "@/lib/auth/frontdoorAuthState";
 
-const { authMock } = vi.hoisted(() => ({
+const { authMock, cookiesMock, cookieGetMock } = vi.hoisted(() => ({
   authMock: vi.fn(),
+  cookiesMock: vi.fn(),
+  cookieGetMock: vi.fn(),
 }));
 const originalNodeEnv = process.env.NODE_ENV;
 const originalVitestEnv = process.env.VITEST;
@@ -11,9 +13,19 @@ vi.mock("@clerk/nextjs/server", () => ({
   auth: authMock,
 }));
 
+vi.mock("next/headers", () => ({
+  cookies: cookiesMock,
+}));
+
 describe("frontdoor auth state", () => {
   beforeEach(() => {
     authMock.mockReset();
+    cookiesMock.mockReset();
+    cookieGetMock.mockReset();
+    cookiesMock.mockResolvedValue({
+      get: cookieGetMock,
+    });
+    cookieGetMock.mockReturnValue(undefined);
     delete process.env.E2E_MOCK_GRAPH;
     delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
     delete process.env.CLERK_PUBLISHABLE_KEY;
@@ -37,6 +49,30 @@ describe("frontdoor auth state", () => {
 
     await expect(resolveFrontdoorAuthState()).resolves.toEqual({ status: "signed-out" });
     expect(authMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats the frontdoor as signed in when auth throws but a clerk session cookie is present", async () => {
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_frontdoor";
+    process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
+    authMock.mockRejectedValue(new Error("Clerk middleware unavailable"));
+    cookieGetMock.mockReturnValue({ value: "session_cookie_value" });
+
+    await expect(resolveFrontdoorAuthState()).resolves.toEqual({
+      status: "signed-in",
+      userId: "session_cookie",
+    });
+  });
+
+  it("treats the frontdoor as signed in when auth returns no user but a clerk session cookie is present", async () => {
+    process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY = "pk_test_frontdoor";
+    process.env.CLERK_SECRET_KEY = "sk_test_frontdoor";
+    authMock.mockResolvedValue({ userId: null });
+    cookieGetMock.mockReturnValue({ value: "session_cookie_value" });
+
+    await expect(resolveFrontdoorAuthState()).resolves.toEqual({
+      status: "signed-in",
+      userId: "session_cookie",
+    });
   });
 
   it("returns a signed-in frontdoor state when clerk resolves a user session", async () => {
