@@ -17,7 +17,10 @@ export default function SignUpPage() {
   }
 
   return (
-    <ConfiguredClerkProvider>
+    <ConfiguredClerkProvider
+      publishableKey={runtimeContract.publishableKey}
+      proxyUrl={process.env.NEXT_PUBLIC_CLERK_PROXY_URL}
+    >
       <div className="ibrains-shell flex min-h-screen items-center justify-center p-6">
         <SignUp
           fallbackRedirectUrl={routeContract.signUpFallbackRedirectUrl}

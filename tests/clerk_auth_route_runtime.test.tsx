@@ -60,4 +60,16 @@ describe("clerk auth route runtime", () => {
       signUpFallbackRedirectUrl: "/apps",
     });
   });
+
+  it("passes server-resolved CLERK_PUBLISHABLE_KEY into ConfiguredClerkProvider when NEXT_PUBLIC is absent", async () => {
+    delete process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+    process.env.CLERK_PUBLISHABLE_KEY = "pk_live_server_runtime";
+
+    const { default: SignInPage } = await import("@/app/sign-in/[[...sign-in]]/page");
+    renderToStaticMarkup(<SignInPage />);
+
+    expect(mocks.clerkProviderProps).toMatchObject({
+      publishableKey: "pk_live_server_runtime",
+    });
+  });
 });
