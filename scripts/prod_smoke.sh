@@ -8,7 +8,8 @@ HOST_HEADER="${HOST_HEADER:-}"
 EXPECT_RELEASE_FILE="${EXPECT_RELEASE_FILE:-0}"
 EXPECT_BUILD_ID="${EXPECT_BUILD_ID:-}"
 EXPECT_GIT_SHA="${EXPECT_GIT_SHA:-}"
-SMOKE_PATHS="${SMOKE_PATHS:-/ /apps /sign-in}"
+PUBLIC_SMOKE_PATHS="${PUBLIC_SMOKE_PATHS:-/ /sign-in}"
+PROTECTED_REDIRECT_PATHS="${PROTECTED_REDIRECT_PATHS:-/apps /apps/ecomviper/walmart/connect}"
 SKIP_SERVICE_CHECKS="${SKIP_SERVICE_CHECKS:-0}"
 
 curl_host_args=()
@@ -122,6 +123,103 @@ check_frontdoor_assets() {
 
     rm -f "$headers_file"
   done < "$refs_file"
+}
+
+normalize_route_path() {
+  local route_path="$1"
+  if [ "$route_path" != "/" ]; then
+    route_path="${route_path%/}"
+  fi
+  printf '%s' "$route_path"
+}
+
+check_protected_redirect() {
+  local route_path="$1"
+  local url="$2"
+  local headers_file
+  local code
+  local location
+  local validation
+  headers_file="$(mktemp)"
+  trap 'rm -f "$headers_file"' RETURN
+
+  if ! curl -sS -D "$headers_file" -o /dev/null "${curl_host_args[@]}" "$url"; then
+    fail "${route_path} protected route request failed"
+    return
+  fi
+
+  code=$(awk '/^HTTP/{code=$2} END{print code}' "$headers_file")
+  location=$(awk 'BEGIN{IGNORECASE=1} /^Location:/{sub(/\r$/,"",$0); print substr($0,10)}' "$headers_file" | tail -n 1 | sed 's/^[[:space:]]*//')
+
+  if [ "$code" != "307" ]; then
+    fail "${route_path} expected 307 protected redirect, got ${code:-missing}"
+    return
+  fi
+
+  if [ -z "$location" ]; then
+    fail "${route_path} protected redirect missing Location header"
+    return
+  fi
+
+  if printf '%s' "$location" | grep -qi 'localhost:3001'; then
+    fail "${route_path} protected redirect Location must not include localhost:3001"
+    return
+  fi
+
+  if ! validation=$(
+    python3 - "$location" "$DOMAIN" "$route_path" <<'PY'
+import sys
+from urllib.parse import parse_qs, urlparse
+
+location, domain, expected_path = sys.argv[1], sys.argv[2], sys.argv[3]
+expected = expected_path.rstrip("/") or "/"
+parsed = urlparse(location)
+
+if parsed.scheme not in ("http", "https"):
+    print("Location must be absolute http/https URL", end="")
+    sys.exit(1)
+if parsed.hostname != domain:
+    print(f"Location host must be {domain}", end="")
+    sys.exit(1)
+if parsed.path != "/sign-in":
+    print("Location path must be /sign-in", end="")
+    sys.exit(1)
+
+redirect_values = parse_qs(parsed.query, keep_blank_values=True).get("redirect_url", [])
+if not redirect_values or not redirect_values[0]:
+    print("redirect_url query param missing", end="")
+    sys.exit(1)
+
+redirect_url = redirect_values[0]
+if "localhost:3001" in redirect_url.lower():
+    print("redirect_url must not include localhost:3001", end="")
+    sys.exit(1)
+
+redirect_parsed = urlparse(redirect_url)
+if redirect_parsed.scheme in ("http", "https"):
+    if redirect_parsed.hostname != domain:
+        print(f"redirect_url host must be {domain}", end="")
+        sys.exit(1)
+    redirect_path = redirect_parsed.path or "/"
+elif redirect_url.startswith("/"):
+    redirect_path = redirect_url
+else:
+    print("redirect_url must be absolute app URL or absolute path", end="")
+    sys.exit(1)
+
+normalized_redirect_path = redirect_path.rstrip("/") or "/"
+if normalized_redirect_path != expected:
+    print(f"redirect_url path must match {expected_path}", end="")
+    sys.exit(1)
+
+print("ok", end="")
+PY
+  ); then
+    fail "${route_path} protected redirect invalid: ${validation}"
+    return
+  fi
+
+  pass "${route_path} returned expected 307 protected redirect"
 }
 
 check_health_json() {
@@ -246,9 +344,13 @@ if [ "${SKIP_SERVICE_CHECKS}" != "1" ]; then
   check_service nginx
 fi
 
-for route_path in ${SMOKE_PATHS}; do
+for route_path in ${PUBLIC_SMOKE_PATHS}; do
   check_http_status "${BASE_URL}${route_path}" "${route_path}"
   check_frontdoor_assets "${BASE_URL}${route_path}" "${route_path}"
+done
+
+for route_path in ${PROTECTED_REDIRECT_PATHS}; do
+  check_protected_redirect "$(normalize_route_path "$route_path")" "${BASE_URL}${route_path}"
 done
 
 check_health_json "${BASE_URL}/api/health"
