@@ -232,6 +232,22 @@ export interface WalmartImportResult {
     itemReportDownloaded?: boolean;
     itemReportRowsParsed?: number;
     itemReportRequestId?: string | null;
+    itemReportRequestEndpointTried?: string[];
+    itemReportRequestEndpointUsed?: string | null;
+    itemReportRequestStatusCode?: number | null;
+    itemReportStatusEndpointUsed?: string | null;
+    itemReportDownloadEndpointUsed?: string | null;
+    itemReportFailureCategory?:
+      | "none"
+      | "auth_or_permission"
+      | "not_found_endpoint"
+      | "timeout"
+      | "report_failed"
+      | "download_failed"
+      | "parse_failed"
+      | "no_rows"
+      | "no_image_columns"
+      | "unavailable";
     imageSourceBreakdown?: {
       walmartItemReport: number;
       walmartSellerCatalogSearch: number;

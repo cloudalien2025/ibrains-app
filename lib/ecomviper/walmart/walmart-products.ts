@@ -770,6 +770,22 @@ interface ImageEnrichmentStats {
     downloaded: boolean;
     rowsParsed: number;
     requestId: string | null;
+    requestEndpointTried: string[];
+    requestEndpointUsed: string | null;
+    requestStatusCode: number | null;
+    statusEndpointUsed: string | null;
+    downloadEndpointUsed: string | null;
+    failureCategory:
+      | "none"
+      | "auth_or_permission"
+      | "not_found_endpoint"
+      | "timeout"
+      | "report_failed"
+      | "download_failed"
+      | "parse_failed"
+      | "no_rows"
+      | "no_image_columns"
+      | "unavailable";
   };
 }
 
@@ -935,6 +951,12 @@ async function enrichProductImages(
       downloaded: false,
       rowsParsed: 0,
       requestId: null,
+      requestEndpointTried: [],
+      requestEndpointUsed: null,
+      requestStatusCode: null,
+      statusEndpointUsed: null,
+      downloadEndpointUsed: null,
+      failureCategory: "none",
     },
   };
 
@@ -947,6 +969,12 @@ async function enrichProductImages(
   stats.itemReport.downloaded = reportEnrichment.run.itemReportDownloaded;
   stats.itemReport.rowsParsed = reportEnrichment.run.itemReportRowsParsed;
   stats.itemReport.requestId = reportEnrichment.run.reportRequestId;
+  stats.itemReport.requestEndpointTried = [...reportEnrichment.run.diagnostics.requestEndpointTried];
+  stats.itemReport.requestEndpointUsed = reportEnrichment.run.diagnostics.requestEndpointUsed;
+  stats.itemReport.requestStatusCode = reportEnrichment.run.diagnostics.requestStatusCode;
+  stats.itemReport.statusEndpointUsed = reportEnrichment.run.diagnostics.statusEndpointUsed;
+  stats.itemReport.downloadEndpointUsed = reportEnrichment.run.diagnostics.downloadEndpointUsed;
+  stats.itemReport.failureCategory = reportEnrichment.run.failureCategory;
 
   const shouldFallbackToItemSearch = new Set<string>();
 
@@ -1174,6 +1202,12 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       itemReportDownloaded: imageStats.itemReport.downloaded,
       itemReportRowsParsed: imageStats.itemReport.rowsParsed,
       itemReportRequestId: imageStats.itemReport.requestId,
+      itemReportRequestEndpointTried: imageStats.itemReport.requestEndpointTried,
+      itemReportRequestEndpointUsed: imageStats.itemReport.requestEndpointUsed,
+      itemReportRequestStatusCode: imageStats.itemReport.requestStatusCode,
+      itemReportStatusEndpointUsed: imageStats.itemReport.statusEndpointUsed,
+      itemReportDownloadEndpointUsed: imageStats.itemReport.downloadEndpointUsed,
+      itemReportFailureCategory: imageStats.itemReport.failureCategory,
       imageSourceBreakdown: {
         walmartItemReport: imageStats.sourceBreakdown.walmartItemReport,
         walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,

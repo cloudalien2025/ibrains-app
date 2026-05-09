@@ -29,6 +29,10 @@ export async function POST(req: NextRequest) {
     const itemReportRequested = result.importDiagnostics?.itemReportRequested ?? false;
     const itemReportDownloaded = result.importDiagnostics?.itemReportDownloaded ?? false;
     const itemReportRowsParsed = result.importDiagnostics?.itemReportRowsParsed ?? 0;
+    const itemReportRequestEndpointUsed = result.importDiagnostics?.itemReportRequestEndpointUsed ?? "n/a";
+    const itemReportStatusEndpointUsed = result.importDiagnostics?.itemReportStatusEndpointUsed ?? "n/a";
+    const itemReportDownloadEndpointUsed = result.importDiagnostics?.itemReportDownloadEndpointUsed ?? "n/a";
+    const itemReportFailureCategory = result.importDiagnostics?.itemReportFailureCategory ?? "none";
     const sourceBreakdown = result.importDiagnostics?.imageSourceBreakdown;
     const inventoryNote =
       inventoryUnknownCount > 0
@@ -36,7 +40,7 @@ export async function POST(req: NextRequest) {
         : "";
     const imageNote =
       result.importedCount > 0
-        ? ` Image enrichment: found=${imageFoundCount}, notFound=${imageNotFoundCount}, ambiguous=${imageAmbiguousCount}, failed=${imageFailedCount}. ItemReport requested=${itemReportRequested}, downloaded=${itemReportDownloaded}, rows=${itemReportRowsParsed}. Source breakdown: itemReport=${sourceBreakdown?.walmartItemReport ?? 0}, sellerCatalog=${sourceBreakdown?.walmartSellerCatalogSearch ?? 0}, itemSearch=${sourceBreakdown?.walmartItemSearch ?? 0}.`
+        ? ` Image enrichment: found=${imageFoundCount}, notFound=${imageNotFoundCount}, ambiguous=${imageAmbiguousCount}, failed=${imageFailedCount}. ItemReport requested=${itemReportRequested}, downloaded=${itemReportDownloaded}, rows=${itemReportRowsParsed}, requestEndpoint=${itemReportRequestEndpointUsed}, statusEndpoint=${itemReportStatusEndpointUsed}, downloadEndpoint=${itemReportDownloadEndpointUsed}, failureCategory=${itemReportFailureCategory}. Source breakdown: itemReport=${sourceBreakdown?.walmartItemReport ?? 0}, sellerCatalog=${sourceBreakdown?.walmartSellerCatalogSearch ?? 0}, itemSearch=${sourceBreakdown?.walmartItemSearch ?? 0}.`
         : "";
     return ok({
       ok: true,

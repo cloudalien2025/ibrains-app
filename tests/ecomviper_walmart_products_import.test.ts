@@ -502,18 +502,18 @@ describe("walmart product import", () => {
           });
         }
 
-        if (url.includes("/v3/reports/generate")) {
-          return new Response(JSON.stringify({ reportRequestId: "REQ-REPORT-1" }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          });
-        }
-
-        if (url.includes("/v3/reports/status/REQ-REPORT-1")) {
+        if (url.includes("/v3/reports/reportRequests/REQ-REPORT-1")) {
           return new Response(
             JSON.stringify({ reportStatus: "PROCESSED", downloadUrl: "https://signed.example.com/report.csv" }),
             { status: 200, headers: { "content-type": "application/json" } }
           );
+        }
+
+        if (url.includes("/v3/reports/reportRequests") && !url.includes("/v3/reports/reportRequests/")) {
+          return new Response(JSON.stringify({ reportRequestId: "REQ-REPORT-1" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
         }
 
         if (url.includes("signed.example.com/report.csv")) {
@@ -551,7 +551,7 @@ describe("walmart product import", () => {
     const reportProduct = listWalmartProducts().find((entry) => entry.sku === "REPORT-IMG-1");
     const searchProduct = listWalmartProducts().find((entry) => entry.sku === "SEARCH-IMG-1");
 
-    const firstReportCall = callOrder.findIndex((entry) => entry.includes("/v3/reports/generate"));
+    const firstReportCall = callOrder.findIndex((entry) => entry.includes("/v3/reports/reportRequests"));
     const firstItemSearchCall = callOrder.findIndex((entry) => entry.includes("/v3/items/walmart/search"));
 
     expect(firstReportCall).toBeGreaterThan(-1);
@@ -570,6 +570,10 @@ describe("walmart product import", () => {
     expect(result.importDiagnostics?.itemReportRequested).toBe(true);
     expect(result.importDiagnostics?.itemReportDownloaded).toBe(true);
     expect(result.importDiagnostics?.itemReportRowsParsed).toBe(1);
+    expect(result.importDiagnostics?.itemReportRequestEndpointUsed).toBe("/v3/reports/reportRequests");
+    expect(result.importDiagnostics?.itemReportStatusEndpointUsed).toBe("/v3/reports/reportRequests/REQ-REPORT-1");
+    expect(result.importDiagnostics?.itemReportDownloadEndpointUsed).toBe("status.downloadUrl");
+    expect(result.importDiagnostics?.itemReportFailureCategory).toBe("none");
     expect(result.importDiagnostics?.imageSourceBreakdown?.walmartItemReport).toBe(1);
     expect(result.importDiagnostics?.imageSourceBreakdown?.walmartItemSearch).toBe(1);
   });

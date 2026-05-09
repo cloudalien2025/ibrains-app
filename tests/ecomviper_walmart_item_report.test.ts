@@ -218,19 +218,7 @@ describe("Walmart Item Report image enrichment", () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
-      if (url.includes("/v3/reports/generate")) {
-        const headers = new Headers(init?.headers as HeadersInit);
-        expect(headers.get("WM_SEC.ACCESS_TOKEN")).toBe("wm-token");
-        expect(headers.get("WM_SVC.NAME")).toBe("Walmart Marketplace");
-        expect(headers.get("content-type")).toContain("application/json");
-        expect(String(init?.body ?? "")).toContain("ITEM");
-        return new Response(JSON.stringify({ reportRequestId: "REQ-1" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-
-      if (url.includes("/v3/reports/status/REQ-1")) {
+      if (url.includes("/v3/reports/reportRequests/REQ-1")) {
         return new Response(
           JSON.stringify({ reportStatus: "PROCESSED", downloadUrl: "https://signed.example.com/report.zip" }),
           {
@@ -238,6 +226,19 @@ describe("Walmart Item Report image enrichment", () => {
             headers: { "content-type": "application/json" },
           }
         );
+      }
+
+      if (url.includes("/v3/reports/reportRequests") && !url.includes("/v3/reports/reportRequests/")) {
+        const headers = new Headers(init?.headers as HeadersInit);
+        expect(headers.get("WM_SEC.ACCESS_TOKEN")).toBe("wm-token");
+        expect(headers.get("WM_SVC.NAME")).toBe("Walmart Marketplace");
+        expect(headers.get("content-type")).toContain("application/json");
+        expect(String(init?.body ?? "")).toContain("ITEM");
+        expect(String(init?.body ?? "")).toContain("CSV");
+        return new Response(JSON.stringify({ reportRequestId: "REQ-1" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
 
       if (url.includes("signed.example.com/report.zip")) {
@@ -260,6 +261,63 @@ describe("Walmart Item Report image enrichment", () => {
     expect(run.itemReportDownloaded).toBe(true);
     expect(run.itemReportRowsParsed).toBe(1);
     expect(run.reportRequestId).toBe("REQ-1");
+    expect(run.diagnostics.requestEndpointUsed).toBe("/v3/reports/reportRequests");
+    expect(run.diagnostics.statusEndpointUsed).toBe("/v3/reports/reportRequests/REQ-1");
+    expect(run.diagnostics.downloadEndpointUsed).toBe("status.downloadUrl");
+    expect(run.diagnostics.downloadAttempts[0]?.endpoint).toBe("status.downloadUrl");
+    const calledUrls = fetchMock.mock.calls.map(([input]) =>
+      typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url
+    );
+    expect(calledUrls.some((entry) => entry.includes("/v3/reports/generate"))).toBe(false);
+    expect(fetchMock).toHaveBeenCalled();
+  });
+
+  it("falls back to /v3/reports/requests when reportRequests endpoint returns 404", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/reports/reportRequests")) {
+        return new Response(JSON.stringify({ message: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/reports/requests") && !url.includes("/v3/reports/requests/")) {
+        return new Response(JSON.stringify({ requestId: "REQ-FALLBACK" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/reports/requests/REQ-FALLBACK")) {
+        return new Response(JSON.stringify({ status: "COMPLETED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/reports/downloadReport?requestId=REQ-FALLBACK")) {
+        return new Response(
+          ["SKU,PrimaryImageUrl", "SKU-FALLBACK,https://images.example.com/fallback.jpg"].join("\n"),
+          {
+            status: 200,
+            headers: { "content-type": "text/csv" },
+          }
+        );
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const run = await runItemReportWorkflow("wm-token");
+
+    expect(run.status).toBe("ready");
+    expect(run.itemReportRequested).toBe(true);
+    expect(run.itemReportDownloaded).toBe(true);
+    expect(run.itemReportRowsParsed).toBe(1);
+    expect(run.diagnostics.requestEndpointTried).toEqual(["/v3/reports/reportRequests", "/v3/reports/requests"]);
+    expect(run.diagnostics.requestEndpointUsed).toBe("/v3/reports/requests");
+    expect(run.diagnostics.statusEndpointUsed).toBe("/v3/reports/requests/REQ-FALLBACK");
+    expect(run.diagnostics.downloadEndpointUsed).toBe("/v3/reports/downloadReport?requestId=<requestId>");
     expect(fetchMock).toHaveBeenCalled();
   });
 
@@ -268,14 +326,14 @@ describe("Walmart Item Report image enrichment", () => {
     try {
       vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-        if (url.includes("/v3/reports/generate")) {
-          return new Response(JSON.stringify({ reportRequestId: "REQ-TIMEOUT" }), {
+        if (url.includes("/v3/reports/reportRequests/REQ-TIMEOUT")) {
+          return new Response(JSON.stringify({ status: "IN_PROGRESS" }), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
         }
-        if (url.includes("/v3/reports/status/REQ-TIMEOUT") || url.includes("reportRequestId=REQ-TIMEOUT")) {
-          return new Response(JSON.stringify({ reportStatus: "IN_PROGRESS" }), {
+        if (url.includes("/v3/reports/reportRequests") && !url.includes("/v3/reports/reportRequests/")) {
+          return new Response(JSON.stringify({ reportRequestId: "REQ-TIMEOUT" }), {
             status: 200,
             headers: { "content-type": "application/json" },
           });
@@ -292,6 +350,7 @@ describe("Walmart Item Report image enrichment", () => {
 
       expect(run.status).toBe("timed_out");
       expect(run.failureReason).toBe("Walmart Item Report was unavailable or timed out.");
+      expect(run.failureCategory).toBe("timeout");
     } finally {
       vi.useRealTimers();
     }
@@ -313,6 +372,34 @@ describe("Walmart Item Report image enrichment", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("returns report_failed when status endpoint reports FAILED", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/reports/reportRequests/REQ-FAILED")) {
+        return new Response(JSON.stringify({ status: "FAILED", errors: [{ description: "Denied" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/reports/reportRequests") && !url.includes("/v3/reports/reportRequests/")) {
+        return new Response(JSON.stringify({ reportRequestId: "REQ-FAILED" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+
+    const run = await runItemReportWorkflow("wm-token");
+
+    expect(run.status).toBe("failed");
+    expect(run.failureCategory).toBe("report_failed");
+    expect(run.failureReason).toBe("Walmart Item Report request failed.");
+  });
+
   it("enriches multiple products from one ITEM report run", async () => {
     const csv = [
       "SKU,PrimaryImageUrl,AdditionalImageUrls,ProductId,ProductIdType",
@@ -322,13 +409,7 @@ describe("Walmart Item Report image enrichment", () => {
 
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
-      if (url.includes("/v3/reports/generate")) {
-        return new Response(JSON.stringify({ reportRequestId: "REQ-2" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
-      }
-      if (url.includes("/v3/reports/status/REQ-2")) {
+      if (url.includes("/v3/reports/reportRequests/REQ-2")) {
         return new Response(
           JSON.stringify({ reportStatus: "PROCESSED", downloadUrl: "https://signed.example.com/report.csv" }),
           {
@@ -336,6 +417,12 @@ describe("Walmart Item Report image enrichment", () => {
             headers: { "content-type": "application/json" },
           }
         );
+      }
+      if (url.includes("/v3/reports/reportRequests") && !url.includes("/v3/reports/reportRequests/")) {
+        return new Response(JSON.stringify({ reportRequestId: "REQ-2" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
       }
       if (url.includes("signed.example.com/report.csv")) {
         return new Response(csv, {
