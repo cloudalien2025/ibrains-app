@@ -78,6 +78,11 @@ describe("walmart products import route", () => {
         inventoryKnownCount: 1,
         inventoryUnknownCount: 1,
         inventoryOutOfStockCount: 0,
+        imageFoundCount: 1,
+        imageNotFoundCount: 1,
+        imageAmbiguousCount: 0,
+        imageFailedCount: 0,
+        imageSource: "Walmart Item Search",
       },
     });
 
@@ -89,6 +94,7 @@ describe("walmart products import route", () => {
     expect(payload.importedCount).toBe(2);
     expect(payload.message).toContain("Imported 2 Walmart product");
     expect(payload.message).toContain("Inventory pending for 1 SKU");
+    expect(payload.message).toContain("Image enrichment (Walmart Item Search): found=1, notFound=1, ambiguous=0, failed=0");
   });
 
   it("returns zero-import diagnostics when no products are imported", async () => {

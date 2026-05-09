@@ -5,6 +5,7 @@ import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
+import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import {
   getLastImportAt,
@@ -24,6 +25,8 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-product-repository";
 import type {
   WalmartDashboardSnapshot,
+  WalmartImageMatchMethod,
+  WalmartImageSyncStatus,
   WalmartImportResult,
   WalmartInventoryStatus,
   WalmartProductRecord,
@@ -31,6 +34,7 @@ import type {
 
 const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
+const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
 
 export function listWalmartProducts(): WalmartProductRecord[] {
   return listProducts();
@@ -128,6 +132,58 @@ function normalizeSkuKey(sku: string): string {
 
 function extractSku(item: Record<string, unknown>): string {
   return firstNonEmptyString(item.sku, item.SKU, item.sellerSku, item.sellerPartNumber);
+}
+
+const IMAGE_ISSUES = new Set([
+  "Image not provided by Walmart catalog",
+  "Image enrichment source not configured",
+  "Image not provided by Walmart Item Search",
+  "Image match ambiguous",
+  "Image sync failed",
+  "Image enrichment not synced",
+]);
+
+function stripImageIssues(issues: string[]): string[] {
+  return issues.filter((issue) => !IMAGE_ISSUES.has(issue));
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
+
+function imageIssueBySyncStatus(status: WalmartImageSyncStatus): string | null {
+  if (status === "not_found") return "Image not provided by Walmart Item Search";
+  if (status === "ambiguous") return "Image match ambiguous";
+  if (status === "failed") return "Image sync failed";
+  if (status === "not_synced") return "Image enrichment not synced";
+  return null;
+}
+
+function imageStatusMessageBySyncStatus(status: WalmartImageSyncStatus): WalmartProductRecord["imageStatusMessage"] {
+  if (status === "found") return "Image available";
+  if (status === "not_found") return "Image not provided by Walmart Item Search";
+  if (status === "ambiguous") return "Image match ambiguous";
+  if (status === "failed") return "Image sync failed";
+  return "Image enrichment not synced";
+}
+
+function extractCatalogIdentifiers(item: Record<string, unknown>): {
+  upc: string;
+  gtin: string;
+  wpid: string;
+  itemId: string;
+  publishedStatus: string;
+} {
+  const identifiers =
+    asObject(item.identifiers) ?? asObject(item.productIdentifiers) ?? asObject(item.productIds) ?? asObject(item.ids);
+
+  return {
+    upc: firstNonEmptyString(item.upc, item.UPC, identifiers?.upc, identifiers?.UPC),
+    gtin: firstNonEmptyString(item.gtin, item.GTIN, identifiers?.gtin, identifiers?.GTIN),
+    wpid: firstNonEmptyString(item.wpid, item.wpID, item.WPID, identifiers?.wpid, identifiers?.wpID),
+    itemId: firstNonEmptyString(item.itemId, item.usItemId, item.id, identifiers?.itemId, identifiers?.usItemId),
+    publishedStatus: firstNonEmptyString(item.publishedStatus, item.published, item.lifecycleStatus),
+  };
 }
 
 function optionalHeader(value: string | undefined): string | undefined {
@@ -512,6 +568,7 @@ function normalizeImportedItem(
 ): WalmartProductRecord | null {
   const sku = extractSku(item);
   if (!sku) return null;
+  const identifiers = extractCatalogIdentifiers(item);
 
   const title = firstNonEmptyString(
     item.productName,
@@ -556,13 +613,24 @@ function normalizeImportedItem(
     sku,
     title: title || `Walmart item ${sku}`,
     brand: brand || "Unknown",
+    upc: identifiers.upc,
+    gtin: identifiers.gtin,
+    wpid: identifiers.wpid,
+    itemId: identifiers.itemId,
+    publishedStatus: identifiers.publishedStatus,
     price,
     inventoryQuantity: inventorySnapshot.quantity,
     inventoryStatus: inventorySnapshot.status,
     imageUrl: imageResolution.imageUrl,
+    galleryImageUrls: imageResolution.imageUrl ? [imageResolution.imageUrl] : [],
+    variantImageUrls: [],
     imageStatus: imageResolution.imageStatus,
     imageStatusMessage: imageResolution.imageStatusMessage,
     imageSource: imageResolution.imageSource,
+    imageSyncStatus: imageResolution.imageUrl ? "found" : "not_synced",
+    imageMatchMethod: imageResolution.imageUrl ? "catalog" : undefined,
+    matchedItemId: identifiers.itemId,
+    lastImageSyncedAt: null,
     attributes: toAttributeMap(item.attributes),
     description: longDescription,
     shortDescription,
@@ -581,11 +649,21 @@ function normalizeImportedItem(
   return {
     ...normalized,
     externalItemId: externalItemId || normalized.externalItemId,
+    upc: identifiers.upc || normalized.upc,
+    gtin: identifiers.gtin || normalized.gtin,
+    wpid: identifiers.wpid || normalized.wpid,
+    itemId: identifiers.itemId || normalized.itemId,
+    publishedStatus: identifiers.publishedStatus || normalized.publishedStatus,
     category: category || normalized.category,
     rawPayload: item,
     normalizedPayload: {
       sku: normalized.sku,
       externalItemId: externalItemId || normalized.externalItemId,
+      upc: identifiers.upc || normalized.upc,
+      gtin: identifiers.gtin || normalized.gtin,
+      wpid: identifiers.wpid || normalized.wpid,
+      itemId: identifiers.itemId || normalized.itemId,
+      publishedStatus: identifiers.publishedStatus || normalized.publishedStatus,
       title: normalized.title,
       brand: normalized.brand,
       category: category || normalized.category,
@@ -594,9 +672,15 @@ function normalizeImportedItem(
       inventoryStatus: normalized.inventoryStatus,
       inventorySource: inventorySnapshot.source,
       imageUrl: normalized.imageUrl,
+      galleryImageUrls: normalized.galleryImageUrls ?? [],
+      variantImageUrls: normalized.variantImageUrls ?? [],
       imageStatus: normalized.imageStatus,
+      imageSyncStatus: normalized.imageSyncStatus,
       imageStatusMessage: normalized.imageStatusMessage,
       imageSource: normalized.imageSource,
+      imageMatchMethod: normalized.imageMatchMethod,
+      matchedItemId: normalized.matchedItemId,
+      lastImageSyncedAt: normalized.lastImageSyncedAt,
       imageProvider: imageResolution.enrichmentProvider,
       attributes: normalized.attributes,
       shortDescription: normalized.shortDescription,
@@ -659,6 +743,208 @@ async function fetchCatalogPage(accessToken: string, nextCursor?: string | null)
   };
 }
 
+interface ImageEnrichmentStats {
+  found: number;
+  notFound: number;
+  ambiguous: number;
+  failed: number;
+}
+
+function withImageEnrichment(
+  product: WalmartProductRecord,
+  enrichment: {
+    imageSyncStatus: WalmartImageSyncStatus;
+    primaryImageUrl: string;
+    galleryImageUrls: string[];
+    variantImageUrls: string[];
+    matchedItemId: string | null;
+    matchMethod: WalmartImageMatchMethod | null;
+    lastImageSyncedAt: string;
+    diagnostics: Array<{ method: WalmartImageMatchMethod; httpStatus: number | null; resultCount: number; ok: boolean }>;
+  }
+): WalmartProductRecord {
+  const hasExistingImage = Boolean(product.imageUrl.trim());
+  const imageIssue = imageIssueBySyncStatus(enrichment.imageSyncStatus);
+  const baseIssues = stripImageIssues(product.issues);
+
+  if (enrichment.imageSyncStatus === "found" && enrichment.primaryImageUrl) {
+    const primaryImageUrl = hasExistingImage ? product.imageUrl : enrichment.primaryImageUrl;
+    const galleryImageUrls = unique([
+      primaryImageUrl,
+      ...(product.galleryImageUrls ?? []),
+      ...enrichment.galleryImageUrls,
+    ]);
+    const variantImageUrls = unique([...(product.variantImageUrls ?? []), ...enrichment.variantImageUrls]);
+
+    return {
+      ...product,
+      imageUrl: primaryImageUrl,
+      galleryImageUrls,
+      variantImageUrls,
+      imageStatus: "image_available",
+      imageStatusMessage: "Image available",
+      imageSource: "walmart_item_search",
+      imageSyncStatus: "found",
+      imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod,
+      matchedItemId: enrichment.matchedItemId ?? product.matchedItemId,
+      lastImageSyncedAt: enrichment.lastImageSyncedAt,
+      issues: baseIssues,
+      normalizedPayload: {
+        ...(asObject(product.normalizedPayload) ?? {}),
+        imageUrl: primaryImageUrl,
+        galleryImageUrls,
+        variantImageUrls,
+        imageStatus: "image_available",
+        imageStatusMessage: "Image available",
+        imageSource: "walmart_item_search",
+        imageSyncStatus: "found",
+        imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod ?? null,
+        matchedItemId: enrichment.matchedItemId ?? product.matchedItemId ?? null,
+        lastImageSyncedAt: enrichment.lastImageSyncedAt,
+        imageSyncDiagnostics: enrichment.diagnostics,
+      },
+    };
+  }
+
+  // Never replace an existing valid image with empty/not_found data.
+  if (hasExistingImage) {
+    return {
+      ...product,
+      imageStatus: "image_available",
+      imageStatusMessage: "Image available",
+      imageSyncStatus: enrichment.imageSyncStatus,
+      imageSource: product.imageSource ?? "walmart_catalog",
+      imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod,
+      matchedItemId: enrichment.matchedItemId ?? product.matchedItemId,
+      lastImageSyncedAt: enrichment.lastImageSyncedAt,
+      issues: baseIssues,
+      normalizedPayload: {
+        ...(asObject(product.normalizedPayload) ?? {}),
+        imageSyncStatus: enrichment.imageSyncStatus,
+        imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod ?? null,
+        matchedItemId: enrichment.matchedItemId ?? product.matchedItemId ?? null,
+        lastImageSyncedAt: enrichment.lastImageSyncedAt,
+        imageSyncDiagnostics: enrichment.diagnostics,
+      },
+    };
+  }
+
+  const imageIssues = imageIssue ? [imageIssue] : [];
+  const imageStatus =
+    enrichment.imageSyncStatus === "not_synced" ? "enrichment_unconfigured" : "catalog_missing";
+  const imageStatusMessage = imageStatusMessageBySyncStatus(enrichment.imageSyncStatus);
+  const nextIssues = unique([...baseIssues, ...imageIssues]);
+
+  return {
+    ...product,
+    imageUrl: "",
+    galleryImageUrls: [],
+    variantImageUrls: [],
+    imageStatus,
+    imageStatusMessage,
+    imageSource: "walmart_item_search",
+    imageSyncStatus: enrichment.imageSyncStatus,
+    imageMatchMethod: enrichment.matchMethod ?? undefined,
+    matchedItemId: enrichment.matchedItemId ?? undefined,
+    lastImageSyncedAt: enrichment.lastImageSyncedAt,
+    issues: nextIssues,
+    normalizedPayload: {
+      ...(asObject(product.normalizedPayload) ?? {}),
+      imageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      imageStatus,
+      imageStatusMessage,
+      imageSource: "walmart_item_search",
+      imageSyncStatus: enrichment.imageSyncStatus,
+      imageMatchMethod: enrichment.matchMethod ?? null,
+      matchedItemId: enrichment.matchedItemId ?? null,
+      lastImageSyncedAt: enrichment.lastImageSyncedAt,
+      imageSyncDiagnostics: enrichment.diagnostics,
+    },
+  };
+}
+
+async function enrichProductImages(
+  accessToken: string,
+  products: WalmartProductRecord[]
+): Promise<{ products: WalmartProductRecord[]; stats: ImageEnrichmentStats }> {
+  const enriched = [...products];
+  const stats: ImageEnrichmentStats = {
+    found: 0,
+    notFound: 0,
+    ambiguous: 0,
+    failed: 0,
+  };
+
+  for (let index = 0; index < enriched.length; index += WALMART_IMAGE_ENRICHMENT_CONCURRENCY) {
+    const batch = enriched.slice(index, index + WALMART_IMAGE_ENRICHMENT_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (product) => {
+        if (product.imageUrl.trim()) {
+          return { product, enrichment: null } as const;
+        }
+
+        try {
+          const enrichment = await enrichWalmartImageFromItemSearch({
+            accessToken,
+            product: {
+              gtin: product.gtin,
+              upc: product.upc,
+              itemId: product.itemId,
+              wpid: product.wpid,
+              title: product.title,
+              brand: product.brand,
+            },
+          });
+          return { product, enrichment } as const;
+        } catch {
+          return {
+            product,
+            enrichment: {
+              imageSyncStatus: "failed" as const,
+              imageSource: "walmart_item_search" as const,
+              primaryImageUrl: "",
+              galleryImageUrls: [],
+              variantImageUrls: [],
+              matchedItemId: null,
+              matchMethod: null,
+              lastImageSyncedAt: new Date().toISOString(),
+              diagnostics: { attempts: [] },
+            },
+          } as const;
+        }
+      })
+    );
+
+    for (const { product, enrichment } of results) {
+      if (!enrichment) continue;
+
+      const key = product.sku.toUpperCase();
+      const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === key);
+      if (targetIndex < 0) continue;
+
+      enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
+        imageSyncStatus: enrichment.imageSyncStatus,
+        primaryImageUrl: enrichment.primaryImageUrl,
+        galleryImageUrls: [...enrichment.galleryImageUrls],
+        variantImageUrls: [...enrichment.variantImageUrls],
+        matchedItemId: enrichment.matchedItemId,
+        matchMethod: enrichment.matchMethod,
+        lastImageSyncedAt: enrichment.lastImageSyncedAt,
+        diagnostics: [...enrichment.diagnostics.attempts],
+      });
+
+      if (enrichment.imageSyncStatus === "found") stats.found += 1;
+      else if (enrichment.imageSyncStatus === "not_found") stats.notFound += 1;
+      else if (enrichment.imageSyncStatus === "ambiguous") stats.ambiguous += 1;
+      else if (enrichment.imageSyncStatus === "failed") stats.failed += 1;
+    }
+  }
+
+  return { products: enriched, stats };
+}
+
 export async function importWalmartProducts(userId: string): Promise<WalmartImportResult> {
   const token = await requestWalmartTokenForUser(userId, { forceRefresh: true });
   if (!token.ok || !token.accessToken) {
@@ -699,7 +985,8 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     bySku.set(normalized.sku.toUpperCase(), normalized);
   }
 
-  const products = Array.from(bySku.values());
+  const baseProducts = Array.from(bySku.values());
+  const { products, stats: imageStats } = await enrichProductImages(token.accessToken, baseProducts);
   const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
   const inventoryOutOfStockCount = products.filter((product) => product.inventoryStatus === "out_of_stock").length;
   const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
@@ -732,6 +1019,11 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       inventoryKnownCount,
       inventoryUnknownCount,
       inventoryOutOfStockCount,
+      imageFoundCount: imageStats.found,
+      imageNotFoundCount: imageStats.notFound,
+      imageAmbiguousCount: imageStats.ambiguous,
+      imageFailedCount: imageStats.failed,
+      imageSource: "Walmart Item Search",
     },
   };
 }

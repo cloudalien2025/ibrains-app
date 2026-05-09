@@ -39,9 +39,13 @@ function formatInventory(product: WalmartProductRecord): string {
 }
 
 function formatImageStatus(product: WalmartProductRecord): string {
+  if (product.imageSyncStatus === "not_found") return "Image not provided by Walmart Item Search";
+  if (product.imageSyncStatus === "ambiguous") return "Image match ambiguous";
+  if (product.imageSyncStatus === "failed") return "Image sync failed";
+  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced";
   if (product.imageStatusMessage) return product.imageStatusMessage;
   if (product.imageUrl) return "Image available";
-  return "Image enrichment source not configured";
+  return "Image enrichment not synced";
 }
 
 function changedProposalFields(product: WalmartProductRecord, proposal: WalmartOptimizationProposalRecord): string[] {
@@ -312,6 +316,32 @@ export default function ProductEditorClient({
           <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
             <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Quality Factors</p>
             <p className="mt-1 text-sm text-[#334155]">{listingQuality.factors.join(", ") || "No quality blockers detected."}</p>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3 xl:col-span-2">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Image Sync Status</p>
+            <div className="mt-2 flex flex-wrap items-center gap-3">
+              {product.imageUrl ? (
+                <img
+                  src={product.imageUrl}
+                  alt={`${product.sku} primary image`}
+                  className="h-14 w-14 rounded border border-[#D9E4F0] bg-[#F8FBFF] object-cover"
+                  loading="lazy"
+                />
+              ) : (
+                <span className="inline-flex h-14 w-14 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">
+                  N/A
+                </span>
+              )}
+              <div className="space-y-1 text-xs text-[#475569]">
+                <p>Status: {formatImageStatus(product)}</p>
+                <p>Sync: {product.imageSyncStatus ?? "not_synced"}</p>
+                <p>Source: {product.imageSource ?? "none"}</p>
+                <p>Match method: {product.imageMatchMethod ?? "N/A"}</p>
+                <p>Matched itemId: {product.matchedItemId ?? "N/A"}</p>
+                <p>Gallery images: {product.galleryImageUrls?.length ?? 0}</p>
+                <p>Variant images: {product.variantImageUrls?.length ?? 0}</p>
+              </div>
+            </div>
           </article>
         </div>
       </section>

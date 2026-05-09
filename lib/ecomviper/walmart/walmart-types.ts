@@ -90,8 +90,11 @@ export interface WalmartOpenAiConnectionStatus {
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
 export type WalmartImageStatus = "image_available" | "catalog_missing" | "enrichment_unconfigured";
+export type WalmartImageSyncStatus = "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
+export type WalmartImageMatchMethod = "gtin" | "upc" | "itemId" | "wpid" | "query" | "catalog";
 export type WalmartImageSource =
   | "walmart_catalog"
+  | "walmart_item_search"
   | "shopify_placeholder"
   | "manual_placeholder"
   | "none";
@@ -101,6 +104,11 @@ export interface WalmartProductRecord {
   marketplace: "walmart";
   sku: string;
   externalItemId: string;
+  upc?: string;
+  gtin?: string;
+  wpid?: string;
+  itemId?: string;
+  publishedStatus?: string;
   title: string;
   brand: string;
   category: string;
@@ -109,9 +117,15 @@ export interface WalmartProductRecord {
   inventoryStatus: WalmartInventoryStatus;
   status: WalmartProductStatus;
   imageUrl: string;
+  galleryImageUrls?: string[];
+  variantImageUrls?: string[];
   imageStatus?: WalmartImageStatus;
   imageStatusMessage?: string;
   imageSource?: WalmartImageSource;
+  imageSyncStatus?: WalmartImageSyncStatus;
+  imageMatchMethod?: WalmartImageMatchMethod;
+  matchedItemId?: string;
+  lastImageSyncedAt?: string | null;
   issues: string[];
   attributes: Record<string, string>;
   shortDescription: string;
@@ -197,6 +211,11 @@ export interface WalmartImportResult {
     inventoryKnownCount?: number;
     inventoryUnknownCount?: number;
     inventoryOutOfStockCount?: number;
+    imageFoundCount?: number;
+    imageNotFoundCount?: number;
+    imageAmbiguousCount?: number;
+    imageFailedCount?: number;
+    imageSource?: "Walmart Item Search";
   };
 }
 
@@ -246,7 +265,14 @@ export interface WalmartListingRecommendation {
 
 export interface WalmartListingQualityAssessment {
   score: number;
-  imageStatus: "Image available" | "Image not provided by Walmart catalog" | "Image enrichment source not configured";
+  imageStatus:
+    | "Image available"
+    | "Image not provided by Walmart catalog"
+    | "Image enrichment source not configured"
+    | "Image not provided by Walmart Item Search"
+    | "Image match ambiguous"
+    | "Image sync failed"
+    | "Image enrichment not synced";
   factors: string[];
   recommendations: WalmartListingRecommendation[];
 }

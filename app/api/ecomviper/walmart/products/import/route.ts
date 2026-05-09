@@ -22,16 +22,24 @@ export async function POST(req: NextRequest) {
     const fetchedCount = result.importDiagnostics?.fetchedCount ?? result.fetchedCount ?? 0;
     const payloadShape = result.importDiagnostics?.payloadShape ?? "unknown";
     const inventoryUnknownCount = result.importDiagnostics?.inventoryUnknownCount ?? 0;
+    const imageFoundCount = result.importDiagnostics?.imageFoundCount ?? 0;
+    const imageNotFoundCount = result.importDiagnostics?.imageNotFoundCount ?? 0;
+    const imageAmbiguousCount = result.importDiagnostics?.imageAmbiguousCount ?? 0;
+    const imageFailedCount = result.importDiagnostics?.imageFailedCount ?? 0;
     const inventoryNote =
       inventoryUnknownCount > 0
         ? ` Inventory pending for ${inventoryUnknownCount} SKU(s); quantity requires Walmart inventory sync.`
+        : "";
+    const imageNote =
+      result.importedCount > 0
+        ? ` Image enrichment (Walmart Item Search): found=${imageFoundCount}, notFound=${imageNotFoundCount}, ambiguous=${imageAmbiguousCount}, failed=${imageFailedCount}.`
         : "";
     return ok({
       ok: true,
       ...result,
       message:
         result.importedCount > 0
-          ? `Imported ${result.importedCount} Walmart product(s).${inventoryNote}`
+          ? `Imported ${result.importedCount} Walmart product(s).${inventoryNote}${imageNote}`
           : `Walmart import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}.`,
     });
   } catch (error) {

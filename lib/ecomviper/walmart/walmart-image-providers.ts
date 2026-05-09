@@ -3,7 +3,14 @@ import type { WalmartImageSource, WalmartImageStatus } from "@/lib/ecomviper/wal
 export interface WalmartImageResolutionResult {
   imageUrl: string;
   imageStatus: WalmartImageStatus;
-  imageStatusMessage: "Image available" | "Image not provided by Walmart catalog" | "Image enrichment source not configured";
+  imageStatusMessage:
+    | "Image available"
+    | "Image not provided by Walmart catalog"
+    | "Image enrichment source not configured"
+    | "Image not provided by Walmart Item Search"
+    | "Image match ambiguous"
+    | "Image sync failed"
+    | "Image enrichment not synced";
   imageSource: WalmartImageSource;
   enrichmentProvider: "walmartCatalogImageProvider" | "futureShopifyImageProvider" | "manualImageProvider" | "none";
 }

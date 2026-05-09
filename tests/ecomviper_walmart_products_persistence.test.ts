@@ -128,6 +128,13 @@ describe("walmart products persistence", () => {
           );
         }
 
+        if (url.includes("/v3/items/walmart/search")) {
+          return new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
         if (url.includes("/v3/inventory")) {
           return new Response(JSON.stringify({ quantity: { amount: 11 } }), {
             status: 200,
@@ -195,6 +202,43 @@ describe("walmart products persistence", () => {
     expect(aProducts.map((product) => product.sku)).toEqual(["SCOPE-A-1"]);
     expect(bProducts.map((product) => product.sku)).toEqual(["SCOPE-B-1"]);
     expect(aSkuFromB).toBeNull();
+  });
+
+  it("persists Item Search image fields across repository reload", async () => {
+    const product = buildProduct("IMG-PERSIST-1");
+    product.imageUrl = "https://images.example.com/img-persist-1.jpg";
+    product.imageStatus = "image_available";
+    product.imageStatusMessage = "Image available";
+    product.imageSource = "walmart_item_search";
+    product.imageSyncStatus = "found";
+    product.imageMatchMethod = "gtin";
+    product.matchedItemId = "WM-IMG-1";
+    product.galleryImageUrls = [
+      "https://images.example.com/img-persist-1.jpg",
+      "https://images.example.com/img-persist-1-gallery.jpg",
+    ];
+    product.variantImageUrls = ["https://images.example.com/img-persist-1-variant.jpg"];
+    product.lastImageSyncedAt = "2026-05-09T12:00:00.000Z";
+    product.issues = [];
+
+    await replaceWalmartProductsForUser({
+      userId: "user_image_persist",
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const reloaded = await getWalmartProductBySkuForUser("user_image_persist", "IMG-PERSIST-1");
+    expect(reloaded?.imageUrl).toBe("https://images.example.com/img-persist-1.jpg");
+    expect(reloaded?.imageSyncStatus).toBe("found");
+    expect(reloaded?.imageMatchMethod).toBe("gtin");
+    expect(reloaded?.matchedItemId).toBe("WM-IMG-1");
+    expect(reloaded?.galleryImageUrls).toEqual([
+      "https://images.example.com/img-persist-1.jpg",
+      "https://images.example.com/img-persist-1-gallery.jpg",
+    ]);
+    expect(reloaded?.variantImageUrls).toEqual(["https://images.example.com/img-persist-1-variant.jpg"]);
   });
 
   it("test seed route stays disabled in normal mode and cannot shadow production products", async () => {

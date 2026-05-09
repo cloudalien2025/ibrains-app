@@ -17,7 +17,7 @@ const filters = [
   { id: "needs_attention", label: "Needs attention" },
   { id: "out_of_stock", label: "Out of stock" },
   { id: "low_stock", label: "Low stock" },
-  { id: "missing_image", label: "Catalog image missing" },
+  { id: "missing_image", label: "Image missing" },
   { id: "missing_attributes", label: "Missing attributes" },
   { id: "price_missing", label: "Price missing" },
   { id: "sync_failed", label: "Sync failed" },
@@ -31,9 +31,13 @@ function formatInventory(product: WalmartProductRecord): string {
 }
 
 function formatImageStatus(product: WalmartProductRecord): string {
+  if (product.imageSyncStatus === "not_found") return "Image not provided by Walmart Item Search";
+  if (product.imageSyncStatus === "ambiguous") return "Image match ambiguous";
+  if (product.imageSyncStatus === "failed") return "Image sync failed";
+  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced";
   if (product.imageStatusMessage) return product.imageStatusMessage;
   if (product.imageUrl) return "Image available";
-  return "Image enrichment source not configured";
+  return "Image enrichment not synced";
 }
 
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
@@ -61,6 +65,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           payloadShape?: string;
           fetchedCount?: number;
           inventoryUnknownCount?: number;
+          imageFoundCount?: number;
+          imageNotFoundCount?: number;
+          imageAmbiguousCount?: number;
+          imageFailedCount?: number;
         };
         error?: { message?: string };
       };
@@ -75,9 +83,13 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         const fetchedCount = payload.importDiagnostics?.fetchedCount ?? payload.fetchedCount ?? 0;
         const payloadShape = payload.importDiagnostics?.payloadShape ?? "unknown";
         const inventoryUnknownCount = payload.importDiagnostics?.inventoryUnknownCount ?? 0;
+        const imageFoundCount = payload.importDiagnostics?.imageFoundCount ?? 0;
+        const imageNotFoundCount = payload.importDiagnostics?.imageNotFoundCount ?? 0;
+        const imageAmbiguousCount = payload.importDiagnostics?.imageAmbiguousCount ?? 0;
+        const imageFailedCount = payload.importDiagnostics?.imageFailedCount ?? 0;
         setMessage(
           payload.message ??
-            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}.`
+            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}, imageFound=${imageFoundCount}, imageNotFound=${imageNotFoundCount}, imageAmbiguous=${imageAmbiguousCount}, imageFailed=${imageFailedCount}.`
         );
       } else {
         setMessage(payload.message ?? "Import completed.");
@@ -152,9 +164,12 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                   <td className="py-2 pr-2">
                     {product.imageUrl ? (
                       <div className="space-y-1">
-                        <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-[#D9E4F0] bg-[#F8FBFF] text-xs text-[#334155]">
-                          IMG
-                        </span>
+                        <img
+                          src={product.imageUrl}
+                          alt={`${product.sku} image`}
+                          className="h-10 w-10 rounded border border-[#D9E4F0] bg-[#F8FBFF] object-cover"
+                          loading="lazy"
+                        />
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
                       </div>
                     ) : (
