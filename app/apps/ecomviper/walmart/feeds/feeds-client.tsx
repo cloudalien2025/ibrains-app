@@ -14,28 +14,6 @@ export default function WalmartFeedsClient({ initialFeeds }: FeedsClientProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [previewPayload, setPreviewPayload] = useState<string | null>(null);
 
-  async function submitFeed() {
-    const response = await fetch("/api/ecomviper/walmart/feeds/submit", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        payload: {
-          feedType: "MP_MAINTENANCE",
-          note: "Manual maintenance feed request from EcomViper.",
-        },
-      }),
-    });
-
-    if (!response.ok) {
-      setMessage("Feed submit failed.");
-      return;
-    }
-
-    const payload = (await response.json()) as { submission: WalmartFeedSubmission; message: string };
-    setFeeds((current) => [payload.submission, ...current]);
-    setMessage(payload.message);
-  }
-
   async function checkStatus(feedId: string) {
     const response = await fetch(`/api/ecomviper/walmart/feeds/status?feedId=${encodeURIComponent(feedId)}`);
     if (!response.ok) {
@@ -54,12 +32,20 @@ export default function WalmartFeedsClient({ initialFeeds }: FeedsClientProps) {
         title="Feeds"
         subtitle="Submit maintenance feeds, track status, and review payload/error history safely."
         actions={
-          <button type="button" onClick={submitFeed} className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white">
-            Submit maintenance feed
+          <button
+            type="button"
+            disabled
+            className="rounded-lg border border-[#94A3B8] bg-[#CBD5E1] px-3 py-2 text-sm text-[#334155] disabled:cursor-not-allowed"
+            title="Submission disabled until approval and write mode are enabled."
+          >
+            Submission disabled
           </button>
         }
       />
 
+      <p className="rounded-lg border border-[#D9E4F0] bg-white/95 px-3 py-2 text-sm text-[#334155]">
+        Preview/staged only. Not submitted to Walmart. Human approval required before feed submission.
+      </p>
       {message ? <p className="rounded-lg border border-[#D9E4F0] bg-white/95 px-3 py-2 text-sm text-[#334155]">{message}</p> : null}
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

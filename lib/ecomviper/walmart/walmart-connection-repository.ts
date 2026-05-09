@@ -19,13 +19,13 @@ interface MarketplaceConnectionRow {
   credential_storage_mode: "env" | "memory" | "encrypted-db";
   last_token_status: WalmartTokenStatus;
   last_safe_read_status: WalmartSafeReadStatus;
-  last_successful_auth_at: string | null;
-  last_successful_read_at: string | null;
+  last_successful_auth_at: string | Date | null;
+  last_successful_read_at: string | Date | null;
   last_error_code: string | null;
   last_error_message: string | null;
   notes: string | null;
-  created_at: string;
-  updated_at: string;
+  created_at: string | Date;
+  updated_at: string | Date;
 }
 
 export interface PersistedWalmartConnection {
@@ -101,7 +101,18 @@ function getFallbackStore(): Map<string, PersistedWalmartConnection> {
   return globalThis.__ecomviper_walmart_connection_fallback__;
 }
 
+function toIsoTimestamp(value: string | Date | null | undefined): string | null {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || null;
+  }
+  return null;
+}
+
 function mapRow(row: MarketplaceConnectionRow): PersistedWalmartConnection {
+  const now = new Date().toISOString();
+
   return {
     id: row.id,
     userId: row.user_id,
@@ -115,13 +126,13 @@ function mapRow(row: MarketplaceConnectionRow): PersistedWalmartConnection {
     credentialStorageMode: row.credential_storage_mode,
     lastTokenStatus: row.last_token_status,
     lastSafeReadStatus: row.last_safe_read_status,
-    lastSuccessfulAuthAt: row.last_successful_auth_at,
-    lastSuccessfulReadAt: row.last_successful_read_at,
+    lastSuccessfulAuthAt: toIsoTimestamp(row.last_successful_auth_at),
+    lastSuccessfulReadAt: toIsoTimestamp(row.last_successful_read_at),
     lastErrorCode: row.last_error_code,
     lastErrorMessage: row.last_error_message,
     notes: row.notes,
-    createdAt: row.created_at,
-    updatedAt: row.updated_at,
+    createdAt: toIsoTimestamp(row.created_at) ?? now,
+    updatedAt: toIsoTimestamp(row.updated_at) ?? now,
   };
 }
 

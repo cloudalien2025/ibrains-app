@@ -91,7 +91,9 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("30066-841");
     expect(html).toContain("Image enrichment source not configured");
     expect(html).toContain("Known (9)");
-    expect(html).toContain("AI provider not configured");
+    expect(html).toContain("AI recommendation unavailable until provider is connected");
+    expect(html).toContain("Deterministic recommendation");
+    expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
     expect(html).toContain("Stage Deterministic Recommendations");
   });
 
@@ -103,5 +105,6 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-staged-changes");
     expect(html).toContain("Improved title");
     expect(html).toContain("manual_image_required");
+    expect(html).toContain("Approve for future submit");
   });
 });
