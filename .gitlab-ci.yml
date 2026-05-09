@@ -77,7 +77,7 @@ deploy_production:
     - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   before_script:
     - apt-get update
-    - apt-get install -y openssh-client rsync curl
+    - apt-get install -y openssh-client curl
     - eval "$(ssh-agent -s)"
     - mkdir -p ~/.ssh
     - chmod 700 ~/.ssh
@@ -93,22 +93,30 @@ deploy_production:
     - test -n "${DEPLOY_HOST:-}"
     - test -n "${DEPLOY_USER:-}"
     - test -n "${DEPLOY_PATH:-}"
-    - scp -P "${DEPLOY_PORT:-22}" artifacts/build.tar.gz "${DEPLOY_USER}@${DEPLOY_HOST}:${DEPLOY_PATH}/artifacts/build.tar.gz"
     - |
       ssh -p "${DEPLOY_PORT:-22}" "${DEPLOY_USER}@${DEPLOY_HOST}" \
-        "CI_COMMIT_SHA='${CI_COMMIT_SHA}' CI_PIPELINE_ID='${CI_PIPELINE_ID}' DEPLOY_PATH='${DEPLOY_PATH}' SERVICE_NAME='${SERVICE_NAME:-ibrains-app}' bash -s" <<'EOF'
+        "CI_COMMIT_SHA='${CI_COMMIT_SHA}' CI_PIPELINE_ID='${CI_PIPELINE_ID}' CI_DEFAULT_BRANCH='${CI_DEFAULT_BRANCH}' DEPLOY_PATH='${DEPLOY_PATH}' SERVICE_NAME='${SERVICE_NAME:-ibrains-app}' bash -s" <<'EOF'
       set -euo pipefail
 
-      ARTIFACT_PATH="${DEPLOY_PATH}/artifacts/build.tar.gz"
-      STAGING_ROOT="${DEPLOY_PATH}/.deploy_staging"
-      RELEASE_DIR="${STAGING_ROOT}/release-${CI_PIPELINE_ID}-$(date +%s)"
+      GUARD_SCRIPT="${DEPLOY_PATH}/scripts/guard-canonical-worktree.sh"
+      if [ ! -x "${GUARD_SCRIPT}" ]; then
+        echo "missing canonical worktree guard script: ${GUARD_SCRIPT}"
+        exit 1
+      fi
+      bash "${GUARD_SCRIPT}" "${DEPLOY_PATH}"
 
-      mkdir -p "${RELEASE_DIR}"
-      tar -xzf "${ARTIFACT_PATH}" -C "${RELEASE_DIR}"
-      rm -f "${ARTIFACT_PATH}"
+      cd "${DEPLOY_PATH}"
 
-      cd "${RELEASE_DIR}"
-      npm ci --omit=dev
+      export GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -i /root/.ssh/gitlab_ibrains_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new}"
+      git fetch --prune origin
+      git checkout "${CI_DEFAULT_BRANCH}"
+      git pull --ff-only origin "${CI_DEFAULT_BRANCH}"
+
+      current_sha="$(git rev-parse HEAD)"
+      if [ "${current_sha}" != "${CI_COMMIT_SHA}" ]; then
+        echo "deployed checkout mismatch: expected ${CI_COMMIT_SHA}, got ${current_sha}"
+        exit 1
+      fi
 
       systemctl_cmd=(systemctl)
       if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
@@ -125,7 +133,24 @@ deploy_production:
         set +a
       fi
 
-      bash "${RELEASE_DIR}/scripts/apply_directoryiq_schema.sh"
+      npm ci
+      mkdir -p app/_meta
+      BUILD_TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+      SHORT_SHA="${CI_COMMIT_SHA:0:7}"
+      cat > app/_meta/release.json <<EOF2
+      {
+        "service": "ibrains",
+        "environment": "production",
+        "git_sha": "${CI_COMMIT_SHA}",
+        "git_sha_short": "${SHORT_SHA}",
+        "build_timestamp": "${BUILD_TIMESTAMP}",
+        "build_id": "${CI_PIPELINE_ID}",
+        "source": "gitlab_ci"
+      }
+      EOF2
+      npm run build
+
+      bash "${DEPLOY_PATH}/scripts/apply_directoryiq_schema.sh"
 
       service_started=0
       cleanup_on_error() {
@@ -136,24 +161,6 @@ deploy_production:
       trap cleanup_on_error EXIT
 
       "${systemctl_cmd[@]}" stop "$SERVICE_NAME"
-
-      if command -v rsync >/dev/null 2>&1; then
-        rsync -a --delete \
-          --exclude artifacts \
-          --exclude .deploy_staging \
-          --exclude .env \
-          --exclude .env.production.local \
-          "${RELEASE_DIR}/" "${DEPLOY_PATH}/"
-      else
-        find "${DEPLOY_PATH}" -mindepth 1 -maxdepth 1 \
-          ! -name artifacts \
-          ! -name .deploy_staging \
-          ! -name .env \
-          ! -name .env.production.local \
-          -exec rm -rf {} +
-        cp -a "${RELEASE_DIR}/." "${DEPLOY_PATH}/"
-      fi
-
       "${systemctl_cmd[@]}" start "$SERVICE_NAME"
       service_started=1
       trap - EXIT
@@ -194,7 +201,7 @@ deploy_production:
 
       cd "${DEPLOY_PATH}"
       SMOKE_SCRIPT="${DEPLOY_PATH}/scripts/prod_smoke.sh"
-      rm -rf "${STAGING_ROOT}"
+      bash "${GUARD_SCRIPT}" "${DEPLOY_PATH}"
       smoke_fail() {
         echo "smoke verification failed"
         "${systemctl_cmd[@]}" status "$SERVICE_NAME" --no-pager -l || true

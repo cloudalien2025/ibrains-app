@@ -153,6 +153,13 @@ describe("gitlab deploy pipeline contract", () => {
     expect(fs.existsSync(githubDeployPath)).toBe(false);
     expect(pipelineSource.includes("scripts/prod_smoke.sh")).toBe(true);
     expect(pipelineSource.includes("artifacts/build.tar.gz")).toBe(true);
+    expect(pipelineSource.includes("scripts/guard-canonical-worktree.sh")).toBe(true);
+    expect(pipelineSource.includes("canonical worktree guard script")).toBe(true);
+    expect(pipelineSource.includes("git fetch --prune origin")).toBe(true);
+    expect(pipelineSource.includes("git pull --ff-only origin \"${CI_DEFAULT_BRANCH}\"")).toBe(true);
+    expect(pipelineSource.includes("deployed checkout mismatch")).toBe(true);
+    expect(pipelineSource.includes("npm run build")).toBe(true);
+    expect(pipelineSource.includes("rsync -a --delete")).toBe(false);
     expect(pipelineSource.includes("EXPECT_RELEASE_FILE=1")).toBe(true);
     expect(pipelineSource.includes("PUBLIC_SMOKE_PATHS=\"/ /sign-in\"")).toBe(true);
     expect(pipelineSource.includes("PROTECTED_REDIRECT_PATHS=\"/apps /apps/ecomviper/walmart/connect\"")).toBe(true);
