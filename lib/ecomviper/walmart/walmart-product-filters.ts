@@ -24,8 +24,15 @@ export function filterWalmartProducts(
 
     if (filter === "all") return true;
     if (filter === "needs_attention") return product.issues.length > 0 || product.status !== "active";
-    if (filter === "out_of_stock") return product.inventoryQuantity === 0;
-    if (filter === "low_stock") return product.inventoryQuantity > 0 && product.inventoryQuantity <= 15;
+    if (filter === "out_of_stock") {
+      return (
+        product.inventoryStatus === "out_of_stock" ||
+        (product.inventoryStatus === "known" && product.inventoryQuantity === 0)
+      );
+    }
+    if (filter === "low_stock") {
+      return product.inventoryStatus === "known" && product.inventoryQuantity > 0 && product.inventoryQuantity <= 15;
+    }
     if (filter === "missing_image") return !product.imageUrl;
     if (filter === "missing_attributes") return Object.keys(product.attributes).length === 0;
     if (filter === "price_missing") return product.price <= 0;

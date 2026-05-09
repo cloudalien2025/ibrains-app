@@ -56,8 +56,14 @@ export function getInventoryView() {
   const products = listProducts();
 
   return {
-    lowStock: products.filter((product) => product.inventoryQuantity > 0 && product.inventoryQuantity <= 15),
-    outOfStock: products.filter((product) => product.inventoryQuantity === 0),
+    lowStock: products.filter(
+      (product) => product.inventoryStatus === "known" && product.inventoryQuantity > 0 && product.inventoryQuantity <= 15
+    ),
+    outOfStock: products.filter(
+      (product) =>
+        product.inventoryStatus === "out_of_stock" ||
+        (product.inventoryStatus === "known" && product.inventoryQuantity === 0)
+    ),
     recentChanges: getRecentInventoryChanges(),
   };
 }

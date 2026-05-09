@@ -14,7 +14,12 @@ import {
   listProducts,
   replaceProducts,
 } from "@/lib/ecomviper/walmart/walmart-store";
-import type { WalmartDashboardSnapshot, WalmartImportResult, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type {
+  WalmartDashboardSnapshot,
+  WalmartImportResult,
+  WalmartInventoryStatus,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
@@ -68,6 +73,28 @@ function firstNumber(...values: unknown[]): number | null {
     if (candidate !== null) return candidate;
   }
   return null;
+}
+
+function asHttpUrl(value: unknown): string {
+  const candidate = asString(value);
+  if (!candidate) return "";
+  return /^https?:\/\//i.test(candidate) ? candidate : "";
+}
+
+function firstHttpUrl(...values: unknown[]): string {
+  for (const value of values) {
+    const candidate = asHttpUrl(value);
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function normalizeSkuKey(sku: string): string {
+  return sku.trim().toUpperCase();
+}
+
+function extractSku(item: Record<string, unknown>): string {
+  return firstNonEmptyString(item.sku, item.SKU, item.sellerSku, item.sellerPartNumber);
 }
 
 function optionalHeader(value: string | undefined): string | undefined {
@@ -189,8 +216,268 @@ function toStringArray(value: unknown): string[] {
     .filter((entry) => entry.length > 0);
 }
 
-function normalizeImportedItem(item: Record<string, unknown>): WalmartProductRecord | null {
-  const sku = firstNonEmptyString(item.sku, item.SKU, item.sellerSku, item.sellerPartNumber);
+function findImageUrlInNode(value: unknown, inImageContext = false, depth = 0): string {
+  if (depth > 6) return "";
+
+  if (Array.isArray(value)) {
+    for (const entry of value) {
+      const found = findImageUrlInNode(entry, inImageContext, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+
+  if (typeof value === "string") {
+    return inImageContext ? asHttpUrl(value) : "";
+  }
+
+  const node = asObject(value);
+  if (!node) return "";
+
+  const entries = Object.entries(node);
+
+  for (const [key, child] of entries) {
+    const nextInImageContext = inImageContext || /(image|asset|thumbnail)/i.test(key);
+    if (typeof child === "string" && nextInImageContext) {
+      const asUrl = asHttpUrl(child);
+      if (asUrl) return asUrl;
+    }
+  }
+
+  for (const [key, child] of entries) {
+    const nextInImageContext = inImageContext || /(image|asset|thumbnail)/i.test(key);
+    const found = findImageUrlInNode(child, nextInImageContext, depth + 1);
+    if (found) return found;
+  }
+
+  return "";
+}
+
+function extractImageUrl(item: Record<string, unknown>): string {
+  const product = asObject(item.product);
+  const content = asObject(item.content);
+  const images = asObject(item.images);
+  const direct = firstHttpUrl(
+    item.mainImageUrl,
+    item.imageUrl,
+    item.productImageUrl,
+    item.itemImageUrl,
+    product?.mainImageUrl,
+    product?.imageUrl,
+    product?.productImageUrl,
+    product?.primaryImageUrl,
+    content?.mainImageUrl,
+    content?.imageUrl,
+    images?.primaryImageUrl
+  );
+  if (direct) return direct;
+
+  const fromArrays = firstHttpUrl(
+    asObjectArray(item.images)[0]?.url,
+    asObjectArray(item.images)[0]?.imageUrl,
+    asObjectArray(item.assets)[0]?.url,
+    asObjectArray(item.assets)[0]?.imageUrl,
+    asObjectArray(item.productAssets)[0]?.url,
+    asObjectArray(item.productAssets)[0]?.imageUrl
+  );
+  if (fromArrays) return fromArrays;
+
+  const deepNodes: unknown[] = [
+    item.images,
+    item.assets,
+    item.productAssets,
+    product?.images,
+    product?.assets,
+    content?.images,
+    content?.assets,
+    item,
+  ];
+
+  for (const node of deepNodes) {
+    const candidate = findImageUrlInNode(node);
+    if (candidate) return candidate;
+  }
+
+  return "";
+}
+
+interface InventorySnapshot {
+  status: WalmartInventoryStatus;
+  quantity: number;
+  source: string;
+}
+
+function availabilityToInventoryStatus(value: unknown): WalmartInventoryStatus | null {
+  const text = firstNonEmptyString(value, asObject(value)?.status, asObject(value)?.availabilityStatus).toLowerCase();
+  if (!text) return null;
+  if (text.includes("out_of_stock") || text.includes("outofstock") || text.includes("out of stock")) {
+    return "out_of_stock";
+  }
+  if (text.includes("in_stock") || text.includes("instock") || text.includes("in stock")) {
+    return "unknown";
+  }
+  return null;
+}
+
+function resolveCatalogInventory(item: Record<string, unknown>): InventorySnapshot {
+  const quantity = firstNumber(
+    item.inventoryQuantity,
+    item.quantity,
+    asObject(item.inventory)?.quantity,
+    asObject(asObject(item.inventory)?.quantity)?.amount,
+    asObject(item.availability)?.quantity,
+    asObject(asObject(item.availability)?.quantity)?.amount,
+    asObject(item.fulfillment)?.quantity,
+    asObject(asObject(item.fulfillment)?.quantity)?.amount
+  );
+  if (quantity !== null) {
+    return {
+      status: "known",
+      quantity: Math.max(0, quantity),
+      source: "catalog_quantity",
+    };
+  }
+
+  const availabilityStatus = availabilityToInventoryStatus(item.availability);
+  if (availabilityStatus === "out_of_stock") {
+    return {
+      status: "out_of_stock",
+      quantity: 0,
+      source: "catalog_availability",
+    };
+  }
+
+  return {
+    status: "unknown",
+    quantity: 0,
+    source: "catalog_missing",
+  };
+}
+
+function mergeInventorySnapshots(
+  catalogSnapshot: InventorySnapshot,
+  inventoryApiSnapshot: InventorySnapshot | null
+): InventorySnapshot {
+  if (!inventoryApiSnapshot) return catalogSnapshot;
+  if (catalogSnapshot.status === "known") return catalogSnapshot;
+  if (inventoryApiSnapshot.status === "known") return inventoryApiSnapshot;
+  if (catalogSnapshot.status === "out_of_stock") return catalogSnapshot;
+  if (inventoryApiSnapshot.status === "out_of_stock") return inventoryApiSnapshot;
+  return inventoryApiSnapshot;
+}
+
+function extractInventoryQuantity(payload: unknown): number | null {
+  const root = asObject(payload);
+  if (!root) return null;
+  return firstNumber(
+    root.quantity,
+    asObject(root.quantity)?.amount,
+    root.inventoryQuantity,
+    asObject(root.inventory)?.quantity,
+    asObject(asObject(root.inventory)?.quantity)?.amount,
+    root.availableToSellQty,
+    asObject(root.availableToSellQty)?.amount,
+    root.onHandQuantity,
+    asObject(root.onHandQuantity)?.amount
+  );
+}
+
+async function fetchInventorySnapshotForSku(accessToken: string, sku: string): Promise<InventorySnapshot> {
+  const url = new URL("/v3/inventory", `${WALMART_PRODUCTION_BASE_URL}/`);
+  url.searchParams.set("sku", sku);
+
+  const correlationId = crypto.randomUUID();
+  const response = await fetch(url.toString(), {
+    method: "GET",
+    headers: buildWalmartApiHeaders(accessToken, correlationId),
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    return {
+      status: "unknown",
+      quantity: 0,
+      source: `inventory_api_http_${response.status}`,
+    };
+  }
+
+  const text = await response.text();
+  const payload = text ? (JSON.parse(text) as unknown) : {};
+  const quantity = extractInventoryQuantity(payload);
+  if (quantity !== null) {
+    return {
+      status: "known",
+      quantity: Math.max(0, quantity),
+      source: "inventory_api",
+    };
+  }
+
+  const availabilityStatus = availabilityToInventoryStatus(asObject(payload)?.availability);
+  if (availabilityStatus === "out_of_stock") {
+    return {
+      status: "out_of_stock",
+      quantity: 0,
+      source: "inventory_api_availability",
+    };
+  }
+
+  return {
+    status: "unknown",
+    quantity: 0,
+    source: "inventory_api_missing_quantity",
+  };
+}
+
+async function fetchInventorySnapshotsForItems(
+  accessToken: string,
+  items: Record<string, unknown>[]
+): Promise<Map<string, InventorySnapshot>> {
+  const bySku = new Map<string, string>();
+  for (const item of items) {
+    const sku = extractSku(item);
+    if (!sku) continue;
+    const catalogInventory = resolveCatalogInventory(item);
+    if (catalogInventory.status === "known") continue;
+    bySku.set(normalizeSkuKey(sku), sku);
+  }
+
+  const snapshots = new Map<string, InventorySnapshot>();
+  const skus = Array.from(bySku.entries());
+  const concurrency = 8;
+
+  for (let index = 0; index < skus.length; index += concurrency) {
+    const batch = skus.slice(index, index + concurrency);
+    const results = await Promise.all(
+      batch.map(async ([key, sku]) => {
+        try {
+          const snapshot = await fetchInventorySnapshotForSku(accessToken, sku);
+          return [key, snapshot] as const;
+        } catch {
+          return [
+            key,
+            {
+              status: "unknown",
+              quantity: 0,
+              source: "inventory_api_exception",
+            } satisfies InventorySnapshot,
+          ] as const;
+        }
+      })
+    );
+
+    for (const [key, snapshot] of results) {
+      snapshots.set(key, snapshot);
+    }
+  }
+
+  return snapshots;
+}
+
+function normalizeImportedItem(
+  item: Record<string, unknown>,
+  inventorySnapshotsBySku: Map<string, InventorySnapshot>
+): WalmartProductRecord | null {
+  const sku = extractSku(item);
   if (!sku) return null;
 
   const title = firstNonEmptyString(
@@ -207,12 +494,7 @@ function normalizeImportedItem(item: Record<string, unknown>): WalmartProductRec
     item.shelf,
     asObject(item.classification)?.category
   );
-  const imageUrl = firstNonEmptyString(
-    item.mainImageUrl,
-    item.imageUrl,
-    asObjectArray(item.images)[0]?.url,
-    asObjectArray(item.images)[0]?.imageUrl
-  );
+  const imageUrl = extractImageUrl(item);
 
   const price = firstNumber(
     item.price,
@@ -221,12 +503,11 @@ function normalizeImportedItem(item: Record<string, unknown>): WalmartProductRec
     asObject(item.priceInfo)?.currentPrice
   ) ?? 0;
 
-  const inventoryQuantity = firstNumber(
-    item.inventoryQuantity,
-    item.quantity,
-    asObject(item.inventory)?.quantity,
-    asObject(item.availability)?.quantity
-  ) ?? 0;
+  const catalogInventory = resolveCatalogInventory(item);
+  const inventorySnapshot = mergeInventorySnapshots(
+    catalogInventory,
+    inventorySnapshotsBySku.get(normalizeSkuKey(sku)) ?? null
+  );
 
   const shortDescription = firstNonEmptyString(item.shortDescription, item.short_desc, item.synopsis);
   const longDescription = firstNonEmptyString(item.longDescription, item.description, item.productDescription);
@@ -239,7 +520,8 @@ function normalizeImportedItem(item: Record<string, unknown>): WalmartProductRec
     title: title || `Walmart item ${sku}`,
     brand: brand || "Unknown",
     price,
-    inventoryQuantity,
+    inventoryQuantity: inventorySnapshot.quantity,
+    inventoryStatus: inventorySnapshot.status,
     imageUrl,
     attributes: toAttributeMap(item.attributes),
     description: longDescription,
@@ -269,6 +551,8 @@ function normalizeImportedItem(item: Record<string, unknown>): WalmartProductRec
       category: category || normalized.category,
       price: normalized.price,
       inventoryQuantity: normalized.inventoryQuantity,
+      inventoryStatus: normalized.inventoryStatus,
+      inventorySource: inventorySnapshot.source,
       imageUrl: normalized.imageUrl,
       attributes: normalized.attributes,
       shortDescription: normalized.shortDescription,
@@ -358,10 +642,12 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     nextCursor = page.nextCursor;
   }
 
+  const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected);
+
   const bySku = new Map<string, WalmartProductRecord>();
   let skippedCount = 0;
   for (const item of collected) {
-    const normalized = normalizeImportedItem(item);
+    const normalized = normalizeImportedItem(item, inventorySnapshotsBySku);
     if (!normalized) {
       skippedCount += 1;
       continue;
@@ -370,6 +656,9 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
   }
 
   const products = Array.from(bySku.values());
+  const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
+  const inventoryOutOfStockCount = products.filter((product) => product.inventoryStatus === "out_of_stock").length;
+  const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
   replaceProducts(products, now);
 
   appendActivityLog({
@@ -392,6 +681,9 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       fetchedCount: collected.length,
       payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
       pageCount,
+      inventoryKnownCount,
+      inventoryUnknownCount,
+      inventoryOutOfStockCount,
     },
   };
 }

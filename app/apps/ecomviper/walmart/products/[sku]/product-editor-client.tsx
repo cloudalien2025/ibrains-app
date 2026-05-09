@@ -31,7 +31,7 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
     imageUrl: product.imageUrl,
     additionalImageUrls: "",
     price: String(product.price),
-    inventoryQuantity: String(product.inventoryQuantity),
+    inventoryQuantity: product.inventoryStatus === "unknown" ? "" : String(product.inventoryQuantity),
     brand: product.brand,
     attributesJson: JSON.stringify(product.attributes, null, 2),
   });

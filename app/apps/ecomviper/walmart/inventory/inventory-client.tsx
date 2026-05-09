@@ -11,6 +11,13 @@ interface InventoryClientProps {
   recentChanges: Array<{ createdAt: string; sku: string | null; message: string }>;
 }
 
+function formatInventory(product: WalmartProductRecord | null): string {
+  if (!product) return "Not found";
+  if (product.inventoryStatus === "unknown") return "Not synced";
+  if (product.inventoryStatus === "out_of_stock") return "Out of stock";
+  return String(product.inventoryQuantity);
+}
+
 export default function WalmartInventoryClient({ products, lowStock, outOfStock, recentChanges }: InventoryClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
   const [quantity, setQuantity] = useState("0");
@@ -65,7 +72,7 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
             </label>
             <label className="text-sm text-[#334155]">
               Current quantity
-              <input value={selectedProduct?.inventoryQuantity ?? "Not found"} readOnly className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2" />
+              <input value={formatInventory(selectedProduct)} readOnly className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2" />
             </label>
             <label className="text-sm text-[#334155]">
               New quantity
@@ -108,7 +115,7 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
             {lowStock.map((product) => (
               <li key={product.sku} className="flex items-center justify-between rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">
                 <span>{product.sku}</span>
-                <span className="font-medium">{product.inventoryQuantity}</span>
+                <span className="font-medium">{formatInventory(product)}</span>
               </li>
             ))}
             {!lowStock.length ? (
@@ -122,7 +129,7 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
             {outOfStock.map((product) => (
               <li key={product.sku} className="flex items-center justify-between rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2">
                 <span>{product.sku}</span>
-                <span className="font-medium">{product.inventoryQuantity}</span>
+                <span className="font-medium">{formatInventory(product)}</span>
               </li>
             ))}
             {!outOfStock.length ? (

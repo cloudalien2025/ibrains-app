@@ -60,6 +60,37 @@ describe("walmart products import route", () => {
     expect(mocks.importWalmartProducts).toHaveBeenCalledWith("user_clerk_1");
   });
 
+  it("includes inventory pending diagnostics in success message when inventory is unknown", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 2,
+      fetchedCount: 2,
+      skippedCount: 0,
+      lastImportAt: "2026-05-09T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 2,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        inventoryKnownCount: 1,
+        inventoryUnknownCount: 1,
+        inventoryOutOfStockCount: 0,
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.importedCount).toBe(2);
+    expect(payload.message).toContain("Imported 2 Walmart product");
+    expect(payload.message).toContain("Inventory pending for 1 SKU");
+  });
+
   it("returns zero-import diagnostics when no products are imported", async () => {
     mocks.requireSignedInUser.mockResolvedValue({
       userId: "user_clerk_1",
