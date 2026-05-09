@@ -7,7 +7,10 @@ import type { WalmartImageMatchMethod, WalmartImageSyncStatus, WalmartProductRec
 
 const ITEM_REPORT_STATUS_POLL_DELAYS_MS = [700, 1200, 1800, 2600, 3500] as const;
 
+type WalmartItemReportEndpointFamily = "report_requests" | "requests";
+
 interface ItemReportRequestAttempt {
+  family: WalmartItemReportEndpointFamily;
   path: string;
   body: unknown;
 }
@@ -64,18 +67,25 @@ export interface WalmartItemReportRunResult {
   status: "ready" | "failed" | "timed_out" | "unavailable";
   failureCategory:
     | "none"
-    | "request_failed"
-    | "status_failed"
-    | "timed_out"
+    | "auth_or_permission"
+    | "not_found_endpoint"
+    | "timeout"
+    | "report_failed"
     | "download_failed"
     | "parse_failed"
-    | "auth_or_permission"
-    | "unsupported_format";
+    | "no_rows"
+    | "no_image_columns"
+    | "unavailable";
   failureReason: string | null;
   diagnostics: {
     requestAttempts: WalmartItemReportApiDiagnostic[];
     statusAttempts: WalmartItemReportApiDiagnostic[];
     downloadAttempts: WalmartItemReportApiDiagnostic[];
+    requestEndpointTried: string[];
+    requestEndpointUsed: string | null;
+    requestStatusCode: number | null;
+    statusEndpointUsed: string | null;
+    downloadEndpointUsed: string | null;
   };
   rows: WalmartItemReportRow[];
 }
@@ -205,27 +215,30 @@ function buildWalmartApiHeaders(accessToken: string, correlationId: string): Rec
 function requestAttempts(): ItemReportRequestAttempt[] {
   return [
     {
-      path: "/v3/reports/generate",
-      body: { reportType: "ITEM" },
+      family: "report_requests",
+      path: "/v3/reports/reportRequests",
+      body: {
+        reportType: "ITEM",
+        format: "CSV",
+      },
     },
     {
-      path: "/v3/reports/generate?reportType=ITEM",
-      body: {},
-    },
-    {
-      path: "/v3/reports/generate",
-      body: { reportRequest: { reportType: "ITEM" } },
+      family: "requests",
+      path: "/v3/reports/requests",
+      body: {
+        reportType: "ITEM",
+        format: "CSV",
+      },
     },
   ];
 }
 
-function statusPaths(reportRequestId: string): string[] {
+function statusPath(reportRequestId: string, family: WalmartItemReportEndpointFamily): string {
   const encoded = encodeURIComponent(reportRequestId);
-  return [
-    `/v3/reports/status/${encoded}`,
-    `/v3/reports/${encoded}`,
-    `/v3/reports/status?reportRequestId=${encoded}`,
-  ];
+  if (family === "requests") {
+    return `/v3/reports/requests/${encoded}`;
+  }
+  return `/v3/reports/reportRequests/${encoded}`;
 }
 
 function extractReportRequestId(payload: unknown): string {
@@ -246,12 +259,16 @@ function extractReportRequestId(payload: unknown): string {
 
 function parseItemReportStatus(payload: unknown): ParsedItemReportStatus {
   const root = asObject(payload) ?? {};
-  const report = asObject(root.report) ?? asObject(root.data) ?? asObject(root.status) ?? {};
+  const report = asObject(root.report) ?? asObject(root.data) ?? asObject(root.reportRequest) ?? {};
+  const errors = asObjectArray(root.errors);
+  const firstError = asObject(errors[0]) ?? asObject(root.error) ?? asObject(report.error) ?? {};
   const reportStatusRaw = firstNonEmptyString(
     root.reportStatus,
+    root.requestStatus,
     root.status,
     root.processingStatus,
     report.reportStatus,
+    report.requestStatus,
     report.status,
     report.processingStatus,
     asObject(root.reportRequest)?.status
@@ -261,18 +278,26 @@ function parseItemReportStatus(payload: unknown): ParsedItemReportStatus {
     root.downloadUrl,
     root.downloadURL,
     root.url,
+    root.reportUrl,
+    root.reportURL,
     report.downloadUrl,
     report.downloadURL,
     report.url,
+    report.reportUrl,
     asObject(root.links)?.download,
-    asObject(root.links)?.downloadUrl
+    asObject(root.links)?.downloadUrl,
+    asObject(root.download)?.url
   );
 
-  const reportId = firstNonEmptyString(root.reportId, report.reportId, root.id, report.id);
+  const reportId = firstNonEmptyString(root.reportId, report.reportId, root.id, report.id, root.requestId, report.requestId);
   const generatedAt = firstNonEmptyString(
     root.generatedAt,
+    root.createdTime,
+    root.createdAt,
     root.reportGeneratedAt,
     report.generatedAt,
+    report.createdTime,
+    report.createdAt,
     report.reportGeneratedAt,
     root.completedAt,
     report.completedAt
@@ -298,7 +323,7 @@ function parseItemReportStatus(payload: unknown): ParsedItemReportStatus {
     };
   }
 
-  if (["INPROGRESS", "IN_PROGRESS", "RUNNING", "RECEIVED", "PENDING", "SUBMITTED"].includes(reportStatusRaw)) {
+  if (["INPROGRESS", "IN_PROGRESS", "RUNNING", "RECEIVED", "PENDING", "SUBMITTED", "PROCESSING"].includes(reportStatusRaw)) {
     return {
       state: "in_progress",
       downloadUrl: null,
@@ -314,7 +339,15 @@ function parseItemReportStatus(payload: unknown): ParsedItemReportStatus {
       downloadUrl: null,
       reportId: reportId || null,
       generatedAt: null,
-      reason: firstNonEmptyString(root.message, report.message, root.error, report.error) || "Report generation failed.",
+      reason:
+        firstNonEmptyString(
+          root.message,
+          report.message,
+          root.error,
+          report.error,
+          firstError.description,
+          firstError.message
+        ) || "Report generation failed.",
     };
   }
 
@@ -334,15 +367,27 @@ async function sleep(ms: number): Promise<void> {
 async function requestItemReport(accessToken: string): Promise<{
   ok: boolean;
   reportRequestId: string | null;
+  endpointFamily: WalmartItemReportEndpointFamily | null;
+  requestEndpointTried: string[];
+  requestEndpointUsed: string | null;
+  requestStatusCode: number | null;
   failureCategory: WalmartItemReportRunResult["failureCategory"];
   failureReason: string | null;
   diagnostics: WalmartItemReportApiDiagnostic[];
 }> {
   const diagnostics: WalmartItemReportApiDiagnostic[] = [];
+  const attempts = requestAttempts();
+  const requestEndpointTried: string[] = [];
+  let requestStatusCode: number | null = null;
+  let requestEndpointUsed: string | null = null;
 
-  for (const attempt of requestAttempts()) {
+  async function runAttempt(attempt: ItemReportRequestAttempt): Promise<{
+    response: Response | null;
+    requestId: string;
+  }> {
     const correlationId = crypto.randomUUID();
     const endpoint = new URL(attempt.path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
+    requestEndpointTried.push(attempt.path);
 
     try {
       const response = await fetch(endpoint, {
@@ -353,112 +398,215 @@ async function requestItemReport(accessToken: string): Promise<{
       });
 
       diagnostics.push({ endpoint: attempt.path, httpStatus: response.status, ok: response.ok });
+      requestStatusCode = response.status;
       const bodyText = await response.text();
       const payload = bodyText ? (JSON.parse(bodyText) as unknown) : {};
-
-      if (response.ok) {
-        const reportRequestId = extractReportRequestId(payload);
-        if (reportRequestId) {
-          return {
-            ok: true,
-            reportRequestId,
-            failureCategory: "none",
-            failureReason: null,
-            diagnostics,
-          };
-        }
-      }
-
-      if (response.status === 401 || response.status === 403) {
-        return {
-          ok: false,
-          reportRequestId: null,
-          failureCategory: "auth_or_permission",
-          failureReason: "Walmart Item Report request failed.",
-          diagnostics,
-        };
-      }
+      return {
+        response,
+        requestId: extractReportRequestId(payload),
+      };
     } catch {
       diagnostics.push({ endpoint: attempt.path, httpStatus: null, ok: false });
+      requestStatusCode = null;
+      return {
+        response: null,
+        requestId: "",
+      };
+    }
+  }
+
+  const primary = attempts[0];
+  if (!primary) {
+    return {
+      ok: false,
+      reportRequestId: null,
+      endpointFamily: null,
+      requestEndpointTried,
+      requestEndpointUsed,
+      requestStatusCode,
+      failureCategory: "unavailable",
+      failureReason: "Walmart Item Report request failed.",
+      diagnostics,
+    };
+  }
+
+  const primaryResult = await runAttempt(primary);
+
+  if (primaryResult.response?.ok && primaryResult.requestId) {
+    requestEndpointUsed = primary.path;
+    return {
+      ok: true,
+      reportRequestId: primaryResult.requestId,
+      endpointFamily: primary.family,
+      requestEndpointTried,
+      requestEndpointUsed,
+      requestStatusCode,
+      failureCategory: "none",
+      failureReason: null,
+      diagnostics,
+    };
+  }
+
+  if (primaryResult.response?.status === 401 || primaryResult.response?.status === 403) {
+    return {
+      ok: false,
+      reportRequestId: null,
+      endpointFamily: null,
+      requestEndpointTried,
+      requestEndpointUsed,
+      requestStatusCode,
+      failureCategory: "auth_or_permission",
+      failureReason: "Walmart Item Report request failed.",
+      diagnostics,
+    };
+  }
+
+  const fallback = attempts[1];
+  if (primaryResult.response?.status === 404 && fallback) {
+    const fallbackResult = await runAttempt(fallback);
+    if (fallbackResult.response?.ok && fallbackResult.requestId) {
+      requestEndpointUsed = fallback.path;
+      return {
+        ok: true,
+        reportRequestId: fallbackResult.requestId,
+        endpointFamily: fallback.family,
+        requestEndpointTried,
+        requestEndpointUsed,
+        requestStatusCode,
+        failureCategory: "none",
+        failureReason: null,
+        diagnostics,
+      };
+    }
+
+    if (fallbackResult.response?.status === 401 || fallbackResult.response?.status === 403) {
+      return {
+        ok: false,
+        reportRequestId: null,
+        endpointFamily: null,
+        requestEndpointTried,
+        requestEndpointUsed,
+        requestStatusCode,
+        failureCategory: "auth_or_permission",
+        failureReason: "Walmart Item Report request failed.",
+        diagnostics,
+      };
+    }
+
+    if (fallbackResult.response?.status === 404) {
+      return {
+        ok: false,
+        reportRequestId: null,
+        endpointFamily: null,
+        requestEndpointTried,
+        requestEndpointUsed,
+        requestStatusCode,
+        failureCategory: "not_found_endpoint",
+        failureReason: "Walmart Item Report request failed.",
+        diagnostics,
+      };
     }
   }
 
   return {
     ok: false,
     reportRequestId: null,
-    failureCategory: "request_failed",
+    endpointFamily: null,
+    requestEndpointTried,
+    requestEndpointUsed,
+    requestStatusCode,
+    failureCategory: primaryResult.response?.status === 404 ? "not_found_endpoint" : "unavailable",
     failureReason: "Walmart Item Report request failed.",
     diagnostics,
   };
 }
 
-async function getReportRequestStatus(accessToken: string, reportRequestId: string): Promise<{
+async function getReportRequestStatus(params: {
+  accessToken: string;
+  reportRequestId: string;
+  endpointFamily: WalmartItemReportEndpointFamily;
+}): Promise<{
   ok: boolean;
   timedOut: boolean;
   status: ParsedItemReportStatus | null;
+  statusEndpointUsed: string | null;
   failureCategory: WalmartItemReportRunResult["failureCategory"];
   failureReason: string | null;
   diagnostics: WalmartItemReportApiDiagnostic[];
 }> {
   const diagnostics: WalmartItemReportApiDiagnostic[] = [];
+  const path = statusPath(params.reportRequestId, params.endpointFamily);
 
   for (let pollIndex = 0; pollIndex < ITEM_REPORT_STATUS_POLL_DELAYS_MS.length; pollIndex += 1) {
-    for (const path of statusPaths(reportRequestId)) {
-      const correlationId = crypto.randomUUID();
-      const endpoint = new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
+    const correlationId = crypto.randomUUID();
+    const endpoint = new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
 
-      try {
-        const response = await fetch(endpoint, {
-          method: "GET",
-          headers: buildWalmartApiHeaders(accessToken, correlationId),
-          cache: "no-store",
-        });
+    try {
+      const response = await fetch(endpoint, {
+        method: "GET",
+        headers: buildWalmartApiHeaders(params.accessToken, correlationId),
+        cache: "no-store",
+      });
 
-        diagnostics.push({ endpoint: path, httpStatus: response.status, ok: response.ok });
+      diagnostics.push({ endpoint: path, httpStatus: response.status, ok: response.ok });
 
-        if (response.status === 401 || response.status === 403) {
-          return {
-            ok: false,
-            timedOut: false,
-            status: null,
-            failureCategory: "auth_or_permission",
-            failureReason: "Walmart Item Report request failed.",
-            diagnostics,
-          };
-        }
-
-        if (!response.ok) {
-          continue;
-        }
-
-        const bodyText = await response.text();
-        const payload = bodyText ? (JSON.parse(bodyText) as unknown) : {};
-        const parsedStatus = parseItemReportStatus(payload);
-
-        if (parsedStatus.state === "complete") {
-          return {
-            ok: true,
-            timedOut: false,
-            status: parsedStatus,
-            failureCategory: "none",
-            failureReason: null,
-            diagnostics,
-          };
-        }
-
-        if (parsedStatus.state === "failed") {
-          return {
-            ok: false,
-            timedOut: false,
-            status: parsedStatus,
-            failureCategory: "status_failed",
-            failureReason: "Walmart Item Report request failed.",
-            diagnostics,
-          };
-        }
-      } catch {
-        diagnostics.push({ endpoint: path, httpStatus: null, ok: false });
+      if (response.status === 401 || response.status === 403) {
+        return {
+          ok: false,
+          timedOut: false,
+          status: null,
+          statusEndpointUsed: path,
+          failureCategory: "auth_or_permission",
+          failureReason: "Walmart Item Report request failed.",
+          diagnostics,
+        };
       }
+
+      if (response.status === 404) {
+        return {
+          ok: false,
+          timedOut: false,
+          status: null,
+          statusEndpointUsed: path,
+          failureCategory: "not_found_endpoint",
+          failureReason: "Walmart Item Report request failed.",
+          diagnostics,
+        };
+      }
+
+      if (!response.ok) {
+        continue;
+      }
+
+      const bodyText = await response.text();
+      const payload = bodyText ? (JSON.parse(bodyText) as unknown) : {};
+      const parsedStatus = parseItemReportStatus(payload);
+
+      if (parsedStatus.state === "complete") {
+        return {
+          ok: true,
+          timedOut: false,
+          status: parsedStatus,
+          statusEndpointUsed: path,
+          failureCategory: "none",
+          failureReason: null,
+          diagnostics,
+        };
+      }
+
+      if (parsedStatus.state === "failed") {
+        return {
+          ok: false,
+          timedOut: false,
+          status: parsedStatus,
+          statusEndpointUsed: path,
+          failureCategory: "report_failed",
+          failureReason: "Walmart Item Report request failed.",
+          diagnostics,
+        };
+      }
+    } catch {
+      diagnostics.push({ endpoint: path, httpStatus: null, ok: false });
     }
 
     await sleep(ITEM_REPORT_STATUS_POLL_DELAYS_MS[pollIndex]);
@@ -468,7 +616,8 @@ async function getReportRequestStatus(accessToken: string, reportRequestId: stri
     ok: false,
     timedOut: true,
     status: null,
-    failureCategory: "timed_out",
+    statusEndpointUsed: path,
+    failureCategory: "timeout",
     failureReason: "Walmart Item Report was unavailable or timed out.",
     diagnostics,
   };
@@ -703,12 +852,13 @@ function decodeReportBuffer(buffer: Buffer, contentType: string | null): string 
 
 async function downloadReport(params: {
   accessToken: string;
+  requestId: string;
   downloadUrl: string | null;
-  reportId: string | null;
 }): Promise<{
   ok: boolean;
   csv: string;
   downloadedAt: string | null;
+  downloadEndpointUsed: string | null;
   failureCategory: WalmartItemReportRunResult["failureCategory"];
   failureReason: string | null;
   diagnostics: WalmartItemReportApiDiagnostic[];
@@ -731,27 +881,35 @@ async function downloadReport(params: {
     return decodeReportBuffer(buffer, contentType);
   }
 
-  const fallbackDownloadPath = params.reportId
-    ? new URL(`/v3/reports/download/${encodeURIComponent(params.reportId)}`, `${WALMART_PRODUCTION_BASE_URL}/`).toString()
-    : null;
-
-  const candidates = [params.downloadUrl, fallbackDownloadPath].filter((value): value is string => Boolean(value));
+  const candidates: Array<{ url: string; diagnosticEndpoint: string }> = [];
+  if (params.downloadUrl) {
+    candidates.push({
+      url: params.downloadUrl,
+      diagnosticEndpoint: "status.downloadUrl",
+    });
+  }
+  const documentedDownloadPath = `/v3/reports/downloadReport?requestId=${encodeURIComponent(params.requestId)}`;
+  candidates.push({
+    url: new URL(documentedDownloadPath, `${WALMART_PRODUCTION_BASE_URL}/`).toString(),
+    diagnosticEndpoint: "/v3/reports/downloadReport?requestId=<requestId>",
+  });
 
   for (const candidate of candidates) {
     try {
-      const url = candidate.startsWith("http")
-        ? candidate
-        : new URL(candidate, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
+      const url = candidate.url.startsWith("http")
+        ? candidate.url
+        : new URL(candidate.url, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
 
       const sameHost = url.startsWith(WALMART_PRODUCTION_BASE_URL);
       const response = await fetchReport(url, sameHost);
-      diagnostics.push({ endpoint: url, httpStatus: response.status, ok: response.ok });
+      diagnostics.push({ endpoint: candidate.diagnosticEndpoint, httpStatus: response.status, ok: response.ok });
 
       if (response.status === 401 || response.status === 403) {
         return {
           ok: false,
           csv: "",
           downloadedAt: null,
+          downloadEndpointUsed: candidate.diagnosticEndpoint,
           failureCategory: "auth_or_permission",
           failureReason: "Walmart Item Report request failed.",
           diagnostics,
@@ -768,18 +926,21 @@ async function downloadReport(params: {
           asObject(payload)?.downloadUrl,
           asObject(payload)?.downloadURL,
           asObject(payload)?.url,
+          asObject(payload)?.signedUrl,
           asObject(asObject(payload)?.report)?.downloadUrl,
-          asObject(asObject(payload)?.report)?.url
+          asObject(asObject(payload)?.report)?.url,
+          asObject(asObject(payload)?.reportDocument)?.url
         );
         if (nestedUrl) {
           const nestedResponse = await fetchReport(nestedUrl, nestedUrl.startsWith(WALMART_PRODUCTION_BASE_URL));
-          diagnostics.push({ endpoint: nestedUrl, httpStatus: nestedResponse.status, ok: nestedResponse.ok });
+          diagnostics.push({ endpoint: "download.redirectUrl", httpStatus: nestedResponse.status, ok: nestedResponse.ok });
           if (!nestedResponse.ok) continue;
           const csv = await readCsvFromResponse(nestedResponse);
           return {
             ok: true,
             csv,
             downloadedAt: new Date().toISOString(),
+            downloadEndpointUsed: candidate.diagnosticEndpoint,
             failureCategory: "none",
             failureReason: null,
             diagnostics,
@@ -793,6 +954,7 @@ async function downloadReport(params: {
         ok: true,
         csv,
         downloadedAt: new Date().toISOString(),
+        downloadEndpointUsed: candidate.diagnosticEndpoint,
         failureCategory: "none",
         failureReason: null,
         diagnostics,
@@ -803,13 +965,14 @@ async function downloadReport(params: {
           ok: false,
           csv: "",
           downloadedAt: null,
-          failureCategory: "unsupported_format",
+          downloadEndpointUsed: candidate.diagnosticEndpoint,
+          failureCategory: "parse_failed",
           failureReason: "Walmart Item Report returned unsupported XLSX format.",
           diagnostics,
         };
       }
 
-      diagnostics.push({ endpoint: candidate, httpStatus: null, ok: false });
+      diagnostics.push({ endpoint: candidate.diagnosticEndpoint, httpStatus: null, ok: false });
     }
   }
 
@@ -817,6 +980,7 @@ async function downloadReport(params: {
     ok: false,
     csv: "",
     downloadedAt: null,
+    downloadEndpointUsed: null,
     failureCategory: "download_failed",
     failureReason: "Walmart Item Report request failed.",
     diagnostics,
@@ -825,7 +989,7 @@ async function downloadReport(params: {
 
 export async function runItemReportWorkflow(accessToken: string): Promise<WalmartItemReportRunResult> {
   const requestResult = await requestItemReport(accessToken);
-  if (!requestResult.ok || !requestResult.reportRequestId) {
+  if (!requestResult.ok || !requestResult.reportRequestId || !requestResult.endpointFamily) {
     return {
       reportRequestId: null,
       reportGeneratedAt: null,
@@ -840,12 +1004,21 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
         requestAttempts: requestResult.diagnostics,
         statusAttempts: [],
         downloadAttempts: [],
+        requestEndpointTried: requestResult.requestEndpointTried,
+        requestEndpointUsed: requestResult.requestEndpointUsed,
+        requestStatusCode: requestResult.requestStatusCode,
+        statusEndpointUsed: null,
+        downloadEndpointUsed: null,
       },
       rows: [],
     };
   }
 
-  const statusResult = await getReportRequestStatus(accessToken, requestResult.reportRequestId);
+  const statusResult = await getReportRequestStatus({
+    accessToken,
+    reportRequestId: requestResult.reportRequestId,
+    endpointFamily: requestResult.endpointFamily,
+  });
   if (!statusResult.ok || !statusResult.status) {
     return {
       reportRequestId: requestResult.reportRequestId,
@@ -861,6 +1034,11 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
         requestAttempts: requestResult.diagnostics,
         statusAttempts: statusResult.diagnostics,
         downloadAttempts: [],
+        requestEndpointTried: requestResult.requestEndpointTried,
+        requestEndpointUsed: requestResult.requestEndpointUsed,
+        requestStatusCode: requestResult.requestStatusCode,
+        statusEndpointUsed: statusResult.statusEndpointUsed,
+        downloadEndpointUsed: null,
       },
       rows: [],
     };
@@ -868,8 +1046,8 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
 
   const downloadResult = await downloadReport({
     accessToken,
+    requestId: requestResult.reportRequestId,
     downloadUrl: statusResult.status.downloadUrl,
-    reportId: statusResult.status.reportId,
   });
 
   if (!downloadResult.ok) {
@@ -880,13 +1058,18 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
       itemReportRequested: true,
       itemReportDownloaded: false,
       itemReportRowsParsed: 0,
-      status: downloadResult.failureCategory === "unsupported_format" ? "failed" : "unavailable",
+      status: downloadResult.failureCategory === "auth_or_permission" ? "failed" : "unavailable",
       failureCategory: downloadResult.failureCategory,
       failureReason: downloadResult.failureReason,
       diagnostics: {
         requestAttempts: requestResult.diagnostics,
         statusAttempts: statusResult.diagnostics,
         downloadAttempts: downloadResult.diagnostics,
+        requestEndpointTried: requestResult.requestEndpointTried,
+        requestEndpointUsed: requestResult.requestEndpointUsed,
+        requestStatusCode: requestResult.requestStatusCode,
+        statusEndpointUsed: statusResult.statusEndpointUsed,
+        downloadEndpointUsed: downloadResult.downloadEndpointUsed,
       },
       rows: [],
     };
@@ -894,6 +1077,14 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
 
   try {
     const rows = parseItemReportCsv(downloadResult.csv);
+    const anyRowHasImage = rows.some((row) => rowHasUsableImage(row));
+    const rowCategory: WalmartItemReportRunResult["failureCategory"] = rows.length === 0 ? "no_rows" : anyRowHasImage ? "none" : "no_image_columns";
+    const rowReason =
+      rowCategory === "no_rows"
+        ? "Walmart Item Report returned no rows."
+        : rowCategory === "no_image_columns"
+          ? "Item Report row found, but no usable image URL was provided."
+          : null;
     return {
       reportRequestId: requestResult.reportRequestId,
       reportGeneratedAt: statusResult.status.generatedAt,
@@ -902,12 +1093,17 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
       itemReportDownloaded: true,
       itemReportRowsParsed: rows.length,
       status: "ready",
-      failureCategory: "none",
-      failureReason: null,
+      failureCategory: rowCategory,
+      failureReason: rowReason,
       diagnostics: {
         requestAttempts: requestResult.diagnostics,
         statusAttempts: statusResult.diagnostics,
         downloadAttempts: downloadResult.diagnostics,
+        requestEndpointTried: requestResult.requestEndpointTried,
+        requestEndpointUsed: requestResult.requestEndpointUsed,
+        requestStatusCode: requestResult.requestStatusCode,
+        statusEndpointUsed: statusResult.statusEndpointUsed,
+        downloadEndpointUsed: downloadResult.downloadEndpointUsed,
       },
       rows,
     };
@@ -926,6 +1122,11 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
         requestAttempts: requestResult.diagnostics,
         statusAttempts: statusResult.diagnostics,
         downloadAttempts: downloadResult.diagnostics,
+        requestEndpointTried: requestResult.requestEndpointTried,
+        requestEndpointUsed: requestResult.requestEndpointUsed,
+        requestStatusCode: requestResult.requestStatusCode,
+        statusEndpointUsed: statusResult.statusEndpointUsed,
+        downloadEndpointUsed: downloadResult.downloadEndpointUsed,
       },
       rows: [],
     };
@@ -1164,7 +1365,7 @@ export async function enrichProductsFromItemReport(params: {
 
   if (run.status !== "ready") {
     const safeReason =
-      run.failureCategory === "timed_out"
+      run.failureCategory === "timeout"
         ? "Walmart Item Report was unavailable or timed out."
         : "Walmart Item Report request failed.";
 
