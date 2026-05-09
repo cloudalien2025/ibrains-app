@@ -88,6 +88,7 @@ export interface WalmartOpenAiConnectionStatus {
 }
 
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
+export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
 
 export interface WalmartProductRecord {
   id: string;
@@ -99,6 +100,7 @@ export interface WalmartProductRecord {
   category: string;
   price: number;
   inventoryQuantity: number;
+  inventoryStatus: WalmartInventoryStatus;
   status: WalmartProductStatus;
   imageUrl: string;
   issues: string[];
@@ -183,6 +185,9 @@ export interface WalmartImportResult {
     fetchedCount: number;
     payloadShape: string;
     pageCount: number;
+    inventoryKnownCount?: number;
+    inventoryUnknownCount?: number;
+    inventoryOutOfStockCount?: number;
   };
 }
 

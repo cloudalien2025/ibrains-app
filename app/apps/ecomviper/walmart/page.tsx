@@ -2,12 +2,19 @@ import Link from "next/link";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
+import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 export const dynamic = "force-dynamic";
 
 function apiErrorMessage(value: { code: string; message: string } | null): string {
   if (!value) return "None";
   return `${value.message} (${value.code})`;
+}
+
+function formatInventory(product: WalmartProductRecord): string {
+  if (product.inventoryStatus === "unknown") return "Not synced";
+  if (product.inventoryStatus === "out_of_stock") return "Out of stock";
+  return String(product.inventoryQuantity);
 }
 
 export default function WalmartDashboardPage() {
@@ -101,7 +108,7 @@ export default function WalmartDashboardPage() {
                     <td className="py-2 pr-3 font-medium">{product.sku}</td>
                     <td className="py-2 pr-3">{product.title}</td>
                     <td className="py-2 pr-3">${product.price.toFixed(2)}</td>
-                    <td className="py-2">{product.inventoryQuantity}</td>
+                    <td className="py-2">{formatInventory(product)}</td>
                   </tr>
                 ))}
                 {!snapshot.recentProducts.length ? (

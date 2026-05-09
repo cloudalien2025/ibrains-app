@@ -31,14 +31,17 @@ export async function POST(req: NextRequest) {
     if (!payload && body.sku) {
       const product = getProductBySku(body.sku);
       if (!product) return fail(404, "SKU not found.", "NOT_FOUND");
+      const updates: Record<string, unknown> = {
+        title: product.title,
+        price: product.price,
+      };
+      if (product.inventoryStatus !== "unknown") {
+        updates.inventoryQuantity = product.inventoryQuantity;
+      }
       payload = {
         feedType: "MP_MAINTENANCE",
         sku: product.sku,
-        updates: {
-          title: product.title,
-          price: product.price,
-          inventoryQuantity: product.inventoryQuantity,
-        },
+        updates,
       };
     }
 

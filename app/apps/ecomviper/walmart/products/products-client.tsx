@@ -24,6 +24,12 @@ const filters = [
   { id: "draft_pending", label: "Draft pending" },
 ] as const;
 
+function formatInventory(product: WalmartProductRecord): string {
+  if (product.inventoryStatus === "unknown") return "Not synced";
+  if (product.inventoryStatus === "out_of_stock") return "Out of stock";
+  return String(product.inventoryQuantity);
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -48,6 +54,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         importDiagnostics?: {
           payloadShape?: string;
           fetchedCount?: number;
+          inventoryUnknownCount?: number;
         };
         error?: { message?: string };
       };
@@ -61,9 +68,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       if (importedCount === 0) {
         const fetchedCount = payload.importDiagnostics?.fetchedCount ?? payload.fetchedCount ?? 0;
         const payloadShape = payload.importDiagnostics?.payloadShape ?? "unknown";
+        const inventoryUnknownCount = payload.importDiagnostics?.inventoryUnknownCount ?? 0;
         setMessage(
           payload.message ??
-            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}.`
+            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}.`
         );
       } else {
         setMessage(payload.message ?? "Import completed.");
@@ -148,7 +156,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                   <td className="py-2 pr-2 text-[#334155]">{product.title}</td>
                   <td className="py-2 pr-2 text-[#334155]">{product.brand}</td>
                   <td className="py-2 pr-2 text-[#334155]">${product.price.toFixed(2)}</td>
-                  <td className="py-2 pr-2 text-[#334155]">{product.inventoryQuantity}</td>
+                  <td className="py-2 pr-2 text-[#334155]">{formatInventory(product)}</td>
                   <td className="py-2 pr-2"><StatusBadge status={product.status} /></td>
                   <td className="py-2 pr-2 text-[#334155]">{product.lastSyncedAt}</td>
                   <td className="py-2 pr-2 text-[#334155]">{product.issues.join(", ") || "None"}</td>

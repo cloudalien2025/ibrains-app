@@ -21,12 +21,17 @@ export async function POST(req: NextRequest) {
     const result = await importWalmartProducts(userId);
     const fetchedCount = result.importDiagnostics?.fetchedCount ?? result.fetchedCount ?? 0;
     const payloadShape = result.importDiagnostics?.payloadShape ?? "unknown";
+    const inventoryUnknownCount = result.importDiagnostics?.inventoryUnknownCount ?? 0;
+    const inventoryNote =
+      inventoryUnknownCount > 0
+        ? ` Inventory pending for ${inventoryUnknownCount} SKU(s); quantity requires Walmart inventory sync.`
+        : "";
     return ok({
       ok: true,
       ...result,
       message:
         result.importedCount > 0
-          ? `Imported ${result.importedCount} Walmart product(s).`
+          ? `Imported ${result.importedCount} Walmart product(s).${inventoryNote}`
           : `Walmart import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}.`,
     });
   } catch (error) {
