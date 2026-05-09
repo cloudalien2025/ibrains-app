@@ -1,5 +1,6 @@
 import "server-only";
 
+import crypto from "crypto";
 import { decryptSecret, encryptSecret } from "@/app/api/ecomviper/_utils/crypto";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
@@ -41,8 +42,24 @@ function relationMissingOrUnavailable(error: unknown): boolean {
   return error instanceof Error && error.message.toLowerCase().includes("missing required env var");
 }
 
+function normalizeCredentialUserId(userId: string): string {
+  const trimmed = userId.trim();
+  if (!trimmed) return "00000000-0000-4000-8000-000000000000";
+
+  const normalized = trimmed.toLowerCase();
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+  if (uuidPattern.test(normalized)) return normalized;
+
+  const hash = crypto.createHash("sha256").update(normalized).digest();
+  const bytes = Buffer.from(hash.subarray(0, 16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString("hex");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 function connectorKey(userId: string): string {
-  return `${userId}:${CONNECTOR_ID}`;
+  return `${normalizeCredentialUserId(userId)}:${CONNECTOR_ID}`;
 }
 
 function getFallbackStore(): Map<string, FallbackCredential> {
@@ -86,6 +103,8 @@ function availabilityError(): Error {
 }
 
 async function readCredential(userId: string): Promise<CredentialRow | null> {
+  const credentialUserId = normalizeCredentialUserId(userId);
+
   if (allowFallbackStore()) {
     const row = getFallbackStore().get(connectorKey(userId));
     if (!row) return null;
@@ -109,7 +128,7 @@ async function readCredential(userId: string): Promise<CredentialRow | null> {
       WHERE user_id = $1 AND connector_id = $2
       LIMIT 1
       `,
-      [userId, CONNECTOR_ID]
+      [credentialUserId, CONNECTOR_ID]
     );
     return rows[0] ?? null;
   } catch (error) {
@@ -149,12 +168,13 @@ export async function saveWalmartOpenAiConnectionForUser(params: {
   userId: string;
   apiKey: string;
 }): Promise<WalmartOpenAiConnectionStatus> {
+  const credentialUserId = normalizeCredentialUserId(params.userId);
   const secret = params.apiKey.trim();
   if (!secret) {
     throw new Error("OpenAI API key is required.");
   }
 
-  const encrypted = encryptSecret(secret, `${params.userId}:${CREDENTIAL_SCOPE}`);
+  const encrypted = encryptSecret(secret, `${credentialUserId}:${CREDENTIAL_SCOPE}`);
   const last4 = secret.slice(-4) || null;
   const secretLength = secret.length;
 
@@ -188,7 +208,7 @@ export async function saveWalmartOpenAiConnectionForUser(params: {
         updated_at = now()
       `,
       [
-        params.userId,
+        credentialUserId,
         CONNECTOR_ID,
         encrypted,
         last4,
@@ -207,6 +227,8 @@ export async function saveWalmartOpenAiConnectionForUser(params: {
 }
 
 export async function deleteWalmartOpenAiConnectionForUser(userId: string): Promise<WalmartOpenAiConnectionStatus> {
+  const credentialUserId = normalizeCredentialUserId(userId);
+
   if (allowFallbackStore()) {
     getFallbackStore().delete(connectorKey(userId));
     return getWalmartOpenAiConnectionStatusForUser(userId);
@@ -222,7 +244,7 @@ export async function deleteWalmartOpenAiConnectionForUser(userId: string): Prom
       DELETE FROM directoryiq_signal_source_credentials
       WHERE user_id = $1 AND connector_id = $2
       `,
-      [userId, CONNECTOR_ID]
+      [credentialUserId, CONNECTOR_ID]
     );
     return getWalmartOpenAiConnectionStatusForUser(userId);
   } catch (error) {
@@ -234,6 +256,7 @@ export async function deleteWalmartOpenAiConnectionForUser(userId: string): Prom
 }
 
 export async function getWalmartOpenAiApiKeyForUser(userId: string): Promise<string | null> {
+  const credentialUserId = normalizeCredentialUserId(userId);
   const saveSupported = await isWalmartOpenAiStoreAvailable();
   if (!saveSupported) return null;
 
@@ -241,7 +264,7 @@ export async function getWalmartOpenAiApiKeyForUser(userId: string): Promise<str
   if (!row?.secret_ciphertext) return null;
 
   try {
-    return decryptSecret(row.secret_ciphertext, `${userId}:${CREDENTIAL_SCOPE}`);
+    return decryptSecret(row.secret_ciphertext, `${credentialUserId}:${CREDENTIAL_SCOPE}`);
   } catch {
     throw new Error(
       "Stored OpenAI API credentials could not be decrypted. Re-save the key after configuring ECOMVIPER_CREDENTIAL_ENCRYPTION_KEY."
