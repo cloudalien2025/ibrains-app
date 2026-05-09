@@ -40,6 +40,13 @@ function formatImageStatus(product: WalmartProductRecord): string {
   return "Image enrichment not synced.";
 }
 
+function formatImageSource(product: WalmartProductRecord): string {
+  if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
+  if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
+  if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  return "Not synced";
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -171,11 +178,13 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                           loading="lazy"
                         />
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
+                        <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
                       </div>
                     ) : (
                       <div className="space-y-1">
                         <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
+                        <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
                       </div>
                     )}
                   </td>

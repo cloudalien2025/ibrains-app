@@ -91,8 +91,20 @@ export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_fail
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
 export type WalmartImageStatus = "image_available" | "catalog_missing" | "enrichment_unconfigured";
 export type WalmartImageSyncStatus = "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
-export type WalmartImageMatchMethod = "gtin" | "upc" | "itemId" | "wpid" | "query" | "catalog";
+export type WalmartImageMatchMethod =
+  | "gtin"
+  | "upc"
+  | "itemId"
+  | "wpid"
+  | "query"
+  | "catalog"
+  | "item_report_sku"
+  | "item_report_productid"
+  | "item_report_itemid"
+  | "item_report_wpid"
+  | "item_report_title_brand";
 export type WalmartImageSource =
+  | "walmart_item_report"
   | "walmart_catalog"
   | "walmart_item_search"
   | "shopify_placeholder"
@@ -215,7 +227,16 @@ export interface WalmartImportResult {
     imageNotFoundCount?: number;
     imageAmbiguousCount?: number;
     imageFailedCount?: number;
-    imageSource?: "Walmart Item Search";
+    imageSource?: "Walmart Item Report + Walmart Item Search";
+    itemReportRequested?: boolean;
+    itemReportDownloaded?: boolean;
+    itemReportRowsParsed?: number;
+    itemReportRequestId?: string | null;
+    imageSourceBreakdown?: {
+      walmartItemReport: number;
+      walmartSellerCatalogSearch: number;
+      walmartItemSearch: number;
+    };
   };
 }
 
@@ -270,6 +291,14 @@ export interface WalmartListingQualityAssessment {
     | "Image not provided by Walmart catalog"
     | "Image enrichment source not configured"
     | "Image not provided by Walmart Item Search"
+    | "Image found in Walmart Item Report."
+    | "Item Report row found, but no usable image URL was provided."
+    | "No matching row found in Walmart Item Report."
+    | "Walmart Item Report request failed."
+    | "Walmart Item Report was unavailable or timed out."
+    | "Item Search returned no usable image."
+    | "Multiple Walmart Item Search candidates matched this product."
+    | "Item Search request failed after retry."
     | "Image match ambiguous"
     | "Image sync failed"
     | "Image enrichment not synced";

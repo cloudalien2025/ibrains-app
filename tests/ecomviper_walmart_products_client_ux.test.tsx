@@ -62,6 +62,7 @@ describe("Walmart products client UX", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 
     expect(html).toContain("Item Search returned no usable image.");
+    expect(html).toContain("Source: Walmart Item Search");
     expect(html).not.toContain("Missing image");
   });
 
@@ -72,6 +73,7 @@ describe("Walmart products client UX", () => {
           createProduct({
             imageUrl: "https://images.example.com/primary.jpg",
             imageSyncStatus: "found",
+            imageSource: "walmart_item_report",
             issues: [],
           }),
         ]}
@@ -79,6 +81,24 @@ describe("Walmart products client UX", () => {
     );
 
     expect(html).toContain('src="https://images.example.com/primary.jpg"');
+    expect(html).toContain("Source: Walmart Item Report");
     expect(html).not.toContain(">N/A<");
+  });
+
+  it("renders Item Report safe not_found reason copy", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageSource: "walmart_item_report",
+            imageStatusMessage: "Item Report row found, but no usable image URL was provided.",
+            imageSyncStatus: "not_found",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("Item Report row found, but no usable image URL was provided.");
+    expect(html).toContain("Source: Walmart Item Report");
   });
 });

@@ -17,11 +17,41 @@ function toImageStatusMessage(
   | "Image not provided by Walmart catalog"
   | "Image enrichment source not configured"
   | "Image not provided by Walmart Item Search"
+  | "Image found in Walmart Item Report."
+  | "Item Report row found, but no usable image URL was provided."
+  | "No matching row found in Walmart Item Report."
+  | "Walmart Item Report request failed."
+  | "Walmart Item Report was unavailable or timed out."
+  | "Item Search returned no usable image."
+  | "Multiple Walmart Item Search candidates matched this product."
+  | "Item Search request failed after retry."
   | "Image match ambiguous"
   | "Image sync failed"
   | "Image enrichment not synced" {
   if (product.imageStatus === "image_available" || Boolean(product.imageUrl)) {
     return "Image available";
+  }
+
+  if (product.imageStatusMessage?.trim()) {
+    const explicit = product.imageStatusMessage.trim();
+    if (
+      explicit === "Image found in Walmart Item Report." ||
+      explicit === "Item Report row found, but no usable image URL was provided." ||
+      explicit === "No matching row found in Walmart Item Report." ||
+      explicit === "Walmart Item Report request failed." ||
+      explicit === "Walmart Item Report was unavailable or timed out." ||
+      explicit === "Item Search returned no usable image." ||
+      explicit === "Multiple Walmart Item Search candidates matched this product." ||
+      explicit === "Item Search request failed after retry." ||
+      explicit === "Image not provided by Walmart Item Search" ||
+      explicit === "Image not provided by Walmart catalog" ||
+      explicit === "Image match ambiguous" ||
+      explicit === "Image sync failed" ||
+      explicit === "Image enrichment not synced" ||
+      explicit === "Image enrichment source not configured"
+    ) {
+      return explicit;
+    }
   }
 
   if (product.imageSyncStatus === "not_found" || product.issues.includes("Image not provided by Walmart Item Search")) {
@@ -113,23 +143,40 @@ export function assessWalmartListingQuality(product: WalmartProductRecord): Walm
 
   const imageStatus = toImageStatusMessage(product);
   if (imageStatus !== "Image available") {
+    const isImageFailure =
+      imageStatus === "Image sync failed" ||
+      imageStatus === "Item Search request failed after retry." ||
+      imageStatus === "Walmart Item Report request failed." ||
+      imageStatus === "Walmart Item Report was unavailable or timed out.";
+    const isImageAmbiguous =
+      imageStatus === "Image match ambiguous" ||
+      imageStatus === "Multiple Walmart Item Search candidates matched this product.";
+    const isImageUnsynced =
+      imageStatus === "Image enrichment source not configured" || imageStatus === "Image enrichment not synced";
+
     const weight =
-      imageStatus === "Image sync failed"
+      isImageFailure
         ? 16
         : imageStatus === "Image enrichment source not configured"
           ? 18
-          : imageStatus === "Image match ambiguous"
+          : isImageAmbiguous
             ? 13
-            : imageStatus === "Image enrichment not synced"
+            : isImageUnsynced
               ? 10
               : 12;
 
     const imageReason =
       imageStatus === "Image not provided by Walmart Item Search"
         ? "Walmart Item Search did not return an image for this SKU."
-        : imageStatus === "Image match ambiguous"
+        : imageStatus === "No matching row found in Walmart Item Report."
+          ? "No matching seller-specific row was found in Walmart Item Report."
+          : imageStatus === "Item Report row found, but no usable image URL was provided."
+            ? "Walmart Item Report matched this product, but did not provide a usable image URL."
+            : imageStatus === "Image found in Walmart Item Report."
+              ? "Walmart Item Report supplied image URLs for this SKU."
+              : isImageAmbiguous
           ? "Walmart Item Search returned multiple possible image matches."
-          : imageStatus === "Image sync failed"
+          : isImageFailure
             ? "Walmart Item Search image sync failed for this SKU."
             : imageStatus === "Image enrichment not synced"
               ? "Image enrichment has not been synced yet."
@@ -250,8 +297,15 @@ export function buildDeterministicOptimizationProposal(
         ? "keep"
         : assessment.imageStatus === "Image not provided by Walmart catalog" ||
             assessment.imageStatus === "Image not provided by Walmart Item Search" ||
+            assessment.imageStatus === "No matching row found in Walmart Item Report." ||
+            assessment.imageStatus === "Item Report row found, but no usable image URL was provided." ||
             assessment.imageStatus === "Image match ambiguous" ||
-            assessment.imageStatus === "Image sync failed"
+            assessment.imageStatus === "Image sync failed" ||
+            assessment.imageStatus === "Walmart Item Report request failed." ||
+            assessment.imageStatus === "Walmart Item Report was unavailable or timed out." ||
+            assessment.imageStatus === "Multiple Walmart Item Search candidates matched this product." ||
+            assessment.imageStatus === "Item Search request failed after retry." ||
+            assessment.imageStatus === "Item Search returned no usable image."
           ? "request_enrichment"
           : "manual_image_required",
     recommendationReason: topReasons.join(" "),

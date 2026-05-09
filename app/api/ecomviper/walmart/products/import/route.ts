@@ -26,13 +26,17 @@ export async function POST(req: NextRequest) {
     const imageNotFoundCount = result.importDiagnostics?.imageNotFoundCount ?? 0;
     const imageAmbiguousCount = result.importDiagnostics?.imageAmbiguousCount ?? 0;
     const imageFailedCount = result.importDiagnostics?.imageFailedCount ?? 0;
+    const itemReportRequested = result.importDiagnostics?.itemReportRequested ?? false;
+    const itemReportDownloaded = result.importDiagnostics?.itemReportDownloaded ?? false;
+    const itemReportRowsParsed = result.importDiagnostics?.itemReportRowsParsed ?? 0;
+    const sourceBreakdown = result.importDiagnostics?.imageSourceBreakdown;
     const inventoryNote =
       inventoryUnknownCount > 0
         ? ` Inventory pending for ${inventoryUnknownCount} SKU(s); quantity requires Walmart inventory sync.`
         : "";
     const imageNote =
       result.importedCount > 0
-        ? ` Image enrichment (Walmart Item Search): found=${imageFoundCount}, notFound=${imageNotFoundCount}, ambiguous=${imageAmbiguousCount}, failed=${imageFailedCount}.`
+        ? ` Image enrichment: found=${imageFoundCount}, notFound=${imageNotFoundCount}, ambiguous=${imageAmbiguousCount}, failed=${imageFailedCount}. ItemReport requested=${itemReportRequested}, downloaded=${itemReportDownloaded}, rows=${itemReportRowsParsed}. Source breakdown: itemReport=${sourceBreakdown?.walmartItemReport ?? 0}, sellerCatalog=${sourceBreakdown?.walmartSellerCatalogSearch ?? 0}, itemSearch=${sourceBreakdown?.walmartItemSearch ?? 0}.`
         : "";
     return ok({
       ok: true,

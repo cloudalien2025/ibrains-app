@@ -241,6 +241,39 @@ describe("walmart products persistence", () => {
     expect(reloaded?.variantImageUrls).toEqual(["https://images.example.com/img-persist-1-variant.jpg"]);
   });
 
+  it("persists Item Report image fields across repository reload", async () => {
+    const product = buildProduct("IMG-REPORT-1");
+    product.imageUrl = "https://images.example.com/report-primary.jpg";
+    product.imageStatus = "image_available";
+    product.imageStatusMessage = "Image found in Walmart Item Report.";
+    product.imageSource = "walmart_item_report";
+    product.imageSyncStatus = "found";
+    product.imageMatchMethod = "item_report_sku";
+    product.matchedItemId = "REPORT-ITEM-1";
+    product.galleryImageUrls = [
+      "https://images.example.com/report-primary.jpg",
+      "https://images.example.com/report-gallery.jpg",
+    ];
+    product.variantImageUrls = ["https://images.example.com/report-variant.jpg"];
+    product.lastImageSyncedAt = "2026-05-09T13:00:00.000Z";
+    product.issues = [];
+
+    await replaceWalmartProductsForUser({
+      userId: "user_image_report_persist",
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const reloaded = await getWalmartProductBySkuForUser("user_image_report_persist", "IMG-REPORT-1");
+    expect(reloaded?.imageSource).toBe("walmart_item_report");
+    expect(reloaded?.imageSyncStatus).toBe("found");
+    expect(reloaded?.imageMatchMethod).toBe("item_report_sku");
+    expect(reloaded?.imageStatusMessage).toBe("Image found in Walmart Item Report.");
+    expect(reloaded?.matchedItemId).toBe("REPORT-ITEM-1");
+  });
+
   it("test seed route stays disabled in normal mode and cannot shadow production products", async () => {
     await replaceWalmartProductsForUser({
       userId: "prod_user",
