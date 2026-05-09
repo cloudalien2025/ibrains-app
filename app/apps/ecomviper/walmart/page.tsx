@@ -18,6 +18,15 @@ function apiErrorMessage(value: { code: string; message: string } | null): strin
   return `${value.message} (${value.code})`;
 }
 
+function formatTimestamp(value: unknown, fallback: string): string {
+  if (value instanceof Date) return value.toISOString();
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  return fallback;
+}
+
 interface WalmartDashboardConnectionUi {
   badgeLabel: "Connected" | "Failed" | "Not Connected";
   connected: boolean;
@@ -76,9 +85,12 @@ export function buildWalmartDashboardConnectionUi(
     primaryActionLabel: connected ? "Manage Walmart Connection" : "Connect Walmart",
     primaryActionHref: "/apps/ecomviper/walmart/connect",
     primaryActionClassName,
-    lastAuth: connection.summary.lastSuccessfulAuth ?? "Never",
-    lastSync: connection.summary.lastSuccessfulRead ?? connection.lastSuccessfulApiCall ?? snapshot.lastImportAt ?? "Not yet",
-    lastImport: snapshot.lastImportAt ?? "Not imported yet",
+    lastAuth: formatTimestamp(connection.summary.lastSuccessfulAuth, "Never"),
+    lastSync: formatTimestamp(
+      connection.summary.lastSuccessfulRead ?? connection.lastSuccessfulApiCall ?? snapshot.lastImportAt,
+      "Not yet"
+    ),
+    lastImport: formatTimestamp(snapshot.lastImportAt, "Not imported yet"),
     lastError: apiErrorMessage(connection.lastApiError),
   };
 }
@@ -148,7 +160,9 @@ export default async function WalmartDashboardPage() {
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products Imported</p>
           <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{snapshot.productsImported}</p>
-          <p className="mt-1 text-xs text-[#64748B]">Last import: {snapshot.lastImportAt ?? "Not imported yet"}</p>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Last import: {formatTimestamp(snapshot.lastImportAt, "Not imported yet")}
+          </p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Draft Changes</p>
@@ -205,16 +219,19 @@ export default async function WalmartDashboardPage() {
           <h2 className="text-lg font-semibold text-[#0F172A]">Recent Sync Activity</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.recentActivity.length ? (
-              snapshot.recentActivity.map((entry) => (
-                <li key={`${entry.time}-${entry.action}`} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-medium text-[#0F172A]">{entry.action}</span>
-                    <StatusBadge status={entry.result} />
-                  </div>
-                  <p className="mt-1 text-[#475569]">{entry.message}</p>
-                  <p className="mt-1 text-xs text-[#64748B]">{entry.time}</p>
-                </li>
-              ))
+              snapshot.recentActivity.map((entry) => {
+                const activityTime = formatTimestamp(entry.time, "Unknown");
+                return (
+                  <li key={`${activityTime}-${entry.action}`} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-[#0F172A]">{entry.action}</span>
+                      <StatusBadge status={entry.result} />
+                    </div>
+                    <p className="mt-1 text-[#475569]">{entry.message}</p>
+                    <p className="mt-1 text-xs text-[#64748B]">{activityTime}</p>
+                  </li>
+                );
+              })
             ) : (
               <li className="rounded-lg border border-dashed border-[#D9E4F0] p-3 text-sm text-[#64748B]">No activity yet.</li>
             )}

@@ -181,6 +181,42 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).not.toContain(">Connect Walmart<");
   });
 
+  it("renders dashboard timestamps safely when connection data includes Date objects", async () => {
+    const authAt = new Date("2026-05-09T20:30:00.000Z");
+    const readAt = new Date("2026-05-09T20:31:00.000Z");
+    const importAt = new Date("2026-05-09T20:32:00.000Z");
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = {
+      mode: "live-ready",
+      products: [],
+      drafts: [],
+      feeds: [],
+      lastImportAt: importAt,
+    };
+
+    walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(
+      buildConnectionHealth({
+        connectionStatus: "connected",
+        summary: {
+          maskedClientId: "ab***1234",
+          clientSecretStored: true,
+          lastSuccessfulAuth: authAt as unknown as string,
+          lastSuccessfulRead: readAt as unknown as string,
+          tokenStatus: "valid",
+          safeReadStatus: "valid",
+        },
+        lastSuccessfulApiCall: readAt as unknown as string,
+      })
+    );
+
+    const html = renderToStaticMarkup(await WalmartDashboardPage());
+
+    expect(html).toContain(authAt.toISOString());
+    expect(html).toContain(readAt.toISOString());
+    expect(html).toContain(importAt.toISOString());
+    expect(html).not.toContain("[object Date]");
+  });
+
   it("keeps dashboard connected when imports succeeded even if stored status is stale", async () => {
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = {
       mode: "live-ready",

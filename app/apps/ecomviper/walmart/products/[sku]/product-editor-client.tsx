@@ -11,6 +11,7 @@ import type {
   WalmartDraftRecord,
   WalmartListingRecommendation,
   WalmartOptimizationProposalRecord,
+  WalmartOptimizationProposalStatus,
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
@@ -43,6 +44,38 @@ function formatImageStatus(product: WalmartProductRecord): string {
   return "Image enrichment source not configured";
 }
 
+function changedProposalFields(product: WalmartProductRecord, proposal: WalmartOptimizationProposalRecord): string[] {
+  const changed: string[] = [];
+
+  if (proposal.proposedTitle.trim() && proposal.proposedTitle.trim() !== product.title.trim()) {
+    changed.push("Title");
+  }
+
+  if (proposal.proposedDescription.trim() && proposal.proposedDescription.trim() !== product.longDescription.trim()) {
+    changed.push("Description");
+  }
+
+  if (
+    proposal.proposedBullets.length > 0 &&
+    JSON.stringify(proposal.proposedBullets) !== JSON.stringify(product.bulletPoints)
+  ) {
+    changed.push("Bullets");
+  }
+
+  if (
+    Object.keys(proposal.proposedKeyAttributes).length > 0 &&
+    JSON.stringify(proposal.proposedKeyAttributes) !== JSON.stringify(product.attributes)
+  ) {
+    changed.push("Key attributes");
+  }
+
+  if (proposal.proposedImageAction !== "keep" || proposal.proposedImageUrl.trim() !== product.imageUrl.trim()) {
+    changed.push("Image strategy");
+  }
+
+  return changed;
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -65,20 +98,34 @@ export default function ProductEditorClient({
   const [message, setMessage] = useState<string | null>(null);
   const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
   const [stagingRecommendation, setStagingRecommendation] = useState(false);
+  const [approvingProposalId, setApprovingProposalId] = useState<string | null>(null);
+  const [localStatusOverrides, setLocalStatusOverrides] = useState<Record<string, WalmartOptimizationProposalStatus>>({});
+  const [localStagedProposal, setLocalStagedProposal] = useState<WalmartOptimizationProposalRecord | null>(null);
 
   const listingQuality = useMemo(() => assessWalmartListingQuality(product), [product]);
   const deterministicProposal = useMemo(
     () => buildDeterministicOptimizationProposal(product, listingQuality),
     [product, listingQuality]
   );
-  const stagedOptimizations = useMemo(
-    () =>
-      stagedDrafts
-        .map((draft) => readOptimizerProposalFromDraft(draft))
-        .filter((entry): entry is WalmartOptimizationProposalRecord => entry !== null)
-        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
-    [stagedDrafts]
-  );
+  const stagedOptimizations = useMemo(() => {
+    const indexed = new Map<string, WalmartOptimizationProposalRecord>();
+    for (const draft of stagedDrafts) {
+      const proposal = readOptimizerProposalFromDraft(draft);
+      if (!proposal) continue;
+      indexed.set(proposal.id, proposal);
+    }
+
+    if (localStagedProposal) {
+      indexed.set(localStagedProposal.id, localStagedProposal);
+    }
+
+    return Array.from(indexed.values())
+      .map((proposal) => ({
+        ...proposal,
+        status: localStatusOverrides[proposal.id] ?? proposal.status,
+      }))
+      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
+  }, [stagedDrafts, localStagedProposal, localStatusOverrides]);
 
   const preview = useMemo(() => {
     let parsedAttributes: Record<string, string> = {};
@@ -178,11 +225,48 @@ export default function ProductEditorClient({
         return;
       }
 
+      setLocalStagedProposal(stagedProposal);
+      setLocalStatusOverrides((current) => ({ ...current, [stagedProposal.id]: "staged" }));
       setMessage("Deterministic recommendations staged. No live Walmart feed submission was performed.");
     } catch {
       setMessage("Failed to stage deterministic recommendations.");
     } finally {
       setStagingRecommendation(false);
+    }
+  }
+
+  async function handleApproveProposal(proposal: WalmartOptimizationProposalRecord) {
+    const timestamp = new Date().toISOString();
+    const approvedProposal: WalmartOptimizationProposalRecord = {
+      ...proposal,
+      status: "approved",
+      updatedAt: timestamp,
+    };
+
+    try {
+      setApprovingProposalId(proposal.id);
+      const response = await fetch("/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          draftPayload: toOptimizerDraftPayload(approvedProposal),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        setMessage(payload?.error?.message ?? "Failed to approve proposal for future submission.");
+        return;
+      }
+
+      setLocalStagedProposal(approvedProposal);
+      setLocalStatusOverrides((current) => ({ ...current, [proposal.id]: "approved" }));
+      setMessage("Proposal approved locally. Not submitted to Walmart. Human approval required before feed submission.");
+    } catch {
+      setMessage("Failed to approve proposal for future submission.");
+    } finally {
+      setApprovingProposalId(null);
     }
   }
 
@@ -237,14 +321,14 @@ export default function ProductEditorClient({
         data-testid="ecomviper-walmart-ai-recommendations"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-lg font-semibold text-[#0F172A]">AI Recommendations</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">Recommendations</h2>
           <Link href="/apps/ecomviper/walmart/ai-optimizer" className="text-sm text-[#2563EB] hover:text-[#1D4ED8]">
             Open AI Optimizer
           </Link>
         </div>
         {!aiProviderConnected ? (
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            AI provider not configured. Showing deterministic recommendations only.
+            AI recommendation unavailable until provider is connected. Showing deterministic recommendations only.
           </p>
         ) : (
           <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
@@ -255,6 +339,7 @@ export default function ProductEditorClient({
           {listingQuality.recommendations.length ? (
             listingQuality.recommendations.map((recommendation: WalmartListingRecommendation) => (
               <li key={recommendation.id} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Deterministic recommendation</p>
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-medium text-[#0F172A]">{recommendation.title}</p>
                   <StatusBadge status={recommendation.severity} />
@@ -277,6 +362,12 @@ export default function ProductEditorClient({
           >
             {stagingRecommendation ? "Staging..." : "Stage Deterministic Recommendations"}
           </button>
+          <p className="mt-2 text-xs text-[#64748B]">
+            Not submitted to Walmart. Human approval required before feed submission.
+          </p>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Workflow: import -&gt; inspect -&gt; optimize -&gt; stage -&gt; approve later -&gt; submit later.
+          </p>
         </div>
       </section>
 
@@ -284,7 +375,8 @@ export default function ProductEditorClient({
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-staged-changes"
       >
-        <h2 className="text-lg font-semibold text-[#0F172A]">Staged Changes</h2>
+        <h2 className="text-lg font-semibold text-[#0F172A]">Staged changes</h2>
+        <p className="mt-1 text-xs text-[#64748B]">Not submitted to Walmart. Human approval required before feed submission.</p>
         {stagedOptimizations.length ? (
           <div className="mt-3 space-y-2">
             {stagedOptimizations.map((proposal) => (
@@ -293,13 +385,28 @@ export default function ProductEditorClient({
                   <p className="text-sm font-medium text-[#0F172A]">{proposal.source === "ai" ? "AI proposal" : "Deterministic proposal"}</p>
                   <StatusBadge status={proposal.status} />
                 </div>
-                <p className="mt-1 text-xs text-[#64748B]">{proposal.recommendationReason}</p>
+                <p className="mt-1 text-xs text-[#64748B]">Reason: {proposal.recommendationReason}</p>
+                <p className="mt-1 text-xs text-[#64748B]">
+                  Changed fields: {changedProposalFields(product, proposal).join(", ") || "No field changes detected"}
+                </p>
                 <p className="mt-1 text-sm text-[#334155]">Title: {proposal.proposedTitle || "None"}</p>
                 <p className="mt-1 text-sm text-[#334155]">Description: {proposal.proposedDescription || "None"}</p>
                 <p className="mt-1 text-sm text-[#334155]">
                   Bullets: {proposal.proposedBullets.length ? proposal.proposedBullets.join(" | ") : "None"}
                 </p>
                 <p className="mt-1 text-sm text-[#334155]">Image action: {proposal.proposedImageAction}</p>
+                {proposal.status !== "approved" && proposal.status !== "submitted" ? (
+                  <div className="mt-2">
+                    <button
+                      type="button"
+                      onClick={() => handleApproveProposal(proposal)}
+                      disabled={approvingProposalId === proposal.id}
+                      className="rounded border border-[#0F172A] bg-[#0F172A] px-2 py-1 text-xs text-white disabled:opacity-50"
+                    >
+                      {approvingProposalId === proposal.id ? "Approving..." : "Approve for future submit"}
+                    </button>
+                  </div>
+                ) : null}
               </article>
             ))}
           </div>
