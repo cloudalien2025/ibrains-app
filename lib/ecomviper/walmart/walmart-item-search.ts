@@ -8,21 +8,47 @@ import type {
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
+const TRANSIENT_HTTP_STATUS = new Set([429, 500, 502, 503, 504]);
+const ITEM_SEARCH_RETRY_BACKOFF_MS = [200, 450] as const;
+const ITEM_SEARCH_TIMEOUT_MS = 9_000;
+
 interface ItemSearchAttempt {
   method: WalmartImageMatchMethod;
   value: string;
 }
+
+type ItemSearchFailureReason =
+  | "none"
+  | "http_non_retryable"
+  | "transient_http_exhausted"
+  | "network_non_retryable"
+  | "network_retry_exhausted"
+  | "parse_error";
 
 export interface WalmartItemSearchAttemptDiagnostic {
   method: WalmartImageMatchMethod;
   httpStatus: number | null;
   resultCount: number;
   ok: boolean;
+  retryCount: number;
+  transientRetries: number;
+  failureReason: ItemSearchFailureReason;
+}
+
+export interface WalmartItemSearchDecisionDiagnostic {
+  outcome: WalmartImageSyncStatus;
+  reason: string;
+  matchMethod: WalmartImageMatchMethod | null;
+  candidateCount: number;
+  selectedScore: number | null;
+  runnerUpScore: number | null;
+  acceptedBy: "identifier_exact" | "title_brand_strong" | "none";
 }
 
 export interface WalmartItemSearchImageEnrichment {
   imageSyncStatus: WalmartImageSyncStatus;
   imageSource: "walmart_item_search";
+  statusReason: string;
   primaryImageUrl: string;
   galleryImageUrls: string[];
   variantImageUrls: string[];
@@ -31,7 +57,17 @@ export interface WalmartItemSearchImageEnrichment {
   lastImageSyncedAt: string;
   diagnostics: {
     attempts: WalmartItemSearchAttemptDiagnostic[];
+    decision: WalmartItemSearchDecisionDiagnostic;
   };
+}
+
+interface SearchIntent {
+  itemId: string;
+  wpid: string;
+  upc: string;
+  gtin: string;
+  title: string;
+  brand: string;
 }
 
 interface SearchCandidate {
@@ -42,16 +78,31 @@ interface SearchCandidate {
   gtin: string;
   title: string;
   brand: string;
+  images: {
+    primaryImageUrl: string;
+    galleryImageUrls: string[];
+    variantImageUrls: string[];
+  };
+  hasUsableImage: boolean;
+  exactGtin: boolean;
+  exactUpc: boolean;
+  exactItemId: boolean;
+  exactWpid: boolean;
+  titleCoverage: number;
+  titleJaccard: number;
+  brandScore: number;
+  brandEquivalent: boolean;
   score: number;
 }
 
-interface SearchIntent {
-  itemId: string;
-  wpid: string;
-  upc: string;
-  gtin: string;
-  title: string;
-  brand: string;
+interface CandidateEvaluation {
+  outcome: "found" | "ambiguous" | "continue";
+  reason: string;
+  acceptedBy: WalmartItemSearchDecisionDiagnostic["acceptedBy"];
+  candidate: SearchCandidate | null;
+  candidateCount: number;
+  selectedScore: number | null;
+  runnerUpScore: number | null;
 }
 
 function asString(value: unknown): string {
@@ -138,8 +189,7 @@ function dedupeUrls(values: unknown[]): string[] {
 
   for (const raw of values) {
     const normalized = normalizeImageUrl(raw);
-    if (!normalized) continue;
-    if (seen.has(normalized)) continue;
+    if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     output.push(normalized);
   }
@@ -152,13 +202,18 @@ function extractSearchItems(payload: unknown): Record<string, unknown>[] {
   if (!root) return [];
 
   const itemResponse = asObject(root.ItemResponse);
+  const data = asObject(root.data);
+  const searchResult = asObject(root.searchResult);
   const candidates = [
     root.items,
     root.ItemResponse,
     itemResponse?.items,
     itemResponse?.item,
     itemResponse?.Item,
-    asObject(root.data)?.items,
+    itemResponse?.searchResult,
+    asObject(itemResponse?.searchResult)?.items,
+    data?.items,
+    searchResult?.items,
   ];
 
   for (const candidate of candidates) {
@@ -177,9 +232,34 @@ function extractItemIdentifiers(item: Record<string, unknown>) {
     wpid: firstNonEmptyString(item.wpid, item.wpID, item.WPID, identifiers?.wpid, identifiers?.wpID),
     upc: firstNonEmptyString(item.upc, identifiers?.upc, identifiers?.UPC),
     gtin: firstNonEmptyString(item.gtin, item.GTIN, identifiers?.gtin, identifiers?.GTIN),
-    title: firstNonEmptyString(item.productName, item.title, item.name, asObject(item.product)?.title),
+    title: firstNonEmptyString(
+      item.productName,
+      item.title,
+      item.name,
+      asObject(item.product)?.title,
+      asObject(item.product)?.productName
+    ),
     brand: firstNonEmptyString(item.brand, item.brandName, asObject(item.product)?.brand),
   };
+}
+
+function flattenImageValuesFromRows(rows: Record<string, unknown>[]): unknown[] {
+  return rows.flatMap((entry) => {
+    const nestedAsset = asObject(entry.asset);
+    return [
+      entry.url,
+      entry.imageUrl,
+      entry.mainImageUrl,
+      entry.productImageUrl,
+      entry.itemImageUrl,
+      entry.thumbnailUrl,
+      entry.thumbnailImageUrl,
+      entry.largeImageUrl,
+      entry.assetUrl,
+      nestedAsset?.url,
+      nestedAsset?.imageUrl,
+    ];
+  });
 }
 
 function extractItemImages(item: Record<string, unknown>): {
@@ -187,50 +267,169 @@ function extractItemImages(item: Record<string, unknown>): {
   galleryImageUrls: string[];
   variantImageUrls: string[];
 } {
-  const imageRows = asObjectArray(item.images);
+  const product = asObject(item.product);
+  const properties = asObject(item.properties);
+  const itemVariants = asObject(properties?.variants);
+  const imageInfo = asObject(item.imageInfo);
+  const content = asObject(item.content);
+  const media = asObject(item.media);
+
+  const galleryRows = [
+    ...asObjectArray(item.images),
+    ...asObjectArray(item.assets),
+    ...asObjectArray(item.productAssets),
+    ...asObjectArray(item.additionalImages),
+    ...asObjectArray(imageInfo?.images),
+    ...asObjectArray(product?.images),
+    ...asObjectArray(content?.images),
+    ...asObjectArray(media?.images),
+  ];
+
+  const variantRows = [
+    ...asObjectArray(itemVariants?.variantData),
+    ...asObjectArray(asObject(asObject(product?.properties)?.variants)?.variantData),
+  ];
+
+  const variantImageUrls = dedupeUrls([
+    ...flattenImageValuesFromRows(variantRows),
+    ...variantRows.flatMap((entry) => flattenImageValuesFromRows(asObjectArray(entry.images))),
+  ]);
+
   const galleryImageUrls = dedupeUrls([
-    ...imageRows.flatMap((entry) => [entry.url, entry.imageUrl, entry.mainImageUrl]),
+    ...flattenImageValuesFromRows(galleryRows),
     item.imageUrl,
     item.mainImageUrl,
     item.productImageUrl,
-    asObject(item.product)?.imageUrl,
-    asObject(item.product)?.mainImageUrl,
+    item.itemImageUrl,
+    item.thumbnailImageUrl,
+    item.largeImageUrl,
+    imageInfo?.imageUrl,
+    imageInfo?.mainImageUrl,
+    imageInfo?.thumbnailImageUrl,
+    product?.imageUrl,
+    product?.mainImageUrl,
+    product?.productImageUrl,
+    content?.imageUrl,
+    content?.mainImageUrl,
   ]);
 
-  const variantRows = asObjectArray(asObject(asObject(item.properties)?.variants)?.variantData);
-  const variantImageUrls = dedupeUrls(
-    variantRows.flatMap((entry) => [entry.productImageUrl, entry.imageUrl, entry.mainImageUrl])
-  );
-
-  const primaryImageUrl = galleryImageUrls[0] ?? variantImageUrls[0] ?? "";
+  const mergedGallery = dedupeUrls([...galleryImageUrls, ...variantImageUrls]);
+  const primaryImageUrl = mergedGallery[0] ?? "";
 
   return {
     primaryImageUrl,
-    galleryImageUrls,
+    galleryImageUrls: mergedGallery,
     variantImageUrls,
   };
 }
 
-function overlapScore(left: string, right: string): number {
-  const leftTokens = normalizeText(left)
+function tokenizeAlnum(value: string): string[] {
+  return normalizeText(value)
     .split(/[^a-z0-9]+/)
     .map((token) => token.trim())
-    .filter((token) => token.length > 2);
-  const rightTokens = new Set(
-    normalizeText(right)
-      .split(/[^a-z0-9]+/)
-      .map((token) => token.trim())
-      .filter((token) => token.length > 2)
-  );
-
-  if (leftTokens.length === 0 || rightTokens.size === 0) return 0;
-  const matches = leftTokens.filter((token) => rightTokens.has(token)).length;
-  return Math.round((matches / leftTokens.length) * 20);
+    .filter((token) => token.length > 1);
 }
 
-function scoreSearchCandidate(item: Record<string, unknown>, intent: SearchIntent): SearchCandidate {
+const BRAND_STOPWORDS = new Set(["inc", "llc", "co", "company", "corp", "corporation", "ltd", "the"]);
+
+function tokenizeBrand(value: string): string[] {
+  return tokenizeAlnum(value).filter((token) => !BRAND_STOPWORDS.has(token));
+}
+
+function ratioFromSets(left: Set<string>, right: Set<string>): number {
+  if (left.size === 0 || right.size === 0) return 0;
+  const matches = Array.from(left.values()).filter((token) => right.has(token)).length;
+  return matches / Math.max(left.size, right.size);
+}
+
+function titleSimilarity(left: string, right: string): { coverage: number; jaccard: number; score: number } {
+  const leftTokens = tokenizeAlnum(left);
+  const rightTokens = tokenizeAlnum(right);
+  const leftSet = new Set(leftTokens);
+  const rightSet = new Set(rightTokens);
+
+  if (leftSet.size === 0 || rightSet.size === 0) {
+    return { coverage: 0, jaccard: 0, score: 0 };
+  }
+
+  const overlapCount = Array.from(leftSet.values()).filter((token) => rightSet.has(token)).length;
+  const coverage = overlapCount / leftSet.size;
+  const unionCount = new Set([...Array.from(leftSet.values()), ...Array.from(rightSet.values())]).size;
+  const jaccard = unionCount > 0 ? overlapCount / unionCount : 0;
+  const score = Math.round(coverage * 80 + jaccard * 30);
+
+  return { coverage, jaccard, score };
+}
+
+function brandSimilarity(left: string, right: string): { score: number; equivalent: boolean } {
+  const normalizedLeft = normalizeText(left);
+  const normalizedRight = normalizeText(right);
+  if (!normalizedLeft || !normalizedRight) {
+    return { score: 0, equivalent: false };
+  }
+
+  if (normalizedLeft === normalizedRight) {
+    return { score: 40, equivalent: true };
+  }
+
+  const leftSet = new Set(tokenizeBrand(left));
+  const rightSet = new Set(tokenizeBrand(right));
+  const overlap = ratioFromSets(leftSet, rightSet);
+
+  if (overlap >= 0.95) {
+    return { score: 34, equivalent: true };
+  }
+  if (overlap >= 0.7) {
+    return { score: 26, equivalent: true };
+  }
+  if (overlap >= 0.5) {
+    return { score: 14, equivalent: false };
+  }
+
+  return { score: 0, equivalent: false };
+}
+
+function scoreSearchCandidate(
+  item: Record<string, unknown>,
+  intent: SearchIntent,
+  method: WalmartImageMatchMethod
+): SearchCandidate {
   const identifiers = extractItemIdentifiers(item);
-  const candidate = {
+  const images = extractItemImages(item);
+  const hasUsableImage = Boolean(images.primaryImageUrl || images.galleryImageUrls.length || images.variantImageUrls.length);
+
+  const exactGtin = Boolean(intent.gtin) && normalizeIdentifier(intent.gtin) === normalizeIdentifier(identifiers.gtin);
+  const exactUpc = Boolean(intent.upc) && normalizeIdentifier(intent.upc) === normalizeIdentifier(identifiers.upc);
+  const exactItemId =
+    Boolean(intent.itemId) && normalizeIdentifier(intent.itemId) === normalizeIdentifier(identifiers.itemId);
+  const exactWpid = Boolean(intent.wpid) && normalizeIdentifier(intent.wpid) === normalizeIdentifier(identifiers.wpid);
+
+  const titleSignal = titleSimilarity(intent.title, identifiers.title);
+  const brandSignal = brandSimilarity(intent.brand, identifiers.brand);
+
+  let score = 0;
+  if (exactGtin) score += 250;
+  if (exactUpc) score += 230;
+  if (exactItemId) score += 210;
+  if (exactWpid) score += 200;
+
+  score += titleSignal.score;
+  score += brandSignal.score;
+
+  if (hasUsableImage) score += 35;
+  else score -= 42;
+
+  if (method === "gtin" && intent.gtin && !exactGtin) score -= 130;
+  if (method === "upc" && intent.upc && !exactUpc) score -= 120;
+  if (method === "itemId" && intent.itemId && !exactItemId) score -= 115;
+  if (method === "wpid" && intent.wpid && !exactWpid) score -= 108;
+
+  if (method === "query") {
+    if (brandSignal.score < 20 && intent.brand) score -= 38;
+    if (titleSignal.coverage < 0.5) score -= 35;
+  }
+
+  return {
     item,
     itemId: identifiers.itemId,
     wpid: identifiers.wpid,
@@ -238,35 +437,18 @@ function scoreSearchCandidate(item: Record<string, unknown>, intent: SearchInten
     gtin: identifiers.gtin,
     title: identifiers.title,
     brand: identifiers.brand,
-    score: 0,
+    images,
+    hasUsableImage,
+    exactGtin,
+    exactUpc,
+    exactItemId,
+    exactWpid,
+    titleCoverage: titleSignal.coverage,
+    titleJaccard: titleSignal.jaccard,
+    brandScore: brandSignal.score,
+    brandEquivalent: brandSignal.equivalent,
+    score,
   };
-
-  if (intent.gtin && normalizeIdentifier(intent.gtin) === normalizeIdentifier(candidate.gtin)) {
-    candidate.score += 140;
-  }
-  if (intent.upc && normalizeIdentifier(intent.upc) === normalizeIdentifier(candidate.upc)) {
-    candidate.score += 120;
-  }
-  if (intent.itemId && normalizeIdentifier(intent.itemId) === normalizeIdentifier(candidate.itemId)) {
-    candidate.score += 100;
-  }
-  if (intent.wpid && normalizeIdentifier(intent.wpid) === normalizeIdentifier(candidate.wpid)) {
-    candidate.score += 90;
-  }
-
-  if (intent.title) {
-    candidate.score += overlapScore(intent.title, candidate.title);
-  }
-  if (intent.brand && normalizeText(intent.brand) === normalizeText(candidate.brand)) {
-    candidate.score += 18;
-  }
-
-  const images = extractItemImages(item);
-  if (!images.primaryImageUrl) {
-    candidate.score -= 25;
-  }
-
-  return candidate;
 }
 
 function buildSearchUrl(attempt: ItemSearchAttempt): string {
@@ -284,43 +466,127 @@ function buildSearchUrl(attempt: ItemSearchAttempt): string {
   return url.toString();
 }
 
+function isTransientStatus(status: number): boolean {
+  return TRANSIENT_HTTP_STATUS.has(status);
+}
+
+function isTransientNetworkError(error: unknown): boolean {
+  if (error instanceof DOMException && error.name === "AbortError") return true;
+  if (error instanceof TypeError) return true;
+  return false;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchWithTimeout(url: string, accessToken: string): Promise<Response> {
+  const correlationId = crypto.randomUUID();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), ITEM_SEARCH_TIMEOUT_MS);
+
+  try {
+    return await fetch(url, {
+      method: "GET",
+      headers: buildWalmartApiHeaders(accessToken, correlationId),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function searchWalmartItems(
   accessToken: string,
   attempt: ItemSearchAttempt
 ): Promise<{ items: Record<string, unknown>[]; diagnostic: WalmartItemSearchAttemptDiagnostic }> {
-  const correlationId = crypto.randomUUID();
   const url = buildSearchUrl(attempt);
+  let retryCount = 0;
+  let transientRetries = 0;
 
-  try {
-    const response = await fetch(url, {
-      method: "GET",
-      headers: buildWalmartApiHeaders(accessToken, correlationId),
-      cache: "no-store",
-    });
+  while (true) {
+    try {
+      const response = await fetchWithTimeout(url, accessToken);
+      const responseBody = await response.text();
+      let payload: unknown = {};
 
-    const responseBody = await response.text();
-    const payload = responseBody ? (JSON.parse(responseBody) as unknown) : {};
-    const items = response.ok ? extractSearchItems(payload) : [];
+      if (responseBody) {
+        try {
+          payload = JSON.parse(responseBody) as unknown;
+        } catch {
+          return {
+            items: [],
+            diagnostic: {
+              method: attempt.method,
+              httpStatus: response.status,
+              resultCount: 0,
+              ok: false,
+              retryCount,
+              transientRetries,
+              failureReason: "parse_error",
+            },
+          };
+        }
+      }
 
-    return {
-      items,
-      diagnostic: {
-        method: attempt.method,
-        httpStatus: response.status,
-        resultCount: items.length,
-        ok: response.ok,
-      },
-    };
-  } catch {
-    return {
-      items: [],
-      diagnostic: {
-        method: attempt.method,
-        httpStatus: null,
-        resultCount: 0,
-        ok: false,
-      },
-    };
+      if (response.ok) {
+        const items = extractSearchItems(payload);
+        return {
+          items,
+          diagnostic: {
+            method: attempt.method,
+            httpStatus: response.status,
+            resultCount: items.length,
+            ok: true,
+            retryCount,
+            transientRetries,
+            failureReason: "none",
+          },
+        };
+      }
+
+      if (isTransientStatus(response.status) && retryCount < ITEM_SEARCH_RETRY_BACKOFF_MS.length) {
+        await sleep(ITEM_SEARCH_RETRY_BACKOFF_MS[retryCount]);
+        retryCount += 1;
+        transientRetries += 1;
+        continue;
+      }
+
+      return {
+        items: [],
+        diagnostic: {
+          method: attempt.method,
+          httpStatus: response.status,
+          resultCount: 0,
+          ok: false,
+          retryCount,
+          transientRetries,
+          failureReason: isTransientStatus(response.status) ? "transient_http_exhausted" : "http_non_retryable",
+        },
+      };
+    } catch (error) {
+      const transient = isTransientNetworkError(error);
+      if (transient && retryCount < ITEM_SEARCH_RETRY_BACKOFF_MS.length) {
+        await sleep(ITEM_SEARCH_RETRY_BACKOFF_MS[retryCount]);
+        retryCount += 1;
+        transientRetries += 1;
+        continue;
+      }
+
+      return {
+        items: [],
+        diagnostic: {
+          method: attempt.method,
+          httpStatus: null,
+          resultCount: 0,
+          ok: false,
+          retryCount,
+          transientRetries,
+          failureReason: transient ? "network_retry_exhausted" : "network_non_retryable",
+        },
+      };
+    }
   }
 }
 
@@ -348,6 +614,177 @@ function resolveAttempts(product: Pick<WalmartProductRecord, "gtin" | "upc" | "i
   return queue;
 }
 
+function hasExactMatchForMethod(candidate: SearchCandidate, method: WalmartImageMatchMethod): boolean {
+  if (method === "gtin") return candidate.exactGtin;
+  if (method === "upc") return candidate.exactUpc;
+  if (method === "itemId") return candidate.exactItemId;
+  if (method === "wpid") return candidate.exactWpid;
+  return candidate.exactGtin || candidate.exactUpc || candidate.exactItemId || candidate.exactWpid;
+}
+
+function evaluateCandidatesForAttempt(
+  candidates: SearchCandidate[],
+  method: WalmartImageMatchMethod
+): CandidateEvaluation {
+  if (candidates.length === 0) {
+    return {
+      outcome: "continue",
+      reason: "Item Search returned no usable image.",
+      acceptedBy: "none",
+      candidate: null,
+      candidateCount: 0,
+      selectedScore: null,
+      runnerUpScore: null,
+    };
+  }
+
+  const sorted = [...candidates].sort((left, right) => right.score - left.score);
+  const top = sorted[0];
+  const runnerUp = sorted[1] ?? null;
+  const scoreGap = runnerUp ? top.score - runnerUp.score : top.score;
+
+  const exactForMethod = hasExactMatchForMethod(top, method);
+  const runnerClose = Boolean(
+    runnerUp && scoreGap <= (method === "query" ? 24 : 14) && runnerUp.score >= (method === "query" ? 80 : 95)
+  );
+  const titleBrandStrong = top.titleCoverage >= 0.72 && top.titleJaccard >= 0.48 && top.brandScore >= 24;
+
+  if (method !== "query") {
+    if (!exactForMethod) {
+      return {
+        outcome: "continue",
+        reason: "No exact identifier match in Item Search result.",
+        acceptedBy: "none",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp?.score ?? null,
+      };
+    }
+
+    const runnerHasSameExact = Boolean(runnerUp && hasExactMatchForMethod(runnerUp, method));
+    if (runnerHasSameExact && scoreGap <= 12) {
+      return {
+        outcome: "ambiguous",
+        reason: "Multiple Walmart Item Search candidates matched this product.",
+        acceptedBy: "none",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp?.score ?? null,
+      };
+    }
+
+    if (!top.hasUsableImage) {
+      return {
+        outcome: "continue",
+        reason: "Item Search returned no usable image.",
+        acceptedBy: "none",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp?.score ?? null,
+      };
+    }
+
+    return {
+      outcome: "found",
+      reason: "Exact identifier match with usable Walmart Item Search image.",
+      acceptedBy: "identifier_exact",
+      candidate: top,
+      candidateCount: sorted.length,
+      selectedScore: top.score,
+      runnerUpScore: runnerUp?.score ?? null,
+    };
+  }
+
+  if (runnerClose && runnerUp) {
+    const runnerPlausible = runnerUp.titleCoverage >= 0.58 && runnerUp.brandScore >= 20;
+    if (runnerPlausible) {
+      return {
+        outcome: "ambiguous",
+        reason: "Multiple Walmart Item Search candidates matched this product.",
+        acceptedBy: "none",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp.score,
+      };
+    }
+  }
+
+  if (!titleBrandStrong) {
+    return {
+      outcome: "continue",
+      reason: "Query fallback confidence is too low for a safe image match.",
+      acceptedBy: "none",
+      candidate: top,
+      candidateCount: sorted.length,
+      selectedScore: top.score,
+      runnerUpScore: runnerUp?.score ?? null,
+    };
+  }
+
+  if (!top.hasUsableImage) {
+    return {
+      outcome: "continue",
+      reason: "Item Search returned no usable image.",
+      acceptedBy: "none",
+      candidate: top,
+      candidateCount: sorted.length,
+      selectedScore: top.score,
+      runnerUpScore: runnerUp?.score ?? null,
+    };
+  }
+
+  return {
+    outcome: "found",
+    reason: "Strong title and brand match with usable Walmart Item Search image.",
+    acceptedBy: "title_brand_strong",
+    candidate: top,
+    candidateCount: sorted.length,
+    selectedScore: top.score,
+    runnerUpScore: runnerUp?.score ?? null,
+  };
+}
+
+function buildResult(params: {
+  syncedAt: string;
+  status: WalmartImageSyncStatus;
+  reason: string;
+  matchMethod: WalmartImageMatchMethod | null;
+  candidate: SearchCandidate | null;
+  acceptedBy?: WalmartItemSearchDecisionDiagnostic["acceptedBy"];
+  candidateCount: number;
+  selectedScore: number | null;
+  runnerUpScore: number | null;
+  diagnostics: WalmartItemSearchAttemptDiagnostic[];
+}): WalmartItemSearchImageEnrichment {
+  return {
+    imageSyncStatus: params.status,
+    imageSource: "walmart_item_search",
+    statusReason: params.reason,
+    primaryImageUrl: params.status === "found" ? params.candidate?.images.primaryImageUrl ?? "" : "",
+    galleryImageUrls: params.status === "found" ? [...(params.candidate?.images.galleryImageUrls ?? [])] : [],
+    variantImageUrls: params.status === "found" ? [...(params.candidate?.images.variantImageUrls ?? [])] : [],
+    matchedItemId: params.candidate?.itemId || null,
+    matchMethod: params.matchMethod,
+    lastImageSyncedAt: params.syncedAt,
+    diagnostics: {
+      attempts: params.diagnostics,
+      decision: {
+        outcome: params.status,
+        reason: params.reason,
+        matchMethod: params.matchMethod,
+        candidateCount: params.candidateCount,
+        selectedScore: params.selectedScore,
+        runnerUpScore: params.runnerUpScore,
+        acceptedBy: params.acceptedBy ?? "none",
+      },
+    },
+  };
+}
+
 export async function enrichWalmartImageFromItemSearch(params: {
   accessToken: string;
   product: Pick<WalmartProductRecord, "gtin" | "upc" | "itemId" | "wpid" | "title" | "brand">;
@@ -357,20 +794,23 @@ export async function enrichWalmartImageFromItemSearch(params: {
   const syncedAt = new Date().toISOString();
 
   if (attempts.length === 0) {
-    return {
-      imageSyncStatus: "not_synced",
-      imageSource: "walmart_item_search",
-      primaryImageUrl: "",
-      galleryImageUrls: [],
-      variantImageUrls: [],
-      matchedItemId: null,
+    return buildResult({
+      syncedAt,
+      status: "not_synced",
+      reason: "Image enrichment not synced.",
       matchMethod: null,
-      lastImageSyncedAt: syncedAt,
-      diagnostics: { attempts: [] },
-    };
+      candidate: null,
+      candidateCount: 0,
+      selectedScore: null,
+      runnerUpScore: null,
+      diagnostics,
+    });
   }
 
   let hadSuccessfulRead = false;
+  let ambiguousChoice: CandidateEvaluation | null = null;
+  let ambiguousMethod: WalmartImageMatchMethod | null = null;
+  let notFoundReason = "Item Search returned no usable image.";
 
   const intent: SearchIntent = {
     itemId: asString(params.product.itemId),
@@ -391,68 +831,78 @@ export async function enrichWalmartImageFromItemSearch(params: {
 
     hadSuccessfulRead = true;
 
-    if (result.items.length === 0) {
-      continue;
-    }
+    const evaluated = evaluateCandidatesForAttempt(
+      result.items.map((item) => scoreSearchCandidate(item, intent, attempt.method)),
+      attempt.method
+    );
 
-    const candidates = result.items
-      .map((item) => scoreSearchCandidate(item, intent))
-      .sort((left, right) => right.score - left.score);
-
-    const top = candidates[0];
-    const second = candidates[1] ?? null;
-    if (!top) {
-      continue;
-    }
-
-    const scoreGap = second ? top.score - second.score : top.score;
-    const lowConfidence = top.score < 30;
-    const ambiguous = lowConfidence || (second !== null && scoreGap <= 8 && second.score > 20);
-
-    const images = extractItemImages(top.item);
-
-    if (ambiguous) {
-      return {
-        imageSyncStatus: "ambiguous",
-        imageSource: "walmart_item_search",
-        primaryImageUrl: "",
-        galleryImageUrls: [],
-        variantImageUrls: [],
-        matchedItemId: top.itemId || null,
+    if (evaluated.outcome === "found" && evaluated.candidate) {
+      return buildResult({
+        syncedAt,
+        status: "found",
+        reason: evaluated.reason,
         matchMethod: attempt.method,
-        lastImageSyncedAt: syncedAt,
-        diagnostics: { attempts: diagnostics },
-      };
+        candidate: evaluated.candidate,
+        acceptedBy: evaluated.acceptedBy,
+        candidateCount: evaluated.candidateCount,
+        selectedScore: evaluated.selectedScore,
+        runnerUpScore: evaluated.runnerUpScore,
+        diagnostics,
+      });
     }
 
-    if (!images.primaryImageUrl) {
+    if (evaluated.outcome === "ambiguous") {
+      if (!ambiguousChoice || (evaluated.selectedScore ?? -Infinity) > (ambiguousChoice.selectedScore ?? -Infinity)) {
+        ambiguousChoice = evaluated;
+        ambiguousMethod = attempt.method;
+      }
       continue;
     }
 
-    return {
-      imageSyncStatus: "found",
-      imageSource: "walmart_item_search",
-      primaryImageUrl: images.primaryImageUrl,
-      galleryImageUrls: images.galleryImageUrls,
-      variantImageUrls: images.variantImageUrls,
-      matchedItemId: top.itemId || null,
-      matchMethod: attempt.method,
-      lastImageSyncedAt: syncedAt,
-      diagnostics: { attempts: diagnostics },
-    };
+    if (evaluated.reason) {
+      notFoundReason = evaluated.reason;
+    }
   }
 
-  return {
-    imageSyncStatus: hadSuccessfulRead ? "not_found" : "failed",
-    imageSource: "walmart_item_search",
-    primaryImageUrl: "",
-    galleryImageUrls: [],
-    variantImageUrls: [],
-    matchedItemId: null,
+  if (ambiguousChoice) {
+    return buildResult({
+      syncedAt,
+      status: "ambiguous",
+      reason: ambiguousChoice.reason,
+      matchMethod: ambiguousMethod,
+      candidate: ambiguousChoice.candidate,
+      candidateCount: ambiguousChoice.candidateCount,
+      selectedScore: ambiguousChoice.selectedScore,
+      runnerUpScore: ambiguousChoice.runnerUpScore,
+      diagnostics,
+    });
+  }
+
+  if (hadSuccessfulRead) {
+    return buildResult({
+      syncedAt,
+      status: "not_found",
+      reason: notFoundReason,
+      matchMethod: null,
+      candidate: null,
+      candidateCount: 0,
+      selectedScore: null,
+      runnerUpScore: null,
+      diagnostics,
+    });
+  }
+
+  return buildResult({
+    syncedAt,
+    status: "failed",
+    reason: "Item Search request failed after retry.",
     matchMethod: null,
-    lastImageSyncedAt: syncedAt,
-    diagnostics: { attempts: diagnostics },
-  };
+    candidate: null,
+    candidateCount: 0,
+    selectedScore: null,
+    runnerUpScore: null,
+    diagnostics,
+  });
 }
 
 export const walmartItemSearchInternals = {
@@ -460,4 +910,5 @@ export const walmartItemSearchInternals = {
   dedupeUrls,
   extractItemImages,
   extractSearchItems,
+  scoreSearchCandidate,
 };

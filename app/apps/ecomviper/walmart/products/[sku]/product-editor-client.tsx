@@ -39,13 +39,13 @@ function formatInventory(product: WalmartProductRecord): string {
 }
 
 function formatImageStatus(product: WalmartProductRecord): string {
-  if (product.imageSyncStatus === "not_found") return "Image not provided by Walmart Item Search";
-  if (product.imageSyncStatus === "ambiguous") return "Image match ambiguous";
-  if (product.imageSyncStatus === "failed") return "Image sync failed";
-  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced";
-  if (product.imageStatusMessage) return product.imageStatusMessage;
+  if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
+  if (product.imageSyncStatus === "not_found") return "Item Search returned no usable image.";
+  if (product.imageSyncStatus === "ambiguous") return "Multiple Walmart Item Search candidates matched this product.";
+  if (product.imageSyncStatus === "failed") return "Item Search request failed after retry.";
+  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced.";
   if (product.imageUrl) return "Image available";
-  return "Image enrichment not synced";
+  return "Image enrichment not synced.";
 }
 
 function changedProposalFields(product: WalmartProductRecord, proposal: WalmartOptimizationProposalRecord): string[] {

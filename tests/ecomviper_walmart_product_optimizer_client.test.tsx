@@ -27,7 +27,7 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     status: "attention",
     imageUrl: "",
     imageStatus: "catalog_missing",
-    imageStatusMessage: "Image not provided by Walmart Item Search",
+    imageStatusMessage: "Item Search returned no usable image.",
     imageSyncStatus: "not_found",
     imageSource: "walmart_item_search",
     imageMatchMethod: "query",
@@ -94,7 +94,7 @@ describe("Walmart product optimizer client", () => {
 
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
     expect(html).toContain("30066-841");
-    expect(html).toContain("Image not provided by Walmart Item Search");
+    expect(html).toContain("Item Search returned no usable image.");
     expect(html).toContain("Known (9)");
     expect(html).toContain("AI recommendation unavailable until provider is connected");
     expect(html).toContain("Deterministic recommendation");

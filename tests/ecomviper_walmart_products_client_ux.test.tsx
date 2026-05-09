@@ -32,6 +32,7 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     inventoryStatus: "known",
     status: "attention",
     imageUrl: "",
+    imageStatusMessage: "Item Search returned no usable image.",
     imageSyncStatus: "not_found",
     imageSource: "walmart_item_search",
     issues: ["Image not provided by Walmart Item Search"],
@@ -60,7 +61,7 @@ describe("Walmart products client UX", () => {
   it("shows Item Search image issue copy for missing images", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 
-    expect(html).toContain("Image not provided by Walmart Item Search");
+    expect(html).toContain("Item Search returned no usable image.");
     expect(html).not.toContain("Missing image");
   });
 

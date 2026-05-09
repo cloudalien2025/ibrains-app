@@ -44,9 +44,11 @@ function createFetchMock(params: {
   catalogPayload: unknown;
   inventoryBySku?: Record<string, unknown | null>;
   itemSearchByMethod?: Partial<Record<"gtin" | "upc" | "itemId" | "wpid" | "query", unknown>>;
+  itemSearchByQueryValue?: Record<string, unknown>;
 }) {
   const inventoryBySku = params.inventoryBySku ?? {};
   const itemSearchByMethod = params.itemSearchByMethod ?? {};
+  const itemSearchByQueryValue = params.itemSearchByQueryValue ?? {};
 
   return vi.fn(async (input: RequestInfo | URL) => {
     const url =
@@ -59,16 +61,20 @@ function createFetchMock(params: {
     if (url.includes("/v3/items/walmart/search")) {
       const parsed = new URL(url);
       let key: "gtin" | "upc" | "itemId" | "wpid" | "query" = "query";
+      const queryValue = (parsed.searchParams.get("query") ?? "").trim();
       if (parsed.searchParams.get("gtin")) key = "gtin";
       else if (parsed.searchParams.get("upc")) key = "upc";
-      else if (parsed.searchParams.get("query")) {
-        const queryValue = parsed.searchParams.get("query") ?? "";
+      else if (queryValue) {
         if (/^item[-_ ]?id[: ]?/i.test(queryValue)) key = "itemId";
         else if (/^wpid[: ]?/i.test(queryValue)) key = "wpid";
-        else key = "query";
+        else if (itemSearchByMethod.itemId && queryValue.toUpperCase() === queryValue && /[0-9]/.test(queryValue)) {
+          key = "itemId";
+        } else if (itemSearchByMethod.wpid && queryValue.toUpperCase() === queryValue && /[0-9]/.test(queryValue)) {
+          key = "wpid";
+        } else key = "query";
       }
 
-      const payload = itemSearchByMethod[key] ?? { items: [] };
+      const payload = itemSearchByQueryValue[queryValue] ?? itemSearchByMethod[key] ?? { items: [] };
       return new Response(JSON.stringify(payload), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -258,7 +264,7 @@ describe("walmart product import", () => {
     const product = listWalmartProducts().find((entry) => entry.sku === "NO-IMAGE-1");
 
     expect(product?.imageUrl).toBe("");
-    expect(product?.imageStatusMessage).toBe("Image not provided by Walmart Item Search");
+    expect(product?.imageStatusMessage).toBe("Item Search returned no usable image.");
     expect(product?.imageSyncStatus).toBe("not_found");
     expect(product?.issues).toContain("Image not provided by Walmart Item Search");
     expect(product?.issues).not.toContain("Image not provided by Walmart catalog");
@@ -391,6 +397,63 @@ describe("walmart product import", () => {
     expect(product?.imageSyncStatus).toBe("found");
   });
 
+  it("uses itemId fallback as an exact high-confidence match when available", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-image-itemid",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "ITEMID-IMAGE-1",
+            itemId: "WM-ITEM-123",
+            productName: "ItemId Match Product",
+            brand: "BrandY",
+            availability: "In_stock",
+            price: { amount: "24.25" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "ITEMID-IMAGE-1": {
+          sku: "ITEMID-IMAGE-1",
+          quantity: { unit: "EACH", amount: 3 },
+        },
+      },
+      itemSearchByQueryValue: {
+        "WM-ITEM-123": {
+          items: [
+            {
+              itemId: "WM-ITEM-123",
+              productName: "ItemId Match Product",
+              brand: "BrandY",
+              images: [{ url: "https://images.example.com/itemid-image-1.jpg" }],
+            },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "ITEMID-IMAGE-1");
+
+    expect(product?.imageSyncStatus).toBe("found");
+    expect(product?.imageMatchMethod).toBe("itemId");
+    expect(product?.matchedItemId).toBe("WM-ITEM-123");
+    expect(product?.imageUrl).toBe("https://images.example.com/itemid-image-1.jpg");
+    expect(product?.imageStatusMessage).toBe("Image available");
+  });
+
   it("does not fail import when Item Search image sync fails for a SKU", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: true,
@@ -448,6 +511,7 @@ describe("walmart product import", () => {
     expect(result.importedCount).toBe(1);
     expect(result.importDiagnostics?.imageFailedCount).toBe(1);
     expect(product?.imageSyncStatus).toBe("failed");
+    expect(product?.imageStatusMessage).toBe("Item Search request failed after retry.");
     expect(product?.issues).toContain("Image sync failed");
     expect(product?.inventoryQuantity).toBe(3);
   });
