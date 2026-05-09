@@ -96,30 +96,40 @@ function buildWalmartApiHeaders(accessToken: string, correlationId: string): Rec
   return headers;
 }
 
-function extractItemNodes(payload: unknown): Record<string, unknown>[] {
+function extractItemNodes(payload: unknown): { items: Record<string, unknown>[]; payloadShape: string } {
   const root = asObject(payload);
-  if (!root) return [];
+  if (!root) {
+    return { items: [], payloadShape: "invalid_root" };
+  }
 
-  const candidates: unknown[] = [];
+  const candidates: Array<{ value: unknown; shape: string }> = [];
   const itemResponse = asObject(root.ItemResponse);
 
-  candidates.push(root.items);
-  candidates.push(root.Item);
-  candidates.push(root.payload);
-  candidates.push(itemResponse?.items);
-  candidates.push(itemResponse?.item);
-  candidates.push(itemResponse?.Item);
-  candidates.push(itemResponse?.payload);
-  candidates.push(asObject(root.data)?.items);
+  candidates.push({ value: root.items, shape: "root.items" });
+  candidates.push({ value: root.Item, shape: "root.Item" });
+  candidates.push({ value: root.payload, shape: "root.payload" });
+  candidates.push({ value: root.ItemResponse, shape: "root.ItemResponse.array" });
+  candidates.push({ value: itemResponse?.items, shape: "root.ItemResponse.items" });
+  candidates.push({ value: itemResponse?.item, shape: "root.ItemResponse.item" });
+  candidates.push({ value: itemResponse?.Item, shape: "root.ItemResponse.Item" });
+  candidates.push({ value: itemResponse?.payload, shape: "root.ItemResponse.payload" });
+  candidates.push({ value: asObject(root.data)?.items, shape: "root.data.items" });
 
   for (const candidate of candidates) {
-    const arrayEntries = asObjectArray(candidate);
+    const arrayEntries = asObjectArray(candidate.value);
     if (arrayEntries.length > 0) {
-      return arrayEntries;
+      return { items: arrayEntries, payloadShape: candidate.shape };
     }
   }
 
-  return [];
+  if (Array.isArray(root.ItemResponse)) {
+    return { items: [], payloadShape: "root.ItemResponse.array_empty" };
+  }
+  if (itemResponse) {
+    return { items: [], payloadShape: "root.ItemResponse.object_empty" };
+  }
+
+  return { items: [], payloadShape: "unknown" };
 }
 
 function extractNextCursor(payload: unknown): string | null {
@@ -292,6 +302,7 @@ function parseWalmartError(responseBody: string, status: number): string {
 async function fetchCatalogPage(accessToken: string, nextCursor?: string | null): Promise<{
   items: Record<string, unknown>[];
   nextCursor: string | null;
+  payloadShape: string;
 }> {
   const url = new URL("/v3/items", `${WALMART_PRODUCTION_BASE_URL}/`);
   url.searchParams.set("limit", String(WALMART_IMPORT_PAGE_LIMIT));
@@ -312,9 +323,11 @@ async function fetchCatalogPage(accessToken: string, nextCursor?: string | null)
   }
 
   const payload = responseBody ? (JSON.parse(responseBody) as unknown) : {};
+  const extracted = extractItemNodes(payload);
   return {
-    items: extractItemNodes(payload),
+    items: extracted.items,
     nextCursor: extractNextCursor(payload),
+    payloadShape: extracted.payloadShape,
   };
 }
 
@@ -329,11 +342,15 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
 
   const now = new Date().toISOString();
   const collected: Record<string, unknown>[] = [];
+  const payloadShapes = new Set<string>();
+  let pageCount = 0;
   let nextCursor: string | null = null;
 
   for (let pageIndex = 0; pageIndex < WALMART_IMPORT_MAX_PAGES; pageIndex += 1) {
     const page = await fetchCatalogPage(token.accessToken, nextCursor);
     collected.push(...page.items);
+    payloadShapes.add(page.payloadShape);
+    pageCount += 1;
 
     if (!page.nextCursor || page.nextCursor === nextCursor || page.items.length === 0) {
       break;
@@ -371,6 +388,11 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     skippedCount,
     lastImportAt: now,
     mode: getWalmartRuntimeMode(),
+    importDiagnostics: {
+      fetchedCount: collected.length,
+      payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
+      pageCount,
+    },
   };
 }
 

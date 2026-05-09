@@ -19,13 +19,15 @@ export async function POST(req: NextRequest) {
     }
 
     const result = await importWalmartProducts(userId);
+    const fetchedCount = result.importDiagnostics?.fetchedCount ?? result.fetchedCount ?? 0;
+    const payloadShape = result.importDiagnostics?.payloadShape ?? "unknown";
     return ok({
       ok: true,
       ...result,
       message:
         result.importedCount > 0
           ? `Imported ${result.importedCount} Walmart product(s).`
-          : "Walmart import completed but no catalog rows were returned for this account.",
+          : `Walmart import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}.`,
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to import Walmart products.");
