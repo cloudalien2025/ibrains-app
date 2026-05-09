@@ -1,20 +1,27 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { listWalmartProducts } from "@/lib/ecomviper/walmart/walmart-products";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { listWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
 
 export async function GET(req: NextRequest) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) return unauthorizedResponse;
+      return fail(401, "Please sign in before viewing Walmart products.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before viewing Walmart products.", "UNAUTHORIZED");
+    }
 
     const search = req.nextUrl.searchParams.get("search") ?? "";
     const filter = req.nextUrl.searchParams.get("filter") ?? "all";
 
-    const products = filterWalmartProducts(listWalmartProducts(), { query: search, filter });
+    const allProducts = await listWalmartProductsForUser(userId);
+    const products = filterWalmartProducts(allProducts, { query: search, filter });
 
     return ok({
       ok: true,

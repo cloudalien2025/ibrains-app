@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
-import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
+import { getWalmartDashboardSnapshotForUser } from "@/lib/ecomviper/walmart/walmart-products";
 
 export async function GET() {
   try {
@@ -19,7 +19,7 @@ export async function GET() {
     }
 
     const health = await getWalmartConnectionHealthForUser(userId);
-    const dashboard = getWalmartDashboardSnapshot();
+    const dashboard = await getWalmartDashboardSnapshotForUser(userId);
 
     return ok({
       ok: true,

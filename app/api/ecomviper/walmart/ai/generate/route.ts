@@ -5,7 +5,7 @@ import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { generateWalmartAiSuggestion } from "@/lib/ecomviper/walmart/walmart-ai-optimizer";
 import { getWalmartOpenAiApiKeyForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
-import { getWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-products";
+import { getWalmartProductBySkuForUser } from "@/lib/ecomviper/walmart/walmart-products";
 
 export async function POST(req: NextRequest) {
   try {
@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const product = getWalmartProductBySku(sku);
+    const product = await getWalmartProductBySkuForUser(userId, sku);
     if (!product) {
       return fail(404, `Product not found for SKU: ${sku}`, "NOT_FOUND");
     }

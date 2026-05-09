@@ -90,6 +90,8 @@ describe("walmart product import", () => {
     vi.clearAllMocks();
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
   });
 
   it("imports image URL when present on an ItemResponse array payload", async () => {
