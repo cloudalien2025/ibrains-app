@@ -142,7 +142,7 @@ describe("walmart product import", () => {
     expect(result.skippedCount).toBe(0);
     expect(result.importDiagnostics?.payloadShape).toBe("root.ItemResponse.array");
     expect(product?.imageUrl).toBe("https://images.example.com/30066-841.jpg");
-    expect(product?.issues).not.toContain("Missing image");
+    expect(product?.issues).not.toContain("Image not provided by Walmart catalog");
     expect(product?.inventoryQuantity).toBe(12);
     expect(product?.inventoryStatus).toBe("known");
   });
@@ -233,7 +233,7 @@ describe("walmart product import", () => {
     const product = listWalmartProducts().find((entry) => entry.sku === "NO-IMAGE-1");
 
     expect(product?.imageUrl).toBe("");
-    expect(product?.issues).toContain("Missing image");
+    expect(product?.issues).toContain("Image not provided by Walmart catalog");
     expect(product?.inventoryQuantity).toBe(7);
     expect(product?.inventoryStatus).toBe("known");
   });

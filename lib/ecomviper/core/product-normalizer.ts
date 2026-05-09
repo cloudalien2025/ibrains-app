@@ -28,7 +28,7 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
   const inventoryStatus = input.inventoryStatus ?? "known";
   const issues: string[] = [];
 
-  if (!hasImage) issues.push("Missing image");
+  if (!hasImage) issues.push("Image not provided by Walmart catalog");
   if (!input.price || input.price <= 0) issues.push("Price missing");
   if (inventoryStatus === "out_of_stock" || (inventoryStatus === "known" && inventoryQuantity <= 0)) {
     issues.push("Out of stock");

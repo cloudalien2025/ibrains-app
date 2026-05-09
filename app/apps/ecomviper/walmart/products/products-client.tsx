@@ -17,7 +17,7 @@ const filters = [
   { id: "needs_attention", label: "Needs attention" },
   { id: "out_of_stock", label: "Out of stock" },
   { id: "low_stock", label: "Low stock" },
-  { id: "missing_image", label: "Missing image" },
+  { id: "missing_image", label: "Catalog image missing" },
   { id: "missing_attributes", label: "Missing attributes" },
   { id: "price_missing", label: "Price missing" },
   { id: "sync_failed", label: "Sync failed" },
@@ -152,8 +152,22 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                       <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
                     )}
                   </td>
-                  <td className="py-2 pr-2 font-medium text-[#0F172A]">{product.sku}</td>
-                  <td className="py-2 pr-2 text-[#334155]">{product.title}</td>
+                  <td className="py-2 pr-2 font-medium text-[#0F172A]">
+                    <Link
+                      href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                      className="hover:text-[#1D4ED8]"
+                    >
+                      {product.sku}
+                    </Link>
+                  </td>
+                  <td className="py-2 pr-2 text-[#334155]">
+                    <Link
+                      href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                      className="hover:text-[#1D4ED8]"
+                    >
+                      {product.title}
+                    </Link>
+                  </td>
                   <td className="py-2 pr-2 text-[#334155]">{product.brand}</td>
                   <td className="py-2 pr-2 text-[#334155]">${product.price.toFixed(2)}</td>
                   <td className="py-2 pr-2 text-[#334155]">{formatInventory(product)}</td>

@@ -2,7 +2,13 @@ import Link from "next/link";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { getWalmartConnectionHealth, getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import type {
+  WalmartConnectionHealth,
+  WalmartDashboardSnapshot,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 export const dynamic = "force-dynamic";
 
@@ -11,24 +17,93 @@ function apiErrorMessage(value: { code: string; message: string } | null): strin
   return `${value.message} (${value.code})`;
 }
 
+interface WalmartDashboardConnectionUi {
+  badgeLabel: "Connected" | "Failed" | "Not Connected";
+  connected: boolean;
+  primaryActionLabel: "Connect Walmart" | "Manage Walmart Connection";
+  primaryActionHref: "/apps/ecomviper/walmart/connect";
+  primaryActionClassName: string;
+  lastAuth: string;
+  lastSync: string;
+  lastImport: string;
+  lastError: string;
+}
+
+function hasRecentSuccessfulWalmartApiSignal(
+  snapshot: WalmartDashboardSnapshot,
+  connection: WalmartConnectionHealth
+): boolean {
+  if (snapshot.productsImported > 0) return true;
+  if (snapshot.lastImportAt) return true;
+  if (connection.lastSuccessfulApiCall) return true;
+  if (connection.summary.lastSuccessfulAuth) return true;
+  if (connection.summary.lastSuccessfulRead) return true;
+
+  return snapshot.recentActivity.some(
+    (entry) =>
+      entry.result === "success" &&
+      (entry.action === "product_import" || entry.action === "inventory_update" || entry.action === "pricing_update")
+  );
+}
+
+function hasStoredCredentialSignal(connection: WalmartConnectionHealth): boolean {
+  return connection.summary.clientSecretStored || connection.summary.maskedClientId !== "Not configured";
+}
+
+export function buildWalmartDashboardConnectionUi(
+  snapshot: WalmartDashboardSnapshot,
+  connection: WalmartConnectionHealth
+): WalmartDashboardConnectionUi {
+  const successfulApiSignal = hasRecentSuccessfulWalmartApiSignal(snapshot, connection);
+  const storedCredentials = hasStoredCredentialSignal(connection);
+
+  const connectedByStatus =
+    connection.connectionStatus === "connected" ||
+    connection.connectionStatus === "token_valid" ||
+    connection.connectionStatus === "token_valid_read_not_configured";
+
+  const connected = connectedByStatus ? storedCredentials || successfulApiSignal : successfulApiSignal;
+  const badgeLabel = connected ? "Connected" : connection.connectionStatus === "failed" ? "Failed" : "Not Connected";
+
+  const primaryActionClassName = connected
+    ? "rounded-lg border border-emerald-600 bg-emerald-600 px-3 py-2 text-sm font-medium text-white transition hover:border-emerald-700 hover:bg-emerald-700"
+    : "rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]";
+
+  return {
+    badgeLabel,
+    connected,
+    primaryActionLabel: connected ? "Manage Walmart Connection" : "Connect Walmart",
+    primaryActionHref: "/apps/ecomviper/walmart/connect",
+    primaryActionClassName,
+    lastAuth: connection.summary.lastSuccessfulAuth ?? "Never",
+    lastSync: connection.summary.lastSuccessfulRead ?? connection.lastSuccessfulApiCall ?? snapshot.lastImportAt ?? "Not yet",
+    lastImport: snapshot.lastImportAt ?? "Not imported yet",
+    lastError: apiErrorMessage(connection.lastApiError),
+  };
+}
+
 function formatInventory(product: WalmartProductRecord): string {
   if (product.inventoryStatus === "unknown") return "Not synced";
   if (product.inventoryStatus === "out_of_stock") return "Out of stock";
   return String(product.inventoryQuantity);
 }
 
-export default function WalmartDashboardPage() {
-  const snapshot = getWalmartDashboardSnapshot();
+async function resolveDashboardConnectionHealth(): Promise<WalmartConnectionHealth> {
+  try {
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse || !userId) {
+      return getWalmartConnectionHealth();
+    }
+    return await getWalmartConnectionHealthForUser(userId);
+  } catch {
+    return getWalmartConnectionHealth();
+  }
+}
 
-  const connectionStatus =
-    snapshot.connection.connectionStatus === "connected"
-      ? "Connected"
-      : snapshot.connection.connectionStatus === "token_valid" ||
-          snapshot.connection.connectionStatus === "token_valid_read_not_configured"
-        ? "Token Valid"
-        : snapshot.connection.connectionStatus === "failed"
-          ? "Failed"
-          : "Not Connected";
+export default async function WalmartDashboardPage() {
+  const snapshot = getWalmartDashboardSnapshot();
+  const connection = await resolveDashboardConnectionHealth();
+  const connectionUi = buildWalmartDashboardConnectionUi(snapshot, connection);
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-dashboard">
@@ -38,10 +113,10 @@ export default function WalmartDashboardPage() {
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
-              href="/apps/ecomviper/walmart/connect"
-              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white transition hover:border-[#1D4ED8] hover:bg-[#1D4ED8]"
+              href={connectionUi.primaryActionHref}
+              className={connectionUi.primaryActionClassName}
             >
-              Connect Walmart
+              {connectionUi.primaryActionLabel}
             </Link>
             <Link
               href="/apps/ecomviper/walmart/products"
@@ -62,10 +137,12 @@ export default function WalmartDashboardPage() {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" data-testid="ecomviper-walmart-metric-cards">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Connection Health</p>
-          <div className="mt-2"><StatusBadge status={connectionStatus} /></div>
+          <div className="mt-2"><StatusBadge status={connectionUi.badgeLabel} /></div>
           <p className="mt-2 text-sm text-[#334155]">Production</p>
-          <p className="mt-1 text-xs text-[#64748B]">Last auth: {snapshot.connection.summary.lastSuccessfulAuth ?? "Never"}</p>
-          <p className="mt-1 text-xs text-[#64748B]">Last error: {apiErrorMessage(snapshot.connection.lastApiError)}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Last auth: {connectionUi.lastAuth}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Last sync: {connectionUi.lastSync}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Last import: {connectionUi.lastImport}</p>
+          <p className="mt-1 text-xs text-[#64748B]">Last error: {connectionUi.lastError}</p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
           <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products Imported</p>
