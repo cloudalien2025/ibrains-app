@@ -12,9 +12,29 @@ function unique(values: string[]): string[] {
 
 function toImageStatusMessage(
   product: WalmartProductRecord
-): "Image available" | "Image not provided by Walmart catalog" | "Image enrichment source not configured" {
+):
+  | "Image available"
+  | "Image not provided by Walmart catalog"
+  | "Image enrichment source not configured"
+  | "Image not provided by Walmart Item Search"
+  | "Image match ambiguous"
+  | "Image sync failed"
+  | "Image enrichment not synced" {
   if (product.imageStatus === "image_available" || Boolean(product.imageUrl)) {
     return "Image available";
+  }
+
+  if (product.imageSyncStatus === "not_found" || product.issues.includes("Image not provided by Walmart Item Search")) {
+    return "Image not provided by Walmart Item Search";
+  }
+  if (product.imageSyncStatus === "ambiguous" || product.issues.includes("Image match ambiguous")) {
+    return "Image match ambiguous";
+  }
+  if (product.imageSyncStatus === "failed" || product.issues.includes("Image sync failed")) {
+    return "Image sync failed";
+  }
+  if (product.imageSyncStatus === "not_synced" || product.issues.includes("Image enrichment not synced")) {
+    return "Image enrichment not synced";
   }
 
   if (
@@ -93,18 +113,41 @@ export function assessWalmartListingQuality(product: WalmartProductRecord): Walm
 
   const imageStatus = toImageStatusMessage(product);
   if (imageStatus !== "Image available") {
+    const weight =
+      imageStatus === "Image sync failed"
+        ? 16
+        : imageStatus === "Image enrichment source not configured"
+          ? 18
+          : imageStatus === "Image match ambiguous"
+            ? 13
+            : imageStatus === "Image enrichment not synced"
+              ? 10
+              : 12;
+
+    const imageReason =
+      imageStatus === "Image not provided by Walmart Item Search"
+        ? "Walmart Item Search did not return an image for this SKU."
+        : imageStatus === "Image match ambiguous"
+          ? "Walmart Item Search returned multiple possible image matches."
+          : imageStatus === "Image sync failed"
+            ? "Walmart Item Search image sync failed for this SKU."
+            : imageStatus === "Image enrichment not synced"
+              ? "Image enrichment has not been synced yet."
+              : imageStatus === "Image enrichment source not configured"
+                ? "Catalog payload has no image and no enrichment provider is configured."
+                : "Catalog payload has no image URL for this SKU.";
+
     apply(
-      imageStatus === "Image enrichment source not configured" ? 18 : 12,
+      weight,
       imageStatus,
       {
         id: "image_enrichment",
         title: "Resolve primary image",
-        reason:
-          imageStatus === "Image enrichment source not configured"
-            ? "Catalog payload has no image and no enrichment provider is configured."
-            : "Catalog payload has no image URL for this SKU.",
+        reason: imageReason,
         proposedImageAction:
-          imageStatus === "Image enrichment source not configured" ? "manual_image_required" : "request_enrichment",
+          imageStatus === "Image enrichment source not configured" || imageStatus === "Image enrichment not synced"
+            ? "manual_image_required"
+            : "request_enrichment",
       }
     );
   }
@@ -205,7 +248,10 @@ export function buildDeterministicOptimizationProposal(
     proposedImageAction:
       assessment.imageStatus === "Image available"
         ? "keep"
-        : assessment.imageStatus === "Image not provided by Walmart catalog"
+        : assessment.imageStatus === "Image not provided by Walmart catalog" ||
+            assessment.imageStatus === "Image not provided by Walmart Item Search" ||
+            assessment.imageStatus === "Image match ambiguous" ||
+            assessment.imageStatus === "Image sync failed"
           ? "request_enrichment"
           : "manual_image_required",
     recommendationReason: topReasons.join(" "),

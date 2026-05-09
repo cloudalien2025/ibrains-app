@@ -32,7 +32,9 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     inventoryStatus: "known",
     status: "attention",
     imageUrl: "",
-    issues: ["Image not provided by Walmart catalog"],
+    imageSyncStatus: "not_found",
+    imageSource: "walmart_item_search",
+    issues: ["Image not provided by Walmart Item Search"],
     attributes: {},
     shortDescription: "",
     longDescription: "",
@@ -55,10 +57,27 @@ describe("Walmart products client UX", () => {
     expect(html).toContain(">Walmart Product<");
   });
 
-  it("shows clearer image issue copy for missing Walmart catalog images", () => {
+  it("shows Item Search image issue copy for missing images", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 
-    expect(html).toContain("Image not provided by Walmart catalog");
+    expect(html).toContain("Image not provided by Walmart Item Search");
     expect(html).not.toContain("Missing image");
+  });
+
+  it("renders thumbnail image when primary image exists", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageUrl: "https://images.example.com/primary.jpg",
+            imageSyncStatus: "found",
+            issues: [],
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain('src="https://images.example.com/primary.jpg"');
+    expect(html).not.toContain(">N/A<");
   });
 });

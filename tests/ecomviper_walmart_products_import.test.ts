@@ -43,8 +43,10 @@ vi.mock("@/lib/ecomviper/walmart/walmart-auth", () => ({
 function createFetchMock(params: {
   catalogPayload: unknown;
   inventoryBySku?: Record<string, unknown | null>;
+  itemSearchByMethod?: Partial<Record<"gtin" | "upc" | "itemId" | "wpid" | "query", unknown>>;
 }) {
   const inventoryBySku = params.inventoryBySku ?? {};
+  const itemSearchByMethod = params.itemSearchByMethod ?? {};
 
   return vi.fn(async (input: RequestInfo | URL) => {
     const url =
@@ -53,6 +55,25 @@ function createFetchMock(params: {
         : input instanceof URL
           ? input.toString()
           : input.url;
+
+    if (url.includes("/v3/items/walmart/search")) {
+      const parsed = new URL(url);
+      let key: "gtin" | "upc" | "itemId" | "wpid" | "query" = "query";
+      if (parsed.searchParams.get("gtin")) key = "gtin";
+      else if (parsed.searchParams.get("upc")) key = "upc";
+      else if (parsed.searchParams.get("query")) {
+        const queryValue = parsed.searchParams.get("query") ?? "";
+        if (/^item[-_ ]?id[: ]?/i.test(queryValue)) key = "itemId";
+        else if (/^wpid[: ]?/i.test(queryValue)) key = "wpid";
+        else key = "query";
+      }
+
+      const payload = itemSearchByMethod[key] ?? { items: [] };
+      return new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
 
     if (url.includes("/v3/items")) {
       return new Response(JSON.stringify(params.catalogPayload), {
@@ -237,12 +258,198 @@ describe("walmart product import", () => {
     const product = listWalmartProducts().find((entry) => entry.sku === "NO-IMAGE-1");
 
     expect(product?.imageUrl).toBe("");
-    expect(product?.imageStatusMessage).toBe("Image enrichment source not configured");
-    expect(product?.issues).toContain("Image not provided by Walmart catalog");
-    expect(product?.issues).toContain("Image enrichment source not configured");
+    expect(product?.imageStatusMessage).toBe("Image not provided by Walmart Item Search");
+    expect(product?.imageSyncStatus).toBe("not_found");
+    expect(product?.issues).toContain("Image not provided by Walmart Item Search");
+    expect(product?.issues).not.toContain("Image not provided by Walmart catalog");
     expect(product?.status).not.toBe("sync_failed");
     expect(product?.inventoryQuantity).toBe(7);
     expect(product?.inventoryStatus).toBe("known");
+  });
+
+  it("enriches missing catalog images using Item Search with GTIN/UPC priority", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-image-gtin",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "GTIN-IMAGE-1",
+            productName: "GTIN Image Product",
+            brand: "Walmart Brand",
+            gtin: "000111222333",
+            upc: "111222333444",
+            availability: "In_stock",
+            price: { amount: "22.00" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "GTIN-IMAGE-1": {
+          sku: "GTIN-IMAGE-1",
+          quantity: { unit: "EACH", amount: 4 },
+        },
+      },
+      itemSearchByMethod: {
+        gtin: {
+          items: [
+            {
+              itemId: "12345",
+              gtin: "000111222333",
+              productName: "GTIN Image Product",
+              brand: "Walmart Brand",
+              images: [{ url: "http://images.example.com/gtin-image-1.jpg" }],
+              properties: {
+                variants: {
+                  variantData: [{ productImageUrl: "https://images.example.com/gtin-image-1-variant.jpg" }],
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "GTIN-IMAGE-1");
+
+    expect(result.importDiagnostics?.imageFoundCount).toBe(1);
+    expect(result.importDiagnostics?.imageSource).toBe("Walmart Item Search");
+    expect(product?.imageUrl).toBe("https://images.example.com/gtin-image-1.jpg");
+    expect(product?.imageSyncStatus).toBe("found");
+    expect(product?.imageMatchMethod).toBe("gtin");
+    expect(product?.imageSource).toBe("walmart_item_search");
+    expect(product?.gtin).toBe("000111222333");
+    expect(product?.upc).toBe("111222333444");
+    expect(product?.galleryImageUrls).toContain("https://images.example.com/gtin-image-1.jpg");
+    expect(product?.variantImageUrls).toContain("https://images.example.com/gtin-image-1-variant.jpg");
+    expect(product?.issues).not.toContain("Image not provided by Walmart Item Search");
+  });
+
+  it("uses title/brand query fallback when identifiers are unavailable", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-image-query",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "QUERY-IMAGE-1",
+            productName: "Daily Wellness Formula",
+            brand: "BrandX",
+            availability: "In_stock",
+            price: { amount: "12.50" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "QUERY-IMAGE-1": {
+          sku: "QUERY-IMAGE-1",
+          quantity: { unit: "EACH", amount: 5 },
+        },
+      },
+      itemSearchByMethod: {
+        query: {
+          items: [
+            {
+              itemId: "Q-100",
+              productName: "Daily Wellness Formula",
+              brand: "BrandX",
+              images: [{ url: "https://images.example.com/query-image-1.jpg" }],
+            },
+          ],
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "QUERY-IMAGE-1");
+
+    expect(product?.imageUrl).toBe("https://images.example.com/query-image-1.jpg");
+    expect(product?.imageMatchMethod).toBe("query");
+    expect(product?.imageSyncStatus).toBe("found");
+  });
+
+  it("does not fail import when Item Search image sync fails for a SKU", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-image-fail",
+    });
+
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.includes("/v3/items/walmart/search")) {
+          return new Response(JSON.stringify({ message: "service unavailable" }), {
+            status: 503,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.includes("/v3/items")) {
+          return new Response(
+            JSON.stringify({
+              ItemResponse: [
+                {
+                  sku: "FAILED-IMG-1",
+                  productName: "Image Failure Product",
+                  brand: "Walmart Brand",
+                  price: { amount: "10.99" },
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+        if (url.includes("/v3/inventory")) {
+          return new Response(JSON.stringify({ quantity: { amount: 3 } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        return new Response(JSON.stringify({ message: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      })
+    );
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "FAILED-IMG-1");
+
+    expect(result.importedCount).toBe(1);
+    expect(result.importDiagnostics?.imageFailedCount).toBe(1);
+    expect(product?.imageSyncStatus).toBe("failed");
+    expect(product?.issues).toContain("Image sync failed");
+    expect(product?.inventoryQuantity).toBe(3);
   });
 
   it("treats missing inventory as unknown and only flags out-of-stock on explicit zero quantity", async () => {

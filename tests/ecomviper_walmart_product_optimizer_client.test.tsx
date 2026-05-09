@@ -26,10 +26,15 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     inventoryStatus: "known",
     status: "attention",
     imageUrl: "",
-    imageStatus: "enrichment_unconfigured",
-    imageStatusMessage: "Image enrichment source not configured",
-    imageSource: "none",
-    issues: ["Image not provided by Walmart catalog", "Image enrichment source not configured"],
+    imageStatus: "catalog_missing",
+    imageStatusMessage: "Image not provided by Walmart Item Search",
+    imageSyncStatus: "not_found",
+    imageSource: "walmart_item_search",
+    imageMatchMethod: "query",
+    matchedItemId: "WM-123",
+    galleryImageUrls: [],
+    variantImageUrls: [],
+    issues: ["Image not provided by Walmart Item Search"],
     attributes: {},
     shortDescription: "",
     longDescription: "",
@@ -89,12 +94,16 @@ describe("Walmart product optimizer client", () => {
 
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
     expect(html).toContain("30066-841");
-    expect(html).toContain("Image enrichment source not configured");
+    expect(html).toContain("Image not provided by Walmart Item Search");
     expect(html).toContain("Known (9)");
     expect(html).toContain("AI recommendation unavailable until provider is connected");
     expect(html).toContain("Deterministic recommendation");
     expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
     expect(html).toContain("Stage Deterministic Recommendations");
+    expect(html).toContain("Match method: query");
+    expect(html).toContain("Matched itemId: WM-123");
+    expect(html).toContain("Gallery images: 0");
+    expect(html).toContain("Variant images: 0");
   });
 
   it("renders staged changes section with proposal data", () => {
