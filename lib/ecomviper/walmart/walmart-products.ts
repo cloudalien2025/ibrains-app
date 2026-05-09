@@ -159,12 +159,17 @@ function imageIssueBySyncStatus(status: WalmartImageSyncStatus): string | null {
   return null;
 }
 
-function imageStatusMessageBySyncStatus(status: WalmartImageSyncStatus): WalmartProductRecord["imageStatusMessage"] {
+function imageStatusMessageBySyncStatus(
+  status: WalmartImageSyncStatus,
+  reason?: string | null
+): WalmartProductRecord["imageStatusMessage"] {
   if (status === "found") return "Image available";
-  if (status === "not_found") return "Image not provided by Walmart Item Search";
-  if (status === "ambiguous") return "Image match ambiguous";
-  if (status === "failed") return "Image sync failed";
-  return "Image enrichment not synced";
+  const safeReason = reason?.trim();
+  if (safeReason) return safeReason;
+  if (status === "not_found") return "Item Search returned no usable image.";
+  if (status === "ambiguous") return "Multiple Walmart Item Search candidates matched this product.";
+  if (status === "failed") return "Item Search request failed after retry.";
+  return "Image enrichment not synced.";
 }
 
 function extractCatalogIdentifiers(item: Record<string, unknown>): {
@@ -754,13 +759,33 @@ function withImageEnrichment(
   product: WalmartProductRecord,
   enrichment: {
     imageSyncStatus: WalmartImageSyncStatus;
+    statusReason?: string;
     primaryImageUrl: string;
     galleryImageUrls: string[];
     variantImageUrls: string[];
     matchedItemId: string | null;
     matchMethod: WalmartImageMatchMethod | null;
     lastImageSyncedAt: string;
-    diagnostics: Array<{ method: WalmartImageMatchMethod; httpStatus: number | null; resultCount: number; ok: boolean }>;
+    diagnostics: {
+      attempts: Array<{
+        method: WalmartImageMatchMethod;
+        httpStatus: number | null;
+        resultCount: number;
+        ok: boolean;
+        retryCount?: number;
+        transientRetries?: number;
+        failureReason?: string;
+      }>;
+      decision?: {
+        outcome: WalmartImageSyncStatus;
+        reason: string;
+        matchMethod: WalmartImageMatchMethod | null;
+        candidateCount: number;
+        selectedScore: number | null;
+        runnerUpScore: number | null;
+        acceptedBy: "identifier_exact" | "title_brand_strong" | "none";
+      };
+    };
   }
 ): WalmartProductRecord {
   const hasExistingImage = Boolean(product.imageUrl.trim());
@@ -801,7 +826,9 @@ function withImageEnrichment(
         imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod ?? null,
         matchedItemId: enrichment.matchedItemId ?? product.matchedItemId ?? null,
         lastImageSyncedAt: enrichment.lastImageSyncedAt,
-        imageSyncDiagnostics: enrichment.diagnostics,
+        imageSyncDiagnostics: enrichment.diagnostics.attempts,
+        imageSyncDecision: enrichment.diagnostics.decision ?? null,
+        imageSyncReason: enrichment.statusReason ?? null,
       },
     };
   }
@@ -824,7 +851,9 @@ function withImageEnrichment(
         imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod ?? null,
         matchedItemId: enrichment.matchedItemId ?? product.matchedItemId ?? null,
         lastImageSyncedAt: enrichment.lastImageSyncedAt,
-        imageSyncDiagnostics: enrichment.diagnostics,
+        imageSyncDiagnostics: enrichment.diagnostics.attempts,
+        imageSyncDecision: enrichment.diagnostics.decision ?? null,
+        imageSyncReason: enrichment.statusReason ?? null,
       },
     };
   }
@@ -832,7 +861,7 @@ function withImageEnrichment(
   const imageIssues = imageIssue ? [imageIssue] : [];
   const imageStatus =
     enrichment.imageSyncStatus === "not_synced" ? "enrichment_unconfigured" : "catalog_missing";
-  const imageStatusMessage = imageStatusMessageBySyncStatus(enrichment.imageSyncStatus);
+  const imageStatusMessage = imageStatusMessageBySyncStatus(enrichment.imageSyncStatus, enrichment.statusReason);
   const nextIssues = unique([...baseIssues, ...imageIssues]);
 
   return {
@@ -860,7 +889,9 @@ function withImageEnrichment(
       imageMatchMethod: enrichment.matchMethod ?? null,
       matchedItemId: enrichment.matchedItemId ?? null,
       lastImageSyncedAt: enrichment.lastImageSyncedAt,
-      imageSyncDiagnostics: enrichment.diagnostics,
+      imageSyncDiagnostics: enrichment.diagnostics.attempts,
+      imageSyncDecision: enrichment.diagnostics.decision ?? null,
+      imageSyncReason: enrichment.statusReason ?? null,
     },
   };
 }
@@ -904,13 +935,25 @@ async function enrichProductImages(
             enrichment: {
               imageSyncStatus: "failed" as const,
               imageSource: "walmart_item_search" as const,
+              statusReason: "Item Search request failed after retry.",
               primaryImageUrl: "",
               galleryImageUrls: [],
               variantImageUrls: [],
               matchedItemId: null,
               matchMethod: null,
               lastImageSyncedAt: new Date().toISOString(),
-              diagnostics: { attempts: [] },
+              diagnostics: {
+                attempts: [],
+                decision: {
+                  outcome: "failed",
+                  reason: "Item Search request failed after retry.",
+                  matchMethod: null,
+                  candidateCount: 0,
+                  selectedScore: null,
+                  runnerUpScore: null,
+                  acceptedBy: "none",
+                },
+              },
             },
           } as const;
         }
@@ -926,13 +969,17 @@ async function enrichProductImages(
 
       enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
         imageSyncStatus: enrichment.imageSyncStatus,
+        statusReason: enrichment.statusReason,
         primaryImageUrl: enrichment.primaryImageUrl,
         galleryImageUrls: [...enrichment.galleryImageUrls],
         variantImageUrls: [...enrichment.variantImageUrls],
         matchedItemId: enrichment.matchedItemId,
         matchMethod: enrichment.matchMethod,
         lastImageSyncedAt: enrichment.lastImageSyncedAt,
-        diagnostics: [...enrichment.diagnostics.attempts],
+        diagnostics: {
+          attempts: [...enrichment.diagnostics.attempts],
+          decision: enrichment.diagnostics.decision,
+        },
       });
 
       if (enrichment.imageSyncStatus === "found") stats.found += 1;
