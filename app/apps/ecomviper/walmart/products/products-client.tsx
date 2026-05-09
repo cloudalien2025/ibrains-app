@@ -43,6 +43,12 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       const response = await fetch("/api/ecomviper/walmart/products/import", { method: "POST" });
       const payload = (await response.json().catch(() => ({}))) as {
         message?: string;
+        importedCount?: number;
+        fetchedCount?: number;
+        importDiagnostics?: {
+          payloadShape?: string;
+          fetchedCount?: number;
+        };
         error?: { message?: string };
       };
 
@@ -51,7 +57,17 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         return;
       }
 
-      setMessage(payload.message ?? "Import completed.");
+      const importedCount = typeof payload.importedCount === "number" ? payload.importedCount : null;
+      if (importedCount === 0) {
+        const fetchedCount = payload.importDiagnostics?.fetchedCount ?? payload.fetchedCount ?? 0;
+        const payloadShape = payload.importDiagnostics?.payloadShape ?? "unknown";
+        setMessage(
+          payload.message ??
+            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}.`
+        );
+      } else {
+        setMessage(payload.message ?? "Import completed.");
+      }
       router.refresh();
     } catch {
       setMessage("Import failed.");

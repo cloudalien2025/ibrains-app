@@ -179,6 +179,11 @@ export interface WalmartImportResult {
   mode: RuntimeMode;
   fetchedCount?: number;
   skippedCount?: number;
+  importDiagnostics?: {
+    fetchedCount: number;
+    payloadShape: string;
+    pageCount: number;
+  };
 }
 
 export interface WalmartInventoryUpdateRequest {
