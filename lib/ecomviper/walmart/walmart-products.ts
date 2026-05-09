@@ -5,6 +5,7 @@ import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
+import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import {
@@ -151,8 +152,14 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
 }
 
-function imageIssueBySyncStatus(status: WalmartImageSyncStatus): string | null {
-  if (status === "not_found") return "Image not provided by Walmart Item Search";
+function imageIssueBySyncStatus(
+  status: WalmartImageSyncStatus,
+  source: WalmartProductRecord["imageSource"]
+): string | null {
+  if (status === "not_found") {
+    if (source === "walmart_item_search") return "Image not provided by Walmart Item Search";
+    return "Image not provided by Walmart catalog";
+  }
   if (status === "ambiguous") return "Image match ambiguous";
   if (status === "failed") return "Image sync failed";
   if (status === "not_synced") return "Image enrichment not synced";
@@ -166,10 +173,10 @@ function imageStatusMessageBySyncStatus(
   if (status === "found") return "Image available";
   const safeReason = reason?.trim();
   if (safeReason) return safeReason;
-  if (status === "not_found") return "Item Search returned no usable image.";
-  if (status === "ambiguous") return "Multiple Walmart Item Search candidates matched this product.";
-  if (status === "failed") return "Item Search request failed after retry.";
-  return "Image enrichment not synced.";
+  if (status === "not_found") return "Image not provided by Walmart catalog";
+  if (status === "ambiguous") return "Image match ambiguous";
+  if (status === "failed") return "Image sync failed";
+  return "Image enrichment not synced";
 }
 
 function extractCatalogIdentifiers(item: Record<string, unknown>): {
@@ -753,6 +760,17 @@ interface ImageEnrichmentStats {
   notFound: number;
   ambiguous: number;
   failed: number;
+  sourceBreakdown: {
+    walmartItemReport: number;
+    walmartSellerCatalogSearch: number;
+    walmartItemSearch: number;
+  };
+  itemReport: {
+    requested: boolean;
+    downloaded: boolean;
+    rowsParsed: number;
+    requestId: string | null;
+  };
 }
 
 function withImageEnrichment(
@@ -760,6 +778,7 @@ function withImageEnrichment(
   enrichment: {
     imageSyncStatus: WalmartImageSyncStatus;
     statusReason?: string;
+    imageSource: WalmartProductRecord["imageSource"];
     primaryImageUrl: string;
     galleryImageUrls: string[];
     variantImageUrls: string[];
@@ -789,7 +808,7 @@ function withImageEnrichment(
   }
 ): WalmartProductRecord {
   const hasExistingImage = Boolean(product.imageUrl.trim());
-  const imageIssue = imageIssueBySyncStatus(enrichment.imageSyncStatus);
+  const imageIssue = imageIssueBySyncStatus(enrichment.imageSyncStatus, enrichment.imageSource);
   const baseIssues = stripImageIssues(product.issues);
 
   if (enrichment.imageSyncStatus === "found" && enrichment.primaryImageUrl) {
@@ -808,7 +827,7 @@ function withImageEnrichment(
       variantImageUrls,
       imageStatus: "image_available",
       imageStatusMessage: "Image available",
-      imageSource: "walmart_item_search",
+      imageSource: enrichment.imageSource ?? product.imageSource ?? "walmart_item_search",
       imageSyncStatus: "found",
       imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod,
       matchedItemId: enrichment.matchedItemId ?? product.matchedItemId,
@@ -821,7 +840,7 @@ function withImageEnrichment(
         variantImageUrls,
         imageStatus: "image_available",
         imageStatusMessage: "Image available",
-        imageSource: "walmart_item_search",
+        imageSource: enrichment.imageSource ?? product.imageSource ?? "walmart_item_search",
         imageSyncStatus: "found",
         imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod ?? null,
         matchedItemId: enrichment.matchedItemId ?? product.matchedItemId ?? null,
@@ -840,7 +859,7 @@ function withImageEnrichment(
       imageStatus: "image_available",
       imageStatusMessage: "Image available",
       imageSyncStatus: enrichment.imageSyncStatus,
-      imageSource: product.imageSource ?? "walmart_catalog",
+      imageSource: product.imageSource ?? enrichment.imageSource ?? "walmart_catalog",
       imageMatchMethod: enrichment.matchMethod ?? product.imageMatchMethod,
       matchedItemId: enrichment.matchedItemId ?? product.matchedItemId,
       lastImageSyncedAt: enrichment.lastImageSyncedAt,
@@ -871,7 +890,7 @@ function withImageEnrichment(
     variantImageUrls: [],
     imageStatus,
     imageStatusMessage,
-    imageSource: "walmart_item_search",
+    imageSource: enrichment.imageSource ?? "walmart_item_search",
     imageSyncStatus: enrichment.imageSyncStatus,
     imageMatchMethod: enrichment.matchMethod ?? undefined,
     matchedItemId: enrichment.matchedItemId ?? undefined,
@@ -884,7 +903,7 @@ function withImageEnrichment(
       variantImageUrls: [],
       imageStatus,
       imageStatusMessage,
-      imageSource: "walmart_item_search",
+      imageSource: enrichment.imageSource ?? "walmart_item_search",
       imageSyncStatus: enrichment.imageSyncStatus,
       imageMatchMethod: enrichment.matchMethod ?? null,
       matchedItemId: enrichment.matchedItemId ?? null,
@@ -906,16 +925,80 @@ async function enrichProductImages(
     notFound: 0,
     ambiguous: 0,
     failed: 0,
+    sourceBreakdown: {
+      walmartItemReport: 0,
+      walmartSellerCatalogSearch: 0,
+      walmartItemSearch: 0,
+    },
+    itemReport: {
+      requested: false,
+      downloaded: false,
+      rowsParsed: 0,
+      requestId: null,
+    },
   };
 
-  for (let index = 0; index < enriched.length; index += WALMART_IMAGE_ENRICHMENT_CONCURRENCY) {
-    const batch = enriched.slice(index, index + WALMART_IMAGE_ENRICHMENT_CONCURRENCY);
-    const results = await Promise.all(
-      batch.map(async (product) => {
-        if (product.imageUrl.trim()) {
-          return { product, enrichment: null } as const;
-        }
+  const reportEnrichment = await enrichProductsFromItemReport({
+    accessToken,
+    products: enriched,
+  });
 
+  stats.itemReport.requested = reportEnrichment.run.itemReportRequested;
+  stats.itemReport.downloaded = reportEnrichment.run.itemReportDownloaded;
+  stats.itemReport.rowsParsed = reportEnrichment.run.itemReportRowsParsed;
+  stats.itemReport.requestId = reportEnrichment.run.reportRequestId;
+
+  const shouldFallbackToItemSearch = new Set<string>();
+
+  for (const [skuKey, decision] of reportEnrichment.decisionsBySku.entries()) {
+    const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === skuKey);
+    if (targetIndex < 0) continue;
+
+    const hasImageAfterDecision = Boolean(decision.primaryImageUrl);
+
+    enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
+      imageSyncStatus: decision.imageSyncStatus,
+      statusReason: decision.statusReason,
+      imageSource: decision.imageSource,
+      primaryImageUrl: decision.primaryImageUrl,
+      galleryImageUrls: [...decision.galleryImageUrls],
+      variantImageUrls: [...decision.variantImageUrls],
+      matchedItemId: decision.matchedItemId,
+      matchMethod: decision.matchMethod,
+      lastImageSyncedAt: decision.lastImageSyncedAt,
+      diagnostics: {
+        attempts: reportEnrichment.run.diagnostics.requestAttempts.slice(0, 1).map((entry) => ({
+          method: decision.matchMethod ?? "item_report_sku",
+          httpStatus: entry.httpStatus,
+          resultCount: reportEnrichment.run.itemReportRowsParsed,
+          ok: entry.ok,
+        })),
+        decision: {
+          outcome: decision.imageSyncStatus,
+          reason: decision.statusReason,
+          matchMethod: decision.matchMethod,
+          candidateCount: reportEnrichment.run.itemReportRowsParsed,
+          selectedScore: null,
+          runnerUpScore: null,
+          acceptedBy: "identifier_exact",
+        },
+      },
+    });
+
+    if (!hasImageAfterDecision && decision.allowItemSearchFallback) {
+      shouldFallbackToItemSearch.add(skuKey);
+    }
+  }
+
+  for (let index = 0; index < enriched.length; index += WALMART_IMAGE_ENRICHMENT_CONCURRENCY) {
+    const batch = enriched
+      .slice(index, index + WALMART_IMAGE_ENRICHMENT_CONCURRENCY)
+      .filter((product) => shouldFallbackToItemSearch.has(product.sku.toUpperCase()) && !product.imageUrl.trim());
+
+    if (batch.length === 0) continue;
+
+    const fallbackResults = await Promise.all(
+      batch.map(async (product) => {
         try {
           const enrichment = await enrichWalmartImageFromItemSearch({
             accessToken,
@@ -945,13 +1028,13 @@ async function enrichProductImages(
               diagnostics: {
                 attempts: [],
                 decision: {
-                  outcome: "failed",
+                  outcome: "failed" as const,
                   reason: "Item Search request failed after retry.",
                   matchMethod: null,
                   candidateCount: 0,
                   selectedScore: null,
                   runnerUpScore: null,
-                  acceptedBy: "none",
+                  acceptedBy: "none" as const,
                 },
               },
             },
@@ -960,9 +1043,7 @@ async function enrichProductImages(
       })
     );
 
-    for (const { product, enrichment } of results) {
-      if (!enrichment) continue;
-
+    for (const { product, enrichment } of fallbackResults) {
       const key = product.sku.toUpperCase();
       const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === key);
       if (targetIndex < 0) continue;
@@ -970,6 +1051,7 @@ async function enrichProductImages(
       enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
         imageSyncStatus: enrichment.imageSyncStatus,
         statusReason: enrichment.statusReason,
+        imageSource: "walmart_item_search",
         primaryImageUrl: enrichment.primaryImageUrl,
         galleryImageUrls: [...enrichment.galleryImageUrls],
         variantImageUrls: [...enrichment.variantImageUrls],
@@ -981,12 +1063,29 @@ async function enrichProductImages(
           decision: enrichment.diagnostics.decision,
         },
       });
-
-      if (enrichment.imageSyncStatus === "found") stats.found += 1;
-      else if (enrichment.imageSyncStatus === "not_found") stats.notFound += 1;
-      else if (enrichment.imageSyncStatus === "ambiguous") stats.ambiguous += 1;
-      else if (enrichment.imageSyncStatus === "failed") stats.failed += 1;
     }
+  }
+
+  stats.sourceBreakdown = {
+    walmartItemReport: 0,
+    walmartSellerCatalogSearch: 0,
+    walmartItemSearch: 0,
+  };
+
+  for (const product of enriched) {
+    const source = product.imageSource ?? "none";
+    if (source === "walmart_item_report" && product.imageSyncStatus === "found" && product.imageUrl.trim()) {
+      stats.sourceBreakdown.walmartItemReport += 1;
+    } else if (source === "walmart_item_search" && product.imageSyncStatus === "found" && product.imageUrl.trim()) {
+      stats.sourceBreakdown.walmartItemSearch += 1;
+    } else if (source === "walmart_catalog" && product.imageSyncStatus === "found" && product.imageUrl.trim()) {
+      stats.sourceBreakdown.walmartSellerCatalogSearch += 1;
+    }
+
+    if (product.imageSyncStatus === "found") stats.found += 1;
+    else if (product.imageSyncStatus === "not_found") stats.notFound += 1;
+    else if (product.imageSyncStatus === "ambiguous") stats.ambiguous += 1;
+    else if (product.imageSyncStatus === "failed") stats.failed += 1;
   }
 
   return { products: enriched, stats };
@@ -1070,7 +1169,16 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       imageNotFoundCount: imageStats.notFound,
       imageAmbiguousCount: imageStats.ambiguous,
       imageFailedCount: imageStats.failed,
-      imageSource: "Walmart Item Search",
+      imageSource: "Walmart Item Report + Walmart Item Search",
+      itemReportRequested: imageStats.itemReport.requested,
+      itemReportDownloaded: imageStats.itemReport.downloaded,
+      itemReportRowsParsed: imageStats.itemReport.rowsParsed,
+      itemReportRequestId: imageStats.itemReport.requestId,
+      imageSourceBreakdown: {
+        walmartItemReport: imageStats.sourceBreakdown.walmartItemReport,
+        walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,
+        walmartItemSearch: imageStats.sourceBreakdown.walmartItemSearch,
+      },
     },
   };
 }

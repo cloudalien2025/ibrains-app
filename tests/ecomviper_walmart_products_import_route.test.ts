@@ -82,7 +82,15 @@ describe("walmart products import route", () => {
         imageNotFoundCount: 1,
         imageAmbiguousCount: 0,
         imageFailedCount: 0,
-        imageSource: "Walmart Item Search",
+        imageSource: "Walmart Item Report + Walmart Item Search",
+        itemReportRequested: true,
+        itemReportDownloaded: true,
+        itemReportRowsParsed: 8,
+        imageSourceBreakdown: {
+          walmartItemReport: 1,
+          walmartSellerCatalogSearch: 0,
+          walmartItemSearch: 0,
+        },
       },
     });
 
@@ -94,7 +102,8 @@ describe("walmart products import route", () => {
     expect(payload.importedCount).toBe(2);
     expect(payload.message).toContain("Imported 2 Walmart product");
     expect(payload.message).toContain("Inventory pending for 1 SKU");
-    expect(payload.message).toContain("Image enrichment (Walmart Item Search): found=1, notFound=1, ambiguous=0, failed=0");
+    expect(payload.message).toContain("Image enrichment: found=1, notFound=1, ambiguous=0, failed=0");
+    expect(payload.message).toContain("ItemReport requested=true, downloaded=true, rows=8");
   });
 
   it("returns zero-import diagnostics when no products are imported", async () => {

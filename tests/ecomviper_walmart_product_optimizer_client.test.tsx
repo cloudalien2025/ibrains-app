@@ -100,6 +100,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Deterministic recommendation");
     expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
     expect(html).toContain("Stage Deterministic Recommendations");
+    expect(html).toContain("Source: Walmart Item Search");
     expect(html).toContain("Match method: query");
     expect(html).toContain("Matched itemId: WM-123");
     expect(html).toContain("Gallery images: 0");
@@ -115,5 +116,22 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Improved title");
     expect(html).toContain("manual_image_required");
     expect(html).toContain("Approve for future submit");
+  });
+
+  it("renders Item Report reason and source text when report is the image source", () => {
+    const html = renderToStaticMarkup(
+      <ProductEditorClient
+        product={createProduct({
+          imageSource: "walmart_item_report",
+          imageStatusMessage: "No matching row found in Walmart Item Report.",
+          imageSyncStatus: "not_found",
+        })}
+        stagedDrafts={[]}
+        aiProviderConnected={false}
+      />
+    );
+
+    expect(html).toContain("No matching row found in Walmart Item Report.");
+    expect(html).toContain("Source: Walmart Item Report");
   });
 });

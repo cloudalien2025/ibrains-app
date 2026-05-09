@@ -331,7 +331,7 @@ describe("walmart product import", () => {
     const product = listWalmartProducts().find((entry) => entry.sku === "GTIN-IMAGE-1");
 
     expect(result.importDiagnostics?.imageFoundCount).toBe(1);
-    expect(result.importDiagnostics?.imageSource).toBe("Walmart Item Search");
+    expect(result.importDiagnostics?.imageSource).toBe("Walmart Item Report + Walmart Item Search");
     expect(product?.imageUrl).toBe("https://images.example.com/gtin-image-1.jpg");
     expect(product?.imageSyncStatus).toBe("found");
     expect(product?.imageMatchMethod).toBe("gtin");
@@ -452,6 +452,126 @@ describe("walmart product import", () => {
     expect(product?.matchedItemId).toBe("WM-ITEM-123");
     expect(product?.imageUrl).toBe("https://images.example.com/itemid-image-1.jpg");
     expect(product?.imageStatusMessage).toBe("Image available");
+  });
+
+  it("uses Item Report before Item Search and stores per-source image fields", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-item-report-priority",
+    });
+
+    const callOrder: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        callOrder.push(url);
+
+        if (url.includes("/v3/items?")) {
+          return new Response(
+            JSON.stringify({
+              ItemResponse: [
+                {
+                  sku: "REPORT-IMG-1",
+                  productName: "Report Image Product",
+                  brand: "BrandR",
+                  price: { amount: "18.00" },
+                },
+                {
+                  sku: "SEARCH-IMG-1",
+                  productName: "Search Image Product",
+                  brand: "BrandS",
+                  price: { amount: "14.00" },
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        if (url.includes("/v3/inventory")) {
+          return new Response(JSON.stringify({ quantity: { amount: 5 } }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        if (url.includes("/v3/reports/generate")) {
+          return new Response(JSON.stringify({ reportRequestId: "REQ-REPORT-1" }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+
+        if (url.includes("/v3/reports/status/REQ-REPORT-1")) {
+          return new Response(
+            JSON.stringify({ reportStatus: "PROCESSED", downloadUrl: "https://signed.example.com/report.csv" }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        if (url.includes("signed.example.com/report.csv")) {
+          return new Response(
+            ["SKU,PrimaryImageUrl", "REPORT-IMG-1,https://images.example.com/report-img-1.jpg"].join("\n"),
+            { status: 200, headers: { "content-type": "text/csv" } }
+          );
+        }
+
+        if (url.includes("/v3/items/walmart/search")) {
+          return new Response(
+            JSON.stringify({
+              items: [
+                {
+                  itemId: "SEARCH-ITEM-1",
+                  productName: "Search Image Product",
+                  brand: "BrandS",
+                  images: [{ url: "https://images.example.com/search-img-1.jpg" }],
+                },
+              ],
+            }),
+            { status: 200, headers: { "content-type": "application/json" } }
+          );
+        }
+
+        return new Response(JSON.stringify({ message: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      })
+    );
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const reportProduct = listWalmartProducts().find((entry) => entry.sku === "REPORT-IMG-1");
+    const searchProduct = listWalmartProducts().find((entry) => entry.sku === "SEARCH-IMG-1");
+
+    const firstReportCall = callOrder.findIndex((entry) => entry.includes("/v3/reports/generate"));
+    const firstItemSearchCall = callOrder.findIndex((entry) => entry.includes("/v3/items/walmart/search"));
+
+    expect(firstReportCall).toBeGreaterThan(-1);
+    expect(firstItemSearchCall).toBeGreaterThan(-1);
+    expect(firstReportCall).toBeLessThan(firstItemSearchCall);
+
+    expect(reportProduct?.imageSource).toBe("walmart_item_report");
+    expect(reportProduct?.imageMatchMethod).toBe("item_report_sku");
+    expect(reportProduct?.imageUrl).toBe("https://images.example.com/report-img-1.jpg");
+    expect(reportProduct?.imageStatusMessage).toBe("Image available");
+
+    expect(searchProduct?.imageSource).toBe("walmart_item_search");
+    expect(searchProduct?.imageMatchMethod).toBe("query");
+    expect(searchProduct?.imageUrl).toBe("https://images.example.com/search-img-1.jpg");
+
+    expect(result.importDiagnostics?.itemReportRequested).toBe(true);
+    expect(result.importDiagnostics?.itemReportDownloaded).toBe(true);
+    expect(result.importDiagnostics?.itemReportRowsParsed).toBe(1);
+    expect(result.importDiagnostics?.imageSourceBreakdown?.walmartItemReport).toBe(1);
+    expect(result.importDiagnostics?.imageSourceBreakdown?.walmartItemSearch).toBe(1);
   });
 
   it("does not fail import when Item Search image sync fails for a SKU", async () => {

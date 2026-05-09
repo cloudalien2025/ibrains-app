@@ -48,6 +48,13 @@ function formatImageStatus(product: WalmartProductRecord): string {
   return "Image enrichment not synced.";
 }
 
+function formatImageSource(product: WalmartProductRecord): string {
+  if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
+  if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
+  if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  return "Not synced";
+}
+
 function changedProposalFields(product: WalmartProductRecord, proposal: WalmartOptimizationProposalRecord): string[] {
   const changed: string[] = [];
 
@@ -335,7 +342,7 @@ export default function ProductEditorClient({
               <div className="space-y-1 text-xs text-[#475569]">
                 <p>Status: {formatImageStatus(product)}</p>
                 <p>Sync: {product.imageSyncStatus ?? "not_synced"}</p>
-                <p>Source: {product.imageSource ?? "none"}</p>
+                <p>Source: {formatImageSource(product)}</p>
                 <p>Match method: {product.imageMatchMethod ?? "N/A"}</p>
                 <p>Matched itemId: {product.matchedItemId ?? "N/A"}</p>
                 <p>Gallery images: {product.galleryImageUrls?.length ?? 0}</p>
