@@ -1,11 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { listWalmartProducts } from "@/lib/ecomviper/walmart/walmart-products";
 import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
-import { POST as createDraftRoute, GET as listDraftsRoute } from "@/app/api/ecomviper/walmart/drafts/route";
-import { GET as productListRoute } from "@/app/api/ecomviper/walmart/products/route";
 import { replaceProducts } from "@/lib/ecomviper/walmart/walmart-store";
+
+const authMocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: authMocks.requireSignedInUser,
+}));
 
 describe("EcomViper Walmart workflows", () => {
   beforeEach(() => {
@@ -13,6 +19,9 @@ describe("EcomViper Walmart workflows", () => {
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "workflow-user", unauthorizedResponse: null });
   });
 
   it("product table source starts empty and product API returns zero records", async () => {
@@ -22,6 +31,7 @@ describe("EcomViper Walmart workflows", () => {
     const bySearch = filterWalmartProducts(products, { query: "omega", filter: "all" });
     expect(bySearch.length).toBe(0);
 
+    const { GET: productListRoute } = await import("@/app/api/ecomviper/walmart/products/route");
     const apiReq = new NextRequest("http://localhost/api/ecomviper/walmart/products?search=omega&filter=all");
     const apiResp = await productListRoute(apiReq);
     const apiPayload = await apiResp.json();
@@ -44,6 +54,7 @@ describe("EcomViper Walmart workflows", () => {
 
     replaceProducts([product], new Date().toISOString());
 
+    const { POST: createDraftRoute, GET: listDraftsRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
     const createReq = new NextRequest("http://localhost/api/ecomviper/walmart/drafts", {
       method: "POST",
       body: JSON.stringify({

@@ -9,6 +9,7 @@ import WalmartConnectPage from "@/app/apps/ecomviper/walmart/connect/page";
 import WalmartFeedsPage from "@/app/apps/ecomviper/walmart/feeds/page";
 import WalmartProductsPage from "@/app/apps/ecomviper/walmart/products/page";
 import WalmartActivityPage from "@/app/apps/ecomviper/walmart/activity/page";
+import { replaceWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
 
 const walmartRouteMocks = vi.hoisted(() => ({
@@ -120,6 +121,8 @@ describe("EcomViper Walmart route contracts", () => {
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_token_cache__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_connection_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
     walmartRouteMocks.requireSignedInUser.mockResolvedValue({ userId: "user_ibrains", unauthorizedResponse: null });
     walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(buildConnectionHealth());
   });
@@ -131,8 +134,8 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain(">Open EcomViper<");
   });
 
-  it("renders /apps/ecomviper marketplace cards", () => {
-    const html = renderToStaticMarkup(<EcomViperDashboardPage />);
+  it("renders /apps/ecomviper marketplace cards", async () => {
+    const html = renderToStaticMarkup(await EcomViperDashboardPage());
     expect(html).toContain("ecomviper-overview-page");
     expect(html).toContain(">Walmart<");
     expect(html).toContain(">Amazon<");
@@ -186,13 +189,11 @@ describe("EcomViper Walmart route contracts", () => {
     const readAt = new Date("2026-05-09T20:31:00.000Z");
     const importAt = new Date("2026-05-09T20:32:00.000Z");
 
-    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = {
-      mode: "live-ready",
+    await replaceWalmartProductsForUser({
+      userId: "user_ibrains",
       products: [],
-      drafts: [],
-      feeds: [],
-      lastImportAt: importAt,
-    };
+      importedAt: importAt.toISOString(),
+    });
 
     walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(
       buildConnectionHealth({
@@ -218,8 +219,8 @@ describe("EcomViper Walmart route contracts", () => {
   });
 
   it("keeps dashboard connected when imports succeeded even if stored status is stale", async () => {
-    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = {
-      mode: "live-ready",
+    await replaceWalmartProductsForUser({
+      userId: "user_ibrains",
       products: [
         {
           id: "walmart_30066-841",
@@ -246,10 +247,8 @@ describe("EcomViper Walmart route contracts", () => {
           updatedAt: "2026-05-09T10:05:00.000Z",
         },
       ],
-      drafts: [],
-      feeds: [],
-      lastImportAt: "2026-05-09T10:05:00.000Z",
-    };
+      importedAt: "2026-05-09T10:05:00.000Z",
+    });
     walmartRouteMocks.getWalmartConnectionHealthForUser.mockResolvedValue(
       buildConnectionHealth({
         connectionStatus: "not_connected",
@@ -309,8 +308,8 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("No feed submissions yet.");
   });
 
-  it("renders products page empty state without mock SKUs", () => {
-    const html = renderToStaticMarkup(<WalmartProductsPage />);
+  it("renders products page empty state without mock SKUs", async () => {
+    const html = renderToStaticMarkup(await WalmartProductsPage());
     expect(html).toContain("No Walmart products imported yet");
     expect(html).not.toContain("OPA-OMEGA3-120");
   });

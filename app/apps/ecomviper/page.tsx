@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { getEcomViperMarketplaceMetrics } from "@/lib/ecomviper/walmart/walmart-products";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import {
+  getEcomViperMarketplaceMetrics,
+  getEcomViperMarketplaceMetricsForUser,
+} from "@/lib/ecomviper/walmart/walmart-products";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +54,12 @@ function statusClasses(status: string) {
   return "border-slate-200 bg-slate-50 text-slate-600";
 }
 
-export default function EcomViperDashboardPage() {
-  const metrics = getEcomViperMarketplaceMetrics();
+export default async function EcomViperDashboardPage() {
+  const { userId, unauthorizedResponse } = await requireSignedInUser();
+  const metrics =
+    !unauthorizedResponse && userId
+      ? await getEcomViperMarketplaceMetricsForUser(userId)
+      : getEcomViperMarketplaceMetrics();
 
   const metricCards = [
     { label: "Connected marketplaces", value: metrics.connectedMarketplaces },

@@ -2,19 +2,26 @@ import "server-only";
 
 import crypto from "crypto";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
-import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
+import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import {
-  getDashboardCounts,
   getLastImportAt,
   getProductBySku,
   getWalmartRuntimeMode,
+  listFeeds,
   listDrafts,
   listProducts,
   replaceProducts,
 } from "@/lib/ecomviper/walmart/walmart-store";
+import {
+  clearPersistedWalmartProducts,
+  getPersistedWalmartLastImportAt,
+  getPersistedWalmartProductBySku,
+  listPersistedWalmartProducts,
+  replacePersistedWalmartProducts,
+} from "@/lib/ecomviper/walmart/walmart-product-repository";
 import type {
   WalmartDashboardSnapshot,
   WalmartImportResult,
@@ -31,6 +38,31 @@ export function listWalmartProducts(): WalmartProductRecord[] {
 
 export function getWalmartProductBySku(sku: string): WalmartProductRecord | null {
   return getProductBySku(sku);
+}
+
+export async function listWalmartProductsForUser(userId: string): Promise<WalmartProductRecord[]> {
+  return listPersistedWalmartProducts(userId);
+}
+
+export async function getWalmartProductBySkuForUser(
+  userId: string,
+  sku: string
+): Promise<WalmartProductRecord | null> {
+  return getPersistedWalmartProductBySku(userId, sku);
+}
+
+export async function replaceWalmartProductsForUser(input: {
+  userId: string;
+  products: WalmartProductRecord[];
+  importedAt: string | null;
+}): Promise<void> {
+  await replacePersistedWalmartProducts(input);
+  replaceProducts(input.products, input.importedAt);
+}
+
+export async function clearWalmartProductsForUser(userId: string): Promise<void> {
+  await clearPersistedWalmartProducts(userId);
+  replaceProducts([], null);
 }
 
 function asString(value: unknown): string {
@@ -671,7 +703,11 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
   const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
   const inventoryOutOfStockCount = products.filter((product) => product.inventoryStatus === "out_of_stock").length;
   const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
-  replaceProducts(products, now);
+  await replaceWalmartProductsForUser({
+    userId,
+    products,
+    importedAt: now,
+  });
 
   appendActivityLog({
     marketplace: "walmart",
@@ -700,8 +736,63 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
   };
 }
 
+function buildDashboardSnapshotFromProducts(params: {
+  products: WalmartProductRecord[];
+  lastImportAt: string | null;
+}): Omit<WalmartDashboardSnapshot, "connection" | "mode"> {
+  const drafts = listDrafts();
+  const feeds = listFeeds();
+  const products = params.products;
+  const attentionProducts = products.filter((product) => product.issues.length > 0 || product.status !== "active");
+  const feedErrors = feeds.reduce((sum, feed) => sum + feed.errorReport.length, 0);
+
+  return {
+    productsImported: products.length,
+    lastImportAt: params.lastImportAt,
+    draftChanges: drafts.filter((draft) => draft.status !== "discarded").length,
+    feedErrors,
+    listingsNeedingAttention: {
+      count: attentionProducts.length,
+      categories: Array.from(new Set(attentionProducts.flatMap((product) => product.issues))).slice(0, 5),
+    },
+    recentProducts: products.slice(0, 5),
+    attentionProducts: attentionProducts.slice(0, 5),
+    recentActivity: listActivityLogs({ marketplace: "walmart", limit: 8 }).map((entry) => ({
+      time: entry.createdAt,
+      action: entry.actionType,
+      result: entry.result,
+      sku: entry.sku,
+      message: entry.message,
+    })),
+  };
+}
+
+export async function getWalmartDashboardSnapshotForUser(userId: string): Promise<WalmartDashboardSnapshot> {
+  const products = await listPersistedWalmartProducts(userId);
+  const lastImportAt = await getPersistedWalmartLastImportAt(userId);
+  const counts = buildDashboardSnapshotFromProducts({ products, lastImportAt });
+  const connection = getWalmartConnectionHealth();
+
+  return {
+    mode: getWalmartRuntimeMode(),
+    connection,
+    productsImported: counts.productsImported,
+    lastImportAt: counts.lastImportAt,
+    draftChanges: counts.draftChanges,
+    feedErrors: counts.feedErrors,
+    listingsNeedingAttention: counts.listingsNeedingAttention,
+    recentProducts: counts.recentProducts,
+    recentActivity: counts.recentActivity,
+    attentionProducts: counts.attentionProducts,
+  };
+}
+
 export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
-  const counts = getDashboardCounts();
+  const products = listProducts();
+  const counts = buildDashboardSnapshotFromProducts({
+    products,
+    lastImportAt: getLastImportAt(),
+  });
   const connection = getWalmartConnectionHealth();
 
   return {
@@ -715,6 +806,20 @@ export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
     recentProducts: counts.recentProducts,
     recentActivity: counts.recentActivity,
     attentionProducts: counts.attentionProducts,
+  };
+}
+
+export async function getEcomViperMarketplaceMetricsForUser(userId: string) {
+  const products = await listPersistedWalmartProducts(userId);
+  const drafts = listDrafts();
+  const attention = products.filter((item) => item.issues.length > 0 || item.status !== "active");
+
+  return {
+    connectedMarketplaces: getWalmartConnectionHealth().connectionStatus === "connected" ? 1 : 0,
+    productsImported: products.length,
+    draftChanges: drafts.filter((draft) => draft.status !== "discarded").length,
+    syncErrors: attention.filter((item) => item.status === "sync_failed").length,
+    listingsNeedingAttention: attention.length,
   };
 }
 

@@ -6,7 +6,8 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { assessWalmartListingQuality, buildDeterministicOptimizationProposal } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import { toOptimizerDraftPayload } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
-import { clearDrafts, clearFeeds, replaceProducts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
+import { replaceWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
+import { clearDrafts, clearFeeds, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
 
 export async function POST(req: NextRequest) {
   if (process.env.E2E_MOCK_GRAPH !== "1") {
@@ -42,7 +43,11 @@ export async function POST(req: NextRequest) {
     attributes: { serving_size: "2 capsules", count: "120" },
   });
 
-  replaceProducts([seededProduct], new Date().toISOString());
+  await replaceWalmartProductsForUser({
+    userId,
+    products: [seededProduct],
+    importedAt: new Date().toISOString(),
+  });
 
   const assessment = assessWalmartListingQuality(seededProduct);
   const stagedProposal = {

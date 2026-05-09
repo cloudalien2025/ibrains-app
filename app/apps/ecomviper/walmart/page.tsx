@@ -1,7 +1,7 @@
 import Link from "next/link";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
+import { getWalmartDashboardSnapshot, getWalmartDashboardSnapshotForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import { getWalmartConnectionHealth, getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { walmartCapabilityModules } from "@/lib/ecomviper/walmart/walmart-capability-map";
@@ -101,10 +101,9 @@ function formatInventory(product: WalmartProductRecord): string {
   return String(product.inventoryQuantity);
 }
 
-async function resolveDashboardConnectionHealth(): Promise<WalmartConnectionHealth> {
+async function resolveDashboardConnectionHealth(userId: string | null): Promise<WalmartConnectionHealth> {
   try {
-    const { userId, unauthorizedResponse } = await requireSignedInUser();
-    if (unauthorizedResponse || !userId) {
+    if (!userId) {
       return getWalmartConnectionHealth();
     }
     return await getWalmartConnectionHealthForUser(userId);
@@ -114,8 +113,11 @@ async function resolveDashboardConnectionHealth(): Promise<WalmartConnectionHeal
 }
 
 export default async function WalmartDashboardPage() {
-  const snapshot = getWalmartDashboardSnapshot();
-  const connection = await resolveDashboardConnectionHealth();
+  const { userId, unauthorizedResponse } = await requireSignedInUser();
+  const snapshot = !unauthorizedResponse && userId
+    ? await getWalmartDashboardSnapshotForUser(userId)
+    : getWalmartDashboardSnapshot();
+  const connection = await resolveDashboardConnectionHealth(!unauthorizedResponse ? userId : null);
   const connectionUi = buildWalmartDashboardConnectionUi(snapshot, connection);
 
   return (
