@@ -1,11 +1,26 @@
 import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
 import { getWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-products";
+import { listDrafts } from "@/lib/ecomviper/walmart/walmart-store";
+import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalmartProductEditorPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = await params;
   const product = getWalmartProductBySku(sku);
+  const stagedDrafts = listDrafts().filter((entry) => entry.sku.trim().toUpperCase() === sku.trim().toUpperCase());
+  let aiProviderConnected = false;
+
+  try {
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (!unauthorizedResponse && userId) {
+      const openAiStatus = await getWalmartOpenAiConnectionStatusForUser(userId);
+      aiProviderConnected = openAiStatus.connected;
+    }
+  } catch {
+    aiProviderConnected = false;
+  }
 
   if (!product) {
     return (
@@ -16,5 +31,5 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
     );
   }
 
-  return <ProductEditorClient product={product} />;
+  return <ProductEditorClient product={product} stagedDrafts={stagedDrafts} aiProviderConnected={aiProviderConnected} />;
 }

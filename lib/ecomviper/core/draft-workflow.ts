@@ -53,7 +53,7 @@ export function validateDraftPayload(draftPayload: Record<string, unknown>): {
 
   const imageUrl = typeof draftPayload.imageUrl === "string" ? draftPayload.imageUrl.trim() : null;
   if (imageUrl !== null && !imageUrl) {
-    violations.push("Primary image URL cannot be empty.");
+    warnings.push("Primary image URL is currently empty.");
   } else if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
     warnings.push("Primary image URL should use an http/https URL.");
   }

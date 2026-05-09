@@ -152,6 +152,10 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain("ecomviper-walmart-metric-cards");
     expect(html).toContain("Walmart Marketplace Manager");
     expect(html).toContain("No Walmart products imported yet");
+    expect(html).toContain("ecomviper-walmart-capability-map");
+    expect(html).toContain("Catalog Optimizer");
+    expect(html).toContain("Walmart Connect Ads Optimizer");
+    expect(html).toContain("Separate integration required");
   });
 
   it("renders connected dashboard state and manage CTA when credential sync succeeded", async () => {

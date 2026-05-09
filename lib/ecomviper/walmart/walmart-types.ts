@@ -89,6 +89,12 @@ export interface WalmartOpenAiConnectionStatus {
 
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
+export type WalmartImageStatus = "image_available" | "catalog_missing" | "enrichment_unconfigured";
+export type WalmartImageSource =
+  | "walmart_catalog"
+  | "shopify_placeholder"
+  | "manual_placeholder"
+  | "none";
 
 export interface WalmartProductRecord {
   id: string;
@@ -103,6 +109,9 @@ export interface WalmartProductRecord {
   inventoryStatus: WalmartInventoryStatus;
   status: WalmartProductStatus;
   imageUrl: string;
+  imageStatus?: WalmartImageStatus;
+  imageStatusMessage?: string;
+  imageSource?: WalmartImageSource;
   issues: string[];
   attributes: Record<string, string>;
   shortDescription: string;
@@ -220,4 +229,56 @@ export interface WalmartAiSuggestion {
   missingAttributes: string[];
   complianceWarnings: string[];
   disclaimer: string;
+}
+
+export interface WalmartListingRecommendation {
+  id: string;
+  title: string;
+  reason: string;
+  severity: "high" | "medium" | "low";
+  proposedTitle?: string;
+  proposedDescription?: string;
+  proposedBullets?: string[];
+  proposedKeyAttributes?: Record<string, string>;
+  proposedImageUrl?: string;
+  proposedImageAction?: "keep" | "request_enrichment" | "manual_image_required";
+}
+
+export interface WalmartListingQualityAssessment {
+  score: number;
+  imageStatus: "Image available" | "Image not provided by Walmart catalog" | "Image enrichment source not configured";
+  factors: string[];
+  recommendations: WalmartListingRecommendation[];
+}
+
+export type WalmartOptimizationProposalStatus = "draft" | "staged" | "approved" | "submitted";
+
+export interface WalmartOptimizationProposalRecord {
+  id: string;
+  sku: string;
+  source: "deterministic" | "ai";
+  proposedTitle: string;
+  proposedDescription: string;
+  proposedBullets: string[];
+  proposedKeyAttributes: Record<string, string>;
+  proposedImageUrl: string;
+  proposedImageAction: "keep" | "request_enrichment" | "manual_image_required";
+  recommendationReason: string;
+  status: WalmartOptimizationProposalStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WalmartCapabilityModule {
+  id:
+    | "catalog_optimizer"
+    | "inventory_optimizer"
+    | "pricing_optimizer"
+    | "feed_manager"
+    | "orders_returns_intelligence"
+    | "walmart_connect_ads_optimizer";
+  title: string;
+  description: string;
+  status: "available" | "foundation" | "separate_integration_required";
+  apiFamily: "marketplace" | "walmart_connect_ads";
 }
