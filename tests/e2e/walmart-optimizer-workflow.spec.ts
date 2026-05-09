@@ -14,10 +14,12 @@ test.describe("walmart optimizer authenticated workflow", () => {
 
     await expect(page).toHaveURL(/\/apps\/ecomviper\/walmart\/products\/30066-841$/);
     await expect(page.getByTestId("ecomviper-walmart-product-editor-page")).toBeVisible();
+    await expect(page.getByTestId("ecomviper-walmart-primary-actions")).toContainText("Optimize with AI");
     await expect(page.getByTestId("ecomviper-walmart-product-optimizer-summary")).toContainText("Listing Quality Score");
     await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).toContainText(
       "AI recommendation unavailable until provider is connected"
     );
+    await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).not.toContainText("Open AI Optimizer");
     await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).toContainText(
       "Deterministic recommendation"
     );

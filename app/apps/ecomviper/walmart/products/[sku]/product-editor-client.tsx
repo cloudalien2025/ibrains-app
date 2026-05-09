@@ -32,6 +32,298 @@ const tabs = [
   "Sync History",
 ] as const;
 
+const OPENAI_OPTIMIZE_REQUIRED_MESSAGE = "Connect your OpenAI API key first to optimize this product.";
+const SHOW_DEVELOPER_DIAGNOSTICS = process.env.NEXT_PUBLIC_ECOMVIPER_PRODUCT_EDITOR_DIAGNOSTICS === "1";
+
+interface ProductEditorFormState {
+  title: string;
+  shortDescription: string;
+  longDescription: string;
+  bulletPoints: string;
+  imageUrl: string;
+  additionalImageUrls: string;
+  price: string;
+  inventoryQuantity: string;
+  brand: string;
+  attributesJson: string;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function hasOwn(source: Record<string, unknown>, key: string): boolean {
+  return Object.prototype.hasOwnProperty.call(source, key);
+}
+
+function asText(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return null;
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function firstNonEmptyString(source: Array<Record<string, unknown> | null>, keys: string[]): string {
+  for (const record of source) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asText(record[key]);
+      if (value && value.trim()) {
+        return value.trim();
+      }
+    }
+  }
+  return "";
+}
+
+function firstNonEmptyNumber(source: Array<Record<string, unknown> | null>, keys: string[]): number | null {
+  for (const record of source) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asNumber(record[key]);
+      if (value !== null) return value;
+    }
+  }
+  return null;
+}
+
+function listFromUnknown(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => {
+        if (typeof entry === "string") return entry.trim();
+        const objectEntry = asObject(entry);
+        if (!objectEntry) return "";
+        const direct = asText(objectEntry.url) ?? asText(objectEntry.value) ?? asText(objectEntry.name);
+        return direct?.trim() ?? "";
+      })
+      .filter(Boolean);
+  }
+
+  const asString = asText(value)?.trim() ?? "";
+  if (!asString) return [];
+  return asString
+    .split(/\r?\n|[;|]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function imageListFromUnknown(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .flatMap((entry) => imageListFromUnknown(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const objectValue = asObject(value);
+  if (objectValue) {
+    return imageListFromUnknown(
+      objectValue.url ??
+      objectValue.imageUrl ??
+      objectValue.primaryImageUrl ??
+      objectValue.src ??
+      objectValue.value ??
+      ""
+    );
+  }
+
+  const asString = asText(value)?.trim() ?? "";
+  if (!asString) return [];
+  return asString
+    .split(/\r?\n|[;,|]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.map((entry) => entry.trim()).filter(Boolean)));
+}
+
+function readLatestDraftPayload(stagedDrafts: WalmartDraftRecord[]): Record<string, unknown> | null {
+  return [...stagedDrafts]
+    .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+    .map((draft) => asObject(draft.draftPayload))
+    .find((draft): draft is Record<string, unknown> => draft !== null) ?? null;
+}
+
+function readDraftString(draft: Record<string, unknown> | null, keys: string[]): string | null {
+  if (!draft) return null;
+  for (const key of keys) {
+    if (!hasOwn(draft, key)) continue;
+    const value = asText(draft[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function readDraftNumber(draft: Record<string, unknown> | null, keys: string[]): number | null {
+  if (!draft) return null;
+  for (const key of keys) {
+    if (!hasOwn(draft, key)) continue;
+    const value = asNumber(draft[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function readDraftList(draft: Record<string, unknown> | null, keys: string[], imageList = false): string[] | null {
+  if (!draft) return null;
+  for (const key of keys) {
+    if (!hasOwn(draft, key)) continue;
+    const parsed = imageList ? imageListFromUnknown(draft[key]) : listFromUnknown(draft[key]);
+    return parsed;
+  }
+  return null;
+}
+
+function readDraftAttributes(draft: Record<string, unknown> | null): Record<string, string> | null {
+  if (!draft || !hasOwn(draft, "attributes")) return null;
+  const value = draft.attributes;
+  const objectValue = asObject(value);
+  if (objectValue) {
+    const result: Record<string, string> = {};
+    for (const [key, attributeValue] of Object.entries(objectValue)) {
+      const text = asText(attributeValue)?.trim() ?? "";
+      if (text) result[key] = text;
+    }
+    return result;
+  }
+
+  const stringValue = asText(value)?.trim();
+  if (!stringValue) return {};
+  try {
+    const parsed = JSON.parse(stringValue) as unknown;
+    const parsedObject = asObject(parsed);
+    if (!parsedObject) return {};
+    const result: Record<string, string> = {};
+    for (const [key, attributeValue] of Object.entries(parsedObject)) {
+      const text = asText(attributeValue)?.trim() ?? "";
+      if (text) result[key] = text;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+function hydrateEditorForm(product: WalmartProductRecord, stagedDrafts: WalmartDraftRecord[]): ProductEditorFormState {
+  const draft = readLatestDraftPayload(stagedDrafts);
+  const normalized = asObject(product.normalizedPayload);
+  const raw = asObject(product.rawPayload);
+  const rawProduct = asObject(raw?.product);
+  const rawContent = asObject(raw?.content);
+
+  const sources = [normalized, product as unknown as Record<string, unknown>, raw, rawProduct, rawContent];
+
+  const draftTitle = readDraftString(draft, ["title"]);
+  const draftShortDescription = readDraftString(draft, ["shortDescription", "short_desc"]);
+  const draftLongDescription = readDraftString(draft, ["longDescription", "description", "productDescription"]);
+  const draftBrand = readDraftString(draft, ["brand", "brandName"]);
+  const draftImageUrl = readDraftString(draft, ["imageUrl", "primaryImageUrl"]);
+  const draftPrice = readDraftNumber(draft, ["price"]);
+  const draftInventory = readDraftNumber(draft, ["inventoryQuantity"]);
+  const draftBullets = readDraftList(draft, ["bulletPoints", "keyFeatures", "bullets"]);
+  const draftAdditionalImages = readDraftList(
+    draft,
+    ["additionalImageUrls", "galleryImageUrls", "imageUrls", "additionalImages", "variantImageUrls"],
+    true
+  );
+  const draftAttributes = readDraftAttributes(draft);
+
+  const title = draftTitle !== null
+    ? draftTitle
+    : (firstNonEmptyString(sources, ["title", "productName", "name"]) || product.title);
+  const shortDescription =
+    draftShortDescription ??
+    firstNonEmptyString(sources, ["shortDescription", "short_desc", "synopsis", "shortDesc"]);
+  const longDescription =
+    draftLongDescription ??
+    firstNonEmptyString(sources, ["longDescription", "description", "productDescription", "long_desc"]);
+  const brandCandidate = draftBrand !== null
+    ? draftBrand
+    : (firstNonEmptyString(sources, ["brand", "brandName", "manufacturer"]) || product.brand);
+  const normalizedBrand = brandCandidate.trim();
+  const brand =
+    normalizedBrand && normalizedBrand.toLowerCase() !== "unknown"
+      ? normalizedBrand
+      : firstNonEmptyString([raw, rawProduct, rawContent], ["brand", "brandName", "manufacturer"]) || normalizedBrand;
+  const imageUrl = draftImageUrl !== null
+    ? draftImageUrl
+    : (
+        firstNonEmptyString(sources, ["imageUrl", "primaryImageUrl", "productImageUrl", "mainImageUrl", "itemImageUrl"]) ||
+        product.imageUrl
+      );
+  const additionalImageUrls =
+    draftAdditionalImages ??
+    unique([
+      ...imageListFromUnknown(normalized?.galleryImageUrls),
+      ...imageListFromUnknown(normalized?.additionalImageUrls),
+      ...imageListFromUnknown(raw?.additionalImageUrls),
+      ...imageListFromUnknown(raw?.galleryImageUrls),
+      ...imageListFromUnknown(raw?.imageUrls),
+      ...(product.galleryImageUrls ?? []),
+      ...(product.variantImageUrls ?? []),
+    ]);
+  const normalizedBullets = listFromUnknown(normalized?.bulletPoints);
+  const rawBullets = listFromUnknown(raw?.bulletPoints);
+  const rawKeyFeatures = listFromUnknown(raw?.keyFeatures);
+  const bulletPoints =
+    draftBullets ??
+    (normalizedBullets.length
+      ? normalizedBullets
+      : rawBullets.length
+        ? rawBullets
+        : rawKeyFeatures.length
+          ? rawKeyFeatures
+          : product.bulletPoints);
+  const price =
+    draftPrice ??
+    firstNonEmptyNumber(sources, ["price", "amount"]) ??
+    product.price;
+  const inventoryQuantity =
+    draftInventory ??
+    firstNonEmptyNumber(sources, ["inventoryQuantity", "quantity", "inventory"]) ??
+    (product.inventoryStatus === "unknown" ? null : product.inventoryQuantity);
+
+  const attributesSource =
+    draftAttributes ??
+    asObject(normalized?.attributes) ??
+    asObject(raw?.attributes) ??
+    asObject(raw?.keyAttributes) ??
+    product.attributes;
+
+  const attributes: Record<string, string> = {};
+  for (const [key, value] of Object.entries(attributesSource ?? {})) {
+    const text = asText(value)?.trim() ?? "";
+    if (text) attributes[key] = text;
+  }
+
+  return {
+    title,
+    shortDescription,
+    longDescription,
+    bulletPoints: bulletPoints.join("\n"),
+    imageUrl,
+    additionalImageUrls: unique(additionalImageUrls).join("\n"),
+    price: Number.isFinite(price) ? String(price) : "",
+    inventoryQuantity: inventoryQuantity === null ? "" : String(inventoryQuantity),
+    brand: brand,
+    attributesJson: JSON.stringify(attributes, null, 2),
+  };
+}
+
 function formatInventory(product: WalmartProductRecord): string {
   if (product.inventoryStatus === "unknown") return "Unknown (Not synced)";
   if (product.inventoryStatus === "out_of_stock") return "Out of stock (0)";
@@ -93,18 +385,8 @@ export default function ProductEditorClient({
   aiProviderConnected,
 }: ProductEditorClientProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
-  const [form, setForm] = useState({
-    title: product.title,
-    shortDescription: product.shortDescription,
-    longDescription: product.longDescription,
-    bulletPoints: product.bulletPoints.join("\n"),
-    imageUrl: product.imageUrl,
-    additionalImageUrls: "",
-    price: String(product.price),
-    inventoryQuantity: product.inventoryStatus === "unknown" ? "" : String(product.inventoryQuantity),
-    brand: product.brand,
-    attributesJson: JSON.stringify(product.attributes, null, 2),
-  });
+  const initialForm = useMemo(() => hydrateEditorForm(product, stagedDrafts), [product, stagedDrafts]);
+  const [form, setForm] = useState<ProductEditorFormState>(() => initialForm);
   const [validated, setValidated] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
@@ -181,6 +463,10 @@ export default function ProductEditorClient({
 
   const validationWarnings = useMemo(() => complianceValidation.warnings, [complianceValidation]);
 
+  const displayTitle = form.title.trim() || product.title;
+  const displayBrand = form.brand.trim() || (product.brand.trim() || "Unknown");
+  const aiOptimizerHref = `/apps/ecomviper/walmart/ai-optimizer?sku=${encodeURIComponent(product.sku)}`;
+
   async function handleSaveDraft() {
     const response = await fetch("/api/ecomviper/walmart/drafts", {
       method: "POST",
@@ -209,6 +495,11 @@ export default function ProductEditorClient({
     }
 
     setMessage("Draft saved and passed policy checks.");
+  }
+
+  function handleOptimizeWithAi() {
+    if (aiProviderConnected) return;
+    setMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
   }
 
   async function handleStageDeterministicRecommendation() {
@@ -296,11 +587,11 @@ export default function ProductEditorClient({
           <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
             <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">SKU</p>
             <p className="mt-1 text-sm font-medium text-[#0F172A]">{product.sku}</p>
-            <p className="mt-1 text-xs text-[#64748B]">{product.title}</p>
+            <p className="mt-1 text-xs text-[#64748B]">{displayTitle}</p>
           </article>
           <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
             <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Brand / Price</p>
-            <p className="mt-1 text-sm font-medium text-[#0F172A]">{product.brand || "Unknown"}</p>
+            <p className="mt-1 text-sm font-medium text-[#0F172A]">{displayBrand}</p>
             <p className="mt-1 text-xs text-[#64748B]">${product.price.toFixed(2)}</p>
           </article>
           <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
@@ -355,21 +646,78 @@ export default function ProductEditorClient({
 
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-primary-actions"
+      >
+        <div className="flex flex-wrap gap-2">
+          {aiProviderConnected ? (
+            <Link
+              href={aiOptimizerHref}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white"
+            >
+              Optimize with AI
+            </Link>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOptimizeWithAi}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white"
+            >
+              Optimize with AI
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+          >
+            Save Draft
+          </button>
+        </div>
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setValidated(true)}
+            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+          >
+            Preview + Validate
+          </button>
+          <button
+            type="button"
+            disabled={!validated || validationViolations.length > 0}
+            className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            Submit Update
+          </button>
+        </div>
+        {!aiProviderConnected ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            {OPENAI_OPTIMIZE_REQUIRED_MESSAGE}
+          </p>
+        ) : (
+          <p className="mt-2 text-xs text-[#64748B]">
+            OpenAI provider connected. Use Optimize with AI to open this SKU in the optimizer workflow.
+          </p>
+        )}
+        <p className="mt-1 text-xs text-[#64748B]">
+          Not submitted to Walmart. Human approval required before feed submission.
+        </p>
+        {message ? <p className="mt-2 text-sm text-[#334155]">{message}</p> : null}
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-ai-recommendations"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="text-lg font-semibold text-[#0F172A]">Recommendations</h2>
-          <Link href="/apps/ecomviper/walmart/ai-optimizer" className="text-sm text-[#2563EB] hover:text-[#1D4ED8]">
-            Open AI Optimizer
-          </Link>
         </div>
         {!aiProviderConnected ? (
           <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            AI recommendation unavailable until provider is connected. Showing deterministic recommendations only.
+            AI recommendation unavailable until provider is connected. Connect your OpenAI API key first to optimize this product.
           </p>
         ) : (
-          <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            AI provider connected. You can generate model-based suggestions from the AI Optimizer page.
+          <p className="mt-2 text-sm text-[#475569]">
+            AI provider connected. Deterministic recommendations below can be staged immediately.
           </p>
         )}
         <ul className="mt-3 space-y-2">
@@ -513,38 +861,23 @@ export default function ProductEditorClient({
           </label>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          <button type="button" onClick={handleSaveDraft} className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white">
-            Save Draft
-          </button>
-          <button
-            type="button"
-            onClick={() => setValidated(true)}
-            className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-          >
-            Preview + Validate
-          </button>
-          <button
-            type="button"
-            disabled={!validated || validationViolations.length > 0}
-            className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Submit Update
-          </button>
-        </div>
-
-        {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-2">
-          <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">Before / Original payload snapshot</h2>
-            <pre className="mt-2 max-h-64 overflow-auto rounded bg-white p-3 text-xs text-[#334155]">{JSON.stringify(product.rawPayload, null, 2)}</pre>
-          </article>
-          <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
-            <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">After / Normalized draft preview</h2>
-            <pre className="mt-2 max-h-64 overflow-auto rounded bg-white p-3 text-xs text-[#334155]">{JSON.stringify(preview, null, 2)}</pre>
-          </article>
-        </div>
+        {SHOW_DEVELOPER_DIAGNOSTICS ? (
+          <details className="mt-4 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
+            <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+              Developer diagnostics
+            </summary>
+            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+              <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">Original payload snapshot</h2>
+                <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">{JSON.stringify(product.rawPayload, null, 2)}</pre>
+              </article>
+              <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
+                <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">Normalized draft preview</h2>
+                <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">{JSON.stringify(preview, null, 2)}</pre>
+              </article>
+            </div>
+          </details>
+        ) : null}
 
         <article className="mt-4 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
           <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">Validation status</h2>

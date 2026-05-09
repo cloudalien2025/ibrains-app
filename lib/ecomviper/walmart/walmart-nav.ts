@@ -11,7 +11,6 @@ export const walmartNavItems: WalmartNavItem[] = [
   { label: "Inventory", href: "/apps/ecomviper/walmart/inventory" },
   { label: "Pricing", href: "/apps/ecomviper/walmart/pricing" },
   { label: "Feeds", href: "/apps/ecomviper/walmart/feeds" },
-  { label: "AI Optimizer", href: "/apps/ecomviper/walmart/ai-optimizer" },
   { label: "Activity Log", href: "/apps/ecomviper/walmart/activity" },
   { label: "Settings", href: "/apps/ecomviper/walmart/settings" },
 ];
