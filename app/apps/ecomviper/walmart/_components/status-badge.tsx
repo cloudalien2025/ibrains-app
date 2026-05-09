@@ -17,6 +17,9 @@ export default function StatusBadge({ status }: StatusBadgeProps) {
           normalized === "validated" ||
           normalized === "token valid"
         ? "border-amber-200 bg-amber-50 text-amber-700"
+        : normalized === "foundation" ||
+            normalized === "separate integration required"
+          ? "border-amber-200 bg-amber-50 text-amber-700"
         : normalized === "error" || normalized === "failed" || normalized === "not connected" || normalized === "missing"
           ? "border-rose-200 bg-rose-50 text-rose-700"
           : "border-slate-200 bg-slate-50 text-slate-600";

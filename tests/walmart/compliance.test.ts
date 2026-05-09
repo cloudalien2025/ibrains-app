@@ -58,8 +58,8 @@ describe("Draft payload validation", () => {
         "Title cannot be empty.",
         "Price must be greater than zero.",
         "Inventory must be zero or greater.",
-        "Primary image URL cannot be empty.",
       ])
     );
+    expect(validation.warnings).toContain("Primary image URL is currently empty.");
   });
 });

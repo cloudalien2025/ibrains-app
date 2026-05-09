@@ -1,13 +1,23 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
-import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { assessWalmartListingQuality, buildDeterministicOptimizationProposal } from "@/lib/ecomviper/walmart/walmart-listing-quality";
+import { readOptimizerProposalFromDraft, toOptimizerDraftPayload } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
+import type {
+  WalmartDraftRecord,
+  WalmartListingRecommendation,
+  WalmartOptimizationProposalRecord,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ProductEditorClientProps {
   product: WalmartProductRecord;
+  stagedDrafts: WalmartDraftRecord[];
+  aiProviderConnected: boolean;
 }
 
 const tabs = [
@@ -21,7 +31,23 @@ const tabs = [
   "Sync History",
 ] as const;
 
-export default function ProductEditorClient({ product }: ProductEditorClientProps) {
+function formatInventory(product: WalmartProductRecord): string {
+  if (product.inventoryStatus === "unknown") return "Unknown (Not synced)";
+  if (product.inventoryStatus === "out_of_stock") return "Out of stock (0)";
+  return `Known (${product.inventoryQuantity})`;
+}
+
+function formatImageStatus(product: WalmartProductRecord): string {
+  if (product.imageStatusMessage) return product.imageStatusMessage;
+  if (product.imageUrl) return "Image available";
+  return "Image enrichment source not configured";
+}
+
+export default function ProductEditorClient({
+  product,
+  stagedDrafts,
+  aiProviderConnected,
+}: ProductEditorClientProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Overview");
   const [form, setForm] = useState({
     title: product.title,
@@ -38,6 +64,21 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
   const [validated, setValidated] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
+  const [stagingRecommendation, setStagingRecommendation] = useState(false);
+
+  const listingQuality = useMemo(() => assessWalmartListingQuality(product), [product]);
+  const deterministicProposal = useMemo(
+    () => buildDeterministicOptimizationProposal(product, listingQuality),
+    [product, listingQuality]
+  );
+  const stagedOptimizations = useMemo(
+    () =>
+      stagedDrafts
+        .map((draft) => readOptimizerProposalFromDraft(draft))
+        .filter((entry): entry is WalmartOptimizationProposalRecord => entry !== null)
+        .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt)),
+    [stagedDrafts]
+  );
 
   const preview = useMemo(() => {
     let parsedAttributes: Record<string, string> = {};
@@ -77,7 +118,6 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
     if (!preview.title) violations.push("Title is required");
     if (!Number.isFinite(preview.price) || preview.price <= 0) violations.push("Price must be greater than zero");
     if (!Number.isFinite(preview.inventoryQuantity) || preview.inventoryQuantity < 0) violations.push("Inventory must be 0 or greater");
-    if (!preview.imageUrl) violations.push("Primary image URL is missing");
     return Array.from(new Set([...violations, ...complianceValidation.violations]));
   }, [preview, complianceValidation]);
 
@@ -113,12 +153,160 @@ export default function ProductEditorClient({ product }: ProductEditorClientProp
     setMessage("Draft saved and passed policy checks.");
   }
 
+  async function handleStageDeterministicRecommendation() {
+    const timestamp = new Date().toISOString();
+    const stagedProposal: WalmartOptimizationProposalRecord = {
+      ...deterministicProposal,
+      status: "staged",
+      updatedAt: timestamp,
+    };
+
+    try {
+      setStagingRecommendation(true);
+      const response = await fetch("/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          draftPayload: toOptimizerDraftPayload(stagedProposal),
+        }),
+      });
+
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as { error?: { message?: string } } | null;
+        setMessage(payload?.error?.message ?? "Failed to stage deterministic recommendations.");
+        return;
+      }
+
+      setMessage("Deterministic recommendations staged. No live Walmart feed submission was performed.");
+    } catch {
+      setMessage("Failed to stage deterministic recommendations.");
+    } finally {
+      setStagingRecommendation(false);
+    }
+  }
+
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-product-editor-page">
       <WalmartPageHeader
         title={`Product Editor • ${product.sku}`}
         subtitle="Stage content, pricing, and inventory changes before any submit flow."
       />
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-product-optimizer-summary"
+      >
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">SKU</p>
+            <p className="mt-1 text-sm font-medium text-[#0F172A]">{product.sku}</p>
+            <p className="mt-1 text-xs text-[#64748B]">{product.title}</p>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Brand / Price</p>
+            <p className="mt-1 text-sm font-medium text-[#0F172A]">{product.brand || "Unknown"}</p>
+            <p className="mt-1 text-xs text-[#64748B]">${product.price.toFixed(2)}</p>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Inventory</p>
+            <p className="mt-1 text-sm font-medium text-[#0F172A]">{formatInventory(product)}</p>
+            <p className="mt-1 text-xs text-[#64748B]">Status: {product.inventoryStatus}</p>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Listing Quality Score</p>
+            <p className="mt-1 text-2xl font-semibold text-[#0F172A]">{listingQuality.score}/100</p>
+            <p className="mt-1 text-xs text-[#64748B]">Image: {formatImageStatus(product)}</p>
+          </article>
+        </div>
+
+        <div className="mt-3 grid gap-3 xl:grid-cols-2">
+          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Current Issues</p>
+            <p className="mt-1 text-sm text-[#334155]">{product.issues.join(", ") || "None"}</p>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Quality Factors</p>
+            <p className="mt-1 text-sm text-[#334155]">{listingQuality.factors.join(", ") || "No quality blockers detected."}</p>
+          </article>
+        </div>
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-ai-recommendations"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-lg font-semibold text-[#0F172A]">AI Recommendations</h2>
+          <Link href="/apps/ecomviper/walmart/ai-optimizer" className="text-sm text-[#2563EB] hover:text-[#1D4ED8]">
+            Open AI Optimizer
+          </Link>
+        </div>
+        {!aiProviderConnected ? (
+          <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            AI provider not configured. Showing deterministic recommendations only.
+          </p>
+        ) : (
+          <p className="mt-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+            AI provider connected. You can generate model-based suggestions from the AI Optimizer page.
+          </p>
+        )}
+        <ul className="mt-3 space-y-2">
+          {listingQuality.recommendations.length ? (
+            listingQuality.recommendations.map((recommendation: WalmartListingRecommendation) => (
+              <li key={recommendation.id} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-[#0F172A]">{recommendation.title}</p>
+                  <StatusBadge status={recommendation.severity} />
+                </div>
+                <p className="mt-1 text-sm text-[#475569]">{recommendation.reason}</p>
+              </li>
+            ))
+          ) : (
+            <li className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#475569]">
+              No deterministic recommendations at the moment.
+            </li>
+          )}
+        </ul>
+        <div className="mt-3">
+          <button
+            type="button"
+            onClick={handleStageDeterministicRecommendation}
+            disabled={stagingRecommendation}
+            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+          >
+            {stagingRecommendation ? "Staging..." : "Stage Deterministic Recommendations"}
+          </button>
+        </div>
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-staged-changes"
+      >
+        <h2 className="text-lg font-semibold text-[#0F172A]">Staged Changes</h2>
+        {stagedOptimizations.length ? (
+          <div className="mt-3 space-y-2">
+            {stagedOptimizations.map((proposal) => (
+              <article key={proposal.id} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium text-[#0F172A]">{proposal.source === "ai" ? "AI proposal" : "Deterministic proposal"}</p>
+                  <StatusBadge status={proposal.status} />
+                </div>
+                <p className="mt-1 text-xs text-[#64748B]">{proposal.recommendationReason}</p>
+                <p className="mt-1 text-sm text-[#334155]">Title: {proposal.proposedTitle || "None"}</p>
+                <p className="mt-1 text-sm text-[#334155]">Description: {proposal.proposedDescription || "None"}</p>
+                <p className="mt-1 text-sm text-[#334155]">
+                  Bullets: {proposal.proposedBullets.length ? proposal.proposedBullets.join(" | ") : "None"}
+                </p>
+                <p className="mt-1 text-sm text-[#334155]">Image action: {proposal.proposedImageAction}</p>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-[#64748B]">No staged optimization proposals yet.</p>
+        )}
+      </section>
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
         <div className="flex flex-wrap gap-2">

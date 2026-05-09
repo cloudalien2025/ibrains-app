@@ -33,7 +33,9 @@ export function filterWalmartProducts(
     if (filter === "low_stock") {
       return product.inventoryStatus === "known" && product.inventoryQuantity > 0 && product.inventoryQuantity <= 15;
     }
-    if (filter === "missing_image") return !product.imageUrl;
+    if (filter === "missing_image") {
+      return product.imageStatus !== "image_available" || !product.imageUrl;
+    }
     if (filter === "missing_attributes") return Object.keys(product.attributes).length === 0;
     if (filter === "price_missing") return product.price <= 0;
     if (filter === "sync_failed") return product.status === "sync_failed";

@@ -4,6 +4,7 @@ import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { getWalmartDashboardSnapshot } from "@/lib/ecomviper/walmart/walmart-products";
 import { getWalmartConnectionHealth, getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { walmartCapabilityModules } from "@/lib/ecomviper/walmart/walmart-capability-map";
 import type {
   WalmartConnectionHealth,
   WalmartDashboardSnapshot,
@@ -238,6 +239,35 @@ export default async function WalmartDashboardPage() {
           ) : (
             <p className="text-sm text-[#64748B]">No products currently flagged.</p>
           )}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]" data-testid="ecomviper-walmart-capability-map">
+        <h2 className="text-lg font-semibold text-[#0F172A]">Available Modules</h2>
+        <p className="mt-1 text-sm text-[#64748B]">
+          Marketplace modules and roadmap lanes are tracked separately from Walmart Connect Ads integrations.
+        </p>
+        <div className="mt-3 grid gap-2">
+          {walmartCapabilityModules.map((module) => (
+            <article key={module.id} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-[#0F172A]">{module.title}</p>
+                <StatusBadge
+                  status={
+                    module.status === "available"
+                      ? "Available"
+                      : module.status === "foundation"
+                        ? "Foundation"
+                        : "Separate integration required"
+                  }
+                />
+              </div>
+              <p className="mt-1 text-sm text-[#475569]">{module.description}</p>
+              <p className="mt-1 text-xs text-[#64748B]">
+                API family: {module.apiFamily === "marketplace" ? "Walmart Marketplace APIs" : "Walmart Connect Ads APIs"}
+              </p>
+            </article>
+          ))}
         </div>
       </section>
     </div>

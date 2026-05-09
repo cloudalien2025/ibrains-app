@@ -5,6 +5,7 @@ import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer
 import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
+import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import {
   getDashboardCounts,
   getLastImportAt,
@@ -495,6 +496,10 @@ function normalizeImportedItem(
     asObject(item.classification)?.category
   );
   const imageUrl = extractImageUrl(item);
+  const imageResolution = resolveWalmartCatalogImage({
+    sku,
+    catalogImageUrl: imageUrl,
+  });
 
   const price = firstNumber(
     item.price,
@@ -522,7 +527,10 @@ function normalizeImportedItem(
     price,
     inventoryQuantity: inventorySnapshot.quantity,
     inventoryStatus: inventorySnapshot.status,
-    imageUrl,
+    imageUrl: imageResolution.imageUrl,
+    imageStatus: imageResolution.imageStatus,
+    imageStatusMessage: imageResolution.imageStatusMessage,
+    imageSource: imageResolution.imageSource,
     attributes: toAttributeMap(item.attributes),
     description: longDescription,
     shortDescription,
@@ -554,6 +562,10 @@ function normalizeImportedItem(
       inventoryStatus: normalized.inventoryStatus,
       inventorySource: inventorySnapshot.source,
       imageUrl: normalized.imageUrl,
+      imageStatus: normalized.imageStatus,
+      imageStatusMessage: normalized.imageStatusMessage,
+      imageSource: normalized.imageSource,
+      imageProvider: imageResolution.enrichmentProvider,
       attributes: normalized.attributes,
       shortDescription: normalized.shortDescription,
       longDescription: normalized.longDescription,

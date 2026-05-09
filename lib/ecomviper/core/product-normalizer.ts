@@ -1,6 +1,11 @@
 import "server-only";
 
-import type { WalmartInventoryStatus, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type {
+  WalmartImageSource,
+  WalmartImageStatus,
+  WalmartInventoryStatus,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 export interface NormalizeProductInput {
   sku: string;
@@ -10,6 +15,9 @@ export interface NormalizeProductInput {
   inventoryQuantity?: number | null;
   inventoryStatus?: WalmartInventoryStatus;
   imageUrl?: string;
+  imageStatus?: WalmartImageStatus;
+  imageSource?: WalmartImageSource;
+  imageStatusMessage?: WalmartProductRecord["imageStatusMessage"];
   status?: WalmartProductRecord["status"];
   rawPayload?: unknown;
   attributes?: Record<string, string>;
@@ -21,6 +29,16 @@ export interface NormalizeProductInput {
 export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartProductRecord {
   const now = new Date().toISOString();
   const hasImage = Boolean(input.imageUrl);
+  const imageStatus: WalmartImageStatus =
+    input.imageStatus ?? (hasImage ? "image_available" : "catalog_missing");
+  const imageStatusMessage =
+    input.imageStatusMessage ??
+    (imageStatus === "image_available"
+      ? "Image available"
+      : imageStatus === "catalog_missing"
+        ? "Image not provided by Walmart catalog"
+        : "Image enrichment source not configured");
+
   const inventoryQuantity =
     typeof input.inventoryQuantity === "number" && Number.isFinite(input.inventoryQuantity)
       ? input.inventoryQuantity
@@ -28,7 +46,12 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
   const inventoryStatus = input.inventoryStatus ?? "known";
   const issues: string[] = [];
 
-  if (!hasImage) issues.push("Image not provided by Walmart catalog");
+  if (imageStatus === "catalog_missing") {
+    issues.push("Image not provided by Walmart catalog");
+  } else if (imageStatus === "enrichment_unconfigured") {
+    issues.push("Image not provided by Walmart catalog");
+    issues.push("Image enrichment source not configured");
+  }
   if (!input.price || input.price <= 0) issues.push("Price missing");
   if (inventoryStatus === "out_of_stock" || (inventoryStatus === "known" && inventoryQuantity <= 0)) {
     issues.push("Out of stock");
@@ -47,6 +70,9 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
     inventoryStatus,
     status: input.status ?? (issues.length ? "attention" : "active"),
     imageUrl: input.imageUrl ?? "",
+    imageStatus,
+    imageStatusMessage,
+    imageSource: input.imageSource ?? (imageStatus === "image_available" ? "walmart_catalog" : "none"),
     issues,
     attributes: input.attributes ?? {},
     shortDescription: input.shortDescription ?? "",

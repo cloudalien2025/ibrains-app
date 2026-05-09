@@ -30,6 +30,12 @@ function formatInventory(product: WalmartProductRecord): string {
   return String(product.inventoryQuantity);
 }
 
+function formatImageStatus(product: WalmartProductRecord): string {
+  if (product.imageStatusMessage) return product.imageStatusMessage;
+  if (product.imageUrl) return "Image available";
+  return "Image enrichment source not configured";
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -145,11 +151,17 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                 <tr key={product.sku} className="border-t border-[#E2E8F0] align-top">
                   <td className="py-2 pr-2">
                     {product.imageUrl ? (
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-[#D9E4F0] bg-[#F8FBFF] text-xs text-[#334155]">
-                        IMG
-                      </span>
+                      <div className="space-y-1">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-[#D9E4F0] bg-[#F8FBFF] text-xs text-[#334155]">
+                          IMG
+                        </span>
+                        <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
+                      </div>
                     ) : (
-                      <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
+                      <div className="space-y-1">
+                        <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
+                        <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
+                      </div>
                     )}
                   </td>
                   <td className="py-2 pr-2 font-medium text-[#0F172A]">
