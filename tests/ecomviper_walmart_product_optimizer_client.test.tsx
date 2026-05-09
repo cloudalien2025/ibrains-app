@@ -87,19 +87,28 @@ function createStagedDraft(): WalmartDraftRecord {
 }
 
 describe("Walmart product optimizer client", () => {
-  it("renders SKU/title/inventory/image status with deterministic recommendation sections", () => {
+  it("renders primary optimize action and seller-friendly recommendations without raw JSON panels", () => {
     const html = renderToStaticMarkup(
       <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} />
     );
 
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
+    expect(html).toContain("ecomviper-walmart-primary-actions");
     expect(html).toContain("30066-841");
     expect(html).toContain("Item Search returned no usable image.");
     expect(html).toContain("Known (9)");
+    expect(html).toContain("Optimize with AI");
+    expect(html).toContain("Connect your OpenAI API key first to optimize this product.");
+    expect(html).toContain("Save Draft");
+    expect(html).toContain("Preview + Validate");
+    expect(html).toContain("Submit Update");
     expect(html).toContain("AI recommendation unavailable until provider is connected");
     expect(html).toContain("Deterministic recommendation");
     expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
     expect(html).toContain("Stage Deterministic Recommendations");
+    expect(html).not.toContain("Open AI Optimizer");
+    expect(html).not.toContain("Before / Original payload snapshot");
+    expect(html).not.toContain("After / Normalized draft preview");
     expect(html).toContain("Source: Walmart Item Search");
     expect(html).toContain("Match method: query");
     expect(html).toContain("Matched itemId: WM-123");
@@ -133,5 +142,45 @@ describe("Walmart product optimizer client", () => {
 
     expect(html).toContain("No matching row found in Walmart Item Report.");
     expect(html).toContain("Source: Walmart Item Report");
+  });
+
+  it("hydrates editable fields from normalized/raw payload and routes optimize action to current SKU", () => {
+    const html = renderToStaticMarkup(
+      <ProductEditorClient
+        product={createProduct({
+          sku: "ROC 808/NY",
+          title: "",
+          brand: "Unknown",
+          shortDescription: "",
+          longDescription: "",
+          bulletPoints: [],
+          normalizedPayload: {
+            title: "Normalized Title from Import",
+            shortDescription: "Normalized short description",
+            longDescription: "Normalized long description",
+            bulletPoints: ["Normalized bullet one", "Normalized bullet two"],
+            imageUrl: "https://images.example.com/normalized-primary.jpg",
+            galleryImageUrls: ["https://images.example.com/normalized-gallery-1.jpg"],
+            brand: "Unknown",
+            price: 24.5,
+            inventoryQuantity: 12,
+            attributes: { color: "Blue" },
+          },
+          rawPayload: {
+            brand: "Payload Brand",
+            keyFeatures: ["Payload feature one", "Payload feature two"],
+          },
+        })}
+        stagedDrafts={[]}
+        aiProviderConnected={true}
+      />
+    );
+
+    expect(html).toContain('href="/apps/ecomviper/walmart/ai-optimizer?sku=ROC%20808%2FNY"');
+    expect(html).toContain('value="Normalized Title from Import"');
+    expect(html).toContain('>Normalized short description</textarea>');
+    expect(html).toContain("Normalized bullet one");
+    expect(html).toContain('value="Payload Brand"');
+    expect(html).not.toContain(">Unknown<");
   });
 });

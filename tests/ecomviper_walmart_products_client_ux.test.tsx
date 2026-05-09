@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import WalmartProductsClient from "@/app/apps/ecomviper/walmart/products/products-client";
+import { walmartNavItems } from "@/lib/ecomviper/walmart/walmart-nav";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 vi.mock("next/link", async () => {
@@ -50,6 +51,10 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
 }
 
 describe("Walmart products client UX", () => {
+  it("removes redundant AI Optimizer sidebar nav entry", () => {
+    expect(walmartNavItems.some((item) => item.label === "AI Optimizer")).toBe(false);
+  });
+
   it("links SKU and title to the product editor route with encoded SKU", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 

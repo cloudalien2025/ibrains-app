@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import type { WalmartAiSuggestion, WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
@@ -25,7 +26,11 @@ type GenerateSuggestionResponse = {
 const OPENAI_REQUIRED_MESSAGE = "Connect your OpenAI API key first to generate product content.";
 
 export default function WalmartAiOptimizerClient({ products }: AiOptimizerClientProps) {
-  const [sku, setSku] = useState(products[0]?.sku ?? "");
+  const searchParams = useSearchParams();
+  const requestedSku = searchParams?.get("sku")?.trim() ?? "";
+  const defaultSku =
+    (requestedSku && products.some((product) => product.sku === requestedSku) ? requestedSku : products[0]?.sku) ?? "";
+  const [sku, setSku] = useState(defaultSku);
   const [message, setMessage] = useState<string | null>(null);
   const [openAiConnected, setOpenAiConnected] = useState(false);
   const [openAiChecked, setOpenAiChecked] = useState(false);
@@ -34,6 +39,11 @@ export default function WalmartAiOptimizerClient({ products }: AiOptimizerClient
   const [suggestionsBySku, setSuggestionsBySku] = useState<Record<string, WalmartAiSuggestion>>({});
 
   const suggestion = useMemo(() => suggestionsBySku[sku] ?? null, [suggestionsBySku, sku]);
+
+  useEffect(() => {
+    if (!defaultSku) return;
+    setSku(defaultSku);
+  }, [defaultSku]);
 
   useEffect(() => {
     let cancelled = false;
