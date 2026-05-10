@@ -309,4 +309,72 @@ describe("walmart products persistence", () => {
     expect(prodProductsAfterEnabledSeed.map((product) => product.sku)).toEqual(["PROD-SKU-1"]);
     expect(e2eProducts.some((product) => product.sku === "E2E-SKU-1")).toBe(true);
   });
+
+  it("saves a draft for a persisted SKU even when runtime product cache is empty", async () => {
+    const userId = "user_save_after_ai";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const response = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "ROC808 Daily Wellness Formula | Optimized",
+            shortDescription: "Daily mobility support summary.",
+            longDescription: "Detailed compliant listing description.",
+            bulletPoints: ["Optimized bullet 1", "Optimized bullet 2", "Optimized bullet 3"],
+            brand: "Walmart Brand",
+            attributes: { form: "Capsule" },
+            imageUrl: "",
+            additionalImageUrls: [],
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(201);
+    expect(payload.ok).toBe(true);
+    expect(payload.draft?.sku).toBe("ROC808");
+    expect(payload.draft?.draftPayload?.title).toBe(
+      "ROC808 Daily Wellness Formula | Optimized"
+    );
+  });
+
+  it("returns product-not-found when draft save SKU is missing from persisted and runtime products", async () => {
+    const userId = "user_save_missing";
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const response = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "MISSING-SKU",
+          draftPayload: {
+            title: "Missing SKU",
+            price: 12.5,
+            inventoryQuantity: 5,
+          },
+        }),
+      })
+    );
+
+    const payload = await response.json();
+    expect(response.status).toBe(404);
+    expect(payload.error?.code).toBe("PRODUCT_NOT_FOUND");
+    expect(payload.error?.message).toContain("product record was not found");
+  });
 });
