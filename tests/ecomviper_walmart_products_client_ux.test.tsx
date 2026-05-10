@@ -71,6 +71,14 @@ describe("Walmart products client UX", () => {
     expect(html).toContain(">View Drafts<");
     expect(html).toContain(">Optimize with AI<");
     expect(html).toContain(">Sync<");
+    expect(html).toContain(">Remove from EcomViper catalog<");
+  });
+
+  it("renders SKU sort control with accessible sort state", () => {
+    const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
+
+    expect(html).toContain("SKU ↕");
+    expect(html).toContain('aria-sort="none"');
   });
 
   it("shows Item Search image issue copy for missing images", () => {
@@ -133,5 +141,35 @@ describe("Walmart products client UX", () => {
     expect(html).toContain("OPA Nutrition");
     expect(html).toContain("Pending draft");
     expect(html).not.toContain(">Unknown<");
+  });
+
+  it("shows draft-specific row action label when pending draft exists", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            hasDraftChanges: true,
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain(">View Draft<");
+  });
+
+  it("centers inventory header and renders unknown inventory placeholder", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            inventoryStatus: "unknown",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("ecomviper-walmart-products-inventory-header");
+    expect(html).toContain("text-center");
+    expect(html).toContain(">—<");
   });
 });

@@ -10,6 +10,10 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-draft-repository";
 import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
+function normalizeSkuKey(value: string): string {
+  return value.trim().toUpperCase();
+}
+
 export async function listWalmartDraftsForUser(userId: string): Promise<WalmartDraftRecord[]> {
   return listPersistedWalmartDrafts({ userId, includeDiscarded: false });
 }
@@ -210,4 +214,41 @@ export async function discardWalmartDraftForUser(
   });
 
   return updated;
+}
+
+export async function discardWalmartDraftsForSkuForUser(userId: string, sku: string): Promise<number> {
+  const skuKey = normalizeSkuKey(sku);
+  if (!skuKey) return 0;
+
+  const allDrafts = await listPersistedWalmartDrafts({ userId, includeDiscarded: true });
+  const toDiscard = allDrafts.filter(
+    (draft) => normalizeSkuKey(draft.sku) === skuKey && draft.status !== "discarded"
+  );
+
+  if (toDiscard.length === 0) return 0;
+
+  const updatedAt = new Date().toISOString();
+  for (const draft of toDiscard) {
+    const discardedDraft: WalmartDraftRecord = {
+      ...draft,
+      status: "discarded",
+      publishStatus: "failed",
+      updatedAt,
+    };
+    await savePersistedWalmartDraft({
+      userId,
+      draft: discardedDraft,
+    });
+
+    appendActivityLog({
+      marketplace: "walmart",
+      sku: draft.sku,
+      actionType: "draft_discard",
+      result: "warning",
+      message: "Draft discarded due to local product removal.",
+      afterPayload: discardedDraft,
+    });
+  }
+
+  return toDiscard.length;
 }

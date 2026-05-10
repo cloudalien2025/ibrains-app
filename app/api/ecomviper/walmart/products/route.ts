@@ -3,6 +3,8 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
+import { mergeProductsWithLatestDrafts } from "@/lib/ecomviper/walmart/walmart-product-display";
 import { listWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
 
@@ -21,7 +23,12 @@ export async function GET(req: NextRequest) {
     const filter = req.nextUrl.searchParams.get("filter") ?? "all";
 
     const allProducts = await listWalmartProductsForUser(userId);
-    const products = filterWalmartProducts(allProducts, { query: search, filter });
+    const drafts = await listWalmartDraftsForUser(userId);
+    const effectiveProducts = mergeProductsWithLatestDrafts({
+      products: allProducts,
+      drafts,
+    });
+    const products = filterWalmartProducts(effectiveProducts, { query: search, filter });
 
     return ok({
       ok: true,

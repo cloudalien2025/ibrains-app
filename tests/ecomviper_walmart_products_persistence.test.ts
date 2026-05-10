@@ -6,10 +6,13 @@ import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer
 import {
   getWalmartProductBySkuForUser,
   importWalmartProducts,
+  isWalmartProductArchivedForUser,
   listWalmartProducts,
   listWalmartProductsForUser,
   replaceWalmartProductsForUser,
 } from "@/lib/ecomviper/walmart/walmart-products";
+import { listPersistedWalmartDrafts } from "@/lib/ecomviper/walmart/walmart-draft-repository";
+import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 
 const authMocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
@@ -103,6 +106,7 @@ describe("walmart products persistence", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = undefined;
@@ -583,5 +587,119 @@ describe("walmart products persistence", () => {
     expect(html).toContain("Hydrated long description");
     expect(html).toContain("Hydrated bullet 1");
     expect(html).toContain('value="OPA Nutrition"');
+  });
+
+  it("removes products from local catalog only, scoped to signed-in user", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "remove_user_a",
+      products: [buildProduct("REMOVE-SKU-1")],
+      importedAt: new Date().toISOString(),
+    });
+    await replaceWalmartProductsForUser({
+      userId: "remove_user_b",
+      products: [buildProduct("REMOVE-SKU-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "remove_user_a", unauthorizedResponse: null });
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+
+    const response = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/REMOVE-SKU-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "REMOVE-SKU-1" }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.sku).toBe("REMOVE-SKU-1");
+    expect(payload.removed).toBe(true);
+    expect(payload.archived).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    const removedUserProducts = await listWalmartProductsForUser("remove_user_a");
+    const retainedUserProducts = await listWalmartProductsForUser("remove_user_b");
+    const removedLookup = await getWalmartProductBySkuForUser("remove_user_a", "REMOVE-SKU-1");
+    const retainedLookup = await getWalmartProductBySkuForUser("remove_user_b", "REMOVE-SKU-1");
+    const removedArchivedState = await isWalmartProductArchivedForUser("remove_user_a", "REMOVE-SKU-1");
+
+    expect(removedUserProducts.some((product) => product.sku === "REMOVE-SKU-1")).toBe(false);
+    expect(retainedUserProducts.some((product) => product.sku === "REMOVE-SKU-1")).toBe(true);
+    expect(removedLookup).toBeNull();
+    expect(retainedLookup?.sku).toBe("REMOVE-SKU-1");
+    expect(removedArchivedState).toBe(true);
+  });
+
+  it("does not allow user A to remove user B product", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "owner_user_b",
+      products: [buildProduct("SCOPE-REMOVE-1")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: "owner_user_a", unauthorizedResponse: null });
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+
+    const response = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/SCOPE-REMOVE-1", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "SCOPE-REMOVE-1" }) }
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(404);
+    expect(payload.error?.code).toBe("PRODUCT_NOT_FOUND");
+    expect((await getWalmartProductBySkuForUser("owner_user_b", "SCOPE-REMOVE-1"))?.sku).toBe("SCOPE-REMOVE-1");
+  });
+
+  it("removing a product discards local drafts for that SKU and shows removed editor copy", async () => {
+    const userId = "remove_with_draft";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const createResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: { brand: "OPA Nutrition" },
+        }),
+      })
+    );
+    expect(createResponse.status).toBe(201);
+
+    const { DELETE: deleteProductRoute } = await import("@/app/api/ecomviper/walmart/products/[sku]/route");
+    const removeResponse = await deleteProductRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/ROC808", {
+        method: "DELETE",
+      }),
+      { params: Promise.resolve({ sku: "ROC808" }) }
+    );
+    const removePayload = await removeResponse.json();
+
+    expect(removeResponse.status).toBe(200);
+    expect(removePayload.affectedDraftCount).toBe(1);
+    expect(await listWalmartDraftsForUser(userId)).toHaveLength(0);
+
+    const allDrafts = await listPersistedWalmartDrafts({ userId, includeDiscarded: true });
+    expect(allDrafts).toHaveLength(1);
+    expect(allDrafts[0]?.status).toBe("discarded");
+
+    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
+    );
+    expect(html).toContain("Product not found");
+    expect(html).toContain("was removed from your local EcomViper catalog");
   });
 });
