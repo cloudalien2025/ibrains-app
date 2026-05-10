@@ -98,6 +98,10 @@ describe("Walmart product editor public listing image flow", () => {
     await flush();
 
     expect(container.textContent).toContain("Public Walmart Listing Images");
+    expect(container.textContent).toContain("Images missing");
+    expect(container.textContent).toContain(
+      "EcomViper could not find images through Walmart Marketplace APIs."
+    );
     expect(container.textContent).toContain(
       "Connect your SerpApi key to fetch public Walmart listing images."
     );

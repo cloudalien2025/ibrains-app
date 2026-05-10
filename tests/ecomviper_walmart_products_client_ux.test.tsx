@@ -125,6 +125,26 @@ describe("Walmart products client UX", () => {
     expect(html).toContain("Source: Walmart Item Report");
   });
 
+  it("renders Public Walmart listing SerpApi source and fallback status copy", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageStatusMessage: "",
+            imageSyncStatus: "not_found",
+            imageSource: "public_walmart_listing_serpapi",
+            publicWalmartUrl:
+              "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("No public Walmart listing images found via SerpApi.");
+    expect(html).toContain("Source: Public Walmart listing via SerpApi");
+    expect(html).toContain(">Resolve images<");
+  });
+
   it("shows draft-aware brand value with pending draft indicator", () => {
     const html = renderToStaticMarkup(
       <WalmartProductsClient

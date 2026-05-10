@@ -527,13 +527,32 @@ function formatInventory(product: WalmartProductRecord): string {
 
 function formatImageStatus(product: WalmartProductRecord): string {
   if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
-  if (product.imageSyncStatus === "not_found")
+  if (product.imageSyncStatus === "not_found") {
+    if (product.imageSource === "walmart_item_report")
+      return "No matching row found in Walmart Item Report.";
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "No public Walmart listing images found via SerpApi.";
+    if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Item Search returned no usable image.";
-  if (product.imageSyncStatus === "ambiguous")
+  }
+  if (product.imageSyncStatus === "ambiguous") {
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing image match is ambiguous.";
     return "Multiple Walmart Item Search candidates matched this product.";
-  if (product.imageSyncStatus === "failed")
+  }
+  if (product.imageSyncStatus === "failed") {
+    if (product.imageSource === "walmart_item_report")
+      return "Walmart Item Report request failed.";
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing image lookup failed.";
     return "Item Search request failed after retry.";
-  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced.";
+  }
+  if (product.imageSyncStatus === "not_synced") {
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing images not synced.";
+    if (product.imageSource === "manual") return "Manual image URL not provided.";
+    return "Image enrichment not synced.";
+  }
   if (product.imageUrl) return "Image available";
   return "Image enrichment not synced.";
 }
@@ -1777,6 +1796,14 @@ export default function ProductEditorClient({
                     <p className="mt-1 text-xs text-[#475569]">
                       Image source: Public Walmart listing via SerpApi
                     </p>
+                    {!form.imageUrl.trim() ? (
+                      <div className="mt-2 rounded-md border border-[#D9E4F0] bg-white px-2 py-2 text-xs text-[#334155]">
+                        <p className="font-medium text-[#0F172A]">Images missing</p>
+                        <p className="mt-1">
+                          EcomViper could not find images through Walmart Marketplace APIs.
+                        </p>
+                      </div>
+                    ) : null}
                     {!serpApiProviderConnected ? (
                       <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
                         <p>Connect your SerpApi key to fetch public Walmart listing images.</p>
