@@ -730,7 +730,7 @@ export default function ProductEditorClient({
       return;
     }
 
-    setMessage("Draft saved.");
+    setMessage("Draft saved. Open Drafts to review and submit when ready.");
   }
 
   function revealInlineAiPanel() {

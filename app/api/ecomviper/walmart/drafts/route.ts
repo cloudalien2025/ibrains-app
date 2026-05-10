@@ -4,11 +4,8 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
-import { listDraftsForUser, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
-
-function isUnknownSkuError(error: unknown): boolean {
-  return error instanceof Error && error.message.startsWith("Unknown SKU:");
-}
+import { listWalmartDraftsForUser, upsertWalmartDraftForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
+import { getProductBySku } from "@/lib/ecomviper/walmart/walmart-store";
 
 export async function GET(req: NextRequest) {
   void req;
@@ -21,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return fail(401, "Please sign in before accessing Walmart drafts.", "UNAUTHORIZED");
     }
-    const drafts = listDraftsForUser(userId);
+    const drafts = await listWalmartDraftsForUser(userId);
     return ok({ ok: true, drafts });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to list drafts.");
@@ -65,7 +62,10 @@ export async function POST(req: NextRequest) {
     }
 
     const allowRuntimeProductLookup = process.env.NODE_ENV === "test";
-    if (!productOverride && !allowRuntimeProductLookup) {
+    const runtimeProduct = allowRuntimeProductLookup ? getProductBySku(body.sku) : null;
+    const resolvedProduct = productOverride ?? runtimeProduct;
+
+    if (!resolvedProduct) {
       return fail(
         404,
         "Draft could not be saved because the product record was not found.",
@@ -73,25 +73,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let draft;
-    try {
-      draft = upsertDraftForSku({
-        sku: body.sku,
-        draftPayload: body.draftPayload,
-        createdBy: userId,
-        productOverride,
-      });
-    } catch (error) {
-      if (isUnknownSkuError(error)) {
-        return fail(
-          404,
-          "Draft could not be saved because the product record was not found.",
-          "PRODUCT_NOT_FOUND"
-        );
-      }
-      throw error;
-    }
-    return ok({ ok: true, draft }, 201);
+    const draft = await upsertWalmartDraftForUser({
+      userId,
+      sku: body.sku,
+      draftPayload: body.draftPayload,
+      product: resolvedProduct,
+    });
+
+    return ok(
+      {
+        ok: true,
+        draft,
+        draftMeta: {
+          draftId: draft.id,
+          sku: draft.sku,
+          updatedAt: draft.updatedAt,
+          validationStatus: draft.validationResult.valid ? "validated" : "draft",
+          publishStatus: draft.publishStatus,
+        },
+      },
+      201
+    );
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to save draft.");
   }

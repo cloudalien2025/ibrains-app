@@ -1,11 +1,13 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
+import { getWalmartDraftByIdForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import { submitWalmartMaintenanceFeed } from "@/lib/ecomviper/walmart/walmart-feeds";
 import { buildMaintenancePayload } from "@/lib/ecomviper/walmart/walmart-maintenance";
-import { getDraftById, getProductBySku } from "@/lib/ecomviper/walmart/walmart-store";
+import { getProductBySku } from "@/lib/ecomviper/walmart/walmart-store";
 import { readOptimizerProposalFromDraft } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
 
 function isWalmartFeedWriteModeEnabled(): boolean {
@@ -14,8 +16,14 @@ function isWalmartFeedWriteModeEnabled(): boolean {
 
 export async function POST(req: NextRequest) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) return unauthorizedResponse;
+      return fail(401, "Please sign in before submitting Walmart feed updates.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before submitting Walmart feed updates.", "UNAUTHORIZED");
+    }
 
     const body = (await req.json().catch(() => ({}))) as {
       draftId?: string;
@@ -30,7 +38,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const draft = getDraftById(body.draftId);
+    const draft = await getWalmartDraftByIdForUser(userId, body.draftId);
     if (!draft) {
       return fail(404, "Draft not found.", "NOT_FOUND");
     }
@@ -68,7 +76,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const product = getProductBySku(draft.sku);
+    const persistedProduct = await getPersistedWalmartProductBySku(userId, draft.sku);
+    const product =
+      persistedProduct ??
+      (process.env.NODE_ENV === "test" ? getProductBySku(draft.sku) : null);
     if (!product) {
       return fail(404, "Product not found for draft.", "NOT_FOUND");
     }

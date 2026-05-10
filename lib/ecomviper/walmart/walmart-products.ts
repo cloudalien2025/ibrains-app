@@ -8,6 +8,7 @@ import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-cli
 import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
+import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
   getProductBySku,
@@ -1220,8 +1221,8 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
 function buildDashboardSnapshotFromProducts(params: {
   products: WalmartProductRecord[];
   lastImportAt: string | null;
+  draftChanges: number;
 }): Omit<WalmartDashboardSnapshot, "connection" | "mode"> {
-  const drafts = listDrafts();
   const feeds = listFeeds();
   const products = params.products;
   const attentionProducts = products.filter((product) => product.issues.length > 0 || product.status !== "active");
@@ -1230,7 +1231,7 @@ function buildDashboardSnapshotFromProducts(params: {
   return {
     productsImported: products.length,
     lastImportAt: params.lastImportAt,
-    draftChanges: drafts.filter((draft) => draft.status !== "discarded").length,
+    draftChanges: params.draftChanges,
     feedErrors,
     listingsNeedingAttention: {
       count: attentionProducts.length,
@@ -1251,7 +1252,12 @@ function buildDashboardSnapshotFromProducts(params: {
 export async function getWalmartDashboardSnapshotForUser(userId: string): Promise<WalmartDashboardSnapshot> {
   const products = await listPersistedWalmartProducts(userId);
   const lastImportAt = await getPersistedWalmartLastImportAt(userId);
-  const counts = buildDashboardSnapshotFromProducts({ products, lastImportAt });
+  const drafts = await listWalmartDraftsForUser(userId);
+  const counts = buildDashboardSnapshotFromProducts({
+    products,
+    lastImportAt,
+    draftChanges: drafts.length,
+  });
   const connection = getWalmartConnectionHealth();
 
   return {
@@ -1270,9 +1276,11 @@ export async function getWalmartDashboardSnapshotForUser(userId: string): Promis
 
 export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
   const products = listProducts();
+  const drafts = listDrafts();
   const counts = buildDashboardSnapshotFromProducts({
     products,
     lastImportAt: getLastImportAt(),
+    draftChanges: drafts.filter((draft) => draft.status !== "discarded").length,
   });
   const connection = getWalmartConnectionHealth();
 
@@ -1292,13 +1300,13 @@ export function getWalmartDashboardSnapshot(): WalmartDashboardSnapshot {
 
 export async function getEcomViperMarketplaceMetricsForUser(userId: string) {
   const products = await listPersistedWalmartProducts(userId);
-  const drafts = listDrafts();
+  const drafts = await listWalmartDraftsForUser(userId);
   const attention = products.filter((item) => item.issues.length > 0 || item.status !== "active");
 
   return {
     connectedMarketplaces: getWalmartConnectionHealth().connectionStatus === "connected" ? 1 : 0,
     productsImported: products.length,
-    draftChanges: drafts.filter((draft) => draft.status !== "discarded").length,
+    draftChanges: drafts.length,
     syncErrors: attention.filter((item) => item.status === "sync_failed").length,
     listingsNeedingAttention: attention.length,
   };

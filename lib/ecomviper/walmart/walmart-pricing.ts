@@ -1,8 +1,9 @@
 import "server-only";
 
 import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
+import { upsertWalmartDraftForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
-import { getRecentPriceChanges, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
+import { getRecentPriceChanges } from "@/lib/ecomviper/walmart/walmart-store";
 import type {
   WalmartMutationResult,
   WalmartPriceUpdateRequest,
@@ -27,13 +28,13 @@ export async function updateWalmartPriceForUser(input: {
   }
 
   if (input.update.saveAsDraft) {
-    upsertDraftForSku({
+    await upsertWalmartDraftForUser({
+      userId: input.userId,
       sku,
       draftPayload: {
         price: input.update.price,
       },
-      createdBy: input.userId,
-      productOverride: product,
+      product,
     });
 
     return {
