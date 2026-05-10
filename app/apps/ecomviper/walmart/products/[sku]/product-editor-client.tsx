@@ -67,7 +67,7 @@ type GenerateSuggestionResponse = {
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type InlineAiOutcome = "improved" | "unchanged" | "worse";
 
-const INLINE_AI_LOADING_MESSAGE = "Optimizing product with AI...";
+const INLINE_AI_LOADING_MESSAGE = "Generating AI improvements...";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -537,6 +537,9 @@ export default function ProductEditorClient({
   const [inlineAiMessage, setInlineAiMessage] = useState<string | null>(null);
   const [inlineAiSuggestion, setInlineAiSuggestion] =
     useState<WalmartAiSuggestion | null>(null);
+  const [aiSuggestionApplied, setAiSuggestionApplied] = useState(false);
+  const [showAiDetails, setShowAiDetails] = useState(false);
+  const [draftEditorOpen, setDraftEditorOpen] = useState(false);
   const optimizingWithAi = inlineAiState === "loading";
 
   const stagedOptimizations = useMemo(() => {
@@ -711,6 +714,8 @@ export default function ProductEditorClient({
 
   async function runInlineOptimization() {
     revealInlineAiPanel();
+    setShowAiDetails(false);
+    setAiSuggestionApplied(false);
 
     if (!aiProviderConnected) {
       setInlineAiState("missing_key");
@@ -802,8 +807,12 @@ export default function ProductEditorClient({
       brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
     });
+    setAiSuggestionApplied(true);
+    setDraftEditorOpen(true);
+    setActiveTab("Content");
+    setShowAiDetails(false);
     setInlineAiState("success");
-    setInlineAiMessage("AI suggestions applied to draft fields. Save Draft when ready.");
+    setInlineAiMessage("AI improvements applied to draft fields. Save Draft when ready.");
   }
 
   function handleDismissInlineAiSuggestion() {
@@ -908,6 +917,7 @@ export default function ProductEditorClient({
   }
 
   function handleReviewAiChanges() {
+    setShowAiDetails(true);
     revealInlineAiPanel();
   }
 
@@ -928,18 +938,48 @@ export default function ProductEditorClient({
   const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
   const scoreDelta = projectedScore - listingQuality.score;
   const scoreDeltaLabel = scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta);
+  const workflowStep = aiSuggestionApplied || draftEditorOpen ? 3 : inlineAiSuggestion || inlineAiState !== "idle" ? 2 : 1;
+  const draftEditorIsActive = aiSuggestionApplied || draftEditorOpen;
+  const hasExistingDraft = Boolean(lastDraftSavedAt);
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-product-editor-page">
       <WalmartPageHeader
         title="Product Editor"
-        subtitle="Edit listing content, optimize with AI, and submit approved updates in one workspace."
+        subtitle="Review, improve, and submit approved Walmart listing updates."
         actions={
           <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
             SKU: {product.sku}
           </span>
         }
       />
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-3 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-workflow-steps"
+      >
+        <ol className="flex flex-wrap items-center gap-2 text-sm">
+          {["1 Review", "2 Improve", "3 Submit"].map((label, index) => {
+            const stepNumber = index + 1;
+            const active = workflowStep === stepNumber;
+            const completed = workflowStep > stepNumber;
+            return (
+              <li
+                key={label}
+                className={`inline-flex items-center rounded-full border px-3 py-1 ${
+                  active
+                    ? "border-[#0F172A] bg-[#0F172A] text-white"
+                    : completed
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                      : "border-[#D9E4F0] bg-[#F8FBFF] text-[#475569]"
+                }`}
+              >
+                {label}
+              </li>
+            );
+          })}
+        </ol>
+      </section>
 
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -962,7 +1002,7 @@ export default function ProductEditorClient({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Current Walmart listing</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 1 · Current listing</p>
               <h2 className="mt-1 truncate text-lg font-semibold text-[#0F172A]">{displayTitle}</h2>
               <p className="mt-1 text-sm text-[#475569]">SKU: {product.sku}</p>
               <div className="mt-3 grid gap-2 text-sm text-[#334155] sm:grid-cols-2 lg:grid-cols-3">
@@ -976,7 +1016,7 @@ export default function ProductEditorClient({
                   <span className="text-[#64748B]">Inventory:</span> {formatInventory(product)}
                 </p>
                 <p>
-                  <span className="text-[#64748B]">Listing Quality:</span> {listingQuality.score}/100
+                  <span className="text-[#64748B]">Listing quality:</span> {listingQuality.score}/100
                 </p>
                 <p className="sm:col-span-2 lg:col-span-1">
                   <span className="text-[#64748B]">Status:</span>{" "}
@@ -1023,43 +1063,35 @@ export default function ProductEditorClient({
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-primary-actions"
+        ref={inlineAiPanelRef}
+        tabIndex={-1}
       >
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={runInlineOptimization}
-            disabled={optimizingWithAi}
-            data-testid="ecomviper-walmart-optimize-button"
-            className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            {optimizingWithAi ? "Optimizing product with AI..." : "Optimize with AI"}
-          </button>
-          <button
-            type="button"
-            onClick={handleSaveDraft}
-            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-          >
-            Save Draft
-          </button>
-          <button
-            type="button"
-            disabled={!canSubmit}
-            className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-          >
-            Submit Update
-          </button>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 2 · Improve listing with AI</p>
+            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">
+              {inlineAiSuggestion ? aiResultHeaderCopy : "Improve this listing with AI"}
+            </h2>
+            <p className="mt-1 text-sm text-[#475569]">
+              EcomViper will improve title, descriptions, bullets, and attributes. Nothing is submitted to Walmart until you approve it.
+            </p>
+          </div>
+          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
+            Current score: {listingQuality.score}/100
+          </span>
         </div>
+
         <div
-          className="mt-2 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
-          data-testid="ecomviper-walmart-inline-ai-state"
+          className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
+          data-testid="ecomviper-walmart-inline-ai-panel"
         >
-          {inlineAiState === "loading" ? "Optimizing product with AI..." : null}
+          {inlineAiState === "loading" ? "Generating AI Improvements..." : null}
           {inlineAiState === "success"
             ? inlineAiOutcome === "worse"
               ? "Suggestions need review - not recommended."
               : inlineAiOutcome === "improved"
-                ? "Optimization improved listing."
-                : "Suggestions are ready to review inline."
+                ? "AI Improvements Ready."
+                : "Suggestions available."
             : null}
           {inlineAiState === "error" ? "Optimization failed. Review the message below and try again." : null}
           {inlineAiState === "missing_key" ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE : null}
@@ -1067,439 +1099,53 @@ export default function ProductEditorClient({
             ? "Optimize title, descriptions, bullets, and attributes without leaving this page."
             : null}
         </div>
-        <p className="mt-2 text-xs text-[#64748B]">
-          No auto-submit. Changes remain in draft until approved.
-        </p>
-        {message ? <p className="mt-2 text-sm text-[#334155]">{message}</p> : null}
-      </section>
 
-      <section
-        className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]"
-      >
-        <article className="order-2 rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)] lg:order-1">
-          <div className="flex flex-wrap gap-2">
-            {tabs.map((tab) => (
-              <button
-                key={tab}
-                type="button"
-                onClick={() => setActiveTab(tab)}
-                className={`rounded-lg border px-3 py-1.5 text-sm ${
-                  activeTab === tab
-                    ? "border-[#93C5FD] bg-[#EAF1F8] text-[#0F172A]"
-                    : "border-[#D9E4F0] bg-white text-[#334155]"
-                }`}
-              >
-                {tab}
-              </button>
-            ))}
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2" data-testid="ecomviper-walmart-product-form">
-            {activeTab === "Content" ? (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                  Content
-                </h2>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  <span className="flex items-center justify-between gap-2">
-                    <span>Title</span>
-                    <span className="text-xs text-[#64748B]">{form.title.length}/200</span>
-                  </span>
-                  <input
-                    value={form.title}
-                    onChange={(event) => patchForm({ title: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  <span className="flex items-center justify-between gap-2">
-                    <span>Short description</span>
-                    <span className="text-xs text-[#64748B]">{form.shortDescription.length}/500</span>
-                  </span>
-                  <textarea
-                    value={form.shortDescription}
-                    onChange={(event) => patchForm({ shortDescription: event.target.value })}
-                    className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  <span className="flex items-center justify-between gap-2">
-                    <span>Long description</span>
-                    <span className="text-xs text-[#64748B]">{form.longDescription.length}/4000</span>
-                  </span>
-                  <textarea
-                    value={form.longDescription}
-                    onChange={(event) => patchForm({ longDescription: event.target.value })}
-                    className="mt-1 min-h-28 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  Bullet / key features (one per line)
-                  <textarea
-                    value={form.bulletPoints}
-                    onChange={(event) => patchForm({ bulletPoints: event.target.value })}
-                    className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155]">
-                  Brand
-                  <input
-                    value={form.brand}
-                    onChange={(event) => patchForm({ brand: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-              </>
-            ) : null}
-
-            {activeTab === "Media" ? (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                  Media
-                </h2>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  Primary image URL
-                  <input
-                    value={form.imageUrl}
-                    onChange={(event) => patchForm({ imageUrl: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  Additional image URLs (one per line)
-                  <textarea
-                    value={form.additionalImageUrls}
-                    onChange={(event) => patchForm({ additionalImageUrls: event.target.value })}
-                    className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-xs text-[#475569] md:col-span-2">
-                  <p>Image sync status: {formatImageStatus(product)}</p>
-                  <p className="mt-1">Source: {formatImageSource(product)}</p>
-                  <p className="mt-1">Gallery images: {product.galleryImageUrls?.length ?? 0}</p>
-                  <p className="mt-1">Variant images: {product.variantImageUrls?.length ?? 0}</p>
-                </div>
-              </>
-            ) : null}
-
-            {activeTab === "Pricing & Inventory" ? (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                  Pricing & inventory
-                </h2>
-                <label className="text-sm text-[#334155]">
-                  Price
-                  <input
-                    value={form.price}
-                    onChange={(event) => patchForm({ price: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-                <label className="text-sm text-[#334155]">
-                  Inventory quantity
-                  <input
-                    value={form.inventoryQuantity}
-                    onChange={(event) => patchForm({ inventoryQuantity: event.target.value })}
-                    className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                  />
-                </label>
-              </>
-            ) : null}
-
-            {activeTab === "Walmart Attributes" ? (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                  Walmart attributes
-                </h2>
-                <label className="text-sm text-[#334155] md:col-span-2">
-                  Key attributes (JSON)
-                  <textarea
-                    value={form.attributesJson}
-                    onChange={(event) => patchForm({ attributesJson: event.target.value })}
-                    className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2 font-mono text-xs"
-                  />
-                </label>
-                <p className="text-xs text-[#64748B] md:col-span-2">
-                  Add seller-approved attributes used to improve listing quality and readiness.
-                </p>
-              </>
-            ) : null}
-
-            {activeTab === "Sync History" ? (
-              <>
-                <h2 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                  Sync history
-                </h2>
-                <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2">
-                  <p>Last product sync: {product.lastSyncedAt}</p>
-                  <p className="mt-1">Image source: {formatImageSource(product)}</p>
-                  <p className="mt-1">Image status: {formatImageStatus(product)}</p>
-                  {lastDraftSavedAt ? (
-                    <p className="mt-1">Last draft save: {lastDraftSavedAt}</p>
-                  ) : (
-                    <p className="mt-1">No saved draft yet.</p>
-                  )}
-                </div>
-              </>
-            ) : null}
-          </div>
-
-          {SHOW_DEVELOPER_DIAGNOSTICS ? (
-            <details className="mt-4 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
-              <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                Developer diagnostics
-              </summary>
-              <div className="mt-3 grid gap-4 lg:grid-cols-2">
-                <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                    Original payload snapshot
-                  </h2>
-                  <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                    {JSON.stringify(product.rawPayload, null, 2)}
-                  </pre>
-                </article>
-                <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
-                  <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                    Normalized draft preview
-                  </h2>
-                  <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">
-                    {JSON.stringify(preview, null, 2)}
-                  </pre>
-                </article>
-              </div>
-            </details>
-          ) : null}
-        </article>
-
-        <aside
-          className="order-1 rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)] lg:order-2 lg:sticky lg:top-6 lg:h-fit"
-          data-testid="ecomviper-walmart-inline-ai-panel"
-          ref={inlineAiPanelRef}
-          tabIndex={-1}
-        >
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-base font-semibold text-[#0F172A]">AI Optimization Assistant</h2>
-            <StatusBadge status={inlineAiState === "success" ? "validated" : "warning"} />
-          </div>
-          <p className="mt-1 text-sm text-[#475569]">
-            Optimize title, descriptions, bullets, and listing attributes without leaving this page.
-          </p>
-
-          {inlineAiState === "idle" ? (
-            <p className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
-              Optimize title, descriptions, bullets, and listing attributes without leaving this page.
-            </p>
-          ) : null}
-
-          {inlineAiState === "loading" ? (
-            <p className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
-              Optimizing product with AI...
-            </p>
-          ) : null}
-
-          {inlineAiState === "missing_key" ? (
-            <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-              {OPENAI_OPTIMIZE_REQUIRED_MESSAGE}
-            </p>
-          ) : null}
-
-          {inlineAiState === "error" ? (
-            <div className="mt-3 space-y-2">
-              <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                {inlineAiMessage ?? "Optimization failed. Try again."}
-              </p>
+        {!inlineAiSuggestion ? (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={runInlineOptimization}
                 disabled={optimizingWithAi}
-                className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+                data-testid="ecomviper-walmart-optimize-button"
+                className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
               >
-                Retry
+                {optimizingWithAi ? "Generating AI Improvements..." : "Generate AI Improvements"}
               </button>
             </div>
-          ) : null}
 
-          {inlineAiSuggestion ? (
-            <div className="mt-4 space-y-3" data-testid="ecomviper-walmart-inline-ai-results">
-              <div
-                className={`rounded-xl border p-3 ${
-                  inlineAiOutcome === "worse"
-                    ? "border-amber-200 bg-amber-50"
-                    : "border-[#D9E4F0] bg-[#F8FBFF]"
-                }`}
-              >
-                <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">{aiResultHeaderCopy}</p>
-                <p className="mt-1 text-sm font-medium text-[#0F172A]">
-                  Current: {listingQuality.score}/100 → Projected: {projectedScore}/100
-                </p>
-                <p className="mt-1 text-sm text-[#334155]">Change: {scoreDeltaLabel}</p>
-                <p className="mt-1 text-sm text-[#475569]">{aiResultMessage}</p>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {inlineAiOutcome === "improved" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleApplyInlineAiSuggestion}
-                        data-testid="ecomviper-walmart-apply-ai-suggestions"
-                        className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-                      >
-                        Apply to Draft
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleReviewAiChanges}
-                        className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                      >
-                        Review Changes
-                      </button>
-                    </>
-                  ) : null}
-
-                  {inlineAiOutcome === "unchanged" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleReviewAiChanges}
-                        className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white"
-                      >
-                        Review Changes
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleApplyInlineAiSuggestion}
-                        data-testid="ecomviper-walmart-apply-ai-suggestions"
-                        className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                      >
-                        Apply to Draft
-                      </button>
-                    </>
-                  ) : null}
-
-                  {inlineAiOutcome === "worse" ? (
-                    <>
-                      <button
-                        type="button"
-                        onClick={handleApplyInlineAiSuggestion}
-                        data-testid="ecomviper-walmart-apply-ai-suggestions"
-                        className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-800"
-                      >
-                        Apply Anyway to Draft
-                      </button>
-                    </>
-                  ) : null}
-
-                  <button
-                    type="button"
-                    onClick={runInlineOptimization}
-                    disabled={optimizingWithAi}
-                    className={`rounded-lg px-3 py-2 text-sm disabled:opacity-50 ${
-                      inlineAiOutcome === "worse"
-                        ? "border border-[#0F172A] bg-[#0F172A] text-white"
-                        : "border border-[#D9E4F0] bg-white text-[#0F172A]"
-                    }`}
-                  >
-                    Regenerate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDismissInlineAiSuggestion}
-                    className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                  >
-                    Dismiss
-                  </button>
-                </div>
+            {inlineAiState === "missing_key" ? (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <p>{OPENAI_OPTIMIZE_REQUIRED_MESSAGE}</p>
+                <a
+                  href="/apps/ecomviper/walmart/connect"
+                  className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
+                >
+                  Connect OpenAI key
+                </a>
               </div>
+            ) : null}
 
-              <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
-                <h3 className="text-sm font-semibold text-[#0F172A]">Change summary</h3>
-                <ul className="mt-2 space-y-1 text-sm text-[#334155]">
-                  <li>
-                    Title: <span className="text-[#64748B]">Current:</span>{" "}
-                    {form.title.trim() || "Missing"} →{" "}
-                    <span className="text-[#64748B]">Suggested:</span> {inlineAiSuggestion.suggestedTitle}
-                  </li>
-                  <li>
-                    Short description: <span className="text-[#64748B]">Current:</span>{" "}
-                    {form.shortDescription.trim() ? "Available" : "Missing"} →{" "}
-                    <span className="text-[#64748B]">Suggested:</span>{" "}
-                    {inlineAiSuggestion.suggestedShortDescription?.trim() ? "Added" : "No change"}
-                  </li>
-                  <li>
-                    Long description: <span className="text-[#64748B]">Current:</span>{" "}
-                    {form.longDescription.trim() ? "Available" : "Missing"} →{" "}
-                    <span className="text-[#64748B]">Suggested:</span>{" "}
-                    {inlineAiSuggestion.suggestedDescription.trim() ? "Added/updated" : "No change"}
-                  </li>
-                  <li>
-                    Bullet points: <span className="text-[#64748B]">Current:</span>{" "}
-                    {preview.bulletPoints.length || 0} →{" "}
-                    <span className="text-[#64748B]">Suggested:</span>{" "}
-                    {inlineAiSuggestion.suggestedBullets.length}
-                  </li>
-                  <li>
-                    Attributes: <span className="text-[#64748B]">Current:</span>{" "}
-                    {Object.keys(preview.attributes).length} →{" "}
-                    <span className="text-[#64748B]">Suggested:</span>{" "}
-                    {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
-                  </li>
-                </ul>
-
-                <h3 className="text-sm font-semibold text-[#0F172A]">Suggested title</h3>
-                <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedTitle}</p>
-
-                <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">Suggested short description</h3>
-                <p className="mt-1 text-sm text-[#334155]">
-                  {inlineAiSuggestion.suggestedShortDescription?.trim() || "No short description suggestion."}
+            {inlineAiState === "error" ? (
+              <div className="space-y-2">
+                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                  {inlineAiMessage ?? "Failed to generate AI suggestions. Try again."}
                 </p>
+                <button
+                  type="button"
+                  onClick={runInlineOptimization}
+                  disabled={optimizingWithAi}
+                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+                >
+                  Retry
+                </button>
+              </div>
+            ) : null}
 
-                <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">Suggested long description</h3>
-                <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedDescription}</p>
-
-                <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">Suggested bullet points</h3>
-                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                  {inlineAiSuggestion.suggestedBullets.map((bullet) => (
-                    <li key={bullet}>{bullet}</li>
-                  ))}
-                </ul>
-
-                <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">Suggested attributes</h3>
-                {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length ? (
-                  <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                    {Object.entries(inlineAiSuggestion.suggestedAttributes ?? {}).map(
-                      ([key, value]) => (
-                        <li key={key}>
-                          {key}: {value}
-                        </li>
-                      )
-                    )}
-                  </ul>
-                ) : (
-                  <p className="mt-1 text-sm text-[#334155]">No attribute updates suggested.</p>
-                )}
-
-                <h3 className="mt-3 text-sm font-semibold text-[#0F172A]">Compliance notes</h3>
-                <ul className="mt-1 space-y-1 text-sm text-[#334155]">
-                  {inlineAiSuggestion.complianceWarnings.length ? (
-                    inlineAiSuggestion.complianceWarnings.map((warning) => (
-                      <li
-                        key={warning}
-                        className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1"
-                      >
-                        {warning}
-                      </li>
-                    ))
-                  ) : (
-                    <li className="rounded-md border border-[#D9E4F0] bg-white px-2 py-1">
-                      No compliance warnings from the AI response.
-                    </li>
-                  )}
-                </ul>
-              </article>
-            </div>
-          ) : (
-            <div className="mt-4 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Rule-based suggestions</p>
+            <details className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
+              <summary className="cursor-pointer text-sm font-semibold text-[#0F172A]">
+                Rule-based suggestions
+              </summary>
               <ul className="mt-2 space-y-2">
                 {listingQuality.recommendations.length ? (
                   listingQuality.recommendations.map(
@@ -1530,17 +1176,416 @@ export default function ProductEditorClient({
               >
                 {stagingRecommendation ? "Staging..." : "Stage rule-based suggestions"}
               </button>
-            </div>
-          )}
+            </details>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-3" data-testid="ecomviper-walmart-inline-ai-results">
+            <article
+              className={`rounded-xl border p-3 ${
+                inlineAiOutcome === "worse"
+                  ? "border-amber-200 bg-amber-50"
+                  : "border-[#D9E4F0] bg-[#F8FBFF]"
+              }`}
+            >
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">{aiResultHeaderCopy}</p>
+              <p className="mt-1 text-sm font-medium text-[#0F172A]">
+                Current: {listingQuality.score}/100 → Projected: {projectedScore}/100
+              </p>
+              <p className="mt-1 text-sm text-[#334155]">Change: {scoreDeltaLabel}</p>
+              <p className="mt-1 text-sm text-[#475569]">{aiResultMessage}</p>
 
-          {inlineAiMessage && inlineAiState !== "error" ? (
-            <p className="mt-3 text-sm text-[#334155]">{inlineAiMessage}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {inlineAiOutcome === "worse" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={runInlineOptimization}
+                      disabled={optimizingWithAi}
+                      className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+                    >
+                      Regenerate
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyInlineAiSuggestion}
+                      data-testid="ecomviper-walmart-apply-ai-suggestions"
+                      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-800"
+                    >
+                      Apply Anyway to Draft
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      type="button"
+                      onClick={handleApplyInlineAiSuggestion}
+                      data-testid="ecomviper-walmart-apply-ai-suggestions"
+                      className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+                    >
+                      Apply to Draft
+                    </button>
+                    <button
+                      type="button"
+                      onClick={runInlineOptimization}
+                      disabled={optimizingWithAi}
+                      className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+                    >
+                      Regenerate
+                    </button>
+                  </>
+                )}
+                <button
+                  type="button"
+                  onClick={handleDismissInlineAiSuggestion}
+                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+                >
+                  Discard
+                </button>
+                <button
+                  type="button"
+                  onClick={handleReviewAiChanges}
+                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+                >
+                  Review Changes
+                </button>
+              </div>
+            </article>
+
+            <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
+              <h3 className="text-sm font-semibold text-[#0F172A]">Change summary</h3>
+              <ul className="mt-2 space-y-1 text-sm text-[#334155]">
+                <li>
+                  Title: {form.title.trim() || "Missing"} → {inlineAiSuggestion.suggestedTitle || "No change"}
+                </li>
+                <li>
+                  Short description:{" "}
+                  {form.shortDescription.trim() ? "Current available" : "Current missing"} →{" "}
+                  {inlineAiSuggestion.suggestedShortDescription?.trim() ? "Suggested update" : "No change"}
+                </li>
+                <li>
+                  Long description:{" "}
+                  {form.longDescription.trim() ? "Current available" : "Current missing"} →{" "}
+                  {inlineAiSuggestion.suggestedDescription.trim() ? "Suggested update" : "No change"}
+                </li>
+                <li>
+                  Bullet points: {preview.bulletPoints.length || 0} → {inlineAiSuggestion.suggestedBullets.length}
+                </li>
+                <li>
+                  Attributes: {Object.keys(preview.attributes).length} →{" "}
+                  {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
+                </li>
+                {!product.imageUrl ? <li>Image still missing from catalog data.</li> : null}
+              </ul>
+
+              <details className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3">
+                <summary className="cursor-pointer text-sm font-medium text-[#0F172A]">
+                  Why did the score change?
+                </summary>
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                  {projectedQuality?.recommendations.length ? (
+                    projectedQuality.recommendations.slice(0, 5).map((recommendation) => (
+                      <li key={recommendation.id}>
+                        {recommendation.title}: {recommendation.reason}
+                      </li>
+                    ))
+                  ) : (
+                    <li>No major scoring changes detected.</li>
+                  )}
+                </ul>
+              </details>
+
+              {showAiDetails ? (
+                <div className="mt-3 space-y-3">
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested title</h4>
+                    <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedTitle}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested short description</h4>
+                    <p className="mt-1 text-sm text-[#334155]">
+                      {inlineAiSuggestion.suggestedShortDescription?.trim() || "No short description suggestion."}
+                    </p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested long description</h4>
+                    <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedDescription}</p>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested bullet points</h4>
+                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                      {inlineAiSuggestion.suggestedBullets.map((bullet) => (
+                        <li key={bullet}>{bullet}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested attributes</h4>
+                    {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length ? (
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                        {Object.entries(inlineAiSuggestion.suggestedAttributes ?? {}).map(
+                          ([key, value]) => (
+                            <li key={key}>
+                              {key}: {value}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-[#334155]">No attribute updates suggested.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+
+              <h4 className="mt-3 text-sm font-semibold text-[#0F172A]">Compliance notes</h4>
+              <ul className="mt-1 space-y-1 text-sm text-[#334155]">
+                {inlineAiSuggestion.complianceWarnings.length ? (
+                  inlineAiSuggestion.complianceWarnings.map((warning) => (
+                    <li
+                      key={warning}
+                      className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1"
+                    >
+                      {warning}
+                    </li>
+                  ))
+                ) : (
+                  <li className="rounded-md border border-[#D9E4F0] bg-white px-2 py-1">
+                    No compliance warnings from the AI response.
+                  </li>
+                )}
+              </ul>
+            </article>
+          </div>
+        )}
+
+        {inlineAiMessage && inlineAiState !== "error" ? (
+          <p className="mt-3 text-sm text-[#334155]">{inlineAiMessage}</p>
+        ) : null}
+        <p className="mt-2 text-xs text-[#64748B]">
+          No auto-submit. Changes remain in draft until approved.
+        </p>
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-draft-editor-card"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 3 · Edit & submit draft</p>
+            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Current editable draft</h2>
+            <p className="mt-1 text-sm text-[#475569]">
+              Review AI improvements, fine-tune fields, then save draft before submission approval.
+            </p>
+          </div>
+          {!draftEditorIsActive ? (
+            <button
+              type="button"
+              onClick={() => setDraftEditorOpen(true)}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+            >
+              Open Draft Editor
+            </button>
           ) : null}
+        </div>
 
-          <p className="mt-2 text-xs text-[#64748B]">
-            Not submitted to Walmart. Human approval required before feed submission.
+        {!draftEditorIsActive ? (
+          <p className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
+            Apply AI improvements first, or open the draft editor to make manual changes.
           </p>
-        </aside>
+        ) : null}
+
+        <details open={draftEditorIsActive || hasExistingDraft} className="mt-3">
+          <summary className="cursor-pointer text-sm font-medium text-[#334155]">
+            {draftEditorIsActive ? "Draft editor active" : "Show draft editor"}
+          </summary>
+
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSaveDraft}
+                className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+              >
+                Save Draft
+              </button>
+              <button
+                type="button"
+                disabled={!canSubmit}
+                className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+              >
+                Submit Update
+              </button>
+              <p className="text-xs text-[#64748B]">{readinessNote}</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {tabs.map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`rounded-lg border px-3 py-1.5 text-sm ${
+                    activeTab === tab
+                      ? "border-[#93C5FD] bg-[#EAF1F8] text-[#0F172A]"
+                      : "border-[#D9E4F0] bg-white text-[#334155]"
+                  }`}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2" data-testid="ecomviper-walmart-product-form">
+              {activeTab === "Content" ? (
+                <>
+                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                    Content
+                  </h3>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Title</span>
+                      <span className="text-xs text-[#64748B]">{form.title.length}/200</span>
+                    </span>
+                    <input
+                      value={form.title}
+                      onChange={(event) => patchForm({ title: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Short description</span>
+                      <span className="text-xs text-[#64748B]">{form.shortDescription.length}/500</span>
+                    </span>
+                    <textarea
+                      value={form.shortDescription}
+                      onChange={(event) => patchForm({ shortDescription: event.target.value })}
+                      className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    <span className="flex items-center justify-between gap-2">
+                      <span>Long description</span>
+                      <span className="text-xs text-[#64748B]">{form.longDescription.length}/4000</span>
+                    </span>
+                    <textarea
+                      value={form.longDescription}
+                      onChange={(event) => patchForm({ longDescription: event.target.value })}
+                      className="mt-1 min-h-28 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Bullet / key features (one per line)
+                    <textarea
+                      value={form.bulletPoints}
+                      onChange={(event) => patchForm({ bulletPoints: event.target.value })}
+                      className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155]">
+                    Brand
+                    <input
+                      value={form.brand}
+                      onChange={(event) => patchForm({ brand: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {activeTab === "Media" ? (
+                <>
+                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                    Media
+                  </h3>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Primary image URL
+                    <input
+                      value={form.imageUrl}
+                      onChange={(event) => patchForm({ imageUrl: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Additional image URLs (one per line)
+                    <textarea
+                      value={form.additionalImageUrls}
+                      onChange={(event) => patchForm({ additionalImageUrls: event.target.value })}
+                      className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-xs text-[#475569] md:col-span-2">
+                    <p>Image sync status: {formatImageStatus(product)}</p>
+                    <p className="mt-1">Source: {formatImageSource(product)}</p>
+                    <p className="mt-1">Gallery images: {product.galleryImageUrls?.length ?? 0}</p>
+                    <p className="mt-1">Variant images: {product.variantImageUrls?.length ?? 0}</p>
+                  </div>
+                </>
+              ) : null}
+
+              {activeTab === "Pricing & Inventory" ? (
+                <>
+                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                    Pricing & inventory
+                  </h3>
+                  <label className="text-sm text-[#334155]">
+                    Price
+                    <input
+                      value={form.price}
+                      onChange={(event) => patchForm({ price: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155]">
+                    Inventory quantity
+                    <input
+                      value={form.inventoryQuantity}
+                      onChange={(event) => patchForm({ inventoryQuantity: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {activeTab === "Walmart Attributes" ? (
+                <>
+                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                    Walmart attributes
+                  </h3>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Key attributes (JSON)
+                    <textarea
+                      value={form.attributesJson}
+                      onChange={(event) => patchForm({ attributesJson: event.target.value })}
+                      className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2 font-mono text-xs"
+                    />
+                  </label>
+                </>
+              ) : null}
+
+              {activeTab === "Sync History" ? (
+                <>
+                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                    Sync history
+                  </h3>
+                  <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2">
+                    <p>Last product sync: {product.lastSyncedAt}</p>
+                    <p className="mt-1">Image source: {formatImageSource(product)}</p>
+                    <p className="mt-1">Image status: {formatImageStatus(product)}</p>
+                    {lastDraftSavedAt ? (
+                      <p className="mt-1">Last draft save: {lastDraftSavedAt}</p>
+                    ) : (
+                      <p className="mt-1">No saved draft yet.</p>
+                    )}
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </details>
+
+        {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
       </section>
 
       <section
@@ -1593,62 +1638,92 @@ export default function ProductEditorClient({
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-staged-changes"
       >
-        <h2 className="text-lg font-semibold text-[#0F172A]">Staged changes</h2>
-        <p className="mt-1 text-xs text-[#64748B]">
-          Not submitted to Walmart. Human approval required before feed submission.
-        </p>
-        {stagedOptimizations.length ? (
-          <div className="mt-3 space-y-2">
-            {stagedOptimizations.map((proposal) => (
-              <article
-                key={proposal.id}
-                className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-medium text-[#0F172A]">
-                    {proposal.source === "ai" ? "AI proposal" : "Non-AI proposal"}
-                  </p>
-                  <StatusBadge status={proposal.status} />
-                </div>
-                <p className="mt-1 text-xs text-[#64748B]">
-                  Reason: {proposal.recommendationReason}
-                </p>
-                <p className="mt-1 text-xs text-[#64748B]">
-                  Changed fields: {changedProposalFields(product, proposal).join(", ") || "No field changes detected"}
-                </p>
-                <p className="mt-1 text-sm text-[#334155]">
-                  Title: {proposal.proposedTitle || "None"}
-                </p>
-                <p className="mt-1 text-sm text-[#334155]">
-                  Description: {proposal.proposedDescription || "None"}
-                </p>
-                <p className="mt-1 text-sm text-[#334155]">
-                  Bullets: {proposal.proposedBullets.length ? proposal.proposedBullets.join(" | ") : "None"}
-                </p>
-                <p className="mt-1 text-sm text-[#334155]">
-                  Image action: {proposal.proposedImageAction}
-                </p>
-                {proposal.status !== "approved" && proposal.status !== "submitted" ? (
-                  <div className="mt-2">
-                    <button
-                      type="button"
-                      onClick={() => handleApproveProposal(proposal)}
-                      disabled={approvingProposalId === proposal.id}
-                      className="rounded border border-[#0F172A] bg-[#0F172A] px-2 py-1 text-xs text-white disabled:opacity-50"
-                    >
-                      {approvingProposalId === proposal.id
-                        ? "Approving..."
-                        : "Approve for future submit"}
-                    </button>
+        <details>
+          <summary className="cursor-pointer text-lg font-semibold text-[#0F172A]">
+            Staged changes
+          </summary>
+          <p className="mt-1 text-xs text-[#64748B]">
+            Not submitted to Walmart. Human approval required before feed submission.
+          </p>
+          {stagedOptimizations.length ? (
+            <div className="mt-3 space-y-2">
+              {stagedOptimizations.map((proposal) => (
+                <article
+                  key={proposal.id}
+                  className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-[#0F172A]">
+                      {proposal.source === "ai" ? "AI proposal" : "Non-AI proposal"}
+                    </p>
+                    <StatusBadge status={proposal.status} />
                   </div>
-                ) : null}
-              </article>
-            ))}
-          </div>
-        ) : (
-          <p className="mt-2 text-sm text-[#64748B]">No staged optimization proposals yet.</p>
-        )}
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    Reason: {proposal.recommendationReason}
+                  </p>
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    Changed fields: {changedProposalFields(product, proposal).join(", ") || "No field changes detected"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    Title: {proposal.proposedTitle || "None"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    Description: {proposal.proposedDescription || "None"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    Bullets: {proposal.proposedBullets.length ? proposal.proposedBullets.join(" | ") : "None"}
+                  </p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    Image action: {proposal.proposedImageAction}
+                  </p>
+                  {proposal.status !== "approved" && proposal.status !== "submitted" ? (
+                    <div className="mt-2">
+                      <button
+                        type="button"
+                        onClick={() => handleApproveProposal(proposal)}
+                        disabled={approvingProposalId === proposal.id}
+                        className="rounded border border-[#0F172A] bg-[#0F172A] px-2 py-1 text-xs text-white disabled:opacity-50"
+                      >
+                        {approvingProposalId === proposal.id
+                          ? "Approving..."
+                          : "Approve for future submit"}
+                      </button>
+                    </div>
+                  ) : null}
+                </article>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-[#64748B]">No staged optimization proposals yet.</p>
+          )}
+        </details>
       </section>
+
+      {SHOW_DEVELOPER_DIAGNOSTICS ? (
+        <details className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
+          <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+            Developer diagnostics
+          </summary>
+          <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                Original payload snapshot
+              </h2>
+              <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                {JSON.stringify(product.rawPayload, null, 2)}
+              </pre>
+            </article>
+            <article className="rounded-xl border border-[#D9E4F0] bg-white p-4">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                Normalized draft preview
+              </h2>
+              <pre className="mt-2 max-h-64 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                {JSON.stringify(preview, null, 2)}
+              </pre>
+            </article>
+          </div>
+        </details>
+      ) : null}
     </div>
   );
 }
