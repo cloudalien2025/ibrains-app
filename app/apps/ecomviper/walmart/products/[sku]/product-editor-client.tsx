@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
@@ -57,9 +57,14 @@ type GenerateSuggestionResponse = {
   ok: boolean;
   suggestion?: WalmartAiSuggestion;
   error?: {
+    code?: string;
     message?: string;
   };
 };
+
+type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
+
+const INLINE_AI_LOADING_MESSAGE = "Optimizing product with AI...";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -524,10 +529,12 @@ export default function ProductEditorClient({
       .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.updatedAt ?? null;
   });
 
-  const [optimizingWithAi, setOptimizingWithAi] = useState(false);
+  const inlineAiPanelRef = useRef<HTMLElement | null>(null);
+  const [inlineAiState, setInlineAiState] = useState<InlineAiState>("idle");
   const [inlineAiMessage, setInlineAiMessage] = useState<string | null>(null);
   const [inlineAiSuggestion, setInlineAiSuggestion] =
     useState<WalmartAiSuggestion | null>(null);
+  const optimizingWithAi = inlineAiState === "loading";
 
   const listingQuality = useMemo(() => assessWalmartListingQuality(product), [product]);
   const deterministicProposal = useMemo(
@@ -658,47 +665,83 @@ export default function ProductEditorClient({
     setMessage("Draft saved and passed policy checks.");
   }
 
+  function revealInlineAiPanel() {
+    if (!inlineAiPanelRef.current) return;
+    inlineAiPanelRef.current.focus();
+    if (typeof inlineAiPanelRef.current.scrollIntoView === "function") {
+      inlineAiPanelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    }
+  }
+
   async function runInlineOptimization() {
+    revealInlineAiPanel();
+
     if (!aiProviderConnected) {
+      setInlineAiState("missing_key");
       setInlineAiMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
       return;
     }
 
     try {
-      setOptimizingWithAi(true);
-      setInlineAiMessage(null);
+      setInlineAiState("loading");
+      setInlineAiMessage(INLINE_AI_LOADING_MESSAGE);
+      setInlineAiSuggestion(null);
       const response = await fetch("/api/ecomviper/walmart/ai/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: product.sku }),
+        body: JSON.stringify({
+          sku: product.sku,
+          draftPayload: preview,
+        }),
       });
 
       const payload =
         (await response.json().catch(() => null)) as GenerateSuggestionResponse | null;
 
       if (!response.ok || !payload?.suggestion) {
+        const errorCode = payload?.error?.code?.trim().toUpperCase() ?? "";
+        const errorMessage = payload?.error?.message?.trim() ?? "";
+        const missingKey =
+          errorCode === "OPENAI_NOT_CONNECTED" ||
+          /openai api key/i.test(errorMessage);
+
+        setInlineAiState(missingKey ? "missing_key" : "error");
         setInlineAiMessage(
-          payload?.error?.message ?? "Failed to generate AI suggestions."
+          missingKey
+            ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE
+            : errorMessage || "Failed to generate AI suggestions. Try again."
         );
         return;
       }
 
       setInlineAiSuggestion(payload.suggestion);
+      setInlineAiState("success");
       setInlineAiMessage("AI suggestions are ready. Review and apply to your draft.");
     } catch {
-      setInlineAiMessage("Failed to generate AI suggestions.");
-    } finally {
-      setOptimizingWithAi(false);
+      setInlineAiState("error");
+      setInlineAiMessage("Failed to generate AI suggestions. Try again.");
     }
   }
 
   function handleApplyInlineAiSuggestion() {
     if (!inlineAiSuggestion) {
+      setInlineAiState("error");
       setInlineAiMessage("Generate AI suggestions first.");
       return;
     }
 
     const attributeMap = readAttributesFromForm(form.attributesJson);
+    const aiAttributeMap = inlineAiSuggestion.suggestedAttributes ?? {};
+    for (const [key, value] of Object.entries(aiAttributeMap)) {
+      const normalizedKey = key.trim();
+      const normalizedValue = value.trim();
+      if (!normalizedKey) continue;
+      if (normalizedValue) {
+        attributeMap[normalizedKey] = normalizedValue;
+      } else if (!hasOwn(attributeMap as unknown as Record<string, unknown>, normalizedKey)) {
+        attributeMap[normalizedKey] = "";
+      }
+    }
     for (const attribute of inlineAiSuggestion.missingAttributes) {
       const key = attribute.trim();
       if (key && !hasOwn(attributeMap as unknown as Record<string, unknown>, key)) {
@@ -706,20 +749,30 @@ export default function ProductEditorClient({
       }
     }
 
+    const suggestedBrand = inlineAiSuggestion.suggestedBrand?.trim() ?? "";
+    const safeBrand =
+      suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
+        ? suggestedBrand
+        : form.brand;
+
     patchForm({
       title: inlineAiSuggestion.suggestedTitle,
       longDescription: inlineAiSuggestion.suggestedDescription,
       shortDescription:
+        inlineAiSuggestion.suggestedShortDescription?.trim() ||
         form.shortDescription.trim() ||
         inferShortDescriptionFromAi(inlineAiSuggestion.suggestedDescription),
       bulletPoints: inlineAiSuggestion.suggestedBullets.join("\n"),
+      brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
     });
+    setInlineAiState("success");
     setInlineAiMessage("AI suggestions applied to draft fields. Save Draft when ready.");
   }
 
   function handleDismissInlineAiSuggestion() {
     setInlineAiSuggestion(null);
+    setInlineAiState("idle");
     setInlineAiMessage("AI suggestions dismissed. Your current draft remains unchanged.");
   }
 
@@ -898,9 +951,10 @@ export default function ProductEditorClient({
             type="button"
             onClick={runInlineOptimization}
             disabled={optimizingWithAi}
+            data-testid="ecomviper-walmart-optimize-button"
             className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
           >
-            {optimizingWithAi ? "Optimizing..." : "Optimize with AI"}
+            {optimizingWithAi ? "Optimizing product with AI..." : "Optimize with AI"}
           </button>
           <button
             type="button"
@@ -917,6 +971,18 @@ export default function ProductEditorClient({
             Submit Update
           </button>
         </div>
+        <div
+          className="mt-2 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
+          data-testid="ecomviper-walmart-inline-ai-state"
+        >
+          {inlineAiState === "loading" ? "Optimizing product with AI..." : null}
+          {inlineAiState === "success" ? "AI suggestions are ready to review inline." : null}
+          {inlineAiState === "error" ? "Optimization failed. Review the message below and try again." : null}
+          {inlineAiState === "missing_key" ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE : null}
+          {inlineAiState === "idle"
+            ? "Optimize title, descriptions, bullets, and attributes without leaving this page."
+            : null}
+        </div>
         <p className="mt-2 text-xs text-[#64748B]">
           Not submitted to Walmart. Human approval required before feed submission.
         </p>
@@ -926,10 +992,15 @@ export default function ProductEditorClient({
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-inline-ai-panel"
+        ref={inlineAiPanelRef}
+        tabIndex={-1}
       >
         <h2 className="text-lg font-semibold text-[#0F172A]">Inline AI optimization</h2>
         <p className="mt-1 text-sm text-[#475569]">
           Optimize title, descriptions, bullets, and listing attributes for this SKU without leaving the page.
+        </p>
+        <p className="mt-1 text-xs text-[#64748B]">
+          Optimize title, descriptions, bullets, and attributes without leaving this page.
         </p>
 
         {!aiProviderConnected ? (
@@ -942,10 +1013,23 @@ export default function ProductEditorClient({
           </p>
         )}
 
-        {optimizingWithAi ? (
+        {inlineAiState === "loading" ? (
           <p className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
             Optimizing this Walmart listing with AI...
           </p>
+        ) : null}
+
+        {inlineAiState === "error" && aiProviderConnected ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={runInlineOptimization}
+              disabled={optimizingWithAi}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+            >
+              Retry optimization
+            </button>
+          </div>
         ) : null}
 
         {inlineAiSuggestion ? (
@@ -969,6 +1053,7 @@ export default function ProductEditorClient({
                 <button
                   type="button"
                   onClick={handleApplyInlineAiSuggestion}
+                  data-testid="ecomviper-walmart-apply-ai-suggestions"
                   className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
                 >
                   Apply suggestions to draft

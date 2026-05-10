@@ -22,8 +22,11 @@ const OPENAI_MODEL = process.env.WALMART_OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
 interface GeneratedSuggestionPayload {
   suggestedTitle?: unknown;
+  suggestedShortDescription?: unknown;
   suggestedDescription?: unknown;
   suggestedBullets?: unknown;
+  suggestedBrand?: unknown;
+  suggestedAttributes?: unknown;
   missingAttributes?: unknown;
   complianceWarnings?: unknown;
   qualityScore?: unknown;
@@ -73,6 +76,24 @@ function safeBullets(product: WalmartProductRecord) {
   ];
 }
 
+function fallbackShortDescription(product: WalmartProductRecord, description: string): string {
+  const existing = product.shortDescription.trim();
+  if (existing) return existing;
+  const firstSentence = description.split(/[.!?]/).find((entry) => entry.trim().length > 0);
+  const candidate = (firstSentence ?? description).trim();
+  return candidate.length > 180 ? `${candidate.slice(0, 177)}...` : candidate;
+}
+
+function toAttributeRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const mapped: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const normalized = toNonEmptyString(raw);
+    if (normalized) mapped[key] = normalized;
+  }
+  return mapped;
+}
+
 export function buildDeterministicAiSuggestion(product: WalmartProductRecord): WalmartAiSuggestion {
   const qualityScore = Math.max(52, 88 - product.issues.length * 8 - (product.imageUrl ? 0 : 8));
 
@@ -82,12 +103,19 @@ export function buildDeterministicAiSuggestion(product: WalmartProductRecord): W
     ? []
     : ["serving_size", "form", "ingredients_highlights", "lifestyle_fit"];
 
+  const deterministicDescription = makeSafeDescription(product);
+
   return {
     sku: product.sku,
     qualityScore,
     suggestedTitle: makeSafeTitle(product),
-    suggestedDescription: makeSafeDescription(product),
+    suggestedShortDescription: fallbackShortDescription(product, deterministicDescription),
+    suggestedDescription: deterministicDescription,
     suggestedBullets: safeBullets(product),
+    suggestedBrand: product.brand.trim() || undefined,
+    suggestedAttributes: Object.fromEntries(
+      missingAttributes.map((attribute) => [attribute, ""])
+    ),
     missingAttributes,
     complianceWarnings: warnings,
     disclaimer:
@@ -145,8 +173,11 @@ async function requestOpenAiSuggestion(params: {
             task: "Generate compliant Walmart listing improvements for AI visibility and referral quality.",
             requiredFields: [
               "suggestedTitle",
+              "suggestedShortDescription",
               "suggestedDescription",
               "suggestedBullets",
+              "suggestedBrand",
+              "suggestedAttributes",
               "missingAttributes",
               "complianceWarnings",
               "qualityScore",
@@ -209,6 +240,10 @@ function toSuggestionFromGenerated(
   const payload = generated as GeneratedSuggestionPayload;
 
   const suggestedTitle = toNonEmptyString(payload.suggestedTitle) || fallback.suggestedTitle;
+  const suggestedShortDescription =
+    toNonEmptyString(payload.suggestedShortDescription) ||
+    fallback.suggestedShortDescription ||
+    fallbackShortDescription(product, fallback.suggestedDescription);
   const suggestedDescription = toNonEmptyString(payload.suggestedDescription) || fallback.suggestedDescription;
 
   const suggestedBulletsRaw = toStringArray(payload.suggestedBullets);
@@ -216,6 +251,16 @@ function toSuggestionFromGenerated(
     suggestedBulletsRaw.length >= 3
       ? suggestedBulletsRaw.slice(0, 6)
       : fallback.suggestedBullets;
+
+  const suggestedBrandRaw = toNonEmptyString(payload.suggestedBrand);
+  const suggestedBrand =
+    suggestedBrandRaw && suggestedBrandRaw.toLowerCase() !== "unknown"
+      ? suggestedBrandRaw
+      : fallback.suggestedBrand;
+  const suggestedAttributes = {
+    ...(fallback.suggestedAttributes ?? {}),
+    ...toAttributeRecord(payload.suggestedAttributes),
+  };
 
   const missingAttributes = toStringArray(payload.missingAttributes);
   const complianceWarnings = unique([
@@ -227,8 +272,11 @@ function toSuggestionFromGenerated(
     sku: product.sku,
     qualityScore: clampScore(payload.qualityScore) ?? fallback.qualityScore,
     suggestedTitle,
+    suggestedShortDescription,
     suggestedDescription,
     suggestedBullets,
+    suggestedBrand,
+    suggestedAttributes,
     missingAttributes,
     complianceWarnings,
     disclaimer: fallback.disclaimer,

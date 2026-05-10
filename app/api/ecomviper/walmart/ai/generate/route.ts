@@ -6,6 +6,103 @@ import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { generateWalmartAiSuggestion } from "@/lib/ecomviper/walmart/walmart-ai-optimizer";
 import { getWalmartOpenAiApiKeyForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { getWalmartProductBySkuForUser } from "@/lib/ecomviper/walmart/walmart-products";
+import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+
+interface GenerateRequestBody {
+  sku?: unknown;
+  draftPayload?: unknown;
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function asStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.map((entry) => asString(entry)).filter((entry) => entry.length > 0);
+  }
+  if (typeof value === "string") {
+    return value
+      .split(/\r?\n/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+  }
+  return [];
+}
+
+function asAttributes(value: unknown): Record<string, string> {
+  const objectValue = asObject(value);
+  if (!objectValue) return {};
+  const mapped: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(objectValue)) {
+    const normalized = asString(raw);
+    if (normalized) mapped[key] = normalized;
+  }
+  return mapped;
+}
+
+function applyDraftOverrides(
+  product: WalmartProductRecord,
+  draftPayload: unknown
+): WalmartProductRecord {
+  const draft = asObject(draftPayload);
+  if (!draft) return product;
+
+  const title = asString(draft.title) || product.title;
+  const shortDescription =
+    asString(draft.shortDescription) ||
+    asString(draft.short_desc) ||
+    product.shortDescription;
+  const longDescription =
+    asString(draft.longDescription) ||
+    asString(draft.description) ||
+    product.longDescription;
+  const bulletPoints = asStringList(draft.bulletPoints);
+  const brandCandidate = asString(draft.brand);
+  const brand =
+    brandCandidate && brandCandidate.toLowerCase() !== "unknown"
+      ? brandCandidate
+      : product.brand;
+
+  const attributes = {
+    ...product.attributes,
+    ...asAttributes(draft.attributes),
+  };
+
+  const draftPrice = asNumber(draft.price);
+  const draftInventory = asNumber(draft.inventoryQuantity);
+
+  return {
+    ...product,
+    title,
+    shortDescription,
+    longDescription,
+    bulletPoints: bulletPoints.length > 0 ? bulletPoints : product.bulletPoints,
+    brand,
+    attributes,
+    price: draftPrice !== null ? draftPrice : product.price,
+    inventoryQuantity:
+      draftInventory !== null && draftInventory >= 0
+        ? draftInventory
+        : product.inventoryQuantity,
+  };
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -20,7 +117,7 @@ export async function POST(req: NextRequest) {
       return fail(401, "Please sign in before generating Walmart product content.", "UNAUTHORIZED");
     }
 
-    const body = (await req.json().catch(() => ({}))) as { sku?: unknown };
+    const body = (await req.json().catch(() => ({}))) as GenerateRequestBody;
     const sku = typeof body.sku === "string" ? body.sku.trim() : "";
 
     if (!sku) {
@@ -42,7 +139,7 @@ export async function POST(req: NextRequest) {
     }
 
     const suggestion = await generateWalmartAiSuggestion({
-      product,
+      product: applyDraftOverrides(product, body.draftPayload),
       openAiApiKey,
     });
 
