@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import type {
+  WalmartAiSuggestion,
   WalmartListingQualityAssessment,
   WalmartListingRecommendation,
   WalmartOptimizationProposalRecord,
@@ -8,6 +9,241 @@ import type {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values));
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function inferShortDescriptionFromLongDescription(longDescription: string): string {
+  const trimmed = longDescription.trim();
+  if (!trimmed) return "";
+  const firstSentence = trimmed.split(/[.!?]/).find((entry) => entry.trim().length > 0);
+  const compact = (firstSentence ?? trimmed).trim();
+  return compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
+}
+
+function toStringList(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => asText(entry))
+      .filter((entry) => entry.length > 0);
+  }
+
+  const normalized = asText(value);
+  if (!normalized) return [];
+
+  return normalized
+    .split(/\r?\n|[;|]+/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function toAttributeRecord(value: unknown): Record<string, string> {
+  const direct = asObject(value);
+  if (direct) {
+    const mapped: Record<string, string> = {};
+    for (const [key, raw] of Object.entries(direct)) {
+      const normalizedKey = key.trim();
+      const normalizedValue = asText(raw);
+      if (!normalizedKey || !normalizedValue) continue;
+      mapped[normalizedKey] = normalizedValue;
+    }
+    return mapped;
+  }
+
+  const asString = asText(value);
+  if (!asString) return {};
+
+  try {
+    const parsed = JSON.parse(asString) as unknown;
+    const parsedObject = asObject(parsed);
+    if (!parsedObject) return {};
+
+    const mapped: Record<string, string> = {};
+    for (const [key, raw] of Object.entries(parsedObject)) {
+      const normalizedKey = key.trim();
+      const normalizedValue = asText(raw);
+      if (!normalizedKey || !normalizedValue) continue;
+      mapped[normalizedKey] = normalizedValue;
+    }
+    return mapped;
+  } catch {
+    return {};
+  }
+}
+
+function countMeaningfulAttributes(attributes: Record<string, string>): number {
+  return Object.values(attributes).filter((value) => value.trim().length > 0).length;
+}
+
+function readDraftString(draft: Record<string, unknown>, keys: string[]): string | null {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(draft, key)) continue;
+    return asText(draft[key]);
+  }
+  return null;
+}
+
+function readDraftNumber(draft: Record<string, unknown>, keys: string[]): number | null {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(draft, key)) continue;
+    const value = asNumber(draft[key]);
+    if (value !== null) return value;
+  }
+  return null;
+}
+
+function readDraftList(draft: Record<string, unknown>, keys: string[]): string[] | null {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(draft, key)) continue;
+    return toStringList(draft[key]);
+  }
+  return null;
+}
+
+function readDraftAttributes(
+  draft: Record<string, unknown>,
+  keys: string[]
+): Record<string, string> | null {
+  for (const key of keys) {
+    if (!Object.prototype.hasOwnProperty.call(draft, key)) continue;
+    return toAttributeRecord(draft[key]);
+  }
+  return null;
+}
+
+export function mergeWalmartDraftPayloadIntoProduct(
+  product: WalmartProductRecord,
+  draftPayload: unknown
+): WalmartProductRecord {
+  const draft = asObject(draftPayload);
+  if (!draft) return product;
+
+  const title = readDraftString(draft, ["title"]) ?? product.title;
+  const shortDescription =
+    readDraftString(draft, ["shortDescription", "short_desc"]) ??
+    product.shortDescription;
+  const longDescription =
+    readDraftString(draft, [
+      "longDescription",
+      "suggestedLongDescription",
+      "suggestedDescription",
+      "description",
+      "productDescription",
+    ]) ?? product.longDescription;
+
+  const bulletPointsFromDraft = readDraftList(draft, [
+    "bulletPoints",
+    "suggestedBullets",
+    "suggestedBulletPoints",
+    "keyFeatures",
+    "bullets",
+  ]);
+
+  const bulletPoints =
+    bulletPointsFromDraft && bulletPointsFromDraft.length > 0
+      ? bulletPointsFromDraft
+      : product.bulletPoints;
+
+  const brandCandidate = readDraftString(draft, ["brand", "brandName", "suggestedBrand"]);
+  const brand =
+    brandCandidate && brandCandidate.toLowerCase() !== "unknown"
+      ? brandCandidate
+      : product.brand;
+
+  const attributeOverrides =
+    readDraftAttributes(draft, [
+      "attributes",
+      "suggestedAttributes",
+      "keyAttributes",
+      "proposedKeyAttributes",
+    ]) ?? {};
+
+  const priceCandidate = readDraftNumber(draft, ["price"]);
+  const inventoryCandidate = readDraftNumber(draft, ["inventoryQuantity", "inventory", "quantity"]);
+
+  const shortDescriptionWithFallback =
+    shortDescription ||
+    inferShortDescriptionFromLongDescription(longDescription) ||
+    product.shortDescription;
+
+  return {
+    ...product,
+    title: title || product.title,
+    shortDescription: shortDescriptionWithFallback,
+    longDescription,
+    bulletPoints,
+    brand,
+    attributes: {
+      ...product.attributes,
+      ...attributeOverrides,
+    },
+    price:
+      priceCandidate !== null && Number.isFinite(priceCandidate)
+        ? priceCandidate
+        : product.price,
+    inventoryQuantity:
+      inventoryCandidate !== null && Number.isFinite(inventoryCandidate) && inventoryCandidate >= 0
+        ? inventoryCandidate
+        : product.inventoryQuantity,
+  };
+}
+
+export function mergeWalmartAiSuggestionIntoProduct(
+  product: WalmartProductRecord,
+  suggestion: WalmartAiSuggestion
+): WalmartProductRecord {
+  const title = suggestion.suggestedTitle.trim() || product.title;
+  const suggestedLongDescription = suggestion.suggestedDescription.trim();
+  const longDescription = suggestedLongDescription || product.longDescription;
+  const shortDescription =
+    suggestion.suggestedShortDescription?.trim() ||
+    product.shortDescription.trim() ||
+    inferShortDescriptionFromLongDescription(longDescription);
+  const suggestedBullets = suggestion.suggestedBullets
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+  const bulletPoints = suggestedBullets.length > 0 ? suggestedBullets : product.bulletPoints;
+  const suggestedBrand = suggestion.suggestedBrand?.trim() ?? "";
+  const brand =
+    suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
+      ? suggestedBrand
+      : product.brand;
+  const suggestedAttributes = Object.fromEntries(
+    Object.entries(suggestion.suggestedAttributes ?? {})
+      .map(([key, value]) => [key.trim(), value.trim()] as const)
+      .filter(([key, value]) => key.length > 0 && value.length > 0)
+  );
+
+  return {
+    ...product,
+    title,
+    shortDescription,
+    longDescription,
+    bulletPoints,
+    brand,
+    attributes: {
+      ...product.attributes,
+      ...suggestedAttributes,
+    },
+  };
 }
 
 function toImageStatusMessage(
@@ -119,7 +355,7 @@ function sanitizedBullets(product: WalmartProductRecord): string[] {
 }
 
 function sanitizedAttributes(product: WalmartProductRecord): Record<string, string> {
-  if (Object.keys(product.attributes).length > 0) return product.attributes;
+  if (countMeaningfulAttributes(product.attributes) > 0) return product.attributes;
   return {
     brand: product.brand || "Unknown",
     category: product.category || "Uncategorized",
@@ -236,7 +472,8 @@ export function assessWalmartListingQuality(product: WalmartProductRecord): Walm
     });
   }
 
-  if (Object.keys(product.attributes).length === 0) {
+  const attributeCount = countMeaningfulAttributes(product.attributes);
+  if (attributeCount === 0) {
     apply(8, "Key attributes are missing", {
       id: "attributes_missing",
       title: "Populate key attributes",
