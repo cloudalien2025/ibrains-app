@@ -266,7 +266,9 @@ describe("Walmart inline optimize button workflow", () => {
       "Optimized bullet 3",
     ]);
     expect(saveBody.draftPayload.attributes).toMatchObject({ material: "Plant-based" });
-    expect(saveBody.draftPayload.imageUrl).toBe("");
+    expect(saveBody.draftPayload.imageUrl).toBeUndefined();
+    expect(saveBody.draftPayload.primaryImageUrl).toBeUndefined();
+    expect(saveBody.draftPayload.additionalImageUrls).toBeUndefined();
     expect(container.textContent).toContain("Draft saved.");
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });

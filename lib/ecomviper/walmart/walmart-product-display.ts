@@ -19,6 +19,8 @@ export interface WalmartEffectiveProductRecord extends WalmartProductRecord {
   liveTitle?: string;
   livePrice?: number;
   liveInventoryQuantity?: number;
+  liveImageUrl?: string;
+  liveGalleryImageUrls?: string[];
 }
 
 export function mergeProductsWithLatestDrafts(input: {
@@ -56,6 +58,8 @@ export function mergeProductsWithLatestDrafts(input: {
       liveTitle: product.title,
       livePrice: product.price,
       liveInventoryQuantity: product.inventoryQuantity,
+      liveImageUrl: product.imageUrl,
+      liveGalleryImageUrls: product.galleryImageUrls ?? [],
     };
   });
 }

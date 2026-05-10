@@ -152,4 +152,40 @@ describe("Walmart listing quality scoring", () => {
     expect(assessment.score).toBeGreaterThanOrEqual(80);
     expect(assessment.factors).toContain("Image not provided by Walmart catalog");
   });
+
+  it("merges draft image aliases into effective product image fields", () => {
+    const merged = mergeWalmartDraftPayloadIntoProduct(
+      createProduct({
+        imageUrl: "",
+        imageStatus: "catalog_missing",
+        imageStatusMessage: "Image not provided by Walmart catalog",
+        imageSource: "none",
+        imageSyncStatus: "not_synced",
+        issues: ["Image not provided by Walmart catalog"],
+      }),
+      {
+        primaryImageUrl: "http://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+        galleryImageUrls: [
+          "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+          "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+          "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+        ],
+        imageSource: "public_walmart_listing_serpapi",
+        imageMatchMethod: "public_url_product_id",
+        imageSyncStatus: "found",
+        publicWalmartProductId: "18410702298",
+      }
+    );
+
+    expect(merged.imageUrl).toBe("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
+    expect(merged.galleryImageUrls).toEqual([
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+      "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+    ]);
+    expect(merged.imageSource).toBe("public_walmart_listing_serpapi");
+    expect(merged.imageMatchMethod).toBe("public_url_product_id");
+    expect(merged.imageSyncStatus).toBe("found");
+    expect(merged.publicWalmartProductId).toBe("18410702298");
+    expect(merged.imageStatusMessage).toBe("Image available");
+  });
 });
