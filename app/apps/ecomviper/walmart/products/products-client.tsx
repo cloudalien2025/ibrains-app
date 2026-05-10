@@ -62,6 +62,9 @@ function formatImageSource(product: WalmartEffectiveProductRecord): string {
   if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
   if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
   if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  if (product.imageSource === "public_walmart_listing_serpapi")
+    return "Public Walmart listing via SerpApi";
+  if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
 }
 

@@ -9,6 +9,7 @@ import type {
   WalmartConnectionHealth,
   WalmartConnectionSummary,
   WalmartOpenAiConnectionStatus,
+  WalmartSerpApiConnectionStatus,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface ConnectClientProps {
@@ -24,6 +25,10 @@ type ConnectForm = {
 };
 
 type OpenAiForm = {
+  apiKey: string;
+};
+
+type SerpApiForm = {
   apiKey: string;
 };
 
@@ -58,6 +63,17 @@ type OpenAiConnectionApiPayload = {
   provider: "openai";
   connected: boolean;
   status: WalmartOpenAiConnectionStatus["status"];
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+  message?: string;
+};
+
+type SerpApiConnectionApiPayload = {
+  ok: boolean;
+  provider: "serpapi";
+  connected: boolean;
+  status: WalmartSerpApiConnectionStatus["status"];
   maskedApiKey: string;
   updatedAt: string | null;
   saveSupported: boolean;
@@ -147,6 +163,18 @@ function toOpenAiStatus(response: OpenAiConnectionApiPayload): WalmartOpenAiConn
   };
 }
 
+function toSerpApiStatus(
+  response: SerpApiConnectionApiPayload
+): WalmartSerpApiConnectionStatus {
+  return {
+    connected: response.connected,
+    status: response.status,
+    maskedApiKey: response.maskedApiKey,
+    updatedAt: response.updatedAt,
+    saveSupported: response.saveSupported,
+  };
+}
+
 function formatApiError(error: WalmartApiError | null | undefined): string {
   if (!error) return "None";
   return `${error.message} (${error.code})`;
@@ -186,6 +214,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     notes: "",
   });
   const [openAiForm, setOpenAiForm] = useState<OpenAiForm>({ apiKey: "" });
+  const [serpApiForm, setSerpApiForm] = useState<SerpApiForm>({ apiKey: "" });
   const [health, setHealth] = useState(initialHealth);
   const [openAiStatus, setOpenAiStatus] = useState<WalmartOpenAiConnectionStatus>({
     connected: false,
@@ -194,12 +223,21 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     updatedAt: null,
     saveSupported: true,
   });
+  const [serpApiStatus, setSerpApiStatus] = useState<WalmartSerpApiConnectionStatus>({
+    connected: false,
+    status: "disconnected",
+    maskedApiKey: "Not configured",
+    updatedAt: null,
+    saveSupported: true,
+  });
   const [loading, setLoading] = useState(false);
   const [openAiLoading, setOpenAiLoading] = useState(false);
+  const [serpApiLoading, setSerpApiLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
   const canSaveOpenAi = useMemo(() => Boolean(openAiForm.apiKey.trim()), [openAiForm.apiKey]);
+  const canSaveSerpApi = useMemo(() => Boolean(serpApiForm.apiKey.trim()), [serpApiForm.apiKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -243,8 +281,21 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     }
 
+    async function loadSerpApiConnection() {
+      try {
+        const response = await fetch("/api/ecomviper/walmart/connect/serpapi", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json().catch(() => null)) as SerpApiConnectionApiPayload | null;
+        if (!payload || cancelled) return;
+        setSerpApiStatus(toSerpApiStatus(payload));
+      } catch {
+        // Intentionally silent; operator can still submit credentials manually.
+      }
+    }
+
     void loadPersistedHealth();
     void loadOpenAiConnection();
+    void loadSerpApiConnection();
 
     return () => {
       cancelled = true;
@@ -374,6 +425,71 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     } finally {
       setOpenAiLoading(false);
+    }
+  }
+
+  async function handleSerpApiTest() {
+    try {
+      setSerpApiLoading(true);
+      const response = await postJson<SerpApiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/serpapi/test",
+        {
+          apiKey: serpApiForm.apiKey,
+        }
+      );
+      setSerpApiStatus(toSerpApiStatus(response));
+      setMessage(response.message ?? "SerpApi test completed.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("SerpApi test failed.");
+      }
+    } finally {
+      setSerpApiLoading(false);
+    }
+  }
+
+  async function handleSerpApiSave() {
+    try {
+      setSerpApiLoading(true);
+      const response = await postJson<SerpApiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/serpapi",
+        {
+          apiKey: serpApiForm.apiKey,
+        }
+      );
+      setSerpApiStatus(toSerpApiStatus(response));
+      setSerpApiForm({ apiKey: "" });
+      setMessage(response.message ?? "SerpApi key saved securely.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to save SerpApi key.");
+      }
+    } finally {
+      setSerpApiLoading(false);
+    }
+  }
+
+  async function handleSerpApiDisconnect() {
+    try {
+      setSerpApiLoading(true);
+      const response = await deleteJson<SerpApiConnectionApiPayload>(
+        "/api/ecomviper/walmart/connect/serpapi"
+      );
+      setSerpApiStatus(toSerpApiStatus(response));
+      setSerpApiForm({ apiKey: "" });
+      setMessage(response.message ?? "SerpApi disconnected.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to disconnect SerpApi key.");
+      }
+    } finally {
+      setSerpApiLoading(false);
     }
   }
 
@@ -643,6 +759,84 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             <div className="flex items-start justify-between gap-3">
               <dt>Last updated</dt>
               <dd className="font-medium">{openAiStatus.updatedAt ?? "Never"}</dd>
+            </div>
+          </dl>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">SerpApi</h2>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Used to fetch public Walmart.com listing images when Walmart Marketplace APIs do not return images.
+          </p>
+
+          <div className="mt-4 grid gap-3">
+            <label className="text-sm text-[#334155]">
+              SerpApi key
+              <input
+                type="password"
+                value={serpApiForm.apiKey}
+                onChange={(event) => setSerpApiForm({ apiKey: event.target.value })}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="serpapi_..."
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleSerpApiTest}
+              disabled={serpApiLoading}
+              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Test API Key
+            </button>
+            <button
+              type="button"
+              onClick={handleSerpApiSave}
+              disabled={serpApiLoading || !canSaveSerpApi || !serpApiStatus.saveSupported}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save SerpApi Key
+            </button>
+            <button
+              type="button"
+              onClick={handleSerpApiDisconnect}
+              disabled={serpApiLoading || !serpApiStatus.saveSupported}
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 disabled:opacity-50"
+            >
+              Disconnect SerpApi
+            </button>
+          </div>
+
+          {!serpApiStatus.saveSupported ? (
+            <p className="mt-3 text-sm text-amber-700">
+              Walmart SerpApi credential saving is not available in this environment.
+            </p>
+          ) : null}
+        </article>
+
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">SerpApi Status</h2>
+          <div className="mt-3"><StatusBadge status={serpApiStatus.connected ? "Connected" : "Not Connected"} /></div>
+          <dl className="mt-3 space-y-2 text-sm text-[#334155]">
+            <div className="flex items-start justify-between gap-3">
+              <dt>Provider</dt>
+              <dd className="font-medium">SerpApi</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Connection</dt>
+              <dd className="font-medium">{serpApiStatus.connected ? "Connected" : "Disconnected"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>API key</dt>
+              <dd className="font-medium">{serpApiStatus.maskedApiKey}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last updated</dt>
+              <dd className="font-medium">{serpApiStatus.updatedAt ?? "Never"}</dd>
             </div>
           </dl>
         </article>

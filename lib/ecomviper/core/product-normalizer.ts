@@ -28,7 +28,11 @@ export interface NormalizeProductInput {
   imageSyncStatus?: WalmartImageSyncStatus;
   imageMatchMethod?: WalmartImageMatchMethod;
   matchedItemId?: string;
+  publicWalmartUrl?: string;
+  publicWalmartProductId?: string;
+  primaryImageUrl?: string;
   lastImageSyncedAt?: string | null;
+  imageSyncReason?: string | null;
   imageSource?: WalmartImageSource;
   imageStatusMessage?: WalmartProductRecord["imageStatusMessage"];
   status?: WalmartProductRecord["status"];
@@ -44,6 +48,9 @@ const IMAGE_ISSUE_MESSAGES = [
   "Image not provided by Walmart catalog",
   "Image enrichment source not configured",
   "Image not provided by Walmart Item Search",
+  "No public Walmart listing images found via SerpApi",
+  "Public Walmart listing image match is ambiguous",
+  "Public Walmart listing image lookup failed",
   "Image match ambiguous",
   "Image sync failed",
   "Image enrichment not synced",
@@ -127,7 +134,11 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
     imageSyncStatus,
     imageMatchMethod: input.imageMatchMethod,
     matchedItemId: input.matchedItemId?.trim() || undefined,
+    publicWalmartUrl: input.publicWalmartUrl?.trim() || undefined,
+    publicWalmartProductId: input.publicWalmartProductId?.trim() || undefined,
+    primaryImageUrl: (input.primaryImageUrl ?? input.imageUrl ?? "").trim() || undefined,
     lastImageSyncedAt: input.lastImageSyncedAt ?? null,
+    imageSyncReason: input.imageSyncReason ?? null,
     imageSource: input.imageSource ?? (imageStatus === "image_available" ? "walmart_catalog" : "none"),
     issues: dedupedIssues,
     attributes: input.attributes ?? {},

@@ -89,7 +89,7 @@ function createStagedDraft(): WalmartDraftRecord {
 describe("Walmart product optimizer client", () => {
   it("renders guided workflow cards with one clear AI-first action path", () => {
     const html = renderToStaticMarkup(
-      <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} />
+      <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} serpApiProviderConnected={false} />
     );
 
     expect(html).toContain("ecomviper-walmart-workflow-steps");
@@ -126,7 +126,7 @@ describe("Walmart product optimizer client", () => {
 
   it("renders staged changes section with proposal data", () => {
     const html = renderToStaticMarkup(
-      <ProductEditorClient product={createProduct()} stagedDrafts={[createStagedDraft()]} aiProviderConnected={true} />
+      <ProductEditorClient product={createProduct()} stagedDrafts={[createStagedDraft()]} aiProviderConnected={true} serpApiProviderConnected={true} />
     );
 
     expect(html).toContain("ecomviper-walmart-staged-changes");
@@ -147,6 +147,7 @@ describe("Walmart product optimizer client", () => {
         })}
         stagedDrafts={[]}
         aiProviderConnected={false}
+        serpApiProviderConnected={false}
       />
     );
 
@@ -182,6 +183,7 @@ describe("Walmart product optimizer client", () => {
         })}
         stagedDrafts={[]}
         aiProviderConnected={true}
+        serpApiProviderConnected={true}
       />
     );
 
