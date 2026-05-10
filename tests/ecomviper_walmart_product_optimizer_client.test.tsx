@@ -87,7 +87,7 @@ function createStagedDraft(): WalmartDraftRecord {
 }
 
 describe("Walmart product optimizer client", () => {
-  it("renders inline AI-first workspace actions without raw JSON panels", () => {
+  it("renders compact summary hero, action bar, and inline AI assistant without raw JSON panels", () => {
     const html = renderToStaticMarkup(
       <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} />
     );
@@ -97,25 +97,27 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-inline-ai-panel");
     expect(html).toContain("ecomviper-walmart-product-form");
     expect(html).toContain("ecomviper-walmart-readiness");
+    expect(html).toContain("Product Editor");
+    expect(html).toContain("SKU: 30066-841");
+    expect(html).toContain("Top issues");
+    expect(html).toContain("View all issues");
     expect(html).toContain("30066-841");
-    expect(html).toContain("Item Search returned no usable image.");
     expect(html).toContain("Known (9)");
     expect(html).toContain("Optimize with AI");
-    expect(html).toContain("Connect your OpenAI API key first to optimize this product.");
+    expect(html).toContain(
+      "Optimize title, descriptions, bullets, and attributes without leaving this page."
+    );
     expect(html).toContain("Save Draft");
     expect(html).toContain("Submit Update");
-    expect(html).toContain("Inline AI optimization");
-    expect(html).toContain("Non-AI suggestions");
-    expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
-    expect(html).toContain("Stage non-AI recommendations");
+    expect(html).toContain("AI Optimization Assistant");
+    expect(html).toContain("Rule-based suggestions");
+    expect(html).toContain("No auto-submit. Changes remain in draft until approved.");
+    expect(html).toContain("Stage rule-based suggestions");
     expect(html).not.toContain("Open AI Optimizer");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
-    expect(html).toContain("Source: Walmart Item Search");
-    expect(html).toContain("Gallery images: 0");
-    expect(html).toContain("Variant images: 0");
     expect(html).toContain("Validation is checked continuously and before Submit Update.");
   });
 
@@ -137,6 +139,7 @@ describe("Walmart product optimizer client", () => {
           imageSource: "walmart_item_report",
           imageStatusMessage: "No matching row found in Walmart Item Report.",
           imageSyncStatus: "not_found",
+          issues: ["No matching row found in Walmart Item Report."],
         })}
         stagedDrafts={[]}
         aiProviderConnected={false}
@@ -144,7 +147,6 @@ describe("Walmart product optimizer client", () => {
     );
 
     expect(html).toContain("No matching row found in Walmart Item Report.");
-    expect(html).toContain("Source: Walmart Item Report");
   });
 
   it("hydrates editable fields from normalized/raw payload and routes optimize action to current SKU", () => {
@@ -183,7 +185,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain('>Normalized short description</textarea>');
     expect(html).toContain("Normalized bullet one");
     expect(html).toContain('value="Payload Brand"');
-    expect(html).toContain("OpenAI provider connected. Run optimization and review suggestions before applying.");
+    expect(html).toContain("AI Optimization Assistant");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });
