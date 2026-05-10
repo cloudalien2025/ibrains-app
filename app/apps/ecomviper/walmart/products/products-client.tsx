@@ -50,10 +50,30 @@ function compareSkuNatural(
 
 function formatImageStatus(product: WalmartEffectiveProductRecord): string {
   if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
-  if (product.imageSyncStatus === "not_found") return "Item Search returned no usable image.";
-  if (product.imageSyncStatus === "ambiguous") return "Multiple Walmart Item Search candidates matched this product.";
-  if (product.imageSyncStatus === "failed") return "Item Search request failed after retry.";
-  if (product.imageSyncStatus === "not_synced") return "Image enrichment not synced.";
+  if (product.imageSyncStatus === "not_found") {
+    if (product.imageSource === "walmart_item_report") return "No matching row found in Walmart Item Report.";
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "No public Walmart listing images found via SerpApi.";
+    if (product.imageSource === "manual") return "Manual image URL not provided.";
+    return "Item Search returned no usable image.";
+  }
+  if (product.imageSyncStatus === "ambiguous") {
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing image match is ambiguous.";
+    return "Multiple Walmart Item Search candidates matched this product.";
+  }
+  if (product.imageSyncStatus === "failed") {
+    if (product.imageSource === "walmart_item_report") return "Walmart Item Report request failed.";
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing image lookup failed.";
+    return "Item Search request failed after retry.";
+  }
+  if (product.imageSyncStatus === "not_synced") {
+    if (product.imageSource === "public_walmart_listing_serpapi")
+      return "Public Walmart listing images not synced.";
+    if (product.imageSource === "manual") return "Manual image URL not provided.";
+    return "Image enrichment not synced.";
+  }
   if (product.imageUrl) return "Image available";
   return "Image enrichment not synced.";
 }
@@ -382,6 +402,14 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                         >
                           Optimize with AI
                         </Link>
+                        {!product.imageUrl && (product.publicWalmartUrl || product.publicWalmartProductId) ? (
+                          <Link
+                            href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                            className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                          >
+                            Resolve images
+                          </Link>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => handleSyncClick(product.sku)}
