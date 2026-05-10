@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { disconnectWalmart } from "@/lib/ecomviper/walmart/walmart-auth";
+import { clearPersistedWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-draft-repository";
 import { clearWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import { clearDrafts } from "@/lib/ecomviper/walmart/walmart-store";
 
@@ -27,6 +28,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (body.action === "reset_drafts") {
+      await clearPersistedWalmartDraftsForUser(userId);
       clearDrafts();
       return ok({ ok: true, action: body.action });
     }

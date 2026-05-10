@@ -105,6 +105,8 @@ describe("walmart products persistence", () => {
     vi.restoreAllMocks();
     (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_tables_checked__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
     delete process.env.E2E_MOCK_GRAPH;
@@ -363,9 +365,122 @@ describe("walmart products persistence", () => {
     expect(response.status).toBe(201);
     expect(payload.ok).toBe(true);
     expect(payload.draft?.sku).toBe("ROC808");
+    expect(payload.draftMeta?.draftId).toBeTypeOf("string");
+    expect(payload.draftMeta?.sku).toBe("ROC808");
+    expect(payload.draftMeta?.updatedAt).toBeTypeOf("string");
+    expect(payload.draftMeta?.validationStatus).toBe("validated");
+    expect(payload.draftMeta?.publishStatus).toBe("pending");
     expect(payload.draft?.draftPayload?.title).toBe(
       "ROC808 Daily Wellness Formula | Optimized"
     );
+  });
+
+  it("lists newly saved draft through drafts route after runtime-store reset", async () => {
+    const userId = "user_draft_roundtrip";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute, GET: listDraftsRoute } = await import(
+      "@/app/api/ecomviper/walmart/drafts/route"
+    );
+
+    const saveResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "ROC808 Optimized Title",
+            shortDescription: "Optimized short description",
+            longDescription: "Optimized long description",
+            bulletPoints: ["Bullet 1", "Bullet 2", "Bullet 3"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Capsule" },
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+
+    expect(saveResponse.status).toBe(201);
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+
+    const listResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const listPayload = await listResponse.json();
+
+    expect(listResponse.status).toBe(200);
+    expect(Array.isArray(listPayload.drafts)).toBe(true);
+    expect(listPayload.drafts).toHaveLength(1);
+    expect(listPayload.drafts[0]?.sku).toBe("ROC808");
+    expect(listPayload.drafts[0]?.productTitle).toContain("ROC808");
+    expect(listPayload.drafts[0]?.changeSummary).toContain("staged field");
+    expect(listPayload.drafts[0]?.validationResult?.valid).toBe(true);
+    expect(listPayload.drafts[0]?.publishStatus).toBe("pending");
+  });
+
+  it("scopes saved drafts to the signed-in user", async () => {
+    const userA = "user_draft_scope_a";
+    const userB = "user_draft_scope_b";
+    await replaceWalmartProductsForUser({
+      userId: userA,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+    await replaceWalmartProductsForUser({
+      userId: userB,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    const { POST: createDraftRoute, GET: listDraftsRoute } = await import(
+      "@/app/api/ecomviper/walmart/drafts/route"
+    );
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userA, unauthorizedResponse: null });
+    const saveResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "User A draft title",
+            price: 29.99,
+            inventoryQuantity: 9,
+          },
+        }),
+      })
+    );
+    expect(saveResponse.status).toBe(201);
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userB, unauthorizedResponse: null });
+    const userBListResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const userBPayload = await userBListResponse.json();
+    expect(userBListResponse.status).toBe(200);
+    expect(userBPayload.drafts).toHaveLength(0);
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId: userA, unauthorizedResponse: null });
+    const userAListResponse = await listDraftsRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "GET",
+      })
+    );
+    const userAPayload = await userAListResponse.json();
+    expect(userAListResponse.status).toBe(200);
+    expect(userAPayload.drafts).toHaveLength(1);
+    expect(userAPayload.drafts[0]?.draftPayload?.title).toBe("User A draft title");
   });
 
   it("returns product-not-found when draft save SKU is missing from persisted and runtime products", async () => {
@@ -425,5 +540,48 @@ describe("walmart products persistence", () => {
     const html = renderToStaticMarkup(await WalmartProductsPage());
     expect(html).toContain("OPA Nutrition");
     expect(html).toContain("Pending draft");
+  });
+
+  it("hydrates saved draft values in product editor after reload", async () => {
+    const userId = "user_editor_hydration";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC808")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            title: "Hydrated optimized title",
+            shortDescription: "Hydrated short description",
+            longDescription: "Hydrated long description",
+            bulletPoints: ["Hydrated bullet 1", "Hydrated bullet 2"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Capsule" },
+            price: 31.99,
+            inventoryQuantity: 7,
+          },
+        }),
+      })
+    );
+    expect(saveDraftResponse.status).toBe(201);
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC808" }) })
+    );
+
+    expect(html).toContain('value="Hydrated optimized title"');
+    expect(html).toContain("Hydrated short description");
+    expect(html).toContain("Hydrated long description");
+    expect(html).toContain("Hydrated bullet 1");
+    expect(html).toContain('value="OPA Nutrition"');
   });
 });

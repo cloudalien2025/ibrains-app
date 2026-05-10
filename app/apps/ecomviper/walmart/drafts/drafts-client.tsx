@@ -8,11 +8,12 @@ import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface DraftsClientProps {
   initialDrafts: WalmartDraftRecord[];
+  loadError?: string;
 }
 
-export default function WalmartDraftsClient({ initialDrafts }: DraftsClientProps) {
+export default function WalmartDraftsClient({ initialDrafts, loadError }: DraftsClientProps) {
   const [drafts, setDrafts] = useState(initialDrafts);
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(loadError ?? null);
 
   async function mutateDraft(id: string, method: "PATCH" | "DELETE", action?: "validate" | "submit") {
     const response = await fetch(`/api/ecomviper/walmart/drafts/${encodeURIComponent(id)}`, {
@@ -103,10 +104,17 @@ export default function WalmartDraftsClient({ initialDrafts }: DraftsClientProps
                   </td>
                 </tr>
               ))}
-              {!drafts.length ? (
+              {!drafts.length && !loadError ? (
                 <tr className="border-t border-[#E2E8F0]">
                   <td colSpan={8} className="py-6 text-center text-sm text-[#64748B]">
                     No staged drafts yet.
+                  </td>
+                </tr>
+              ) : null}
+              {!drafts.length && loadError ? (
+                <tr className="border-t border-[#E2E8F0]">
+                  <td colSpan={8} className="py-6 text-center text-sm text-rose-700">
+                    {loadError}
                   </td>
                 </tr>
               ) : null}

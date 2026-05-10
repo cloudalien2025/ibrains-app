@@ -1,20 +1,35 @@
 export const runtime = "nodejs";
 
 import { NextRequest } from "next/server";
-import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { discardDraft, getDraftById, submitDraft, validateDraft } from "@/lib/ecomviper/walmart/walmart-store";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import {
+  discardWalmartDraftForUser,
+  getWalmartDraftByIdForUser,
+  submitWalmartDraftForUser,
+  validateWalmartDraftForUser,
+} from "@/lib/ecomviper/walmart/walmart-drafts";
+
+function isDraftNotFoundError(error: unknown): boolean {
+  return error instanceof Error && error.message.toLowerCase().includes("draft not found");
+}
 
 export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) return unauthorizedResponse;
+      return fail(401, "Please sign in before accessing Walmart drafts.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before accessing Walmart drafts.", "UNAUTHORIZED");
+    }
 
     const { id } = await Promise.resolve(params);
-    const draft = getDraftById(id);
+    const draft = await getWalmartDraftByIdForUser(userId, id);
     if (!draft) return fail(404, "Draft not found.", "NOT_FOUND");
 
     return ok({ ok: true, draft });
@@ -28,19 +43,25 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) return unauthorizedResponse;
+      return fail(401, "Please sign in before updating Walmart drafts.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before updating Walmart drafts.", "UNAUTHORIZED");
+    }
 
     const { id } = await Promise.resolve(params);
     const body = (await req.json().catch(() => ({}))) as { action?: "validate" | "submit" };
 
     const action = body.action ?? "validate";
     if (action === "submit") {
-      const revalidatedDraft = validateDraft(id);
+      const revalidatedDraft = await validateWalmartDraftForUser(userId, id);
       const hasViolations = !revalidatedDraft.validationResult.valid || (revalidatedDraft.validationResult.violations?.length ?? 0) > 0;
 
       if (hasViolations) {
-        const blockedDraft = submitDraft(id);
+        const blockedDraft = await submitWalmartDraftForUser(userId, id);
         return ok({
           ok: false,
           action,
@@ -52,14 +73,17 @@ export async function PATCH(
         });
       }
 
-      const draft = submitDraft(id);
+      const draft = await submitWalmartDraftForUser(userId, id);
       return ok({ ok: true, action, draft });
     }
 
-    const draft = validateDraft(id);
+    const draft = await validateWalmartDraftForUser(userId, id);
 
     return ok({ ok: true, action, draft });
   } catch (error) {
+    if (isDraftNotFoundError(error)) {
+      return fail(404, "Draft not found.", "NOT_FOUND");
+    }
     return fail(500, error instanceof Error ? error.message : "Failed to update draft.");
   }
 }
@@ -69,13 +93,22 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> | { id: string } }
 ) {
   try {
-    const userId = resolveUserId(req);
-    await ensureUser(userId);
+    const { userId, unauthorizedResponse } = await requireSignedInUser();
+    if (unauthorizedResponse) {
+      if (unauthorizedResponse.status !== 401) return unauthorizedResponse;
+      return fail(401, "Please sign in before discarding Walmart drafts.", "UNAUTHORIZED");
+    }
+    if (!userId) {
+      return fail(401, "Please sign in before discarding Walmart drafts.", "UNAUTHORIZED");
+    }
 
     const { id } = await Promise.resolve(params);
-    const draft = discardDraft(id);
+    const draft = await discardWalmartDraftForUser(userId, id);
     return ok({ ok: true, draft });
   } catch (error) {
+    if (isDraftNotFoundError(error)) {
+      return fail(404, "Draft not found.", "NOT_FOUND");
+    }
     return fail(500, error instanceof Error ? error.message : "Failed to discard draft.");
   }
 }

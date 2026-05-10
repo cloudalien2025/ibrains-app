@@ -1,6 +1,6 @@
 import WalmartDraftsClient from "@/app/apps/ecomviper/walmart/drafts/drafts-client";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
-import { listDraftsForUser } from "@/lib/ecomviper/walmart/walmart-store";
+import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 
 export const dynamic = "force-dynamic";
 
@@ -10,5 +10,15 @@ export default async function WalmartDraftsPage() {
     return <WalmartDraftsClient initialDrafts={[]} />;
   }
 
-  return <WalmartDraftsClient initialDrafts={listDraftsForUser(userId)} />;
+  try {
+    const drafts = await listWalmartDraftsForUser(userId);
+    return <WalmartDraftsClient initialDrafts={drafts} />;
+  } catch {
+    return (
+      <WalmartDraftsClient
+        initialDrafts={[]}
+        loadError="Could not load drafts right now. Please try again."
+      />
+    );
+  }
 }
