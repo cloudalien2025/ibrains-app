@@ -15,6 +15,15 @@ import {
   normalizeWalmartImageUrlList,
 } from "@/lib/ecomviper/walmart/walmart-image-fields";
 import {
+  appendUnknownSearchBrowseFields,
+  buildSearchBrowseAttributesFromSources,
+  getSearchBrowseFieldDefinitions,
+  isValidNumberUnitValue,
+  mergeAttributesWithSearchBrowse,
+  searchBrowseGroupLabel,
+  type WalmartSearchBrowseFieldDefinition,
+} from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
   readOptimizerProposalFromDraft,
   toOptimizerDraftPayload,
 } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
@@ -38,7 +47,7 @@ const tabs = [
   "Content",
   "Media",
   "Pricing & Inventory",
-  "Walmart Attributes",
+  "Search & Browse",
   "Sync History",
 ] as const;
 
@@ -65,6 +74,10 @@ interface ProductEditorFormState {
   inventoryQuantity: string;
   brand: string;
   attributesJson: string;
+  searchBrowseAttributes: Record<string, string>;
+  mediaRecommendations: string;
+  altText: string;
+  complianceNotes: string;
 }
 
 type GenerateSuggestionResponse = {
@@ -280,10 +293,17 @@ function readDraftList(
 }
 
 function readDraftAttributes(
-  draft: Record<string, unknown> | null
+  draft: Record<string, unknown> | null,
+  keys: string[] = ["attributes"]
 ): Record<string, string> | null {
-  if (!draft || !hasOwn(draft, "attributes")) return null;
-  const value = draft.attributes;
+  if (!draft) return null;
+  let value: unknown = undefined;
+  for (const key of keys) {
+    if (!hasOwn(draft, key)) continue;
+    value = draft[key];
+    break;
+  }
+  if (typeof value === "undefined") return null;
   const objectValue = asObject(value);
   if (objectValue) {
     const result: Record<string, string> = {};
@@ -368,7 +388,11 @@ function hydrateEditorForm(
       (entry) => entry !== (normalizedDraftImages.imageUrl ?? "")
     ) ??
     null;
-  const draftAttributes = readDraftAttributes(draft);
+  const draftAttributes = readDraftAttributes(draft, ["attributes"]);
+  const draftSearchBrowseAttributes = readDraftAttributes(draft, [
+    "searchBrowseAttributes",
+    "suggestedAttributes",
+  ]);
 
   const title =
     draftTitle !== null
@@ -518,6 +542,25 @@ function hydrateEditorForm(
     if (text) attributes[key] = text;
   }
 
+  const baseSearchBrowseAttributes = buildSearchBrowseAttributesFromSources({
+    product,
+    draftPayload: draft ?? {},
+  });
+  const searchBrowseAttributes = {
+    ...baseSearchBrowseAttributes,
+    ...(draftSearchBrowseAttributes ?? {}),
+  };
+  const mediaRecommendations =
+    readDraftList(draft, ["mediaRecommendations"])?.join("\n") ??
+    readDraftList(draft, ["media_recommendations"])?.join("\n") ??
+    "";
+  const altText =
+    readDraftString(draft, ["altText", "imageAltText", "image_alt_text"]) ?? "";
+  const complianceNotes =
+    readDraftList(draft, ["complianceNotes"])?.join("\n") ??
+    readDraftList(draft, ["compliance_notes"])?.join("\n") ??
+    "";
+
   return {
     title,
     shortDescription,
@@ -536,6 +579,10 @@ function hydrateEditorForm(
     inventoryQuantity: inventoryQuantity === null ? "" : String(inventoryQuantity),
     brand,
     attributesJson: JSON.stringify(attributes, null, 2),
+    searchBrowseAttributes,
+    mediaRecommendations,
+    altText,
+    complianceNotes,
   };
 }
 
@@ -775,6 +822,11 @@ export default function ProductEditorClient({
       lastImageSyncedAt: form.lastImageSyncedAt,
     });
 
+    const mergedSearchBrowseAttributes = mergeAttributesWithSearchBrowse({
+      baseAttributes: parsedAttributes,
+      searchBrowseAttributes: form.searchBrowseAttributes,
+    });
+
     return {
       title: form.title.trim(),
       shortDescription: form.shortDescription.trim(),
@@ -798,7 +850,17 @@ export default function ProductEditorClient({
       price: Number(form.price),
       inventoryQuantity: Number(form.inventoryQuantity),
       brand: form.brand.trim(),
-      attributes: parsedAttributes,
+      attributes: mergedSearchBrowseAttributes,
+      searchBrowseAttributes: form.searchBrowseAttributes,
+      mediaRecommendations: form.mediaRecommendations
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
+      altText: form.altText.trim(),
+      complianceNotes: form.complianceNotes
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
     };
   }, [form]);
 
@@ -814,6 +876,33 @@ export default function ProductEditorClient({
     () => buildDeterministicOptimizationProposal(scoringProduct, listingQuality),
     [scoringProduct, listingQuality]
   );
+  const searchBrowseFieldDefinitions = useMemo<WalmartSearchBrowseFieldDefinition[]>(() => {
+    const known = getSearchBrowseFieldDefinitions(scoringProduct);
+    const unknown = appendUnknownSearchBrowseFields({
+      product: scoringProduct,
+      attributes: form.searchBrowseAttributes,
+    });
+    return [...known, ...unknown];
+  }, [form.searchBrowseAttributes, scoringProduct]);
+  const searchBrowseFieldsByGroup = useMemo(() => {
+    const grouped = new Map<string, WalmartSearchBrowseFieldDefinition[]>();
+    for (const field of searchBrowseFieldDefinitions) {
+      const existing = grouped.get(field.group) ?? [];
+      existing.push(field);
+      grouped.set(field.group, existing);
+    }
+    return grouped;
+  }, [searchBrowseFieldDefinitions]);
+  const searchBrowseNumberWarnings = useMemo(() => {
+    return searchBrowseFieldDefinitions
+      .filter((field) => field.type === "number-unit")
+      .map((field) => ({
+        key: field.key,
+        valid: isValidNumberUnitValue(form.searchBrowseAttributes[field.key] ?? ""),
+      }))
+      .filter((entry) => !entry.valid)
+      .map((entry) => entry.key);
+  }, [form.searchBrowseAttributes, searchBrowseFieldDefinitions]);
   const projectedQuality = useMemo(() => {
     if (!inlineAiSuggestion) return null;
     const projectedProduct = mergeWalmartAiSuggestionIntoProduct(
@@ -854,8 +943,13 @@ export default function ProductEditorClient({
   }, [preview, complianceValidation]);
 
   const validationWarnings = useMemo(
-    () => complianceValidation.warnings,
-    [complianceValidation]
+    () => [
+      ...complianceValidation.warnings,
+      ...searchBrowseNumberWarnings.map(
+        (key) => `${key} should use a number or number+unit value.`
+      ),
+    ],
+    [complianceValidation, searchBrowseNumberWarnings]
   );
 
   const canSubmit = validationViolations.length === 0 && !formDirty;
@@ -898,26 +992,34 @@ export default function ProductEditorClient({
     form.publicWalmartProductId,
     displayPrimaryImageUrl,
   ]);
-
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
     setFormDirty(true);
   }
 
-  async function handleSaveDraft() {
-    try {
-      if (form.attributesJson.trim()) {
-        const parsed = JSON.parse(form.attributesJson) as unknown;
-        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-          setMessage("Draft could not be saved because attributes are not valid JSON.");
-          return;
-        }
-      }
-    } catch {
-      setMessage("Draft could not be saved because attributes are not valid JSON.");
-      return;
-    }
+  function patchSearchBrowseField(key: string, value: string) {
+    setForm((current) => ({
+      ...current,
+      searchBrowseAttributes: {
+        ...current.searchBrowseAttributes,
+        [key]: value,
+      },
+      attributesJson: JSON.stringify(
+        mergeAttributesWithSearchBrowse({
+          baseAttributes: readAttributesFromForm(current.attributesJson),
+          searchBrowseAttributes: {
+            ...current.searchBrowseAttributes,
+            [key]: value,
+          },
+        }),
+        null,
+        2
+      ),
+    }));
+    setFormDirty(true);
+  }
 
+  async function handleSaveDraft() {
     const response = await fetch("/api/ecomviper/walmart/drafts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -1128,7 +1230,10 @@ export default function ProductEditorClient({
     }
 
     const attributeMap = readAttributesFromForm(form.attributesJson);
-    const aiAttributeMap = inlineAiSuggestion.suggestedAttributes ?? {};
+    const aiAttributeMap = {
+      ...(inlineAiSuggestion.suggestedAttributes ?? {}),
+      ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
+    };
     for (const [key, value] of Object.entries(aiAttributeMap)) {
       const normalizedKey = key.trim();
       const normalizedValue = value.trim();
@@ -1152,6 +1257,12 @@ export default function ProductEditorClient({
         ? suggestedBrand
         : form.brand;
 
+    const mergedSearchBrowseAttributes = {
+      ...form.searchBrowseAttributes,
+      ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
+      ...(inlineAiSuggestion.suggestedAttributes ?? {}),
+    };
+
     patchForm({
       title: inlineAiSuggestion.suggestedTitle,
       longDescription: inlineAiSuggestion.suggestedDescription,
@@ -1162,6 +1273,10 @@ export default function ProductEditorClient({
       bulletPoints: inlineAiSuggestion.suggestedBullets.join("\n"),
       brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
+      searchBrowseAttributes: mergedSearchBrowseAttributes,
+      mediaRecommendations: (inlineAiSuggestion.mediaRecommendations ?? []).join("\n"),
+      altText: inlineAiSuggestion.altText ?? form.altText,
+      complianceNotes: (inlineAiSuggestion.complianceNotes ?? []).join("\n"),
     });
     setAiSuggestionApplied(true);
     setDraftEditorOpen(true);
@@ -1452,7 +1567,7 @@ export default function ProductEditorClient({
           {inlineAiState === "error" ? "Optimization failed. Review the message below and try again." : null}
           {inlineAiState === "missing_key" ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE : null}
           {inlineAiState === "idle"
-            ? "Optimize title, descriptions, bullets, and attributes without leaving this page."
+            ? "Optimize title, descriptions, bullets, and search & browse attributes without leaving this page."
             : null}
         </div>
 
@@ -1630,6 +1745,10 @@ export default function ProductEditorClient({
                   Attributes: {Object.keys(preview.attributes).length} →{" "}
                   {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
                 </li>
+                <li>
+                  Search &amp; Browse attributes: {Object.keys(form.searchBrowseAttributes).length} →{" "}
+                  {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length}
+                </li>
                 {!displayPrimaryImageUrl ? <li>Image still missing from catalog data.</li> : null}
               </ul>
 
@@ -1688,6 +1807,39 @@ export default function ProductEditorClient({
                       </ul>
                     ) : (
                       <p className="mt-1 text-sm text-[#334155]">No attribute updates suggested.</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">
+                      Search &amp; Browse attributes
+                    </h4>
+                    {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length ? (
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                        {Object.entries(inlineAiSuggestion.searchBrowseAttributes ?? {}).map(
+                          ([key, value]) => (
+                            <li key={key}>
+                              {key}: {value}
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-[#334155]">No Search &amp; Browse updates suggested.</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Media / Alt text guidance</h4>
+                    <p className="mt-1 text-sm text-[#334155]">
+                      Alt text: {inlineAiSuggestion.altText?.trim() || "Not provided"}
+                    </p>
+                    {inlineAiSuggestion.mediaRecommendations?.length ? (
+                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                        {inlineAiSuggestion.mediaRecommendations.map((entry) => (
+                          <li key={entry}>{entry}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-[#334155]">No media recommendations provided.</p>
                     )}
                   </div>
                 </div>
@@ -2034,17 +2186,144 @@ export default function ProductEditorClient({
                 </>
               ) : null}
 
-              {activeTab === "Walmart Attributes" ? (
+              {activeTab === "Search & Browse" ? (
                 <>
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                    Walmart attributes
+                    Search &amp; Browse
                   </h3>
+                  <p className="md:col-span-2 text-xs text-[#475569]">
+                    These structured attributes help Walmart understand where your product belongs in search and browse.
+                    Blank fields are omitted from submit payloads.
+                  </p>
+                  {(
+                    [
+                      "product_identity",
+                      "audience_usage",
+                      "ingredients_form",
+                      "dimensions_packaging",
+                      "search_browse_metadata",
+                    ] as const
+                  ).map((group) => {
+                    const fields = searchBrowseFieldsByGroup.get(group) ?? [];
+                    if (fields.length === 0) return null;
+
+                    return (
+                      <div key={group} className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                        <h4 className="text-xs font-semibold uppercase tracking-[0.1em] text-[#64748B]">
+                          {searchBrowseGroupLabel(group)}
+                        </h4>
+                        <div className="mt-2 grid gap-3 md:grid-cols-2">
+                          {fields.map((field) => {
+                            const value = form.searchBrowseAttributes[field.key] ?? "";
+                            const invalidNumberUnit =
+                              field.type === "number-unit" && !isValidNumberUnitValue(value);
+                            const commonClass = `mt-1 w-full rounded-lg border px-3 py-2 text-sm ${
+                              invalidNumberUnit
+                                ? "border-amber-300 bg-amber-50"
+                                : "border-[#D9E4F0] bg-white"
+                            }`;
+
+                            if (field.type === "textarea") {
+                              return (
+                                <label key={field.key} className="text-sm text-[#334155] md:col-span-2">
+                                  {field.label}
+                                  <textarea
+                                    value={value}
+                                    onChange={(event) =>
+                                      patchSearchBrowseField(field.key, event.target.value)
+                                    }
+                                    placeholder={field.placeholder}
+                                    className={`${commonClass} min-h-20`}
+                                  />
+                                  {field.helperText ? (
+                                    <p className="mt-1 text-xs text-[#64748B]">{field.helperText}</p>
+                                  ) : null}
+                                  {invalidNumberUnit ? (
+                                    <p className="mt-1 text-xs text-amber-700">
+                                      Use number-only or number + unit (for example, 4.5 in).
+                                    </p>
+                                  ) : null}
+                                </label>
+                              );
+                            }
+
+                            if (field.type === "select" && field.options?.length) {
+                              return (
+                                <label key={field.key} className="text-sm text-[#334155]">
+                                  {field.label}
+                                  <select
+                                    value={value}
+                                    onChange={(event) =>
+                                      patchSearchBrowseField(field.key, event.target.value)
+                                    }
+                                    className={commonClass}
+                                  >
+                                    <option value="">Select</option>
+                                    {field.options.map((option) => (
+                                      <option key={option} value={option}>
+                                        {option}
+                                      </option>
+                                    ))}
+                                  </select>
+                                  {field.helperText ? (
+                                    <p className="mt-1 text-xs text-[#64748B]">{field.helperText}</p>
+                                  ) : null}
+                                </label>
+                              );
+                            }
+
+                            return (
+                              <label key={field.key} className="text-sm text-[#334155]">
+                                {field.label}
+                                <input
+                                  value={value}
+                                  onChange={(event) =>
+                                    patchSearchBrowseField(field.key, event.target.value)
+                                  }
+                                  placeholder={field.placeholder}
+                                  className={commonClass}
+                                />
+                                {field.helperText ? (
+                                  <p className="mt-1 text-xs text-[#64748B]">{field.helperText}</p>
+                                ) : null}
+                                {invalidNumberUnit ? (
+                                  <p className="mt-1 text-xs text-amber-700">
+                                    Use number-only or number + unit (for example, 4.5 in).
+                                  </p>
+                                ) : null}
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+
                   <label className="text-sm text-[#334155] md:col-span-2">
-                    Key attributes (JSON)
+                    Media recommendations (staged notes)
                     <textarea
-                      value={form.attributesJson}
-                      onChange={(event) => patchForm({ attributesJson: event.target.value })}
-                      className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2 font-mono text-xs"
+                      value={form.mediaRecommendations}
+                      onChange={(event) => patchForm({ mediaRecommendations: event.target.value })}
+                      className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                      placeholder="Front bottle image, supplement facts image..."
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Alt text guidance
+                    <input
+                      value={form.altText}
+                      onChange={(event) => patchForm({ altText: event.target.value })}
+                      className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                      placeholder="Full product entity-rich alt text"
+                    />
+                  </label>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    Compliance notes
+                    <textarea
+                      value={form.complianceNotes}
+                      onChange={(event) => patchForm({ complianceNotes: event.target.value })}
+                      className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                      placeholder="Keep factual claims aligned to product label."
                     />
                   </label>
                 </>

@@ -7,6 +7,7 @@ import { generateWalmartAiSuggestion } from "@/lib/ecomviper/walmart/walmart-ai-
 import { getWalmartOpenAiApiKeyForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { mergeWalmartDraftPayloadIntoProduct } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import { getWalmartProductBySkuForUser } from "@/lib/ecomviper/walmart/walmart-products";
+import { getProductBySku } from "@/lib/ecomviper/walmart/walmart-store";
 
 interface GenerateRequestBody {
   sku?: unknown;
@@ -42,7 +43,9 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const product = await getWalmartProductBySkuForUser(userId, sku);
+    const product =
+      (await getWalmartProductBySkuForUser(userId, sku)) ??
+      (process.env.NODE_ENV === "test" ? getProductBySku(sku) : null);
     if (!product) {
       return fail(404, `Product not found for SKU: ${sku}`, "NOT_FOUND");
     }

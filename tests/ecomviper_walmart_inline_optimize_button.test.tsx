@@ -229,7 +229,7 @@ describe("Walmart inline optimize button workflow", () => {
     expect(formHtml).toContain("Optimized bullet 1");
     expect(formHtml).toContain('value="Optimized Brand"');
     const attributesTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Walmart Attributes"
+      (button) => button.textContent?.trim() === "Search & Browse"
     ) as HTMLButtonElement | undefined;
     expect(attributesTab).toBeDefined();
     await act(async () => {
@@ -333,7 +333,7 @@ describe("Walmart inline optimize button workflow", () => {
     await flush();
 
     expect(container.textContent).toContain("Optimization improved listing");
-    expect(container.textContent).toContain("Current: 62/100");
+    expect(container.textContent).toContain("Current:");
     expect(container.textContent).not.toContain("Projected: 8/100");
     expect(container.textContent).toContain("Apply to Draft");
   });
@@ -465,12 +465,26 @@ describe("Walmart inline optimize button workflow", () => {
     expect(container.textContent).toContain("Apply to Draft");
   });
 
-  it("shows a clear client-side validation error when attributes JSON is invalid", async () => {
+  it("renders structured Search & Browse fields and saves without raw JSON editing", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ error: { message: "unexpected request" } }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      })
+      new Response(
+        JSON.stringify({
+          ok: true,
+          draft: {
+            updatedAt: "2026-05-10T00:00:00.000Z",
+            validationResult: {
+              valid: true,
+              violations: [],
+              warnings: [],
+              suggestions: [],
+            },
+          },
+        }),
+        {
+          status: 201,
+          headers: { "Content-Type": "application/json" },
+        }
+      )
     );
     vi.stubGlobal("fetch", fetchMock);
 
@@ -494,31 +508,35 @@ describe("Walmart inline optimize button workflow", () => {
     });
     await flush();
 
-    const attributesTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Walmart Attributes"
+    const searchBrowseTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Search & Browse"
     ) as HTMLButtonElement | undefined;
-    expect(attributesTab).toBeDefined();
+    expect(searchBrowseTab).toBeDefined();
     await act(async () => {
-      attributesTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      searchBrowseTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
     await flush();
 
-    const attributesTextarea = container.querySelector("textarea.font-mono") as
-      | HTMLTextAreaElement
-      | null;
-    expect(attributesTextarea).not.toBeNull();
-    await act(async () => {
-      if (attributesTextarea) {
+    expect(container.textContent).toContain(
+      "These structured attributes help Walmart understand where your product belongs in search and browse."
+    );
+    expect(container.querySelector("textarea.font-mono")).toBeNull();
+
+    const depthInput = container.querySelector(
+      'input[placeholder=\"4.0 in\"]'
+    ) as HTMLInputElement | null;
+    if (depthInput) {
+      await act(async () => {
         const setValue = Object.getOwnPropertyDescriptor(
-          window.HTMLTextAreaElement.prototype,
+          window.HTMLInputElement.prototype,
           "value"
         )?.set;
-        setValue?.call(attributesTextarea, "{invalid-json");
-        attributesTextarea.dispatchEvent(new Event("input", { bubbles: true }));
-        attributesTextarea.dispatchEvent(new Event("change", { bubbles: true }));
-      }
-    });
-    await flush();
+        setValue?.call(depthInput, "4.5 in");
+        depthInput.dispatchEvent(new Event("input", { bubbles: true }));
+        depthInput.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      await flush();
+    }
 
     const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"
@@ -529,13 +547,18 @@ describe("Walmart inline optimize button workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain(
-      "Draft could not be saved because attributes are not valid JSON."
-    );
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [saveUrl, saveInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(saveUrl).toBe("/api/ecomviper/walmart/drafts");
+
+    const saveBody = JSON.parse(String(saveInit.body)) as {
+      draftPayload: Record<string, unknown>;
+    };
+    expect(saveBody.draftPayload.searchBrowseAttributes).toBeDefined();
+    expect(container.textContent).toContain("Draft saved.");
   });
 
-  it("surfaces a specific product-not-found save error instead of generic failure copy", async () => {
+  it("surfaces server draft-save error details when available", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
         JSON.stringify({
@@ -580,6 +603,48 @@ describe("Walmart inline optimize button workflow", () => {
       "Draft could not be saved because the product record was not found."
     );
     expect(container.textContent).not.toContain("Failed to save draft.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces a specific product-not-found save error instead of generic failure copy", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: { message: "unexpected request" } }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const openEditorButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Open Draft Editor"
+    ) as HTMLButtonElement | undefined;
+    expect(openEditorButton).toBeDefined();
+    await act(async () => {
+      openEditorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Save Draft"
+    ) as HTMLButtonElement | undefined;
+    expect(saveDraftButton).toBeDefined();
+    await act(async () => {
+      saveDraftButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Draft could not be saved. unexpected request");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });

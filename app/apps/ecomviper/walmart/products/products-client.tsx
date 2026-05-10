@@ -102,6 +102,13 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
   const [skuSortDirection, setSkuSortDirection] = useState<SkuSortDirection>("none");
   const [message, setMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [importPhase, setImportPhase] = useState<"idle" | "importing" | "enriching">("idle");
+  const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
+    imageNotFoundCount: number;
+    imageAmbiguousCount: number;
+    imageFailedCount: number;
+    imageSkippedNoProviderCount: number;
+  } | null>(null);
   const [locallyRemovedSkuKeys, setLocallyRemovedSkuKeys] = useState<string[]>([]);
   const [removeTarget, setRemoveTarget] = useState<{
     sku: string;
@@ -160,11 +167,24 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
     [allProducts]
   );
 
-  async function handleImport() {
+  async function handleImport(mode: "import" | "retry_image_enrichment" = "import") {
     setIsImporting(true);
+    setImportPhase(mode === "retry_image_enrichment" ? "enriching" : "importing");
     setMessage(null);
+    const enrichmentTimer =
+      mode === "retry_image_enrichment"
+        ? null
+        : setTimeout(() => {
+            setImportPhase("enriching");
+          }, 700);
     try {
-      const response = await fetch("/api/ecomviper/walmart/products/import", { method: "POST" });
+      const response = await fetch("/api/ecomviper/walmart/products/import", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: mode === "retry_image_enrichment" ? "retry_image_enrichment" : "import",
+        }),
+      });
       const payload = (await response.json().catch(() => ({}))) as {
         message?: string;
         importedCount?: number;
@@ -177,6 +197,9 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           imageNotFoundCount?: number;
           imageAmbiguousCount?: number;
           imageFailedCount?: number;
+          imageSkippedNoProviderCount?: number;
+          enrichmentQueuedCount?: number;
+          enrichmentCompletedCount?: number;
         };
         error?: { message?: string };
       };
@@ -187,26 +210,50 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       }
 
       const importedCount = typeof payload.importedCount === "number" ? payload.importedCount : null;
+      const imageFoundCount = payload.importDiagnostics?.imageFoundCount ?? 0;
+      const imageNotFoundCount = payload.importDiagnostics?.imageNotFoundCount ?? 0;
+      const imageAmbiguousCount = payload.importDiagnostics?.imageAmbiguousCount ?? 0;
+      const imageFailedCount = payload.importDiagnostics?.imageFailedCount ?? 0;
+      const imageSkippedNoProviderCount =
+        payload.importDiagnostics?.imageSkippedNoProviderCount ?? 0;
+      const enrichmentQueuedCount = payload.importDiagnostics?.enrichmentQueuedCount ?? 0;
+      const enrichmentCompletedCount = payload.importDiagnostics?.enrichmentCompletedCount ?? 0;
+      const missingCount = imageNotFoundCount + imageSkippedNoProviderCount;
+      const enrichmentSummary = `Enriching images... queued=${enrichmentQueuedCount}, completed=${enrichmentCompletedCount}. Images found: ${imageFoundCount} / Missing: ${missingCount} / Ambiguous: ${imageAmbiguousCount} / Failed: ${imageFailedCount}.`;
+      const providerGuidance =
+        imageSkippedNoProviderCount > 0
+          ? " Images can be enriched automatically when you connect your SerpApi key."
+          : "";
+
+      setLastImportDiagnostics({
+        imageNotFoundCount,
+        imageAmbiguousCount,
+        imageFailedCount,
+        imageSkippedNoProviderCount,
+      });
+
       if (importedCount === 0) {
         const fetchedCount = payload.importDiagnostics?.fetchedCount ?? payload.fetchedCount ?? 0;
         const payloadShape = payload.importDiagnostics?.payloadShape ?? "unknown";
         const inventoryUnknownCount = payload.importDiagnostics?.inventoryUnknownCount ?? 0;
-        const imageFoundCount = payload.importDiagnostics?.imageFoundCount ?? 0;
-        const imageNotFoundCount = payload.importDiagnostics?.imageNotFoundCount ?? 0;
-        const imageAmbiguousCount = payload.importDiagnostics?.imageAmbiguousCount ?? 0;
-        const imageFailedCount = payload.importDiagnostics?.imageFailedCount ?? 0;
         setMessage(
-          payload.message ??
-            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}, imageFound=${imageFoundCount}, imageNotFound=${imageNotFoundCount}, imageAmbiguous=${imageAmbiguousCount}, imageFailed=${imageFailedCount}.`
+          `${
+            payload.message ??
+            `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}.`
+          } ${enrichmentSummary}${providerGuidance}`
         );
       } else {
-        setMessage(payload.message ?? "Import completed.");
+        setMessage(
+          `${payload.message ?? "Importing products..."} ${enrichmentSummary}${providerGuidance}`
+        );
       }
       router.refresh();
     } catch {
       setMessage("Import failed.");
     } finally {
+      if (enrichmentTimer) clearTimeout(enrichmentTimer);
       setIsImporting(false);
+      setImportPhase("idle");
     }
   }
 
@@ -270,11 +317,15 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         actions={
           <button
             type="button"
-            onClick={handleImport}
+            onClick={() => void handleImport("import")}
             disabled={isImporting}
             className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
           >
-            {isImporting ? "Importing..." : "Import Products"}
+            {isImporting
+              ? importPhase === "enriching"
+                ? "Enriching images..."
+                : "Importing products..."
+              : "Import Products"}
           </button>
         }
       />
@@ -300,7 +351,26 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           </select>
         </div>
 
+        {isImporting ? (
+          <div className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
+            <p>Importing products...</p>
+            <p className="mt-1">Enriching images...</p>
+          </div>
+        ) : null}
         {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
+        {!isImporting &&
+        lastImportDiagnostics &&
+        (lastImportDiagnostics.imageNotFoundCount > 0 ||
+          lastImportDiagnostics.imageAmbiguousCount > 0 ||
+          lastImportDiagnostics.imageFailedCount > 0) ? (
+          <button
+            type="button"
+            onClick={() => void handleImport("retry_image_enrichment")}
+            className="mt-2 rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-xs text-[#0F172A]"
+          >
+            Retry image enrichment
+          </button>
+        ) : null}
 
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-[1080px] w-full text-sm">

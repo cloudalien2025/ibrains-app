@@ -110,7 +110,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Known (9)");
     expect(html).toContain("Generate AI Improvements");
     expect(html).toContain(
-      "Optimize title, descriptions, bullets, and attributes without leaving this page."
+      "Optimize title, descriptions, bullets, and search &amp; browse attributes without leaving this page."
     );
     expect(html).toContain("Improve this listing with AI");
     expect(html).toContain("Rule-based suggestions");

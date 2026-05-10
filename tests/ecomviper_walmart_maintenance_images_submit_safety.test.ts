@@ -92,4 +92,27 @@ describe("Walmart maintenance payload image submit safety", () => {
 
     expect(updates.imageUrl).toBe("https://images.example.com/current.jpg");
   });
+
+  it("omits blank or needs-confirmation attributes to avoid blank overwrites", () => {
+    const product = createProduct();
+    const draft = createDraft({
+      attributes: {
+        age_group: "",
+        product_form: "Capsule",
+      },
+      searchBrowseAttributes: {
+        support_areas: "needs product label confirmation",
+        target_audience: "Adults",
+      },
+    });
+
+    const payload = buildMaintenancePayload({ draft, product });
+    const updates = payload.updates as Record<string, unknown>;
+    const attributes = (updates.attributes ?? {}) as Record<string, string>;
+
+    expect(attributes.age_group).toBeUndefined();
+    expect(attributes.support_areas).toBeUndefined();
+    expect(attributes.product_form).toBe("Capsule");
+    expect(attributes.target_audience).toBe("Adults");
+  });
 });
