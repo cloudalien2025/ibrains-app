@@ -93,7 +93,7 @@ describe("Walmart inline optimize button workflow", () => {
     await flush();
 
     const stateText =
-      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-state"]')?.textContent ?? "";
+      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
     expect(stateText).toContain("Connect your OpenAI API key first to optimize this product.");
     expect(fetchMock).not.toHaveBeenCalled();
     expect(container.querySelector('a[href*="/apps/ecomviper/walmart/ai-optimizer"]')).toBeNull();
@@ -127,10 +127,10 @@ describe("Walmart inline optimize button workflow", () => {
     });
 
     expect(optimizeButton?.disabled).toBe(true);
-    expect(optimizeButton?.textContent).toContain("Optimizing product with AI...");
+    expect(optimizeButton?.textContent).toContain("Generating AI Improvements...");
     const loadingState =
-      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-state"]')?.textContent ?? "";
-    expect(loadingState).toContain("Optimizing product with AI...");
+      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
+    expect(loadingState).toContain("Generating AI Improvements...");
 
     const responsePayload = {
       ok: true,
@@ -170,8 +170,8 @@ describe("Walmart inline optimize button workflow", () => {
     expect(body.draftPayload.title).toBe("ROC808 Daily Wellness Formula");
 
     const successState =
-      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-state"]')?.textContent ?? "";
-    expect(successState).toContain("Optimization improved listing.");
+      container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
+    expect(successState).toContain("AI Improvements Ready.");
     expect(container.textContent).toContain("ROC808 Daily Wellness Formula | Optimized");
 
     const applyButton = container.querySelector(
@@ -186,14 +186,22 @@ describe("Walmart inline optimize button workflow", () => {
 
     const titleInput = container.querySelector('input[value="ROC808 Daily Wellness Formula | Optimized"]');
     expect(titleInput).not.toBeNull();
-    expect(container.textContent).toContain("AI suggestions applied to draft fields. Save Draft when ready.");
+    expect(container.textContent).toContain("AI improvements applied to draft fields. Save Draft when ready.");
 
     const formHtml = container.innerHTML;
     expect(formHtml).toContain("Optimized short summary");
     expect(formHtml).toContain("Optimized long listing description");
     expect(formHtml).toContain("Optimized bullet 1");
     expect(formHtml).toContain('value="Optimized Brand"');
-    expect(formHtml).toContain("Plant-based");
+    const attributesTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Walmart Attributes"
+    ) as HTMLButtonElement | undefined;
+    expect(attributesTab).toBeDefined();
+    await act(async () => {
+      attributesTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+    expect(container.innerHTML).toContain("Plant-based");
     expect(container.textContent).toContain("Current:");
     expect(container.textContent).toContain("Projected:");
     expect(fetchMock).toHaveBeenCalledTimes(1);

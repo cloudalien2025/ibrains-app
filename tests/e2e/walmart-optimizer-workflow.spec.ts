@@ -14,24 +14,19 @@ test.describe("walmart optimizer authenticated workflow", () => {
 
     await expect(page).toHaveURL(/\/apps\/ecomviper\/walmart\/products\/30066-841$/);
     await expect(page.getByTestId("ecomviper-walmart-product-editor-page")).toBeVisible();
-    await expect(page.getByTestId("ecomviper-walmart-primary-actions")).toContainText("Optimize with AI");
+    await expect(page.getByTestId("ecomviper-walmart-workflow-steps")).toContainText("1 Review");
+    await expect(page.getByTestId("ecomviper-walmart-primary-actions")).toContainText(
+      "Generate AI Improvements"
+    );
     await expect(page.getByTestId("ecomviper-walmart-product-optimizer-summary")).toContainText("Listing quality");
     await expect(page.getByTestId("ecomviper-walmart-inline-ai-panel")).toContainText(
-      "Connect your OpenAI API key first to optimize this product."
+      "Optimize title, descriptions, bullets, and attributes without leaving this page."
     );
     await expect(page.getByTestId("ecomviper-walmart-staged-changes")).toContainText("Staged changes");
-    await expect(page.getByTestId("ecomviper-walmart-inline-ai-panel")).toContainText(
-      "Not submitted to Walmart. Human approval required before feed submission."
-    );
     await expect(page.getByTestId("ecomviper-walmart-primary-actions")).not.toContainText("Preview + Validate");
 
-    await page.getByRole("button", { name: "Optimize with AI" }).click();
+    await page.getByRole("button", { name: "Generate AI Improvements" }).click();
     await expect(page).toHaveURL(/\/apps\/ecomviper\/walmart\/products\/30066-841$/);
     await expect(page.getByText("Connect your OpenAI API key first to optimize this product.")).toBeVisible();
-
-    await page.getByRole("button", { name: "Stage non-AI recommendations" }).click();
-    await expect(
-      page.getByText("Non-AI recommendations staged. No live Walmart feed submission was performed.")
-    ).toBeVisible();
   });
 });
