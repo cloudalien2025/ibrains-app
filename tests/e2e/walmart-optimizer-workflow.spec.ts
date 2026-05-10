@@ -15,22 +15,23 @@ test.describe("walmart optimizer authenticated workflow", () => {
     await expect(page).toHaveURL(/\/apps\/ecomviper\/walmart\/products\/30066-841$/);
     await expect(page.getByTestId("ecomviper-walmart-product-editor-page")).toBeVisible();
     await expect(page.getByTestId("ecomviper-walmart-primary-actions")).toContainText("Optimize with AI");
-    await expect(page.getByTestId("ecomviper-walmart-product-optimizer-summary")).toContainText("Listing Quality Score");
-    await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).toContainText(
-      "AI recommendation unavailable until provider is connected"
-    );
-    await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).not.toContainText("Open AI Optimizer");
-    await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).toContainText(
-      "Deterministic recommendation"
+    await expect(page.getByTestId("ecomviper-walmart-product-optimizer-summary")).toContainText("Listing quality");
+    await expect(page.getByTestId("ecomviper-walmart-inline-ai-panel")).toContainText(
+      "Connect your OpenAI API key first to optimize this product."
     );
     await expect(page.getByTestId("ecomviper-walmart-staged-changes")).toContainText("Staged changes");
-    await expect(page.getByTestId("ecomviper-walmart-ai-recommendations")).toContainText(
+    await expect(page.getByTestId("ecomviper-walmart-inline-ai-panel")).toContainText(
       "Not submitted to Walmart. Human approval required before feed submission."
     );
+    await expect(page.getByTestId("ecomviper-walmart-primary-actions")).not.toContainText("Preview + Validate");
 
-    await page.getByRole("button", { name: "Stage Deterministic Recommendations" }).click();
+    await page.getByRole("button", { name: "Optimize with AI" }).click();
+    await expect(page).toHaveURL(/\/apps\/ecomviper\/walmart\/products\/30066-841$/);
+    await expect(page.getByText("Connect your OpenAI API key first to optimize this product.")).toBeVisible();
+
+    await page.getByRole("button", { name: "Stage non-AI recommendations" }).click();
     await expect(
-      page.getByText("Deterministic recommendations staged. No live Walmart feed submission was performed.")
+      page.getByText("Non-AI recommendations staged. No live Walmart feed submission was performed.")
     ).toBeVisible();
   });
 });

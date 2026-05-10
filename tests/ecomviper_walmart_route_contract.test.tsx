@@ -9,6 +9,7 @@ import WalmartConnectPage from "@/app/apps/ecomviper/walmart/connect/page";
 import WalmartFeedsPage from "@/app/apps/ecomviper/walmart/feeds/page";
 import WalmartProductsPage from "@/app/apps/ecomviper/walmart/products/page";
 import WalmartActivityPage from "@/app/apps/ecomviper/walmart/activity/page";
+import WalmartAiOptimizerPage from "@/app/apps/ecomviper/walmart/ai-optimizer/page";
 import { replaceWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
 
@@ -30,6 +31,9 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({
     refresh: vi.fn(),
   }),
+  redirect: (path: string) => {
+    throw new Error(`NEXT_REDIRECT:${path}`);
+  },
 }));
 
 vi.mock("@/components/frontdoor/frontdoor-header-actions", () => ({
@@ -318,5 +322,15 @@ describe("EcomViper Walmart route contracts", () => {
   it("renders activity page with empty state when no activity exists", () => {
     const html = renderToStaticMarkup(<WalmartActivityPage />);
     expect(html).toContain("No activity yet.");
+  });
+
+  it("redirects deprecated ai-optimizer route into product workspace routes", async () => {
+    await expect(
+      WalmartAiOptimizerPage({ searchParams: Promise.resolve({ sku: "ROC808" }) })
+    ).rejects.toThrow("NEXT_REDIRECT:/apps/ecomviper/walmart/products/ROC808");
+
+    await expect(
+      WalmartAiOptimizerPage({ searchParams: Promise.resolve({}) })
+    ).rejects.toThrow("NEXT_REDIRECT:/apps/ecomviper/walmart/products");
   });
 });

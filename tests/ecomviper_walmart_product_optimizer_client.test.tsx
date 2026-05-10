@@ -87,33 +87,36 @@ function createStagedDraft(): WalmartDraftRecord {
 }
 
 describe("Walmart product optimizer client", () => {
-  it("renders primary optimize action and seller-friendly recommendations without raw JSON panels", () => {
+  it("renders inline AI-first workspace actions without raw JSON panels", () => {
     const html = renderToStaticMarkup(
       <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} />
     );
 
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
     expect(html).toContain("ecomviper-walmart-primary-actions");
+    expect(html).toContain("ecomviper-walmart-inline-ai-panel");
+    expect(html).toContain("ecomviper-walmart-product-form");
+    expect(html).toContain("ecomviper-walmart-readiness");
     expect(html).toContain("30066-841");
     expect(html).toContain("Item Search returned no usable image.");
     expect(html).toContain("Known (9)");
     expect(html).toContain("Optimize with AI");
     expect(html).toContain("Connect your OpenAI API key first to optimize this product.");
     expect(html).toContain("Save Draft");
-    expect(html).toContain("Preview + Validate");
     expect(html).toContain("Submit Update");
-    expect(html).toContain("AI recommendation unavailable until provider is connected");
-    expect(html).toContain("Deterministic recommendation");
+    expect(html).toContain("Inline AI optimization");
+    expect(html).toContain("Non-AI suggestions");
     expect(html).toContain("Not submitted to Walmart. Human approval required before feed submission.");
-    expect(html).toContain("Stage Deterministic Recommendations");
+    expect(html).toContain("Stage non-AI recommendations");
     expect(html).not.toContain("Open AI Optimizer");
+    expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
+    expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
     expect(html).toContain("Source: Walmart Item Search");
-    expect(html).toContain("Match method: query");
-    expect(html).toContain("Matched itemId: WM-123");
     expect(html).toContain("Gallery images: 0");
     expect(html).toContain("Variant images: 0");
+    expect(html).toContain("Validation is checked continuously and before Submit Update.");
   });
 
   it("renders staged changes section with proposal data", () => {
@@ -176,11 +179,12 @@ describe("Walmart product optimizer client", () => {
       />
     );
 
-    expect(html).toContain('href="/apps/ecomviper/walmart/ai-optimizer?sku=ROC%20808%2FNY"');
     expect(html).toContain('value="Normalized Title from Import"');
     expect(html).toContain('>Normalized short description</textarea>');
     expect(html).toContain("Normalized bullet one");
     expect(html).toContain('value="Payload Brand"');
+    expect(html).toContain("OpenAI provider connected. Run optimization and review suggestions before applying.");
+    expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });
 });
