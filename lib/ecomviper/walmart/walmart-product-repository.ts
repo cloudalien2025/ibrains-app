@@ -10,6 +10,7 @@ interface WalmartProductRow {
   product_payload: WalmartProductRecord;
   imported_at: string | Date;
   updated_at: string | Date;
+  archived_at: string | Date | null;
 }
 
 interface WalmartProductStateRow {
@@ -19,6 +20,7 @@ interface WalmartProductStateRow {
 
 type FallbackUserState = {
   productsBySku: Map<string, WalmartProductRecord>;
+  archivedSkus: Set<string>;
   lastImportAt: string | null;
 };
 
@@ -77,6 +79,7 @@ function getFallbackUserState(userId: string): FallbackUserState {
 
   const created: FallbackUserState = {
     productsBySku: new Map<string, WalmartProductRecord>(),
+    archivedSkus: new Set<string>(),
     lastImportAt: null,
   };
   store.set(userId, created);
@@ -94,10 +97,18 @@ async function ensureTables(): Promise<void> {
       sku TEXT NOT NULL,
       product_payload JSONB NOT NULL,
       imported_at TIMESTAMPTZ NOT NULL,
+      archived_at TIMESTAMPTZ NULL,
       created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
       PRIMARY KEY (user_id, sku)
     )
+    `
+  );
+
+  await query(
+    `
+    ALTER TABLE ${PRODUCTS_TABLE}
+    ADD COLUMN IF NOT EXISTS archived_at TIMESTAMPTZ NULL
     `
   );
 
@@ -115,6 +126,10 @@ async function ensureTables(): Promise<void> {
   await query(
     `CREATE INDEX IF NOT EXISTS idx_${PRODUCTS_TABLE}_user_updated
      ON ${PRODUCTS_TABLE}(user_id, updated_at DESC)`
+  );
+  await query(
+    `CREATE INDEX IF NOT EXISTS idx_${PRODUCTS_TABLE}_user_archived_updated
+     ON ${PRODUCTS_TABLE}(user_id, archived_at, updated_at DESC)`
   );
 
   globalThis.__ecomviper_walmart_product_tables_checked__ = true;
@@ -135,9 +150,9 @@ export async function listPersistedWalmartProducts(userId: string): Promise<Walm
 
     const rows = await query<WalmartProductRow>(
       `
-      SELECT user_id, sku, product_payload, imported_at, updated_at
+      SELECT user_id, sku, product_payload, imported_at, updated_at, archived_at
       FROM ${PRODUCTS_TABLE}
-      WHERE user_id = $1
+      WHERE user_id = $1 AND archived_at IS NULL
       ORDER BY updated_at DESC, sku ASC
       `,
       [userId]
@@ -154,15 +169,19 @@ export async function listPersistedWalmartProducts(userId: string): Promise<Walm
   }
 }
 
-export async function getPersistedWalmartProductBySku(
-  userId: string,
-  sku: string
-): Promise<WalmartProductRecord | null> {
+export async function getPersistedWalmartProductBySkuWithArchiveState(input: {
+  userId: string;
+  sku: string;
+}): Promise<{ product: WalmartProductRecord | null; archived: boolean }> {
+  const { userId, sku } = input;
   const normalizedSku = normalizeSku(sku);
 
   if (allowFallbackStore()) {
     const state = getFallbackUserState(userId);
-    return state.productsBySku.get(normalizedSku) ?? null;
+    if (state.archivedSkus.has(normalizedSku)) {
+      return { product: null, archived: true };
+    }
+    return { product: state.productsBySku.get(normalizedSku) ?? null, archived: false };
   }
 
   if (!dbConfigured()) {
@@ -174,7 +193,7 @@ export async function getPersistedWalmartProductBySku(
 
     const rows = await query<WalmartProductRow>(
       `
-      SELECT user_id, sku, product_payload, imported_at, updated_at
+      SELECT user_id, sku, product_payload, imported_at, updated_at, archived_at
       FROM ${PRODUCTS_TABLE}
       WHERE user_id = $1 AND sku = $2
       LIMIT 1
@@ -182,13 +201,29 @@ export async function getPersistedWalmartProductBySku(
       [userId, normalizedSku]
     );
 
-    return rows[0]?.product_payload ?? null;
+    const row = rows[0];
+    if (!row) {
+      return { product: null, archived: false };
+    }
+    if (row.archived_at) {
+      return { product: null, archived: true };
+    }
+
+    return { product: row.product_payload ?? null, archived: false };
   } catch (error) {
     if (isUndefinedRelationError(error, PRODUCTS_TABLE) || isUndefinedRelationError(error, STATE_TABLE)) {
       throw tableMissingError();
     }
     throw error;
   }
+}
+
+export async function getPersistedWalmartProductBySku(
+  userId: string,
+  sku: string
+): Promise<WalmartProductRecord | null> {
+  const lookup = await getPersistedWalmartProductBySkuWithArchiveState({ userId, sku });
+  return lookup.product;
 }
 
 export async function replacePersistedWalmartProducts(input: {
@@ -200,9 +235,13 @@ export async function replacePersistedWalmartProducts(input: {
 
   if (allowFallbackStore()) {
     const state = getFallbackUserState(input.userId);
-    state.productsBySku = new Map<string, WalmartProductRecord>(
-      input.products.map((product) => [normalizeSku(product.sku), product])
-    );
+    const nextProductsBySku = new Map<string, WalmartProductRecord>();
+    for (const product of input.products) {
+      const normalizedSku = normalizeSku(product.sku);
+      if (state.archivedSkus.has(normalizedSku)) continue;
+      nextProductsBySku.set(normalizedSku, product);
+    }
+    state.productsBySku = nextProductsBySku;
     state.lastImportAt = importedAt;
     return;
   }
@@ -222,19 +261,20 @@ export async function replacePersistedWalmartProducts(input: {
     const skus = Array.from(normalizedProductsBySku.keys());
 
     if (skus.length === 0) {
-      await query(`DELETE FROM ${PRODUCTS_TABLE} WHERE user_id = $1`, [input.userId]);
+      await query(`DELETE FROM ${PRODUCTS_TABLE} WHERE user_id = $1 AND archived_at IS NULL`, [input.userId]);
     } else {
       for (const [normalizedSku, product] of normalizedProductsBySku.entries()) {
         await query(
           `
           INSERT INTO ${PRODUCTS_TABLE}
-            (user_id, sku, product_payload, imported_at, created_at, updated_at)
+            (user_id, sku, product_payload, imported_at, archived_at, created_at, updated_at)
           VALUES
-            ($1, $2, $3::jsonb, $4::timestamptz, now(), now())
+            ($1, $2, $3::jsonb, $4::timestamptz, null, now(), now())
           ON CONFLICT (user_id, sku)
           DO UPDATE SET
             product_payload = EXCLUDED.product_payload,
             imported_at = EXCLUDED.imported_at,
+            archived_at = ${PRODUCTS_TABLE}.archived_at,
             updated_at = now()
           `,
           [input.userId, normalizedSku, JSON.stringify(product), importedAt]
@@ -243,7 +283,7 @@ export async function replacePersistedWalmartProducts(input: {
 
       await query(
         `DELETE FROM ${PRODUCTS_TABLE}
-         WHERE user_id = $1 AND NOT (sku = ANY($2::text[]))`,
+         WHERE user_id = $1 AND archived_at IS NULL AND NOT (sku = ANY($2::text[]))`,
         [input.userId, skus]
       );
     }
@@ -295,10 +335,53 @@ export async function getPersistedWalmartLastImportAt(userId: string): Promise<s
   }
 }
 
+export async function archivePersistedWalmartProductBySku(input: {
+  userId: string;
+  sku: string;
+}): Promise<boolean> {
+  const normalizedSku = normalizeSku(input.sku);
+  if (!normalizedSku) return false;
+
+  if (allowFallbackStore()) {
+    const state = getFallbackUserState(input.userId);
+    const existing = state.productsBySku.get(normalizedSku);
+    if (!existing) return false;
+    state.productsBySku.delete(normalizedSku);
+    state.archivedSkus.add(normalizedSku);
+    return true;
+  }
+
+  if (!dbConfigured()) {
+    throw databaseUnavailableError();
+  }
+
+  try {
+    await ensureTables();
+
+    const rows = await query<{ sku: string }>(
+      `
+      UPDATE ${PRODUCTS_TABLE}
+      SET archived_at = now(), updated_at = now()
+      WHERE user_id = $1 AND sku = $2 AND archived_at IS NULL
+      RETURNING sku
+      `,
+      [input.userId, normalizedSku]
+    );
+
+    return rows.length > 0;
+  } catch (error) {
+    if (isUndefinedRelationError(error, PRODUCTS_TABLE) || isUndefinedRelationError(error, STATE_TABLE)) {
+      throw tableMissingError();
+    }
+    throw error;
+  }
+}
+
 export async function clearPersistedWalmartProducts(userId: string): Promise<void> {
   if (allowFallbackStore()) {
     const state = getFallbackUserState(userId);
     state.productsBySku.clear();
+    state.archivedSkus.clear();
     state.lastImportAt = null;
     return;
   }

@@ -5,10 +5,32 @@ export interface ProductFilterParams {
   filter?: string;
 }
 
-export function filterWalmartProducts(
-  products: WalmartProductRecord[],
+type DraftAwareProduct = WalmartProductRecord & {
+  hasDraftChanges?: boolean;
+  draftStatus?: string | null;
+  draftPublishStatus?: string | null;
+};
+
+function hasPendingDraft(product: DraftAwareProduct): boolean {
+  if (product.hasDraftChanges) return true;
+
+  const draftStatus = (product.draftStatus ?? "").trim().toLowerCase();
+  const draftPublishStatus = (product.draftPublishStatus ?? "").trim().toLowerCase();
+
+  if (draftStatus === "draft" || draftStatus === "validated" || draftStatus === "staged") {
+    return true;
+  }
+  if (draftPublishStatus === "pending" || draftPublishStatus === "validated" || draftPublishStatus === "staged") {
+    return true;
+  }
+
+  return product.status === "draft";
+}
+
+export function filterWalmartProducts<T extends WalmartProductRecord>(
+  products: T[],
   params: ProductFilterParams
-): WalmartProductRecord[] {
+): T[] {
   const query = (params.query ?? "").trim().toLowerCase();
   const filter = (params.filter ?? "all").trim().toLowerCase();
 
@@ -39,7 +61,7 @@ export function filterWalmartProducts(
     if (filter === "missing_attributes") return Object.keys(product.attributes).length === 0;
     if (filter === "price_missing") return product.price <= 0;
     if (filter === "sync_failed") return product.status === "sync_failed";
-    if (filter === "draft_pending") return product.status === "draft";
+    if (filter === "draft_pending") return hasPendingDraft(product as DraftAwareProduct);
     return true;
   });
 }
@@ -48,5 +70,5 @@ export function filterWalmartProductsWithType<T extends WalmartProductRecord>(
   products: T[],
   params: ProductFilterParams
 ): T[] {
-  return filterWalmartProducts(products, params) as T[];
+  return filterWalmartProducts(products, params);
 }

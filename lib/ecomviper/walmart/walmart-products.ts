@@ -8,7 +8,7 @@ import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-cli
 import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
-import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
+import { discardWalmartDraftsForSkuForUser, listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
   getProductBySku,
@@ -19,9 +19,11 @@ import {
   replaceProducts,
 } from "@/lib/ecomviper/walmart/walmart-store";
 import {
+  archivePersistedWalmartProductBySku,
   clearPersistedWalmartProducts,
   getPersistedWalmartLastImportAt,
   getPersistedWalmartProductBySku,
+  getPersistedWalmartProductBySkuWithArchiveState,
   listPersistedWalmartProducts,
   replacePersistedWalmartProducts,
 } from "@/lib/ecomviper/walmart/walmart-product-repository";
@@ -57,6 +59,11 @@ export async function getWalmartProductBySkuForUser(
   return getPersistedWalmartProductBySku(userId, sku);
 }
 
+export async function isWalmartProductArchivedForUser(userId: string, sku: string): Promise<boolean> {
+  const lookup = await getPersistedWalmartProductBySkuWithArchiveState({ userId, sku });
+  return lookup.archived;
+}
+
 export async function replaceWalmartProductsForUser(input: {
   userId: string;
   products: WalmartProductRecord[];
@@ -69,6 +76,59 @@ export async function replaceWalmartProductsForUser(input: {
 export async function clearWalmartProductsForUser(userId: string): Promise<void> {
   await clearPersistedWalmartProducts(userId);
   replaceProducts([], null);
+}
+
+export interface WalmartLocalProductRemovalResult {
+  sku: string;
+  removed: boolean;
+  archived: boolean;
+  affectedDraftCount: number;
+  productTitle: string;
+}
+
+export async function removeWalmartProductFromCatalogForUser(input: {
+  userId: string;
+  sku: string;
+}): Promise<WalmartLocalProductRemovalResult | null> {
+  const lookup = await getPersistedWalmartProductBySkuWithArchiveState({
+    userId: input.userId,
+    sku: input.sku,
+  });
+  if (!lookup.product) {
+    return null;
+  }
+
+  const affectedDraftCount = await discardWalmartDraftsForSkuForUser(input.userId, lookup.product.sku);
+  const removed = await archivePersistedWalmartProductBySku({
+    userId: input.userId,
+    sku: lookup.product.sku,
+  });
+
+  if (removed) {
+    appendActivityLog({
+      marketplace: "walmart",
+      sku: lookup.product.sku,
+      actionType: "product_remove_local",
+      result: "warning",
+      message:
+        affectedDraftCount > 0
+          ? `Product removed from EcomViper catalog. ${affectedDraftCount} local draft(s) were discarded.`
+          : "Product removed from EcomViper catalog.",
+      afterPayload: {
+        sku: lookup.product.sku,
+        title: lookup.product.title,
+        affectedDraftCount,
+      },
+    });
+  }
+
+  return {
+    sku: lookup.product.sku,
+    removed,
+    archived: removed,
+    affectedDraftCount,
+    productTitle: lookup.product.title,
+  };
 }
 
 function asString(value: unknown): string {

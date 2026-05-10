@@ -13,6 +13,8 @@ function asEpoch(value: string): number {
 export interface WalmartEffectiveProductRecord extends WalmartProductRecord {
   hasDraftChanges?: boolean;
   draftUpdatedAt?: string | null;
+  draftStatus?: WalmartDraftRecord["status"] | null;
+  draftPublishStatus?: WalmartDraftRecord["publishStatus"] | null;
   liveBrand?: string;
   liveTitle?: string;
   livePrice?: number;
@@ -48,6 +50,8 @@ export function mergeProductsWithLatestDrafts(input: {
       ...merged,
       hasDraftChanges: Boolean(latestDraft),
       draftUpdatedAt: latestDraft?.updatedAt ?? null,
+      draftStatus: latestDraft?.status ?? null,
+      draftPublishStatus: latestDraft?.publishStatus ?? null,
       liveBrand: product.brand,
       liveTitle: product.title,
       livePrice: product.price,

@@ -25,9 +25,27 @@ const filters = [
 ] as const;
 
 function formatInventory(product: WalmartEffectiveProductRecord): string {
-  if (product.inventoryStatus === "unknown") return "Not synced";
+  if (product.inventoryStatus === "unknown") return "—";
   if (product.inventoryStatus === "out_of_stock") return "Out of stock";
   return String(product.inventoryQuantity);
+}
+
+function normalizeSkuKey(sku: string): string {
+  return sku.trim().toUpperCase();
+}
+
+type SkuSortDirection = "none" | "asc" | "desc";
+
+function compareSkuNatural(
+  left: WalmartEffectiveProductRecord,
+  right: WalmartEffectiveProductRecord,
+  direction: Exclude<SkuSortDirection, "none">
+): number {
+  const compared = left.sku.localeCompare(right.sku, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+  return direction === "asc" ? compared : compared * -1;
 }
 
 function formatImageStatus(product: WalmartEffectiveProductRecord): string {
@@ -51,12 +69,65 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string>("all");
+  const [skuSortDirection, setSkuSortDirection] = useState<SkuSortDirection>("none");
   const [message, setMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
+  const [locallyRemovedSkuKeys, setLocallyRemovedSkuKeys] = useState<string[]>([]);
+  const [removeTarget, setRemoveTarget] = useState<{
+    sku: string;
+    title: string;
+    hasDraftChanges: boolean;
+  } | null>(null);
+  const [isRemoving, setIsRemoving] = useState(false);
 
-  const filtered = useMemo(
-    () => filterWalmartProductsWithType(products, { query, filter }),
-    [products, query, filter]
+  const allProducts = useMemo(
+    () =>
+      products.filter((product) => !locallyRemovedSkuKeys.includes(normalizeSkuKey(product.sku))),
+    [products, locallyRemovedSkuKeys]
+  );
+
+  const visibleProducts = useMemo(() => {
+    const filteredProducts = filterWalmartProductsWithType(allProducts, { query, filter });
+    if (skuSortDirection === "none") return filteredProducts;
+    return [...filteredProducts].sort((left, right) => compareSkuNatural(left, right, skuSortDirection));
+  }, [allProducts, query, filter, skuSortDirection]);
+
+  const hasImportedProducts = allProducts.length > 0;
+  const isImportEmpty = !hasImportedProducts;
+  const isFilteredEmpty = hasImportedProducts && visibleProducts.length === 0;
+
+  const emptyStateMessage = useMemo(() => {
+    if (isImportEmpty) {
+      return "No Walmart products imported yet. Connect Walmart, then import your products.";
+    }
+    if (!isFilteredEmpty) return null;
+    if (filter === "draft_pending") {
+      return "No products with pending drafts match this filter.";
+    }
+    return "No products match the selected filter.";
+  }, [filter, isFilteredEmpty, isImportEmpty]);
+
+  const skuSortLabel = useMemo(() => {
+    if (skuSortDirection === "asc") return "SKU ↑";
+    if (skuSortDirection === "desc") return "SKU ↓";
+    return "SKU ↕";
+  }, [skuSortDirection]);
+
+  const skuAriaSort = useMemo(() => {
+    if (skuSortDirection === "asc") return "ascending";
+    if (skuSortDirection === "desc") return "descending";
+    return "none";
+  }, [skuSortDirection]);
+
+  const draftLinkHrefBySku = useMemo(
+    () =>
+      new Map<string, string>(
+        allProducts.map((product) => [
+          product.sku,
+          product.hasDraftChanges ? `/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}` : "/apps/ecomviper/walmart/drafts",
+        ])
+      ),
+    [allProducts]
   );
 
   async function handleImport() {
@@ -113,6 +184,54 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
     setMessage(`Sync request queued for ${sku}. Run Import Products to refresh catalog data.`);
   }
 
+  function toggleSkuSort() {
+    setSkuSortDirection((current) => {
+      if (current === "none") return "asc";
+      if (current === "asc") return "desc";
+      return "asc";
+    });
+  }
+
+  async function confirmRemoveFromCatalog() {
+    if (!removeTarget) return;
+
+    setIsRemoving(true);
+    setMessage(null);
+
+    try {
+      const response = await fetch(`/api/ecomviper/walmart/products/${encodeURIComponent(removeTarget.sku)}`, {
+        method: "DELETE",
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        sku?: string;
+        affectedDraftCount?: number;
+        error?: { message?: string };
+      };
+
+      if (!response.ok || !payload.ok || !payload.sku) {
+        setMessage(payload.error?.message ?? "Could not remove product from local EcomViper catalog.");
+        return;
+      }
+
+      const skuKey = normalizeSkuKey(payload.sku);
+      setLocallyRemovedSkuKeys((current) => (current.includes(skuKey) ? current : [...current, skuKey]));
+      const affectedDraftCount = payload.affectedDraftCount ?? 0;
+      setMessage(
+        affectedDraftCount > 0
+          ? `Removed ${payload.sku} from EcomViper catalog. ${affectedDraftCount} local draft(s) were removed.`
+          : `Removed ${payload.sku} from EcomViper catalog.`
+      );
+      setRemoveTarget(null);
+      router.refresh();
+    } catch {
+      setMessage("Could not remove product from local EcomViper catalog.");
+    } finally {
+      setIsRemoving(false);
+    }
+  }
+
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-products-page">
       <WalmartPageHeader
@@ -158,11 +277,20 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
               <tr>
                 <th className="py-2">Image</th>
-                <th className="py-2">SKU</th>
+                <th className="py-2" aria-sort={skuAriaSort}>
+                  <button
+                    type="button"
+                    onClick={toggleSkuSort}
+                    className="inline-flex items-center rounded-md px-1 py-0.5 text-left text-xs uppercase tracking-[0.1em] text-[#64748B] hover:text-[#0F172A]"
+                    aria-label="Sort by SKU"
+                  >
+                    {skuSortLabel}
+                  </button>
+                </th>
                 <th className="py-2">Title</th>
                 <th className="py-2">Brand</th>
                 <th className="py-2">Price</th>
-                <th className="py-2">Inventory</th>
+                <th className="py-2 text-center" data-testid="ecomviper-walmart-products-inventory-header">Inventory</th>
                 <th className="py-2">Status</th>
                 <th className="py-2">Last Synced</th>
                 <th className="py-2">Issues</th>
@@ -170,7 +298,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
               </tr>
             </thead>
             <tbody>
-              {filtered.map((product) => (
+              {visibleProducts.map((product) => (
                 <tr key={product.sku} className="border-t border-[#E2E8F0] align-top">
                   <td className="py-2 pr-2">
                     {product.imageUrl ? (
@@ -220,7 +348,9 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                     </div>
                   </td>
                   <td className="py-2 pr-2 text-[#334155]">${product.price.toFixed(2)}</td>
-                  <td className="py-2 pr-2 text-[#334155]">{formatInventory(product)}</td>
+                  <td className="py-2 px-2 text-center text-[#334155]" data-testid="ecomviper-walmart-products-inventory-cell">
+                    {formatInventory(product)}
+                  </td>
                   <td className="py-2 pr-2"><StatusBadge status={product.status} /></td>
                   <td className="py-2 pr-2 text-[#334155]">{product.lastSyncedAt}</td>
                   <td className="py-2 pr-2 text-[#334155]">{product.issues.join(", ") || "None"}</td>
@@ -230,7 +360,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                         Actions
                         <span aria-hidden="true">▾</span>
                       </summary>
-                      <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-[#D9E4F0] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.16)]">
+                      <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[#D9E4F0] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.16)]">
                         <Link
                           href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
                           className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
@@ -238,10 +368,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                           Edit Product
                         </Link>
                         <Link
-                          href="/apps/ecomviper/walmart/drafts"
+                          href={draftLinkHrefBySku.get(product.sku) ?? "/apps/ecomviper/walmart/drafts"}
                           className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
                         >
-                          View Drafts
+                          {product.hasDraftChanges ? "View Draft" : "View Drafts"}
                         </Link>
                         <Link
                           href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
@@ -256,15 +386,29 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                         >
                           Sync
                         </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setRemoveTarget({
+                              sku: product.sku,
+                              title: product.title,
+                              hasDraftChanges: Boolean(product.hasDraftChanges),
+                            })
+                          }
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
+                          data-testid={`ecomviper-walmart-remove-${encodeURIComponent(product.sku)}`}
+                        >
+                          Remove from EcomViper catalog
+                        </button>
                       </div>
                     </details>
                   </td>
                 </tr>
               ))}
-              {!filtered.length ? (
+              {emptyStateMessage ? (
                 <tr className="border-t border-[#E2E8F0]">
                   <td colSpan={10} className="py-6 text-center text-sm text-[#64748B]">
-                    No Walmart products imported yet. Connect Walmart, then import your products.
+                    {emptyStateMessage}
                   </td>
                 </tr>
               ) : null}
@@ -272,6 +416,44 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           </table>
         </div>
       </section>
+
+      {removeTarget ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0F172A]/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xl rounded-2xl border border-[#D9E4F0] bg-white p-5 shadow-[0_22px_48px_rgba(15,23,42,0.28)]">
+            <h2 className="text-lg font-semibold text-[#0F172A]">Remove product from EcomViper catalog?</h2>
+            <p className="mt-2 text-sm text-[#334155]">
+              This removes the product from your EcomViper workspace only. It will not delete, retire, unpublish, or change the product on Walmart.
+            </p>
+            {removeTarget.hasDraftChanges ? (
+              <p className="mt-2 text-sm text-[#9A3412]">
+                Any local EcomViper drafts for this product will also be removed.
+              </p>
+            ) : null}
+            <div className="mt-4 rounded-lg border border-[#E2E8F0] bg-[#F8FAFC] p-3 text-sm text-[#334155]">
+              <p><span className="font-medium text-[#0F172A]">SKU:</span> {removeTarget.sku}</p>
+              <p><span className="font-medium text-[#0F172A]">Title:</span> {removeTarget.title}</p>
+            </div>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setRemoveTarget(null)}
+                disabled={isRemoving}
+                className="rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm text-[#334155]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmRemoveFromCatalog}
+                disabled={isRemoving}
+                className="rounded-lg border border-rose-700 bg-rose-700 px-3 py-2 text-sm text-white"
+              >
+                {isRemoving ? "Removing..." : "Remove from EcomViper"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
