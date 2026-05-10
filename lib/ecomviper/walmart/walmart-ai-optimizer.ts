@@ -1,6 +1,10 @@
 import "server-only";
 
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
+import {
+  assessWalmartListingQuality,
+  mergeWalmartAiSuggestionIntoProduct,
+} from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 const forbiddenTerms = [
@@ -23,10 +27,21 @@ const OPENAI_MODEL = process.env.WALMART_OPENAI_MODEL?.trim() || "gpt-4o-mini";
 interface GeneratedSuggestionPayload {
   suggestedTitle?: unknown;
   suggestedShortDescription?: unknown;
+  suggestedShortDesc?: unknown;
+  shortDescription?: unknown;
   suggestedDescription?: unknown;
+  suggestedLongDescription?: unknown;
+  longDescription?: unknown;
+  description?: unknown;
   suggestedBullets?: unknown;
+  suggestedBulletPoints?: unknown;
+  bulletPoints?: unknown;
+  keyFeatures?: unknown;
   suggestedBrand?: unknown;
+  brand?: unknown;
   suggestedAttributes?: unknown;
+  attributes?: unknown;
+  keyAttributes?: unknown;
   missingAttributes?: unknown;
   complianceWarnings?: unknown;
   qualityScore?: unknown;
@@ -50,6 +65,30 @@ function toStringArray(value: unknown): string[] {
 function clampScore(value: unknown): number | null {
   if (typeof value !== "number" || !Number.isFinite(value)) return null;
   return Math.max(1, Math.min(100, Math.round(value)));
+}
+
+function firstNonEmptyString(values: unknown[]): string {
+  for (const value of values) {
+    const normalized = toNonEmptyString(value);
+    if (normalized) return normalized;
+  }
+  return "";
+}
+
+function firstStringArray(values: unknown[]): string[] {
+  for (const value of values) {
+    const normalized = toStringArray(value);
+    if (normalized.length > 0) return normalized;
+  }
+  return [];
+}
+
+function mergeAttributeAliases(payload: GeneratedSuggestionPayload): Record<string, string> {
+  return {
+    ...toAttributeRecord(payload.suggestedAttributes),
+    ...toAttributeRecord(payload.attributes),
+    ...toAttributeRecord(payload.keyAttributes),
+  };
 }
 
 function makeSafeTitle(product: WalmartProductRecord) {
@@ -239,27 +278,46 @@ function toSuggestionFromGenerated(
   const fallback = buildDeterministicAiSuggestion(product);
   const payload = generated as GeneratedSuggestionPayload;
 
-  const suggestedTitle = toNonEmptyString(payload.suggestedTitle) || fallback.suggestedTitle;
+  const suggestedTitle =
+    firstNonEmptyString([payload.suggestedTitle]) || fallback.suggestedTitle;
   const suggestedShortDescription =
-    toNonEmptyString(payload.suggestedShortDescription) ||
+    firstNonEmptyString([
+      payload.suggestedShortDescription,
+      payload.suggestedShortDesc,
+      payload.shortDescription,
+    ]) ||
     fallback.suggestedShortDescription ||
     fallbackShortDescription(product, fallback.suggestedDescription);
-  const suggestedDescription = toNonEmptyString(payload.suggestedDescription) || fallback.suggestedDescription;
+  const suggestedDescription =
+    firstNonEmptyString([
+      payload.suggestedDescription,
+      payload.suggestedLongDescription,
+      payload.longDescription,
+      payload.description,
+    ]) || fallback.suggestedDescription;
 
-  const suggestedBulletsRaw = toStringArray(payload.suggestedBullets);
+  const suggestedBulletsRaw = firstStringArray([
+    payload.suggestedBullets,
+    payload.suggestedBulletPoints,
+    payload.bulletPoints,
+    payload.keyFeatures,
+  ]);
   const suggestedBullets =
     suggestedBulletsRaw.length >= 3
       ? suggestedBulletsRaw.slice(0, 6)
       : fallback.suggestedBullets;
 
-  const suggestedBrandRaw = toNonEmptyString(payload.suggestedBrand);
+  const suggestedBrandRaw = firstNonEmptyString([
+    payload.suggestedBrand,
+    payload.brand,
+  ]);
   const suggestedBrand =
     suggestedBrandRaw && suggestedBrandRaw.toLowerCase() !== "unknown"
       ? suggestedBrandRaw
       : fallback.suggestedBrand;
   const suggestedAttributes = {
     ...(fallback.suggestedAttributes ?? {}),
-    ...toAttributeRecord(payload.suggestedAttributes),
+    ...mergeAttributeAliases(payload),
   };
 
   const missingAttributes = toStringArray(payload.missingAttributes);
@@ -308,6 +366,18 @@ function applyComplianceGuardrails(product: WalmartProductRecord, suggestion: Wa
   };
 }
 
+function alignSuggestionQualityScore(
+  product: WalmartProductRecord,
+  suggestion: WalmartAiSuggestion
+): WalmartAiSuggestion {
+  const projected = mergeWalmartAiSuggestionIntoProduct(product, suggestion);
+  const projectedQuality = assessWalmartListingQuality(projected);
+  return {
+    ...suggestion,
+    qualityScore: projectedQuality.score,
+  };
+}
+
 export async function generateWalmartAiSuggestion(params: {
   product: WalmartProductRecord;
   openAiApiKey: string;
@@ -323,5 +393,6 @@ export async function generateWalmartAiSuggestion(params: {
   });
 
   const suggestion = toSuggestionFromGenerated(params.product, generated);
-  return applyComplianceGuardrails(params.product, suggestion);
+  const guarded = applyComplianceGuardrails(params.product, suggestion);
+  return alignSuggestionQualityScore(params.product, guarded);
 }

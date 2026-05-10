@@ -7,6 +7,8 @@ import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmar
 import {
   assessWalmartListingQuality,
   buildDeterministicOptimizationProposal,
+  mergeWalmartAiSuggestionIntoProduct,
+  mergeWalmartDraftPayloadIntoProduct,
 } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import {
   readOptimizerProposalFromDraft,
@@ -63,6 +65,7 @@ type GenerateSuggestionResponse = {
 };
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
+type InlineAiOutcome = "improved" | "unchanged" | "worse";
 
 const INLINE_AI_LOADING_MESSAGE = "Optimizing product with AI...";
 
@@ -536,11 +539,6 @@ export default function ProductEditorClient({
     useState<WalmartAiSuggestion | null>(null);
   const optimizingWithAi = inlineAiState === "loading";
 
-  const listingQuality = useMemo(() => assessWalmartListingQuality(product), [product]);
-  const deterministicProposal = useMemo(
-    () => buildDeterministicOptimizationProposal(product, listingQuality),
-    [product, listingQuality]
-  );
   const stagedOptimizations = useMemo(() => {
     const indexed = new Map<string, WalmartOptimizationProposalRecord>();
     for (const draft of stagedDrafts) {
@@ -566,7 +564,14 @@ export default function ProductEditorClient({
     try {
       const parsed = JSON.parse(form.attributesJson);
       if (parsed && typeof parsed === "object") {
-        parsedAttributes = parsed as Record<string, string>;
+        const mapped: Record<string, string> = {};
+        for (const [key, raw] of Object.entries(parsed as Record<string, unknown>)) {
+          const normalizedKey = key.trim();
+          const normalizedValue = asText(raw)?.trim() ?? "";
+          if (!normalizedKey || !normalizedValue) continue;
+          mapped[normalizedKey] = normalizedValue;
+        }
+        parsedAttributes = mapped;
       }
     } catch {
       parsedAttributes = {};
@@ -591,6 +596,37 @@ export default function ProductEditorClient({
       attributes: parsedAttributes,
     };
   }, [form]);
+
+  const scoringProduct = useMemo(
+    () => mergeWalmartDraftPayloadIntoProduct(product, preview),
+    [product, preview]
+  );
+  const listingQuality = useMemo(
+    () => assessWalmartListingQuality(scoringProduct),
+    [scoringProduct]
+  );
+  const deterministicProposal = useMemo(
+    () => buildDeterministicOptimizationProposal(scoringProduct, listingQuality),
+    [scoringProduct, listingQuality]
+  );
+  const projectedQuality = useMemo(() => {
+    if (!inlineAiSuggestion) return null;
+    const projectedProduct = mergeWalmartAiSuggestionIntoProduct(
+      scoringProduct,
+      inlineAiSuggestion
+    );
+    return assessWalmartListingQuality(projectedProduct);
+  }, [inlineAiSuggestion, scoringProduct]);
+  const projectedQualityDelta = projectedQuality
+    ? projectedQuality.score - listingQuality.score
+    : 0;
+  const inlineAiOutcome: InlineAiOutcome | null = projectedQuality
+    ? projectedQualityDelta > 0
+      ? "improved"
+      : projectedQualityDelta < 0
+        ? "worse"
+        : "unchanged"
+    : null;
 
   const complianceValidation = useMemo(
     () => evaluateWalmartListingCompliance(preview),
@@ -716,7 +752,7 @@ export default function ProductEditorClient({
 
       setInlineAiSuggestion(payload.suggestion);
       setInlineAiState("success");
-      setInlineAiMessage("AI suggestions are ready. Review and apply to your draft.");
+      setInlineAiMessage("AI suggestions are ready. Compare score impact before applying.");
     } catch {
       setInlineAiState("error");
       setInlineAiMessage("Failed to generate AI suggestions. Try again.");
@@ -871,10 +907,27 @@ export default function ProductEditorClient({
     readiness.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
+  function handleReviewAiChanges() {
+    revealInlineAiPanel();
+  }
+
   const topIssues = product.issues.filter((issue) => issue.trim().length > 0).slice(0, 3);
-  const qualityDelta = inlineAiSuggestion
-    ? inlineAiSuggestion.qualityScore - listingQuality.score
-    : 0;
+  const aiResultHeaderCopy =
+    inlineAiOutcome === "improved"
+      ? "Optimization improved listing"
+      : inlineAiOutcome === "worse"
+        ? "Suggestions need review - not recommended"
+        : "Suggestions available";
+
+  const aiResultMessage =
+    inlineAiOutcome === "improved"
+      ? "These suggestions increase listing quality and are ready to apply."
+      : inlineAiOutcome === "worse"
+        ? "These suggestions would lower the listing quality score, so EcomViper did not recommend applying them."
+        : "These suggestions keep listing quality flat. Review changes before applying.";
+  const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
+  const scoreDelta = projectedScore - listingQuality.score;
+  const scoreDeltaLabel = scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta);
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-product-editor-page">
@@ -1001,7 +1054,13 @@ export default function ProductEditorClient({
           data-testid="ecomviper-walmart-inline-ai-state"
         >
           {inlineAiState === "loading" ? "Optimizing product with AI..." : null}
-          {inlineAiState === "success" ? "AI suggestions are ready to review inline." : null}
+          {inlineAiState === "success"
+            ? inlineAiOutcome === "worse"
+              ? "Suggestions need review - not recommended."
+              : inlineAiOutcome === "improved"
+                ? "Optimization improved listing."
+                : "Suggestions are ready to review inline."
+            : null}
           {inlineAiState === "error" ? "Optimization failed. Review the message below and try again." : null}
           {inlineAiState === "missing_key" ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE : null}
           {inlineAiState === "idle"
@@ -1262,15 +1321,130 @@ export default function ProductEditorClient({
 
           {inlineAiSuggestion ? (
             <div className="mt-4 space-y-3" data-testid="ecomviper-walmart-inline-ai-results">
-              <div className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
-                <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Optimization complete</p>
-                <p className="mt-1 text-sm text-[#334155]">
-                  Projected score: {inlineAiSuggestion.qualityScore}/100
-                  {qualityDelta !== 0 ? ` (${qualityDelta > 0 ? "+" : ""}${qualityDelta})` : ""}
+              <div
+                className={`rounded-xl border p-3 ${
+                  inlineAiOutcome === "worse"
+                    ? "border-amber-200 bg-amber-50"
+                    : "border-[#D9E4F0] bg-[#F8FBFF]"
+                }`}
+              >
+                <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">{aiResultHeaderCopy}</p>
+                <p className="mt-1 text-sm font-medium text-[#0F172A]">
+                  Current: {listingQuality.score}/100 → Projected: {projectedScore}/100
                 </p>
+                <p className="mt-1 text-sm text-[#334155]">Change: {scoreDeltaLabel}</p>
+                <p className="mt-1 text-sm text-[#475569]">{aiResultMessage}</p>
+
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {inlineAiOutcome === "improved" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleApplyInlineAiSuggestion}
+                        data-testid="ecomviper-walmart-apply-ai-suggestions"
+                        className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+                      >
+                        Apply to Draft
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleReviewAiChanges}
+                        className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+                      >
+                        Review Changes
+                      </button>
+                    </>
+                  ) : null}
+
+                  {inlineAiOutcome === "unchanged" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleReviewAiChanges}
+                        className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white"
+                      >
+                        Review Changes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleApplyInlineAiSuggestion}
+                        data-testid="ecomviper-walmart-apply-ai-suggestions"
+                        className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+                      >
+                        Apply to Draft
+                      </button>
+                    </>
+                  ) : null}
+
+                  {inlineAiOutcome === "worse" ? (
+                    <>
+                      <button
+                        type="button"
+                        onClick={handleApplyInlineAiSuggestion}
+                        data-testid="ecomviper-walmart-apply-ai-suggestions"
+                        className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-800"
+                      >
+                        Apply Anyway to Draft
+                      </button>
+                    </>
+                  ) : null}
+
+                  <button
+                    type="button"
+                    onClick={runInlineOptimization}
+                    disabled={optimizingWithAi}
+                    className={`rounded-lg px-3 py-2 text-sm disabled:opacity-50 ${
+                      inlineAiOutcome === "worse"
+                        ? "border border-[#0F172A] bg-[#0F172A] text-white"
+                        : "border border-[#D9E4F0] bg-white text-[#0F172A]"
+                    }`}
+                  >
+                    Regenerate
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleDismissInlineAiSuggestion}
+                    className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+                  >
+                    Dismiss
+                  </button>
+                </div>
               </div>
 
               <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
+                <h3 className="text-sm font-semibold text-[#0F172A]">Change summary</h3>
+                <ul className="mt-2 space-y-1 text-sm text-[#334155]">
+                  <li>
+                    Title: <span className="text-[#64748B]">Current:</span>{" "}
+                    {form.title.trim() || "Missing"} →{" "}
+                    <span className="text-[#64748B]">Suggested:</span> {inlineAiSuggestion.suggestedTitle}
+                  </li>
+                  <li>
+                    Short description: <span className="text-[#64748B]">Current:</span>{" "}
+                    {form.shortDescription.trim() ? "Available" : "Missing"} →{" "}
+                    <span className="text-[#64748B]">Suggested:</span>{" "}
+                    {inlineAiSuggestion.suggestedShortDescription?.trim() ? "Added" : "No change"}
+                  </li>
+                  <li>
+                    Long description: <span className="text-[#64748B]">Current:</span>{" "}
+                    {form.longDescription.trim() ? "Available" : "Missing"} →{" "}
+                    <span className="text-[#64748B]">Suggested:</span>{" "}
+                    {inlineAiSuggestion.suggestedDescription.trim() ? "Added/updated" : "No change"}
+                  </li>
+                  <li>
+                    Bullet points: <span className="text-[#64748B]">Current:</span>{" "}
+                    {preview.bulletPoints.length || 0} →{" "}
+                    <span className="text-[#64748B]">Suggested:</span>{" "}
+                    {inlineAiSuggestion.suggestedBullets.length}
+                  </li>
+                  <li>
+                    Attributes: <span className="text-[#64748B]">Current:</span>{" "}
+                    {Object.keys(preview.attributes).length} →{" "}
+                    <span className="text-[#64748B]">Suggested:</span>{" "}
+                    {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
+                  </li>
+                </ul>
+
                 <h3 className="text-sm font-semibold text-[#0F172A]">Suggested title</h3>
                 <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedTitle}</p>
 
@@ -1321,32 +1495,6 @@ export default function ProductEditorClient({
                     </li>
                   )}
                 </ul>
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={handleApplyInlineAiSuggestion}
-                    data-testid="ecomviper-walmart-apply-ai-suggestions"
-                    className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-                  >
-                    Apply suggestions
-                  </button>
-                  <button
-                    type="button"
-                    onClick={runInlineOptimization}
-                    disabled={optimizingWithAi}
-                    className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
-                  >
-                    Regenerate
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleDismissInlineAiSuggestion}
-                    className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                  >
-                    Dismiss
-                  </button>
-                </div>
               </article>
             </div>
           ) : (

@@ -171,7 +171,7 @@ describe("Walmart inline optimize button workflow", () => {
 
     const successState =
       container.querySelector('[data-testid="ecomviper-walmart-inline-ai-state"]')?.textContent ?? "";
-    expect(successState).toContain("AI suggestions are ready to review inline.");
+    expect(successState).toContain("Optimization improved listing.");
     expect(container.textContent).toContain("ROC808 Daily Wellness Formula | Optimized");
 
     const applyButton = container.querySelector(
@@ -194,6 +194,197 @@ describe("Walmart inline optimize button workflow", () => {
     expect(formHtml).toContain("Optimized bullet 1");
     expect(formHtml).toContain('value="Optimized Brand"');
     expect(formHtml).toContain("Plant-based");
+    expect(container.textContent).toContain("Current:");
+    expect(container.textContent).toContain("Projected:");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows improvement safeguards when projected score beats current score even if AI payload claims low quality", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          suggestion: {
+            sku: "ROC808",
+            qualityScore: 8,
+            suggestedTitle:
+              "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+            suggestedShortDescription: "Daily mobility support with compliant listing copy.",
+            suggestedDescription:
+              "Designed for compliant listing quality with clear shopper-facing product detail.",
+            suggestedBullets: [
+              "Joint and mobility support blend",
+              "Glucosamine, chondroitin, and MSM formula",
+              "Clear daily routine guidance",
+              "Factual catalog language",
+              "Structured key feature coverage",
+            ],
+            suggestedBrand: "ROC Brand",
+            suggestedAttributes: { form: "Capsule", serving_size: "2 capsules" },
+            missingAttributes: [],
+            complianceWarnings: [],
+            disclaimer: "compliance disclaimer",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            title: "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+            shortDescription: "",
+            longDescription: "",
+            bulletPoints: [],
+            attributes: {},
+            imageStatusMessage: "Image not provided by Walmart catalog",
+            issues: ["Image not provided by Walmart catalog"],
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      optimizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Optimization improved listing");
+    expect(container.textContent).toContain("Current: 62/100");
+    expect(container.textContent).not.toContain("Projected: 8/100");
+    expect(container.textContent).toContain("Apply to Draft");
+  });
+
+  it("shows warning safeguards when projected score is worse and makes regenerate the primary action", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          suggestion: {
+            sku: "ROC808",
+            qualityScore: 95,
+            suggestedTitle: "Bad",
+            suggestedShortDescription: "Too short",
+            suggestedDescription: "Minimal",
+            suggestedBullets: ["One", "Two", "Three"],
+            suggestedBrand: "ROC Brand",
+            suggestedAttributes: { form: "Capsule", serving_size: "2 capsules" },
+            missingAttributes: [],
+            complianceWarnings: [],
+            disclaimer: "compliance disclaimer",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            title:
+              "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+            shortDescription: "Daily support short description.",
+            longDescription: "Detailed compliant listing description for marketplace shoppers.",
+            bulletPoints: ["Feature one", "Feature two", "Feature three"],
+            attributes: { form: "Capsule", serving_size: "2 capsules" },
+            imageStatusMessage: "Image not provided by Walmart catalog",
+            issues: ["Image not provided by Walmart catalog"],
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      optimizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Suggestions need review - not recommended");
+    expect(container.textContent).toContain("Apply Anyway to Draft");
+    expect(container.textContent).toContain("Regenerate");
+    expect(container.textContent).not.toContain("Optimization complete");
+  });
+
+  it("shows neutral state when projected score is unchanged", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          suggestion: {
+            sku: "ROC808",
+            qualityScore: 5,
+            suggestedTitle:
+              "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+            suggestedShortDescription: "Daily mobility support with compliant listing copy.",
+            suggestedDescription:
+              "Designed for compliant listing quality with clear shopper-facing product detail.",
+            suggestedBullets: [
+              "Joint and mobility support blend",
+              "Glucosamine, chondroitin, and MSM formula",
+              "Structured key feature coverage",
+            ],
+            suggestedBrand: "ROC Brand",
+            suggestedAttributes: { form: "Capsule", serving_size: "2 capsules" },
+            missingAttributes: [],
+            complianceWarnings: [],
+            disclaimer: "compliance disclaimer",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            title:
+              "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+            shortDescription: "Daily mobility support with compliant listing copy.",
+            longDescription:
+              "Designed for compliant listing quality with clear shopper-facing product detail.",
+            bulletPoints: [
+              "Joint and mobility support blend",
+              "Glucosamine, chondroitin, and MSM formula",
+              "Structured key feature coverage",
+            ],
+            attributes: { form: "Capsule", serving_size: "2 capsules" },
+            imageStatusMessage: "Image not provided by Walmart catalog",
+            issues: ["Image not provided by Walmart catalog"],
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      optimizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Suggestions available");
+    expect(container.textContent).toContain("Change: 0");
+    expect(container.textContent).toContain("Review Changes");
+    expect(container.textContent).toContain("Apply to Draft");
   });
 });

@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { assessWalmartListingQuality } from "@/lib/ecomviper/walmart/walmart-listing-quality";
+import {
+  assessWalmartListingQuality,
+  mergeWalmartAiSuggestionIntoProduct,
+  mergeWalmartDraftPayloadIntoProduct,
+} from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {
@@ -69,5 +73,83 @@ describe("Walmart listing quality scoring", () => {
 
     expect(assessment.recommendations.some((entry) => entry.id === "brand_missing")).toBe(true);
     expect(assessment.recommendations.some((entry) => entry.id === "title_quality")).toBe(true);
+  });
+
+  it("scores projected draft from merged AI fields instead of trusting raw AI quality number", () => {
+    const current = createProduct({
+      sku: "ROC808",
+      title: "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+      shortDescription: "",
+      longDescription: "",
+      bulletPoints: [],
+      attributes: {},
+      imageUrl: "",
+      imageStatus: "catalog_missing",
+      imageStatusMessage: "Image not provided by Walmart catalog",
+      imageSyncStatus: "not_found",
+      imageSource: "walmart_item_search",
+      issues: ["Image not provided by Walmart catalog"],
+    });
+
+    const currentAssessment = assessWalmartListingQuality(current);
+    expect(currentAssessment.score).toBe(62);
+
+    const suggestionQualityClaim = 8;
+    const projected = mergeWalmartAiSuggestionIntoProduct(current, {
+      sku: "ROC808",
+      qualityScore: suggestionQualityClaim,
+      suggestedTitle: "OPA Joint Flex Capsules with Glucosamine, Chondroitin & MSM - 60ct",
+      suggestedShortDescription: "Daily joint and mobility support.",
+      suggestedDescription:
+        "Designed for compliant listing quality with clear product benefits and factual shopper guidance.",
+      suggestedBullets: [
+        "Joint and mobility support formula",
+        "Glucosamine, chondroitin, and MSM blend",
+        "Clear daily routine guidance",
+        "Factual listing language",
+        "Structured key feature coverage",
+      ],
+      suggestedAttributes: { form: "Capsule", serving_size: "2 capsules" },
+      missingAttributes: ["ingredients_highlights"],
+      complianceWarnings: [],
+      disclaimer: "compliance disclaimer",
+    });
+
+    const projectedAssessment = assessWalmartListingQuality(projected);
+    expect(projectedAssessment.score).toBeGreaterThan(currentAssessment.score);
+    expect(projectedAssessment.score).not.toBe(suggestionQualityClaim);
+    expect(projectedAssessment.factors).toContain("Image not provided by Walmart catalog");
+  });
+
+  it("does not let empty attribute keys mask missing attributes in scoring", () => {
+    const fromDraft = mergeWalmartDraftPayloadIntoProduct(
+      createProduct({
+        attributes: {},
+      }),
+      {
+        attributes: {
+          color: "",
+          material: " ",
+        },
+      }
+    );
+    const assessment = assessWalmartListingQuality(fromDraft);
+    expect(assessment.factors).toContain("Key attributes are missing");
+  });
+
+  it("keeps score healthy when image is the only major issue", () => {
+    const assessment = assessWalmartListingQuality(
+      createProduct({
+        imageUrl: "",
+        imageStatus: "catalog_missing",
+        imageStatusMessage: "Image not provided by Walmart catalog",
+        imageSyncStatus: "not_found",
+        imageSource: "walmart_item_search",
+        issues: ["Image not provided by Walmart catalog"],
+      })
+    );
+
+    expect(assessment.score).toBeGreaterThanOrEqual(80);
+    expect(assessment.factors).toContain("Image not provided by Walmart catalog");
   });
 });
