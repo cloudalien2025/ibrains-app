@@ -31,6 +31,20 @@ function toImageUrlList(value: unknown): string[] {
   return [];
 }
 
+function toAttributeRecord(value: unknown): Record<string, string> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const mapped: Record<string, string> = {};
+  for (const [key, raw] of Object.entries(value as Record<string, unknown>)) {
+    const normalizedKey = key.trim();
+    const text = typeof raw === "string" ? raw.trim() : typeof raw === "number" ? String(raw) : "";
+    if (!normalizedKey || !text) continue;
+    if (/needs\s+(product\s+label|confirmation)/i.test(text)) continue;
+    mapped[normalizedKey] = text;
+  }
+  return mapped;
+}
+
 export function buildMaintenancePayload(params: {
   draft: WalmartDraftRecord;
   product: WalmartProductRecord;
@@ -58,6 +72,14 @@ export function buildMaintenancePayload(params: {
   const resolvedAdditionalImages =
     patchedAdditionalImages.length > 0 ? patchedAdditionalImages : fallbackAdditionalImages;
 
+  const patchHasAttributes =
+    Object.prototype.hasOwnProperty.call(patch, "attributes") ||
+    Object.prototype.hasOwnProperty.call(patch, "searchBrowseAttributes");
+  const stagedAttributes = {
+    ...toAttributeRecord(patch.attributes),
+    ...toAttributeRecord(patch.searchBrowseAttributes),
+  };
+
   const updates: Record<string, unknown> = {
     title: typeof patch.title === "string" ? patch.title : product.title,
     shortDescription:
@@ -68,10 +90,6 @@ export function buildMaintenancePayload(params: {
       ? patch.bulletPoints
       : product.bulletPoints,
     price: typeof patch.price === "number" ? patch.price : product.price,
-    attributes:
-      patch.attributes && typeof patch.attributes === "object"
-        ? patch.attributes
-        : product.attributes,
   };
 
   if (typeof inventoryQuantity === "number") {
@@ -82,6 +100,9 @@ export function buildMaintenancePayload(params: {
   }
   if (resolvedAdditionalImages.length > 0) {
     updates.additionalImageUrls = resolvedAdditionalImages;
+  }
+  if (patchHasAttributes && Object.keys(stagedAttributes).length > 0) {
+    updates.attributes = stagedAttributes;
   }
 
   return {

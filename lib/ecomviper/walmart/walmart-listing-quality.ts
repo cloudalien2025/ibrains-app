@@ -172,6 +172,7 @@ export function mergeWalmartDraftPayloadIntoProduct(
   const attributeOverrides =
     readDraftAttributes(draft, [
       "attributes",
+      "searchBrowseAttributes",
       "suggestedAttributes",
       "keyAttributes",
       "proposedKeyAttributes",
@@ -194,6 +195,10 @@ export function mergeWalmartDraftPayloadIntoProduct(
     brand,
     attributes: {
       ...product.attributes,
+      ...attributeOverrides,
+    },
+    searchBrowseAttributes: {
+      ...(product.searchBrowseAttributes ?? {}),
       ...attributeOverrides,
     },
     price:
@@ -237,6 +242,11 @@ export function mergeWalmartAiSuggestionIntoProduct(
       .map(([key, value]) => [key.trim(), value.trim()] as const)
       .filter(([key, value]) => key.length > 0 && value.length > 0)
   );
+  const suggestedSearchBrowseAttributes = Object.fromEntries(
+    Object.entries(suggestion.searchBrowseAttributes ?? {})
+      .map(([key, value]) => [key.trim(), value.trim()] as const)
+      .filter(([key, value]) => key.length > 0 && value.length > 0)
+  );
 
   return {
     ...product,
@@ -248,6 +258,12 @@ export function mergeWalmartAiSuggestionIntoProduct(
     attributes: {
       ...product.attributes,
       ...suggestedAttributes,
+      ...suggestedSearchBrowseAttributes,
+    },
+    searchBrowseAttributes: {
+      ...(product.searchBrowseAttributes ?? {}),
+      ...suggestedAttributes,
+      ...suggestedSearchBrowseAttributes,
     },
   };
 }

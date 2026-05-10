@@ -8,6 +8,7 @@ import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-cli
 import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
+import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
 import { discardWalmartDraftsForSkuForUser, listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
@@ -825,6 +826,18 @@ interface ImageEnrichmentStats {
     walmartItemReport: number;
     walmartSellerCatalogSearch: number;
     walmartItemSearch: number;
+    publicWalmartListingSerpApi: number;
+  };
+  publicListing: {
+    providerConnected: boolean;
+    queuedCount: number;
+    completedCount: number;
+    foundCount: number;
+    notFoundCount: number;
+    ambiguousCount: number;
+    failedCount: number;
+    skippedNoProviderCount: number;
+    lastEnrichedAt: string | null;
   };
   itemReport: {
     requested: boolean;
@@ -994,6 +1007,7 @@ function withImageEnrichment(
 
 async function enrichProductImages(
   accessToken: string,
+  userId: string,
   products: WalmartProductRecord[]
 ): Promise<{ products: WalmartProductRecord[]; stats: ImageEnrichmentStats }> {
   const enriched = [...products];
@@ -1006,6 +1020,18 @@ async function enrichProductImages(
       walmartItemReport: 0,
       walmartSellerCatalogSearch: 0,
       walmartItemSearch: 0,
+      publicWalmartListingSerpApi: 0,
+    },
+    publicListing: {
+      providerConnected: false,
+      queuedCount: 0,
+      completedCount: 0,
+      foundCount: 0,
+      notFoundCount: 0,
+      ambiguousCount: 0,
+      failedCount: 0,
+      skippedNoProviderCount: 0,
+      lastEnrichedAt: null,
     },
     itemReport: {
       requested: false,
@@ -1155,13 +1181,33 @@ async function enrichProductImages(
     }
   }
 
+  const publicListingQueue = await runPublicListingImageEnrichmentQueue({
+    userId,
+    products: enriched,
+    importedCount: products.length,
+  });
+
+  const finalized = publicListingQueue.products;
+  stats.publicListing = {
+    providerConnected: publicListingQueue.progress.providerConnected,
+    queuedCount: publicListingQueue.progress.enrichmentQueuedCount,
+    completedCount: publicListingQueue.progress.enrichmentCompletedCount,
+    foundCount: publicListingQueue.progress.foundCount,
+    notFoundCount: publicListingQueue.progress.notFoundCount,
+    ambiguousCount: publicListingQueue.progress.ambiguousCount,
+    failedCount: publicListingQueue.progress.failedCount,
+    skippedNoProviderCount: publicListingQueue.progress.skippedNoProviderCount,
+    lastEnrichedAt: publicListingQueue.progress.lastEnrichedAt,
+  };
+
   stats.sourceBreakdown = {
     walmartItemReport: 0,
     walmartSellerCatalogSearch: 0,
     walmartItemSearch: 0,
+    publicWalmartListingSerpApi: 0,
   };
 
-  for (const product of enriched) {
+  for (const product of finalized) {
     const source = product.imageSource ?? "none";
     if (source === "walmart_item_report" && product.imageSyncStatus === "found" && product.imageUrl.trim()) {
       stats.sourceBreakdown.walmartItemReport += 1;
@@ -1169,6 +1215,12 @@ async function enrichProductImages(
       stats.sourceBreakdown.walmartItemSearch += 1;
     } else if (source === "walmart_catalog" && product.imageSyncStatus === "found" && product.imageUrl.trim()) {
       stats.sourceBreakdown.walmartSellerCatalogSearch += 1;
+    } else if (
+      source === "public_walmart_listing_serpapi" &&
+      product.imageSyncStatus === "found" &&
+      product.imageUrl.trim()
+    ) {
+      stats.sourceBreakdown.publicWalmartListingSerpApi += 1;
     }
 
     if (product.imageSyncStatus === "found") stats.found += 1;
@@ -1177,7 +1229,7 @@ async function enrichProductImages(
     else if (product.imageSyncStatus === "failed") stats.failed += 1;
   }
 
-  return { products: enriched, stats };
+  return { products: finalized, stats };
 }
 
 export async function importWalmartProducts(userId: string): Promise<WalmartImportResult> {
@@ -1221,7 +1273,7 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
   }
 
   const baseProducts = Array.from(bySku.values());
-  const { products, stats: imageStats } = await enrichProductImages(token.accessToken, baseProducts);
+  const { products, stats: imageStats } = await enrichProductImages(token.accessToken, userId, baseProducts);
   const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
   const inventoryOutOfStockCount = products.filter((product) => product.inventoryStatus === "out_of_stock").length;
   const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
@@ -1258,7 +1310,11 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       imageNotFoundCount: imageStats.notFound,
       imageAmbiguousCount: imageStats.ambiguous,
       imageFailedCount: imageStats.failed,
-      imageSource: "Walmart Item Report + Walmart Item Search",
+      imageSkippedNoProviderCount: imageStats.publicListing.skippedNoProviderCount,
+      enrichmentQueuedCount: imageStats.publicListing.queuedCount,
+      enrichmentCompletedCount: imageStats.publicListing.completedCount,
+      lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
+      imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
       itemReportRequested: imageStats.itemReport.requested,
       itemReportDownloaded: imageStats.itemReport.downloaded,
       itemReportRowsParsed: imageStats.itemReport.rowsParsed,
@@ -1273,6 +1329,63 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
         walmartItemReport: imageStats.sourceBreakdown.walmartItemReport,
         walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,
         walmartItemSearch: imageStats.sourceBreakdown.walmartItemSearch,
+        publicWalmartListingSerpApi: imageStats.sourceBreakdown.publicWalmartListingSerpApi,
+      },
+    },
+  };
+}
+
+export async function retryWalmartPublicImageEnrichmentForUser(
+  userId: string
+): Promise<WalmartImportResult> {
+  const currentProducts = await listPersistedWalmartProducts(userId);
+  const queue = await runPublicListingImageEnrichmentQueue({
+    userId,
+    products: currentProducts,
+    importedCount: currentProducts.length,
+  });
+
+  const importedAt = await getPersistedWalmartLastImportAt(userId);
+  await replaceWalmartProductsForUser({
+    userId,
+    products: queue.products,
+    importedAt,
+  });
+
+  return {
+    importedCount: queue.products.length,
+    fetchedCount: queue.products.length,
+    skippedCount: 0,
+    lastImportAt: importedAt,
+    mode: getWalmartRuntimeMode(),
+    importDiagnostics: {
+      fetchedCount: queue.products.length,
+      payloadShape: "retry_enrichment_only",
+      pageCount: 0,
+      imageFoundCount: queue.progress.foundCount,
+      imageNotFoundCount: queue.progress.notFoundCount,
+      imageAmbiguousCount: queue.progress.ambiguousCount,
+      imageFailedCount: queue.progress.failedCount,
+      imageSkippedNoProviderCount: queue.progress.skippedNoProviderCount,
+      enrichmentQueuedCount: queue.progress.enrichmentQueuedCount,
+      enrichmentCompletedCount: queue.progress.enrichmentCompletedCount,
+      lastEnrichedAt: queue.progress.lastEnrichedAt,
+      imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
+      imageSourceBreakdown: {
+        walmartItemReport: queue.products.filter(
+          (product) => product.imageSource === "walmart_item_report" && product.imageSyncStatus === "found"
+        ).length,
+        walmartSellerCatalogSearch: queue.products.filter(
+          (product) => product.imageSource === "walmart_catalog" && product.imageSyncStatus === "found"
+        ).length,
+        walmartItemSearch: queue.products.filter(
+          (product) => product.imageSource === "walmart_item_search" && product.imageSyncStatus === "found"
+        ).length,
+        publicWalmartListingSerpApi: queue.products.filter(
+          (product) =>
+            product.imageSource === "public_walmart_listing_serpapi" &&
+            product.imageSyncStatus === "found"
+        ).length,
       },
     },
   };

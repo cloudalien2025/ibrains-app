@@ -35,10 +35,28 @@ const mocks = vi.hoisted(() => ({
   })),
 }));
 
+const serpApiMocks = vi.hoisted(() => ({
+  getSerpApiCredentialsForUser: vi.fn(),
+  enrichProductImagesFromPublicWalmartListing: vi.fn(),
+}));
+
 vi.mock("@/lib/ecomviper/walmart/walmart-auth", () => ({
   requestWalmartTokenForUser: mocks.requestWalmartTokenForUser,
   getWalmartConnectionHealth: mocks.getWalmartConnectionHealth,
 }));
+
+vi.mock("@/lib/ecomviper/walmart/serpapi-walmart-images", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/ecomviper/walmart/serpapi-walmart-images")>(
+      "@/lib/ecomviper/walmart/serpapi-walmart-images"
+    );
+
+  return {
+    ...actual,
+    getSerpApiCredentialsForUser: serpApiMocks.getSerpApiCredentialsForUser,
+    enrichProductImagesFromPublicWalmartListing: serpApiMocks.enrichProductImagesFromPublicWalmartListing,
+  };
+});
 
 function createFetchMock(params: {
   catalogPayload: unknown;
@@ -119,6 +137,32 @@ describe("walmart product import", () => {
     (globalThis as Record<string, unknown>).__ecomviper_activity_store__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_product_fallback__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_walmart_product_tables_checked__ = undefined;
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: false,
+      apiKey: null,
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "not_synced",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "Connect your SerpApi key to fetch public Walmart listing images.",
+      imageMatchMethod: null,
+      publicWalmartUrl: "",
+      publicWalmartProductId: "",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_product",
+        statusCategory: "not_configured",
+        productId: null,
+        candidateCount: 0,
+        imageCount: 0,
+        matchMethod: null,
+      },
+      errorCode: "SERPAPI_NOT_CONNECTED",
+    });
   });
 
   it("imports image URL when present on an ItemResponse array payload", async () => {
@@ -331,7 +375,9 @@ describe("walmart product import", () => {
     const product = listWalmartProducts().find((entry) => entry.sku === "GTIN-IMAGE-1");
 
     expect(result.importDiagnostics?.imageFoundCount).toBe(1);
-    expect(result.importDiagnostics?.imageSource).toBe("Walmart Item Report + Walmart Item Search");
+    expect(result.importDiagnostics?.imageSource).toBe(
+      "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi"
+    );
     expect(product?.imageUrl).toBe("https://images.example.com/gtin-image-1.jpg");
     expect(product?.imageSyncStatus).toBe("found");
     expect(product?.imageMatchMethod).toBe("gtin");
@@ -638,6 +684,82 @@ describe("walmart product import", () => {
     expect(product?.imageStatusMessage).toBe("Item Search request failed after retry.");
     expect(product?.issues).toContain("Image sync failed");
     expect(product?.inventoryQuantity).toBe(3);
+  });
+
+  it("runs public listing SerpApi enrichment for missing images when provider is connected", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-public-serpapi",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: true,
+      apiKey: "serpapi_test_key",
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "found",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "Public Walmart listing images found via SerpApi.",
+      imageMatchMethod: "serpapi_product_id",
+      publicWalmartUrl: "https://www.walmart.com/ip/sample/18410702298",
+      publicWalmartProductId: "18410702298",
+      primaryImageUrl: "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+      galleryImageUrls: [
+        "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+        "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+      ],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_product",
+        statusCategory: "ok",
+        productId: "18410702298",
+        candidateCount: 1,
+        imageCount: 2,
+        matchMethod: "serpapi_product_id",
+      },
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "SERPAPI-IMG-1",
+            productName: "SerpApi Image Product",
+            brand: "OPA",
+            itemId: "18410702298",
+            availability: "In_stock",
+            price: { amount: "29.99" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "SERPAPI-IMG-1": {
+          sku: "SERPAPI-IMG-1",
+          quantity: { unit: "EACH", amount: 7 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "SERPAPI-IMG-1");
+
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledTimes(1);
+    expect(result.importDiagnostics?.enrichmentQueuedCount).toBe(1);
+    expect(result.importDiagnostics?.enrichmentCompletedCount).toBe(1);
+    expect(result.importDiagnostics?.imageFoundCount).toBe(1);
+    expect(result.importDiagnostics?.imageSourceBreakdown?.publicWalmartListingSerpApi).toBe(1);
+    expect(product?.imageSource).toBe("public_walmart_listing_serpapi");
+    expect(product?.imageUrl).toBe("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
   });
 
   it("treats missing inventory as unknown and only flags out-of-stock on explicit zero quantity", async () => {

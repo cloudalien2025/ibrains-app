@@ -159,6 +159,9 @@ export interface WalmartProductRecord {
   imageSyncReason?: string | null;
   issues: string[];
   attributes: Record<string, string>;
+  searchBrowseAttributes?: Record<string, string>;
+  mediaRecommendations?: string[];
+  altText?: string;
   shortDescription: string;
   longDescription: string;
   bulletPoints: string[];
@@ -246,7 +249,11 @@ export interface WalmartImportResult {
     imageNotFoundCount?: number;
     imageAmbiguousCount?: number;
     imageFailedCount?: number;
-    imageSource?: "Walmart Item Report + Walmart Item Search";
+    imageSkippedNoProviderCount?: number;
+    enrichmentQueuedCount?: number;
+    enrichmentCompletedCount?: number;
+    lastEnrichedAt?: string | null;
+    imageSource?: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi";
     itemReportRequested?: boolean;
     itemReportDownloaded?: boolean;
     itemReportRowsParsed?: number;
@@ -271,6 +278,7 @@ export interface WalmartImportResult {
       walmartItemReport: number;
       walmartSellerCatalogSearch: number;
       walmartItemSearch: number;
+      publicWalmartListingSerpApi?: number;
     };
   };
 }
@@ -304,6 +312,21 @@ export interface WalmartAiSuggestion {
   suggestedBullets: string[];
   suggestedBrand?: string;
   suggestedAttributes?: Record<string, string>;
+  searchBrowseAttributes?: Record<string, string>;
+  mediaRecommendations?: string[];
+  altText?: string;
+  complianceNotes?: string[];
+  rejectedRiskyClaims?: string[];
+  entitySet?: {
+    brand: string;
+    productName: string;
+    category: string;
+    keyIngredients: string[];
+    form: string;
+    count: string;
+    audience: string;
+    supportedBenefits: string[];
+  };
   missingAttributes: string[];
   complianceWarnings: string[];
   disclaimer: string;
