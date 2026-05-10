@@ -6,6 +6,7 @@ import type {
   WalmartOptimizationProposalRecord,
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
+import { applyDraftImageFieldsToProduct } from "@/lib/ecomviper/walmart/walmart-image-fields";
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values));
@@ -184,7 +185,7 @@ export function mergeWalmartDraftPayloadIntoProduct(
     inferShortDescriptionFromLongDescription(longDescription) ||
     product.shortDescription;
 
-  return {
+  const mergedContent: WalmartProductRecord = {
     ...product,
     title: title || product.title,
     shortDescription: shortDescriptionWithFallback,
@@ -204,6 +205,11 @@ export function mergeWalmartDraftPayloadIntoProduct(
         ? inventoryCandidate
         : product.inventoryQuantity,
   };
+
+  return applyDraftImageFieldsToProduct({
+    product: mergedContent,
+    draftPayload: draft,
+  });
 }
 
 export function mergeWalmartAiSuggestionIntoProduct(

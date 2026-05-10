@@ -163,6 +163,26 @@ describe("Walmart products client UX", () => {
     expect(html).not.toContain(">Unknown<");
   });
 
+  it("shows pending draft image context when draft image differs from live image", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageUrl: "https://images.example.com/draft-primary.jpg",
+            imageSource: "public_walmart_listing_serpapi",
+            imageSyncStatus: "found",
+            hasDraftChanges: true,
+            liveImageUrl: "",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain('src="https://images.example.com/draft-primary.jpg"');
+    expect(html).toContain("Source: Public Walmart listing via SerpApi");
+    expect(html).toContain("Pending draft image");
+  });
+
   it("shows draft-specific row action label when pending draft exists", () => {
     const html = renderToStaticMarkup(
       <WalmartProductsClient

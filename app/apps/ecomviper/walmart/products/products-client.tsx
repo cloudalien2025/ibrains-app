@@ -88,6 +88,13 @@ function formatImageSource(product: WalmartEffectiveProductRecord): string {
   return "Not synced";
 }
 
+function hasPendingDraftImage(product: WalmartEffectiveProductRecord): boolean {
+  if (!product.hasDraftChanges) return false;
+  const current = product.imageUrl?.trim() ?? "";
+  const live = product.liveImageUrl?.trim() ?? "";
+  return current !== live;
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -334,12 +341,18 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                         />
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
                         <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
+                        {hasPendingDraftImage(product) ? (
+                          <p className="max-w-[180px] text-[11px] text-amber-700">Pending draft image</p>
+                        ) : null}
                       </div>
                     ) : (
                       <div className="space-y-1">
                         <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
                         <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
+                        {hasPendingDraftImage(product) ? (
+                          <p className="max-w-[180px] text-[11px] text-amber-700">Pending draft image</p>
+                        ) : null}
                       </div>
                     )}
                   </td>

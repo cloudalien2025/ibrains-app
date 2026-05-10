@@ -224,6 +224,7 @@ describe("Walmart product editor public listing image flow", () => {
     await flush();
 
     expect(container.textContent).toContain("Images added to draft. Save Draft before submitting.");
+    expect(container.textContent).not.toContain("Images missing");
 
     const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"
@@ -249,7 +250,14 @@ describe("Walmart product editor public listing image flow", () => {
     expect(saveBody.draftPayload.imageUrl).toBe(
       "https://i5.walmartimages.com/asr/18410702298-primary.jpeg"
     );
+    expect(saveBody.draftPayload.primaryImageUrl).toBe(
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg"
+    );
     expect(saveBody.draftPayload.additionalImageUrls).toEqual([
+      "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+    ]);
+    expect(saveBody.draftPayload.galleryImageUrls).toEqual([
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
       "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
     ]);
     expect(saveBody.draftPayload.imageSource).toBe("public_walmart_listing_serpapi");

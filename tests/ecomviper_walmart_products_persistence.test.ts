@@ -589,6 +589,75 @@ describe("walmart products persistence", () => {
     expect(html).toContain('value="OPA Nutrition"');
   });
 
+  it("hydrates saved draft images in product editor and products list from primary/gallery aliases", async () => {
+    const userId = "user_editor_image_hydration";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC949")],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC949",
+          draftPayload: {
+            title: "Hydrated image title",
+            shortDescription: "Hydrated short description",
+            longDescription: "Hydrated long description",
+            bulletPoints: ["Hydrated bullet 1", "Hydrated bullet 2"],
+            brand: "OPA Nutrition",
+            attributes: { form: "Gummy" },
+            price: 31.99,
+            inventoryQuantity: 7,
+            primaryImageUrl: "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+            galleryImageUrls: [
+              "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+              "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+              "https://i5.walmartimages.com/asr/18410702298-gallery-2.jpeg",
+            ],
+            imageSource: "public_walmart_listing_serpapi",
+            imageMatchMethod: "public_url_product_id",
+            imageSyncStatus: "found",
+            imageSyncReason: "Public Walmart listing images found via SerpApi.",
+            publicWalmartUrl:
+              "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+            publicWalmartProductId: "18410702298",
+            lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+          },
+        }),
+      })
+    );
+    expect(saveDraftResponse.status).toBe(201);
+
+    const savedDrafts = await listWalmartDraftsForUser(userId);
+    expect(savedDrafts).toHaveLength(1);
+    expect(savedDrafts[0]?.draftPayload?.primaryImageUrl).toBe(
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg"
+    );
+    expect(savedDrafts[0]?.draftPayload?.galleryImageUrls).toEqual([
+      "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+      "https://i5.walmartimages.com/asr/18410702298-gallery-1.jpeg",
+      "https://i5.walmartimages.com/asr/18410702298-gallery-2.jpeg",
+    ]);
+
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_store__ = undefined;
+    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const editorHtml = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC949" }) })
+    );
+    expect(editorHtml).toContain("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
+
+    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const productsHtml = renderToStaticMarkup(await WalmartProductsPage());
+    expect(productsHtml).toContain('src="https://i5.walmartimages.com/asr/18410702298-primary.jpeg"');
+    expect(productsHtml).toContain("Source: Public Walmart listing via SerpApi");
+    expect(productsHtml).toContain("Pending draft image");
+  });
+
   it("removes products from local catalog only, scoped to signed-in user", async () => {
     await replaceWalmartProductsForUser({
       userId: "remove_user_a",

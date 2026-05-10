@@ -11,6 +11,10 @@ import {
   mergeWalmartDraftPayloadIntoProduct,
 } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import {
+  normalizeDraftImageFields,
+  normalizeWalmartImageUrlList,
+} from "@/lib/ecomviper/walmart/walmart-image-fields";
+import {
   readOptimizerProposalFromDraft,
   toOptimizerDraftPayload,
 } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
@@ -312,6 +316,7 @@ function hydrateEditorForm(
   stagedDrafts: WalmartDraftRecord[]
 ): ProductEditorFormState {
   const draft = readLatestDraftPayload(stagedDrafts);
+  const normalizedDraftImages = normalizeDraftImageFields(draft ?? {});
   const normalized = asObject(product.normalizedPayload);
   const raw = asObject(product.rawPayload);
   const rawProduct = asObject(raw?.product);
@@ -336,7 +341,6 @@ function hydrateEditorForm(
     "productDescription",
   ]);
   const draftBrand = readDraftString(draft, ["brand", "brandName"]);
-  const draftImageUrl = readDraftString(draft, ["imageUrl", "primaryImageUrl"]);
   const draftPublicWalmartUrl = readDraftString(draft, ["publicWalmartUrl"]);
   const draftPublicWalmartProductId = readDraftString(draft, ["publicWalmartProductId"]);
   const draftImageSource = readDraftString(draft, ["imageSource"]);
@@ -358,6 +362,12 @@ function hydrateEditorForm(
     ],
     true
   );
+  const draftAdditionalFromNormalized =
+    normalizedDraftImages.additionalImageUrls ??
+    normalizedDraftImages.galleryImageUrls?.filter(
+      (entry) => entry !== (normalizedDraftImages.imageUrl ?? "")
+    ) ??
+    null;
   const draftAttributes = readDraftAttributes(draft);
 
   const title =
@@ -395,28 +405,32 @@ function hydrateEditorForm(
           "brandName",
           "manufacturer",
         ]) || normalizedBrand;
-  const imageUrl =
-    draftImageUrl !== null
-      ? draftImageUrl
-      : firstNonEmptyString(sources, [
-          "imageUrl",
-          "primaryImageUrl",
-          "productImageUrl",
-          "mainImageUrl",
-          "itemImageUrl",
-        ]) || product.imageUrl;
-  const additionalImageUrls =
-    draftAdditionalImages ??
-    unique([
-      ...imageListFromUnknown(normalized?.galleryImageUrls),
-      ...imageListFromUnknown(normalized?.additionalImageUrls),
-      ...imageListFromUnknown(raw?.additionalImageUrls),
-      ...imageListFromUnknown(raw?.galleryImageUrls),
-      ...imageListFromUnknown(raw?.imageUrls),
-      ...(product.galleryImageUrls ?? []),
-      ...(product.variantImageUrls ?? []),
+  const fallbackGalleryImageUrls = normalizeWalmartImageUrlList([
+    normalized?.galleryImageUrls,
+    normalized?.additionalImageUrls,
+    raw?.additionalImageUrls,
+    raw?.galleryImageUrls,
+    raw?.imageUrls,
+    product.galleryImageUrls ?? [],
+    product.variantImageUrls ?? [],
+  ]);
+  const preferredImageUrl =
+    normalizedDraftImages.imageUrl ??
+    (readDraftString(draft, ["imageUrl", "primaryImageUrl"]) ?? null) ??
+    firstNonEmptyString(sources, [
+      "imageUrl",
+      "primaryImageUrl",
+      "productImageUrl",
+      "mainImageUrl",
+      "itemImageUrl",
     ]);
+  const imageUrl = preferredImageUrl || product.imageUrl;
+  const additionalImageUrls =
+    draftAdditionalFromNormalized ??
+    draftAdditionalImages ??
+    fallbackGalleryImageUrls.filter((entry) => entry !== imageUrl);
   const publicWalmartUrl =
+    normalizedDraftImages.publicWalmartUrl ??
     draftPublicWalmartUrl ??
     firstNonEmptyStringValue(
       product.publicWalmartUrl,
@@ -424,6 +438,7 @@ function hydrateEditorForm(
       raw?.publicWalmartUrl
     );
   const publicWalmartProductId =
+    normalizedDraftImages.publicWalmartProductId ??
     draftPublicWalmartProductId ??
     firstNonEmptyStringValue(
       product.publicWalmartProductId,
@@ -431,6 +446,7 @@ function hydrateEditorForm(
       raw?.publicWalmartProductId
     );
   const imageSource =
+    normalizedDraftImages.imageSource ??
     draftImageSource ??
     firstNonEmptyStringValue(
       product.imageSource,
@@ -438,6 +454,7 @@ function hydrateEditorForm(
       raw?.imageSource
     );
   const imageMatchMethod =
+    normalizedDraftImages.imageMatchMethod ??
     draftImageMatchMethod ??
     firstNonEmptyStringValue(
       product.imageMatchMethod,
@@ -445,6 +462,7 @@ function hydrateEditorForm(
       raw?.imageMatchMethod
     );
   const imageSyncStatus =
+    normalizedDraftImages.imageSyncStatus ??
     draftImageSyncStatus ??
     firstNonEmptyStringValue(
       product.imageSyncStatus,
@@ -452,6 +470,7 @@ function hydrateEditorForm(
       raw?.imageSyncStatus
     );
   const imageSyncReason =
+    normalizedDraftImages.imageSyncReason ??
     draftImageSyncReason ??
     firstNonEmptyStringValue(
       product.imageSyncReason,
@@ -460,6 +479,7 @@ function hydrateEditorForm(
       raw?.imageSyncReason
     );
   const lastImageSyncedAt =
+    normalizedDraftImages.lastImageSyncedAt ??
     draftLastImageSyncedAt ??
     firstNonEmptyStringValue(
       product.lastImageSyncedAt,
@@ -504,7 +524,7 @@ function hydrateEditorForm(
     longDescription,
     bulletPoints: bulletPoints.join("\n"),
     imageUrl,
-    additionalImageUrls: unique(additionalImageUrls).join("\n"),
+    additionalImageUrls: normalizeWalmartImageUrlList(additionalImageUrls).join("\n"),
     publicWalmartUrl,
     publicWalmartProductId,
     imageSource,
@@ -741,6 +761,20 @@ export default function ProductEditorClient({
       parsedAttributes = {};
     }
 
+    const normalizedImageFields = normalizeDraftImageFields({
+      imageUrl: form.imageUrl,
+      primaryImageUrl: form.imageUrl,
+      additionalImageUrls: form.additionalImageUrls,
+      galleryImageUrls: form.additionalImageUrls,
+      imageSource: form.imageSource,
+      imageMatchMethod: form.imageMatchMethod,
+      imageSyncStatus: form.imageSyncStatus,
+      imageSyncReason: form.imageSyncReason,
+      publicWalmartUrl: form.publicWalmartUrl,
+      publicWalmartProductId: form.publicWalmartProductId,
+      lastImageSyncedAt: form.lastImageSyncedAt,
+    });
+
     return {
       title: form.title.trim(),
       shortDescription: form.shortDescription.trim(),
@@ -749,18 +783,18 @@ export default function ProductEditorClient({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean),
-      imageUrl: form.imageUrl.trim(),
-      additionalImageUrls: form.additionalImageUrls
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean),
-      publicWalmartUrl: form.publicWalmartUrl.trim() || undefined,
-      publicWalmartProductId: form.publicWalmartProductId.trim() || undefined,
-      imageSource: form.imageSource.trim() || undefined,
-      imageMatchMethod: form.imageMatchMethod.trim() || undefined,
-      imageSyncStatus: form.imageSyncStatus.trim() || undefined,
-      imageSyncReason: form.imageSyncReason.trim() || undefined,
-      lastImageSyncedAt: form.lastImageSyncedAt.trim() || undefined,
+      imageUrl: normalizedImageFields.imageUrl,
+      primaryImageUrl: normalizedImageFields.primaryImageUrl,
+      additionalImageUrls: normalizedImageFields.additionalImageUrls,
+      galleryImageUrls: normalizedImageFields.galleryImageUrls,
+      variantImageUrls: normalizedImageFields.variantImageUrls,
+      publicWalmartUrl: normalizedImageFields.publicWalmartUrl,
+      publicWalmartProductId: normalizedImageFields.publicWalmartProductId,
+      imageSource: normalizedImageFields.imageSource,
+      imageMatchMethod: normalizedImageFields.imageMatchMethod,
+      imageSyncStatus: normalizedImageFields.imageSyncStatus,
+      imageSyncReason: normalizedImageFields.imageSyncReason,
+      lastImageSyncedAt: normalizedImageFields.lastImageSyncedAt,
       price: Number(form.price),
       inventoryQuantity: Number(form.inventoryQuantity),
       brand: form.brand.trim(),
@@ -834,6 +868,36 @@ export default function ProductEditorClient({
 
   const displayTitle = form.title.trim() || product.title;
   const displayBrand = form.brand.trim() || product.brand.trim() || "Unknown";
+  const displayPrimaryImageUrl = scoringProduct.imageUrl?.trim() || "";
+  const displayGalleryPreviewUrls = useMemo(
+    () =>
+      normalizeWalmartImageUrlList([
+        displayPrimaryImageUrl,
+        scoringProduct.galleryImageUrls ?? [],
+        scoringProduct.variantImageUrls ?? [],
+      ]),
+    [displayPrimaryImageUrl, scoringProduct.galleryImageUrls, scoringProduct.variantImageUrls]
+  );
+  const persistedDraftImagePreview = useMemo(() => {
+    if (resolvedPublicImages || displayGalleryPreviewUrls.length === 0) return null;
+    return {
+      imageSourceLabel:
+        scoringProduct.imageSource === "public_walmart_listing_serpapi"
+          ? "Public Walmart listing via SerpApi"
+          : formatImageSource(scoringProduct),
+      publicWalmartProductId: form.publicWalmartProductId.trim(),
+      imageCount: displayGalleryPreviewUrls.length,
+      primaryImageUrl: displayPrimaryImageUrl || displayGalleryPreviewUrls[0] || "",
+      galleryImageUrls: displayGalleryPreviewUrls,
+    };
+  }, [
+    resolvedPublicImages,
+    displayGalleryPreviewUrls,
+    scoringProduct.imageSource,
+    scoringProduct,
+    form.publicWalmartProductId,
+    displayPrimaryImageUrl,
+  ]);
 
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
@@ -1280,9 +1344,9 @@ export default function ProductEditorClient({
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div className="flex min-w-0 flex-1 items-start gap-4">
             <div className="shrink-0">
-              {product.imageUrl ? (
+              {displayPrimaryImageUrl ? (
                 <img
-                  src={product.imageUrl}
+                  src={displayPrimaryImageUrl}
                   alt={`${product.sku} primary image`}
                   className="h-20 w-20 rounded-xl border border-[#D9E4F0] bg-white object-cover"
                   loading="lazy"
@@ -1566,7 +1630,7 @@ export default function ProductEditorClient({
                   Attributes: {Object.keys(preview.attributes).length} →{" "}
                   {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
                 </li>
-                {!product.imageUrl ? <li>Image still missing from catalog data.</li> : null}
+                {!displayPrimaryImageUrl ? <li>Image still missing from catalog data.</li> : null}
               </ul>
 
               <details className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3">
@@ -1892,6 +1956,34 @@ export default function ProductEditorClient({
                         </button>
                       </div>
                     ) : null}
+
+                    {!resolvedPublicImages && persistedDraftImagePreview ? (
+                      <div className="mt-3 rounded-lg border border-[#BFDBFE] bg-white p-3">
+                        <p className="text-xs text-[#1D4ED8]">
+                          Source: {persistedDraftImagePreview.imageSourceLabel}
+                        </p>
+                        <p className="mt-1 text-xs text-[#334155]">
+                          Public product ID: {persistedDraftImagePreview.publicWalmartProductId || "Unknown"}
+                        </p>
+                        <p className="mt-1 text-xs text-[#334155]">
+                          Gallery image count: {persistedDraftImagePreview.imageCount}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-[#334155]">
+                          Primary image URL: {persistedDraftImagePreview.primaryImageUrl || "Not provided"}
+                        </p>
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {persistedDraftImagePreview.galleryImageUrls.slice(0, 4).map((url) => (
+                            <img
+                              key={url}
+                              src={url}
+                              alt="Saved draft image preview"
+                              className="h-14 w-14 rounded border border-[#D9E4F0] bg-white object-cover"
+                              loading="lazy"
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Primary image URL
@@ -1910,10 +2002,10 @@ export default function ProductEditorClient({
                     />
                   </label>
                   <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-xs text-[#475569] md:col-span-2">
-                    <p>Image sync status: {formatImageStatus(product)}</p>
-                    <p className="mt-1">Source: {formatImageSource(product)}</p>
-                    <p className="mt-1">Gallery images: {product.galleryImageUrls?.length ?? 0}</p>
-                    <p className="mt-1">Variant images: {product.variantImageUrls?.length ?? 0}</p>
+                    <p>Image sync status: {formatImageStatus(scoringProduct)}</p>
+                    <p className="mt-1">Source: {formatImageSource(scoringProduct)}</p>
+                    <p className="mt-1">Gallery images: {scoringProduct.galleryImageUrls?.length ?? 0}</p>
+                    <p className="mt-1">Variant images: {scoringProduct.variantImageUrls?.length ?? 0}</p>
                   </div>
                 </>
               ) : null}
