@@ -3,7 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import type { ReactNode } from "react";
 import WalmartProductsClient from "@/app/apps/ecomviper/walmart/products/products-client";
 import { walmartNavItems } from "@/lib/ecomviper/walmart/walmart-nav";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 vi.mock("next/link", async () => {
   const React = await import("react");
@@ -19,7 +19,7 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {
+function createProduct(overrides?: Partial<WalmartEffectiveProductRecord>): WalmartEffectiveProductRecord {
   return {
     id: "walmart_sku-30066-841",
     marketplace: "walmart",
@@ -61,6 +61,16 @@ describe("Walmart products client UX", () => {
     expect(html).toContain('href="/apps/ecomviper/walmart/products/SKU%2030066%2F841"');
     expect(html).toContain(">SKU 30066/841<");
     expect(html).toContain(">Walmart Product<");
+  });
+
+  it("renders compact row actions control with key actions", () => {
+    const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
+
+    expect(html).toContain(">Actions<");
+    expect(html).toContain(">Edit Product<");
+    expect(html).toContain(">View Drafts<");
+    expect(html).toContain(">Optimize with AI<");
+    expect(html).toContain(">Sync<");
   });
 
   it("shows Item Search image issue copy for missing images", () => {
@@ -105,5 +115,23 @@ describe("Walmart products client UX", () => {
 
     expect(html).toContain("Item Report row found, but no usable image URL was provided.");
     expect(html).toContain("Source: Walmart Item Report");
+  });
+
+  it("shows draft-aware brand value with pending draft indicator", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            brand: "OPA Nutrition",
+            hasDraftChanges: true,
+            liveBrand: "Unknown",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("OPA Nutrition");
+    expect(html).toContain("Pending draft");
+    expect(html).not.toContain(">Unknown<");
   });
 });

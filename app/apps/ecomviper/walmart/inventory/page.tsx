@@ -1,14 +1,35 @@
 import WalmartInventoryClient from "@/app/apps/ecomviper/walmart/inventory/inventory-client";
 import { getInventoryView } from "@/lib/ecomviper/walmart/walmart-inventory";
-import { listProducts } from "@/lib/ecomviper/walmart/walmart-store";
+import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import { mergeProductsWithLatestDrafts } from "@/lib/ecomviper/walmart/walmart-product-display";
+import { listWalmartProductsForUser } from "@/lib/ecomviper/walmart/walmart-products";
+import { listDraftsForUser } from "@/lib/ecomviper/walmart/walmart-store";
 
 export const dynamic = "force-dynamic";
 
-export default function WalmartInventoryPage() {
-  const inventory = getInventoryView();
+export default async function WalmartInventoryPage() {
+  const { userId, unauthorizedResponse } = await requireSignedInUser();
+  if (unauthorizedResponse || !userId) {
+    return (
+      <WalmartInventoryClient
+        products={[]}
+        lowStock={[]}
+        outOfStock={[]}
+        recentChanges={[]}
+      />
+    );
+  }
+
+  const products = await listWalmartProductsForUser(userId);
+  const effectiveProducts = mergeProductsWithLatestDrafts({
+    products,
+    drafts: listDraftsForUser(userId),
+  });
+  const inventory = getInventoryView(effectiveProducts);
+
   return (
     <WalmartInventoryClient
-      products={listProducts()}
+      products={effectiveProducts}
       lowStock={inventory.lowStock}
       outOfStock={inventory.outOfStock}
       recentChanges={inventory.recentChanges}

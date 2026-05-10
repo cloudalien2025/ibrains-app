@@ -72,6 +72,14 @@ export function listDrafts(): WalmartDraftRecord[] {
   return [...getStore().drafts];
 }
 
+export function listDraftsForUser(userId: string): WalmartDraftRecord[] {
+  const normalizedUserId = userId.trim();
+  if (!normalizedUserId) return [];
+  return getStore().drafts.filter(
+    (draft) => !draft.createdBy || draft.createdBy.trim() === normalizedUserId
+  );
+}
+
 export function getDraftById(id: string): WalmartDraftRecord | null {
   return getStore().drafts.find((draft) => draft.id === id) ?? null;
 }

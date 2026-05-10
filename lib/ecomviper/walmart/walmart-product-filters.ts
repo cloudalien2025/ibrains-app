@@ -43,3 +43,10 @@ export function filterWalmartProducts(
     return true;
   });
 }
+
+export function filterWalmartProductsWithType<T extends WalmartProductRecord>(
+  products: T[],
+  params: ProductFilterParams
+): T[] {
+  return filterWalmartProducts(products, params) as T[];
+}

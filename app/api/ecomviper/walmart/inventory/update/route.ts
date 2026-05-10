@@ -3,7 +3,7 @@ export const runtime = "nodejs";
 import { NextRequest } from "next/server";
 import { ensureUser, resolveUserId } from "@/app/api/ecomviper/_utils/user";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
-import { updateWalmartInventory } from "@/lib/ecomviper/walmart/walmart-inventory";
+import { updateWalmartInventoryForUser } from "@/lib/ecomviper/walmart/walmart-inventory";
 
 export async function POST(req: NextRequest) {
   try {
@@ -23,10 +23,13 @@ export async function POST(req: NextRequest) {
       return fail(400, "quantity must be a non-negative number.", "BAD_REQUEST");
     }
 
-    const result = updateWalmartInventory({
-      sku: body.sku,
-      quantity: body.quantity,
-      saveAsDraft: Boolean(body.saveAsDraft),
+    const result = await updateWalmartInventoryForUser({
+      userId,
+      update: {
+        sku: body.sku,
+        quantity: body.quantity,
+        saveAsDraft: Boolean(body.saveAsDraft),
+      },
     });
 
     return ok(result);

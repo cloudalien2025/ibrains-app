@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { ReactNode } from "react";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import {
   getWalmartProductBySkuForUser,
@@ -63,6 +65,20 @@ vi.mock("@/lib/ecomviper/walmart/walmart-auth", async () => {
     getWalmartConnectionHealth: walmartAuthMocks.getWalmartConnectionHealth,
   };
 });
+
+vi.mock("next/link", async () => {
+  const React = await import("react");
+  return {
+    default: ({ href, children, ...props }: { href: string; children?: ReactNode }) =>
+      React.createElement("a", { href, ...props }, children),
+  };
+});
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    refresh: vi.fn(),
+  }),
+}));
 
 function buildProduct(sku: string) {
   return normalizeWalmartProduct({
@@ -376,5 +392,38 @@ describe("walmart products persistence", () => {
     expect(response.status).toBe(404);
     expect(payload.error?.code).toBe("PRODUCT_NOT_FOUND");
     expect(payload.error?.message).toContain("product record was not found");
+  });
+
+  it("renders products list with draft-aware brand when a saved draft overrides unknown brand", async () => {
+    const userId = "user_brand_overlay";
+    const product = buildProduct("ROC808");
+    product.brand = "Unknown";
+
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const { POST: createDraftRoute } = await import("@/app/api/ecomviper/walmart/drafts/route");
+    const saveDraftResponse = await createDraftRoute(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/drafts", {
+        method: "POST",
+        body: JSON.stringify({
+          sku: "ROC808",
+          draftPayload: {
+            brand: "OPA Nutrition",
+          },
+        }),
+      })
+    );
+
+    expect(saveDraftResponse.status).toBe(201);
+
+    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const html = renderToStaticMarkup(await WalmartProductsPage());
+    expect(html).toContain("OPA Nutrition");
+    expect(html).toContain("Pending draft");
   });
 });

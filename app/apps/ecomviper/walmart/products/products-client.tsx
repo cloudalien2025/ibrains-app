@@ -5,11 +5,11 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
-import { filterWalmartProducts } from "@/lib/ecomviper/walmart/walmart-product-filters";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { filterWalmartProductsWithType } from "@/lib/ecomviper/walmart/walmart-product-filters";
+import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 interface ProductsClientProps {
-  products: WalmartProductRecord[];
+  products: WalmartEffectiveProductRecord[];
 }
 
 const filters = [
@@ -24,13 +24,13 @@ const filters = [
   { id: "draft_pending", label: "Draft pending" },
 ] as const;
 
-function formatInventory(product: WalmartProductRecord): string {
+function formatInventory(product: WalmartEffectiveProductRecord): string {
   if (product.inventoryStatus === "unknown") return "Not synced";
   if (product.inventoryStatus === "out_of_stock") return "Out of stock";
   return String(product.inventoryQuantity);
 }
 
-function formatImageStatus(product: WalmartProductRecord): string {
+function formatImageStatus(product: WalmartEffectiveProductRecord): string {
   if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
   if (product.imageSyncStatus === "not_found") return "Item Search returned no usable image.";
   if (product.imageSyncStatus === "ambiguous") return "Multiple Walmart Item Search candidates matched this product.";
@@ -40,7 +40,7 @@ function formatImageStatus(product: WalmartProductRecord): string {
   return "Image enrichment not synced.";
 }
 
-function formatImageSource(product: WalmartProductRecord): string {
+function formatImageSource(product: WalmartEffectiveProductRecord): string {
   if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
   if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
   if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
@@ -55,7 +55,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
   const [isImporting, setIsImporting] = useState(false);
 
   const filtered = useMemo(
-    () => filterWalmartProducts(products, { query, filter }),
+    () => filterWalmartProductsWithType(products, { query, filter }),
     [products, query, filter]
   );
 
@@ -109,6 +109,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
     }
   }
 
+  function handleSyncClick(sku: string) {
+    setMessage(`Sync request queued for ${sku}. Run Import Products to refresh catalog data.`);
+  }
+
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-products-page">
       <WalmartPageHeader
@@ -150,7 +154,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
 
         <div className="mt-4 overflow-x-auto">
-          <table className="min-w-[980px] w-full text-sm">
+          <table className="min-w-[1080px] w-full text-sm">
             <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
               <tr>
                 <th className="py-2">Image</th>
@@ -162,7 +166,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                 <th className="py-2">Status</th>
                 <th className="py-2">Last Synced</th>
                 <th className="py-2">Issues</th>
-                <th className="py-2">Actions</th>
+                <th className="py-2 pr-3 text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -204,18 +208,56 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
                       {product.title}
                     </Link>
                   </td>
-                  <td className="py-2 pr-2 text-[#334155]">{product.brand}</td>
+                  <td className="py-2 pr-2 text-[#334155]">
+                    <div className="flex flex-wrap items-center gap-1">
+                      <span>{product.brand}</span>
+                      {product.hasDraftChanges &&
+                      product.brand.trim() !== (product.liveBrand ?? product.brand).trim() ? (
+                        <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.08em] text-amber-700">
+                          Pending draft
+                        </span>
+                      ) : null}
+                    </div>
+                  </td>
                   <td className="py-2 pr-2 text-[#334155]">${product.price.toFixed(2)}</td>
                   <td className="py-2 pr-2 text-[#334155]">{formatInventory(product)}</td>
                   <td className="py-2 pr-2"><StatusBadge status={product.status} /></td>
                   <td className="py-2 pr-2 text-[#334155]">{product.lastSyncedAt}</td>
                   <td className="py-2 pr-2 text-[#334155]">{product.issues.join(", ") || "None"}</td>
-                  <td className="py-2">
-                    <div className="flex flex-wrap gap-2">
-                      <Link href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`} className="text-xs text-[#2563EB] hover:text-[#1D4ED8]">Edit</Link>
-                      <Link href="/apps/ecomviper/walmart/drafts" className="text-xs text-[#2563EB] hover:text-[#1D4ED8]">View Drafts</Link>
-                      <button type="button" className="text-xs text-[#2563EB]">Sync</button>
-                    </div>
+                  <td className="py-2 pr-3 text-right">
+                    <details className="relative inline-block text-left">
+                      <summary className="inline-flex cursor-pointer list-none items-center gap-1 rounded-lg border border-[#D9E4F0] bg-white px-2.5 py-1.5 text-xs font-medium text-[#0F172A] hover:border-[#BFDBFE] hover:bg-[#F8FAFF] [&::-webkit-details-marker]:hidden">
+                        Actions
+                        <span aria-hidden="true">▾</span>
+                      </summary>
+                      <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-[#D9E4F0] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.16)]">
+                        <Link
+                          href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                          className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                        >
+                          Edit Product
+                        </Link>
+                        <Link
+                          href="/apps/ecomviper/walmart/drafts"
+                          className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                        >
+                          View Drafts
+                        </Link>
+                        <Link
+                          href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                          className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                        >
+                          Optimize with AI
+                        </Link>
+                        <button
+                          type="button"
+                          onClick={() => handleSyncClick(product.sku)}
+                          className="block w-full rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
+                        >
+                          Sync
+                        </button>
+                      </div>
+                    </details>
                   </td>
                 </tr>
               ))}

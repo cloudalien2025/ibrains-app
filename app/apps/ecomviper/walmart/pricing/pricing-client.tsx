@@ -1,18 +1,18 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 interface PricingClientProps {
-  products: WalmartProductRecord[];
+  products: WalmartEffectiveProductRecord[];
   warnings: Array<{ sku: string; message: string }>;
   recentChanges: Array<{ createdAt: string; sku: string | null; message: string }>;
 }
 
 export default function WalmartPricingClient({ products, warnings, recentChanges }: PricingClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
-  const [price, setPrice] = useState("0");
+  const [price, setPrice] = useState(products[0] ? products[0].price.toFixed(2) : "0");
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedProduct = useMemo(
@@ -20,13 +20,28 @@ export default function WalmartPricingClient({ products, warnings, recentChanges
     [products, sku]
   );
 
+  useEffect(() => {
+    if (!selectedProduct) return;
+    setPrice(selectedProduct.price.toFixed(2));
+  }, [selectedProduct?.sku]);
+
   async function submit(saveAsDraft: boolean) {
+    if (!selectedProduct) {
+      setMessage("Select a valid product SKU before updating pricing.");
+      return;
+    }
+
     const parsedPrice = Number(price);
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      setMessage("Price must be greater than zero.");
+      return;
+    }
+
     const response = await fetch("/api/ecomviper/walmart/pricing/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sku,
+        sku: selectedProduct.sku,
         price: parsedPrice,
         saveAsDraft,
       }),
@@ -59,22 +74,66 @@ export default function WalmartPricingClient({ products, warnings, recentChanges
           <h2 className="text-lg font-semibold text-[#0F172A]">Pricing Update Workspace</h2>
           <div className="mt-4 grid gap-3">
             <label className="text-sm text-[#334155]">
-              Search SKU
-              <input value={sku} onChange={(event) => setSku(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2" />
+              Select product / SKU
+              <input
+                data-testid="ecomviper-walmart-pricing-sku-selector"
+                list="ecomviper-walmart-pricing-product-options"
+                value={sku}
+                onChange={(event) => setSku(event.target.value)}
+                placeholder="Search by SKU or title"
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              />
+              <datalist id="ecomviper-walmart-pricing-product-options">
+                {products.map((product) => (
+                  <option
+                    key={product.sku}
+                    value={product.sku}
+                    label={`${product.sku} - ${product.title}`}
+                  />
+                ))}
+              </datalist>
+            </label>
+            <label className="text-sm text-[#334155]">
+              Product title
+              <input
+                value={selectedProduct?.title ?? "Not found"}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
             </label>
             <label className="text-sm text-[#334155]">
               Current price
-              <input value={selectedProduct ? `$${selectedProduct.price.toFixed(2)}` : "Not found"} readOnly className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2" />
+              <input
+                data-testid="ecomviper-walmart-pricing-current-price"
+                value={selectedProduct ? `$${selectedProduct.price.toFixed(2)}` : "Not found"}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
             </label>
             <label className="text-sm text-[#334155]">
               New price
-              <input value={price} onChange={(event) => setPrice(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2" />
+              <input
+                data-testid="ecomviper-walmart-pricing-new-price"
+                value={price}
+                onChange={(event) => setPrice(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              />
             </label>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => submit(true)} className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]">
+              <button
+                data-testid="ecomviper-walmart-pricing-save-draft"
+                type="button"
+                onClick={() => submit(true)}
+                className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+              >
                 Save Draft
               </button>
-              <button type="button" onClick={() => submit(false)} className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white">
+              <button
+                data-testid="ecomviper-walmart-pricing-submit-update"
+                type="button"
+                onClick={() => submit(false)}
+                className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+              >
                 Submit Price Update
               </button>
             </div>

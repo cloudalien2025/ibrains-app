@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
-import { listDrafts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
+import { listDraftsForUser, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
 
 function isUnknownSkuError(error: unknown): boolean {
   return error instanceof Error && error.message.startsWith("Unknown SKU:");
@@ -21,9 +21,7 @@ export async function GET(req: NextRequest) {
     if (!userId) {
       return fail(401, "Please sign in before accessing Walmart drafts.", "UNAUTHORIZED");
     }
-    const drafts = listDrafts().filter(
-      (draft) => !draft.createdBy || draft.createdBy === userId
-    );
+    const drafts = listDraftsForUser(userId);
     return ok({ ok: true, drafts });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to list drafts.");
