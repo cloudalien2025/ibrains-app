@@ -56,7 +56,7 @@ describe("walmart products import route", () => {
     expect(response.status).toBe(200);
     expect(payload.importedCount).toBe(3);
     expect(payload.fetchedCount).toBe(3);
-    expect(payload.message).toContain("Imported 3 Walmart product");
+    expect(payload.message).toContain("Imported 3 products.");
     expect(mocks.importWalmartProducts).toHaveBeenCalledWith("user_clerk_1");
   });
 
@@ -100,9 +100,9 @@ describe("walmart products import route", () => {
 
     expect(response.status).toBe(200);
     expect(payload.importedCount).toBe(2);
-    expect(payload.message).toContain("Imported 2 Walmart product");
+    expect(payload.message).toContain("Imported 2 products.");
     expect(payload.message).toContain("Inventory pending for 1 SKU");
-    expect(payload.message).toContain("Image enrichment: found=1, notFound=1, ambiguous=0, failed=0");
+    expect(payload.message).toContain("found=1, notFound=1, ambiguous=0, failed=0");
     expect(payload.message).toContain("ItemReport requested=true, downloaded=true, rows=8");
   });
 

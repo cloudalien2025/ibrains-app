@@ -35,6 +35,30 @@ function normalizeSkuKey(sku: string): string {
 }
 
 type SkuSortDirection = "none" | "asc" | "desc";
+type ImportPanelStage =
+  | "idle"
+  | "importing_products"
+  | "normalizing_catalog"
+  | "enriching_images"
+  | "complete"
+  | "completed_with_warnings"
+  | "failed";
+
+interface ImportPanelState {
+  stage: ImportPanelStage;
+  percent: number;
+  importedCount: number;
+  processedCount: number;
+  foundCount: number;
+  missingCount: number;
+  ambiguousCount: number;
+  failedCount: number;
+  skippedNoProviderCount: number;
+  providerConnected: boolean;
+  noImageReason: string | null;
+  summary: string;
+  running: boolean;
+}
 
 function compareSkuNatural(
   left: WalmartEffectiveProductRecord,
@@ -95,6 +119,16 @@ function hasPendingDraftImage(product: WalmartEffectiveProductRecord): boolean {
   return current !== live;
 }
 
+function importStageLabel(stage: ImportPanelStage): string {
+  if (stage === "importing_products") return "Importing products";
+  if (stage === "normalizing_catalog") return "Normalizing catalog";
+  if (stage === "enriching_images") return "Enriching images";
+  if (stage === "complete") return "Complete";
+  if (stage === "completed_with_warnings") return "Completed with warnings";
+  if (stage === "failed") return "Failed";
+  return "Idle";
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -102,7 +136,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
   const [skuSortDirection, setSkuSortDirection] = useState<SkuSortDirection>("none");
   const [message, setMessage] = useState<string | null>(null);
   const [isImporting, setIsImporting] = useState(false);
-  const [importPhase, setImportPhase] = useState<"idle" | "importing" | "enriching">("idle");
+  const [importPanel, setImportPanel] = useState<ImportPanelState | null>(null);
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
     imageNotFoundCount: number;
     imageAmbiguousCount: number;
@@ -169,14 +203,59 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
 
   async function handleImport(mode: "import" | "retry_image_enrichment" = "import") {
     setIsImporting(true);
-    setImportPhase(mode === "retry_image_enrichment" ? "enriching" : "importing");
     setMessage(null);
-    const enrichmentTimer =
-      mode === "retry_image_enrichment"
-        ? null
-        : setTimeout(() => {
-            setImportPhase("enriching");
-          }, 700);
+    const stageTimers: ReturnType<typeof setTimeout>[] = [];
+    setImportPanel({
+      stage: mode === "retry_image_enrichment" ? "enriching_images" : "importing_products",
+      percent: mode === "retry_image_enrichment" ? 42 : 12,
+      importedCount: 0,
+      processedCount: 0,
+      foundCount: 0,
+      missingCount: 0,
+      ambiguousCount: 0,
+      failedCount: 0,
+      skippedNoProviderCount: 0,
+      providerConnected: false,
+      noImageReason: null,
+      summary:
+        mode === "retry_image_enrichment"
+          ? "Retrying image enrichment..."
+          : "Importing products...",
+      running: true,
+    });
+
+    if (mode !== "retry_image_enrichment") {
+      stageTimers.push(
+        setTimeout(() => {
+          setImportPanel((current) =>
+            current && current.running
+              ? {
+                  ...current,
+                  stage: "normalizing_catalog",
+                  percent: Math.max(current.percent, 36),
+                  summary: "Normalizing catalog...",
+                }
+              : current
+          );
+        }, 450)
+      );
+    }
+
+    stageTimers.push(
+      setTimeout(() => {
+        setImportPanel((current) =>
+          current && current.running
+            ? {
+                ...current,
+                stage: "enriching_images",
+                percent: Math.max(current.percent, 68),
+                summary: "Enriching images...",
+              }
+            : current
+        );
+      }, mode === "retry_image_enrichment" ? 350 : 900)
+    );
+
     try {
       const response = await fetch("/api/ecomviper/walmart/products/import", {
         method: "POST",
@@ -189,6 +268,20 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         message?: string;
         importedCount?: number;
         fetchedCount?: number;
+        importProgress?: {
+          stage?: "complete" | "completed_with_warnings";
+          providerConnected?: boolean;
+          noImageReason?: string | null;
+          totals?: {
+            importedCount?: number;
+            processedCount?: number;
+            imageFoundCount?: number;
+            imageMissingCount?: number;
+            imageAmbiguousCount?: number;
+            imageFailedCount?: number;
+            imageSkippedNoProviderCount?: number;
+          };
+        };
         importDiagnostics?: {
           payloadShape?: string;
           fetchedCount?: number;
@@ -200,16 +293,35 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           imageSkippedNoProviderCount?: number;
           enrichmentQueuedCount?: number;
           enrichmentCompletedCount?: number;
+          enrichmentProcessedCount?: number;
+          enrichmentProviderConnected?: boolean;
+          imageEnrichmentNoImageReason?: string | null;
         };
         error?: { message?: string };
       };
 
       if (!response.ok) {
-        setMessage(payload.error?.message ?? "Import failed.");
+        const failureMessage = payload.error?.message ?? "Import failed.";
+        setMessage(failureMessage);
+        setImportPanel((current) => ({
+          stage: "failed",
+          percent: 100,
+          importedCount: current?.importedCount ?? 0,
+          processedCount: current?.processedCount ?? 0,
+          foundCount: current?.foundCount ?? 0,
+          missingCount: current?.missingCount ?? 0,
+          ambiguousCount: current?.ambiguousCount ?? 0,
+          failedCount: current?.failedCount ?? 0,
+          skippedNoProviderCount: current?.skippedNoProviderCount ?? 0,
+          providerConnected: current?.providerConnected ?? false,
+          noImageReason: current?.noImageReason ?? null,
+          summary: failureMessage,
+          running: false,
+        }));
         return;
       }
 
-      const importedCount = typeof payload.importedCount === "number" ? payload.importedCount : null;
+      const importedCount = payload.importProgress?.totals?.importedCount ?? payload.importedCount ?? 0;
       const imageFoundCount = payload.importDiagnostics?.imageFoundCount ?? 0;
       const imageNotFoundCount = payload.importDiagnostics?.imageNotFoundCount ?? 0;
       const imageAmbiguousCount = payload.importDiagnostics?.imageAmbiguousCount ?? 0;
@@ -217,19 +329,50 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       const imageSkippedNoProviderCount =
         payload.importDiagnostics?.imageSkippedNoProviderCount ?? 0;
       const enrichmentQueuedCount = payload.importDiagnostics?.enrichmentQueuedCount ?? 0;
-      const enrichmentCompletedCount = payload.importDiagnostics?.enrichmentCompletedCount ?? 0;
+      const enrichmentCompletedCount =
+        payload.importDiagnostics?.enrichmentCompletedCount ??
+        payload.importDiagnostics?.enrichmentProcessedCount ??
+        0;
       const missingCount = imageNotFoundCount + imageSkippedNoProviderCount;
-      const enrichmentSummary = `Enriching images... queued=${enrichmentQueuedCount}, completed=${enrichmentCompletedCount}. Images found: ${imageFoundCount} / Missing: ${missingCount} / Ambiguous: ${imageAmbiguousCount} / Failed: ${imageFailedCount}.`;
-      const providerGuidance =
-        imageSkippedNoProviderCount > 0
-          ? " Images can be enriched automatically when you connect your SerpApi key."
-          : "";
+      const providerConnected =
+        payload.importProgress?.providerConnected ??
+        payload.importDiagnostics?.enrichmentProviderConnected ??
+        false;
+      const noImageReason =
+        payload.importProgress?.noImageReason ??
+        payload.importDiagnostics?.imageEnrichmentNoImageReason ??
+        null;
+      const finalStage: ImportPanelStage =
+        payload.importProgress?.stage === "completed_with_warnings" ||
+        missingCount > 0 ||
+        imageAmbiguousCount > 0 ||
+        imageFailedCount > 0
+          ? "completed_with_warnings"
+          : "complete";
+      const finalSummary = `Imported ${importedCount} products. Images found: ${imageFoundCount}. Missing: ${missingCount}. Ambiguous: ${imageAmbiguousCount}. Failed: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
         imageNotFoundCount,
         imageAmbiguousCount,
         imageFailedCount,
         imageSkippedNoProviderCount,
+      });
+
+      setImportPanel({
+        stage: finalStage,
+        percent: 100,
+        importedCount,
+        processedCount: payload.importProgress?.totals?.processedCount ?? enrichmentCompletedCount,
+        foundCount: payload.importProgress?.totals?.imageFoundCount ?? imageFoundCount,
+        missingCount: payload.importProgress?.totals?.imageMissingCount ?? missingCount,
+        ambiguousCount: payload.importProgress?.totals?.imageAmbiguousCount ?? imageAmbiguousCount,
+        failedCount: payload.importProgress?.totals?.imageFailedCount ?? imageFailedCount,
+        skippedNoProviderCount:
+          payload.importProgress?.totals?.imageSkippedNoProviderCount ?? imageSkippedNoProviderCount,
+        providerConnected,
+        noImageReason,
+        summary: noImageReason ? `${finalSummary} ${noImageReason}` : finalSummary,
+        running: false,
       });
 
       if (importedCount === 0) {
@@ -240,20 +383,34 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           `${
             payload.message ??
             `Import completed with zero products. fetchedCount=${fetchedCount}, payloadShape=${payloadShape}, inventoryPending=${inventoryUnknownCount}.`
-          } ${enrichmentSummary}${providerGuidance}`
+          }`
         );
       } else {
-        setMessage(
-          `${payload.message ?? "Importing products..."} ${enrichmentSummary}${providerGuidance}`
-        );
+        setMessage(payload.message ?? finalSummary);
       }
       router.refresh();
     } catch {
       setMessage("Import failed.");
+      setImportPanel((current) => ({
+        stage: "failed",
+        percent: 100,
+        importedCount: current?.importedCount ?? 0,
+        processedCount: current?.processedCount ?? 0,
+        foundCount: current?.foundCount ?? 0,
+        missingCount: current?.missingCount ?? 0,
+        ambiguousCount: current?.ambiguousCount ?? 0,
+        failedCount: current?.failedCount ?? 0,
+        skippedNoProviderCount: current?.skippedNoProviderCount ?? 0,
+        providerConnected: current?.providerConnected ?? false,
+        noImageReason: current?.noImageReason ?? null,
+        summary: "Import failed.",
+        running: false,
+      }));
     } finally {
-      if (enrichmentTimer) clearTimeout(enrichmentTimer);
+      for (const timer of stageTimers) {
+        clearTimeout(timer);
+      }
       setIsImporting(false);
-      setImportPhase("idle");
     }
   }
 
@@ -321,11 +478,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             disabled={isImporting}
             className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
           >
-            {isImporting
-              ? importPhase === "enriching"
-                ? "Enriching images..."
-                : "Importing products..."
-              : "Import Products"}
+            {isImporting ? `${importStageLabel(importPanel?.stage ?? "importing_products")}...` : "Import Products"}
           </button>
         }
       />
@@ -351,10 +504,48 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           </select>
         </div>
 
-        {isImporting ? (
-          <div className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
-            <p>Importing products...</p>
-            <p className="mt-1">Enriching images...</p>
+        {importPanel ? (
+          <div className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-3 text-sm text-[#334155]">
+            <div className="flex items-center justify-between gap-3">
+              <p className="font-medium text-[#0F172A]">{importStageLabel(importPanel.stage)}</p>
+              {!importPanel.running ? (
+                <button
+                  type="button"
+                  onClick={() => setImportPanel(null)}
+                  className="rounded-md border border-[#CBD5E1] bg-white px-2 py-1 text-xs text-[#334155]"
+                >
+                  Dismiss
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-2 h-2 w-full rounded-full bg-[#E2E8F0]">
+              <div
+                className={`h-2 rounded-full transition-all ${
+                  importPanel.stage === "failed"
+                    ? "bg-rose-600"
+                    : importPanel.stage === "completed_with_warnings"
+                    ? "bg-amber-500"
+                    : "bg-[#2563EB]"
+                }`}
+                style={{ width: `${Math.max(0, Math.min(100, importPanel.percent))}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-[#475569]">{importPanel.summary}</p>
+            <div className="mt-2 grid gap-1 text-xs text-[#334155] sm:grid-cols-2">
+              <p>Products imported: {importPanel.importedCount}</p>
+              <p>Products processed: {importPanel.processedCount}</p>
+              <p>Images found: {importPanel.foundCount}</p>
+              <p>Missing/not found: {importPanel.missingCount}</p>
+              <p>Ambiguous: {importPanel.ambiguousCount}</p>
+              <p>Failed: {importPanel.failedCount}</p>
+              <p>Skipped (SerpApi not connected): {importPanel.skippedNoProviderCount}</p>
+              <p>SerpApi: {importPanel.providerConnected ? "Connected" : "Not connected"}</p>
+            </div>
+            {importPanel.noImageReason ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">
+                {importPanel.noImageReason}
+              </p>
+            ) : null}
           </div>
         ) : null}
         {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}

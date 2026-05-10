@@ -8,24 +8,93 @@ interface SettingsClientProps {
   region: string;
 }
 
-async function runDangerAction(action: "disconnect_marketplace" | "clear_products" | "reset_drafts") {
+type DangerAction = "disconnect_marketplace" | "clear_products" | "reset_drafts";
+
+interface DangerActionResponse {
+  ok: boolean;
+  action?: DangerAction;
+  clearedProductCount?: number;
+  clearedImportStateCount?: number;
+  clearedImageMetadataCount?: number;
+  blockedDraftCount?: number;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+}
+
+async function runDangerAction(action: DangerAction): Promise<DangerActionResponse> {
   const response = await fetch("/api/ecomviper/walmart/settings/reset", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action }),
   });
-  return response.ok;
+  const payload = (await response.json().catch(() => ({}))) as DangerActionResponse;
+  if (response.ok) {
+    return {
+      ...payload,
+      action,
+      ok: true,
+    };
+  }
+  return {
+    ...payload,
+    action,
+    ok: false,
+  };
 }
 
 export default function WalmartSettingsClient({ environment, region }: SettingsClientProps) {
   const [writeProtectionEnabled, setWriteProtectionEnabled] = useState(true);
   const [message, setMessage] = useState<string | null>(null);
+  const [clearProductsModalOpen, setClearProductsModalOpen] = useState(false);
+  const [dangerActionPending, setDangerActionPending] = useState<DangerAction | null>(null);
 
-  async function guardedAction(action: "disconnect_marketplace" | "clear_products" | "reset_drafts", confirmText: string) {
+  async function guardedAction(action: DangerAction, confirmText: string) {
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
-    const ok = await runDangerAction(action);
-    setMessage(ok ? "Danger action completed." : "Danger action failed.");
+    setDangerActionPending(action);
+    const result = await runDangerAction(action);
+    setDangerActionPending(null);
+    if (!result.ok) {
+      setMessage(result.error?.message ?? "Danger action failed.");
+      return;
+    }
+
+    if (action === "disconnect_marketplace") {
+      setMessage("Walmart marketplace disconnected.");
+      return;
+    }
+
+    if (action === "reset_drafts") {
+      setMessage("Drafts were reset.");
+      return;
+    }
+
+    setMessage("Danger action completed.");
+  }
+
+  async function confirmClearImportedProducts() {
+    setDangerActionPending("clear_products");
+    const result = await runDangerAction("clear_products");
+    setDangerActionPending(null);
+    setClearProductsModalOpen(false);
+
+    if (result.ok) {
+      const clearedProductCount = result.clearedProductCount ?? 0;
+      setMessage(`Cleared ${clearedProductCount} imported products from EcomViper.`);
+      return;
+    }
+
+    if (result.error?.code === "ACTIVE_DRAFTS_BLOCK_CLEAR") {
+      const blockedDraftCount = result.blockedDraftCount ?? 0;
+      setMessage(
+        `Cannot clear imported products while ${blockedDraftCount} active drafts exist. Reset or discard drafts first.`
+      );
+      return;
+    }
+
+    setMessage(result.error?.message ?? "Clear failed. Please try again.");
   }
 
   return (
@@ -73,13 +142,15 @@ export default function WalmartSettingsClient({ environment, region }: SettingsC
             <button
               type="button"
               onClick={() => guardedAction("disconnect_marketplace", "Disconnect Walmart marketplace now?")}
+              disabled={dangerActionPending !== null}
               className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-left text-sm text-rose-700"
             >
               Disconnect marketplace
             </button>
             <button
               type="button"
-              onClick={() => guardedAction("clear_products", "Clear all imported products now?")}
+              onClick={() => setClearProductsModalOpen(true)}
+              disabled={dangerActionPending !== null}
               className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-left text-sm text-rose-700"
             >
               Clear imported products
@@ -87,6 +158,7 @@ export default function WalmartSettingsClient({ environment, region }: SettingsC
             <button
               type="button"
               onClick={() => guardedAction("reset_drafts", "Reset all drafts now?")}
+              disabled={dangerActionPending !== null}
               className="rounded-lg border border-rose-300 bg-white px-3 py-2 text-left text-sm text-rose-700"
             >
               Reset drafts
@@ -95,6 +167,38 @@ export default function WalmartSettingsClient({ environment, region }: SettingsC
           {message ? <p className="mt-3 text-sm text-rose-700">{message}</p> : null}
         </article>
       </section>
+
+      {clearProductsModalOpen ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-[#0F172A]/40 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-xl rounded-2xl border border-[#D9E4F0] bg-white p-5 shadow-[0_22px_48px_rgba(15,23,42,0.28)]">
+            <h2 className="text-lg font-semibold text-[#0F172A]">Clear imported products from EcomViper?</h2>
+            <p className="mt-2 text-sm text-[#334155]">
+              This removes imported product rows and local image enrichment metadata from your EcomViper workspace only. It will not delete, retire, unpublish, or change products on Walmart.
+            </p>
+            <p className="mt-2 text-sm text-[#9A3412]">
+              If active drafts exist, clear will be blocked. Reset or discard drafts before clearing imported products.
+            </p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setClearProductsModalOpen(false)}
+                disabled={dangerActionPending === "clear_products"}
+                className="rounded-lg border border-[#CBD5E1] px-3 py-2 text-sm text-[#334155]"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void confirmClearImportedProducts()}
+                disabled={dangerActionPending === "clear_products"}
+                className="rounded-lg border border-rose-700 bg-rose-700 px-3 py-2 text-sm text-white"
+              >
+                {dangerActionPending === "clear_products" ? "Clearing..." : "Clear imported products"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

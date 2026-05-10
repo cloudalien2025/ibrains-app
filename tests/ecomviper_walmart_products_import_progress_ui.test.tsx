@@ -82,6 +82,20 @@ describe("Walmart import progress UI", () => {
           ok: true,
           importedCount: 3,
           message: "Imported 3 Walmart product(s).",
+          importProgress: {
+            stage: "completed_with_warnings",
+            providerConnected: false,
+            noImageReason: "SerpApi is not connected.",
+            totals: {
+              importedCount: 3,
+              processedCount: 2,
+              imageFoundCount: 1,
+              imageMissingCount: 2,
+              imageAmbiguousCount: 1,
+              imageFailedCount: 0,
+              imageSkippedNoProviderCount: 1,
+            },
+          },
           importDiagnostics: {
             imageFoundCount: 1,
             imageNotFoundCount: 1,
@@ -90,6 +104,8 @@ describe("Walmart import progress UI", () => {
             imageSkippedNoProviderCount: 1,
             enrichmentQueuedCount: 2,
             enrichmentCompletedCount: 2,
+            enrichmentProviderConnected: false,
+            imageEnrichmentNoImageReason: "SerpApi is not connected.",
           },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -110,10 +126,14 @@ describe("Walmart import progress UI", () => {
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(container.textContent).toContain("Imported 3 Walmart product(s).");
-    expect(container.textContent).toContain(
-      "Images can be enriched automatically when you connect your SerpApi key."
-    );
+    expect(container.textContent).toContain("Completed with warnings");
+    expect(container.textContent).toContain("Products imported: 3");
+    expect(container.textContent).toContain("Products processed: 2");
+    expect(container.textContent).toContain("Images found: 1");
+    expect(container.textContent).toContain("Missing/not found: 2");
+    expect(container.textContent).toContain("Skipped (SerpApi not connected): 1");
+    expect(container.textContent).toContain("SerpApi: Not connected");
+    expect(container.textContent).toContain("SerpApi is not connected.");
     expect(routerRefresh).toHaveBeenCalledTimes(1);
   });
 });

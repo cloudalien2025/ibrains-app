@@ -18,6 +18,11 @@ export async function listWalmartDraftsForUser(userId: string): Promise<WalmartD
   return listPersistedWalmartDrafts({ userId, includeDiscarded: false });
 }
 
+export async function countActiveWalmartDraftsForUser(userId: string): Promise<number> {
+  const drafts = await listPersistedWalmartDrafts({ userId, includeDiscarded: false });
+  return drafts.filter((draft) => draft.status !== "discarded").length;
+}
+
 export async function getWalmartDraftByIdForUser(
   userId: string,
   draftId: string

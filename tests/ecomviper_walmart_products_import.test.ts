@@ -762,6 +762,132 @@ describe("walmart product import", () => {
     expect(product?.imageUrl).toBe("https://i5.walmartimages.com/asr/18410702298-primary.jpeg");
   });
 
+  it("normalizes numeric Walmart public IDs from import payload for SerpApi enrichment", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-public-serpapi-numeric-id",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: true,
+      apiKey: "serpapi_test_key",
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "found",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "Public Walmart listing images found via SerpApi.",
+      imageMatchMethod: "public_url_product_id",
+      publicWalmartUrl:
+        "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+      publicWalmartProductId: "18410702298",
+      primaryImageUrl: "https://i5.walmartimages.com/asr/18410702298-primary.jpeg",
+      galleryImageUrls: ["https://i5.walmartimages.com/asr/18410702298-primary.jpeg"],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_product",
+        statusCategory: "ok",
+        productId: "18410702298",
+        candidateCount: 1,
+        imageCount: 1,
+        matchMethod: "public_url_product_id",
+      },
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "SERPAPI-NUMERIC-ID-1",
+            productName: "Numeric Identifier Product",
+            brand: "OPA",
+            usItemId: 18410702298,
+            productPageUrl:
+              "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+            availability: "In_stock",
+            price: { amount: "18.99" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "SERPAPI-NUMERIC-ID-1": {
+          sku: "SERPAPI-NUMERIC-ID-1",
+          quantity: { unit: "EACH", amount: 4 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "SERPAPI-NUMERIC-ID-1");
+
+    expect(result.importDiagnostics?.imageFoundCount).toBe(1);
+    expect(product?.publicWalmartProductId).toBe("18410702298");
+    expect(product?.publicWalmartUrl).toContain("/18410702298");
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_clerk_1",
+        product: expect.objectContaining({
+          publicWalmartProductId: "18410702298",
+        }),
+      })
+    );
+  });
+
+  it("reports no-image reason when SerpApi is not connected", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-no-provider-reason",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: false,
+      apiKey: null,
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "NO-PROVIDER-IMG-1",
+            productName: "No Provider Product",
+            brand: "BrandZ",
+            availability: "In_stock",
+            price: { amount: "11.00" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "NO-PROVIDER-IMG-1": {
+          sku: "NO-PROVIDER-IMG-1",
+          quantity: { unit: "EACH", amount: 2 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+
+    expect(result.importDiagnostics?.enrichmentProviderConnected).toBe(false);
+    expect(result.importDiagnostics?.imageSkippedNoProviderCount).toBe(1);
+    expect(result.importDiagnostics?.imageEnrichmentNoImageReason).toBe("SerpApi is not connected.");
+  });
+
   it("treats missing inventory as unknown and only flags out-of-stock on explicit zero quantity", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: true,

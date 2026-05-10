@@ -252,7 +252,10 @@ export interface WalmartImportResult {
     imageSkippedNoProviderCount?: number;
     enrichmentQueuedCount?: number;
     enrichmentCompletedCount?: number;
+    enrichmentProcessedCount?: number;
+    enrichmentProviderConnected?: boolean;
     lastEnrichedAt?: string | null;
+    imageEnrichmentNoImageReason?: string | null;
     imageSource?: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi";
     itemReportRequested?: boolean;
     itemReportDownloaded?: boolean;
