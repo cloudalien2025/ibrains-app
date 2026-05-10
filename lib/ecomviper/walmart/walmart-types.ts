@@ -280,8 +280,11 @@ export interface WalmartAiSuggestion {
   sku: string;
   qualityScore: number;
   suggestedTitle: string;
+  suggestedShortDescription?: string;
   suggestedDescription: string;
   suggestedBullets: string[];
+  suggestedBrand?: string;
+  suggestedAttributes?: Record<string, string>;
   missingAttributes: string[];
   complianceWarnings: string[];
   disclaimer: string;
