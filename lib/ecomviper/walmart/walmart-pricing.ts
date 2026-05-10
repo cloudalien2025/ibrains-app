@@ -1,12 +1,20 @@
 import "server-only";
 
 import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
-import { getProductBySku, getRecentPriceChanges, listProducts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
-import type { WalmartPriceUpdateRequest } from "@/lib/ecomviper/walmart/walmart-types";
+import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
+import { getRecentPriceChanges, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
+import type {
+  WalmartMutationResult,
+  WalmartPriceUpdateRequest,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
-export function updateWalmartPrice(input: WalmartPriceUpdateRequest) {
-  const sku = input.sku.trim();
-  const product = getProductBySku(sku);
+export async function updateWalmartPriceForUser(input: {
+  userId: string;
+  update: WalmartPriceUpdateRequest;
+}): Promise<WalmartMutationResult> {
+  const sku = input.update.sku.trim();
+  const product = await getPersistedWalmartProductBySku(input.userId, sku);
 
   if (!product) {
     return {
@@ -18,12 +26,14 @@ export function updateWalmartPrice(input: WalmartPriceUpdateRequest) {
     };
   }
 
-  if (input.saveAsDraft) {
+  if (input.update.saveAsDraft) {
     upsertDraftForSku({
       sku,
       draftPayload: {
-        price: input.price,
+        price: input.update.price,
       },
+      createdBy: input.userId,
+      productOverride: product,
     });
 
     return {
@@ -52,9 +62,7 @@ export function updateWalmartPrice(input: WalmartPriceUpdateRequest) {
   };
 }
 
-export function getPricingView() {
-  const products = listProducts();
-
+export function getPricingView(products: WalmartProductRecord[]) {
   return {
     products,
     validationWarnings: products

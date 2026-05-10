@@ -1,21 +1,25 @@
 import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
 import { getWalmartProductBySkuForUser } from "@/lib/ecomviper/walmart/walmart-products";
-import { listDrafts } from "@/lib/ecomviper/walmart/walmart-store";
+import { listDraftsForUser } from "@/lib/ecomviper/walmart/walmart-store";
 import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
+import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 export const dynamic = "force-dynamic";
 
 export default async function WalmartProductEditorPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = await params;
   let product = null;
-  const stagedDrafts = listDrafts().filter((entry) => entry.sku.trim().toUpperCase() === sku.trim().toUpperCase());
+  let stagedDrafts: WalmartDraftRecord[] = [];
   let aiProviderConnected = false;
 
   try {
     const { userId, unauthorizedResponse } = await requireSignedInUser();
     if (!unauthorizedResponse && userId) {
       product = await getWalmartProductBySkuForUser(userId, sku);
+      stagedDrafts = listDraftsForUser(userId).filter(
+        (entry) => entry.sku.trim().toUpperCase() === sku.trim().toUpperCase()
+      );
       const openAiStatus = await getWalmartOpenAiConnectionStatusForUser(userId);
       aiProviderConnected = openAiStatus.connected;
     }

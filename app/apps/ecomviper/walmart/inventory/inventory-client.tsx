@@ -1,26 +1,33 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 interface InventoryClientProps {
-  products: WalmartProductRecord[];
-  lowStock: WalmartProductRecord[];
-  outOfStock: WalmartProductRecord[];
+  products: WalmartEffectiveProductRecord[];
+  lowStock: WalmartEffectiveProductRecord[];
+  outOfStock: WalmartEffectiveProductRecord[];
   recentChanges: Array<{ createdAt: string; sku: string | null; message: string }>;
 }
 
-function formatInventory(product: WalmartProductRecord | null): string {
+function formatInventory(product: WalmartEffectiveProductRecord | null): string {
   if (!product) return "Not found";
   if (product.inventoryStatus === "unknown") return "Not synced";
   if (product.inventoryStatus === "out_of_stock") return "Out of stock";
   return String(product.inventoryQuantity);
 }
 
+function formatInventoryStatus(product: WalmartEffectiveProductRecord | null): string {
+  if (!product) return "Unknown";
+  if (product.inventoryStatus === "unknown") return "Unknown (Not synced)";
+  if (product.inventoryStatus === "out_of_stock") return "Out of stock";
+  return "In stock";
+}
+
 export default function WalmartInventoryClient({ products, lowStock, outOfStock, recentChanges }: InventoryClientProps) {
   const [sku, setSku] = useState(products[0]?.sku ?? "");
-  const [quantity, setQuantity] = useState("0");
+  const [quantity, setQuantity] = useState(products[0] ? String(products[0].inventoryQuantity) : "0");
   const [message, setMessage] = useState<string | null>(null);
 
   const selectedProduct = useMemo(
@@ -28,13 +35,28 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
     [products, sku]
   );
 
+  useEffect(() => {
+    if (!selectedProduct) return;
+    setQuantity(String(selectedProduct.inventoryQuantity));
+  }, [selectedProduct?.sku]);
+
   async function submit(saveAsDraft: boolean) {
+    if (!selectedProduct) {
+      setMessage("Select a valid product SKU before updating inventory.");
+      return;
+    }
+
     const parsedQuantity = Number(quantity);
+    if (!Number.isFinite(parsedQuantity) || parsedQuantity < 0) {
+      setMessage("Quantity must be a non-negative number.");
+      return;
+    }
+
     const response = await fetch("/api/ecomviper/walmart/inventory/update", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        sku,
+        sku: selectedProduct.sku,
         quantity: parsedQuantity,
         saveAsDraft,
       }),
@@ -67,22 +89,74 @@ export default function WalmartInventoryClient({ products, lowStock, outOfStock,
           <h2 className="text-lg font-semibold text-[#0F172A]">Inventory Update Workspace</h2>
           <div className="mt-4 grid gap-3">
             <label className="text-sm text-[#334155]">
-              Search SKU
-              <input value={sku} onChange={(event) => setSku(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2" />
+              Select product / SKU
+              <input
+                data-testid="ecomviper-walmart-inventory-sku-selector"
+                list="ecomviper-walmart-inventory-product-options"
+                value={sku}
+                onChange={(event) => setSku(event.target.value)}
+                placeholder="Search by SKU or title"
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              />
+              <datalist id="ecomviper-walmart-inventory-product-options">
+                {products.map((product) => (
+                  <option
+                    key={product.sku}
+                    value={product.sku}
+                    label={`${product.sku} - ${product.title}`}
+                  />
+                ))}
+              </datalist>
+            </label>
+            <label className="text-sm text-[#334155]">
+              Product title
+              <input
+                value={selectedProduct?.title ?? "Not found"}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
             </label>
             <label className="text-sm text-[#334155]">
               Current quantity
-              <input value={formatInventory(selectedProduct)} readOnly className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2" />
+              <input
+                data-testid="ecomviper-walmart-inventory-current-quantity"
+                value={formatInventory(selectedProduct)}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
+            </label>
+            <label className="text-sm text-[#334155]">
+              Inventory status
+              <input
+                value={formatInventoryStatus(selectedProduct)}
+                readOnly
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2"
+              />
             </label>
             <label className="text-sm text-[#334155]">
               New quantity
-              <input value={quantity} onChange={(event) => setQuantity(event.target.value)} className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2" />
+              <input
+                data-testid="ecomviper-walmart-inventory-new-quantity"
+                value={quantity}
+                onChange={(event) => setQuantity(event.target.value)}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+              />
             </label>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => submit(true)} className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]">
+              <button
+                data-testid="ecomviper-walmart-inventory-save-draft"
+                type="button"
+                onClick={() => submit(true)}
+                className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+              >
                 Save Draft
               </button>
-              <button type="button" onClick={() => submit(false)} className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white">
+              <button
+                data-testid="ecomviper-walmart-inventory-update-sku"
+                type="button"
+                onClick={() => submit(false)}
+                className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
+              >
                 Update SKU
               </button>
             </div>

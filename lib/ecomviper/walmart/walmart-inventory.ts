@@ -1,13 +1,20 @@
 import "server-only";
 
 import { appendActivityLog } from "@/lib/ecomviper/core/activity-log";
-import { getProductBySku, getRecentInventoryChanges, listProducts, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
-import type { WalmartInventoryUpdateRequest } from "@/lib/ecomviper/walmart/walmart-types";
+import { getPersistedWalmartProductBySku } from "@/lib/ecomviper/walmart/walmart-product-repository";
+import { getRecentInventoryChanges, upsertDraftForSku } from "@/lib/ecomviper/walmart/walmart-store";
+import type {
+  WalmartInventoryUpdateRequest,
+  WalmartMutationResult,
+  WalmartProductRecord,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
-export function updateWalmartInventory(input: WalmartInventoryUpdateRequest) {
-  const sku = input.sku.trim();
-  const product = getProductBySku(sku);
-
+export async function updateWalmartInventoryForUser(input: {
+  userId: string;
+  update: WalmartInventoryUpdateRequest;
+}): Promise<WalmartMutationResult> {
+  const sku = input.update.sku.trim();
+  const product = await getPersistedWalmartProductBySku(input.userId, sku);
   if (!product) {
     return {
       ok: false,
@@ -18,12 +25,14 @@ export function updateWalmartInventory(input: WalmartInventoryUpdateRequest) {
     };
   }
 
-  if (input.saveAsDraft) {
+  if (input.update.saveAsDraft) {
     upsertDraftForSku({
       sku,
       draftPayload: {
-        inventoryQuantity: input.quantity,
+        inventoryQuantity: input.update.quantity,
       },
+      createdBy: input.userId,
+      productOverride: product,
     });
 
     return {
@@ -52,9 +61,7 @@ export function updateWalmartInventory(input: WalmartInventoryUpdateRequest) {
   };
 }
 
-export function getInventoryView() {
-  const products = listProducts();
-
+export function getInventoryView(products: WalmartProductRecord[]) {
   return {
     lowStock: products.filter(
       (product) => product.inventoryStatus === "known" && product.inventoryQuantity > 0 && product.inventoryQuantity <= 15
