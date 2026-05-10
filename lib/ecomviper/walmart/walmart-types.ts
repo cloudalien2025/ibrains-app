@@ -87,6 +87,14 @@ export interface WalmartOpenAiConnectionStatus {
   saveSupported: boolean;
 }
 
+export interface WalmartSerpApiConnectionStatus {
+  connected: boolean;
+  status: "connected" | "disconnected";
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+}
+
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
 export type WalmartImageStatus = "image_available" | "catalog_missing" | "enrichment_unconfigured";
@@ -98,6 +106,11 @@ export type WalmartImageMatchMethod =
   | "wpid"
   | "query"
   | "catalog"
+  | "public_url_product_id"
+  | "serpapi_product_id"
+  | "serpapi_search_upc"
+  | "serpapi_search_gtin"
+  | "serpapi_search_title_brand"
   | "item_report_sku"
   | "item_report_productid"
   | "item_report_itemid"
@@ -107,6 +120,8 @@ export type WalmartImageSource =
   | "walmart_item_report"
   | "walmart_catalog"
   | "walmart_item_search"
+  | "public_walmart_listing_serpapi"
+  | "manual"
   | "shopify_placeholder"
   | "manual_placeholder"
   | "none";
@@ -137,7 +152,11 @@ export interface WalmartProductRecord {
   imageSyncStatus?: WalmartImageSyncStatus;
   imageMatchMethod?: WalmartImageMatchMethod;
   matchedItemId?: string;
+  publicWalmartUrl?: string;
+  publicWalmartProductId?: string;
+  primaryImageUrl?: string;
   lastImageSyncedAt?: string | null;
+  imageSyncReason?: string | null;
   issues: string[];
   attributes: Record<string, string>;
   shortDescription: string;

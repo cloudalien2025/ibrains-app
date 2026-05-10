@@ -27,6 +27,7 @@ interface ProductEditorClientProps {
   product: WalmartProductRecord;
   stagedDrafts: WalmartDraftRecord[];
   aiProviderConnected: boolean;
+  serpApiProviderConnected: boolean;
 }
 
 const tabs = [
@@ -49,6 +50,13 @@ interface ProductEditorFormState {
   bulletPoints: string;
   imageUrl: string;
   additionalImageUrls: string;
+  publicWalmartUrl: string;
+  publicWalmartProductId: string;
+  imageSource: string;
+  imageMatchMethod: string;
+  imageSyncStatus: string;
+  imageSyncReason: string;
+  lastImageSyncedAt: string;
   price: string;
   inventoryQuantity: string;
   brand: string;
@@ -58,6 +66,29 @@ interface ProductEditorFormState {
 type GenerateSuggestionResponse = {
   ok: boolean;
   suggestion?: WalmartAiSuggestion;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
+type PublicListingResolveResponse = {
+  ok: boolean;
+  sku: string;
+  resolved?: {
+    imageSyncStatus: string;
+    imageSource: string;
+    imageSourceLabel: string;
+    imageMatchMethod: string | null;
+    publicWalmartUrl: string;
+    publicWalmartProductId: string;
+    primaryImageUrl: string;
+    galleryImageUrls: string[];
+    variantImageUrls: string[];
+    imageCount: number;
+    imageSyncReason: string;
+    lastImageSyncedAt: string;
+  };
   error?: {
     code?: string;
     message?: string;
@@ -106,6 +137,16 @@ function firstNonEmptyString(
       if (value && value.trim()) {
         return value.trim();
       }
+    }
+  }
+  return "";
+}
+
+function firstNonEmptyStringValue(...values: Array<unknown>): string {
+  for (const value of values) {
+    const text = asText(value);
+    if (text && text.trim()) {
+      return text.trim();
     }
   }
   return "";
@@ -296,6 +337,13 @@ function hydrateEditorForm(
   ]);
   const draftBrand = readDraftString(draft, ["brand", "brandName"]);
   const draftImageUrl = readDraftString(draft, ["imageUrl", "primaryImageUrl"]);
+  const draftPublicWalmartUrl = readDraftString(draft, ["publicWalmartUrl"]);
+  const draftPublicWalmartProductId = readDraftString(draft, ["publicWalmartProductId"]);
+  const draftImageSource = readDraftString(draft, ["imageSource"]);
+  const draftImageMatchMethod = readDraftString(draft, ["imageMatchMethod"]);
+  const draftImageSyncStatus = readDraftString(draft, ["imageSyncStatus"]);
+  const draftImageSyncReason = readDraftString(draft, ["imageSyncReason"]);
+  const draftLastImageSyncedAt = readDraftString(draft, ["lastImageSyncedAt"]);
   const draftPrice = readDraftNumber(draft, ["price"]);
   const draftInventory = readDraftNumber(draft, ["inventoryQuantity"]);
   const draftBullets = readDraftList(draft, ["bulletPoints", "keyFeatures", "bullets"]);
@@ -368,6 +416,56 @@ function hydrateEditorForm(
       ...(product.galleryImageUrls ?? []),
       ...(product.variantImageUrls ?? []),
     ]);
+  const publicWalmartUrl =
+    draftPublicWalmartUrl ??
+    firstNonEmptyStringValue(
+      product.publicWalmartUrl,
+      normalized?.publicWalmartUrl,
+      raw?.publicWalmartUrl
+    );
+  const publicWalmartProductId =
+    draftPublicWalmartProductId ??
+    firstNonEmptyStringValue(
+      product.publicWalmartProductId,
+      normalized?.publicWalmartProductId,
+      raw?.publicWalmartProductId
+    );
+  const imageSource =
+    draftImageSource ??
+    firstNonEmptyStringValue(
+      product.imageSource,
+      normalized?.imageSource,
+      raw?.imageSource
+    );
+  const imageMatchMethod =
+    draftImageMatchMethod ??
+    firstNonEmptyStringValue(
+      product.imageMatchMethod,
+      normalized?.imageMatchMethod,
+      raw?.imageMatchMethod
+    );
+  const imageSyncStatus =
+    draftImageSyncStatus ??
+    firstNonEmptyStringValue(
+      product.imageSyncStatus,
+      normalized?.imageSyncStatus,
+      raw?.imageSyncStatus
+    );
+  const imageSyncReason =
+    draftImageSyncReason ??
+    firstNonEmptyStringValue(
+      product.imageSyncReason,
+      product.imageStatusMessage,
+      normalized?.imageSyncReason,
+      raw?.imageSyncReason
+    );
+  const lastImageSyncedAt =
+    draftLastImageSyncedAt ??
+    firstNonEmptyStringValue(
+      product.lastImageSyncedAt,
+      normalized?.lastImageSyncedAt,
+      raw?.lastImageSyncedAt
+    );
   const normalizedBullets = listFromUnknown(normalized?.bulletPoints);
   const rawBullets = listFromUnknown(raw?.bulletPoints);
   const rawKeyFeatures = listFromUnknown(raw?.keyFeatures);
@@ -407,6 +505,13 @@ function hydrateEditorForm(
     bulletPoints: bulletPoints.join("\n"),
     imageUrl,
     additionalImageUrls: unique(additionalImageUrls).join("\n"),
+    publicWalmartUrl,
+    publicWalmartProductId,
+    imageSource,
+    imageMatchMethod,
+    imageSyncStatus,
+    imageSyncReason,
+    lastImageSyncedAt,
     price: Number.isFinite(price) ? String(price) : "",
     inventoryQuantity: inventoryQuantity === null ? "" : String(inventoryQuantity),
     brand,
@@ -437,6 +542,9 @@ function formatImageSource(product: WalmartProductRecord): string {
   if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
   if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
   if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  if (product.imageSource === "public_walmart_listing_serpapi")
+    return "Public Walmart listing via SerpApi";
+  if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
 }
 
@@ -513,6 +621,7 @@ export default function ProductEditorClient({
   product,
   stagedDrafts,
   aiProviderConnected,
+  serpApiProviderConnected,
 }: ProductEditorClientProps) {
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Content");
   const initialForm = useMemo(() => hydrateEditorForm(product, stagedDrafts), [product, stagedDrafts]);
@@ -540,6 +649,39 @@ export default function ProductEditorClient({
   const [aiSuggestionApplied, setAiSuggestionApplied] = useState(false);
   const [showAiDetails, setShowAiDetails] = useState(false);
   const [draftEditorOpen, setDraftEditorOpen] = useState(false);
+  const [resolvingPublicImages, setResolvingPublicImages] = useState(false);
+  const [resolvedPublicImages, setResolvedPublicImages] =
+    useState<PublicListingResolveResponse["resolved"] | null>(() => {
+      if (
+        initialForm.imageSource === "public_walmart_listing_serpapi" &&
+        (initialForm.imageUrl.trim() || initialForm.additionalImageUrls.trim())
+      ) {
+        const galleryImageUrls = unique([
+          initialForm.imageUrl.trim(),
+          ...initialForm.additionalImageUrls
+            .split("\n")
+            .map((line) => line.trim())
+            .filter(Boolean),
+        ]);
+        return {
+          imageSyncStatus: initialForm.imageSyncStatus || "found",
+          imageSource: "public_walmart_listing_serpapi",
+          imageSourceLabel: "Public Walmart listing via SerpApi",
+          imageMatchMethod: initialForm.imageMatchMethod || null,
+          publicWalmartUrl: initialForm.publicWalmartUrl,
+          publicWalmartProductId: initialForm.publicWalmartProductId,
+          primaryImageUrl: initialForm.imageUrl.trim(),
+          galleryImageUrls,
+          variantImageUrls: [],
+          imageCount: galleryImageUrls.length,
+          imageSyncReason:
+            initialForm.imageSyncReason || "Public Walmart listing images found via SerpApi.",
+          lastImageSyncedAt: initialForm.lastImageSyncedAt || new Date().toISOString(),
+        };
+      }
+      return null;
+    });
+  const [publicImageMessage, setPublicImageMessage] = useState<string | null>(null);
   const optimizingWithAi = inlineAiState === "loading";
 
   const stagedOptimizations = useMemo(() => {
@@ -593,6 +735,13 @@ export default function ProductEditorClient({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean),
+      publicWalmartUrl: form.publicWalmartUrl.trim() || undefined,
+      publicWalmartProductId: form.publicWalmartProductId.trim() || undefined,
+      imageSource: form.imageSource.trim() || undefined,
+      imageMatchMethod: form.imageMatchMethod.trim() || undefined,
+      imageSyncStatus: form.imageSyncStatus.trim() || undefined,
+      imageSyncReason: form.imageSyncReason.trim() || undefined,
+      lastImageSyncedAt: form.lastImageSyncedAt.trim() || undefined,
       price: Number(form.price),
       inventoryQuantity: Number(form.inventoryQuantity),
       brand: form.brand.trim(),
@@ -731,6 +880,101 @@ export default function ProductEditorClient({
     }
 
     setMessage("Draft saved. Open Drafts to review and submit when ready.");
+  }
+
+  function toPublicImageErrorMessage(code: string, fallback: string): string {
+    if (code === "SERPAPI_NOT_CONNECTED") {
+      return "Connect your SerpApi key to fetch public Walmart listing images.";
+    }
+    if (code === "INVALID_PUBLIC_WALMART_URL") {
+      return "Public Walmart listing URL is invalid. Use a valid walmart.com product URL.";
+    }
+    if (code === "INVALID_PUBLIC_WALMART_PRODUCT_ID") {
+      return "Public Walmart product ID is invalid.";
+    }
+    if (code === "SERPAPI_AUTH_FAILED") {
+      return "SerpApi authentication failed. Verify your SerpApi key on the Connect page.";
+    }
+    if (code === "SERPAPI_RATE_LIMITED") {
+      return "SerpApi rate limited this request. Retry in a moment.";
+    }
+    if (code === "SERPAPI_AMBIGUOUS_MATCH") {
+      return "Multiple public Walmart listing candidates matched this product. Provide a direct public Walmart URL.";
+    }
+    if (code === "SERPAPI_NOT_FOUND" || code === "SERPAPI_NO_IMAGES_FOUND") {
+      return "No public Walmart listing images were found for this product.";
+    }
+    return fallback || "Could not fetch public Walmart listing images.";
+  }
+
+  async function handleFindPublicListingImages() {
+    setResolvedPublicImages(null);
+    setPublicImageMessage(null);
+    setResolvingPublicImages(true);
+
+    try {
+      const response = await fetch(
+        `/api/ecomviper/walmart/products/${encodeURIComponent(product.sku)}/images/resolve`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            publicWalmartUrl: form.publicWalmartUrl.trim(),
+            publicWalmartProductId: form.publicWalmartProductId.trim(),
+          }),
+        }
+      );
+
+      const payload = (await response.json().catch(() => null)) as PublicListingResolveResponse | null;
+      if (!response.ok || !payload?.resolved) {
+        const code = payload?.error?.code?.trim().toUpperCase() ?? "";
+        const fallback = payload?.error?.message?.trim() ?? "Could not fetch public Walmart listing images.";
+        setPublicImageMessage(toPublicImageErrorMessage(code, fallback));
+        return;
+      }
+
+      setResolvedPublicImages(payload.resolved);
+      setPublicImageMessage("Public Walmart listing images found. Click Use Images in Draft to apply them.");
+      setForm((current) => ({
+        ...current,
+        publicWalmartUrl: payload.resolved?.publicWalmartUrl || current.publicWalmartUrl,
+        publicWalmartProductId:
+          payload.resolved?.publicWalmartProductId || current.publicWalmartProductId,
+      }));
+    } catch {
+      setPublicImageMessage("Provider request failed. Could not fetch public Walmart listing images.");
+    } finally {
+      setResolvingPublicImages(false);
+    }
+  }
+
+  function handleUseResolvedImagesInDraft() {
+    if (!resolvedPublicImages) {
+      setPublicImageMessage("Find images first, then use them in draft.");
+      return;
+    }
+
+    const primaryImageUrl = resolvedPublicImages.primaryImageUrl.trim();
+    const galleryImageUrls = unique(
+      resolvedPublicImages.galleryImageUrls
+        .map((entry) => entry.trim())
+        .filter(Boolean)
+    );
+    const additionalImageUrls = galleryImageUrls.filter((entry) => entry !== primaryImageUrl);
+
+    patchForm({
+      imageUrl: primaryImageUrl,
+      additionalImageUrls: additionalImageUrls.join("\n"),
+      publicWalmartUrl: resolvedPublicImages.publicWalmartUrl || form.publicWalmartUrl,
+      publicWalmartProductId:
+        resolvedPublicImages.publicWalmartProductId || form.publicWalmartProductId,
+      imageSource: resolvedPublicImages.imageSource || "public_walmart_listing_serpapi",
+      imageMatchMethod: resolvedPublicImages.imageMatchMethod ?? "",
+      imageSyncStatus: resolvedPublicImages.imageSyncStatus || "found",
+      imageSyncReason: resolvedPublicImages.imageSyncReason || "Public Walmart listing images found via SerpApi.",
+      lastImageSyncedAt: resolvedPublicImages.lastImageSyncedAt || new Date().toISOString(),
+    });
+    setPublicImageMessage("Images added to draft. Save Draft before submitting.");
   }
 
   function revealInlineAiPanel() {
@@ -1528,6 +1772,100 @@ export default function ProductEditorClient({
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
                     Media
                   </h3>
+                  <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2">
+                    <p className="font-medium text-[#0F172A]">Public Walmart Listing Images</p>
+                    <p className="mt-1 text-xs text-[#475569]">
+                      Image source: Public Walmart listing via SerpApi
+                    </p>
+                    {!serpApiProviderConnected ? (
+                      <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
+                        <p>Connect your SerpApi key to fetch public Walmart listing images.</p>
+                        <a
+                          href="/apps/ecomviper/walmart/connect"
+                          className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
+                        >
+                          Connect SerpApi
+                        </a>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <label className="text-sm text-[#334155] md:col-span-2">
+                        Public Walmart listing URL
+                        <input
+                          value={form.publicWalmartUrl}
+                          onChange={(event) => patchForm({ publicWalmartUrl: event.target.value })}
+                          placeholder="https://www.walmart.com/ip/.../18410702298"
+                          className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                        />
+                      </label>
+                      <label className="text-sm text-[#334155]">
+                        Public Walmart product ID (optional)
+                        <input
+                          value={form.publicWalmartProductId}
+                          onChange={(event) => patchForm({ publicWalmartProductId: event.target.value })}
+                          placeholder="18410702298"
+                          className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={handleFindPublicListingImages}
+                          disabled={resolvingPublicImages || !serpApiProviderConnected}
+                          className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+                        >
+                          {resolvingPublicImages
+                            ? "Finding Images..."
+                            : "Find Images from Public Walmart Listing"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {publicImageMessage ? (
+                      <p className="mt-2 text-xs text-[#334155]">{publicImageMessage}</p>
+                    ) : null}
+
+                    {resolvedPublicImages ? (
+                      <div
+                        className="mt-3 rounded-lg border border-[#BFDBFE] bg-white p-3"
+                        data-testid="ecomviper-walmart-public-image-result"
+                      >
+                        <p className="text-xs text-[#1D4ED8]">
+                          Source: {resolvedPublicImages.imageSourceLabel}
+                        </p>
+                        <p className="mt-1 text-xs text-[#334155]">
+                          Public product ID: {resolvedPublicImages.publicWalmartProductId || "Unknown"}
+                        </p>
+                        <p className="mt-1 text-xs text-[#334155]">
+                          Gallery image count: {resolvedPublicImages.imageCount}
+                        </p>
+                        <p className="mt-1 break-all text-xs text-[#334155]">
+                          Primary image URL: {resolvedPublicImages.primaryImageUrl || "Not provided"}
+                        </p>
+
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          {resolvedPublicImages.galleryImageUrls.slice(0, 4).map((url) => (
+                            <img
+                              key={url}
+                              src={url}
+                              alt="Public Walmart listing preview"
+                              className="h-14 w-14 rounded border border-[#D9E4F0] bg-white object-cover"
+                              loading="lazy"
+                            />
+                          ))}
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleUseResolvedImagesInDraft}
+                          className="mt-3 rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white"
+                        >
+                          Use Images in Draft
+                        </button>
+                      </div>
+                    ) : null}
+                  </div>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Primary image URL
                     <input

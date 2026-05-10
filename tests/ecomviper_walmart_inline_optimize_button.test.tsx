@@ -78,6 +78,7 @@ describe("Walmart inline optimize button workflow", () => {
           product={createProduct()}
           stagedDrafts={[]}
           aiProviderConnected={false}
+          serpApiProviderConnected={false}
         />
       );
     });
@@ -147,6 +148,7 @@ describe("Walmart inline optimize button workflow", () => {
           product={createProduct()}
           stagedDrafts={[]}
           aiProviderConnected={true}
+          serpApiProviderConnected={true}
         />
       );
     });
@@ -315,6 +317,7 @@ describe("Walmart inline optimize button workflow", () => {
           })}
           stagedDrafts={[]}
           aiProviderConnected={true}
+          serpApiProviderConnected={true}
         />
       );
     });
@@ -372,6 +375,7 @@ describe("Walmart inline optimize button workflow", () => {
           })}
           stagedDrafts={[]}
           aiProviderConnected={true}
+          serpApiProviderConnected={true}
         />
       );
     });
@@ -440,6 +444,7 @@ describe("Walmart inline optimize button workflow", () => {
           })}
           stagedDrafts={[]}
           aiProviderConnected={true}
+          serpApiProviderConnected={true}
         />
       );
     });
@@ -473,6 +478,7 @@ describe("Walmart inline optimize button workflow", () => {
           product={createProduct()}
           stagedDrafts={[]}
           aiProviderConnected={false}
+          serpApiProviderConnected={false}
         />
       );
     });
@@ -547,6 +553,7 @@ describe("Walmart inline optimize button workflow", () => {
           product={createProduct()}
           stagedDrafts={[]}
           aiProviderConnected={false}
+          serpApiProviderConnected={false}
         />
       );
     });
