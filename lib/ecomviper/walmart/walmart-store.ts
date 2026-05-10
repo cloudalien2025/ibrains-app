@@ -80,9 +80,10 @@ export function upsertDraftForSku(params: {
   sku: string;
   draftPayload: Record<string, unknown>;
   createdBy?: string | null;
+  productOverride?: WalmartProductRecord | null;
 }): WalmartDraftRecord {
   const store = getStore();
-  const product = getProductBySku(params.sku);
+  const product = params.productOverride ?? getProductBySku(params.sku);
   if (!product) {
     throw new Error(`Unknown SKU: ${params.sku}`);
   }

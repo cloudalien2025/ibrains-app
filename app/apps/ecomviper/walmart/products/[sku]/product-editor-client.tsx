@@ -673,6 +673,19 @@ export default function ProductEditorClient({
   }
 
   async function handleSaveDraft() {
+    try {
+      if (form.attributesJson.trim()) {
+        const parsed = JSON.parse(form.attributesJson) as unknown;
+        if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+          setMessage("Draft could not be saved because attributes are not valid JSON.");
+          return;
+        }
+      }
+    } catch {
+      setMessage("Draft could not be saved because attributes are not valid JSON.");
+      return;
+    }
+
     const response = await fetch("/api/ecomviper/walmart/drafts", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -680,7 +693,23 @@ export default function ProductEditorClient({
     });
 
     if (!response.ok) {
-      setMessage("Failed to save draft.");
+      const payload = (await response.json().catch(() => null)) as
+        | { error?: { code?: string; message?: string } }
+        | null;
+      const code = payload?.error?.code?.trim().toUpperCase() ?? "";
+      if (code === "PRODUCT_NOT_FOUND") {
+        setMessage("Draft could not be saved because the product record was not found.");
+        return;
+      }
+      if (code === "BAD_REQUEST" && payload?.error?.message?.toLowerCase().includes("draftpayload")) {
+        setMessage("Draft could not be saved because the draft payload is invalid.");
+        return;
+      }
+      if (payload?.error?.message?.trim()) {
+        setMessage(`Draft could not be saved. ${payload.error.message.trim()}`);
+        return;
+      }
+      setMessage("Draft could not be saved. Please try again.");
       return;
     }
 
@@ -701,7 +730,7 @@ export default function ProductEditorClient({
       return;
     }
 
-    setMessage("Draft saved and passed policy checks.");
+    setMessage("Draft saved.");
   }
 
   function revealInlineAiPanel() {

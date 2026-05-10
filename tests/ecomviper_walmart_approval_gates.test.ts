@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { assessWalmartListingQuality, buildDeterministicOptimizationProposal } from "@/lib/ecomviper/walmart/walmart-listing-quality";
@@ -8,6 +8,14 @@ import { clearDrafts, clearFeeds, replaceProducts } from "@/lib/ecomviper/walmar
 import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import { POST as createDraftRoute } from "@/app/api/ecomviper/walmart/drafts/route";
 import { POST as submitFeedRoute } from "@/app/api/ecomviper/walmart/feeds/submit/route";
+
+const authMocks = vi.hoisted(() => ({
+  requireSignedInUser: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/requireSignedInUser", () => ({
+  requireSignedInUser: authMocks.requireSignedInUser,
+}));
 
 function seedProduct() {
   const product = normalizeWalmartProduct({
@@ -65,6 +73,10 @@ describe("EcomViper Walmart optimizer approval gates", () => {
     clearDrafts();
     clearFeeds();
     delete process.env.WALMART_FEED_WRITE_ENABLED;
+    authMocks.requireSignedInUser.mockResolvedValue({
+      userId: "approval-user",
+      unauthorizedResponse: null,
+    });
   });
 
   it("staging deterministic proposal keeps feed submissions untouched", async () => {
