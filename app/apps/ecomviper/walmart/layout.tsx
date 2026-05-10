@@ -15,7 +15,7 @@ export default function WalmartLayout({ children }: { children: ReactNode }) {
           Walmart operations workspace
         </div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid gap-4 lg:grid-cols-[236px_minmax(0,1fr)]">
         <WalmartSidebar />
         <section className="space-y-4">{children}</section>
       </div>

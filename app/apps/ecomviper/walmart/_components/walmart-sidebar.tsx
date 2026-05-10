@@ -8,21 +8,24 @@ export default function WalmartSidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_40px_rgba(15,23,42,0.08)]">
-      <div className="mb-4 border-b border-[#D9E4F0] pb-3">
-        <p className="text-xs uppercase tracking-[0.14em] text-[#64748B]">EcomViper</p>
-        <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Walmart</h2>
+    <aside className="rounded-2xl border border-[#D9E4F0] bg-white/90 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
+      <div className="mb-3 border-b border-[#E2E8F0] pb-3">
+        <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748B]">ECOMVIPER</p>
+        <h2 className="mt-1 text-base font-semibold text-[#0F172A]">Walmart Marketplace</h2>
       </div>
-      <nav className="grid gap-1.5" data-testid="ecomviper-walmart-sidebar">
+      <nav className="grid gap-1" data-testid="ecomviper-walmart-sidebar">
         {walmartNavItems.map((item) => {
-          const active = pathname === item.href;
+          const active =
+            pathname === item.href ||
+            (item.href !== "/apps/ecomviper/walmart" &&
+              pathname.startsWith(`${item.href}/`));
           return (
             <Link
               key={item.href}
               href={item.href}
               className={`rounded-lg border px-3 py-2 text-sm transition ${
                 active
-                  ? "border-[#93C5FD] bg-[#EAF1F8] text-[#0F172A]"
+                  ? "border-[#BFDBFE] bg-[#EFF6FF] text-[#0F172A]"
                   : "border-transparent text-[#334155] hover:border-[#D9E4F0] hover:bg-white"
               }`}
             >
