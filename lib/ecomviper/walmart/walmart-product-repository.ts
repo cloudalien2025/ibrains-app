@@ -377,13 +377,20 @@ export async function archivePersistedWalmartProductBySku(input: {
   }
 }
 
-export async function clearPersistedWalmartProducts(userId: string): Promise<void> {
+export async function clearPersistedWalmartProducts(userId: string): Promise<{
+  clearedProductCount: number;
+  clearedImportStateCount: number;
+}> {
   if (allowFallbackStore()) {
     const state = getFallbackUserState(userId);
+    const clearedProductCount = state.productsBySku.size;
     state.productsBySku.clear();
     state.archivedSkus.clear();
     state.lastImportAt = null;
-    return;
+    return {
+      clearedProductCount,
+      clearedImportStateCount: 1,
+    };
   }
 
   if (!dbConfigured()) {
@@ -393,7 +400,10 @@ export async function clearPersistedWalmartProducts(userId: string): Promise<voi
   try {
     await ensureTables();
 
-    await query(`DELETE FROM ${PRODUCTS_TABLE} WHERE user_id = $1`, [userId]);
+    const clearedRows = await query<{ sku: string }>(
+      `DELETE FROM ${PRODUCTS_TABLE} WHERE user_id = $1 RETURNING sku`,
+      [userId]
+    );
     await query(
       `
       INSERT INTO ${STATE_TABLE}
@@ -407,6 +417,11 @@ export async function clearPersistedWalmartProducts(userId: string): Promise<voi
       `,
       [userId]
     );
+
+    return {
+      clearedProductCount: clearedRows.length,
+      clearedImportStateCount: 1,
+    };
   } catch (error) {
     if (isUndefinedRelationError(error, PRODUCTS_TABLE) || isUndefinedRelationError(error, STATE_TABLE)) {
       throw tableMissingError();

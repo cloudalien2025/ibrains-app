@@ -9,6 +9,7 @@ import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-it
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
+import { extractWalmartPublicProductIdFromUrl } from "@/lib/ecomviper/walmart/serpapi-walmart-images";
 import { discardWalmartDraftsForSkuForUser, listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
@@ -40,6 +41,7 @@ import type {
 const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
+const WALMART_HOST_SUFFIX = ".walmart.com";
 
 export function listWalmartProducts(): WalmartProductRecord[] {
   return listProducts();
@@ -74,9 +76,18 @@ export async function replaceWalmartProductsForUser(input: {
   replaceProducts(input.products, input.importedAt);
 }
 
-export async function clearWalmartProductsForUser(userId: string): Promise<void> {
-  await clearPersistedWalmartProducts(userId);
+export async function clearWalmartProductsForUser(userId: string): Promise<{
+  clearedProductCount: number;
+  clearedImportStateCount: number;
+  clearedImageMetadataCount: number;
+}> {
+  const result = await clearPersistedWalmartProducts(userId);
   replaceProducts([], null);
+  return {
+    clearedProductCount: result.clearedProductCount,
+    clearedImportStateCount: result.clearedImportStateCount,
+    clearedImageMetadataCount: result.clearedProductCount,
+  };
 }
 
 export interface WalmartLocalProductRemovalResult {
@@ -133,7 +144,10 @@ export async function removeWalmartProductFromCatalogForUser(input: {
 }
 
 function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "bigint") return value.toString();
+  return "";
 }
 
 function asNumber(value: unknown): number | null {
@@ -179,6 +193,36 @@ function asHttpUrl(value: unknown): string {
   const candidate = asString(value);
   if (!candidate) return "";
   return /^https?:\/\//i.test(candidate) ? candidate : "";
+}
+
+function normalizeWalmartPublicUrl(value: unknown): string {
+  const candidate = asHttpUrl(value);
+  if (!candidate) return "";
+  try {
+    const parsed = new URL(candidate);
+    const host = parsed.hostname.toLowerCase();
+    if (!(host === "walmart.com" || host.endsWith(WALMART_HOST_SUFFIX))) {
+      return "";
+    }
+    parsed.protocol = "https:";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function normalizeWalmartPublicProductId(value: unknown): string {
+  const candidate = asString(value);
+  if (!candidate) return "";
+  return /^\d{6,20}$/.test(candidate) ? candidate : "";
+}
+
+function firstPublicWalmartProductId(...values: unknown[]): string {
+  for (const value of values) {
+    const candidate = normalizeWalmartPublicProductId(value);
+    if (candidate) return candidate;
+  }
+  return "";
 }
 
 function firstHttpUrl(...values: unknown[]): string {
@@ -257,6 +301,67 @@ function extractCatalogIdentifiers(item: Record<string, unknown>): {
     wpid: firstNonEmptyString(item.wpid, item.wpID, item.WPID, identifiers?.wpid, identifiers?.wpID),
     itemId: firstNonEmptyString(item.itemId, item.usItemId, item.id, identifiers?.itemId, identifiers?.usItemId),
     publishedStatus: firstNonEmptyString(item.publishedStatus, item.published, item.lifecycleStatus),
+  };
+}
+
+function extractPublicListingReference(item: Record<string, unknown>): {
+  publicWalmartUrl: string;
+  publicWalmartProductId: string;
+} {
+  const product = asObject(item.product);
+  const content = asObject(item.content);
+  const links = asObject(item.links);
+  const identifiers =
+    asObject(item.identifiers) ?? asObject(item.productIdentifiers) ?? asObject(item.productIds) ?? asObject(item.ids);
+
+  const publicWalmartUrl = [
+    item.publicWalmartUrl,
+    item.productPageUrl,
+    item.productUrl,
+    item.canonicalUrl,
+    item.url,
+    item.itemUrl,
+    item.shareUrl,
+    item.buyUrl,
+    product?.publicWalmartUrl,
+    product?.productPageUrl,
+    product?.productUrl,
+    product?.canonicalUrl,
+    product?.url,
+    content?.productUrl,
+    content?.canonicalUrl,
+    links?.product,
+    links?.canonical,
+    asObjectArray(item.links)[0]?.href,
+  ]
+    .map((value) => normalizeWalmartPublicUrl(value))
+    .find(Boolean) ?? "";
+
+  const productIdFromUrl = publicWalmartUrl ? extractWalmartPublicProductIdFromUrl(publicWalmartUrl) ?? "" : "";
+
+  const publicWalmartProductId = firstPublicWalmartProductId(
+    item.publicWalmartProductId,
+    item.productId,
+    item.usItemId,
+    item.itemId,
+    item.id,
+    item.usItemID,
+    item.product_id,
+    product?.publicWalmartProductId,
+    product?.productId,
+    product?.itemId,
+    product?.usItemId,
+    content?.productId,
+    identifiers?.publicWalmartProductId,
+    identifiers?.productId,
+    identifiers?.itemId,
+    identifiers?.usItemId,
+    productIdFromUrl
+  );
+
+  return {
+    publicWalmartUrl,
+    publicWalmartProductId,
   };
 }
 
@@ -643,6 +748,7 @@ function normalizeImportedItem(
   const sku = extractSku(item);
   if (!sku) return null;
   const identifiers = extractCatalogIdentifiers(item);
+  const publicListingReference = extractPublicListingReference(item);
 
   const title = firstNonEmptyString(
     item.productName,
@@ -704,6 +810,8 @@ function normalizeImportedItem(
     imageSyncStatus: imageResolution.imageUrl ? "found" : "not_synced",
     imageMatchMethod: imageResolution.imageUrl ? "catalog" : undefined,
     matchedItemId: identifiers.itemId,
+    publicWalmartUrl: publicListingReference.publicWalmartUrl || undefined,
+    publicWalmartProductId: publicListingReference.publicWalmartProductId || undefined,
     lastImageSyncedAt: null,
     attributes: toAttributeMap(item.attributes),
     description: longDescription,
@@ -717,7 +825,12 @@ function normalizeImportedItem(
     item.wpid,
     item.itemId,
     item.usItemId,
-    item.id
+    item.id,
+    item.productId,
+    asObject(item.identifiers)?.itemId,
+    asObject(item.identifiers)?.usItemId,
+    asObject(item.identifiers)?.productId,
+    publicListingReference.publicWalmartProductId
   );
 
   return {
@@ -728,6 +841,9 @@ function normalizeImportedItem(
     wpid: identifiers.wpid || normalized.wpid,
     itemId: identifiers.itemId || normalized.itemId,
     publishedStatus: identifiers.publishedStatus || normalized.publishedStatus,
+    publicWalmartUrl: publicListingReference.publicWalmartUrl || normalized.publicWalmartUrl,
+    publicWalmartProductId:
+      publicListingReference.publicWalmartProductId || normalized.publicWalmartProductId,
     category: category || normalized.category,
     rawPayload: item,
     normalizedPayload: {
@@ -738,6 +854,9 @@ function normalizeImportedItem(
       wpid: identifiers.wpid || normalized.wpid,
       itemId: identifiers.itemId || normalized.itemId,
       publishedStatus: identifiers.publishedStatus || normalized.publishedStatus,
+      publicWalmartUrl: publicListingReference.publicWalmartUrl || normalized.publicWalmartUrl,
+      publicWalmartProductId:
+        publicListingReference.publicWalmartProductId || normalized.publicWalmartProductId,
       title: normalized.title,
       brand: normalized.brand,
       category: category || normalized.category,
@@ -822,6 +941,7 @@ interface ImageEnrichmentStats {
   notFound: number;
   ambiguous: number;
   failed: number;
+  noImageReason: string | null;
   sourceBreakdown: {
     walmartItemReport: number;
     walmartSellerCatalogSearch: number;
@@ -860,6 +980,32 @@ interface ImageEnrichmentStats {
       | "no_rows"
       | "no_image_columns"
       | "unavailable";
+  };
+}
+
+function firstIdentifierCount(products: WalmartProductRecord[]): {
+  withPublicProductId: number;
+  withPublicUrl: number;
+  withUpcOrGtin: number;
+} {
+  let withPublicProductId = 0;
+  let withPublicUrl = 0;
+  let withUpcOrGtin = 0;
+  for (const product of products) {
+    if (product.publicWalmartProductId?.trim() || product.itemId?.trim() || product.wpid?.trim()) {
+      withPublicProductId += 1;
+    }
+    if (product.publicWalmartUrl?.trim()) {
+      withPublicUrl += 1;
+    }
+    if (product.upc?.trim() || product.gtin?.trim()) {
+      withUpcOrGtin += 1;
+    }
+  }
+  return {
+    withPublicProductId,
+    withPublicUrl,
+    withUpcOrGtin,
   };
 }
 
@@ -1016,6 +1162,7 @@ async function enrichProductImages(
     notFound: 0,
     ambiguous: 0,
     failed: 0,
+    noImageReason: null,
     sourceBreakdown: {
       walmartItemReport: 0,
       walmartSellerCatalogSearch: 0,
@@ -1229,6 +1376,25 @@ async function enrichProductImages(
     else if (product.imageSyncStatus === "failed") stats.failed += 1;
   }
 
+  if (stats.found === 0) {
+    const identifierCoverage = firstIdentifierCount(enriched.filter((product) => !product.imageUrl.trim()));
+    if (!publicListingQueue.progress.providerConnected) {
+      stats.noImageReason = "SerpApi is not connected.";
+    } else if (
+      identifierCoverage.withPublicProductId === 0 &&
+      identifierCoverage.withPublicUrl === 0 &&
+      identifierCoverage.withUpcOrGtin === 0
+    ) {
+      stats.noImageReason =
+        "No public product IDs or UPC/GTIN matches were available for safe image matching.";
+    } else if (
+      publicListingQueue.progress.enrichmentCompletedCount > 0 &&
+      publicListingQueue.progress.foundCount === 0
+    ) {
+      stats.noImageReason = "Provider returned no image-bearing matches.";
+    }
+  }
+
   return { products: finalized, stats };
 }
 
@@ -1313,6 +1479,9 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       imageSkippedNoProviderCount: imageStats.publicListing.skippedNoProviderCount,
       enrichmentQueuedCount: imageStats.publicListing.queuedCount,
       enrichmentCompletedCount: imageStats.publicListing.completedCount,
+      enrichmentProviderConnected: imageStats.publicListing.providerConnected,
+      enrichmentProcessedCount: imageStats.publicListing.completedCount,
+      imageEnrichmentNoImageReason: imageStats.noImageReason,
       lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
       imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
       itemReportRequested: imageStats.itemReport.requested,
@@ -1369,6 +1538,14 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       imageSkippedNoProviderCount: queue.progress.skippedNoProviderCount,
       enrichmentQueuedCount: queue.progress.enrichmentQueuedCount,
       enrichmentCompletedCount: queue.progress.enrichmentCompletedCount,
+      enrichmentProviderConnected: queue.progress.providerConnected,
+      enrichmentProcessedCount: queue.progress.enrichmentCompletedCount,
+      imageEnrichmentNoImageReason:
+        queue.progress.foundCount > 0
+          ? null
+          : queue.progress.providerConnected
+          ? "Provider returned no image-bearing matches."
+          : "SerpApi is not connected.",
       lastEnrichedAt: queue.progress.lastEnrichedAt,
       imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
       imageSourceBreakdown: {

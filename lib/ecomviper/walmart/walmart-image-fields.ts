@@ -214,8 +214,14 @@ export function applyDraftImageFieldsToProduct(input: {
   if (normalized.lastImageSyncedAt) metadataPatch.lastImageSyncedAt = normalized.lastImageSyncedAt;
 
   if (!hasDraftImage) {
-    return Object.keys(metadataPatch).length > 0
-      ? { ...input.product, ...metadataPatch }
+    const metadataWithoutStatus: Partial<WalmartProductRecord> = {};
+    if (normalized.publicWalmartUrl) metadataWithoutStatus.publicWalmartUrl = normalized.publicWalmartUrl;
+    if (normalized.publicWalmartProductId) {
+      metadataWithoutStatus.publicWalmartProductId = normalized.publicWalmartProductId;
+    }
+
+    return Object.keys(metadataWithoutStatus).length > 0
+      ? { ...input.product, ...metadataWithoutStatus }
       : input.product;
   }
 
