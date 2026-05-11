@@ -76,6 +76,9 @@ interface ImportPanelState {
   processedCount: number;
   queuedCount: number;
   foundCount: number;
+  fromImportPayloadCount: number;
+  enrichedCount: number;
+  stillMissingCount: number;
   missingCount: number;
   notFoundCount: number;
   ambiguousCount: number;
@@ -271,10 +274,14 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const [isImporting, setIsImporting] = useState(false);
   const [importPanel, setImportPanel] = useState<ImportPanelState | null>(null);
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
+    imageFromImportPayloadCount: number;
+    imageEnrichedCount: number;
+    imageStillMissingCount: number;
     imageNotFoundCount: number;
     imageAmbiguousCount: number;
     imageFailedCount: number;
     imageSkippedNoProviderCount: number;
+    enrichmentDeferredCount: number;
   } | null>(null);
   const [locallyRemovedSkuKeys, setLocallyRemovedSkuKeys] = useState<string[]>([]);
   const [removeTarget, setRemoveTarget] = useState<{
@@ -353,6 +360,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       processedCount: 0,
       queuedCount: 0,
       foundCount: 0,
+      fromImportPayloadCount: 0,
+      enrichedCount: 0,
+      stillMissingCount: 0,
       missingCount: 0,
       notFoundCount: 0,
       ambiguousCount: 0,
@@ -486,6 +496,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             processedCount?: number;
             queuedCount?: number;
             imageFoundCount?: number;
+            imageFromImportPayloadCount?: number;
+            imageEnrichedCount?: number;
+            imageStillMissingCount?: number;
             imageMissingCount?: number;
             imageNotFoundCount?: number;
             imageAmbiguousCount?: number;
@@ -498,6 +511,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           fetchedCount?: number;
           inventoryUnknownCount?: number;
           imageFoundCount?: number;
+          imageFromImportPayloadCount?: number;
+          imageEnrichedCount?: number;
+          imageStillMissingCount?: number;
           imageNotFoundCount?: number;
           imageAmbiguousCount?: number;
           imageFailedCount?: number;
@@ -557,7 +573,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           processedCount: totals?.processedCount ?? 0,
           queuedCount: totals?.queuedCount ?? 0,
           foundCount: totals?.imageFoundCount ?? 0,
-          missingCount: totals?.imageMissingCount ?? 0,
+          fromImportPayloadCount: totals?.imageFromImportPayloadCount ?? 0,
+          enrichedCount: totals?.imageEnrichedCount ?? 0,
+          stillMissingCount: totals?.imageStillMissingCount ?? totals?.imageMissingCount ?? 0,
+          missingCount:
+            totals?.imageStillMissingCount ?? totals?.imageMissingCount ?? 0,
           notFoundCount: totals?.imageNotFoundCount ?? 0,
           ambiguousCount: totals?.imageAmbiguousCount ?? 0,
           failedCount: totals?.imageFailedCount ?? 0,
@@ -591,7 +611,36 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
 
       const totals = payload.importProgress?.totals;
       const importedCount = totals?.importedCount ?? payload.importedCount ?? 0;
+      const hasImageDiagnostics =
+        totals?.imageFoundCount !== undefined ||
+        totals?.imageFromImportPayloadCount !== undefined ||
+        totals?.imageEnrichedCount !== undefined ||
+        totals?.imageStillMissingCount !== undefined ||
+        totals?.imageNotFoundCount !== undefined ||
+        totals?.imageAmbiguousCount !== undefined ||
+        totals?.imageFailedCount !== undefined ||
+        totals?.imageSkippedNoProviderCount !== undefined ||
+        payload.importDiagnostics?.imageFoundCount !== undefined ||
+        payload.importDiagnostics?.imageFromImportPayloadCount !== undefined ||
+        payload.importDiagnostics?.imageEnrichedCount !== undefined ||
+        payload.importDiagnostics?.imageStillMissingCount !== undefined ||
+        payload.importDiagnostics?.imageNotFoundCount !== undefined ||
+        payload.importDiagnostics?.imageAmbiguousCount !== undefined ||
+        payload.importDiagnostics?.imageFailedCount !== undefined ||
+        payload.importDiagnostics?.imageSkippedNoProviderCount !== undefined;
       const imageFoundCount = totals?.imageFoundCount ?? payload.importDiagnostics?.imageFoundCount ?? 0;
+      const imageFromImportPayloadCount =
+        totals?.imageFromImportPayloadCount ??
+        payload.importDiagnostics?.imageFromImportPayloadCount ??
+        0;
+      const imageEnrichedCount =
+        totals?.imageEnrichedCount ??
+        payload.importDiagnostics?.imageEnrichedCount ??
+        Math.max(0, imageFoundCount - imageFromImportPayloadCount);
+      const imageStillMissingCount =
+        totals?.imageStillMissingCount ??
+        payload.importDiagnostics?.imageStillMissingCount ??
+        (hasImageDiagnostics ? Math.max(0, importedCount - imageFoundCount) : 0);
       const imageNotFoundCount =
         totals?.imageNotFoundCount ?? payload.importDiagnostics?.imageNotFoundCount ?? 0;
       const imageAmbiguousCount =
@@ -600,7 +649,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       const imageSkippedNoProviderCount = totals?.imageSkippedNoProviderCount ?? payload.importDiagnostics?.imageSkippedNoProviderCount ?? 0;
       const enrichmentQueuedCount = totals?.queuedCount ?? payload.importDiagnostics?.enrichmentQueuedCount ?? 0;
       const enrichmentCompletedCount = totals?.processedCount ?? payload.importDiagnostics?.enrichmentCompletedCount ?? payload.importDiagnostics?.enrichmentProcessedCount ?? 0;
-      const missingCount = imageNotFoundCount + imageSkippedNoProviderCount;
+      const missingCount = imageStillMissingCount;
       const providerConnected =
         payload.importProgress?.providerConnected ??
         payload.importDiagnostics?.enrichmentProviderConnected ??
@@ -635,18 +684,22 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         0;
       const finalStage: ImportPanelStage =
         payload.importProgress?.stage === "completed_with_warnings" ||
-        missingCount > 0 ||
+        imageStillMissingCount > 0 ||
         imageAmbiguousCount > 0 ||
         imageFailedCount > 0
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images found: ${imageFoundCount}. Missing: ${missingCount}. Ambiguous: ${imageAmbiguousCount}. Failed: ${imageFailedCount}.`;
+      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Fallback enriched: ${imageEnrichedCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
+        imageFromImportPayloadCount,
+        imageEnrichedCount,
+        imageStillMissingCount,
         imageNotFoundCount,
         imageAmbiguousCount,
         imageFailedCount,
         imageSkippedNoProviderCount,
+        enrichmentDeferredCount,
       });
 
       setImportPanel({
@@ -657,7 +710,12 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         processedCount: totals?.processedCount ?? enrichmentCompletedCount,
         queuedCount: totals?.queuedCount ?? enrichmentQueuedCount,
         foundCount: totals?.imageFoundCount ?? imageFoundCount,
-        missingCount: totals?.imageMissingCount ?? missingCount,
+        fromImportPayloadCount:
+          totals?.imageFromImportPayloadCount ?? imageFromImportPayloadCount,
+        enrichedCount: totals?.imageEnrichedCount ?? imageEnrichedCount,
+        stillMissingCount:
+          totals?.imageStillMissingCount ?? imageStillMissingCount,
+        missingCount: totals?.imageStillMissingCount ?? missingCount,
         notFoundCount: totals?.imageNotFoundCount ?? imageNotFoundCount,
         ambiguousCount: totals?.imageAmbiguousCount ?? imageAmbiguousCount,
         failedCount: totals?.imageFailedCount ?? imageFailedCount,
@@ -707,6 +765,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         processedCount: current?.processedCount ?? 0,
         queuedCount: current?.queuedCount ?? 0,
         foundCount: current?.foundCount ?? 0,
+        fromImportPayloadCount: current?.fromImportPayloadCount ?? 0,
+        enrichedCount: current?.enrichedCount ?? 0,
+        stillMissingCount: current?.stillMissingCount ?? 0,
         missingCount: current?.missingCount ?? 0,
         notFoundCount: current?.notFoundCount ?? 0,
         ambiguousCount: current?.ambiguousCount ?? 0,
@@ -862,12 +923,15 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Products imported: {importPanel.importedCount}</p>
               <p>Products fetched: {importPanel.fetchedCount}</p>
               <p>Products processed: {importPanel.processedCount}</p>
-              <p>Images queued: {importPanel.queuedCount}</p>
+              <p>Queued for fallback enrichment: {importPanel.queuedCount}</p>
               <p>Images found: {importPanel.foundCount}</p>
+              <p>Images from import payload: {importPanel.fromImportPayloadCount}</p>
+              <p>Fallback enriched successfully: {importPanel.enrichedCount}</p>
+              <p>Still missing images: {importPanel.stillMissingCount}</p>
+              <p>Failed (SerpApi/provider): {importPanel.failedCount}</p>
               <p>Missing/not found: {importPanel.missingCount}</p>
               <p>Not found: {importPanel.notFoundCount}</p>
               <p>Ambiguous: {importPanel.ambiguousCount}</p>
-              <p>Failed: {importPanel.failedCount}</p>
               <p>Skipped (SerpApi not connected): {importPanel.skippedNoProviderCount}</p>
               <p>
                 SerpApi:{" "}
@@ -924,7 +988,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
         {!isImporting &&
         lastImportDiagnostics &&
-        (lastImportDiagnostics.imageNotFoundCount > 0 ||
+        (lastImportDiagnostics.imageStillMissingCount > 0 ||
+          lastImportDiagnostics.enrichmentDeferredCount > 0 ||
+          lastImportDiagnostics.imageNotFoundCount > 0 ||
           lastImportDiagnostics.imageAmbiguousCount > 0 ||
           lastImportDiagnostics.imageFailedCount > 0) ? (
           <button

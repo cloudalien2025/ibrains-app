@@ -374,6 +374,9 @@ describe("walmart products import route", () => {
         payloadShape: "root.ItemResponse.array",
         pageCount: 1,
         imageFoundCount: 0,
+        imageFromImportPayloadCount: 0,
+        imageEnrichedCount: 0,
+        imageStillMissingCount: 4,
         imageNotFoundCount: 0,
         imageAmbiguousCount: 0,
         imageFailedCount: 4,
@@ -411,6 +414,8 @@ describe("walmart products import route", () => {
     expect(payload.importProgress?.providerStatus).toBe("invalid_key");
     expect(payload.importProgress?.providerStatusReason).toBe("SerpApi key was rejected.");
     expect(payload.importProgress?.totals?.importedCount).toBe(4);
+    expect(payload.importProgress?.totals?.imageStillMissingCount).toBe(4);
+    expect(payload.importProgress?.totals?.imageMissingCount).toBe(4);
     expect(payload.importProgress?.totals?.imageFailedCount).toBe(4);
   });
 });
