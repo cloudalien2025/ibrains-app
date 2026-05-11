@@ -16,6 +16,7 @@ const IMAGE_ISSUES = new Set([
   "Image sync failed",
   "Image enrichment not synced",
 ]);
+const SERPAPI_ENRICHMENT_RETRY_BACKOFF_MS = [500, 1_300] as const;
 
 function stripImageIssues(issues: string[]): string[] {
   return issues.filter((issue) => !IMAGE_ISSUES.has(issue));
@@ -62,8 +63,7 @@ function shouldRetryTransientFailure(errorCode: string | undefined): boolean {
   return (
     errorCode === "SERPAPI_PROVIDER_ERROR" ||
     errorCode === "SERPAPI_NETWORK_ERROR" ||
-    errorCode === "SERPAPI_REQUEST_FAILED" ||
-    errorCode === "SERPAPI_RATE_LIMITED"
+    errorCode === "SERPAPI_REQUEST_FAILED"
   );
 }
 
@@ -256,8 +256,9 @@ async function resolveWithRetry(input: {
     last.imageSyncStatus === "failed" &&
     shouldRetryTransientFailure(last.errorCode)
   ) {
+    const delay = SERPAPI_ENRICHMENT_RETRY_BACKOFF_MS[Math.min(attempt, SERPAPI_ENRICHMENT_RETRY_BACKOFF_MS.length - 1)];
     attempt += 1;
-    await new Promise((resolve) => setTimeout(resolve, 120 * attempt));
+    await new Promise((resolve) => setTimeout(resolve, delay));
     last = await enrichProductImagesFromPublicWalmartListing({
       userId: input.userId,
       product: input.product,
@@ -315,8 +316,8 @@ export async function runPublicListingImageEnrichmentQueue(input: {
     return { products, progress };
   }
 
-  const concurrency = Math.max(1, Math.min(6, input.concurrency ?? 3));
-  const retries = Math.max(0, Math.min(2, input.retries ?? 1));
+  const concurrency = Math.max(1, Math.min(6, input.concurrency ?? 2));
+  const retries = Math.max(0, Math.min(2, input.retries ?? 2));
 
   for (let index = 0; index < candidates.length; index += concurrency) {
     const batch = candidates.slice(index, index + concurrency);

@@ -11,7 +11,8 @@ import type {
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search.json";
-const SERPAPI_REQUEST_TIMEOUT_MS = 10_000;
+const SERPAPI_REQUEST_TIMEOUT_MS = 16_000;
+const SERPAPI_RETRY_BACKOFF_MS = [450, 1_200] as const;
 const WALMART_HOST_SUFFIX = ".walmart.com";
 
 type SerpApiEndpointFamily = "walmart_product" | "walmart_search";
@@ -338,12 +339,22 @@ function sanitizeSerpApiHttpError(status: number): {
   statusCategory: SerpApiStatusCategory;
   errorCode: SerpApiResolveErrorCode;
   message: string;
+  retryable: boolean;
 } {
   if (status === 400) {
     return {
       statusCategory: "validation_error",
       errorCode: "SERPAPI_BAD_REQUEST",
       message: "SerpApi rejected request parameters.",
+      retryable: false,
+    };
+  }
+  if (status === 402) {
+    return {
+      statusCategory: "rate_limited",
+      errorCode: "SERPAPI_RATE_LIMITED",
+      message: "SerpApi account has no remaining searches.",
+      retryable: false,
     };
   }
   if (status === 401) {
@@ -351,6 +362,7 @@ function sanitizeSerpApiHttpError(status: number): {
       statusCategory: "invalid_key",
       errorCode: "SERPAPI_INVALID_KEY",
       message: "SerpApi key was rejected.",
+      retryable: false,
     };
   }
   if (status === 403) {
@@ -358,6 +370,7 @@ function sanitizeSerpApiHttpError(status: number): {
       statusCategory: "forbidden",
       errorCode: "SERPAPI_FORBIDDEN",
       message: "SerpApi account does not have permission.",
+      retryable: false,
     };
   }
   if (status === 429) {
@@ -365,6 +378,7 @@ function sanitizeSerpApiHttpError(status: number): {
       statusCategory: "rate_limited",
       errorCode: "SERPAPI_RATE_LIMITED",
       message: "SerpApi rate limit reached. Retry in a moment.",
+      retryable: true,
     };
   }
   if (status >= 500) {
@@ -372,6 +386,7 @@ function sanitizeSerpApiHttpError(status: number): {
       statusCategory: "provider_error",
       errorCode: "SERPAPI_PROVIDER_ERROR",
       message: "SerpApi provider request failed. Try again shortly.",
+      retryable: true,
     };
   }
 
@@ -379,7 +394,94 @@ function sanitizeSerpApiHttpError(status: number): {
     statusCategory: "provider_error",
     errorCode: "SERPAPI_REQUEST_FAILED",
     message: `SerpApi request failed with HTTP ${status}.`,
+    retryable: false,
   };
+}
+
+function classifySerpApiProviderErrorMessage(message: string): {
+  statusCategory: SerpApiStatusCategory;
+  errorCode: SerpApiResolveErrorCode;
+  statusReason: string;
+  retryable: boolean;
+} {
+  const lowered = message.toLowerCase();
+
+  if (lowered.includes("api key") || lowered.includes("unauthorized") || lowered.includes("authentication")) {
+    return {
+      statusCategory: "invalid_key",
+      errorCode: "SERPAPI_INVALID_KEY",
+      statusReason: "SerpApi key was rejected.",
+      retryable: false,
+    };
+  }
+  if (
+    lowered.includes("forbidden") ||
+    lowered.includes("permission") ||
+    lowered.includes("not allowed") ||
+    lowered.includes("plan") ||
+    lowered.includes("upgrade")
+  ) {
+    return {
+      statusCategory: "forbidden",
+      errorCode: "SERPAPI_FORBIDDEN",
+      statusReason: "SerpApi account does not include Walmart API access.",
+      retryable: false,
+    };
+  }
+  if (
+    lowered.includes("rate") ||
+    lowered.includes("too many") ||
+    lowered.includes("out of searches") ||
+    lowered.includes("no searches") ||
+    lowered.includes("insufficient credits") ||
+    lowered.includes("quota")
+  ) {
+    return {
+      statusCategory: "rate_limited",
+      errorCode: "SERPAPI_RATE_LIMITED",
+      statusReason: "SerpApi account has no remaining searches.",
+      retryable: false,
+    };
+  }
+
+  if (lowered.includes("parameter") || lowered.includes("missing") || lowered.includes("invalid")) {
+    return {
+      statusCategory: "validation_error",
+      errorCode: "SERPAPI_BAD_REQUEST",
+      statusReason: "SerpApi rejected request parameters.",
+      retryable: false,
+    };
+  }
+
+  if (
+    lowered.includes("timeout") ||
+    lowered.includes("temporarily unavailable") ||
+    lowered.includes("try again later") ||
+    lowered.includes("internal error") ||
+    lowered.includes("server error")
+  ) {
+    return {
+      statusCategory: "provider_error",
+      errorCode: "SERPAPI_PROVIDER_ERROR",
+      statusReason: "SerpApi provider is temporarily unavailable. Retry in a moment.",
+      retryable: true,
+    };
+  }
+
+  return {
+    statusCategory: "provider_error",
+    errorCode: "SERPAPI_PROVIDER_ERROR",
+    statusReason: "SerpApi returned a provider error.",
+    retryable: false,
+  };
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function fetchSerpApiJson(params: {
@@ -404,7 +506,8 @@ async function fetchSerpApiJson(params: {
     url.searchParams.set("query", params.query ?? "");
   }
 
-  try {
+  for (let attempt = 0; attempt <= SERPAPI_RETRY_BACKOFF_MS.length; attempt += 1) {
+    try {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), SERPAPI_REQUEST_TIMEOUT_MS);
     const response = await fetch(url.toString(), {
@@ -429,8 +532,12 @@ async function fetchSerpApiJson(params: {
       }
     }
 
-    if (!response.ok) {
+      if (!response.ok) {
       const mapped = sanitizeSerpApiHttpError(response.status);
+        if (mapped.retryable && attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
+          await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
+          continue;
+        }
       return {
         ok: false,
         payload,
@@ -442,69 +549,51 @@ async function fetchSerpApiJson(params: {
 
     const payloadObject = asObject(payload);
     const providerError = asString(payloadObject?.error);
-    if (providerError) {
-      const lowered = providerError.toLowerCase();
-      if (lowered.includes("api key") || lowered.includes("unauthorized")) {
+      if (providerError) {
+        const classified = classifySerpApiProviderErrorMessage(providerError);
+        if (classified.retryable && attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
+          await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
+          continue;
+        }
         return {
           ok: false,
           payload,
-          statusCategory: "invalid_key",
-          errorCode: "SERPAPI_INVALID_KEY",
-          statusReason: "SerpApi key was rejected.",
-        };
-      }
-      if (lowered.includes("forbidden") || lowered.includes("permission") || lowered.includes("not allowed")) {
-        return {
-          ok: false,
-          payload,
-          statusCategory: "forbidden",
-          errorCode: "SERPAPI_FORBIDDEN",
-          statusReason: "SerpApi account does not have permission.",
-        };
-      }
-      if (lowered.includes("rate") || lowered.includes("too many")) {
-        return {
-          ok: false,
-          payload,
-          statusCategory: "rate_limited",
-          errorCode: "SERPAPI_RATE_LIMITED",
-          statusReason: "SerpApi rate limit reached. Retry in a moment.",
-        };
-      }
-
-      if (lowered.includes("parameter") || lowered.includes("missing") || lowered.includes("invalid")) {
-        return {
-          ok: false,
-          payload,
-          statusCategory: "validation_error",
-          errorCode: "SERPAPI_BAD_REQUEST",
-          statusReason: "SerpApi rejected request parameters.",
+          statusCategory: classified.statusCategory,
+          errorCode: classified.errorCode,
+          statusReason: classified.statusReason,
         };
       }
 
       return {
-        ok: false,
+        ok: true,
         payload,
-        statusCategory: "provider_error",
-        errorCode: "SERPAPI_PROVIDER_ERROR",
-        statusReason: "SerpApi returned a provider error.",
+        statusCategory: "ok",
+      };
+    } catch (error) {
+      const isTimeout = isAbortError(error);
+      if (attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
+        await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
+        continue;
+      }
+      return {
+        ok: false,
+        payload: {},
+        statusCategory: "network_error",
+        errorCode: "SERPAPI_NETWORK_ERROR",
+        statusReason: isTimeout
+          ? "SerpApi request timed out. Retry in a moment."
+          : "SerpApi request failed due to a network error.",
       };
     }
-
-    return {
-      ok: true,
-      payload,
-      statusCategory: "ok",
-    };
-  } catch {
-    return {
-      ok: false,
-      payload: {},
-      statusCategory: "network_error",
-      errorCode: "SERPAPI_NETWORK_ERROR",
-      statusReason: "SerpApi request failed due to a network error.",
-    };
   }
+
+  return {
+    ok: false,
+    payload: {},
+    statusCategory: "network_error",
+    errorCode: "SERPAPI_NETWORK_ERROR",
+    statusReason: "SerpApi request failed due to a network error.",
+  };
 }
 
 function extractSerpApiSearchCandidates(payload: unknown): WalmartSearchCandidate[] {
