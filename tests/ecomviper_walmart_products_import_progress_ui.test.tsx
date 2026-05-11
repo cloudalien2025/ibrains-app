@@ -95,6 +95,9 @@ describe("Walmart import progress UI", () => {
               processedCount: 2,
               queuedCount: 2,
               imageFoundCount: 1,
+              imageFromImportPayloadCount: 1,
+              imageEnrichedCount: 0,
+              imageStillMissingCount: 2,
               imageMissingCount: 2,
               imageNotFoundCount: 1,
               imageAmbiguousCount: 1,
@@ -115,6 +118,9 @@ describe("Walmart import progress UI", () => {
             imageEnrichmentBounded: true,
             imageEnrichmentImportLimit: 4,
             imageEnrichmentDeferredCount: 24,
+            imageFromImportPayloadCount: 1,
+            imageEnrichedCount: 0,
+            imageStillMissingCount: 2,
           },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -139,8 +145,12 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Products imported: 3");
     expect(container.textContent).toContain("Products fetched: 3");
     expect(container.textContent).toContain("Products processed: 2");
-    expect(container.textContent).toContain("Images queued: 2");
+    expect(container.textContent).toContain("Queued for fallback enrichment: 2");
     expect(container.textContent).toContain("Images found: 1");
+    expect(container.textContent).toContain("Images from import payload: 1");
+    expect(container.textContent).toContain("Fallback enriched successfully: 0");
+    expect(container.textContent).toContain("Still missing images: 2");
+    expect(container.textContent).toContain("Failed (SerpApi/provider): 0");
     expect(container.textContent).toContain("Missing/not found: 2");
     expect(container.textContent).toContain("Not found: 1");
     expect(container.textContent).toContain("Skipped (SerpApi not connected): 1");
@@ -182,6 +192,9 @@ describe("Walmart import progress UI", () => {
               processedCount: 0,
               queuedCount: 0,
               imageFoundCount: 0,
+              imageFromImportPayloadCount: 0,
+              imageEnrichedCount: 0,
+              imageStillMissingCount: 0,
               imageMissingCount: 0,
               imageNotFoundCount: 0,
               imageAmbiguousCount: 0,
@@ -236,7 +249,10 @@ describe("Walmart import progress UI", () => {
               processedCount: 4,
               queuedCount: 4,
               imageFoundCount: 0,
-              imageMissingCount: 0,
+              imageFromImportPayloadCount: 0,
+              imageEnrichedCount: 0,
+              imageStillMissingCount: 4,
+              imageMissingCount: 4,
               imageNotFoundCount: 0,
               imageAmbiguousCount: 0,
               imageFailedCount: 4,
@@ -264,6 +280,8 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain(
       "SerpApi returned a provider error: timeout from upstream api_key=[REDACTED]"
     );
+    expect(container.textContent).toContain("Still missing images: 4");
+    expect(container.textContent).toContain("Failed (SerpApi/provider): 4");
     expect(container.textContent).toContain("Test SerpApi connection in Connect.");
     expect(container.textContent).not.toContain("api_key=secret");
   });

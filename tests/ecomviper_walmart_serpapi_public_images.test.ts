@@ -556,23 +556,37 @@ describe("Walmart SerpApi public listing images", () => {
       importedAt: new Date().toISOString(),
     });
 
-    const fetchMock = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValue(
-        new Response(
-          JSON.stringify({
-            product_result: {
-              title: "OPA Sleep Magnesium Gummies",
-              brand: "OPA Sleep",
-              images: [
-                "https://i5.walmartimages.com/asr/18410702298-a.jpg",
-                "https://i5.walmartimages.com/asr/18410702298-b.jpg",
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      if (parsed.searchParams.get("engine") === "walmart") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "18410702298",
+                  title: "OPA Sleep Magnesium Gummies",
+                  brand: "OPA Sleep",
+                  image: "https://i5.walmartimages.com/asr/18410702298-a.jpg",
+                  images: [
+                    "https://i5.walmartimages.com/asr/18410702298-a.jpg",
+                    "https://i5.walmartimages.com/asr/18410702298-b.jpg",
+                  ],
+                },
               ],
-            },
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } }
-        )
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "walmart_product should not be required" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        })
       );
+    });
 
     const response = await resolvePublicImageRoute(
       new NextRequest(
@@ -625,6 +639,144 @@ describe("Walmart SerpApi public listing images", () => {
     const payload = await response.json();
     expect(response.status).toBe(400);
     expect(payload.error?.code).toBe("SERPAPI_NOT_CONNECTED");
+  });
+
+  it("uses Walmart search payload images by exact product ID without requiring walmart_product lookup", async () => {
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: "serpapi_test_secret_123456" }),
+    });
+    await saveSerpApiRoute(saveReq);
+
+    let calledWalmartProductEndpoint = false;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      if (parsed.searchParams.get("engine") === "walmart") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "18410702298",
+                  title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+                  brand: "OPA Sleep",
+                  thumbnail: "https://i5.walmartimages.com/asr/18410702298-thumb.jpeg",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      if (parsed.searchParams.get("engine") === "walmart_product") {
+        calledWalmartProductEndpoint = true;
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "walmart_product should not be called" }), {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+    });
+
+    const result = await enrichProductImagesFromPublicWalmartListing({
+      userId: "user_ibrains",
+      product: {
+        ...createProduct(),
+        itemId: "18410702298",
+      },
+    });
+
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.imageMatchMethod).toBe("serpapi_product_id");
+    expect(result.diagnostics.endpointFamily).toBe("walmart_search");
+    expect(result.primaryImageUrl).toBe("https://i5.walmartimages.com/asr/18410702298-thumb.jpeg");
+    expect(fetchMock).toHaveBeenCalled();
+    expect(calledWalmartProductEndpoint).toBe(false);
+  });
+
+  it("falls back after walmart_product not-found provider error and still resolves image from search", async () => {
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: "serpapi_test_secret_123456" }),
+    });
+    await saveSerpApiRoute(saveReq);
+
+    const warnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      const engine = parsed.searchParams.get("engine");
+      const query = parsed.searchParams.get("query");
+
+      if (engine === "walmart" && query === "18410702298") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "18410702298",
+                  title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+                  brand: "OPA Sleep",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (engine === "walmart_product") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: "The product has not found." }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (engine === "walmart") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "18410702298",
+                  title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+                  brand: "OPA Sleep",
+                  image: "https://i5.walmartimages.com/asr/18410702298-found.jpeg",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+    });
+
+    const result = await enrichProductImagesFromPublicWalmartListing({
+      userId: "user_ibrains",
+      product: {
+        ...createProduct(),
+        itemId: "18410702298",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.imageMatchMethod).toBe("serpapi_search_title_brand");
+    expect(result.primaryImageUrl).toBe("https://i5.walmartimages.com/asr/18410702298-found.jpeg");
+    expect(warnMock).toHaveBeenCalledWith(
+      "[ecomviper:walmart:serpapi] walmart_product identifier not found",
+      expect.objectContaining({
+        sku: "ROC808",
+        identifierType: "product_record_item_id",
+        identifierValue: "18410702298",
+      })
+    );
   });
 
   it("marks weak title-only fallback as ambiguous", async () => {

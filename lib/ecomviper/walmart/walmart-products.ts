@@ -1253,7 +1253,7 @@ function firstIdentifierCount(products: WalmartProductRecord[]): {
   let withPublicUrl = 0;
   let withUpcOrGtin = 0;
   for (const product of products) {
-    if (product.publicWalmartProductId?.trim() || product.itemId?.trim() || product.wpid?.trim()) {
+    if (product.publicWalmartProductId?.trim() || product.itemId?.trim()) {
       withPublicProductId += 1;
     }
     if (product.publicWalmartUrl?.trim()) {
@@ -1806,6 +1806,11 @@ export async function importWalmartProducts(
     }
 
     const baseProducts = Array.from(bySku.values());
+    const imageFromImportPayloadSkuKeys = new Set(
+      baseProducts
+        .filter((product) => product.imageUrl.trim().length > 0)
+        .map((product) => normalizeSkuKey(product.sku))
+    );
     partialProgress.importedCount = baseProducts.length;
     const enrichmentCap = options?.boundedRuntime
       ? Math.max(
@@ -1866,16 +1871,28 @@ export async function importWalmartProducts(
       (product) => product.inventoryStatus === "out_of_stock"
     ).length;
     const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
+    const imageFoundCount = products.filter((product) => product.imageUrl.trim().length > 0).length;
+    const imageFromImportPayloadCount = products.filter(
+      (product) =>
+        imageFromImportPayloadSkuKeys.has(normalizeSkuKey(product.sku)) &&
+        product.imageUrl.trim().length > 0
+    ).length;
+    const imageEnrichedCount = products.filter(
+      (product) =>
+        !imageFromImportPayloadSkuKeys.has(normalizeSkuKey(product.sku)) &&
+        product.imageUrl.trim().length > 0
+    ).length;
+    const imageStillMissingCount = Math.max(0, products.length - imageFoundCount);
+
     partialProgress.importedCount = products.length;
     partialProgress.queuedCount = imageStats.publicListing.queuedCount;
     partialProgress.processedCount = imageStats.publicListing.completedCount;
-    partialProgress.imageFoundCount = imageStats.found;
+    partialProgress.imageFoundCount = imageFoundCount;
     partialProgress.imageNotFoundCount = imageStats.notFound;
     partialProgress.imageAmbiguousCount = imageStats.ambiguous;
     partialProgress.imageFailedCount = imageStats.failed;
     partialProgress.imageSkippedNoProviderCount = imageStats.publicListing.skippedNoProviderCount;
-    partialProgress.imageMissingCount =
-      imageStats.notFound + imageStats.publicListing.skippedNoProviderCount;
+    partialProgress.imageMissingCount = imageStillMissingCount;
 
     try {
       await replaceWalmartProductsForUser({
@@ -1918,7 +1935,10 @@ export async function importWalmartProducts(
         inventoryKnownCount,
         inventoryUnknownCount,
         inventoryOutOfStockCount,
-        imageFoundCount: imageStats.found,
+        imageFoundCount,
+        imageFromImportPayloadCount,
+        imageEnrichedCount,
+        imageStillMissingCount,
         imageNotFoundCount: imageStats.notFound,
         imageAmbiguousCount: imageStats.ambiguous,
         imageFailedCount: imageStats.failed,
@@ -1985,11 +2005,16 @@ export async function retryWalmartPublicImageEnrichmentForUser(
   userId: string
 ): Promise<WalmartImportResult> {
   const currentProducts = await listPersistedWalmartProducts(userId);
+  const initialCatalogImageCount = currentProducts.filter(
+    (product) => product.imageSource === "walmart_catalog" && product.imageUrl.trim().length > 0
+  ).length;
   const queue = await runPublicListingImageEnrichmentQueue({
     userId,
     products: currentProducts,
     importedCount: currentProducts.length,
   });
+  const finalImageFoundCount = queue.products.filter((product) => product.imageUrl.trim().length > 0).length;
+  const finalImageStillMissingCount = Math.max(0, queue.products.length - finalImageFoundCount);
 
   const importedAt = await getPersistedWalmartLastImportAt(userId);
   await replaceWalmartProductsForUser({
@@ -2008,7 +2033,10 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       fetchedCount: queue.products.length,
       payloadShape: "retry_enrichment_only",
       pageCount: 0,
-      imageFoundCount: queue.progress.foundCount,
+      imageFoundCount: finalImageFoundCount,
+      imageFromImportPayloadCount: initialCatalogImageCount,
+      imageEnrichedCount: queue.progress.foundCount,
+      imageStillMissingCount: finalImageStillMissingCount,
       imageNotFoundCount: queue.progress.notFoundCount,
       imageAmbiguousCount: queue.progress.ambiguousCount,
       imageFailedCount: queue.progress.failedCount,
@@ -2024,7 +2052,7 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       },
       enrichmentProcessedCount: queue.progress.enrichmentCompletedCount,
       imageEnrichmentNoImageReason:
-        queue.progress.foundCount > 0
+        finalImageFoundCount > 0
           ? null
           : queue.progress.providerStatus === "not_connected"
           ? "Connect SerpApi to enable automated public Walmart image enrichment."

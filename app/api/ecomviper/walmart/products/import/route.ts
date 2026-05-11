@@ -24,6 +24,9 @@ interface ImportProgressTotals {
   processedCount: number;
   queuedCount: number;
   imageFoundCount: number;
+  imageFromImportPayloadCount: number;
+  imageEnrichedCount: number;
+  imageStillMissingCount: number;
   imageMissingCount: number;
   imageNotFoundCount: number;
   imageAmbiguousCount: number;
@@ -260,8 +263,28 @@ function buildSuccessProgress(input: {
   existingProductsShownCount: number;
 }): ImportProgressPayload {
   const result = input.result;
+  const diagnostics = result.importDiagnostics;
+  const hasImageDiagnostics =
+    diagnostics?.imageFoundCount !== undefined ||
+    diagnostics?.imageFromImportPayloadCount !== undefined ||
+    diagnostics?.imageEnrichedCount !== undefined ||
+    diagnostics?.imageStillMissingCount !== undefined ||
+    diagnostics?.imageNotFoundCount !== undefined ||
+    diagnostics?.imageAmbiguousCount !== undefined ||
+    diagnostics?.imageFailedCount !== undefined ||
+    diagnostics?.imageSkippedNoProviderCount !== undefined ||
+    diagnostics?.enrichmentQueuedCount !== undefined ||
+    diagnostics?.enrichmentCompletedCount !== undefined ||
+    diagnostics?.enrichmentProcessedCount !== undefined;
   const fetchedCount = result.importDiagnostics?.fetchedCount ?? result.fetchedCount ?? 0;
   const imageFoundCount = result.importDiagnostics?.imageFoundCount ?? 0;
+  const imageFromImportPayloadCount = result.importDiagnostics?.imageFromImportPayloadCount ?? 0;
+  const imageEnrichedCount =
+    result.importDiagnostics?.imageEnrichedCount ??
+    (hasImageDiagnostics ? Math.max(0, imageFoundCount - imageFromImportPayloadCount) : 0);
+  const imageStillMissingCount =
+    result.importDiagnostics?.imageStillMissingCount ??
+    (hasImageDiagnostics ? Math.max(0, result.importedCount - imageFoundCount) : 0);
   const imageNotFoundCount = result.importDiagnostics?.imageNotFoundCount ?? 0;
   const imageAmbiguousCount = result.importDiagnostics?.imageAmbiguousCount ?? 0;
   const imageFailedCount = result.importDiagnostics?.imageFailedCount ?? 0;
@@ -271,7 +294,7 @@ function buildSuccessProgress(input: {
     result.importDiagnostics?.enrichmentCompletedCount ??
     result.importDiagnostics?.enrichmentProcessedCount ??
     0;
-  const missingCount = imageNotFoundCount + imageSkippedNoProviderCount;
+  const missingCount = imageStillMissingCount;
   const providerConnected = result.importDiagnostics?.enrichmentProviderConnected ?? false;
   const providerStatus =
     result.importDiagnostics?.serpApiStatus ??
@@ -288,7 +311,7 @@ function buildSuccessProgress(input: {
     ...EMPTY_ERROR_CATEGORIES,
     ...(result.importDiagnostics?.enrichmentErrorCategories ?? {}),
   };
-  const warningCount = missingCount + imageAmbiguousCount + imageFailedCount;
+  const warningCount = imageStillMissingCount + imageAmbiguousCount + imageFailedCount;
   const stage = warningCount > 0 ? "completed_with_warnings" : "complete";
 
   return {
@@ -307,6 +330,9 @@ function buildSuccessProgress(input: {
       processedCount: enrichmentCompletedCount,
       queuedCount: enrichmentQueuedCount,
       imageFoundCount,
+      imageFromImportPayloadCount,
+      imageEnrichedCount,
+      imageStillMissingCount,
       imageMissingCount: missingCount,
       imageNotFoundCount,
       imageAmbiguousCount,
@@ -365,6 +391,9 @@ export async function POST(req: NextRequest) {
           processedCount: 0,
           queuedCount: 0,
           imageFoundCount: 0,
+          imageFromImportPayloadCount: 0,
+          imageEnrichedCount: 0,
+          imageStillMissingCount: 0,
           imageMissingCount: 0,
           imageNotFoundCount: 0,
           imageAmbiguousCount: 0,
@@ -487,6 +516,9 @@ export async function POST(req: NextRequest) {
         processedCount: partialTotals?.processedCount ?? 0,
         queuedCount: partialTotals?.queuedCount ?? 0,
         imageFoundCount: partialTotals?.imageFoundCount ?? 0,
+        imageFromImportPayloadCount: 0,
+        imageEnrichedCount: 0,
+        imageStillMissingCount: partialTotals?.imageMissingCount ?? 0,
         imageMissingCount: partialTotals?.imageMissingCount ?? 0,
         imageNotFoundCount: partialTotals?.imageNotFoundCount ?? 0,
         imageAmbiguousCount: partialTotals?.imageAmbiguousCount ?? 0,

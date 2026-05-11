@@ -301,6 +301,9 @@ export interface WalmartImportResult {
     inventoryOutOfStockCount?: number;
     inventoryLookupSkippedCount?: number;
     imageFoundCount?: number;
+    imageFromImportPayloadCount?: number;
+    imageEnrichedCount?: number;
+    imageStillMissingCount?: number;
     imageNotFoundCount?: number;
     imageAmbiguousCount?: number;
     imageFailedCount?: number;

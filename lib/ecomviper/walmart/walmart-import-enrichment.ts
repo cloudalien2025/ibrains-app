@@ -327,12 +327,43 @@ export async function runPublicListingImageEnrichmentQueue(input: {
 
     const results = await Promise.all(
       batch.map(async (product) => {
-        const resolution = await resolveWithRetry({
-          userId: input.userId,
-          product,
-          retries,
-        });
-        return { product, resolution };
+        try {
+          const resolution = await resolveWithRetry({
+            userId: input.userId,
+            product,
+            retries,
+          });
+          return { product, resolution };
+        } catch (error) {
+          return {
+            product,
+            resolution: {
+              imageSyncStatus: "failed" as const,
+              imageSource: "public_walmart_listing_serpapi" as const,
+              statusReason:
+                error instanceof Error && error.message.trim().length > 0
+                  ? error.message
+                  : "Public Walmart listing enrichment failed.",
+              imageMatchMethod: null,
+              publicWalmartUrl: product.publicWalmartUrl ?? "",
+              publicWalmartProductId: product.publicWalmartProductId ?? "",
+              primaryImageUrl: "",
+              galleryImageUrls: [],
+              variantImageUrls: [],
+              lastImageSyncedAt: new Date().toISOString(),
+              diagnostics: {
+                provider: "serpapi" as const,
+                endpointFamily: "walmart_search" as const,
+                statusCategory: "provider_error" as const,
+                productId: product.publicWalmartProductId ?? null,
+                candidateCount: 0,
+                imageCount: 0,
+                matchMethod: null,
+              },
+              errorCode: "SERPAPI_REQUEST_FAILED" as const,
+            },
+          };
+        }
       })
     );
 
