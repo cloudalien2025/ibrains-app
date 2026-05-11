@@ -334,6 +334,30 @@ describe("walmart products import route", () => {
     expect(payload.importProgress?.importErrorReason).toBe("Import failed due to an unknown runtime error.");
   });
 
+  it("maps gateway timeout errors to import_gateway_timeout with gateway phase", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockRejectedValue(
+      new Error(
+        "Import request timed out at the gateway before completion. Try Import Products again."
+      )
+    );
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.importProgress?.importErrorCategory).toBe("import_gateway_timeout");
+    expect(payload.importProgress?.importErrorPhase).toBe("gateway_timeout");
+    expect(payload.importProgress?.importErrorStatusCode).toBe(504);
+    expect(payload.importProgress?.importErrorEndpointFamily).toBe("gateway");
+  });
+
   it("keeps import as completed_with_warnings when catalog import succeeds but SerpApi key is invalid", async () => {
     mocks.requireSignedInUser.mockResolvedValue({
       userId: "user_clerk_1",

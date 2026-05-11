@@ -43,13 +43,17 @@ import type {
 
 const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
+const WALMART_IMPORT_MAX_PAGES_BOUNDED = 1;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
 const WALMART_HOST_SUFFIX = ".walmart.com";
 const WALMART_IMPORT_FAILURE_NAME = "WalmartImportFailureError";
 const WALMART_CATALOG_REQUEST_TIMEOUT_MS = 12_000;
 const WALMART_INVENTORY_REQUEST_TIMEOUT_MS = 4_500;
+const WALMART_INVENTORY_REQUEST_TIMEOUT_MS_BOUNDED = 2_500;
 const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS = 45;
+const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED = 4;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
+const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED = 0;
 
 type WalmartImportPartialProgress = {
   importedCount: number;
@@ -79,6 +83,7 @@ interface WalmartImportOptions {
   boundedRuntime?: boolean;
   maxImageEnrichmentProducts?: number;
   maxInventoryLookups?: number;
+  maxCatalogPages?: number;
 }
 
 function createWalmartImportFailure(input: {
@@ -743,13 +748,17 @@ function extractInventoryQuantity(payload: unknown): number | null {
   );
 }
 
-async function fetchInventorySnapshotForSku(accessToken: string, sku: string): Promise<InventorySnapshot> {
+async function fetchInventorySnapshotForSku(
+  accessToken: string,
+  sku: string,
+  timeoutMs = WALMART_INVENTORY_REQUEST_TIMEOUT_MS
+): Promise<InventorySnapshot> {
   const url = new URL("/v3/inventory", `${WALMART_PRODUCTION_BASE_URL}/`);
   url.searchParams.set("sku", sku);
 
   const correlationId = crypto.randomUUID();
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), WALMART_INVENTORY_REQUEST_TIMEOUT_MS);
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: buildWalmartApiHeaders(accessToken, correlationId),
@@ -806,7 +815,7 @@ async function fetchInventorySnapshotForSku(accessToken: string, sku: string): P
 async function fetchInventorySnapshotsForItems(
   accessToken: string,
   items: Record<string, unknown>[],
-  options?: { maxLookups?: number }
+  options?: { maxLookups?: number; timeoutMs?: number }
 ): Promise<Map<string, InventorySnapshot>> {
   const bySku = new Map<string, string>();
   for (const item of items) {
@@ -818,7 +827,10 @@ async function fetchInventorySnapshotsForItems(
   }
 
   const snapshots = new Map<string, InventorySnapshot>();
-  const maxLookups = Math.max(1, options?.maxLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS);
+  const configuredMaxLookups = options?.maxLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS;
+  const maxLookups = Math.max(0, configuredMaxLookups);
+  if (maxLookups === 0) return snapshots;
+  const timeoutMs = Math.max(500, options?.timeoutMs ?? WALMART_INVENTORY_REQUEST_TIMEOUT_MS);
   const skus = Array.from(bySku.entries()).slice(0, maxLookups);
   const concurrency = 8;
 
@@ -827,7 +839,7 @@ async function fetchInventorySnapshotsForItems(
     const results = await Promise.all(
       batch.map(async ([key, sku]) => {
         try {
-          const snapshot = await fetchInventorySnapshotForSku(accessToken, sku);
+          const snapshot = await fetchInventorySnapshotForSku(accessToken, sku, timeoutMs);
           return [key, snapshot] as const;
         } catch {
           return [
@@ -1180,6 +1192,58 @@ interface ImageEnrichmentStats {
   };
 }
 
+function createInitialImageEnrichmentStats(): ImageEnrichmentStats {
+  return {
+    found: 0,
+    notFound: 0,
+    ambiguous: 0,
+    failed: 0,
+    noImageReason: null,
+    sourceBreakdown: {
+      walmartItemReport: 0,
+      walmartSellerCatalogSearch: 0,
+      walmartItemSearch: 0,
+      publicWalmartListingSerpApi: 0,
+    },
+    publicListing: {
+      providerConnected: false,
+      providerStatus: "not_connected",
+      providerStatusReason: null,
+      providerCanAttempt: false,
+      queuedCount: 0,
+      completedCount: 0,
+      foundCount: 0,
+      notFoundCount: 0,
+      ambiguousCount: 0,
+      failedCount: 0,
+      skippedNoProviderCount: 0,
+      lastEnrichedAt: null,
+      errorCategories: {
+        invalidKeyCount: 0,
+        forbiddenCount: 0,
+        rateLimitedCount: 0,
+        badRequestCount: 0,
+        providerErrorCount: 0,
+        networkErrorCount: 0,
+        malformedResponseCount: 0,
+        unknownErrorCount: 0,
+      },
+    },
+    itemReport: {
+      requested: false,
+      downloaded: false,
+      rowsParsed: 0,
+      requestId: null,
+      requestEndpointTried: [],
+      requestEndpointUsed: null,
+      requestStatusCode: null,
+      statusEndpointUsed: null,
+      downloadEndpointUsed: null,
+      failureCategory: "none",
+    },
+  };
+}
+
 function firstIdentifierCount(products: WalmartProductRecord[]): {
   withPublicProductId: number;
   withPublicUrl: number;
@@ -1351,190 +1415,150 @@ function withImageEnrichment(
 async function enrichProductImages(
   accessToken: string,
   userId: string,
-  products: WalmartProductRecord[]
+  products: WalmartProductRecord[],
+  options?: {
+    skipOfficialSources?: boolean;
+  }
 ): Promise<{ products: WalmartProductRecord[]; stats: ImageEnrichmentStats }> {
   const enriched = [...products];
-  const stats: ImageEnrichmentStats = {
-    found: 0,
-    notFound: 0,
-    ambiguous: 0,
-    failed: 0,
-    noImageReason: null,
-    sourceBreakdown: {
-      walmartItemReport: 0,
-      walmartSellerCatalogSearch: 0,
-      walmartItemSearch: 0,
-      publicWalmartListingSerpApi: 0,
-    },
-    publicListing: {
-      providerConnected: false,
-      providerStatus: "not_connected",
-      providerStatusReason: null,
-      providerCanAttempt: false,
-      queuedCount: 0,
-      completedCount: 0,
-      foundCount: 0,
-      notFoundCount: 0,
-      ambiguousCount: 0,
-      failedCount: 0,
-      skippedNoProviderCount: 0,
-      lastEnrichedAt: null,
-      errorCategories: {
-        invalidKeyCount: 0,
-        forbiddenCount: 0,
-        rateLimitedCount: 0,
-        badRequestCount: 0,
-        providerErrorCount: 0,
-        networkErrorCount: 0,
-        malformedResponseCount: 0,
-        unknownErrorCount: 0,
-      },
-    },
-    itemReport: {
-      requested: false,
-      downloaded: false,
-      rowsParsed: 0,
-      requestId: null,
-      requestEndpointTried: [],
-      requestEndpointUsed: null,
-      requestStatusCode: null,
-      statusEndpointUsed: null,
-      downloadEndpointUsed: null,
-      failureCategory: "none",
-    },
-  };
+  const stats = createInitialImageEnrichmentStats();
+  const skipOfficialSources = Boolean(options?.skipOfficialSources);
 
-  const reportEnrichment = await enrichProductsFromItemReport({
-    accessToken,
-    products: enriched,
-  });
-
-  stats.itemReport.requested = reportEnrichment.run.itemReportRequested;
-  stats.itemReport.downloaded = reportEnrichment.run.itemReportDownloaded;
-  stats.itemReport.rowsParsed = reportEnrichment.run.itemReportRowsParsed;
-  stats.itemReport.requestId = reportEnrichment.run.reportRequestId;
-  stats.itemReport.requestEndpointTried = [...reportEnrichment.run.diagnostics.requestEndpointTried];
-  stats.itemReport.requestEndpointUsed = reportEnrichment.run.diagnostics.requestEndpointUsed;
-  stats.itemReport.requestStatusCode = reportEnrichment.run.diagnostics.requestStatusCode;
-  stats.itemReport.statusEndpointUsed = reportEnrichment.run.diagnostics.statusEndpointUsed;
-  stats.itemReport.downloadEndpointUsed = reportEnrichment.run.diagnostics.downloadEndpointUsed;
-  stats.itemReport.failureCategory = reportEnrichment.run.failureCategory;
-
-  const shouldFallbackToItemSearch = new Set<string>();
-
-  for (const [skuKey, decision] of reportEnrichment.decisionsBySku.entries()) {
-    const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === skuKey);
-    if (targetIndex < 0) continue;
-
-    const hasImageAfterDecision = Boolean(decision.primaryImageUrl);
-
-    enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
-      imageSyncStatus: decision.imageSyncStatus,
-      statusReason: decision.statusReason,
-      imageSource: decision.imageSource,
-      primaryImageUrl: decision.primaryImageUrl,
-      galleryImageUrls: [...decision.galleryImageUrls],
-      variantImageUrls: [...decision.variantImageUrls],
-      matchedItemId: decision.matchedItemId,
-      matchMethod: decision.matchMethod,
-      lastImageSyncedAt: decision.lastImageSyncedAt,
-      diagnostics: {
-        attempts: reportEnrichment.run.diagnostics.requestAttempts.slice(0, 1).map((entry) => ({
-          method: decision.matchMethod ?? "item_report_sku",
-          httpStatus: entry.httpStatus,
-          resultCount: reportEnrichment.run.itemReportRowsParsed,
-          ok: entry.ok,
-        })),
-        decision: {
-          outcome: decision.imageSyncStatus,
-          reason: decision.statusReason,
-          matchMethod: decision.matchMethod,
-          candidateCount: reportEnrichment.run.itemReportRowsParsed,
-          selectedScore: null,
-          runnerUpScore: null,
-          acceptedBy: "identifier_exact",
-        },
-      },
+  if (!skipOfficialSources) {
+    const reportEnrichment = await enrichProductsFromItemReport({
+      accessToken,
+      products: enriched,
     });
 
-    if (!hasImageAfterDecision && decision.allowItemSearchFallback) {
-      shouldFallbackToItemSearch.add(skuKey);
-    }
-  }
+    stats.itemReport.requested = reportEnrichment.run.itemReportRequested;
+    stats.itemReport.downloaded = reportEnrichment.run.itemReportDownloaded;
+    stats.itemReport.rowsParsed = reportEnrichment.run.itemReportRowsParsed;
+    stats.itemReport.requestId = reportEnrichment.run.reportRequestId;
+    stats.itemReport.requestEndpointTried = [...reportEnrichment.run.diagnostics.requestEndpointTried];
+    stats.itemReport.requestEndpointUsed = reportEnrichment.run.diagnostics.requestEndpointUsed;
+    stats.itemReport.requestStatusCode = reportEnrichment.run.diagnostics.requestStatusCode;
+    stats.itemReport.statusEndpointUsed = reportEnrichment.run.diagnostics.statusEndpointUsed;
+    stats.itemReport.downloadEndpointUsed = reportEnrichment.run.diagnostics.downloadEndpointUsed;
+    stats.itemReport.failureCategory = reportEnrichment.run.failureCategory;
 
-  for (let index = 0; index < enriched.length; index += WALMART_IMAGE_ENRICHMENT_CONCURRENCY) {
-    const batch = enriched
-      .slice(index, index + WALMART_IMAGE_ENRICHMENT_CONCURRENCY)
-      .filter((product) => shouldFallbackToItemSearch.has(product.sku.toUpperCase()) && !product.imageUrl.trim());
+    const shouldFallbackToItemSearch = new Set<string>();
 
-    if (batch.length === 0) continue;
-
-    const fallbackResults = await Promise.all(
-      batch.map(async (product) => {
-        try {
-          const enrichment = await enrichWalmartImageFromItemSearch({
-            accessToken,
-            product: {
-              gtin: product.gtin,
-              upc: product.upc,
-              itemId: product.itemId,
-              wpid: product.wpid,
-              title: product.title,
-              brand: product.brand,
-            },
-          });
-          return { product, enrichment } as const;
-        } catch {
-          return {
-            product,
-            enrichment: {
-              imageSyncStatus: "failed" as const,
-              imageSource: "walmart_item_search" as const,
-              statusReason: "Item Search request failed after retry.",
-              primaryImageUrl: "",
-              galleryImageUrls: [],
-              variantImageUrls: [],
-              matchedItemId: null,
-              matchMethod: null,
-              lastImageSyncedAt: new Date().toISOString(),
-              diagnostics: {
-                attempts: [],
-                decision: {
-                  outcome: "failed" as const,
-                  reason: "Item Search request failed after retry.",
-                  matchMethod: null,
-                  candidateCount: 0,
-                  selectedScore: null,
-                  runnerUpScore: null,
-                  acceptedBy: "none" as const,
-                },
-              },
-            },
-          } as const;
-        }
-      })
-    );
-
-    for (const { product, enrichment } of fallbackResults) {
-      const key = product.sku.toUpperCase();
-      const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === key);
+    for (const [skuKey, decision] of reportEnrichment.decisionsBySku.entries()) {
+      const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === skuKey);
       if (targetIndex < 0) continue;
 
+      const hasImageAfterDecision = Boolean(decision.primaryImageUrl);
+
       enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
-        imageSyncStatus: enrichment.imageSyncStatus,
-        statusReason: enrichment.statusReason,
-        imageSource: "walmart_item_search",
-        primaryImageUrl: enrichment.primaryImageUrl,
-        galleryImageUrls: [...enrichment.galleryImageUrls],
-        variantImageUrls: [...enrichment.variantImageUrls],
-        matchedItemId: enrichment.matchedItemId,
-        matchMethod: enrichment.matchMethod,
-        lastImageSyncedAt: enrichment.lastImageSyncedAt,
+        imageSyncStatus: decision.imageSyncStatus,
+        statusReason: decision.statusReason,
+        imageSource: decision.imageSource,
+        primaryImageUrl: decision.primaryImageUrl,
+        galleryImageUrls: [...decision.galleryImageUrls],
+        variantImageUrls: [...decision.variantImageUrls],
+        matchedItemId: decision.matchedItemId,
+        matchMethod: decision.matchMethod,
+        lastImageSyncedAt: decision.lastImageSyncedAt,
         diagnostics: {
-          attempts: [...enrichment.diagnostics.attempts],
-          decision: enrichment.diagnostics.decision,
+          attempts: reportEnrichment.run.diagnostics.requestAttempts.slice(0, 1).map((entry) => ({
+            method: decision.matchMethod ?? "item_report_sku",
+            httpStatus: entry.httpStatus,
+            resultCount: reportEnrichment.run.itemReportRowsParsed,
+            ok: entry.ok,
+          })),
+          decision: {
+            outcome: decision.imageSyncStatus,
+            reason: decision.statusReason,
+            matchMethod: decision.matchMethod,
+            candidateCount: reportEnrichment.run.itemReportRowsParsed,
+            selectedScore: null,
+            runnerUpScore: null,
+            acceptedBy: "identifier_exact",
+          },
         },
       });
+
+      if (!hasImageAfterDecision && decision.allowItemSearchFallback) {
+        shouldFallbackToItemSearch.add(skuKey);
+      }
+    }
+
+    for (let index = 0; index < enriched.length; index += WALMART_IMAGE_ENRICHMENT_CONCURRENCY) {
+      const batch = enriched
+        .slice(index, index + WALMART_IMAGE_ENRICHMENT_CONCURRENCY)
+        .filter(
+          (product) => shouldFallbackToItemSearch.has(product.sku.toUpperCase()) && !product.imageUrl.trim()
+        );
+
+      if (batch.length === 0) continue;
+
+      const fallbackResults = await Promise.all(
+        batch.map(async (product) => {
+          try {
+            const enrichment = await enrichWalmartImageFromItemSearch({
+              accessToken,
+              product: {
+                gtin: product.gtin,
+                upc: product.upc,
+                itemId: product.itemId,
+                wpid: product.wpid,
+                title: product.title,
+                brand: product.brand,
+              },
+            });
+            return { product, enrichment } as const;
+          } catch {
+            return {
+              product,
+              enrichment: {
+                imageSyncStatus: "failed" as const,
+                imageSource: "walmart_item_search" as const,
+                statusReason: "Item Search request failed after retry.",
+                primaryImageUrl: "",
+                galleryImageUrls: [],
+                variantImageUrls: [],
+                matchedItemId: null,
+                matchMethod: null,
+                lastImageSyncedAt: new Date().toISOString(),
+                diagnostics: {
+                  attempts: [],
+                  decision: {
+                    outcome: "failed" as const,
+                    reason: "Item Search request failed after retry.",
+                    matchMethod: null,
+                    candidateCount: 0,
+                    selectedScore: null,
+                    runnerUpScore: null,
+                    acceptedBy: "none" as const,
+                  },
+                },
+              },
+            } as const;
+          }
+        })
+      );
+
+      for (const { product, enrichment } of fallbackResults) {
+        const key = product.sku.toUpperCase();
+        const targetIndex = enriched.findIndex((entry) => entry.sku.toUpperCase() === key);
+        if (targetIndex < 0) continue;
+
+        enriched[targetIndex] = withImageEnrichment(enriched[targetIndex], {
+          imageSyncStatus: enrichment.imageSyncStatus,
+          statusReason: enrichment.statusReason,
+          imageSource: "walmart_item_search",
+          primaryImageUrl: enrichment.primaryImageUrl,
+          galleryImageUrls: [...enrichment.galleryImageUrls],
+          variantImageUrls: [...enrichment.variantImageUrls],
+          matchedItemId: enrichment.matchedItemId,
+          matchMethod: enrichment.matchMethod,
+          lastImageSyncedAt: enrichment.lastImageSyncedAt,
+          diagnostics: {
+            attempts: [...enrichment.diagnostics.attempts],
+            decision: enrichment.diagnostics.decision,
+          },
+        });
+      }
     }
   }
 
@@ -1691,8 +1715,11 @@ export async function importWalmartProducts(
     const payloadShapes = new Set<string>();
     let pageCount = 0;
     let nextCursor: string | null = null;
+    const catalogPageCap = options?.boundedRuntime
+      ? Math.max(1, Math.min(WALMART_IMPORT_MAX_PAGES, options.maxCatalogPages ?? WALMART_IMPORT_MAX_PAGES_BOUNDED))
+      : WALMART_IMPORT_MAX_PAGES;
 
-    for (let pageIndex = 0; pageIndex < WALMART_IMPORT_MAX_PAGES; pageIndex += 1) {
+    for (let pageIndex = 0; pageIndex < catalogPageCap; pageIndex += 1) {
       let page: Awaited<ReturnType<typeof fetchCatalogPage>>;
       try {
         page = await fetchCatalogPage(token.accessToken, nextCursor);
@@ -1743,10 +1770,14 @@ export async function importWalmartProducts(
     }
 
     const inventoryLookupCap = options?.boundedRuntime
-      ? Math.max(1, options.maxInventoryLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS)
-      : Number.MAX_SAFE_INTEGER;
+      ? Math.max(0, options.maxInventoryLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED)
+      : Math.max(1, options?.maxInventoryLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS);
+    const inventoryTimeoutMs = options?.boundedRuntime
+      ? WALMART_INVENTORY_REQUEST_TIMEOUT_MS_BOUNDED
+      : WALMART_INVENTORY_REQUEST_TIMEOUT_MS;
     const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected, {
       maxLookups: inventoryLookupCap,
+      timeoutMs: inventoryTimeoutMs,
     });
 
     const bySku = new Map<string, WalmartProductRecord>();
@@ -1778,17 +1809,21 @@ export async function importWalmartProducts(
     partialProgress.importedCount = baseProducts.length;
     const enrichmentCap = options?.boundedRuntime
       ? Math.max(
-          1,
-          options.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS
+          0,
+          options.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED
         )
-      : Number.MAX_SAFE_INTEGER;
+      : Math.max(1, options?.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS);
     const productsForImageEnrichment = baseProducts.slice(0, enrichmentCap);
     const deferredProducts = baseProducts.slice(productsForImageEnrichment.length);
-    const { products: enrichedProducts, stats: imageStats } = await enrichProductImages(
-      token.accessToken,
-      userId,
-      productsForImageEnrichment
-    );
+    let enrichedProducts = productsForImageEnrichment;
+    let imageStats = createInitialImageEnrichmentStats();
+    if (productsForImageEnrichment.length > 0) {
+      const enriched = await enrichProductImages(token.accessToken, userId, productsForImageEnrichment, {
+        skipOfficialSources: Boolean(options?.boundedRuntime),
+      });
+      enrichedProducts = enriched.products;
+      imageStats = enriched.stats;
+    }
     const deferredReason =
       deferredProducts.length > 0
         ? "Image enrichment deferred during import to keep this request responsive. Use Retry image enrichment to continue."

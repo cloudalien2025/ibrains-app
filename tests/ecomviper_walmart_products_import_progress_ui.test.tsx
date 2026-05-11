@@ -202,4 +202,32 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Existing products shown below are from the previous successful import.");
     expect(container.textContent).toContain("SerpApi: Connected");
   });
+
+  it("shows gateway timeout failure without incorrectly marking SerpApi as not connected", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response("Gateway Time-out", { status: 504 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Failed");
+    expect(container.textContent).toContain("Import error (import_gateway_timeout)");
+    expect(container.textContent).toContain("Failure phase: gateway_timeout (HTTP 504) · endpoint: gateway");
+    expect(container.textContent).toContain("SerpApi: Unknown error");
+    expect(container.textContent).toContain(
+      "Provider status unavailable because the import request timed out."
+    );
+  });
 });

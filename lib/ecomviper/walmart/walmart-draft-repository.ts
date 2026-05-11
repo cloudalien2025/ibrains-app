@@ -55,16 +55,51 @@ function asEpoch(value: string): number {
   return Number.isNaN(parsed) ? 0 : parsed;
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asString(entry))
+    .filter((entry) => entry.length > 0);
+}
+
+function sanitizeDraftValidationResult(value: unknown): WalmartDraftRecord["validationResult"] {
+  const candidate = asObject(value);
+  const warnings = asStringArray(candidate?.warnings ?? []);
+  const violations = asStringArray(candidate?.violations ?? []);
+  const suggestions = asStringArray(candidate?.suggestions ?? []);
+  const valid = typeof candidate?.valid === "boolean" ? candidate.valid : violations.length === 0;
+
+  return {
+    valid,
+    warnings,
+    violations,
+    suggestions,
+  };
+}
+
+function sanitizeDraftPayload(value: unknown): Record<string, unknown> {
+  const payload = asObject(value);
+  if (!payload) return {};
+  return { ...payload };
+}
+
 function cloneDraft(draft: WalmartDraftRecord): WalmartDraftRecord {
+  const validationResult = sanitizeDraftValidationResult(draft.validationResult);
   return {
     ...draft,
-    draftPayload: { ...draft.draftPayload },
-    validationResult: {
-      ...draft.validationResult,
-      violations: draft.validationResult.violations ? [...draft.validationResult.violations] : [],
-      warnings: [...draft.validationResult.warnings],
-      suggestions: draft.validationResult.suggestions ? [...draft.validationResult.suggestions] : [],
-    },
+    draftPayload: sanitizeDraftPayload(draft.draftPayload),
+    validationResult,
   };
 }
 
