@@ -31,11 +31,11 @@ const marketplaceCards = [
   {
     id: "ebay",
     name: "eBay",
-    status: "Coming Soon",
-    description: "Planned marketplace extension for eBay catalog and operational sync.",
+    status: "Active",
+    description: "Phase 1 read-only mock-first dashboard for eBay listing import, optimization scoring, and AI-ready recommendations.",
     href: "/apps/ecomviper/ebay",
-    actionLabel: "Coming Soon",
-    disabled: true,
+    actionLabel: "Open eBay",
+    disabled: false,
   },
   {
     id: "shopify",
