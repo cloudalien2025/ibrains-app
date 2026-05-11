@@ -842,6 +842,85 @@ describe("walmart product import", () => {
     );
   });
 
+  it("prefers Walmart URL-derived product ID over GTIN-like productId fields during enrichment", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-public-serpapi-url-id-priority",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: true,
+      apiKey: "serpapi_test_key",
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "found",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "Public Walmart listing images found via SerpApi.",
+      imageMatchMethod: "public_url_product_id",
+      publicWalmartUrl: "https://www.walmart.com/ip/seort/17812552813",
+      publicWalmartProductId: "17812552813",
+      primaryImageUrl: "https://i5.walmartimages.com/asr/17812552813-primary.jpeg",
+      galleryImageUrls: ["https://i5.walmartimages.com/asr/17812552813-primary.jpeg"],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_search",
+        statusCategory: "ok",
+        productId: "17812552813",
+        candidateCount: 1,
+        imageCount: 1,
+        matchMethod: "public_url_product_id",
+      },
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "SERPAPI-URL-ID-1",
+            productName: "URL ID Priority Product",
+            brand: "Seort",
+            gtin: "852764008491",
+            productId: "852764008491",
+            productPageUrl: "/ip/seort/17812552813",
+            availability: "In_stock",
+            price: { amount: "16.99" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "SERPAPI-URL-ID-1": {
+          sku: "SERPAPI-URL-ID-1",
+          quantity: { unit: "EACH", amount: 8 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "SERPAPI-URL-ID-1");
+
+    expect(product?.publicWalmartUrl).toBe("https://www.walmart.com/ip/seort/17812552813");
+    expect(product?.publicWalmartProductId).toBe("17812552813");
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: "user_clerk_1",
+        product: expect.objectContaining({
+          publicWalmartProductId: "17812552813",
+          gtin: "852764008491",
+        }),
+      })
+    );
+  });
+
   it("reports no-image reason when SerpApi is not connected", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: true,

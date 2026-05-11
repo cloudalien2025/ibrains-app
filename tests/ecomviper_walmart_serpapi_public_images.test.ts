@@ -214,6 +214,12 @@ describe("Walmart SerpApi public listing images", () => {
         "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298?athbdg=L1600"
       )
     ).toBe("18410702298");
+    expect(
+      extractWalmartPublicProductIdFromUrl("https://www.walmart.com/ip/seort/17812552813")
+    ).toBe("17812552813");
+    expect(
+      extractWalmartPublicProductIdFromUrl("/ip/seort/17812552813?athbdg=L1600")
+    ).toBe("17812552813");
 
     expect(extractWalmartPublicProductIdFromUrl("https://example.com/ip/18410702298")).toBeNull();
   });
@@ -696,6 +702,70 @@ describe("Walmart SerpApi public listing images", () => {
     expect(calledWalmartProductEndpoint).toBe(false);
   });
 
+  it("prefers Walmart product ID parsed from Walmart URL over GTIN/UPC fallback search", async () => {
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: "serpapi_test_secret_123456" }),
+    });
+    await saveSerpApiRoute(saveReq);
+
+    const requestedQueries: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      const engine = parsed.searchParams.get("engine");
+      const query = parsed.searchParams.get("query");
+      if (engine === "walmart" && query) {
+        requestedQueries.push(query);
+      }
+
+      if (engine === "walmart" && query === "17812552813") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "17812552813",
+                  title: "Seort Product",
+                  brand: "Seort",
+                  image: "https://i5.walmartimages.com/asr/17812552813.jpeg",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (engine === "walmart" && query === "852764008491") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: "The product has not found." }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+    });
+
+    const result = await enrichProductImagesFromPublicWalmartListing({
+      userId: "user_ibrains",
+      product: {
+        ...createProduct(),
+        gtin: "852764008491",
+        publicWalmartUrl: "https://www.walmart.com/ip/seort/17812552813",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.imageMatchMethod).toBe("public_url_product_id");
+    expect(result.publicWalmartProductId).toBe("17812552813");
+    expect(requestedQueries).toContain("17812552813");
+    expect(requestedQueries).not.toContain("852764008491");
+  });
+
   it("falls back after walmart_product not-found provider error and still resolves image from search", async () => {
     const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
       method: "POST",
@@ -773,7 +843,7 @@ describe("Walmart SerpApi public listing images", () => {
       "[ecomviper:walmart:serpapi] walmart_product identifier not found",
       expect.objectContaining({
         sku: "ROC808",
-        identifierType: "product_record_item_id",
+        identifierType: "walmartItemId",
         identifierValue: "18410702298",
       })
     );

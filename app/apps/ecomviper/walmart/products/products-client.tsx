@@ -313,6 +313,15 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const hasImportedProducts = allProducts.length > 0;
   const isImportEmpty = !hasImportedProducts;
   const isFilteredEmpty = hasImportedProducts && visibleProducts.length === 0;
+  const showConnectedIdentifierWarning = Boolean(
+    importPanel &&
+      importPanel.providerConnected &&
+      importPanel.providerStatus !== "not_connected" &&
+      importPanel.providerStatus !== "invalid_key" &&
+      importPanel.providerStatus !== "forbidden" &&
+      importPanel.providerStatus !== "rate_limited" &&
+      (importPanel.failedCount > 0 || importPanel.notFoundCount > 0 || importPanel.ambiguousCount > 0)
+  );
 
   const emptyStateMessage = useMemo(() => {
     if (isImportEmpty) {
@@ -953,11 +962,17 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                 Connect SerpApi to enable automated public Walmart image enrichment.
               </p>
             ) : null}
-            {importPanel.providerStatus === "provider_error" ||
-            importPanel.providerStatus === "bad_request" ||
-            importPanel.providerStatus === "network_error" ||
-            importPanel.providerStatus === "malformed_response" ? (
-              <p className="mt-2 text-xs text-[#7C2D12]">Test SerpApi connection in Connect.</p>
+            {showConnectedIdentifierWarning ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">
+                SerpApi is connected, but Walmart did not find a product for the identifier used. Verify identifier mapping.
+              </p>
+            ) : null}
+            {(importPanel.providerStatus === "invalid_key" ||
+              importPanel.providerStatus === "forbidden" ||
+              importPanel.providerStatus === "rate_limited") ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">
+                SerpApi credentials were rejected or rate-limited. Verify the key in Connect.
+              </p>
             ) : null}
             {importPanel.noImageReason ? (
               <p className="mt-2 text-xs text-[#7C2D12]">

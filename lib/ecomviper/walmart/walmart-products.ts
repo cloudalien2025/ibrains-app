@@ -293,8 +293,20 @@ function asHttpUrl(value: unknown): string {
   return /^https?:\/\//i.test(candidate) ? candidate : "";
 }
 
+function normalizeIdentifier(value: unknown): string {
+  return asString(value).replace(/[^0-9a-z]/gi, "").toUpperCase();
+}
+
 function normalizeWalmartPublicUrl(value: unknown): string {
-  const candidate = asHttpUrl(value);
+  const raw = asString(value);
+  if (!raw) return "";
+  const candidate =
+    asHttpUrl(raw) ||
+    (/^\/ip\//i.test(raw)
+      ? `https://www.walmart.com${raw.startsWith("/") ? raw : `/${raw}`}`
+      : /^(?:www\.)?walmart\.com\//i.test(raw)
+      ? `https://${raw.replace(/^https?:\/\//i, "")}`
+      : "");
   if (!candidate) return "";
   try {
     const parsed = new URL(candidate);
@@ -319,6 +331,19 @@ function firstPublicWalmartProductId(...values: unknown[]): string {
   for (const value of values) {
     const candidate = normalizeWalmartPublicProductId(value);
     if (candidate) return candidate;
+  }
+  return "";
+}
+
+function firstPublicWalmartProductIdExcluding(input: {
+  values: unknown[];
+  excludedIdentifiers: Set<string>;
+}): string {
+  for (const value of input.values) {
+    const candidate = normalizeWalmartPublicProductId(value);
+    if (!candidate) continue;
+    if (input.excludedIdentifiers.has(normalizeIdentifier(candidate))) continue;
+    return candidate;
   }
   return "";
 }
@@ -436,26 +461,60 @@ function extractPublicListingReference(item: Record<string, unknown>): {
     .find(Boolean) ?? "";
 
   const productIdFromUrl = publicWalmartUrl ? extractWalmartPublicProductIdFromUrl(publicWalmartUrl) ?? "" : "";
-
-  const publicWalmartProductId = firstPublicWalmartProductId(
-    item.publicWalmartProductId,
-    item.productId,
-    item.usItemId,
-    item.itemId,
-    item.id,
-    item.usItemID,
-    item.product_id,
-    product?.publicWalmartProductId,
-    product?.productId,
-    product?.itemId,
-    product?.usItemId,
-    content?.productId,
-    identifiers?.publicWalmartProductId,
-    identifiers?.productId,
-    identifiers?.itemId,
-    identifiers?.usItemId,
-    productIdFromUrl
+  const excludedIdentifierValues = new Set(
+    [identifiers?.upc, identifiers?.gtin, item.upc, item.gtin]
+      .map((value) => normalizeIdentifier(value))
+      .filter(Boolean)
   );
+
+  const publicWalmartProductId = firstPublicWalmartProductIdExcluding({
+    // Prefer canonical ID from Walmart product URL, then item/usItem IDs, then other explicit product IDs.
+    values: [
+      productIdFromUrl,
+      item.publicWalmartProductId,
+      item.usItemId,
+      item.itemId,
+      item.usItemID,
+      item.id,
+      product?.publicWalmartProductId,
+      product?.usItemId,
+      product?.itemId,
+      content?.productId,
+      identifiers?.publicWalmartProductId,
+      identifiers?.usItemId,
+      identifiers?.itemId,
+      item.productId,
+      item.product_id,
+      product?.productId,
+      identifiers?.productId,
+    ],
+    excludedIdentifiers: excludedIdentifierValues,
+  });
+
+  if (!publicWalmartProductId) {
+    return {
+      publicWalmartUrl,
+      publicWalmartProductId: firstPublicWalmartProductId(
+        productIdFromUrl,
+        item.publicWalmartProductId,
+        item.usItemId,
+        item.itemId,
+        item.usItemID,
+        item.id,
+        product?.publicWalmartProductId,
+        product?.usItemId,
+        product?.itemId,
+        content?.productId,
+        identifiers?.publicWalmartProductId,
+        identifiers?.usItemId,
+        identifiers?.itemId,
+        item.productId,
+        item.product_id,
+        product?.productId,
+        identifiers?.productId
+      ),
+    };
+  }
 
   return {
     publicWalmartUrl,
