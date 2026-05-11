@@ -145,6 +145,50 @@ interface ImportPanelState {
   running: boolean;
 }
 
+const ALLOWED_INVENTORY_STATUSES = new Set<WalmartEffectiveProductRecord["inventoryStatus"]>([
+  "known",
+  "unknown",
+  "out_of_stock",
+]);
+
+const ALLOWED_PRODUCT_STATUSES = new Set<WalmartEffectiveProductRecord["status"]>([
+  "active",
+  "attention",
+  "draft",
+  "sync_failed",
+]);
+
+const ALLOWED_IMAGE_SYNC_STATUSES = new Set<
+  NonNullable<WalmartEffectiveProductRecord["imageSyncStatus"]>
+>(["found", "not_found", "ambiguous", "failed", "not_synced"]);
+
+const ALLOWED_IMAGE_SOURCES = new Set<NonNullable<WalmartEffectiveProductRecord["imageSource"]>>([
+  "walmart_item_report",
+  "walmart_catalog",
+  "walmart_item_search",
+  "public_walmart_listing_serpapi",
+  "manual",
+  "shopify_placeholder",
+  "manual_placeholder",
+  "none",
+]);
+
+function safeEnum<T extends string>(value: unknown, allowed: Set<T>, fallback: T): T {
+  const candidate = safeString(value);
+  if (!candidate) return fallback;
+  return allowed.has(candidate as T) ? (candidate as T) : fallback;
+}
+
+function safeSkuRouteSegment(sku: string): string {
+  try {
+    return encodeURIComponent(sku);
+  } catch {
+    const withoutSurrogates = sku.replace(/[\uD800-\uDFFF]/g, "");
+    const fallback = withoutSurrogates.trim() || "UNKNOWN-SKU";
+    return encodeURIComponent(fallback);
+  }
+}
+
 function compareSkuNatural(
   left: WalmartEffectiveProductRecord,
   right: WalmartEffectiveProductRecord,
@@ -250,9 +294,13 @@ function normalizeProductForRender(product: WalmartEffectiveProductRecord): Walm
     brand: safeString(product.brand, "Unknown"),
     price: safeNumber(product.price, 0),
     inventoryQuantity: Math.max(0, safeNumber(product.inventoryQuantity, 0)),
+    inventoryStatus: safeEnum(product.inventoryStatus, ALLOWED_INVENTORY_STATUSES, "unknown"),
+    status: safeEnum(product.status, ALLOWED_PRODUCT_STATUSES, "attention"),
     imageUrl: normalizedImageUrl,
     liveImageUrl: normalizedLiveImageUrl,
     imageStatusMessage: safeString(product.imageStatusMessage) || undefined,
+    imageSource: safeEnum(product.imageSource, ALLOWED_IMAGE_SOURCES, "none"),
+    imageSyncStatus: safeEnum(product.imageSyncStatus, ALLOWED_IMAGE_SYNC_STATUSES, "not_synced"),
     issues: safeStringArray(product.issues),
     lastSyncedAt: safeString(product.lastSyncedAt, "—"),
     publicWalmartUrl: safeString(product.publicWalmartUrl) || undefined,
@@ -304,7 +352,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
 
   const allProducts = useMemo(
     () =>
-      products
+      (Array.isArray(products) ? products : [])
         .map((product) => normalizeProductForRender(product))
         .filter((product) => !locallyRemovedSkuKeys.includes(normalizeSkuKey(product.sku))),
     [products, locallyRemovedSkuKeys]
@@ -357,7 +405,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       new Map<string, string>(
         allProducts.map((product) => [
           product.sku,
-          product.hasDraftChanges ? `/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}` : "/apps/ecomviper/walmart/drafts",
+          product.hasDraftChanges
+            ? `/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`
+            : "/apps/ecomviper/walmart/drafts",
         ])
       ),
     [allProducts]
@@ -880,7 +930,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     setMessage(null);
 
     try {
-      const response = await fetch(`/api/ecomviper/walmart/products/${encodeURIComponent(removeTarget.sku)}`, {
+      const response = await fetch(`/api/ecomviper/walmart/products/${safeSkuRouteSegment(removeTarget.sku)}`, {
         method: "DELETE",
       });
 
@@ -1127,7 +1177,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                   </td>
                   <td className="py-2 pr-2 font-medium text-[#0F172A]">
                     <Link
-                      href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                      href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                       className="hover:text-[#1D4ED8]"
                     >
                       {product.sku}
@@ -1135,7 +1185,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                   </td>
                   <td className="py-2 pr-2 text-[#334155]">
                     <Link
-                      href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                      href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                       className="hover:text-[#1D4ED8]"
                     >
                       {product.title}
@@ -1167,7 +1217,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                       </summary>
                       <div className="absolute right-0 z-20 mt-1 w-56 rounded-lg border border-[#D9E4F0] bg-white p-1 shadow-[0_12px_28px_rgba(15,23,42,0.16)]">
                         <Link
-                          href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                          href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                           className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
                         >
                           Edit Product
@@ -1179,14 +1229,14 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                           {product.hasDraftChanges ? "View Draft" : "View Drafts"}
                         </Link>
                         <Link
-                          href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                          href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                           className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
                         >
                           Optimize with AI
                         </Link>
                         {!product.imageUrl && (product.publicWalmartUrl || product.publicWalmartProductId) ? (
                           <Link
-                            href={`/apps/ecomviper/walmart/products/${encodeURIComponent(product.sku)}`}
+                            href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                             className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"
                           >
                             Resolve images
@@ -1209,7 +1259,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                             })
                           }
                           className="block w-full rounded-md px-2 py-1.5 text-left text-xs font-medium text-rose-700 hover:bg-rose-50"
-                          data-testid={`ecomviper-walmart-remove-${encodeURIComponent(product.sku)}`}
+                          data-testid={`ecomviper-walmart-remove-${safeSkuRouteSegment(product.sku)}`}
                         >
                           Remove from EcomViper catalog
                         </button>

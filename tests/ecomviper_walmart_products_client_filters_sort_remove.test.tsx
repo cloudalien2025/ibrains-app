@@ -175,6 +175,34 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     );
   });
 
+  it("renders legacy product rows when status and image diagnostics are null", async () => {
+    const legacyProduct = createProduct("LEGACY-NULL", {
+      status: null as unknown as WalmartEffectiveProductRecord["status"],
+      inventoryStatus: null as unknown as WalmartEffectiveProductRecord["inventoryStatus"],
+      imageSource: null as unknown as WalmartEffectiveProductRecord["imageSource"],
+      imageSyncStatus: null as unknown as WalmartEffectiveProductRecord["imageSyncStatus"],
+      imageStatusMessage: null as unknown as string,
+      issues: null as unknown as string[],
+    });
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[legacyProduct]} />);
+    });
+
+    expect(container.textContent).toContain("LEGACY-NULL");
+    expect(container.textContent).toContain("Image enrichment not synced.");
+  });
+
+  it("renders products when SKU contains invalid URI surrogate characters", async () => {
+    const invalidSku = `SURROGATE-\uD800-SKU`;
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct(invalidSku)]} />);
+    });
+
+    expect(container.textContent).toContain("SURROGATE-");
+    expect(container.textContent).toContain("Item Search returned no usable image.");
+  });
+
   it("sorts SKU ascending and descending with natural ordering and accessible sort state", async () => {
     await act(async () => {
       root.render(

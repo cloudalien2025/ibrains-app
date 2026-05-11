@@ -175,6 +175,53 @@ describe("Walmart import progress UI", () => {
     expect(routerRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("renders completed progress safely when new diagnostics fields are missing or null", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 2,
+          fetchedCount: 2,
+          message: "Imported 2 Walmart product(s).",
+          importProgress: {
+            stage: "complete",
+            providerConnected: true,
+            providerStatus: "connected",
+            providerStatusReason: null,
+            providerCanAttempt: true,
+            totals: {
+              importedCount: 2,
+              fetchedCount: 2,
+            },
+          },
+          importDiagnostics: null,
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Complete");
+    expect(container.textContent).toContain("Products imported: 2");
+    expect(container.textContent).toContain("Products fetched: 2");
+    expect(container.textContent).toContain("Products processed: 0");
+    expect(container.textContent).toContain("Images found: 0");
+    expect(container.textContent).toContain("Still missing images: 0");
+    expect(container.textContent).toContain("SerpApi: Connected");
+  });
+
   it("shows failed import diagnostics without zeroing context when previous products exist", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(
