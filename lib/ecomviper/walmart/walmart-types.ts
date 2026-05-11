@@ -101,8 +101,23 @@ export type WalmartSerpApiProviderStatus =
   | "invalid_key"
   | "forbidden"
   | "rate_limited"
+  | "bad_request"
+  | "network_error"
+  | "malformed_response"
   | "provider_error"
   | "unknown_error";
+
+export interface WalmartSerpApiTestDiagnostics {
+  providerStatus: WalmartSerpApiProviderStatus;
+  statusCode: number | null;
+  statusReason: string;
+  safeProviderErrorDetail: string | null;
+  usage: {
+    totalSearchesLeft: number | null;
+    thisMonthUsage: number | null;
+    planSearchesPerMonth: number | null;
+  } | null;
+}
 
 export type WalmartImportErrorCategory =
   | "none"
@@ -296,6 +311,8 @@ export interface WalmartImportResult {
     enrichmentProviderConnected?: boolean;
     lastEnrichedAt?: string | null;
     imageEnrichmentDeferredCount?: number;
+    imageEnrichmentImportLimit?: number | null;
+    imageEnrichmentBounded?: boolean;
     imageEnrichmentNoImageReason?: string | null;
     serpApiStatus?: WalmartSerpApiProviderStatus;
     serpApiStatusReason?: string | null;

@@ -103,7 +103,7 @@ describe("Walmart product editor public listing image flow", () => {
       "EcomViper could not find images through Walmart Marketplace APIs."
     );
     expect(container.textContent).toContain(
-      "Connect your SerpApi key to fetch public Walmart listing images."
+      "SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment."
     );
   });
 

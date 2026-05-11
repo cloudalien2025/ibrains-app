@@ -71,7 +71,10 @@ function providerStatusPriority(status: WalmartSerpApiProviderStatus): number {
   if (status === "invalid_key") return 70;
   if (status === "forbidden") return 65;
   if (status === "rate_limited") return 60;
-  if (status === "provider_error") return 55;
+  if (status === "bad_request") return 57;
+  if (status === "malformed_response") return 56;
+  if (status === "network_error") return 55;
+  if (status === "provider_error") return 54;
   if (status === "unknown_error") return 50;
   if (status === "not_connected") return 40;
   return 10;
@@ -97,13 +100,13 @@ function applyProviderErrorToProgress(input: {
     status = "rate_limited";
   } else if (input.errorCode === "SERPAPI_BAD_REQUEST") {
     next.errorCategories.badRequestCount += 1;
-    status = "provider_error";
+    status = "bad_request";
   } else if (input.errorCode === "SERPAPI_NETWORK_ERROR") {
     next.errorCategories.networkErrorCount += 1;
-    status = "provider_error";
+    status = "network_error";
   } else if (input.errorCode === "SERPAPI_MALFORMED_RESPONSE") {
     next.errorCategories.malformedResponseCount += 1;
-    status = "provider_error";
+    status = "malformed_response";
   } else if (
     input.errorCode === "SERPAPI_PROVIDER_ERROR" ||
     input.errorCode === "SERPAPI_REQUEST_FAILED"

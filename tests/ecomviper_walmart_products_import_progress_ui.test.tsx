@@ -85,7 +85,10 @@ describe("Walmart import progress UI", () => {
           importProgress: {
             stage: "completed_with_warnings",
             providerConnected: false,
-            noImageReason: "SerpApi is not connected.",
+            noImageReason: "Connect SerpApi to enable automated public Walmart image enrichment.",
+            enrichmentBounded: true,
+            enrichmentBoundedLimit: 4,
+            enrichmentDeferredCount: 24,
             totals: {
               importedCount: 3,
               fetchedCount: 3,
@@ -108,7 +111,10 @@ describe("Walmart import progress UI", () => {
             enrichmentQueuedCount: 2,
             enrichmentCompletedCount: 2,
             enrichmentProviderConnected: false,
-            imageEnrichmentNoImageReason: "SerpApi is not connected.",
+            imageEnrichmentNoImageReason: "Connect SerpApi to enable automated public Walmart image enrichment.",
+            imageEnrichmentBounded: true,
+            imageEnrichmentImportLimit: 4,
+            imageEnrichmentDeferredCount: 24,
           },
         }),
         { status: 200, headers: { "Content-Type": "application/json" } }
@@ -139,7 +145,13 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Not found: 1");
     expect(container.textContent).toContain("Skipped (SerpApi not connected): 1");
     expect(container.textContent).toContain("SerpApi: Not connected");
-    expect(container.textContent).toContain("SerpApi is not connected.");
+    expect(container.textContent).toContain(
+      "Connect SerpApi to enable automated public Walmart image enrichment."
+    );
+    expect(container.textContent).toContain(
+      "Import image enrichment checks the first 4 missing-image products during import."
+    );
+    expect(container.textContent).toContain("Retry image enrichment (continue remaining products)");
     expect(routerRefresh).toHaveBeenCalledTimes(1);
   });
 
@@ -201,6 +213,59 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Failure phase: walmart_auth (HTTP 401) · endpoint: walmart_token");
     expect(container.textContent).toContain("Existing products shown below are from the previous successful import.");
     expect(container.textContent).toContain("SerpApi: Connected");
+  });
+
+  it("shows sanitized provider-error detail and Connect guidance", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 4,
+          importProgress: {
+            stage: "completed_with_warnings",
+            providerConnected: true,
+            providerStatus: "provider_error",
+            providerStatusReason:
+              "SerpApi returned a provider error: timeout from upstream api_key=[REDACTED]",
+            providerCanAttempt: true,
+            noImageReason:
+              "SerpApi returned a provider error: timeout from upstream api_key=[REDACTED]",
+            totals: {
+              importedCount: 4,
+              fetchedCount: 4,
+              processedCount: 4,
+              queuedCount: 4,
+              imageFoundCount: 0,
+              imageMissingCount: 0,
+              imageNotFoundCount: 0,
+              imageAmbiguousCount: 0,
+              imageFailedCount: 4,
+              imageSkippedNoProviderCount: 0,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain(
+      "SerpApi returned a provider error: timeout from upstream api_key=[REDACTED]"
+    );
+    expect(container.textContent).toContain("Test SerpApi connection in Connect.");
+    expect(container.textContent).not.toContain("api_key=secret");
   });
 
   it("shows gateway timeout failure without incorrectly marking SerpApi as not connected", async () => {

@@ -38,6 +38,9 @@ interface ImportProgressPayload {
   providerStatusReason: string | null;
   providerCanAttempt: boolean;
   noImageReason: string | null;
+  enrichmentBounded: boolean;
+  enrichmentBoundedLimit: number | null;
+  enrichmentDeferredCount: number;
   totals: ImportProgressTotals;
   importErrorCategory: WalmartImportErrorCategory;
   importErrorReason: string | null;
@@ -278,6 +281,9 @@ function buildSuccessProgress(input: {
     (providerStatus === "not_connected" ? "SerpApi key is missing." : null);
   const providerCanAttempt = result.importDiagnostics?.serpApiCanAttempt ?? providerConnected;
   const noImageReason = result.importDiagnostics?.imageEnrichmentNoImageReason ?? null;
+  const enrichmentBounded = Boolean(result.importDiagnostics?.imageEnrichmentBounded);
+  const enrichmentBoundedLimit = result.importDiagnostics?.imageEnrichmentImportLimit ?? null;
+  const enrichmentDeferredCount = result.importDiagnostics?.imageEnrichmentDeferredCount ?? 0;
   const enrichmentErrorCategories = {
     ...EMPTY_ERROR_CATEGORIES,
     ...(result.importDiagnostics?.enrichmentErrorCategories ?? {}),
@@ -292,6 +298,9 @@ function buildSuccessProgress(input: {
     providerStatusReason,
     providerCanAttempt,
     noImageReason,
+    enrichmentBounded,
+    enrichmentBoundedLimit,
+    enrichmentDeferredCount,
     totals: {
       importedCount: result.importedCount,
       fetchedCount,
@@ -347,6 +356,9 @@ export async function POST(req: NextRequest) {
         providerStatusReason: null,
         providerCanAttempt: false,
         noImageReason: null,
+        enrichmentBounded: false,
+        enrichmentBoundedLimit: null,
+        enrichmentDeferredCount: 0,
         totals: {
           importedCount: 0,
           fetchedCount: 0,
@@ -466,6 +478,9 @@ export async function POST(req: NextRequest) {
       providerStatusReason,
       providerCanAttempt,
       noImageReason: null,
+      enrichmentBounded: false,
+      enrichmentBoundedLimit: null,
+      enrichmentDeferredCount: 0,
       totals: {
         importedCount: partialTotals?.importedCount ?? 0,
         fetchedCount: partialTotals?.fetchedCount ?? 0,

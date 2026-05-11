@@ -37,22 +37,50 @@ export async function POST(req: NextRequest) {
     const apiKey = submittedApiKey || (await getWalmartSerpApiKeyForUser(userId)) || "";
 
     if (!apiKey) {
-      return fail(400, "SerpApi key is not configured. Save credentials first.", "NOT_CONFIGURED");
+      const status = await getWalmartSerpApiConnectionStatusForUser(userId);
+      return ok({
+        ok: true,
+        provider: "serpapi",
+        connected: false,
+        status: status.status,
+        maskedApiKey: status.maskedApiKey,
+        updatedAt: status.updatedAt,
+        saveSupported: status.saveSupported,
+        providerStatus: "not_connected",
+        providerStatusReason: "SerpApi key missing.",
+        safeProviderErrorDetail: null,
+        statusCode: null,
+        usage: null,
+        verifiedAt: new Date().toISOString(),
+        message: "SerpApi key missing.",
+        securityNote: "SerpApi keys are processed server-side and never returned.",
+      });
     }
 
-    await testWalmartSerpApiKey(apiKey);
+    const diagnostics = await testWalmartSerpApiKey(apiKey);
     const status = await getWalmartSerpApiConnectionStatusForUser(userId);
+    const isConnected = diagnostics.providerStatus === "connected";
+    const message = isConnected
+      ? "Connected to SerpApi."
+      : diagnostics.safeProviderErrorDetail
+      ? `${diagnostics.statusReason}`
+      : diagnostics.statusReason;
 
     return ok({
       ok: true,
       provider: "serpapi",
-      connected: status.connected,
+      connected: status.connected && isConnected,
       status: status.status,
       maskedApiKey: status.maskedApiKey,
       updatedAt: status.updatedAt,
       saveSupported: status.saveSupported,
+      providerStatus: diagnostics.providerStatus,
+      providerStatusReason: diagnostics.statusReason,
+      safeProviderErrorDetail: diagnostics.safeProviderErrorDetail,
+      statusCode: diagnostics.statusCode,
+      usage: diagnostics.usage,
       verifiedAt: new Date().toISOString(),
-      message: "Connected to SerpApi.",
+      message,
       securityNote: "SerpApi keys are processed server-side and never returned.",
     });
   } catch (error) {

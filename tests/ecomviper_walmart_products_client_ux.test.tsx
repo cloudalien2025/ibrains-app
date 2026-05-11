@@ -140,7 +140,7 @@ describe("Walmart products client UX", () => {
       />
     );
 
-    expect(html).toContain("No public Walmart listing images found via SerpApi.");
+    expect(html).toContain("No safe public Walmart image match found.");
     expect(html).toContain("Source: Public Walmart listing via SerpApi");
     expect(html).toContain(">Resolve images<");
   });
@@ -158,8 +158,25 @@ describe("Walmart products client UX", () => {
       />
     );
 
-    expect(html).toContain("SerpApi returned a provider error.");
+    expect(html).toContain("SerpApi provider error.");
     expect(html).not.toContain("SerpApi returned an error response.");
+  });
+
+  it("renders sanitized SerpApi provider detail on row status", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageStatusMessage: "SerpApi provider error: upstream timeout api_key=[REDACTED]",
+            imageSyncStatus: "failed",
+            imageSource: "public_walmart_listing_serpapi",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("SerpApi provider error: upstream timeout api_key=[REDACTED]");
+    expect(html).not.toContain("api_key=secret");
   });
 
   it("shows draft-aware brand value with pending draft indicator", () => {

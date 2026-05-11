@@ -4,11 +4,20 @@ import crypto from "crypto";
 import { decryptSecret, encryptSecret } from "@/app/api/ecomviper/_utils/crypto";
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
-import type { WalmartSerpApiConnectionStatus } from "@/lib/ecomviper/walmart/walmart-types";
+import {
+  extractSerpApiErrorDetail,
+  sanitizeSerpApiErrorDetail,
+} from "@/lib/ecomviper/walmart/serpapi-safety";
+import type {
+  WalmartSerpApiConnectionStatus,
+  WalmartSerpApiProviderStatus,
+  WalmartSerpApiTestDiagnostics,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 const CONNECTOR_ID = "ecomviper_walmart_serpapi";
 const CREDENTIAL_SCOPE = "ecomviper:walmart:serpapi";
 const TEST_PRODUCT_ID = "18410702298";
+const SERPAPI_TEST_TIMEOUT_MS = 14_000;
 
 interface CredentialRow {
   secret_ciphertext: string;
@@ -277,36 +286,375 @@ export async function getWalmartSerpApiKeyForUser(userId: string): Promise<strin
   }
 }
 
-function sanitizeSerpApiTestError(status: number): Error {
-  if (status === 401 || status === 403) {
-    return new Error("SerpApi test failed: authentication error. Verify your SerpApi key.");
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
   }
-  if (status === 429) {
-    return new Error("SerpApi test failed: rate limited. Retry in a moment.");
-  }
-  if (status >= 500) {
-    return new Error("SerpApi test failed: provider temporarily unavailable.");
-  }
-  return new Error(`SerpApi test failed: HTTP ${status}.`);
+  return null;
 }
 
-export async function testWalmartSerpApiKey(apiKey: string): Promise<void> {
-  const url = new URL("https://serpapi.com/search.json");
-  url.searchParams.set("engine", "walmart_product");
-  url.searchParams.set("product_id", TEST_PRODUCT_ID);
-  url.searchParams.set("api_key", apiKey);
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
 
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    cache: "no-store",
+function withSafeDetail(base: string, detail: string | null): string {
+  if (!detail) return base;
+  if (base.endsWith(".")) {
+    return `${base.slice(0, -1)}: ${detail}`;
+  }
+  return `${base}: ${detail}`;
+}
+
+function classifyByStatusCode(status: number, safeDetail: string | null): {
+  providerStatus: WalmartSerpApiProviderStatus;
+  statusReason: string;
+} {
+  if (status === 400 || status === 404 || status === 422) {
+    return {
+      providerStatus: "bad_request",
+      statusReason: withSafeDetail("SerpApi bad request.", safeDetail),
+    };
+  }
+  if (status === 401) {
+    return {
+      providerStatus: "invalid_key",
+      statusReason: "SerpApi key was rejected.",
+    };
+  }
+  if (status === 402 || status === 429) {
+    return {
+      providerStatus: "rate_limited",
+      statusReason: "SerpApi rate limit reached.",
+    };
+  }
+  if (status === 403) {
+    return {
+      providerStatus: "forbidden",
+      statusReason: "SerpApi account does not have permission.",
+    };
+  }
+  if (status >= 500) {
+    return {
+      providerStatus: "provider_error",
+      statusReason: withSafeDetail("SerpApi provider error.", safeDetail),
+    };
+  }
+  return {
+    providerStatus: "provider_error",
+    statusReason: withSafeDetail(`SerpApi request failed with HTTP ${status}.`, safeDetail),
+  };
+}
+
+function classifyByMessage(message: string): {
+  providerStatus: WalmartSerpApiProviderStatus;
+  statusReason: string;
+  safeProviderErrorDetail: string | null;
+} {
+  const lowered = message.toLowerCase();
+  const safeDetail = sanitizeSerpApiErrorDetail(message);
+
+  if (
+    lowered.includes("api_key is required") ||
+    lowered.includes("api key is required") ||
+    lowered.includes("no api key") ||
+    lowered.includes("missing api key")
+  ) {
+    return {
+      providerStatus: "not_connected",
+      statusReason: "SerpApi key missing.",
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (lowered.includes("api key") || lowered.includes("unauthorized") || lowered.includes("authentication")) {
+    return {
+      providerStatus: "invalid_key",
+      statusReason: "SerpApi key was rejected.",
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (
+    lowered.includes("forbidden") ||
+    lowered.includes("permission") ||
+    lowered.includes("not allowed") ||
+    lowered.includes("plan") ||
+    lowered.includes("upgrade") ||
+    lowered.includes("account deleted")
+  ) {
+    return {
+      providerStatus: "forbidden",
+      statusReason: "SerpApi account does not have permission.",
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (
+    lowered.includes("rate") ||
+    lowered.includes("too many") ||
+    lowered.includes("out of searches") ||
+    lowered.includes("no searches") ||
+    lowered.includes("insufficient credits") ||
+    lowered.includes("quota") ||
+    lowered.includes("429")
+  ) {
+    return {
+      providerStatus: "rate_limited",
+      statusReason: "SerpApi rate limit reached.",
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (
+    lowered.includes("parameter") ||
+    lowered.includes("product_id is required") ||
+    lowered.includes("engine is required") ||
+    lowered.includes("bad request") ||
+    lowered.includes("unable to process") ||
+    lowered.includes("unsupported engine") ||
+    lowered.includes("not supported") ||
+    lowered.includes("400")
+  ) {
+    return {
+      providerStatus: "bad_request",
+      statusReason: withSafeDetail("SerpApi bad request.", safeDetail),
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (
+    lowered.includes("timeout") ||
+    lowered.includes("econnreset") ||
+    lowered.includes("etimedout") ||
+    lowered.includes("network")
+  ) {
+    return {
+      providerStatus: "network_error",
+      statusReason: withSafeDetail("SerpApi network error.", safeDetail),
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (lowered.includes("invalid json") || lowered.includes("malformed")) {
+    return {
+      providerStatus: "malformed_response",
+      statusReason: withSafeDetail("SerpApi returned a malformed response.", safeDetail),
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  if (
+    lowered.includes("internal error") ||
+    lowered.includes("server error") ||
+    lowered.includes("temporarily unavailable")
+  ) {
+    return {
+      providerStatus: "provider_error",
+      statusReason: withSafeDetail("SerpApi provider error.", safeDetail),
+      safeProviderErrorDetail: safeDetail,
+    };
+  }
+  return {
+    providerStatus: "provider_error",
+    statusReason: withSafeDetail("SerpApi provider error.", safeDetail),
+    safeProviderErrorDetail: safeDetail,
+  };
+}
+
+function parseUsage(payload: unknown): WalmartSerpApiTestDiagnostics["usage"] {
+  const root = asObject(payload) ?? {};
+  const planSearchesPerMonth = asNumber(
+    root.plan_searches_per_month ?? asObject(root.plan)?.searches_per_month
+  );
+  const thisMonthUsage = asNumber(
+    root.this_month_usage ?? asObject(root.usage)?.this_month_usage ?? asObject(root.account_usage)?.this_month_usage
+  );
+  const totalSearchesLeft = asNumber(
+    root.total_searches_left ??
+      root.searches_left ??
+      asObject(root.usage)?.searches_left ??
+      asObject(root.account_usage)?.searches_left
+  );
+
+  if (planSearchesPerMonth === null && thisMonthUsage === null && totalSearchesLeft === null) {
+    return null;
+  }
+
+  return {
+    totalSearchesLeft,
+    thisMonthUsage,
+    planSearchesPerMonth,
+  };
+}
+
+async function fetchSerpApiTestPayload(url: URL): Promise<{
+  networkErrorDetail: string | null;
+  statusCode: number | null;
+  ok: boolean;
+  payload: unknown;
+  parseFailed: boolean;
+  safeErrorDetail: string | null;
+}> {
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SERPAPI_TEST_TIMEOUT_MS);
+    const response = await fetch(url.toString(), {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
+
+    const bodyText = await response.text();
+    let payload: unknown = {};
+    let parseFailed = false;
+    if (bodyText.trim()) {
+      try {
+        payload = JSON.parse(bodyText) as unknown;
+      } catch {
+        parseFailed = true;
+      }
+    }
+
+    const safeErrorDetail =
+      extractSerpApiErrorDetail(payload, { includeGenericMessage: true }) ??
+      sanitizeSerpApiErrorDetail(bodyText);
+
+    return {
+      networkErrorDetail: null,
+      statusCode: response.status,
+      ok: response.ok,
+      payload,
+      parseFailed,
+      safeErrorDetail,
+    };
+  } catch (error) {
+    return {
+      networkErrorDetail:
+        sanitizeSerpApiErrorDetail(error instanceof Error ? error.message : String(error)) ?? null,
+      statusCode: null,
+      ok: false,
+      payload: {},
+      parseFailed: false,
+      safeErrorDetail: null,
+    };
+  }
+}
+
+export async function testWalmartSerpApiKey(apiKey: string): Promise<WalmartSerpApiTestDiagnostics> {
+  const normalizedApiKey = apiKey.trim();
+  if (!normalizedApiKey) {
+    return {
+      providerStatus: "not_connected",
+      statusCode: null,
+      statusReason: "SerpApi key missing.",
+      safeProviderErrorDetail: null,
+      usage: null,
+    };
+  }
+
+  const accountUrl = new URL("https://serpapi.com/account");
+  accountUrl.searchParams.set("api_key", normalizedApiKey);
+  const accountResponse = await fetchSerpApiTestPayload(accountUrl);
+  if (accountResponse.networkErrorDetail) {
+    return {
+      providerStatus: "network_error",
+      statusCode: null,
+      statusReason: withSafeDetail("SerpApi network error.", accountResponse.networkErrorDetail),
+      safeProviderErrorDetail: accountResponse.networkErrorDetail,
+      usage: null,
+    };
+  }
+  if (accountResponse.parseFailed) {
+    return {
+      providerStatus: "malformed_response",
+      statusCode: accountResponse.statusCode,
+      statusReason: "SerpApi returned a malformed response.",
+      safeProviderErrorDetail: null,
+      usage: null,
+    };
+  }
+
+  const usage = parseUsage(accountResponse.payload);
+  if (!accountResponse.ok) {
+    const mapped = classifyByStatusCode(
+      accountResponse.statusCode ?? 0,
+      accountResponse.safeErrorDetail
+    );
+    return {
+      providerStatus: mapped.providerStatus,
+      statusCode: accountResponse.statusCode,
+      statusReason: mapped.statusReason,
+      safeProviderErrorDetail: accountResponse.safeErrorDetail,
+      usage,
+    };
+  }
+
+  const accountPayloadError = extractSerpApiErrorDetail(accountResponse.payload, {
+    includeGenericMessage: true,
   });
-
-  if (!response.ok) {
-    throw sanitizeSerpApiTestError(response.status);
+  if (accountPayloadError) {
+    const mapped = classifyByMessage(accountPayloadError);
+    return {
+      providerStatus: mapped.providerStatus,
+      statusCode: accountResponse.statusCode,
+      statusReason: mapped.statusReason,
+      safeProviderErrorDetail: mapped.safeProviderErrorDetail,
+      usage,
+    };
   }
 
-  const payload = (await response.json().catch(() => ({}))) as { error?: unknown };
-  if (typeof payload.error === "string" && payload.error.trim()) {
-    throw new Error("SerpApi test failed: provider returned an error response.");
+  const searchUrl = new URL("https://serpapi.com/search.json");
+  searchUrl.searchParams.set("engine", "walmart_product");
+  searchUrl.searchParams.set("product_id", TEST_PRODUCT_ID);
+  searchUrl.searchParams.set("api_key", normalizedApiKey);
+
+  const searchResponse = await fetchSerpApiTestPayload(searchUrl);
+  if (searchResponse.networkErrorDetail) {
+    return {
+      providerStatus: "network_error",
+      statusCode: null,
+      statusReason: withSafeDetail("SerpApi network error.", searchResponse.networkErrorDetail),
+      safeProviderErrorDetail: searchResponse.networkErrorDetail,
+      usage,
+    };
   }
+  if (searchResponse.parseFailed) {
+    return {
+      providerStatus: "malformed_response",
+      statusCode: searchResponse.statusCode,
+      statusReason: "SerpApi returned a malformed response.",
+      safeProviderErrorDetail: null,
+      usage,
+    };
+  }
+  if (!searchResponse.ok) {
+    const mapped = classifyByStatusCode(searchResponse.statusCode ?? 0, searchResponse.safeErrorDetail);
+    return {
+      providerStatus: mapped.providerStatus,
+      statusCode: searchResponse.statusCode,
+      statusReason: mapped.statusReason,
+      safeProviderErrorDetail: searchResponse.safeErrorDetail,
+      usage,
+    };
+  }
+
+  const searchPayloadError = extractSerpApiErrorDetail(searchResponse.payload, {
+    includeGenericMessage: false,
+  });
+  if (searchPayloadError) {
+    const mapped = classifyByMessage(searchPayloadError);
+    return {
+      providerStatus: mapped.providerStatus,
+      statusCode: searchResponse.statusCode,
+      statusReason: mapped.statusReason,
+      safeProviderErrorDetail: mapped.safeProviderErrorDetail,
+      usage,
+    };
+  }
+
+  return {
+    providerStatus: "connected",
+    statusCode: searchResponse.statusCode,
+    statusReason: "Connected to SerpApi.",
+    safeProviderErrorDetail: null,
+    usage,
+  };
 }

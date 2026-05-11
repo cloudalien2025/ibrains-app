@@ -4,6 +4,10 @@ import {
   getWalmartSerpApiConnectionStatusForUser,
   getWalmartSerpApiKeyForUser,
 } from "@/lib/ecomviper/walmart/walmart-serpapi-connection";
+import {
+  extractSerpApiErrorDetail,
+  sanitizeSerpApiErrorDetail,
+} from "@/lib/ecomviper/walmart/serpapi-safety";
 import type {
   WalmartImageMatchMethod,
   WalmartImageSyncStatus,
@@ -335,17 +339,25 @@ export function normalizeSerpApiWalmartImages(response: unknown): {
   };
 }
 
-function sanitizeSerpApiHttpError(status: number): {
+function withSafeProviderDetail(base: string, detail: string | null): string {
+  if (!detail) return base;
+  if (base.endsWith(".")) {
+    return `${base.slice(0, -1)}: ${detail}`;
+  }
+  return `${base}: ${detail}`;
+}
+
+function sanitizeSerpApiHttpError(status: number, safeDetail: string | null): {
   statusCategory: SerpApiStatusCategory;
   errorCode: SerpApiResolveErrorCode;
   message: string;
   retryable: boolean;
 } {
-  if (status === 400) {
+  if (status === 400 || status === 422) {
     return {
       statusCategory: "validation_error",
       errorCode: "SERPAPI_BAD_REQUEST",
-      message: "SerpApi rejected request parameters.",
+      message: withSafeProviderDetail("SerpApi bad request.", safeDetail),
       retryable: false,
     };
   }
@@ -385,7 +397,10 @@ function sanitizeSerpApiHttpError(status: number): {
     return {
       statusCategory: "provider_error",
       errorCode: "SERPAPI_PROVIDER_ERROR",
-      message: "SerpApi provider request failed. Try again shortly.",
+      message: withSafeProviderDetail(
+        "SerpApi provider request failed. Try again shortly.",
+        safeDetail
+      ),
       retryable: true,
     };
   }
@@ -393,7 +408,7 @@ function sanitizeSerpApiHttpError(status: number): {
   return {
     statusCategory: "provider_error",
     errorCode: "SERPAPI_REQUEST_FAILED",
-    message: `SerpApi request failed with HTTP ${status}.`,
+    message: withSafeProviderDetail(`SerpApi request failed with HTTP ${status}.`, safeDetail),
     retryable: false,
   };
 }
@@ -405,6 +420,21 @@ function classifySerpApiProviderErrorMessage(message: string): {
   retryable: boolean;
 } {
   const lowered = message.toLowerCase();
+  const safeDetail = sanitizeSerpApiErrorDetail(message);
+
+  if (
+    lowered.includes("api_key is required") ||
+    lowered.includes("api key is required") ||
+    lowered.includes("no api key") ||
+    lowered.includes("missing api key")
+  ) {
+    return {
+      statusCategory: "invalid_key",
+      errorCode: "SERPAPI_INVALID_KEY",
+      statusReason: "SerpApi key is missing or invalid.",
+      retryable: false,
+    };
+  }
 
   if (lowered.includes("api key") || lowered.includes("unauthorized") || lowered.includes("authentication")) {
     return {
@@ -418,6 +448,7 @@ function classifySerpApiProviderErrorMessage(message: string): {
     lowered.includes("forbidden") ||
     lowered.includes("permission") ||
     lowered.includes("not allowed") ||
+    lowered.includes("account deleted") ||
     lowered.includes("plan") ||
     lowered.includes("upgrade")
   ) {
@@ -448,7 +479,36 @@ function classifySerpApiProviderErrorMessage(message: string): {
     return {
       statusCategory: "validation_error",
       errorCode: "SERPAPI_BAD_REQUEST",
-      statusReason: "SerpApi rejected request parameters.",
+      statusReason: withSafeProviderDetail("SerpApi bad request.", safeDetail),
+      retryable: false,
+    };
+  }
+
+  if (
+    lowered.includes("unable to process") ||
+    lowered.includes("product_id is required") ||
+    lowered.includes("engine is required") ||
+    lowered.includes("unsupported engine") ||
+    lowered.includes("not supported")
+  ) {
+    return {
+      statusCategory: "validation_error",
+      errorCode: "SERPAPI_BAD_REQUEST",
+      statusReason: withSafeProviderDetail("SerpApi bad request.", safeDetail),
+      retryable: false,
+    };
+  }
+
+  if (
+    lowered.includes("econnreset") ||
+    lowered.includes("etimedout") ||
+    lowered.includes("timeout while") ||
+    lowered.includes("connection reset")
+  ) {
+    return {
+      statusCategory: "network_error",
+      errorCode: "SERPAPI_NETWORK_ERROR",
+      statusReason: withSafeProviderDetail("SerpApi request failed due to a network error.", safeDetail),
       retryable: false,
     };
   }
@@ -463,15 +523,27 @@ function classifySerpApiProviderErrorMessage(message: string): {
     return {
       statusCategory: "provider_error",
       errorCode: "SERPAPI_PROVIDER_ERROR",
-      statusReason: "SerpApi provider is temporarily unavailable. Retry in a moment.",
+      statusReason: withSafeProviderDetail(
+        "SerpApi provider is temporarily unavailable. Retry in a moment.",
+        safeDetail
+      ),
       retryable: true,
+    };
+  }
+
+  if (lowered.includes("invalid json") || lowered.includes("malformed")) {
+    return {
+      statusCategory: "malformed_response",
+      errorCode: "SERPAPI_MALFORMED_RESPONSE",
+      statusReason: withSafeProviderDetail("SerpApi returned a malformed response.", safeDetail),
+      retryable: false,
     };
   }
 
   return {
     statusCategory: "provider_error",
     errorCode: "SERPAPI_PROVIDER_ERROR",
-    statusReason: "SerpApi returned a provider error.",
+    statusReason: withSafeProviderDetail("SerpApi returned a provider error.", safeDetail),
     retryable: false,
   };
 }
@@ -508,20 +580,45 @@ async function fetchSerpApiJson(params: {
 
   for (let attempt = 0; attempt <= SERPAPI_RETRY_BACKOFF_MS.length; attempt += 1) {
     try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SERPAPI_REQUEST_TIMEOUT_MS);
-    const response = await fetch(url.toString(), {
-      method: "GET",
-      cache: "no-store",
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), SERPAPI_REQUEST_TIMEOUT_MS);
+      const response = await fetch(url.toString(), {
+        method: "GET",
+        cache: "no-store",
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeout));
 
-    const responseText = await response.text();
-    let payload: unknown = {};
-    if (responseText.trim()) {
-      try {
-        payload = JSON.parse(responseText) as unknown;
-      } catch {
+      const responseText = await response.text();
+      let payload: unknown = {};
+      let payloadParseFailed = false;
+      if (responseText.trim()) {
+        try {
+          payload = JSON.parse(responseText) as unknown;
+        } catch {
+          payloadParseFailed = true;
+          payload = {};
+        }
+      }
+
+      if (!response.ok) {
+        const safeProviderDetail =
+          extractSerpApiErrorDetail(payload, { includeGenericMessage: true }) ??
+          sanitizeSerpApiErrorDetail(responseText);
+        const mapped = sanitizeSerpApiHttpError(response.status, safeProviderDetail);
+        if (mapped.retryable && attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
+          await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
+          continue;
+        }
+        return {
+          ok: false,
+          payload,
+          statusCategory: mapped.statusCategory,
+          errorCode: mapped.errorCode,
+          statusReason: mapped.message,
+        };
+      }
+
+      if (payloadParseFailed) {
         return {
           ok: false,
           payload: {},
@@ -530,25 +627,10 @@ async function fetchSerpApiJson(params: {
           statusReason: "SerpApi returned a malformed response.",
         };
       }
-    }
 
-      if (!response.ok) {
-      const mapped = sanitizeSerpApiHttpError(response.status);
-        if (mapped.retryable && attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
-          await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
-          continue;
-        }
-      return {
-        ok: false,
-        payload,
-        statusCategory: mapped.statusCategory,
-        errorCode: mapped.errorCode,
-        statusReason: mapped.message,
-      };
-    }
-
-    const payloadObject = asObject(payload);
-    const providerError = asString(payloadObject?.error);
+      const payloadObject = asObject(payload);
+      const providerError =
+        asString(payloadObject?.error) || extractSerpApiErrorDetail(payloadObject ?? {}, { includeGenericMessage: false }) || "";
       if (providerError) {
         const classified = classifySerpApiProviderErrorMessage(providerError);
         if (classified.retryable && attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
@@ -571,6 +653,8 @@ async function fetchSerpApiJson(params: {
       };
     } catch (error) {
       const isTimeout = isAbortError(error);
+      const safeDetail =
+        sanitizeSerpApiErrorDetail(error instanceof Error ? error.message : String(error)) ?? null;
       if (attempt < SERPAPI_RETRY_BACKOFF_MS.length) {
         await sleep(SERPAPI_RETRY_BACKOFF_MS[attempt]);
         continue;
@@ -581,8 +665,8 @@ async function fetchSerpApiJson(params: {
         statusCategory: "network_error",
         errorCode: "SERPAPI_NETWORK_ERROR",
         statusReason: isTimeout
-          ? "SerpApi request timed out. Retry in a moment."
-          : "SerpApi request failed due to a network error.",
+          ? withSafeProviderDetail("SerpApi request timed out. Retry in a moment.", safeDetail)
+          : withSafeProviderDetail("SerpApi request failed due to a network error.", safeDetail),
       };
     }
   }
@@ -1060,7 +1144,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     return asFailureResolution({
       imageSyncStatus: "not_synced",
       errorCode: "SERPAPI_NOT_CONNECTED",
-      statusReason: "Connect your SerpApi key to fetch public Walmart listing images.",
+      statusReason: "SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment.",
       matchMethod: null,
       publicWalmartUrl: requestedUrl,
       publicWalmartProductId: requestedProductIdFromUrl ?? "",
@@ -1338,10 +1422,15 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     }
   }
 
+  const hasSafeIdentifiers =
+    Boolean(preferredProductId) || Boolean(productIdentifiers.upc) || Boolean(productIdentifiers.gtin);
+
   return asFailureResolution({
     imageSyncStatus: "not_found",
     errorCode: "SERPAPI_NOT_FOUND",
-    statusReason: "No public Walmart listing images were found for this product.",
+    statusReason: hasSafeIdentifiers
+      ? "No public Walmart listing images were found for this product."
+      : "No public product ID or UPC/GTIN available for safe matching.",
     matchMethod: preferredProductId ? "serpapi_product_id" : null,
     publicWalmartUrl: requestedUrl,
     publicWalmartProductId: preferredProductId ?? "",
@@ -1362,6 +1451,8 @@ export const serpApiWalmartImageInternals = {
   normalizeWalmartPublicProductId,
   normalizeSerpApiWalmartImages,
   extractSerpApiSearchCandidates,
+  sanitizeSerpApiErrorDetail,
+  extractSerpApiErrorDetail,
   normalizeIdentifier,
   firstMatchedCandidateByIdentifier,
   firstMatchedCandidateByTitleBrand,
