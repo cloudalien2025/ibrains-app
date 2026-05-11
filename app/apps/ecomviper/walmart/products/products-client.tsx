@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
@@ -10,6 +10,7 @@ import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walm
 
 interface ProductsClientProps {
   products: WalmartEffectiveProductRecord[];
+  loadError?: string | null;
 }
 
 const filters = [
@@ -105,6 +106,7 @@ interface ImportPanelState {
     | "user_scope_failed"
     | "database_failed"
     | "import_request_invalid"
+    | "import_gateway_timeout"
     | "import_unknown_error";
   importErrorReason: string | null;
   importErrorPhase:
@@ -118,6 +120,7 @@ interface ImportPanelState {
     | "product_normalization"
     | "product_persistence"
     | "database"
+    | "gateway_timeout"
     | "import_unknown"
     | null;
   importErrorStatusCode: number | null;
@@ -246,12 +249,12 @@ function normalizeProductForRender(product: WalmartEffectiveProductRecord): Walm
   };
 }
 
-export default function WalmartProductsClient({ products }: ProductsClientProps) {
+export default function WalmartProductsClient({ products, loadError = null }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<string>("all");
   const [skuSortDirection, setSkuSortDirection] = useState<SkuSortDirection>("none");
-  const [message, setMessage] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(loadError);
   const [isImporting, setIsImporting] = useState(false);
   const [importPanel, setImportPanel] = useState<ImportPanelState | null>(null);
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
@@ -267,6 +270,11 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
     hasDraftChanges: boolean;
   } | null>(null);
   const [isRemoving, setIsRemoving] = useState(false);
+
+  useEffect(() => {
+    if (!loadError) return;
+    setMessage(loadError);
+  }, [loadError]);
 
   const allProducts = useMemo(
     () =>
@@ -428,6 +436,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             | "user_scope_failed"
             | "database_failed"
             | "import_request_invalid"
+            | "import_gateway_timeout"
             | "import_unknown_error";
           importErrorReason?: string | null;
           importErrorPhase?:
@@ -441,6 +450,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             | "product_normalization"
             | "product_persistence"
             | "database"
+            | "gateway_timeout"
             | "import_unknown"
             | null;
           importErrorStatusCode?: number | null;
@@ -490,10 +500,11 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       };
 
       if (!response.ok) {
+        const isGatewayTimeout = response.status === 504;
         const failureMessage =
           payload.importProgress?.importErrorReason ??
           payload.error?.message ??
-          (response.status === 504
+          (isGatewayTimeout
             ? "Import request timed out at the gateway before completion. Try Import Products again or run Retry image enrichment after products are imported."
             : `Import failed (HTTP ${response.status}).`);
         const totals = payload.importProgress?.totals;
@@ -501,7 +512,10 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         const providerConnected = payload.importProgress?.providerConnected ?? false;
         const providerStatus =
           payload.importProgress?.providerStatus ??
-          (providerConnected ? "connected" : "not_connected");
+          (isGatewayTimeout ? "unknown_error" : providerConnected ? "connected" : "not_connected");
+        const providerStatusReason =
+          payload.importProgress?.providerStatusReason ??
+          (isGatewayTimeout ? "Provider status unavailable because the import request timed out." : null);
         const summaryWithContext =
           existingProductsShownCount > 0
             ? `${failureMessage} Existing products shown below are from the previous successful import.`
@@ -522,14 +536,19 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           skippedNoProviderCount: totals?.imageSkippedNoProviderCount ?? 0,
           providerConnected,
           providerStatus,
-          providerStatusReason: payload.importProgress?.providerStatusReason ?? null,
+          providerStatusReason,
           providerCanAttempt: payload.importProgress?.providerCanAttempt ?? providerConnected,
           noImageReason: payload.importProgress?.noImageReason ?? null,
-          importErrorCategory: payload.importProgress?.importErrorCategory ?? "import_unknown_error",
+          importErrorCategory:
+            payload.importProgress?.importErrorCategory ??
+            (isGatewayTimeout ? "import_gateway_timeout" : "import_unknown_error"),
           importErrorReason: payload.importProgress?.importErrorReason ?? failureMessage,
-          importErrorPhase: payload.importProgress?.importErrorPhase ?? "import_unknown",
-          importErrorStatusCode: payload.importProgress?.importErrorStatusCode ?? null,
-          importErrorEndpointFamily: payload.importProgress?.importErrorEndpointFamily ?? null,
+          importErrorPhase:
+            payload.importProgress?.importErrorPhase ??
+            (isGatewayTimeout ? "gateway_timeout" : "import_unknown"),
+          importErrorStatusCode: payload.importProgress?.importErrorStatusCode ?? (isGatewayTimeout ? 504 : null),
+          importErrorEndpointFamily:
+            payload.importProgress?.importErrorEndpointFamily ?? (isGatewayTimeout ? "gateway" : null),
           importErrorCorrelationId: payload.importProgress?.importErrorCorrelationId ?? null,
           importErrorResponseShape: payload.importProgress?.importErrorResponseShape ?? null,
           existingProductsShownCount,

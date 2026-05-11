@@ -580,6 +580,47 @@ describe("walmart products persistence", () => {
     expect(html).toContain("Pending draft");
   });
 
+  it("does not crash products page when legacy draft rows are missing validationResult", async () => {
+    const userId = "user_legacy_draft_missing_validation";
+    const product = buildProduct("ROCLEGACY1");
+    product.brand = "Unknown";
+
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [product],
+      importedAt: new Date().toISOString(),
+    });
+
+    const malformedDraft = {
+      id: "draft_legacy_1",
+      productId: product.id,
+      marketplace: "walmart",
+      sku: product.sku,
+      productTitle: product.title,
+      draftPayload: {
+        brand: "Legacy Overlay Brand",
+      },
+      changeSummary: "legacy row",
+      createdBy: userId,
+      status: "draft",
+      publishStatus: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // validationResult intentionally omitted to mimic malformed legacy row.
+    };
+
+    const fallbackStore = new Map<string, Map<string, unknown>>();
+    fallbackStore.set(userId, new Map([["draft_legacy_1", malformedDraft]]));
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const WalmartProductsPage = (await import("@/app/apps/ecomviper/walmart/products/page")).default;
+    const html = renderToStaticMarkup(await WalmartProductsPage());
+
+    expect(html).toContain("Legacy Overlay Brand");
+    expect(html).toContain("Pending draft");
+  });
+
   it("hydrates saved draft values in product editor after reload", async () => {
     const userId = "user_editor_hydration";
     await replaceWalmartProductsForUser({

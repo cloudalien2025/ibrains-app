@@ -117,6 +117,7 @@ export type WalmartImportErrorCategory =
   | "user_scope_failed"
   | "database_failed"
   | "import_request_invalid"
+  | "import_gateway_timeout"
   | "import_unknown_error";
 
 export type WalmartImportFailurePhase =
@@ -130,6 +131,7 @@ export type WalmartImportFailurePhase =
   | "product_normalization"
   | "product_persistence"
   | "database"
+  | "gateway_timeout"
   | "import_unknown";
 
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";

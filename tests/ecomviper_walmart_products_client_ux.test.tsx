@@ -254,4 +254,15 @@ describe("Walmart products client UX", () => {
     expect(html).toContain(">22<");
     expect(html).toContain(">Untitled product<");
   });
+
+  it("renders load error message provided by the server page", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[createProduct()]}
+        loadError="Could not load draft overlays right now. Showing base imported products."
+      />
+    );
+
+    expect(html).toContain("Could not load draft overlays right now. Showing base imported products.");
+  });
 });

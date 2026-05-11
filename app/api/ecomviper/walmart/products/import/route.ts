@@ -108,6 +108,21 @@ function classifyImportError(error: unknown): {
   const lowered = reason.toLowerCase();
 
   if (
+    lowered.includes("gateway time-out") ||
+    lowered.includes("gateway timeout") ||
+    lowered.includes("timed out at the gateway")
+  ) {
+    return {
+      category: "import_gateway_timeout",
+      phase: "gateway_timeout",
+      reason,
+      statusCode: 504,
+      endpointFamily: "gateway",
+      correlationId: null,
+      responseShape: null,
+    };
+  }
+  if (
     lowered.includes("missing walmart client id") ||
     lowered.includes("missing walmart client secret") ||
     lowered.includes("missing credentials") ||
