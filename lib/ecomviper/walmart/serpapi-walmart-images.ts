@@ -63,6 +63,7 @@ interface SerpApiRequestDiagnostics {
   statusCategory: SerpApiStatusCategory;
   productId: string | null;
   productIdentifierType?: SerpApiProductIdentifierType;
+  productPageUrl?: string | null;
   candidateCount: number;
   imageCount: number;
   matchMethod: WalmartImageMatchMethod | null;
@@ -101,6 +102,7 @@ interface SerpApiProductImageResult {
   errorCode?: SerpApiResolveErrorCode;
   statusReason: string;
   productId: string;
+  productPageUrl: string;
   title: string;
   brand: string;
   primaryImageUrl: string;
@@ -147,6 +149,12 @@ function normalizeWalmartPublicProductId(value: unknown): string {
 
 function sanitizePublicWalmartUrl(value: unknown): string {
   return normalizeWalmartPublicUrl(value);
+}
+
+function derivePublicWalmartUrl(productId: string): string {
+  const normalized = normalizeWalmartPublicProductId(productId);
+  if (!normalized) return "";
+  return `https://www.walmart.com/ip/${normalized}`;
 }
 
 export function extractWalmartPublicProductIdFromUrl(url: string): string | null {
@@ -217,6 +225,54 @@ function dedupeImageUrls(urls: unknown[]): string[] {
       return left.order - right.order;
     })
     .map((entry) => entry.url);
+}
+
+function resolveSerpApiProductPageMetadata(input: {
+  payload: Record<string, unknown>;
+  fallbackProductId: string;
+}): {
+  publicWalmartUrl: string;
+  resolvedProductId: string;
+} {
+  const productResult = asObject(input.payload.product_result);
+  const productPageUrl = sanitizePublicWalmartUrl(
+    firstNonEmptyString(
+      productResult?.product_page_url,
+      productResult?.productPageUrl,
+      input.payload.product_page_url,
+      input.payload.productPageUrl
+    )
+  );
+  const productIdFromPageUrl = productPageUrl
+    ? extractWalmartPublicProductIdFromUrl(productPageUrl) ?? ""
+    : "";
+
+  const productIdFromPayload = normalizeWalmartPublicProductId(
+    firstNonEmptyString(
+      productResult?.us_item_id,
+      productResult?.usItemId,
+      productResult?.item_id,
+      productResult?.itemId,
+      productResult?.product_id,
+      productResult?.productId,
+      input.payload.us_item_id,
+      input.payload.usItemId,
+      input.payload.item_id,
+      input.payload.itemId,
+      input.payload.product_id,
+      input.payload.productId
+    )
+  );
+
+  const resolvedProductId =
+    productIdFromPageUrl ||
+    productIdFromPayload ||
+    normalizeWalmartPublicProductId(input.fallbackProductId);
+  const resolvedUrl = productPageUrl || derivePublicWalmartUrl(resolvedProductId);
+  return {
+    publicWalmartUrl: resolvedUrl,
+    resolvedProductId,
+  };
 }
 
 function collectImageLikeUrls(value: unknown, keyHint = "", depth = 0): string[] {
@@ -576,6 +632,7 @@ async function fetchSerpApiJson(params: {
   if (params.endpointFamily === "walmart_product") {
     url.searchParams.set("engine", "walmart_product");
     url.searchParams.set("product_id", params.productId ?? "");
+    url.searchParams.set("walmart_domain", "walmart.com");
   } else {
     url.searchParams.set("engine", "walmart");
     url.searchParams.set("query", params.query ?? "");
@@ -942,6 +999,7 @@ export async function fetchWalmartProductImagesViaSerpApi(input: {
       errorCode: "INVALID_PUBLIC_WALMART_PRODUCT_ID",
       statusReason: "Public Walmart product ID is invalid.",
       productId: "",
+      productPageUrl: "",
       title: "",
       brand: "",
       primaryImageUrl: "",
@@ -963,6 +1021,7 @@ export async function fetchWalmartProductImagesViaSerpApi(input: {
       errorCode: response.errorCode,
       statusReason: response.statusReason ?? "SerpApi request failed.",
       productId,
+      productPageUrl: "",
       title: "",
       brand: "",
       primaryImageUrl: "",
@@ -973,6 +1032,10 @@ export async function fetchWalmartProductImagesViaSerpApi(input: {
 
   const payloadObject = asObject(response.payload) ?? {};
   const productResult = asObject(payloadObject.product_result);
+  const productPageMetadata = resolveSerpApiProductPageMetadata({
+    payload: payloadObject,
+    fallbackProductId: productId,
+  });
   const title = firstNonEmptyString(productResult?.title, payloadObject.title);
   const brand = firstNonEmptyString(productResult?.brand, payloadObject.brand);
   const normalized = normalizeSerpApiWalmartImages(response.payload);
@@ -983,7 +1046,8 @@ export async function fetchWalmartProductImagesViaSerpApi(input: {
       statusCategory: "not_found",
       errorCode: "SERPAPI_NO_IMAGES_FOUND",
       statusReason: "No public Walmart listing images were found for this product ID.",
-      productId,
+      productId: productPageMetadata.resolvedProductId || productId,
+      productPageUrl: productPageMetadata.publicWalmartUrl,
       title,
       brand,
       primaryImageUrl: "",
@@ -996,7 +1060,8 @@ export async function fetchWalmartProductImagesViaSerpApi(input: {
     ok: true,
     statusCategory: "ok",
     statusReason: "Public Walmart listing images found via SerpApi.",
-    productId,
+    productId: productPageMetadata.resolvedProductId || productId,
+    productPageUrl: productPageMetadata.publicWalmartUrl,
     title,
     brand,
     primaryImageUrl: normalized.primaryImageUrl,
@@ -1330,6 +1395,77 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     preferredProductIdentifier.identifierType !== "missing_product_identifier";
 
   if (canUseProductLookup) {
+    const byProductId = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: credentials.apiKey,
+      productId: preferredProductId,
+    });
+
+    const matchMethod: WalmartImageMatchMethod =
+      preferredProductIdentifier.identifierType === "url_product_id"
+        ? "public_url_product_id"
+        : "serpapi_product_id";
+
+    if (byProductId.ok) {
+      return asFoundResolution({
+        statusReason: byProductId.statusReason,
+        matchMethod,
+        publicWalmartUrl: byProductId.productPageUrl || effectiveRequestedUrl,
+        publicWalmartProductId: byProductId.productId,
+        primaryImageUrl: byProductId.primaryImageUrl,
+        galleryImageUrls: byProductId.galleryImageUrls,
+        variantImageUrls: byProductId.variantImageUrls,
+        diagnostics: {
+          provider: "serpapi",
+          endpointFamily: "walmart_product",
+          statusCategory: "ok",
+          productId: byProductId.productId,
+          productIdentifierType: preferredProductIdentifier.identifierType,
+          productPageUrl: byProductId.productPageUrl || null,
+          candidateCount: 1,
+          imageCount: byProductId.galleryImageUrls.length,
+          matchMethod,
+        },
+      });
+    }
+
+    if (isProductNotFoundProviderMessage(byProductId.statusReason)) {
+      console.warn("[ecomviper:walmart:serpapi] walmart_product identifier not found", {
+        sku: input.product.sku,
+        identifierType: preferredProductIdentifier.identifierType,
+        identifierValue: preferredProductId,
+        endpointFamily: "walmart_product",
+      });
+    }
+
+    if (
+      byProductId.statusCategory === "invalid_key" ||
+      byProductId.statusCategory === "forbidden" ||
+      byProductId.statusCategory === "rate_limited" ||
+      byProductId.statusCategory === "provider_error" ||
+      byProductId.statusCategory === "network_error" ||
+      byProductId.statusCategory === "malformed_response"
+    ) {
+      return asFailureResolution({
+        imageSyncStatus: "failed",
+        errorCode: byProductId.errorCode ?? "SERPAPI_PROVIDER_ERROR",
+        statusReason: `${byProductId.statusReason} ${identifierStrategyNote}`,
+        matchMethod,
+        publicWalmartUrl: byProductId.productPageUrl || effectiveRequestedUrl,
+        publicWalmartProductId: byProductId.productId || preferredProductId,
+        diagnostics: {
+          provider: "serpapi",
+          endpointFamily: "walmart_product",
+          statusCategory: byProductId.statusCategory,
+          productId: byProductId.productId || preferredProductId,
+          productIdentifierType: preferredProductIdentifier.identifierType,
+          productPageUrl: byProductId.productPageUrl || null,
+          candidateCount: 0,
+          imageCount: 0,
+          matchMethod,
+        },
+      });
+    }
+
     const byProductIdSearch = await searchWalmartProductCandidatesViaSerpApi({
       apiKey: credentials.apiKey,
       query: preferredProductId,
@@ -1342,11 +1478,12 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       });
       if (exactCandidate) {
         return asFoundResolution({
-          statusReason: "Public Walmart listing images found via SerpApi search payload.",
-          matchMethod: preferredProductIdentifier.identifierType === "url_product_id"
-            ? "public_url_product_id"
-            : "serpapi_product_id",
-          publicWalmartUrl: effectiveRequestedUrl,
+          statusReason: "Public Walmart listing image found via SerpApi search fallback.",
+          matchMethod:
+            preferredProductIdentifier.identifierType === "url_product_id"
+              ? "public_url_product_id"
+              : "serpapi_product_id",
+          publicWalmartUrl: effectiveRequestedUrl || derivePublicWalmartUrl(exactCandidate.productId),
           publicWalmartProductId: exactCandidate.productId,
           primaryImageUrl: exactCandidate.primaryImageUrl || exactCandidate.galleryImageUrls[0] || "",
           galleryImageUrls: dedupeImageUrls([
@@ -1399,75 +1536,6 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
             preferredProductIdentifier.identifierType === "url_product_id"
               ? "public_url_product_id"
               : "serpapi_product_id",
-        },
-      });
-    }
-
-    const byProductId = await fetchWalmartProductImagesViaSerpApi({
-      apiKey: credentials.apiKey,
-      productId: preferredProductId,
-    });
-
-    const matchMethod: WalmartImageMatchMethod =
-      preferredProductIdentifier.identifierType === "url_product_id"
-        ? "public_url_product_id"
-        : "serpapi_product_id";
-
-    if (byProductId.ok) {
-      return asFoundResolution({
-        statusReason: byProductId.statusReason,
-        matchMethod,
-        publicWalmartUrl: effectiveRequestedUrl,
-        publicWalmartProductId: byProductId.productId,
-        primaryImageUrl: byProductId.primaryImageUrl,
-        galleryImageUrls: byProductId.galleryImageUrls,
-        variantImageUrls: byProductId.variantImageUrls,
-        diagnostics: {
-          provider: "serpapi",
-          endpointFamily: "walmart_product",
-          statusCategory: "ok",
-          productId: byProductId.productId,
-          productIdentifierType: preferredProductIdentifier.identifierType,
-          candidateCount: 1,
-          imageCount: byProductId.galleryImageUrls.length,
-          matchMethod,
-        },
-      });
-    }
-
-    if (isProductNotFoundProviderMessage(byProductId.statusReason)) {
-      console.warn("[ecomviper:walmart:serpapi] walmart_product identifier not found", {
-        sku: input.product.sku,
-        identifierType: preferredProductIdentifier.identifierType,
-        identifierValue: preferredProductId,
-        endpointFamily: "walmart_product",
-      });
-    }
-
-    if (
-      byProductId.statusCategory === "invalid_key" ||
-      byProductId.statusCategory === "forbidden" ||
-      byProductId.statusCategory === "rate_limited" ||
-      byProductId.statusCategory === "provider_error" ||
-      byProductId.statusCategory === "network_error" ||
-      byProductId.statusCategory === "malformed_response"
-    ) {
-      return asFailureResolution({
-        imageSyncStatus: "failed",
-        errorCode: byProductId.errorCode ?? "SERPAPI_PROVIDER_ERROR",
-        statusReason: `${byProductId.statusReason} ${identifierStrategyNote}`,
-        matchMethod,
-        publicWalmartUrl: effectiveRequestedUrl,
-        publicWalmartProductId: preferredProductId,
-        diagnostics: {
-          provider: "serpapi",
-          endpointFamily: "walmart_product",
-          statusCategory: byProductId.statusCategory,
-          productId: preferredProductId,
-          productIdentifierType: preferredProductIdentifier.identifierType,
-          candidateCount: 0,
-          imageCount: 0,
-          matchMethod,
         },
       });
     }

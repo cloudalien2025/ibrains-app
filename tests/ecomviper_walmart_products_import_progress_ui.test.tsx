@@ -99,6 +99,8 @@ describe("Walmart import progress UI", () => {
               imageEnrichedCount: 0,
               imageFromWalmartSearchCount: 0,
               imageFromSerpApiFallbackCount: 0,
+              imageFromSerpApiProductGalleryCount: 0,
+              imageFromSerpApiSearchFallbackCount: 0,
               walmartSearchNotFoundCount: 1,
               imageStillMissingCount: 2,
               imageMissingCount: 2,
@@ -125,6 +127,8 @@ describe("Walmart import progress UI", () => {
             imageEnrichedCount: 0,
             imageFromWalmartSearchCount: 0,
             imageFromSerpApiFallbackCount: 0,
+            imageFromSerpApiProductGalleryCount: 0,
+            imageFromSerpApiSearchFallbackCount: 0,
             walmartSearchNotFoundCount: 1,
             imageStillMissingCount: 2,
           },
@@ -156,6 +160,8 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Images from import payload: 1");
     expect(container.textContent).toContain("Resolved via Walmart Item Search: 0");
     expect(container.textContent).toContain("Images from Walmart Item Search: 0");
+    expect(container.textContent).toContain("Images from SerpApi product gallery: 0");
+    expect(container.textContent).toContain("Images from SerpApi search fallback: 0");
     expect(container.textContent).toContain("Images from SerpApi fallback: 0");
     expect(container.textContent).toContain("Total fallback enriched successfully: 0");
     expect(container.textContent).toContain("Still missing images: 2");

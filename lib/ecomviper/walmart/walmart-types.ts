@@ -305,6 +305,8 @@ export interface WalmartImportResult {
     imageEnrichedCount?: number;
     imageFromWalmartSearchCount?: number;
     imageFromSerpApiFallbackCount?: number;
+    imageFromSerpApiProductGalleryCount?: number;
+    imageFromSerpApiSearchFallbackCount?: number;
     walmartSearchNotFoundCount?: number;
     imageStillMissingCount?: number;
     imageNotFoundCount?: number;
@@ -373,6 +375,15 @@ export interface WalmartImportResult {
       skipped_gtin_as_product_id: number;
       walmart_search_not_found: number;
       no_searchable_identifier: number;
+    };
+    serpApiProductGalleryDiagnostics?: {
+      serpapi_product_gallery_checked: number;
+      serpapi_product_gallery_primary_found: number;
+      serpapi_product_gallery_additional_found: number;
+      serpapi_product_gallery_no_images: number;
+      skipped_no_verified_public_listing: number;
+      skipped_non_public_identifier: number;
+      skipped_gtin_as_product_id: number;
     };
   };
 }

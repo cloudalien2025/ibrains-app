@@ -203,6 +203,81 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     expect(container.textContent).toContain("Item Search returned no usable image.");
   });
 
+  it("renders strict View Walmart Listing link from verified public Walmart URL", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-LINK-URL", {
+              publicWalmartUrl:
+                "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate/17812552813?classType=REGULAR",
+            }),
+          ]}
+        />
+      );
+    });
+
+    const link = Array.from(container.querySelectorAll("a")).find(
+      (entry) => entry.textContent?.trim() === "View Walmart Listing"
+    ) as HTMLAnchorElement | undefined;
+
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute("href")).toBe(
+      "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate/17812552813?classType=REGULAR"
+    );
+    expect(link?.getAttribute("target")).toBe("_blank");
+    expect(link?.getAttribute("rel")).toContain("noopener");
+    expect(link?.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  it("renders strict View Walmart Listing link from verified public item ID when URL is missing", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-LINK-ID", {
+              publicWalmartProductId: "17812552813",
+              publicWalmartUrl: undefined,
+              upc: "850054016119",
+              gtin: "0850054016119",
+            }),
+          ]}
+        />
+      );
+    });
+
+    const link = Array.from(container.querySelectorAll("a")).find(
+      (entry) => entry.textContent?.trim() === "View Walmart Listing"
+    ) as HTMLAnchorElement | undefined;
+
+    expect(link).toBeTruthy();
+    expect(link?.getAttribute("href")).toBe("https://www.walmart.com/ip/17812552813");
+    expect(link?.getAttribute("target")).toBe("_blank");
+  });
+
+  it("does not render View Walmart Listing link from UPC/GTIN/WPID or generic Walmart search URL", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-NO-LINK", {
+              upc: "850054016119",
+              gtin: "0850054016119",
+              wpid: "1X1X1X1",
+              publicWalmartProductId: undefined,
+              publicWalmartUrl: "https://www.walmart.com/search?q=opa+sleep+magnesium",
+            }),
+          ]}
+        />
+      );
+    });
+
+    const link = Array.from(container.querySelectorAll("a")).find(
+      (entry) => entry.textContent?.trim() === "View Walmart Listing"
+    );
+    expect(link).toBeUndefined();
+  });
+
   it("sorts SKU ascending and descending with natural ordering and accessible sort state", async () => {
     await act(async () => {
       root.render(

@@ -6,6 +6,10 @@ import { useRouter } from "next/navigation";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { filterWalmartProductsWithType } from "@/lib/ecomviper/walmart/walmart-product-filters";
+import {
+  extractWalmartPublicProductIdFromUrl,
+  resolveCanonicalWalmartPublicIdentifier,
+} from "@/lib/ecomviper/walmart/walmart-public-identifier";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 interface ProductsClientProps {
@@ -53,9 +57,83 @@ function safeNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
 function safeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => safeString(entry)).filter((entry) => entry.length > 0);
+}
+
+function deriveWalmartListingUrlFromId(productId: string): string {
+  const normalized = safeString(productId);
+  if (!/^\d{6,20}$/.test(normalized)) return "";
+  return `https://www.walmart.com/ip/${normalized}`;
+}
+
+function resolveVerifiedWalmartListingUrl(product: WalmartEffectiveProductRecord): string {
+  const normalizedPayload = asObject(product.normalizedPayload);
+  const rawPayload = asObject(product.rawPayload);
+
+  const resolved = resolveCanonicalWalmartPublicIdentifier({
+    publicWalmartUrlCandidates: [
+      product.publicWalmartUrl,
+      normalizedPayload?.publicWalmartUrl,
+      normalizedPayload?.walmartProductUrl,
+      normalizedPayload?.product_page_url,
+      normalizedPayload?.productPageUrl,
+      normalizedPayload?.canonicalUrl,
+      rawPayload?.publicWalmartUrl,
+      rawPayload?.walmartProductUrl,
+      rawPayload?.product_page_url,
+      rawPayload?.productPageUrl,
+      rawPayload?.productUrl,
+      rawPayload?.canonicalUrl,
+      rawPayload?.url,
+    ],
+    explicitWalmartProductIdCandidates: [
+      product.publicWalmartProductId,
+      normalizedPayload?.publicWalmartProductId,
+      rawPayload?.publicWalmartProductId,
+    ],
+    walmartItemIdCandidates: [
+      product.itemId,
+      normalizedPayload?.itemId,
+      normalizedPayload?.usItemId,
+      rawPayload?.itemId,
+      rawPayload?.usItemId,
+      rawPayload?.us_item_id,
+    ],
+    walmartPayloadProductIdCandidates: [
+      normalizedPayload?.productId,
+      normalizedPayload?.product_id,
+      rawPayload?.productId,
+      rawPayload?.product_id,
+    ],
+    upcCandidates: [product.upc, normalizedPayload?.upc, rawPayload?.upc],
+    gtinCandidates: [product.gtin, normalizedPayload?.gtin, rawPayload?.gtin],
+    nestedPayloadCandidates: [normalizedPayload, rawPayload],
+  });
+
+  const canUseIdentifier =
+    resolved.preferredIdentifierType !== "missing_product_identifier" &&
+    resolved.preferredIdentifierType !== "search_title_brand" &&
+    resolved.preferredIdentifierType !== "gtin_skipped_for_product_lookup" &&
+    resolved.preferredIdentifierType !== "upc_skipped_for_product_lookup";
+
+  if (resolved.normalizedPublicWalmartUrl) {
+    const productIdFromUrl = extractWalmartPublicProductIdFromUrl(resolved.normalizedPublicWalmartUrl);
+    if (productIdFromUrl) {
+      return resolved.normalizedPublicWalmartUrl;
+    }
+  }
+
+  if (!canUseIdentifier) return "";
+  return deriveWalmartListingUrlFromId(resolved.preferredWalmartProductId);
 }
 
 type SkuSortDirection = "none" | "asc" | "desc";
@@ -81,6 +159,8 @@ interface ImportPanelState {
   walmartSearchResolvedCount: number;
   walmartSearchImageFoundCount: number;
   serpApiFallbackImageFoundCount: number;
+  serpApiProductGalleryImageFoundCount: number;
+  serpApiSearchFallbackImageFoundCount: number;
   walmartSearchNotFoundCount: number;
   stillMissingCount: number;
   missingCount: number;
@@ -330,6 +410,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     imageEnrichedCount: number;
     imageFromWalmartSearchCount: number;
     imageFromSerpApiFallbackCount: number;
+    imageFromSerpApiProductGalleryCount: number;
+    imageFromSerpApiSearchFallbackCount: number;
     imageStillMissingCount: number;
     imageNotFoundCount: number;
     imageAmbiguousCount: number;
@@ -430,6 +512,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       walmartSearchResolvedCount: 0,
       walmartSearchImageFoundCount: 0,
       serpApiFallbackImageFoundCount: 0,
+      serpApiProductGalleryImageFoundCount: 0,
+      serpApiSearchFallbackImageFoundCount: 0,
       walmartSearchNotFoundCount: 0,
       stillMissingCount: 0,
       missingCount: 0,
@@ -569,6 +653,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             imageEnrichedCount?: number;
             imageFromWalmartSearchCount?: number;
             imageFromSerpApiFallbackCount?: number;
+            imageFromSerpApiProductGalleryCount?: number;
+            imageFromSerpApiSearchFallbackCount?: number;
             walmartSearchNotFoundCount?: number;
             imageStillMissingCount?: number;
             imageMissingCount?: number;
@@ -587,6 +673,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           imageEnrichedCount?: number;
           imageFromWalmartSearchCount?: number;
           imageFromSerpApiFallbackCount?: number;
+          imageFromSerpApiProductGalleryCount?: number;
+          imageFromSerpApiSearchFallbackCount?: number;
           walmartSearchNotFoundCount?: number;
           imageStillMissingCount?: number;
           imageNotFoundCount?: number;
@@ -653,6 +741,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           walmartSearchResolvedCount: totals?.imageFromWalmartSearchCount ?? 0,
           walmartSearchImageFoundCount: totals?.imageFromWalmartSearchCount ?? 0,
           serpApiFallbackImageFoundCount: totals?.imageFromSerpApiFallbackCount ?? 0,
+          serpApiProductGalleryImageFoundCount:
+            totals?.imageFromSerpApiProductGalleryCount ?? 0,
+          serpApiSearchFallbackImageFoundCount:
+            totals?.imageFromSerpApiSearchFallbackCount ?? 0,
           walmartSearchNotFoundCount: totals?.walmartSearchNotFoundCount ?? 0,
           stillMissingCount: totals?.imageStillMissingCount ?? totals?.imageMissingCount ?? 0,
           missingCount:
@@ -696,6 +788,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         totals?.imageEnrichedCount !== undefined ||
         totals?.imageFromWalmartSearchCount !== undefined ||
         totals?.imageFromSerpApiFallbackCount !== undefined ||
+        totals?.imageFromSerpApiProductGalleryCount !== undefined ||
+        totals?.imageFromSerpApiSearchFallbackCount !== undefined ||
         totals?.imageStillMissingCount !== undefined ||
         totals?.imageNotFoundCount !== undefined ||
         totals?.imageAmbiguousCount !== undefined ||
@@ -706,6 +800,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         payload.importDiagnostics?.imageEnrichedCount !== undefined ||
         payload.importDiagnostics?.imageFromWalmartSearchCount !== undefined ||
         payload.importDiagnostics?.imageFromSerpApiFallbackCount !== undefined ||
+        payload.importDiagnostics?.imageFromSerpApiProductGalleryCount !== undefined ||
+        payload.importDiagnostics?.imageFromSerpApiSearchFallbackCount !== undefined ||
         payload.importDiagnostics?.imageStillMissingCount !== undefined ||
         payload.importDiagnostics?.imageNotFoundCount !== undefined ||
         payload.importDiagnostics?.imageAmbiguousCount !== undefined ||
@@ -724,10 +820,18 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         totals?.imageFromWalmartSearchCount ??
         payload.importDiagnostics?.imageFromWalmartSearchCount ??
         0;
+      const imageFromSerpApiProductGalleryCount =
+        totals?.imageFromSerpApiProductGalleryCount ??
+        payload.importDiagnostics?.imageFromSerpApiProductGalleryCount ??
+        0;
+      const imageFromSerpApiSearchFallbackCount =
+        totals?.imageFromSerpApiSearchFallbackCount ??
+        payload.importDiagnostics?.imageFromSerpApiSearchFallbackCount ??
+        0;
       const imageFromSerpApiFallbackCount =
         totals?.imageFromSerpApiFallbackCount ??
         payload.importDiagnostics?.imageFromSerpApiFallbackCount ??
-        0;
+        imageFromSerpApiProductGalleryCount + imageFromSerpApiSearchFallbackCount;
       const walmartSearchNotFoundCount =
         totals?.walmartSearchNotFoundCount ??
         payload.importDiagnostics?.walmartSearchNotFoundCount ??
@@ -784,13 +888,15 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         imageFailedCount > 0
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi fallback images: ${imageFromSerpApiFallbackCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${imageFromSerpApiSearchFallbackCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
         imageFromImportPayloadCount,
         imageEnrichedCount,
         imageFromWalmartSearchCount,
         imageFromSerpApiFallbackCount,
+        imageFromSerpApiProductGalleryCount,
+        imageFromSerpApiSearchFallbackCount,
         imageStillMissingCount,
         imageNotFoundCount,
         imageAmbiguousCount,
@@ -816,6 +922,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           totals?.imageFromWalmartSearchCount ?? imageFromWalmartSearchCount,
         serpApiFallbackImageFoundCount:
           totals?.imageFromSerpApiFallbackCount ?? imageFromSerpApiFallbackCount,
+        serpApiProductGalleryImageFoundCount:
+          totals?.imageFromSerpApiProductGalleryCount ?? imageFromSerpApiProductGalleryCount,
+        serpApiSearchFallbackImageFoundCount:
+          totals?.imageFromSerpApiSearchFallbackCount ?? imageFromSerpApiSearchFallbackCount,
         walmartSearchNotFoundCount:
           totals?.walmartSearchNotFoundCount ?? walmartSearchNotFoundCount,
         stillMissingCount:
@@ -875,6 +985,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         walmartSearchResolvedCount: current?.walmartSearchResolvedCount ?? 0,
         walmartSearchImageFoundCount: current?.walmartSearchImageFoundCount ?? 0,
         serpApiFallbackImageFoundCount: current?.serpApiFallbackImageFoundCount ?? 0,
+        serpApiProductGalleryImageFoundCount:
+          current?.serpApiProductGalleryImageFoundCount ?? 0,
+        serpApiSearchFallbackImageFoundCount:
+          current?.serpApiSearchFallbackImageFoundCount ?? 0,
         walmartSearchNotFoundCount: current?.walmartSearchNotFoundCount ?? 0,
         stillMissingCount: current?.stillMissingCount ?? 0,
         missingCount: current?.missingCount ?? 0,
@@ -1037,6 +1151,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Images from import payload: {importPanel.fromImportPayloadCount}</p>
               <p>Resolved via Walmart Item Search: {importPanel.walmartSearchResolvedCount}</p>
               <p>Images from Walmart Item Search: {importPanel.walmartSearchImageFoundCount}</p>
+              <p>Images from SerpApi product gallery: {importPanel.serpApiProductGalleryImageFoundCount}</p>
+              <p>Images from SerpApi search fallback: {importPanel.serpApiSearchFallbackImageFoundCount}</p>
               <p>Images from SerpApi fallback: {importPanel.serpApiFallbackImageFoundCount}</p>
               <p>Total fallback enriched successfully: {importPanel.enrichedCount}</p>
               <p>Still missing images: {importPanel.stillMissingCount}</p>
@@ -1147,8 +1263,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               </tr>
             </thead>
             <tbody>
-              {visibleProducts.map((product) => (
-                <tr key={product.sku} className="border-t border-[#E2E8F0] align-top">
+              {visibleProducts.map((product) => {
+                const walmartListingUrl = resolveVerifiedWalmartListingUrl(product);
+                return (
+                  <tr key={product.sku} className="border-t border-[#E2E8F0] align-top">
                   <td className="py-2 pr-2">
                     {product.imageUrl ? (
                       <div className="space-y-1">
@@ -1184,12 +1302,24 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                     </Link>
                   </td>
                   <td className="py-2 pr-2 text-[#334155]">
-                    <Link
-                      href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
-                      className="hover:text-[#1D4ED8]"
-                    >
-                      {product.title}
-                    </Link>
+                    <div className="flex flex-col">
+                      <Link
+                        href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
+                        className="hover:text-[#1D4ED8]"
+                      >
+                        {product.title}
+                      </Link>
+                      {walmartListingUrl ? (
+                        <a
+                          href={walmartListingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 text-xs font-medium text-[#2563EB] hover:text-[#1D4ED8]"
+                        >
+                          View Walmart Listing
+                        </a>
+                      ) : null}
+                    </div>
                   </td>
                   <td className="py-2 pr-2 text-[#334155]">
                     <div className="flex flex-wrap items-center gap-1">
@@ -1266,8 +1396,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                       </div>
                     </details>
                   </td>
-                </tr>
-              ))}
+                  </tr>
+                );
+              })}
               {emptyStateMessage ? (
                 <tr className="border-t border-[#E2E8F0]">
                   <td colSpan={10} className="py-6 text-center text-sm text-[#64748B]">

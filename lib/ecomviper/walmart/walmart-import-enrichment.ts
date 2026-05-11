@@ -49,6 +49,18 @@ function createIdentifierPathCounts(): WalmartImageIdentifierPathCounts {
   };
 }
 
+function createSerpApiProductGalleryDiagnostics() {
+  return {
+    serpapi_product_gallery_checked: 0,
+    serpapi_product_gallery_primary_found: 0,
+    serpapi_product_gallery_additional_found: 0,
+    serpapi_product_gallery_no_images: 0,
+    skipped_no_verified_public_listing: 0,
+    skipped_non_public_identifier: 0,
+    skipped_gtin_as_product_id: 0,
+  };
+}
+
 function stripImageIssues(issues: string[]): string[] {
   return issues.filter((issue) => !IMAGE_ISSUES.has(issue));
 }
@@ -66,6 +78,8 @@ export interface WalmartPublicImportEnrichmentProgress {
   walmartSearchResolvedCount: number;
   walmartSearchImageFoundCount: number;
   serpApiFallbackFoundCount: number;
+  serpApiProductGalleryFoundCount: number;
+  serpApiSearchFallbackFoundCount: number;
   walmartSearchNotFoundCount: number;
   notFoundCount: number;
   ambiguousCount: number;
@@ -87,6 +101,15 @@ export interface WalmartPublicImportEnrichmentProgress {
     unknownErrorCount: number;
   };
   identifierPathCounts: WalmartImageIdentifierPathCounts;
+  serpApiProductGalleryDiagnostics: {
+    serpapi_product_gallery_checked: number;
+    serpapi_product_gallery_primary_found: number;
+    serpapi_product_gallery_additional_found: number;
+    serpapi_product_gallery_no_images: number;
+    skipped_no_verified_public_listing: number;
+    skipped_non_public_identifier: number;
+    skipped_gtin_as_product_id: number;
+  };
 }
 
 export interface WalmartPublicImportEnrichmentResult {
@@ -171,6 +194,8 @@ function applyFoundPublicListingImages(
     imageMatchMethod: WalmartProductRecord["imageMatchMethod"] | null;
     statusReason: string;
     lastImageSyncedAt: string;
+    endpointFamily?: "walmart_product" | "walmart_search";
+    productPageUrl?: string;
   }
 ): WalmartProductRecord {
   const primaryImageUrl =
@@ -214,6 +239,8 @@ function applyFoundPublicListingImages(
       imageSyncReason: resolution.statusReason,
       publicWalmartUrl: resolution.publicWalmartUrl || null,
       publicWalmartProductId: resolution.publicWalmartProductId || null,
+      serpApiEndpointFamily: resolution.endpointFamily ?? null,
+      serpApiProductPageUrl: resolution.productPageUrl ?? null,
       lastImageSyncedAt: resolution.lastImageSyncedAt,
     },
   };
@@ -362,6 +389,37 @@ function pathFromSerpApiResolution(
     return "no_searchable_identifier";
   }
   return "serpapi_public_item_id";
+}
+
+function applySerpApiGalleryDiagnostics(input: {
+  progress: WalmartPublicImportEnrichmentProgress;
+  resolution: Awaited<ReturnType<typeof enrichProductImagesFromPublicWalmartListing>>;
+  identifierPath: WalmartImageIdentifierPath;
+}): void {
+  const diagnostics = input.progress.serpApiProductGalleryDiagnostics;
+  const endpointFamily = asString(input.resolution.diagnostics?.endpointFamily);
+  const identifierType = asString(input.resolution.diagnostics?.productIdentifierType);
+
+  if (endpointFamily === "walmart_product") {
+    diagnostics.serpapi_product_gallery_checked += 1;
+    if (input.resolution.imageSyncStatus === "found" && input.resolution.primaryImageUrl.trim()) {
+      diagnostics.serpapi_product_gallery_primary_found += 1;
+      const additional = Math.max(0, input.resolution.galleryImageUrls.length - 1);
+      diagnostics.serpapi_product_gallery_additional_found += additional;
+    } else {
+      diagnostics.serpapi_product_gallery_no_images += 1;
+    }
+  }
+
+  if (input.identifierPath === "skipped_gtin_as_product_id") {
+    diagnostics.skipped_gtin_as_product_id += 1;
+  }
+
+  if (identifierType === "missing_product_identifier") {
+    diagnostics.skipped_no_verified_public_listing += 1;
+  } else if (identifierType === "search_title_brand") {
+    diagnostics.skipped_non_public_identifier += 1;
+  }
 }
 
 function incrementPathCount(
@@ -550,6 +608,8 @@ export async function runPublicListingImageEnrichmentQueue(input: {
     walmartSearchResolvedCount: 0,
     walmartSearchImageFoundCount: 0,
     serpApiFallbackFoundCount: 0,
+    serpApiProductGalleryFoundCount: 0,
+    serpApiSearchFallbackFoundCount: 0,
     walmartSearchNotFoundCount: 0,
     notFoundCount: 0,
     ambiguousCount: 0,
@@ -571,6 +631,7 @@ export async function runPublicListingImageEnrichmentQueue(input: {
       unknownErrorCount: 0,
     },
     identifierPathCounts: createIdentifierPathCounts(),
+    serpApiProductGalleryDiagnostics: createSerpApiProductGalleryDiagnostics(),
   };
 
   const concurrency = Math.max(1, Math.min(6, input.concurrency ?? 2));
@@ -758,6 +819,11 @@ export async function runPublicListingImageEnrichmentQueue(input: {
           ? unresolvedPathRaw
           : "seller_catalog_only";
       incrementPathCount(progress.identifierPathCounts, unresolvedPath);
+      if (unresolvedPath === "skipped_gtin_as_product_id") {
+        progress.serpApiProductGalleryDiagnostics.skipped_gtin_as_product_id += 1;
+      } else if (unresolvedPath === "no_searchable_identifier") {
+        progress.serpApiProductGalleryDiagnostics.skipped_no_verified_public_listing += 1;
+      }
       progress.enrichmentCompletedCount += 1;
       products[targetIndex] = applyNonFoundResolution(unresolved, {
         imageSyncStatus: unresolved.imageSyncStatus ?? "not_synced",
@@ -835,10 +901,20 @@ export async function runPublicListingImageEnrichmentQueue(input: {
       progress.enrichmentCompletedCount += 1;
       const identifierPath = pathFromSerpApiResolution(resolution);
       incrementPathCount(progress.identifierPathCounts, identifierPath);
+      applySerpApiGalleryDiagnostics({
+        progress,
+        resolution,
+        identifierPath,
+      });
 
       if (resolution.imageSyncStatus === "found") {
         progress.foundCount += 1;
         progress.serpApiFallbackFoundCount += 1;
+        if (resolution.diagnostics.endpointFamily === "walmart_product") {
+          progress.serpApiProductGalleryFoundCount += 1;
+        } else {
+          progress.serpApiSearchFallbackFoundCount += 1;
+        }
         products[targetIndex] = applyFoundPublicListingImages(products[targetIndex], {
           primaryImageUrl: resolution.primaryImageUrl,
           galleryImageUrls: resolution.galleryImageUrls,
@@ -848,6 +924,8 @@ export async function runPublicListingImageEnrichmentQueue(input: {
           imageMatchMethod: resolution.imageMatchMethod,
           statusReason: resolution.statusReason,
           lastImageSyncedAt: resolution.lastImageSyncedAt,
+          endpointFamily: resolution.diagnostics.endpointFamily,
+          productPageUrl: asString(resolution.diagnostics.productPageUrl),
         });
         const normalizedPayload =
           products[targetIndex]?.normalizedPayload && typeof products[targetIndex]?.normalizedPayload === "object"
