@@ -766,6 +766,143 @@ describe("Walmart SerpApi public listing images", () => {
     expect(requestedQueries).not.toContain("852764008491");
   });
 
+  it("supports root-relative Walmart URLs and still prefers URL-derived product ID over GTIN", async () => {
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: "serpapi_test_secret_123456" }),
+    });
+    await saveSerpApiRoute(saveReq);
+
+    const requestedQueries: string[] = [];
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      const engine = parsed.searchParams.get("engine");
+      const query = parsed.searchParams.get("query");
+      if (engine === "walmart" && query) {
+        requestedQueries.push(query);
+      }
+
+      if (engine === "walmart" && query === "17812552813") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "17812552813",
+                  title: "Seort Product",
+                  brand: "Seort",
+                  image: "https://i5.walmartimages.com/asr/17812552813-root-relative.jpeg",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (engine === "walmart" && query === "852764008491") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({ error: "The product has not found." }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+    });
+
+    const result = await enrichProductImagesFromPublicWalmartListing({
+      userId: "user_ibrains",
+      product: {
+        ...createProduct(),
+        gtin: "852764008491",
+        publicWalmartUrl: "/ip/seort/17812552813?athbdg=L1600",
+      },
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.imageMatchMethod).toBe("public_url_product_id");
+    expect(result.publicWalmartProductId).toBe("17812552813");
+    expect(requestedQueries).toContain("17812552813");
+    expect(requestedQueries).not.toContain("852764008491");
+  });
+
+  it("does not use GTIN-only records as Walmart product-detail query identifiers", async () => {
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
+      method: "POST",
+      body: JSON.stringify({ apiKey: "serpapi_test_secret_123456" }),
+    });
+    await saveSerpApiRoute(saveReq);
+
+    const fallbackProduct = {
+      ...createProduct(),
+      gtin: "850054016119",
+      upc: "",
+      publicWalmartUrl: "",
+      publicWalmartProductId: undefined,
+      itemId: "",
+    };
+    const expectedTitleBrandQuery = `${fallbackProduct.brand} ${fallbackProduct.title}`.trim();
+
+    const requestedQueries: string[] = [];
+    let calledWalmartProductEndpoint = false;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      const engine = parsed.searchParams.get("engine");
+
+      if (engine === "walmart_product") {
+        calledWalmartProductEndpoint = true;
+        return Promise.resolve(new Response(JSON.stringify({}), { status: 500 }));
+      }
+
+      const query = parsed.searchParams.get("query");
+      if (engine === "walmart" && query) {
+        requestedQueries.push(query);
+      }
+
+      if (engine === "walmart" && query === expectedTitleBrandQuery) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              organic_results: [
+                {
+                  product_id: "17812552813",
+                  title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+                  brand: "OPA Sleep",
+                  image: "https://i5.walmartimages.com/asr/17812552813-title-brand.jpeg",
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: "The product has not found." }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+    });
+
+    const result = await enrichProductImagesFromPublicWalmartListing({
+      userId: "user_ibrains",
+      product: fallbackProduct,
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.imageMatchMethod).toBe("serpapi_search_title_brand");
+    expect(requestedQueries).toContain(expectedTitleBrandQuery);
+    expect(requestedQueries).not.toContain("850054016119");
+    expect(calledWalmartProductEndpoint).toBe(false);
+  });
+
   it("falls back after walmart_product not-found provider error and still resolves image from search", async () => {
     const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
       method: "POST",
@@ -843,7 +980,7 @@ describe("Walmart SerpApi public listing images", () => {
       "[ecomviper:walmart:serpapi] walmart_product identifier not found",
       expect.objectContaining({
         sku: "ROC808",
-        identifierType: "walmartItemId",
+        identifierType: "walmart_item_id",
         identifierValue: "18410702298",
       })
     );

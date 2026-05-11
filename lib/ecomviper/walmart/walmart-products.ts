@@ -9,7 +9,10 @@ import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-it
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
-import { extractWalmartPublicProductIdFromUrl } from "@/lib/ecomviper/walmart/serpapi-walmart-images";
+import {
+  resolveCanonicalWalmartIdentifierFromProductRecord,
+  resolveCanonicalWalmartPublicIdentifier,
+} from "@/lib/ecomviper/walmart/walmart-public-identifier";
 import { discardWalmartDraftsForSkuForUser, listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
@@ -45,7 +48,6 @@ const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
 const WALMART_IMPORT_MAX_PAGES_BOUNDED = 1;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
-const WALMART_HOST_SUFFIX = ".walmart.com";
 const WALMART_IMPORT_FAILURE_NAME = "WalmartImportFailureError";
 const WALMART_CATALOG_REQUEST_TIMEOUT_MS = 12_000;
 const WALMART_INVENTORY_REQUEST_TIMEOUT_MS = 4_500;
@@ -293,61 +295,6 @@ function asHttpUrl(value: unknown): string {
   return /^https?:\/\//i.test(candidate) ? candidate : "";
 }
 
-function normalizeIdentifier(value: unknown): string {
-  return asString(value).replace(/[^0-9a-z]/gi, "").toUpperCase();
-}
-
-function normalizeWalmartPublicUrl(value: unknown): string {
-  const raw = asString(value);
-  if (!raw) return "";
-  const candidate =
-    asHttpUrl(raw) ||
-    (/^\/ip\//i.test(raw)
-      ? `https://www.walmart.com${raw.startsWith("/") ? raw : `/${raw}`}`
-      : /^(?:www\.)?walmart\.com\//i.test(raw)
-      ? `https://${raw.replace(/^https?:\/\//i, "")}`
-      : "");
-  if (!candidate) return "";
-  try {
-    const parsed = new URL(candidate);
-    const host = parsed.hostname.toLowerCase();
-    if (!(host === "walmart.com" || host.endsWith(WALMART_HOST_SUFFIX))) {
-      return "";
-    }
-    parsed.protocol = "https:";
-    return parsed.toString();
-  } catch {
-    return "";
-  }
-}
-
-function normalizeWalmartPublicProductId(value: unknown): string {
-  const candidate = asString(value);
-  if (!candidate) return "";
-  return /^\d{6,20}$/.test(candidate) ? candidate : "";
-}
-
-function firstPublicWalmartProductId(...values: unknown[]): string {
-  for (const value of values) {
-    const candidate = normalizeWalmartPublicProductId(value);
-    if (candidate) return candidate;
-  }
-  return "";
-}
-
-function firstPublicWalmartProductIdExcluding(input: {
-  values: unknown[];
-  excludedIdentifiers: Set<string>;
-}): string {
-  for (const value of input.values) {
-    const candidate = normalizeWalmartPublicProductId(value);
-    if (!candidate) continue;
-    if (input.excludedIdentifiers.has(normalizeIdentifier(candidate))) continue;
-    return candidate;
-  }
-  return "";
-}
-
 function firstHttpUrl(...values: unknown[]): string {
   for (const value of values) {
     const candidate = asHttpUrl(value);
@@ -437,88 +384,57 @@ function extractPublicListingReference(item: Record<string, unknown>): {
   const identifiers =
     asObject(item.identifiers) ?? asObject(item.productIdentifiers) ?? asObject(item.productIds) ?? asObject(item.ids);
 
-  const publicWalmartUrl = [
-    item.publicWalmartUrl,
-    item.productPageUrl,
-    item.productUrl,
-    item.canonicalUrl,
-    item.url,
-    item.itemUrl,
-    item.shareUrl,
-    item.buyUrl,
-    product?.publicWalmartUrl,
-    product?.productPageUrl,
-    product?.productUrl,
-    product?.canonicalUrl,
-    product?.url,
-    content?.productUrl,
-    content?.canonicalUrl,
-    links?.product,
-    links?.canonical,
-    asObjectArray(item.links)[0]?.href,
-  ]
-    .map((value) => normalizeWalmartPublicUrl(value))
-    .find(Boolean) ?? "";
-
-  const productIdFromUrl = publicWalmartUrl ? extractWalmartPublicProductIdFromUrl(publicWalmartUrl) ?? "" : "";
-  const excludedIdentifierValues = new Set(
-    [identifiers?.upc, identifiers?.gtin, item.upc, item.gtin]
-      .map((value) => normalizeIdentifier(value))
-      .filter(Boolean)
-  );
-
-  const publicWalmartProductId = firstPublicWalmartProductIdExcluding({
-    // Prefer canonical ID from Walmart product URL, then item/usItem IDs, then other explicit product IDs.
-    values: [
-      productIdFromUrl,
+  const resolved = resolveCanonicalWalmartPublicIdentifier({
+    publicWalmartUrlCandidates: [
+      item.publicWalmartUrl,
+      item.productPageUrl,
+      item.productUrl,
+      item.canonicalUrl,
+      item.url,
+      item.itemUrl,
+      item.shareUrl,
+      item.buyUrl,
+      product?.publicWalmartUrl,
+      product?.productPageUrl,
+      product?.productUrl,
+      product?.canonicalUrl,
+      product?.url,
+      content?.productUrl,
+      content?.canonicalUrl,
+      links?.product,
+      links?.canonical,
+      asObjectArray(item.links)[0]?.href,
+    ],
+    explicitWalmartProductIdCandidates: [
       item.publicWalmartProductId,
+      product?.publicWalmartProductId,
+      identifiers?.publicWalmartProductId,
+    ],
+    walmartItemIdCandidates: [
       item.usItemId,
       item.itemId,
-      item.usItemID,
       item.id,
-      product?.publicWalmartProductId,
+      item.usItemID,
       product?.usItemId,
       product?.itemId,
-      content?.productId,
-      identifiers?.publicWalmartProductId,
       identifiers?.usItemId,
       identifiers?.itemId,
+    ],
+    walmartPayloadProductIdCandidates: [
       item.productId,
       item.product_id,
       product?.productId,
+      content?.productId,
       identifiers?.productId,
     ],
-    excludedIdentifiers: excludedIdentifierValues,
+    upcCandidates: [item.upc, identifiers?.upc],
+    gtinCandidates: [item.gtin, identifiers?.gtin],
+    nestedPayloadCandidates: [item, product, content, links, identifiers],
   });
 
-  if (!publicWalmartProductId) {
-    return {
-      publicWalmartUrl,
-      publicWalmartProductId: firstPublicWalmartProductId(
-        productIdFromUrl,
-        item.publicWalmartProductId,
-        item.usItemId,
-        item.itemId,
-        item.usItemID,
-        item.id,
-        product?.publicWalmartProductId,
-        product?.usItemId,
-        product?.itemId,
-        content?.productId,
-        identifiers?.publicWalmartProductId,
-        identifiers?.usItemId,
-        identifiers?.itemId,
-        item.productId,
-        item.product_id,
-        product?.productId,
-        identifiers?.productId
-      ),
-    };
-  }
-
   return {
-    publicWalmartUrl,
-    publicWalmartProductId,
+    publicWalmartUrl: resolved.normalizedPublicWalmartUrl,
+    publicWalmartProductId: resolved.preferredWalmartProductId,
   };
 }
 
@@ -2064,13 +1980,41 @@ export async function retryWalmartPublicImageEnrichmentForUser(
   userId: string
 ): Promise<WalmartImportResult> {
   const currentProducts = await listPersistedWalmartProducts(userId);
+  const repairedProducts = currentProducts.map((product) => {
+    const resolved = resolveCanonicalWalmartIdentifierFromProductRecord({ product });
+    const nextPublicWalmartUrl =
+      resolved.normalizedPublicWalmartUrl || product.publicWalmartUrl || "";
+    const nextPublicWalmartProductId =
+      resolved.preferredWalmartProductId || product.publicWalmartProductId || "";
+
+    const unchanged =
+      (product.publicWalmartUrl ?? "") === nextPublicWalmartUrl &&
+      (product.publicWalmartProductId ?? "") === nextPublicWalmartProductId;
+    if (unchanged) return product;
+
+    const normalizedPayloadBase =
+      product.normalizedPayload && typeof product.normalizedPayload === "object"
+        ? (product.normalizedPayload as Record<string, unknown>)
+        : {};
+
+    return {
+      ...product,
+      publicWalmartUrl: nextPublicWalmartUrl || undefined,
+      publicWalmartProductId: nextPublicWalmartProductId || undefined,
+      normalizedPayload: {
+        ...normalizedPayloadBase,
+        publicWalmartUrl: nextPublicWalmartUrl || null,
+        publicWalmartProductId: nextPublicWalmartProductId || null,
+      },
+    };
+  });
   const initialCatalogImageCount = currentProducts.filter(
     (product) => product.imageSource === "walmart_catalog" && product.imageUrl.trim().length > 0
   ).length;
   const queue = await runPublicListingImageEnrichmentQueue({
     userId,
-    products: currentProducts,
-    importedCount: currentProducts.length,
+    products: repairedProducts,
+    importedCount: repairedProducts.length,
   });
   const finalImageFoundCount = queue.products.filter((product) => product.imageUrl.trim().length > 0).length;
   const finalImageStillMissingCount = Math.max(0, queue.products.length - finalImageFoundCount);
