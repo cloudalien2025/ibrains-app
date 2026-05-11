@@ -31,6 +31,8 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-product-repository";
 import type {
   WalmartDashboardSnapshot,
+  WalmartImportErrorCategory,
+  WalmartImportFailurePhase,
   WalmartImageMatchMethod,
   WalmartImageSyncStatus,
   WalmartImportResult,
@@ -43,6 +45,86 @@ const WALMART_IMPORT_PAGE_LIMIT = 100;
 const WALMART_IMPORT_MAX_PAGES = 5;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
 const WALMART_HOST_SUFFIX = ".walmart.com";
+const WALMART_IMPORT_FAILURE_NAME = "WalmartImportFailureError";
+
+type WalmartImportPartialProgress = {
+  importedCount: number;
+  fetchedCount: number;
+  processedCount: number;
+  queuedCount: number;
+  imageFoundCount: number;
+  imageMissingCount: number;
+  imageNotFoundCount: number;
+  imageAmbiguousCount: number;
+  imageFailedCount: number;
+  imageSkippedNoProviderCount: number;
+};
+
+export interface WalmartImportFailureError extends Error {
+  name: typeof WALMART_IMPORT_FAILURE_NAME;
+  category: WalmartImportErrorCategory;
+  phase: WalmartImportFailurePhase;
+  statusCode?: number;
+  correlationId?: string | null;
+  endpointFamily?: string | null;
+  responseShapeSummary?: string | null;
+  partialProgress?: WalmartImportPartialProgress;
+}
+
+function createWalmartImportFailure(input: {
+  category: WalmartImportErrorCategory;
+  phase: WalmartImportFailurePhase;
+  reason: string;
+  statusCode?: number;
+  correlationId?: string | null;
+  endpointFamily?: string | null;
+  responseShapeSummary?: string | null;
+  partialProgress?: WalmartImportPartialProgress;
+}): WalmartImportFailureError {
+  const error = new Error(input.reason) as WalmartImportFailureError;
+  error.name = WALMART_IMPORT_FAILURE_NAME;
+  error.category = input.category;
+  error.phase = input.phase;
+  error.statusCode = input.statusCode;
+  error.correlationId = input.correlationId ?? null;
+  error.endpointFamily = input.endpointFamily ?? null;
+  error.responseShapeSummary = input.responseShapeSummary ?? null;
+  error.partialProgress = input.partialProgress ? { ...input.partialProgress } : undefined;
+  return error;
+}
+
+export function isWalmartImportFailureError(error: unknown): error is WalmartImportFailureError {
+  return (
+    error instanceof Error &&
+    (error as WalmartImportFailureError).name === WALMART_IMPORT_FAILURE_NAME &&
+    typeof (error as WalmartImportFailureError).category === "string" &&
+    typeof (error as WalmartImportFailureError).phase === "string"
+  );
+}
+
+function normalizeUnknownErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message.trim();
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (error && typeof error === "object") {
+    const candidate = (error as { message?: unknown }).message;
+    if (typeof candidate === "string" && candidate.trim()) return candidate.trim();
+  }
+  return fallback;
+}
+
+function isLikelyDatabaseError(error: unknown): boolean {
+  const message = normalizeUnknownErrorMessage(error, "").toLowerCase();
+  if (!message) return false;
+  return (
+    message.includes("database") ||
+    message.includes("relation") ||
+    message.includes("sql") ||
+    message.includes("postgres") ||
+    message.includes("query failed") ||
+    message.includes("connection refused") ||
+    message.includes("timeout")
+  );
+}
 
 export function listWalmartProducts(): WalmartProductRecord[] {
   return listProducts();
@@ -884,7 +966,18 @@ function normalizeImportedItem(
   };
 }
 
-function parseWalmartError(responseBody: string, status: number): string {
+function summarizeWalmartResponseShape(payload: unknown): string {
+  if (Array.isArray(payload)) return `array(${payload.length})`;
+  if (!payload || typeof payload !== "object") return typeof payload;
+  const keys = Object.keys(payload as Record<string, unknown>).slice(0, 8);
+  if (keys.length === 0) return "object_empty";
+  return `object:${keys.join("|")}`;
+}
+
+function parseWalmartError(responseBody: string, status: number): {
+  reason: string;
+  responseShapeSummary: string;
+} {
   try {
     const parsed = JSON.parse(responseBody) as Record<string, unknown>;
     const errors = Array.isArray(parsed.errors) ? parsed.errors : [];
@@ -897,12 +990,22 @@ function parseWalmartError(responseBody: string, status: number): string {
       parsed.error_description
     );
     if (description) {
-      return code ? `${description} (${code})` : description;
+      return {
+        reason: code ? `${description} (${code})` : description,
+        responseShapeSummary: summarizeWalmartResponseShape(parsed),
+      };
     }
+    return {
+      reason: `Walmart catalog read failed with HTTP ${status}.`,
+      responseShapeSummary: summarizeWalmartResponseShape(parsed),
+    };
   } catch {
     // Fallback below when upstream payload is not JSON.
   }
-  return `Walmart catalog read failed with HTTP ${status}.`;
+  return {
+    reason: `Walmart catalog read failed with HTTP ${status}.`,
+    responseShapeSummary: responseBody.trim().length > 0 ? "non_json" : "empty",
+  };
 }
 
 async function fetchCatalogPage(accessToken: string, nextCursor?: string | null): Promise<{
@@ -925,10 +1028,44 @@ async function fetchCatalogPage(accessToken: string, nextCursor?: string | null)
 
   const responseBody = await response.text();
   if (!response.ok) {
-    throw new Error(parseWalmartError(responseBody, response.status));
+    const parsedError = parseWalmartError(responseBody, response.status);
+    const error = new Error(parsedError.reason) as Error & {
+      statusCode?: number;
+      correlationId?: string | null;
+      endpointFamily?: string;
+      responseShapeSummary?: string;
+    };
+    error.statusCode = response.status;
+    error.correlationId =
+      response.headers.get("WM_QOS.CORRELATION_ID") ??
+      response.headers.get("wm_qos.correlation_id") ??
+      null;
+    error.endpointFamily = "walmart_catalog_items";
+    error.responseShapeSummary = parsedError.responseShapeSummary;
+    throw error;
   }
 
-  const payload = responseBody ? (JSON.parse(responseBody) as unknown) : {};
+  let payload: unknown = {};
+  if (responseBody.trim().length > 0) {
+    try {
+      payload = JSON.parse(responseBody) as unknown;
+    } catch {
+      const error = new Error("Walmart products response was not valid JSON.") as Error & {
+        statusCode?: number;
+        correlationId?: string | null;
+        endpointFamily?: string;
+        responseShapeSummary?: string;
+      };
+      error.statusCode = response.status;
+      error.correlationId =
+        response.headers.get("WM_QOS.CORRELATION_ID") ??
+        response.headers.get("wm_qos.correlation_id") ??
+        null;
+      error.endpointFamily = "walmart_catalog_items";
+      error.responseShapeSummary = "invalid_json";
+      throw error;
+    }
+  }
   const extracted = extractItemNodes(payload);
   return {
     items: extracted.items,
@@ -1445,16 +1582,15 @@ async function enrichProductImages(
   return { products: finalized, stats };
 }
 
-export async function importWalmartProducts(userId: string): Promise<WalmartImportResult> {
-  const token = await requestWalmartTokenForUser(userId, { forceRefresh: true });
-  if (!token.ok || !token.accessToken) {
-    throw new Error(
-      token.lastError?.message ??
-        "Walmart is not connected. Save credentials in Walmart Connect before importing products."
-    );
-  }
+function categorizeWalmartTokenFailure(code: string | null | undefined): WalmartImportErrorCategory {
+  const normalized = (code ?? "").trim().toUpperCase();
+  if (!normalized || normalized === "MISSING_CREDENTIALS") return "walmart_credentials_missing";
+  if (normalized.includes("HTTP_401") || normalized.includes("HTTP_403")) return "walmart_auth_failed";
+  return "walmart_token_failed";
+}
 
-  const partialProgress = {
+export async function importWalmartProducts(userId: string): Promise<WalmartImportResult> {
+  const partialProgress: WalmartImportPartialProgress = {
     importedCount: 0,
     fetchedCount: 0,
     processedCount: 0,
@@ -1467,6 +1603,39 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     imageSkippedNoProviderCount: 0,
   };
 
+  let token: Awaited<ReturnType<typeof requestWalmartTokenForUser>>;
+  try {
+    token = await requestWalmartTokenForUser(userId, { forceRefresh: true });
+  } catch (error) {
+    const reason = normalizeUnknownErrorMessage(
+      error,
+      "Unable to resolve Walmart credentials for this user."
+    );
+    throw createWalmartImportFailure({
+      category: isLikelyDatabaseError(error) ? "database_failed" : "walmart_credentials_missing",
+      phase: isLikelyDatabaseError(error) ? "database" : "walmart_credentials",
+      reason,
+      partialProgress,
+    });
+  }
+
+  if (!token.ok || !token.accessToken) {
+    throw createWalmartImportFailure({
+      category: categorizeWalmartTokenFailure(token.lastError?.code),
+      phase:
+        categorizeWalmartTokenFailure(token.lastError?.code) === "walmart_auth_failed"
+          ? "walmart_auth"
+          : "walmart_token",
+      reason:
+        token.lastError?.message ??
+        "Walmart is not connected. Save credentials in Walmart Connect before importing products.",
+      statusCode: token.httpStatus ?? undefined,
+      correlationId: token.correlationId,
+      endpointFamily: "walmart_token",
+      partialProgress,
+    });
+  }
+
   try {
     const now = new Date().toISOString();
     const collected: Record<string, unknown>[] = [];
@@ -1475,7 +1644,44 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     let nextCursor: string | null = null;
 
     for (let pageIndex = 0; pageIndex < WALMART_IMPORT_MAX_PAGES; pageIndex += 1) {
-      const page = await fetchCatalogPage(token.accessToken, nextCursor);
+      let page: Awaited<ReturnType<typeof fetchCatalogPage>>;
+      try {
+        page = await fetchCatalogPage(token.accessToken, nextCursor);
+      } catch (error) {
+        const statusCode =
+          error && typeof error === "object" && typeof (error as { statusCode?: unknown }).statusCode === "number"
+            ? ((error as { statusCode: number }).statusCode as number)
+            : undefined;
+        const responseShapeSummary =
+          error && typeof error === "object" && typeof (error as { responseShapeSummary?: unknown }).responseShapeSummary === "string"
+            ? ((error as { responseShapeSummary: string }).responseShapeSummary as string)
+            : undefined;
+        const isResponseParseFailure = normalizeUnknownErrorMessage(error, "")
+          .toLowerCase()
+          .includes("not valid json");
+        throw createWalmartImportFailure({
+          category: isResponseParseFailure
+            ? "walmart_products_response_invalid"
+            : "walmart_products_fetch_failed",
+          phase: isResponseParseFailure ? "walmart_products_parse" : "walmart_products_fetch",
+          reason: normalizeUnknownErrorMessage(
+            error,
+            "Walmart catalog products request failed."
+          ),
+          statusCode,
+          correlationId:
+            error && typeof error === "object" && "correlationId" in error
+              ? ((error as { correlationId?: string | null }).correlationId ?? null)
+              : null,
+          endpointFamily:
+            error && typeof error === "object" && "endpointFamily" in error
+              ? ((error as { endpointFamily?: string }).endpointFamily ?? "walmart_catalog_items")
+              : "walmart_catalog_items",
+          responseShapeSummary,
+          partialProgress,
+        });
+      }
+
       collected.push(...page.items);
       payloadShapes.add(page.payloadShape);
       pageCount += 1;
@@ -1492,7 +1698,21 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     const bySku = new Map<string, WalmartProductRecord>();
     let skippedCount = 0;
     for (const item of collected) {
-      const normalized = normalizeImportedItem(item, inventorySnapshotsBySku);
+      let normalized: WalmartProductRecord | null;
+      try {
+        normalized = normalizeImportedItem(item, inventorySnapshotsBySku);
+      } catch (error) {
+        const rawSku = asString((asObject(item)?.sku ?? asObject(item)?.SKU) ?? "");
+        throw createWalmartImportFailure({
+          category: "product_normalization_failed",
+          phase: "product_normalization",
+          reason: rawSku
+            ? `Product normalization failed for SKU ${rawSku}.`
+            : "Product normalization failed for one catalog row.",
+          partialProgress,
+          responseShapeSummary: normalizeUnknownErrorMessage(error, "unknown_normalization_error"),
+        });
+      }
       if (!normalized) {
         skippedCount += 1;
         continue;
@@ -1519,11 +1739,23 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     partialProgress.imageMissingCount =
       imageStats.notFound + imageStats.publicListing.skippedNoProviderCount;
 
-    await replaceWalmartProductsForUser({
-      userId,
-      products,
-      importedAt: now,
-    });
+    try {
+      await replaceWalmartProductsForUser({
+        userId,
+        products,
+        importedAt: now,
+      });
+    } catch (error) {
+      throw createWalmartImportFailure({
+        category: isLikelyDatabaseError(error) ? "database_failed" : "product_persistence_failed",
+        phase: isLikelyDatabaseError(error) ? "database" : "product_persistence",
+        reason: normalizeUnknownErrorMessage(
+          error,
+          "Failed to persist imported Walmart products."
+        ),
+        partialProgress,
+      });
+    }
 
     appendActivityLog({
       marketplace: "walmart",
@@ -1587,11 +1819,19 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       },
     };
   } catch (error) {
-    const nextError = error instanceof Error ? error : new Error("Walmart import failed.");
-    (nextError as Error & { partialProgress?: typeof partialProgress }).partialProgress = {
-      ...partialProgress,
-    };
-    throw nextError;
+    if (isWalmartImportFailureError(error)) {
+      error.partialProgress = {
+        ...partialProgress,
+      };
+      throw error;
+    }
+
+    throw createWalmartImportFailure({
+      category: "import_unknown_error",
+      phase: "import_unknown",
+      reason: normalizeUnknownErrorMessage(error, "Walmart import failed due to an unknown runtime error."),
+      partialProgress,
+    });
   }
 }
 

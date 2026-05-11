@@ -158,8 +158,11 @@ describe("Walmart import progress UI", () => {
             providerStatus: "connected",
             providerStatusReason: null,
             providerCanAttempt: true,
-            importErrorCategory: "walmart_auth",
+            importErrorCategory: "walmart_auth_failed",
             importErrorReason: "Production token request failed: HTTP 401 unauthorized.",
+            importErrorPhase: "walmart_auth",
+            importErrorStatusCode: 401,
+            importErrorEndpointFamily: "walmart_token",
             existingProductsShownCount: 1,
             totals: {
               importedCount: 0,
@@ -194,7 +197,8 @@ describe("Walmart import progress UI", () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("Failed");
-    expect(container.textContent).toContain("Import error (walmart_auth): Production token request failed: HTTP 401 unauthorized.");
+    expect(container.textContent).toContain("Import error (walmart_auth_failed): Production token request failed: HTTP 401 unauthorized.");
+    expect(container.textContent).toContain("Failure phase: walmart_auth (HTTP 401) · endpoint: walmart_token");
     expect(container.textContent).toContain("Existing products shown below are from the previous successful import.");
     expect(container.textContent).toContain("SerpApi: Connected");
   });

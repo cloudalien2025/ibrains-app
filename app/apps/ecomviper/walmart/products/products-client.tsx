@@ -94,13 +94,36 @@ interface ImportPanelState {
   noImageReason: string | null;
   importErrorCategory:
     | "none"
-    | "walmart_not_connected"
-    | "walmart_auth"
-    | "walmart_permission"
-    | "walmart_rate_limited"
-    | "walmart_provider_error"
-    | "import_runtime_error";
+    | "walmart_credentials_missing"
+    | "walmart_auth_failed"
+    | "walmart_token_failed"
+    | "walmart_products_fetch_failed"
+    | "walmart_products_response_invalid"
+    | "walmart_products_empty"
+    | "product_normalization_failed"
+    | "product_persistence_failed"
+    | "user_scope_failed"
+    | "database_failed"
+    | "import_request_invalid"
+    | "import_unknown_error";
   importErrorReason: string | null;
+  importErrorPhase:
+    | "request_validation"
+    | "user_scope"
+    | "walmart_credentials"
+    | "walmart_auth"
+    | "walmart_token"
+    | "walmart_products_fetch"
+    | "walmart_products_parse"
+    | "product_normalization"
+    | "product_persistence"
+    | "database"
+    | "import_unknown"
+    | null;
+  importErrorStatusCode: number | null;
+  importErrorEndpointFamily: string | null;
+  importErrorCorrelationId: string | null;
+  importErrorResponseShape: string | null;
   existingProductsShownCount: number;
   summary: string;
   running: boolean;
@@ -321,6 +344,11 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       noImageReason: null,
       importErrorCategory: "none",
       importErrorReason: null,
+      importErrorPhase: null,
+      importErrorStatusCode: null,
+      importErrorEndpointFamily: null,
+      importErrorCorrelationId: null,
+      importErrorResponseShape: null,
       existingProductsShownCount: 0,
       summary:
         mode === "retry_image_enrichment"
@@ -389,13 +417,36 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           noImageReason?: string | null;
           importErrorCategory?:
             | "none"
-            | "walmart_not_connected"
-            | "walmart_auth"
-            | "walmart_permission"
-            | "walmart_rate_limited"
-            | "walmart_provider_error"
-            | "import_runtime_error";
+            | "walmart_credentials_missing"
+            | "walmart_auth_failed"
+            | "walmart_token_failed"
+            | "walmart_products_fetch_failed"
+            | "walmart_products_response_invalid"
+            | "walmart_products_empty"
+            | "product_normalization_failed"
+            | "product_persistence_failed"
+            | "user_scope_failed"
+            | "database_failed"
+            | "import_request_invalid"
+            | "import_unknown_error";
           importErrorReason?: string | null;
+          importErrorPhase?:
+            | "request_validation"
+            | "user_scope"
+            | "walmart_credentials"
+            | "walmart_auth"
+            | "walmart_token"
+            | "walmart_products_fetch"
+            | "walmart_products_parse"
+            | "product_normalization"
+            | "product_persistence"
+            | "database"
+            | "import_unknown"
+            | null;
+          importErrorStatusCode?: number | null;
+          importErrorEndpointFamily?: string | null;
+          importErrorCorrelationId?: string | null;
+          importErrorResponseShape?: string | null;
           existingProductsShownCount?: number;
           totals?: {
             importedCount?: number;
@@ -472,8 +523,13 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           providerStatusReason: payload.importProgress?.providerStatusReason ?? null,
           providerCanAttempt: payload.importProgress?.providerCanAttempt ?? providerConnected,
           noImageReason: payload.importProgress?.noImageReason ?? null,
-          importErrorCategory: payload.importProgress?.importErrorCategory ?? "import_runtime_error",
+          importErrorCategory: payload.importProgress?.importErrorCategory ?? "import_unknown_error",
           importErrorReason: payload.importProgress?.importErrorReason ?? failureMessage,
+          importErrorPhase: payload.importProgress?.importErrorPhase ?? "import_unknown",
+          importErrorStatusCode: payload.importProgress?.importErrorStatusCode ?? null,
+          importErrorEndpointFamily: payload.importProgress?.importErrorEndpointFamily ?? null,
+          importErrorCorrelationId: payload.importProgress?.importErrorCorrelationId ?? null,
+          importErrorResponseShape: payload.importProgress?.importErrorResponseShape ?? null,
           existingProductsShownCount,
           summary: summaryWithContext,
           running: false,
@@ -550,6 +606,11 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         noImageReason,
         importErrorCategory: payload.importProgress?.importErrorCategory ?? "none",
         importErrorReason: payload.importProgress?.importErrorReason ?? null,
+        importErrorPhase: payload.importProgress?.importErrorPhase ?? null,
+        importErrorStatusCode: payload.importProgress?.importErrorStatusCode ?? null,
+        importErrorEndpointFamily: payload.importProgress?.importErrorEndpointFamily ?? null,
+        importErrorCorrelationId: payload.importProgress?.importErrorCorrelationId ?? null,
+        importErrorResponseShape: payload.importProgress?.importErrorResponseShape ?? null,
         existingProductsShownCount: payload.importProgress?.existingProductsShownCount ?? 0,
         summary: noImageReason ? `${finalSummary} ${noImageReason}` : finalSummary,
         running: false,
@@ -589,8 +650,13 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         providerStatusReason: current?.providerStatusReason ?? null,
         providerCanAttempt: current?.providerCanAttempt ?? false,
         noImageReason: current?.noImageReason ?? null,
-        importErrorCategory: current?.importErrorCategory ?? "import_runtime_error",
+        importErrorCategory: current?.importErrorCategory ?? "import_unknown_error",
         importErrorReason: current?.importErrorReason ?? "Import failed.",
+        importErrorPhase: current?.importErrorPhase ?? "import_unknown",
+        importErrorStatusCode: current?.importErrorStatusCode ?? null,
+        importErrorEndpointFamily: current?.importErrorEndpointFamily ?? null,
+        importErrorCorrelationId: current?.importErrorCorrelationId ?? null,
+        importErrorResponseShape: current?.importErrorResponseShape ?? null,
         existingProductsShownCount: current?.existingProductsShownCount ?? 0,
         summary: "Import failed.",
         running: false,
@@ -747,6 +813,15 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             {importPanel.stage === "failed" && importPanel.importErrorReason ? (
               <p className="mt-2 text-xs text-rose-700">
                 Import error ({importPanel.importErrorCategory}): {importPanel.importErrorReason}
+              </p>
+            ) : null}
+            {importPanel.stage === "failed" && importPanel.importErrorPhase ? (
+              <p className="mt-1 text-xs text-rose-700">
+                Failure phase: {importPanel.importErrorPhase}
+                {importPanel.importErrorStatusCode ? ` (HTTP ${importPanel.importErrorStatusCode})` : ""}
+                {importPanel.importErrorEndpointFamily
+                  ? ` · endpoint: ${importPanel.importErrorEndpointFamily}`
+                  : ""}
               </p>
             ) : null}
             {importPanel.stage === "failed" && importPanel.existingProductsShownCount > 0 ? (

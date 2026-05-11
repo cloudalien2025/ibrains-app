@@ -106,12 +106,31 @@ export type WalmartSerpApiProviderStatus =
 
 export type WalmartImportErrorCategory =
   | "none"
-  | "walmart_not_connected"
+  | "walmart_credentials_missing"
+  | "walmart_auth_failed"
+  | "walmart_token_failed"
+  | "walmart_products_fetch_failed"
+  | "walmart_products_response_invalid"
+  | "walmart_products_empty"
+  | "product_normalization_failed"
+  | "product_persistence_failed"
+  | "user_scope_failed"
+  | "database_failed"
+  | "import_request_invalid"
+  | "import_unknown_error";
+
+export type WalmartImportFailurePhase =
+  | "request_validation"
+  | "user_scope"
+  | "walmart_credentials"
   | "walmart_auth"
-  | "walmart_permission"
-  | "walmart_rate_limited"
-  | "walmart_provider_error"
-  | "import_runtime_error";
+  | "walmart_token"
+  | "walmart_products_fetch"
+  | "walmart_products_parse"
+  | "product_normalization"
+  | "product_persistence"
+  | "database"
+  | "import_unknown";
 
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
