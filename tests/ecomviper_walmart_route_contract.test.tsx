@@ -323,6 +323,46 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).not.toContain("OPA-OMEGA3-120");
   });
 
+  it("renders products page with legacy records that omit new enrichment metadata fields", async () => {
+    await replaceWalmartProductsForUser({
+      userId: "user_ibrains",
+      products: [
+        {
+          id: "legacy_walmart_product",
+          marketplace: "walmart",
+          sku: "LEGACY-SKU-01",
+          externalItemId: "legacy_external_item",
+          title: "Legacy Product",
+          brand: "Legacy Brand",
+          category: "Supplements",
+          price: 0,
+          inventoryQuantity: 0,
+          inventoryStatus: null,
+          status: null,
+          imageUrl: "",
+          imageStatusMessage: null,
+          imageSource: null,
+          imageSyncStatus: null,
+          issues: null,
+          attributes: null,
+          shortDescription: "",
+          longDescription: "",
+          bulletPoints: [],
+          rawPayload: {},
+          normalizedPayload: {},
+          lastSyncedAt: "2026-05-11T00:00:00.000Z",
+          createdAt: "2026-05-11T00:00:00.000Z",
+          updatedAt: "2026-05-11T00:00:00.000Z",
+        } as unknown as Parameters<typeof replaceWalmartProductsForUser>[0]["products"][number],
+      ],
+      importedAt: "2026-05-11T00:00:00.000Z",
+    });
+
+    const html = renderToStaticMarkup(await WalmartProductsPage());
+    expect(html).toContain("LEGACY-SKU-01");
+    expect(html).toContain("Image enrichment not synced.");
+  });
+
   it("renders activity page with empty state when no activity exists", () => {
     const html = renderToStaticMarkup(<WalmartActivityPage />);
     expect(html).toContain("No activity yet.");

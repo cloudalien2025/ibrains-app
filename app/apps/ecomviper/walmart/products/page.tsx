@@ -6,6 +6,10 @@ import { mergeProductsWithLatestDrafts } from "@/lib/ecomviper/walmart/walmart-p
 
 export const dynamic = "force-dynamic";
 
+function asArray<T>(value: T[] | null | undefined): T[] {
+  return Array.isArray(value) ? value : [];
+}
+
 export default async function WalmartProductsPage() {
   const { userId, unauthorizedResponse } = await requireSignedInUser();
   if (unauthorizedResponse || !userId) {
@@ -18,7 +22,7 @@ export default async function WalmartProductsPage() {
   let effectiveProducts = [] as typeof products;
 
   try {
-    products = await listWalmartProductsForUser(userId);
+    products = asArray(await listWalmartProductsForUser(userId));
     effectiveProducts = products;
   } catch (error) {
     console.error("[ecomviper:walmart:products-page] product load failed", {
@@ -29,7 +33,7 @@ export default async function WalmartProductsPage() {
 
   if (products.length > 0) {
     try {
-      drafts = await listWalmartDraftsForUser(userId);
+      drafts = asArray(await listWalmartDraftsForUser(userId));
     } catch (error) {
       console.error("[ecomviper:walmart:products-page] draft load failed", {
         message: error instanceof Error ? error.message : "unknown_error",
