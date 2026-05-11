@@ -229,4 +229,29 @@ describe("Walmart products client UX", () => {
     expect(html).toContain("text-center");
     expect(html).toContain(">—<");
   });
+
+  it("renders safely when product row payload contains malformed runtime field types", () => {
+    const malformedProduct = {
+      ...createProduct(),
+      price: "bad-number",
+      issues: { code: "bad" },
+      imageUrl: { href: "https://images.example.com/not-string.jpg" },
+      imageStatusMessage: { detail: "bad" },
+      liveImageUrl: 12345,
+      liveGalleryImageUrls: "bad",
+      galleryImageUrls: { url: "bad" },
+      variantImageUrls: null,
+      lastSyncedAt: { when: "bad" },
+      brand: 22,
+      title: null,
+    } as unknown as WalmartEffectiveProductRecord;
+
+    const html = renderToStaticMarkup(<WalmartProductsClient products={[malformedProduct]} />);
+
+    expect(html).toContain("$0.00");
+    expect(html).toContain(">None<");
+    expect(html).toContain(">Item Search returned no usable image.<");
+    expect(html).toContain(">22<");
+    expect(html).toContain(">Untitled product<");
+  });
 });

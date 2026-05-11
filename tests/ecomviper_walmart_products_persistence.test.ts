@@ -226,6 +226,40 @@ describe("walmart products persistence", () => {
     expect(aSkuFromB).toBeNull();
   });
 
+  it("sanitizes malformed persisted product fields before returning products list", async () => {
+    const malformed = {
+      ...buildProduct("MALFORMED-1"),
+      price: "bad-number",
+      issues: { broken: true },
+      imageUrl: { href: "https://images.example.com/not-a-string.jpg" },
+      imageStatusMessage: { detail: "bad" },
+      inventoryQuantity: "17",
+      attributes: ["bad"],
+      bulletPoints: { value: "bad" },
+      shortDescription: 99,
+      longDescription: null,
+    } as unknown as ReturnType<typeof buildProduct>;
+
+    await replaceWalmartProductsForUser({
+      userId: "user_malformed",
+      products: [malformed],
+      importedAt: new Date().toISOString(),
+    });
+
+    const products = await listWalmartProductsForUser("user_malformed");
+    expect(products).toHaveLength(1);
+    expect(products[0]?.sku).toBe("MALFORMED-1");
+    expect(products[0]?.price).toBe(0);
+    expect(products[0]?.issues).toEqual([]);
+    expect(products[0]?.imageUrl).toBe("");
+    expect(products[0]?.imageStatusMessage).toBeUndefined();
+    expect(products[0]?.inventoryQuantity).toBe(17);
+    expect(products[0]?.attributes).toEqual({});
+    expect(products[0]?.bulletPoints).toEqual([]);
+    expect(products[0]?.shortDescription).toBe("99");
+    expect(products[0]?.longDescription).toBe("");
+  });
+
   it("persists Item Search image fields across repository reload", async () => {
     const product = buildProduct("IMG-PERSIST-1");
     product.imageUrl = "https://images.example.com/img-persist-1.jpg";
