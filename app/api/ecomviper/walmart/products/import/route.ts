@@ -28,6 +28,8 @@ interface ImportProgressTotals {
   imageEnrichedCount: number;
   imageFromWalmartSearchCount: number;
   imageFromSerpApiFallbackCount: number;
+  imageFromSerpApiProductGalleryCount: number;
+  imageFromSerpApiSearchFallbackCount: number;
   walmartSearchNotFoundCount: number;
   imageStillMissingCount: number;
   imageMissingCount: number;
@@ -290,6 +292,10 @@ function buildSuccessProgress(input: {
     (hasImageDiagnostics ? Math.max(0, imageFoundCount - imageFromImportPayloadCount) : 0);
   const imageFromWalmartSearchCount = result.importDiagnostics?.imageFromWalmartSearchCount ?? 0;
   const imageFromSerpApiFallbackCount = result.importDiagnostics?.imageFromSerpApiFallbackCount ?? 0;
+  const imageFromSerpApiProductGalleryCount =
+    result.importDiagnostics?.imageFromSerpApiProductGalleryCount ?? 0;
+  const imageFromSerpApiSearchFallbackCount =
+    result.importDiagnostics?.imageFromSerpApiSearchFallbackCount ?? 0;
   const walmartSearchNotFoundCount = result.importDiagnostics?.walmartSearchNotFoundCount ?? 0;
   const imageStillMissingCount =
     result.importDiagnostics?.imageStillMissingCount ??
@@ -343,6 +349,8 @@ function buildSuccessProgress(input: {
       imageEnrichedCount,
       imageFromWalmartSearchCount,
       imageFromSerpApiFallbackCount,
+      imageFromSerpApiProductGalleryCount,
+      imageFromSerpApiSearchFallbackCount,
       walmartSearchNotFoundCount,
       imageStillMissingCount,
       imageMissingCount: missingCount,
@@ -407,6 +415,8 @@ export async function POST(req: NextRequest) {
           imageEnrichedCount: 0,
           imageFromWalmartSearchCount: 0,
           imageFromSerpApiFallbackCount: 0,
+          imageFromSerpApiProductGalleryCount: 0,
+          imageFromSerpApiSearchFallbackCount: 0,
           walmartSearchNotFoundCount: 0,
           imageStillMissingCount: 0,
           imageMissingCount: 0,
@@ -458,7 +468,7 @@ export async function POST(req: NextRequest) {
       existingProductsShownCount,
     });
 
-    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi fallback images: ${progress.totals.imageFromSerpApiFallbackCount}. Still missing images: ${progress.totals.imageStillMissingCount}. Ambiguous: ${progress.totals.imageAmbiguousCount}. Failed: ${progress.totals.imageFailedCount}.`;
+    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Still missing images: ${progress.totals.imageStillMissingCount}. Ambiguous: ${progress.totals.imageAmbiguousCount}. Failed: ${progress.totals.imageFailedCount}.`;
     const message =
       progress.totals.importedCount > 0
         ? isRetryMode
@@ -535,6 +545,8 @@ export async function POST(req: NextRequest) {
         imageEnrichedCount: 0,
         imageFromWalmartSearchCount: 0,
         imageFromSerpApiFallbackCount: 0,
+        imageFromSerpApiProductGalleryCount: 0,
+        imageFromSerpApiSearchFallbackCount: 0,
         walmartSearchNotFoundCount: 0,
         imageStillMissingCount: partialTotals?.imageMissingCount ?? 0,
         imageMissingCount: partialTotals?.imageMissingCount ?? 0,
