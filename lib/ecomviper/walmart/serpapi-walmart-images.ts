@@ -1118,9 +1118,9 @@ function isBarcodeEquivalentProductId(input: {
 }): boolean {
   const normalizedProductId = normalizeIdentifier(input.productId);
   if (!normalizedProductId) return false;
-  return (
-    (input.upc && normalizedProductId === input.upc) ||
-    (input.gtin && normalizedProductId === input.gtin)
+  return Boolean(
+    (input.upc.length > 0 && normalizedProductId === input.upc) ||
+      (input.gtin.length > 0 && normalizedProductId === input.gtin)
   );
 }
 
