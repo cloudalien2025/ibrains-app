@@ -8,6 +8,13 @@ import {
   extractSerpApiErrorDetail,
   sanitizeSerpApiErrorDetail,
 } from "@/lib/ecomviper/walmart/serpapi-safety";
+import {
+  extractWalmartPublicProductIdFromUrl as extractWalmartPublicProductIdFromUrlShared,
+  isLikelyGtinOrUpc,
+  normalizeWalmartPublicUrl,
+  resolveCanonicalWalmartIdentifierFromProductRecord,
+  type WalmartPublicIdentifierType,
+} from "@/lib/ecomviper/walmart/walmart-public-identifier";
 import type {
   WalmartImageMatchMethod,
   WalmartImageSyncStatus,
@@ -17,19 +24,9 @@ import type {
 const SERPAPI_ENDPOINT = "https://serpapi.com/search.json";
 const SERPAPI_REQUEST_TIMEOUT_MS = 16_000;
 const SERPAPI_RETRY_BACKOFF_MS = [450, 1_200] as const;
-const WALMART_HOST_SUFFIX = ".walmart.com";
 
 type SerpApiEndpointFamily = "walmart_product" | "walmart_search";
-type SerpApiProductIdentifierType =
-  | "explicitWalmartProductId"
-  | "walmartProductIdFromUrl"
-  | "walmartPublicProductId"
-  | "walmartItemId"
-  | "walmartPayloadProductId"
-  | "gtinFallbackSearch"
-  | "upcFallbackSearch"
-  | "titleBrandFallbackSearch"
-  | "none";
+type SerpApiProductIdentifierType = WalmartPublicIdentifierType;
 type SerpApiStatusCategory =
   | "ok"
   | "not_found"
@@ -149,64 +146,11 @@ function normalizeWalmartPublicProductId(value: unknown): string {
 }
 
 function sanitizePublicWalmartUrl(value: unknown): string {
-  const input = asString(value);
-  if (!input) return "";
-  const raw =
-    /^https?:\/\//i.test(input)
-      ? input
-      : /^\/ip\//i.test(input)
-      ? `https://www.walmart.com${input.startsWith("/") ? input : `/${input}`}`
-      : /^(?:www\.)?walmart\.com\//i.test(input)
-      ? `https://${input.replace(/^https?:\/\//i, "")}`
-      : "";
-  if (!raw) return "";
-
-  try {
-    const parsed = new URL(raw);
-    const host = parsed.hostname.toLowerCase();
-    if (!(host === "walmart.com" || host.endsWith(WALMART_HOST_SUFFIX))) {
-      return "";
-    }
-    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
-      return "";
-    }
-
-    parsed.protocol = "https:";
-    return parsed.toString();
-  } catch {
-    return "";
-  }
+  return normalizeWalmartPublicUrl(value);
 }
 
 export function extractWalmartPublicProductIdFromUrl(url: string): string | null {
-  const sanitized = sanitizePublicWalmartUrl(url);
-  if (!sanitized) return null;
-
-  try {
-    const parsed = new URL(sanitized);
-    const segments = parsed.pathname
-      .split("/")
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-
-    const ipIndex = segments.findIndex((segment) => segment.toLowerCase() === "ip");
-    if (ipIndex >= 0) {
-      const trailing = segments.slice(ipIndex + 1);
-      for (let index = trailing.length - 1; index >= 0; index -= 1) {
-        const candidate = normalizeWalmartPublicProductId(trailing[index]);
-        if (candidate) return candidate;
-      }
-    }
-
-    for (let index = segments.length - 1; index >= 0; index -= 1) {
-      const candidate = normalizeWalmartPublicProductId(segments[index]);
-      if (candidate) return candidate;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return extractWalmartPublicProductIdFromUrlShared(url);
 }
 
 function normalizeImageUrl(value: unknown): string {
@@ -1111,6 +1055,23 @@ export async function searchWalmartProductCandidatesViaSerpApi(input: {
   };
 }
 
+function productIdentifiersForSearch(product: WalmartProductRecord): {
+  productId: string;
+  productIdentifierType: SerpApiProductIdentifierType;
+  upc: string;
+  gtin: string;
+  normalizedPublicWalmartUrl: string;
+} {
+  const resolved = resolveCanonicalWalmartIdentifierFromProductRecord({ product });
+  return {
+    productId: resolved.preferredWalmartProductId,
+    productIdentifierType: resolved.preferredIdentifierType,
+    upc: resolved.upc,
+    gtin: resolved.gtin,
+    normalizedPublicWalmartUrl: resolved.normalizedPublicWalmartUrl,
+  };
+}
+
 function isBarcodeEquivalentProductId(input: {
   productId: string;
   upc: string;
@@ -1118,132 +1079,85 @@ function isBarcodeEquivalentProductId(input: {
 }): boolean {
   const normalizedProductId = normalizeIdentifier(input.productId);
   if (!normalizedProductId) return false;
-  return Boolean(
+  return (
     (input.upc.length > 0 && normalizedProductId === input.upc) ||
-      (input.gtin.length > 0 && normalizedProductId === input.gtin)
+    (input.gtin.length > 0 && normalizedProductId === input.gtin)
   );
 }
 
-function productIdentifiersForSearch(product: WalmartProductRecord): {
-  productId: string;
-  productIdentifierType: SerpApiProductIdentifierType;
-  upc: string;
-  gtin: string;
-} {
-  const normalizedPayload = asObject(product.normalizedPayload);
-  const rawPayload = asObject(product.rawPayload);
-  const upc = normalizeIdentifier(firstNonEmptyString(product.upc));
-  const gtin = normalizeIdentifier(firstNonEmptyString(product.gtin));
-
-  const firstUrlWithProductId = [
-    product.publicWalmartUrl,
-    normalizedPayload?.publicWalmartUrl,
-    rawPayload?.publicWalmartUrl,
-    rawPayload?.productPageUrl,
-    rawPayload?.productUrl,
-    rawPayload?.canonicalUrl,
-    rawPayload?.url,
-  ]
-    .map((value) => asString(value))
-    .find((value) => extractWalmartPublicProductIdFromUrl(value));
-  const productIdFromUrl = firstUrlWithProductId
-    ? extractWalmartPublicProductIdFromUrl(firstUrlWithProductId) ?? ""
-    : "";
-  if (productIdFromUrl) {
-    return {
-      productId: productIdFromUrl,
-      productIdentifierType: "walmartProductIdFromUrl",
-      upc,
-      gtin,
-    };
-  }
-
-  const publicProductId = normalizeWalmartPublicProductId(
-    firstNonEmptyString(
-      product.publicWalmartProductId,
-      normalizedPayload?.publicWalmartProductId,
-      rawPayload?.publicWalmartProductId
-    )
-  );
-  if (
-    publicProductId &&
-    !isBarcodeEquivalentProductId({ productId: publicProductId, upc, gtin })
-  ) {
-    return {
-      productId: publicProductId,
-      productIdentifierType: "walmartPublicProductId",
-      upc,
-      gtin,
-    };
-  }
-
-  const itemId = normalizeWalmartPublicProductId(
-    firstNonEmptyString(
-      product.itemId,
-      normalizedPayload?.itemId,
-      rawPayload?.itemId,
-      rawPayload?.usItemId
-    )
-  );
-  if (itemId && !isBarcodeEquivalentProductId({ productId: itemId, upc, gtin })) {
-    return {
-      productId: itemId,
-      productIdentifierType: "walmartItemId",
-      upc,
-      gtin,
-    };
-  }
-
-  const payloadProductId = normalizeWalmartPublicProductId(
-    firstNonEmptyString(rawPayload?.productId, rawPayload?.product_id, normalizedPayload?.productId)
-  );
-  if (
-    payloadProductId &&
-    !isBarcodeEquivalentProductId({ productId: payloadProductId, upc, gtin })
-  ) {
-    return {
-      productId: payloadProductId,
-      productIdentifierType: "walmartPayloadProductId",
-      upc,
-      gtin,
-    };
-  }
-
-  return {
-    productId: "",
-    productIdentifierType: "none",
-    upc,
-    gtin,
-  };
+function identifierTypeForBarcodeLike(value: string): SerpApiProductIdentifierType {
+  return /^\d{12}$/.test(value) ? "upc_skipped_for_product_lookup" : "gtin_skipped_for_product_lookup";
 }
 
 function resolvePreferredProductIdentifierContext(input: {
   explicitProductId: string;
   requestedProductIdFromUrl: string | null;
-  productRecordProductId: string;
-  productRecordIdentifierType: SerpApiProductIdentifierType;
+  productRecord: ReturnType<typeof productIdentifiersForSearch>;
 }): { productId: string; identifierType: SerpApiProductIdentifierType } {
-  if (input.explicitProductId) {
-    return {
-      productId: input.explicitProductId,
-      identifierType: "explicitWalmartProductId",
-    };
-  }
   if (input.requestedProductIdFromUrl) {
     return {
       productId: input.requestedProductIdFromUrl,
-      identifierType: "walmartProductIdFromUrl",
+      identifierType: "url_product_id",
     };
   }
-  if (input.productRecordProductId) {
+
+  if (
+    input.explicitProductId &&
+    !isBarcodeEquivalentProductId({
+      productId: input.explicitProductId,
+      upc: input.productRecord.upc,
+      gtin: input.productRecord.gtin,
+    })
+  ) {
+    if (isLikelyGtinOrUpc(input.explicitProductId)) {
+      return {
+        productId: "",
+        identifierType: identifierTypeForBarcodeLike(input.explicitProductId),
+      };
+    }
     return {
-      productId: input.productRecordProductId,
-      identifierType: input.productRecordIdentifierType,
+      productId: input.explicitProductId,
+      identifierType: "explicit_product_id",
     };
   }
+
+  if (
+    input.explicitProductId &&
+    isBarcodeEquivalentProductId({
+      productId: input.explicitProductId,
+      upc: input.productRecord.upc,
+      gtin: input.productRecord.gtin,
+    })
+  ) {
+    return {
+      productId: "",
+      identifierType:
+        input.productRecord.upc &&
+        normalizeIdentifier(input.explicitProductId) === input.productRecord.upc
+          ? "upc_skipped_for_product_lookup"
+          : "gtin_skipped_for_product_lookup",
+    };
+  }
+
+  if (input.productRecord.productId) {
+    if (
+      input.productRecord.productIdentifierType === "explicit_product_id" &&
+      isLikelyGtinOrUpc(input.productRecord.productId)
+    ) {
+      return {
+        productId: "",
+        identifierType: identifierTypeForBarcodeLike(input.productRecord.productId),
+      };
+    }
+    return {
+      productId: input.productRecord.productId,
+      identifierType: input.productRecord.productIdentifierType,
+    };
+  }
+
   return {
     productId: "",
-    identifierType: "none",
+    identifierType: input.productRecord.productIdentifierType || "missing_product_identifier",
   };
 }
 
@@ -1270,47 +1184,6 @@ function isProductNotFoundProviderMessage(statusReason: string): boolean {
     lowered.includes("product not found") ||
     lowered.includes("no product found")
   );
-}
-
-function firstMatchedCandidateByIdentifier(input: {
-  candidates: WalmartSearchCandidate[];
-  upc: string;
-  gtin: string;
-}): {
-  status: "found" | "ambiguous" | "none";
-  candidate: WalmartSearchCandidate | null;
-} {
-  const identifierMatches = input.candidates.filter((candidate) => {
-    const candidateUpc = normalizeIdentifier(candidate.upc);
-    const candidateGtin = normalizeIdentifier(candidate.gtin);
-
-    if (input.upc && candidateUpc === input.upc) return true;
-    if (input.gtin && candidateGtin === input.gtin) return true;
-    return false;
-  });
-
-  const withImages = identifierMatches.filter(
-    (candidate) => Boolean(candidate.primaryImageUrl || candidate.galleryImageUrls.length)
-  );
-
-  if (withImages.length === 1) {
-    return {
-      status: "found",
-      candidate: withImages[0],
-    };
-  }
-
-  if (withImages.length > 1) {
-    return {
-      status: "ambiguous",
-      candidate: null,
-    };
-  }
-
-  return {
-    status: "none",
-    candidate: null,
-  };
 }
 
 function firstMatchedCandidateByTitleBrand(candidates: WalmartSearchCandidate[], product: WalmartProductRecord): {
@@ -1377,6 +1250,8 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
   const requestedProductIdFromUrl = requestedUrl
     ? extractWalmartPublicProductIdFromUrl(requestedUrl)
     : null;
+  const productIdentifiers = productIdentifiersForSearch(input.product);
+  const effectiveRequestedUrl = requestedUrl || productIdentifiers.normalizedPublicWalmartUrl;
 
   if ((input.publicWalmartUrl ?? "").trim() && !requestedUrl) {
     return asFailureResolution({
@@ -1404,7 +1279,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       errorCode: "SERPAPI_NOT_CONNECTED",
       statusReason: "SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment.",
       matchMethod: null,
-      publicWalmartUrl: requestedUrl,
+      publicWalmartUrl: effectiveRequestedUrl,
       publicWalmartProductId: requestedProductIdFromUrl ?? "",
       diagnostics: {
         provider: "serpapi",
@@ -1418,15 +1293,14 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     });
   }
 
-  const productIdentifiers = productIdentifiersForSearch(input.product);
   const explicitProductId = normalizeWalmartPublicProductId(input.publicWalmartProductId);
   const preferredProductIdentifier = resolvePreferredProductIdentifierContext({
     explicitProductId,
     requestedProductIdFromUrl,
-    productRecordProductId: productIdentifiers.productId,
-    productRecordIdentifierType: productIdentifiers.productIdentifierType,
+    productRecord: productIdentifiers,
   });
   const preferredProductId = preferredProductIdentifier.productId;
+  const identifierStrategyNote = `Identifier strategy: ${preferredProductIdentifier.identifierType}.`;
 
   if ((input.publicWalmartProductId ?? "").trim() && !explicitProductId) {
     return asFailureResolution({
@@ -1434,7 +1308,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       errorCode: "INVALID_PUBLIC_WALMART_PRODUCT_ID",
       statusReason: "Public Walmart product ID is invalid.",
       matchMethod: null,
-      publicWalmartUrl: requestedUrl,
+      publicWalmartUrl: effectiveRequestedUrl,
       publicWalmartProductId: "",
       diagnostics: {
         provider: "serpapi",
@@ -1448,7 +1322,14 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     });
   }
 
-  if (preferredProductId) {
+  const canUseProductLookup =
+    Boolean(preferredProductId) &&
+    preferredProductIdentifier.identifierType !== "upc_skipped_for_product_lookup" &&
+    preferredProductIdentifier.identifierType !== "gtin_skipped_for_product_lookup" &&
+    preferredProductIdentifier.identifierType !== "search_title_brand" &&
+    preferredProductIdentifier.identifierType !== "missing_product_identifier";
+
+  if (canUseProductLookup) {
     const byProductIdSearch = await searchWalmartProductCandidatesViaSerpApi({
       apiKey: credentials.apiKey,
       query: preferredProductId,
@@ -1462,10 +1343,10 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       if (exactCandidate) {
         return asFoundResolution({
           statusReason: "Public Walmart listing images found via SerpApi search payload.",
-          matchMethod: preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+          matchMethod: preferredProductIdentifier.identifierType === "url_product_id"
             ? "public_url_product_id"
             : "serpapi_product_id",
-          publicWalmartUrl: requestedUrl,
+          publicWalmartUrl: effectiveRequestedUrl,
           publicWalmartProductId: exactCandidate.productId,
           primaryImageUrl: exactCandidate.primaryImageUrl || exactCandidate.galleryImageUrls[0] || "",
           galleryImageUrls: dedupeImageUrls([
@@ -1482,7 +1363,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
             candidateCount: byProductIdSearch.candidates.length,
             imageCount: exactCandidate.galleryImageUrls.length,
             matchMethod:
-              preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+              preferredProductIdentifier.identifierType === "url_product_id"
                 ? "public_url_product_id"
                 : "serpapi_product_id",
           },
@@ -1499,12 +1380,12 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       return asFailureResolution({
         imageSyncStatus: "failed",
         errorCode: byProductIdSearch.errorCode ?? "SERPAPI_PROVIDER_ERROR",
-        statusReason: byProductIdSearch.statusReason,
+        statusReason: `${byProductIdSearch.statusReason} ${identifierStrategyNote}`,
         matchMethod:
-          preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+          preferredProductIdentifier.identifierType === "url_product_id"
             ? "public_url_product_id"
             : "serpapi_product_id",
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: preferredProductId,
         diagnostics: {
           provider: "serpapi",
@@ -1515,7 +1396,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
           candidateCount: 0,
           imageCount: 0,
           matchMethod:
-            preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+            preferredProductIdentifier.identifierType === "url_product_id"
               ? "public_url_product_id"
               : "serpapi_product_id",
         },
@@ -1528,7 +1409,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     });
 
     const matchMethod: WalmartImageMatchMethod =
-      preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+      preferredProductIdentifier.identifierType === "url_product_id"
         ? "public_url_product_id"
         : "serpapi_product_id";
 
@@ -1536,7 +1417,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       return asFoundResolution({
         statusReason: byProductId.statusReason,
         matchMethod,
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: byProductId.productId,
         primaryImageUrl: byProductId.primaryImageUrl,
         galleryImageUrls: byProductId.galleryImageUrls,
@@ -1574,9 +1455,9 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       return asFailureResolution({
         imageSyncStatus: "failed",
         errorCode: byProductId.errorCode ?? "SERPAPI_PROVIDER_ERROR",
-        statusReason: byProductId.statusReason,
+        statusReason: `${byProductId.statusReason} ${identifierStrategyNote}`,
         matchMethod,
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: preferredProductId,
         diagnostics: {
           provider: "serpapi",
@@ -1592,107 +1473,14 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     }
   }
 
-  if (productIdentifiers.upc || productIdentifiers.gtin) {
-    const queryIdentifier = productIdentifiers.upc || productIdentifiers.gtin;
-    const endpointMatchMethod: WalmartImageMatchMethod = productIdentifiers.upc
-      ? "serpapi_search_upc"
-      : "serpapi_search_gtin";
-
-    const searchResponse = await searchWalmartProductCandidatesViaSerpApi({
-      apiKey: credentials.apiKey,
-      query: queryIdentifier,
-    });
-
-    if (!searchResponse.ok) {
-      return asFailureResolution({
-        imageSyncStatus:
-          searchResponse.statusCategory === "invalid_key" ||
-          searchResponse.statusCategory === "forbidden" ||
-          searchResponse.statusCategory === "rate_limited" ||
-          searchResponse.statusCategory === "provider_error" ||
-          searchResponse.statusCategory === "network_error" ||
-          searchResponse.statusCategory === "malformed_response" ||
-          searchResponse.statusCategory === "validation_error"
-            ? "failed"
-            : "not_found",
-        errorCode: searchResponse.errorCode ?? "SERPAPI_PROVIDER_ERROR",
-        statusReason: searchResponse.statusReason,
-        matchMethod: endpointMatchMethod,
-        publicWalmartUrl: requestedUrl,
-        publicWalmartProductId: preferredProductId ?? "",
-        diagnostics: {
-          provider: "serpapi",
-          endpointFamily: "walmart_search",
-          statusCategory: searchResponse.statusCategory,
-          productId: preferredProductId ?? null,
-          productIdentifierType: productIdentifiers.upc
-            ? "upcFallbackSearch"
-            : "gtinFallbackSearch",
-          candidateCount: 0,
-          imageCount: 0,
-          matchMethod: endpointMatchMethod,
-        },
-      });
-    }
-
-    const identifierMatch = firstMatchedCandidateByIdentifier({
-      candidates: searchResponse.candidates,
-      upc: productIdentifiers.upc,
-      gtin: productIdentifiers.gtin,
-    });
-
-    if (identifierMatch.status === "found" && identifierMatch.candidate) {
-      const found = identifierMatch.candidate;
-      return asFoundResolution({
-        statusReason: "Public Walmart listing images found via SerpApi search.",
-        matchMethod: endpointMatchMethod,
-        publicWalmartUrl: requestedUrl,
-        publicWalmartProductId: found.productId,
-        primaryImageUrl: found.primaryImageUrl || found.galleryImageUrls[0] || "",
-        galleryImageUrls: dedupeImageUrls([
-          found.primaryImageUrl,
-          ...found.galleryImageUrls,
-        ]),
-        variantImageUrls: found.variantImageUrls,
-        diagnostics: {
-          provider: "serpapi",
-          endpointFamily: "walmart_search",
-          statusCategory: "ok",
-          productId: found.productId,
-          productIdentifierType: productIdentifiers.upc
-            ? "upcFallbackSearch"
-            : "gtinFallbackSearch",
-          candidateCount: searchResponse.candidates.length,
-          imageCount: found.galleryImageUrls.length,
-          matchMethod: endpointMatchMethod,
-        },
-      });
-    }
-
-    if (identifierMatch.status === "ambiguous") {
-      return asFailureResolution({
-        imageSyncStatus: "ambiguous",
-        errorCode: "SERPAPI_AMBIGUOUS_MATCH",
-        statusReason:
-          "Multiple public Walmart listing candidates matched this product identifier. Provide a direct public Walmart listing URL.",
-        matchMethod: endpointMatchMethod,
-        publicWalmartUrl: requestedUrl,
-        publicWalmartProductId: preferredProductId ?? "",
-        diagnostics: {
-          provider: "serpapi",
-          endpointFamily: "walmart_search",
-          statusCategory: "ambiguous",
-          productId: preferredProductId ?? null,
-          productIdentifierType: productIdentifiers.upc
-            ? "upcFallbackSearch"
-            : "gtinFallbackSearch",
-          candidateCount: searchResponse.candidates.length,
-          imageCount: 0,
-          matchMethod: endpointMatchMethod,
-        },
-      });
-    }
-  }
+  const barcodeSkipIdentifierType =
+    preferredProductIdentifier.identifierType === "upc_skipped_for_product_lookup" ||
+    preferredProductIdentifier.identifierType === "gtin_skipped_for_product_lookup"
+      ? preferredProductIdentifier.identifierType
+      : null;
+  const barcodeSkipReason = barcodeSkipIdentifierType
+    ? `Identifier strategy: ${barcodeSkipIdentifierType}.`
+    : null;
 
   const titleBrandQuery = `${asString(input.product.brand)} ${asString(input.product.title)}`.trim();
   if (titleBrandQuery) {
@@ -1714,16 +1502,18 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
             ? "failed"
             : "not_found",
         errorCode: titleSearch.errorCode ?? "SERPAPI_PROVIDER_ERROR",
-        statusReason: titleSearch.statusReason,
+        statusReason: barcodeSkipReason
+          ? `${titleSearch.statusReason} ${barcodeSkipReason}`
+          : `${titleSearch.statusReason} ${identifierStrategyNote}`,
         matchMethod: "serpapi_search_title_brand",
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: preferredProductId ?? "",
         diagnostics: {
           provider: "serpapi",
           endpointFamily: "walmart_search",
           statusCategory: titleSearch.statusCategory,
           productId: preferredProductId ?? null,
-          productIdentifierType: "titleBrandFallbackSearch",
+          productIdentifierType: "search_title_brand",
           candidateCount: 0,
           imageCount: 0,
           matchMethod: "serpapi_search_title_brand",
@@ -1735,9 +1525,11 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     if (titleBrandMatch.status === "found" && titleBrandMatch.candidate) {
       const found = titleBrandMatch.candidate;
       return asFoundResolution({
-        statusReason: "Public Walmart listing images found via title+brand match through SerpApi.",
+        statusReason: barcodeSkipReason
+          ? `Public Walmart listing images found via title+brand match through SerpApi. ${barcodeSkipReason}`
+          : "Public Walmart listing images found via title+brand match through SerpApi.",
         matchMethod: "serpapi_search_title_brand",
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: found.productId,
         primaryImageUrl: found.primaryImageUrl || found.galleryImageUrls[0] || "",
         galleryImageUrls: dedupeImageUrls([
@@ -1750,7 +1542,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
           endpointFamily: "walmart_search",
           statusCategory: "ok",
           productId: found.productId,
-          productIdentifierType: "titleBrandFallbackSearch",
+          productIdentifierType: "search_title_brand",
           candidateCount: titleSearch.candidates.length,
           imageCount: found.galleryImageUrls.length,
           matchMethod: "serpapi_search_title_brand",
@@ -1762,17 +1554,18 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       return asFailureResolution({
         imageSyncStatus: "ambiguous",
         errorCode: "SERPAPI_AMBIGUOUS_MATCH",
-        statusReason:
-          "Multiple title+brand candidates were found. Add a direct public Walmart listing URL for a confident match.",
+        statusReason: barcodeSkipReason
+          ? `Multiple title+brand candidates were found. Add a direct public Walmart listing URL for a confident match. ${barcodeSkipReason}`
+          : "Multiple title+brand candidates were found. Add a direct public Walmart listing URL for a confident match.",
         matchMethod: "serpapi_search_title_brand",
-        publicWalmartUrl: requestedUrl,
+        publicWalmartUrl: effectiveRequestedUrl,
         publicWalmartProductId: preferredProductId ?? "",
         diagnostics: {
           provider: "serpapi",
           endpointFamily: "walmart_search",
           statusCategory: "ambiguous",
           productId: preferredProductId ?? null,
-          productIdentifierType: "titleBrandFallbackSearch",
+          productIdentifierType: "search_title_brand",
           candidateCount: titleSearch.candidates.length,
           imageCount: 0,
           matchMethod: "serpapi_search_title_brand",
@@ -1781,22 +1574,21 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     }
   }
 
-  const hasSafeIdentifiers =
-    Boolean(preferredProductId) || Boolean(productIdentifiers.upc) || Boolean(productIdentifiers.gtin);
+  const hasSafeIdentifiers = Boolean(canUseProductLookup || titleBrandQuery);
 
   return asFailureResolution({
     imageSyncStatus: "not_found",
     errorCode: "SERPAPI_NOT_FOUND",
     statusReason: hasSafeIdentifiers
-      ? "No public Walmart listing images were found for this product."
-      : "No public product ID or UPC/GTIN available for safe matching.",
+      ? `No public Walmart listing images were found for this product. ${identifierStrategyNote}`
+      : `No safe Walmart product identifier is available for lookup. ${identifierStrategyNote}`,
     matchMethod:
-      preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+      preferredProductIdentifier.identifierType === "url_product_id"
         ? "public_url_product_id"
         : preferredProductId
         ? "serpapi_product_id"
         : null,
-    publicWalmartUrl: requestedUrl,
+    publicWalmartUrl: effectiveRequestedUrl,
     publicWalmartProductId: preferredProductId ?? "",
     diagnostics: {
       provider: "serpapi",
@@ -1807,7 +1599,7 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
       candidateCount: 0,
       imageCount: 0,
       matchMethod:
-        preferredProductIdentifier.identifierType === "walmartProductIdFromUrl"
+        preferredProductIdentifier.identifierType === "url_product_id"
           ? "public_url_product_id"
           : preferredProductId
           ? "serpapi_product_id"
@@ -1824,7 +1616,6 @@ export const serpApiWalmartImageInternals = {
   sanitizeSerpApiErrorDetail,
   extractSerpApiErrorDetail,
   normalizeIdentifier,
-  firstMatchedCandidateByIdentifier,
   firstMatchedCandidateByTitleBrand,
   normalizeCandidateScore,
   tokenizeText,
