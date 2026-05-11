@@ -128,6 +128,40 @@ describe("Walmart Item Search image enrichment", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("never sends UPC/GTIN barcode through generic query parameter", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const parsed = new URL(url);
+      expect(parsed.searchParams.get("upc")).toBe("852764008491");
+      expect(parsed.searchParams.get("query")).toBeNull();
+      return buildSearchResponse([
+        {
+          itemId: "BARCODE-ITEM-1",
+          upc: "852764008491",
+          productName: "Barcode Match Product",
+          brand: "BrandX",
+          images: [{ url: "https://images.example.com/barcode.jpg" }],
+        },
+      ]);
+    });
+
+    const result = await enrichWalmartImageFromItemSearch({
+      accessToken: "token",
+      product: {
+        gtin: "",
+        upc: "852764008491",
+        itemId: "",
+        wpid: "",
+        title: "Barcode Match Product",
+        brand: "BrandX",
+      },
+    });
+
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.matchMethod).toBe("upc");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("returns found for exact itemId query fallback", async () => {
     vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;

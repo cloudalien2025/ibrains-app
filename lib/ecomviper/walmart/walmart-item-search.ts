@@ -603,8 +603,9 @@ function resolveAttempts(product: Pick<WalmartProductRecord, "gtin" | "upc" | "i
     queue.push({ method, value: normalizedValue });
   };
 
-  push("gtin", product.gtin);
+  // Prefer UPC first, then GTIN, to match Walmart Item Search parameter behavior.
   push("upc", product.upc);
+  push("gtin", product.gtin);
   push("itemId", product.itemId);
   push("wpid", product.wpid);
 
@@ -811,6 +812,8 @@ export async function enrichWalmartImageFromItemSearch(params: {
   let ambiguousChoice: CandidateEvaluation | null = null;
   let ambiguousMethod: WalmartImageMatchMethod | null = null;
   let notFoundReason = "Item Search returned no usable image.";
+  let notFoundCandidate: SearchCandidate | null = null;
+  let notFoundMethod: WalmartImageMatchMethod | null = null;
 
   const intent: SearchIntent = {
     itemId: asString(params.product.itemId),
@@ -859,6 +862,17 @@ export async function enrichWalmartImageFromItemSearch(params: {
       continue;
     }
 
+    if (
+      evaluated.candidate &&
+      (evaluated.candidate.exactGtin ||
+        evaluated.candidate.exactUpc ||
+        evaluated.candidate.exactItemId ||
+        evaluated.candidate.titleCoverage >= 0.72)
+    ) {
+      notFoundCandidate = evaluated.candidate;
+      notFoundMethod = attempt.method;
+    }
+
     if (evaluated.reason) {
       notFoundReason = evaluated.reason;
     }
@@ -883,9 +897,9 @@ export async function enrichWalmartImageFromItemSearch(params: {
       syncedAt,
       status: "not_found",
       reason: notFoundReason,
-      matchMethod: null,
-      candidate: null,
-      candidateCount: 0,
+      matchMethod: notFoundMethod,
+      candidate: notFoundCandidate,
+      candidateCount: notFoundCandidate ? 1 : 0,
       selectedScore: null,
       runnerUpScore: null,
       diagnostics,

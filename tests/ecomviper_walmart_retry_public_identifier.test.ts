@@ -5,6 +5,10 @@ const enrichmentQueueMocks = vi.hoisted(() => ({
   runPublicListingImageEnrichmentQueue: vi.fn(),
 }));
 
+const authMocks = vi.hoisted(() => ({
+  requestWalmartTokenForUser: vi.fn(),
+}));
+
 vi.mock("@/lib/ecomviper/walmart/walmart-import-enrichment", async () => {
   const actual =
     await vi.importActual<typeof import("@/lib/ecomviper/walmart/walmart-import-enrichment")>(
@@ -14,6 +18,17 @@ vi.mock("@/lib/ecomviper/walmart/walmart-import-enrichment", async () => {
   return {
     ...actual,
     runPublicListingImageEnrichmentQueue: enrichmentQueueMocks.runPublicListingImageEnrichmentQueue,
+  };
+});
+
+vi.mock("@/lib/ecomviper/walmart/walmart-auth", async () => {
+  const actual =
+    await vi.importActual<typeof import("@/lib/ecomviper/walmart/walmart-auth")>(
+      "@/lib/ecomviper/walmart/walmart-auth"
+    );
+  return {
+    ...actual,
+    requestWalmartTokenForUser: authMocks.requestWalmartTokenForUser,
   };
 });
 
@@ -36,6 +51,10 @@ describe("Walmart retry enrichment identifier repair", () => {
             enrichmentQueuedCount: products.length,
             enrichmentCompletedCount: products.length,
             foundCount: 0,
+            walmartSearchResolvedCount: 0,
+            walmartSearchImageFoundCount: 0,
+            serpApiFallbackFoundCount: 0,
+            walmartSearchNotFoundCount: 0,
             notFoundCount: 0,
             ambiguousCount: 0,
             failedCount: 0,
@@ -55,10 +74,32 @@ describe("Walmart retry enrichment identifier repair", () => {
               malformedResponseCount: 0,
               unknownErrorCount: 0,
             },
+            identifierPathCounts: {
+              seller_catalog_only: 0,
+              walmart_search_upc: 0,
+              walmart_search_gtin: 0,
+              walmart_search_title_brand: 0,
+              public_item_id_direct: 0,
+              serpapi_public_item_id: 0,
+              serpapi_title_brand_fallback: 0,
+              skipped_gtin_as_product_id: 0,
+              walmart_search_not_found: 0,
+              no_searchable_identifier: 0,
+            },
           },
         };
       }
     );
+    authMocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-retry",
+    });
   });
 
   it("backfills Walmart product ID from persisted Walmart URL before retry queue runs", async () => {
@@ -106,6 +147,7 @@ describe("Walmart retry enrichment identifier repair", () => {
     expect(enrichmentQueueMocks.runPublicListingImageEnrichmentQueue).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: "user_ibrains",
+        accessToken: "wm_token",
         products: [
           expect.objectContaining({
             sku: "WMT-URL-REPAIR-1",
