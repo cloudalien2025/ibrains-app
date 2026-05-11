@@ -145,6 +145,23 @@ describe("Walmart products client UX", () => {
     expect(html).toContain(">Resolve images<");
   });
 
+  it("normalizes legacy generic SerpApi row error copy to provider-error wording", () => {
+    const html = renderToStaticMarkup(
+      <WalmartProductsClient
+        products={[
+          createProduct({
+            imageStatusMessage: "SerpApi returned an error response.",
+            imageSyncStatus: "failed",
+            imageSource: "public_walmart_listing_serpapi",
+          }),
+        ]}
+      />
+    );
+
+    expect(html).toContain("SerpApi returned a provider error.");
+    expect(html).not.toContain("SerpApi returned an error response.");
+  });
+
   it("shows draft-aware brand value with pending draft indicator", () => {
     const html = renderToStaticMarkup(
       <WalmartProductsClient

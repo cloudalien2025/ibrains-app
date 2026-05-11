@@ -95,6 +95,24 @@ export interface WalmartSerpApiConnectionStatus {
   saveSupported: boolean;
 }
 
+export type WalmartSerpApiProviderStatus =
+  | "connected"
+  | "not_connected"
+  | "invalid_key"
+  | "forbidden"
+  | "rate_limited"
+  | "provider_error"
+  | "unknown_error";
+
+export type WalmartImportErrorCategory =
+  | "none"
+  | "walmart_not_connected"
+  | "walmart_auth"
+  | "walmart_permission"
+  | "walmart_rate_limited"
+  | "walmart_provider_error"
+  | "import_runtime_error";
+
 export type WalmartProductStatus = "active" | "attention" | "draft" | "sync_failed";
 export type WalmartInventoryStatus = "known" | "unknown" | "out_of_stock";
 export type WalmartImageStatus = "image_available" | "catalog_missing" | "enrichment_unconfigured";
@@ -256,6 +274,21 @@ export interface WalmartImportResult {
     enrichmentProviderConnected?: boolean;
     lastEnrichedAt?: string | null;
     imageEnrichmentNoImageReason?: string | null;
+    serpApiStatus?: WalmartSerpApiProviderStatus;
+    serpApiStatusReason?: string | null;
+    serpApiCanAttempt?: boolean;
+    enrichmentErrorCategories?: {
+      invalidKeyCount: number;
+      forbiddenCount: number;
+      rateLimitedCount: number;
+      badRequestCount: number;
+      providerErrorCount: number;
+      networkErrorCount: number;
+      malformedResponseCount: number;
+      unknownErrorCount: number;
+    };
+    importErrorCategory?: WalmartImportErrorCategory;
+    importErrorReason?: string | null;
     imageSource?: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi";
     itemReportRequested?: boolean;
     itemReportDownloaded?: boolean;

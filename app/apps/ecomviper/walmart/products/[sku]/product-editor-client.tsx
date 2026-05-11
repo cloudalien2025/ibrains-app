@@ -1080,6 +1080,15 @@ export default function ProductEditorClient({
     if (code === "SERPAPI_AUTH_FAILED") {
       return "SerpApi authentication failed. Verify your SerpApi key on the Connect page.";
     }
+    if (code === "SERPAPI_INVALID_KEY") {
+      return "SerpApi key was rejected. Verify your key on the Connect page.";
+    }
+    if (code === "SERPAPI_FORBIDDEN") {
+      return "SerpApi account does not have permission for this request.";
+    }
+    if (code === "SERPAPI_BAD_REQUEST") {
+      return "SerpApi rejected this image lookup request.";
+    }
     if (code === "SERPAPI_RATE_LIMITED") {
       return "SerpApi rate limited this request. Retry in a moment.";
     }

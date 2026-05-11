@@ -886,6 +886,154 @@ describe("walmart product import", () => {
     expect(result.importDiagnostics?.enrichmentProviderConnected).toBe(false);
     expect(result.importDiagnostics?.imageSkippedNoProviderCount).toBe(1);
     expect(result.importDiagnostics?.imageEnrichmentNoImageReason).toBe("SerpApi is not connected.");
+    expect(result.importDiagnostics?.serpApiStatus).toBe("not_connected");
+    expect(result.importDiagnostics?.serpApiCanAttempt).toBe(false);
+  });
+
+  it("categorizes SerpApi invalid-key failures without marking provider as disconnected", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-invalid-key",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: true,
+      apiKey: "serpapi_bad_key",
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "failed",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "SerpApi key was rejected.",
+      imageMatchMethod: "serpapi_product_id",
+      publicWalmartUrl: "",
+      publicWalmartProductId: "18410702298",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_product",
+        statusCategory: "invalid_key",
+        productId: "18410702298",
+        candidateCount: 0,
+        imageCount: 0,
+        matchMethod: "serpapi_product_id",
+      },
+      errorCode: "SERPAPI_INVALID_KEY",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "SERPAPI-INVALID-KEY-1",
+            productName: "Invalid Key Product",
+            brand: "BrandX",
+            itemId: "18410702298",
+            availability: "In_stock",
+            price: { amount: "11.00" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "SERPAPI-INVALID-KEY-1": {
+          sku: "SERPAPI-INVALID-KEY-1",
+          quantity: { unit: "EACH", amount: 2 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "SERPAPI-INVALID-KEY-1");
+
+    expect(result.importDiagnostics?.serpApiStatus).toBe("invalid_key");
+    expect(result.importDiagnostics?.serpApiStatusReason).toBe("SerpApi key was rejected.");
+    expect(result.importDiagnostics?.imageFailedCount).toBe(1);
+    expect(result.importDiagnostics?.enrichmentErrorCategories?.invalidKeyCount).toBe(1);
+    expect(product?.imageSource).toBe("public_walmart_listing_serpapi");
+    expect(product?.imageSyncStatus).toBe("failed");
+    expect(product?.imageStatusMessage).toBe("SerpApi key was rejected.");
+  });
+
+  it("categorizes SerpApi forbidden failures with provider warning reason", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-forbidden",
+    });
+
+    serpApiMocks.getSerpApiCredentialsForUser.mockResolvedValue({
+      connected: true,
+      apiKey: "serpapi_forbidden_key",
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
+      imageSyncStatus: "failed",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "SerpApi account does not have permission.",
+      imageMatchMethod: "serpapi_product_id",
+      publicWalmartUrl: "",
+      publicWalmartProductId: "18410702298",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-10T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_product",
+        statusCategory: "forbidden",
+        productId: "18410702298",
+        candidateCount: 0,
+        imageCount: 0,
+        matchMethod: "serpapi_product_id",
+      },
+      errorCode: "SERPAPI_FORBIDDEN",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "SERPAPI-FORBIDDEN-1",
+            productName: "Forbidden Product",
+            brand: "BrandX",
+            itemId: "18410702298",
+            availability: "In_stock",
+            price: { amount: "11.00" },
+          },
+        ],
+      },
+      inventoryBySku: {
+        "SERPAPI-FORBIDDEN-1": {
+          sku: "SERPAPI-FORBIDDEN-1",
+          quantity: { unit: "EACH", amount: 2 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+
+    expect(result.importDiagnostics?.serpApiStatus).toBe("forbidden");
+    expect(result.importDiagnostics?.serpApiStatusReason).toBe("SerpApi account does not have permission.");
+    expect(result.importDiagnostics?.enrichmentErrorCategories?.forbiddenCount).toBe(1);
+    expect(result.importDiagnostics?.imageEnrichmentNoImageReason).toBe(
+      "SerpApi account does not have permission."
+    );
   });
 
   it("treats missing inventory as unknown and only flags out-of-stock on explicit zero quantity", async () => {

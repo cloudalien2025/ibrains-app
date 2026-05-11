@@ -19,18 +19,26 @@ type SerpApiStatusCategory =
   | "not_found"
   | "ambiguous"
   | "validation_error"
-  | "auth_error"
+  | "invalid_key"
+  | "forbidden"
   | "rate_limited"
   | "provider_error"
   | "network_error"
+  | "malformed_response"
   | "not_configured";
 
 type SerpApiResolveErrorCode =
   | "SERPAPI_NOT_CONNECTED"
   | "INVALID_PUBLIC_WALMART_URL"
   | "INVALID_PUBLIC_WALMART_PRODUCT_ID"
+  | "SERPAPI_INVALID_KEY"
+  | "SERPAPI_FORBIDDEN"
   | "SERPAPI_AUTH_FAILED"
   | "SERPAPI_RATE_LIMITED"
+  | "SERPAPI_BAD_REQUEST"
+  | "SERPAPI_PROVIDER_ERROR"
+  | "SERPAPI_NETWORK_ERROR"
+  | "SERPAPI_MALFORMED_RESPONSE"
   | "SERPAPI_REQUEST_FAILED"
   | "SERPAPI_NO_IMAGES_FOUND"
   | "SERPAPI_AMBIGUOUS_MATCH"
@@ -330,11 +338,25 @@ function sanitizeSerpApiHttpError(status: number): {
   errorCode: SerpApiResolveErrorCode;
   message: string;
 } {
-  if (status === 401 || status === 403) {
+  if (status === 400) {
     return {
-      statusCategory: "auth_error",
-      errorCode: "SERPAPI_AUTH_FAILED",
-      message: "SerpApi authentication failed. Verify your SerpApi key.",
+      statusCategory: "validation_error",
+      errorCode: "SERPAPI_BAD_REQUEST",
+      message: "SerpApi rejected request parameters.",
+    };
+  }
+  if (status === 401) {
+    return {
+      statusCategory: "invalid_key",
+      errorCode: "SERPAPI_INVALID_KEY",
+      message: "SerpApi key was rejected.",
+    };
+  }
+  if (status === 403) {
+    return {
+      statusCategory: "forbidden",
+      errorCode: "SERPAPI_FORBIDDEN",
+      message: "SerpApi account does not have permission.",
     };
   }
   if (status === 429) {
@@ -347,7 +369,7 @@ function sanitizeSerpApiHttpError(status: number): {
   if (status >= 500) {
     return {
       statusCategory: "provider_error",
-      errorCode: "SERPAPI_REQUEST_FAILED",
+      errorCode: "SERPAPI_PROVIDER_ERROR",
       message: "SerpApi provider request failed. Try again shortly.",
     };
   }
@@ -387,7 +409,21 @@ async function fetchSerpApiJson(params: {
       cache: "no-store",
     });
 
-    const payload = (await response.json().catch(() => ({}))) as unknown;
+    const responseText = await response.text();
+    let payload: unknown = {};
+    if (responseText.trim()) {
+      try {
+        payload = JSON.parse(responseText) as unknown;
+      } catch {
+        return {
+          ok: false,
+          payload: {},
+          statusCategory: "malformed_response",
+          errorCode: "SERPAPI_MALFORMED_RESPONSE",
+          statusReason: "SerpApi returned a malformed response.",
+        };
+      }
+    }
 
     if (!response.ok) {
       const mapped = sanitizeSerpApiHttpError(response.status);
@@ -408,9 +444,18 @@ async function fetchSerpApiJson(params: {
         return {
           ok: false,
           payload,
-          statusCategory: "auth_error",
-          errorCode: "SERPAPI_AUTH_FAILED",
-          statusReason: "SerpApi authentication failed. Verify your SerpApi key.",
+          statusCategory: "invalid_key",
+          errorCode: "SERPAPI_INVALID_KEY",
+          statusReason: "SerpApi key was rejected.",
+        };
+      }
+      if (lowered.includes("forbidden") || lowered.includes("permission") || lowered.includes("not allowed")) {
+        return {
+          ok: false,
+          payload,
+          statusCategory: "forbidden",
+          errorCode: "SERPAPI_FORBIDDEN",
+          statusReason: "SerpApi account does not have permission.",
         };
       }
       if (lowered.includes("rate") || lowered.includes("too many")) {
@@ -423,12 +468,22 @@ async function fetchSerpApiJson(params: {
         };
       }
 
+      if (lowered.includes("parameter") || lowered.includes("missing") || lowered.includes("invalid")) {
+        return {
+          ok: false,
+          payload,
+          statusCategory: "validation_error",
+          errorCode: "SERPAPI_BAD_REQUEST",
+          statusReason: "SerpApi rejected request parameters.",
+        };
+      }
+
       return {
         ok: false,
         payload,
         statusCategory: "provider_error",
-        errorCode: "SERPAPI_REQUEST_FAILED",
-        statusReason: "SerpApi returned an error response.",
+        errorCode: "SERPAPI_PROVIDER_ERROR",
+        statusReason: "SerpApi returned a provider error.",
       };
     }
 
@@ -442,7 +497,7 @@ async function fetchSerpApiJson(params: {
       ok: false,
       payload: {},
       statusCategory: "network_error",
-      errorCode: "SERPAPI_REQUEST_FAILED",
+      errorCode: "SERPAPI_NETWORK_ERROR",
       statusReason: "SerpApi request failed due to a network error.",
     };
   }
@@ -618,19 +673,26 @@ function asFailureResolution(input: {
 export async function getSerpApiCredentialsForUser(userId: string): Promise<{
   connected: boolean;
   apiKey: string | null;
+  status: "connected" | "not_connected";
+  statusReason: string | null;
 }> {
   const status = await getWalmartSerpApiConnectionStatusForUser(userId);
   if (!status.connected) {
     return {
       connected: false,
       apiKey: null,
+      status: "not_connected",
+      statusReason: "SerpApi key is missing.",
     };
   }
 
   const apiKey = await getWalmartSerpApiKeyForUser(userId);
+  const connected = Boolean(apiKey?.trim());
   return {
-    connected: Boolean(apiKey?.trim()),
+    connected,
     apiKey: apiKey?.trim() || null,
+    status: connected ? "connected" : "not_connected",
+    statusReason: connected ? null : "SerpApi key is missing.",
   };
 }
 
@@ -978,14 +1040,17 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
     }
 
     if (
-      byProductId.statusCategory === "auth_error" ||
+      byProductId.statusCategory === "invalid_key" ||
+      byProductId.statusCategory === "forbidden" ||
       byProductId.statusCategory === "rate_limited" ||
       byProductId.statusCategory === "provider_error" ||
-      byProductId.statusCategory === "network_error"
+      byProductId.statusCategory === "network_error" ||
+      byProductId.statusCategory === "malformed_response" ||
+      byProductId.statusCategory === "validation_error"
     ) {
       return asFailureResolution({
         imageSyncStatus: "failed",
-        errorCode: byProductId.errorCode ?? "SERPAPI_REQUEST_FAILED",
+        errorCode: byProductId.errorCode ?? "SERPAPI_PROVIDER_ERROR",
         statusReason: byProductId.statusReason,
         matchMethod,
         publicWalmartUrl: requestedUrl,
@@ -1016,8 +1081,17 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
 
     if (!searchResponse.ok) {
       return asFailureResolution({
-        imageSyncStatus: searchResponse.statusCategory === "auth_error" || searchResponse.statusCategory === "rate_limited" ? "failed" : "not_found",
-        errorCode: searchResponse.errorCode ?? "SERPAPI_REQUEST_FAILED",
+        imageSyncStatus:
+          searchResponse.statusCategory === "invalid_key" ||
+          searchResponse.statusCategory === "forbidden" ||
+          searchResponse.statusCategory === "rate_limited" ||
+          searchResponse.statusCategory === "provider_error" ||
+          searchResponse.statusCategory === "network_error" ||
+          searchResponse.statusCategory === "malformed_response" ||
+          searchResponse.statusCategory === "validation_error"
+            ? "failed"
+            : "not_found",
+        errorCode: searchResponse.errorCode ?? "SERPAPI_PROVIDER_ERROR",
         statusReason: searchResponse.statusReason,
         matchMethod: endpointMatchMethod,
         publicWalmartUrl: requestedUrl,
@@ -1096,8 +1170,17 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
 
     if (!titleSearch.ok) {
       return asFailureResolution({
-        imageSyncStatus: titleSearch.statusCategory === "auth_error" || titleSearch.statusCategory === "rate_limited" ? "failed" : "not_found",
-        errorCode: titleSearch.errorCode ?? "SERPAPI_REQUEST_FAILED",
+        imageSyncStatus:
+          titleSearch.statusCategory === "invalid_key" ||
+          titleSearch.statusCategory === "forbidden" ||
+          titleSearch.statusCategory === "rate_limited" ||
+          titleSearch.statusCategory === "provider_error" ||
+          titleSearch.statusCategory === "network_error" ||
+          titleSearch.statusCategory === "malformed_response" ||
+          titleSearch.statusCategory === "validation_error"
+            ? "failed"
+            : "not_found",
+        errorCode: titleSearch.errorCode ?? "SERPAPI_PROVIDER_ERROR",
         statusReason: titleSearch.statusReason,
         matchMethod: "serpapi_search_title_brand",
         publicWalmartUrl: requestedUrl,

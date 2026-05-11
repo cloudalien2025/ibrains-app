@@ -48,14 +48,37 @@ interface ImportPanelState {
   stage: ImportPanelStage;
   percent: number;
   importedCount: number;
+  fetchedCount: number;
   processedCount: number;
+  queuedCount: number;
   foundCount: number;
   missingCount: number;
+  notFoundCount: number;
   ambiguousCount: number;
   failedCount: number;
   skippedNoProviderCount: number;
   providerConnected: boolean;
+  providerStatus:
+    | "connected"
+    | "not_connected"
+    | "invalid_key"
+    | "forbidden"
+    | "rate_limited"
+    | "provider_error"
+    | "unknown_error";
+  providerStatusReason: string | null;
+  providerCanAttempt: boolean;
   noImageReason: string | null;
+  importErrorCategory:
+    | "none"
+    | "walmart_not_connected"
+    | "walmart_auth"
+    | "walmart_permission"
+    | "walmart_rate_limited"
+    | "walmart_provider_error"
+    | "import_runtime_error";
+  importErrorReason: string | null;
+  existingProductsShownCount: number;
   summary: string;
   running: boolean;
 }
@@ -73,7 +96,12 @@ function compareSkuNatural(
 }
 
 function formatImageStatus(product: WalmartEffectiveProductRecord): string {
-  if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
+  if (product.imageStatusMessage?.trim()) {
+    if (product.imageStatusMessage.trim() === "SerpApi returned an error response.") {
+      return "SerpApi returned a provider error.";
+    }
+    return product.imageStatusMessage;
+  }
   if (product.imageSyncStatus === "not_found") {
     if (product.imageSource === "walmart_item_report") return "No matching row found in Walmart Item Report.";
     if (product.imageSource === "public_walmart_listing_serpapi")
@@ -127,6 +155,20 @@ function importStageLabel(stage: ImportPanelStage): string {
   if (stage === "completed_with_warnings") return "Completed with warnings";
   if (stage === "failed") return "Failed";
   return "Idle";
+}
+
+function formatSerpApiProviderStatus(
+  status: ImportPanelState["providerStatus"],
+  fallbackConnected: boolean
+): string {
+  if (status === "connected") return "Connected";
+  if (status === "not_connected") return "Not connected";
+  if (status === "invalid_key") return "Invalid key";
+  if (status === "forbidden") return "Forbidden";
+  if (status === "rate_limited") return "Rate limited";
+  if (status === "provider_error") return "Provider error";
+  if (status === "unknown_error") return "Unknown error";
+  return fallbackConnected ? "Connected" : "Not connected";
 }
 
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
@@ -209,14 +251,23 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       stage: mode === "retry_image_enrichment" ? "enriching_images" : "importing_products",
       percent: mode === "retry_image_enrichment" ? 42 : 12,
       importedCount: 0,
+      fetchedCount: 0,
       processedCount: 0,
+      queuedCount: 0,
       foundCount: 0,
       missingCount: 0,
+      notFoundCount: 0,
       ambiguousCount: 0,
       failedCount: 0,
       skippedNoProviderCount: 0,
       providerConnected: false,
+      providerStatus: "not_connected",
+      providerStatusReason: null,
+      providerCanAttempt: false,
       noImageReason: null,
+      importErrorCategory: "none",
+      importErrorReason: null,
+      existingProductsShownCount: 0,
       summary:
         mode === "retry_image_enrichment"
           ? "Retrying image enrichment..."
@@ -269,14 +320,37 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         importedCount?: number;
         fetchedCount?: number;
         importProgress?: {
-          stage?: "complete" | "completed_with_warnings";
+          stage?: "complete" | "completed_with_warnings" | "failed";
           providerConnected?: boolean;
+          providerStatus?:
+            | "connected"
+            | "not_connected"
+            | "invalid_key"
+            | "forbidden"
+            | "rate_limited"
+            | "provider_error"
+            | "unknown_error";
+          providerStatusReason?: string | null;
+          providerCanAttempt?: boolean;
           noImageReason?: string | null;
+          importErrorCategory?:
+            | "none"
+            | "walmart_not_connected"
+            | "walmart_auth"
+            | "walmart_permission"
+            | "walmart_rate_limited"
+            | "walmart_provider_error"
+            | "import_runtime_error";
+          importErrorReason?: string | null;
+          existingProductsShownCount?: number;
           totals?: {
             importedCount?: number;
+            fetchedCount?: number;
             processedCount?: number;
+            queuedCount?: number;
             imageFoundCount?: number;
             imageMissingCount?: number;
+            imageNotFoundCount?: number;
             imageAmbiguousCount?: number;
             imageFailedCount?: number;
             imageSkippedNoProviderCount?: number;
@@ -296,48 +370,91 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
           enrichmentProcessedCount?: number;
           enrichmentProviderConnected?: boolean;
           imageEnrichmentNoImageReason?: string | null;
+          serpApiStatus?:
+            | "connected"
+            | "not_connected"
+            | "invalid_key"
+            | "forbidden"
+            | "rate_limited"
+            | "provider_error"
+            | "unknown_error";
+          serpApiStatusReason?: string | null;
+          serpApiCanAttempt?: boolean;
         };
         error?: { message?: string };
       };
 
       if (!response.ok) {
-        const failureMessage = payload.error?.message ?? "Import failed.";
+        const failureMessage =
+          payload.importProgress?.importErrorReason ??
+          payload.error?.message ??
+          "Import failed.";
+        const totals = payload.importProgress?.totals;
+        const existingProductsShownCount = payload.importProgress?.existingProductsShownCount ?? 0;
+        const providerConnected = payload.importProgress?.providerConnected ?? false;
+        const providerStatus =
+          payload.importProgress?.providerStatus ??
+          (providerConnected ? "connected" : "not_connected");
+        const summaryWithContext =
+          existingProductsShownCount > 0
+            ? `${failureMessage} Existing products shown below are from the previous successful import.`
+            : failureMessage;
         setMessage(failureMessage);
-        setImportPanel((current) => ({
+        setImportPanel({
           stage: "failed",
           percent: 100,
-          importedCount: current?.importedCount ?? 0,
-          processedCount: current?.processedCount ?? 0,
-          foundCount: current?.foundCount ?? 0,
-          missingCount: current?.missingCount ?? 0,
-          ambiguousCount: current?.ambiguousCount ?? 0,
-          failedCount: current?.failedCount ?? 0,
-          skippedNoProviderCount: current?.skippedNoProviderCount ?? 0,
-          providerConnected: current?.providerConnected ?? false,
-          noImageReason: current?.noImageReason ?? null,
-          summary: failureMessage,
+          importedCount: totals?.importedCount ?? 0,
+          fetchedCount: totals?.fetchedCount ?? 0,
+          processedCount: totals?.processedCount ?? 0,
+          queuedCount: totals?.queuedCount ?? 0,
+          foundCount: totals?.imageFoundCount ?? 0,
+          missingCount: totals?.imageMissingCount ?? 0,
+          notFoundCount: totals?.imageNotFoundCount ?? 0,
+          ambiguousCount: totals?.imageAmbiguousCount ?? 0,
+          failedCount: totals?.imageFailedCount ?? 0,
+          skippedNoProviderCount: totals?.imageSkippedNoProviderCount ?? 0,
+          providerConnected,
+          providerStatus,
+          providerStatusReason: payload.importProgress?.providerStatusReason ?? null,
+          providerCanAttempt: payload.importProgress?.providerCanAttempt ?? providerConnected,
+          noImageReason: payload.importProgress?.noImageReason ?? null,
+          importErrorCategory: payload.importProgress?.importErrorCategory ?? "import_runtime_error",
+          importErrorReason: payload.importProgress?.importErrorReason ?? failureMessage,
+          existingProductsShownCount,
+          summary: summaryWithContext,
           running: false,
-        }));
+        });
         return;
       }
 
-      const importedCount = payload.importProgress?.totals?.importedCount ?? payload.importedCount ?? 0;
-      const imageFoundCount = payload.importDiagnostics?.imageFoundCount ?? 0;
-      const imageNotFoundCount = payload.importDiagnostics?.imageNotFoundCount ?? 0;
-      const imageAmbiguousCount = payload.importDiagnostics?.imageAmbiguousCount ?? 0;
-      const imageFailedCount = payload.importDiagnostics?.imageFailedCount ?? 0;
-      const imageSkippedNoProviderCount =
-        payload.importDiagnostics?.imageSkippedNoProviderCount ?? 0;
-      const enrichmentQueuedCount = payload.importDiagnostics?.enrichmentQueuedCount ?? 0;
-      const enrichmentCompletedCount =
-        payload.importDiagnostics?.enrichmentCompletedCount ??
-        payload.importDiagnostics?.enrichmentProcessedCount ??
-        0;
+      const totals = payload.importProgress?.totals;
+      const importedCount = totals?.importedCount ?? payload.importedCount ?? 0;
+      const imageFoundCount = totals?.imageFoundCount ?? payload.importDiagnostics?.imageFoundCount ?? 0;
+      const imageNotFoundCount =
+        totals?.imageNotFoundCount ?? payload.importDiagnostics?.imageNotFoundCount ?? 0;
+      const imageAmbiguousCount =
+        totals?.imageAmbiguousCount ?? payload.importDiagnostics?.imageAmbiguousCount ?? 0;
+      const imageFailedCount = totals?.imageFailedCount ?? payload.importDiagnostics?.imageFailedCount ?? 0;
+      const imageSkippedNoProviderCount = totals?.imageSkippedNoProviderCount ?? payload.importDiagnostics?.imageSkippedNoProviderCount ?? 0;
+      const enrichmentQueuedCount = totals?.queuedCount ?? payload.importDiagnostics?.enrichmentQueuedCount ?? 0;
+      const enrichmentCompletedCount = totals?.processedCount ?? payload.importDiagnostics?.enrichmentCompletedCount ?? payload.importDiagnostics?.enrichmentProcessedCount ?? 0;
       const missingCount = imageNotFoundCount + imageSkippedNoProviderCount;
       const providerConnected =
         payload.importProgress?.providerConnected ??
         payload.importDiagnostics?.enrichmentProviderConnected ??
         false;
+      const providerStatus =
+        payload.importProgress?.providerStatus ??
+        payload.importDiagnostics?.serpApiStatus ??
+        (providerConnected ? "connected" : "not_connected");
+      const providerStatusReason =
+        payload.importProgress?.providerStatusReason ??
+        payload.importDiagnostics?.serpApiStatusReason ??
+        null;
+      const providerCanAttempt =
+        payload.importProgress?.providerCanAttempt ??
+        payload.importDiagnostics?.serpApiCanAttempt ??
+        providerConnected;
       const noImageReason =
         payload.importProgress?.noImageReason ??
         payload.importDiagnostics?.imageEnrichmentNoImageReason ??
@@ -362,15 +479,24 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         stage: finalStage,
         percent: 100,
         importedCount,
-        processedCount: payload.importProgress?.totals?.processedCount ?? enrichmentCompletedCount,
-        foundCount: payload.importProgress?.totals?.imageFoundCount ?? imageFoundCount,
-        missingCount: payload.importProgress?.totals?.imageMissingCount ?? missingCount,
-        ambiguousCount: payload.importProgress?.totals?.imageAmbiguousCount ?? imageAmbiguousCount,
-        failedCount: payload.importProgress?.totals?.imageFailedCount ?? imageFailedCount,
+        fetchedCount: totals?.fetchedCount ?? payload.fetchedCount ?? 0,
+        processedCount: totals?.processedCount ?? enrichmentCompletedCount,
+        queuedCount: totals?.queuedCount ?? enrichmentQueuedCount,
+        foundCount: totals?.imageFoundCount ?? imageFoundCount,
+        missingCount: totals?.imageMissingCount ?? missingCount,
+        notFoundCount: totals?.imageNotFoundCount ?? imageNotFoundCount,
+        ambiguousCount: totals?.imageAmbiguousCount ?? imageAmbiguousCount,
+        failedCount: totals?.imageFailedCount ?? imageFailedCount,
         skippedNoProviderCount:
-          payload.importProgress?.totals?.imageSkippedNoProviderCount ?? imageSkippedNoProviderCount,
+          totals?.imageSkippedNoProviderCount ?? imageSkippedNoProviderCount,
         providerConnected,
+        providerStatus,
+        providerStatusReason,
+        providerCanAttempt,
         noImageReason,
+        importErrorCategory: payload.importProgress?.importErrorCategory ?? "none",
+        importErrorReason: payload.importProgress?.importErrorReason ?? null,
+        existingProductsShownCount: payload.importProgress?.existingProductsShownCount ?? 0,
         summary: noImageReason ? `${finalSummary} ${noImageReason}` : finalSummary,
         running: false,
       });
@@ -395,14 +521,23 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         stage: "failed",
         percent: 100,
         importedCount: current?.importedCount ?? 0,
+        fetchedCount: current?.fetchedCount ?? 0,
         processedCount: current?.processedCount ?? 0,
+        queuedCount: current?.queuedCount ?? 0,
         foundCount: current?.foundCount ?? 0,
         missingCount: current?.missingCount ?? 0,
+        notFoundCount: current?.notFoundCount ?? 0,
         ambiguousCount: current?.ambiguousCount ?? 0,
         failedCount: current?.failedCount ?? 0,
         skippedNoProviderCount: current?.skippedNoProviderCount ?? 0,
         providerConnected: current?.providerConnected ?? false,
+        providerStatus: current?.providerStatus ?? "unknown_error",
+        providerStatusReason: current?.providerStatusReason ?? null,
+        providerCanAttempt: current?.providerCanAttempt ?? false,
         noImageReason: current?.noImageReason ?? null,
+        importErrorCategory: current?.importErrorCategory ?? "import_runtime_error",
+        importErrorReason: current?.importErrorReason ?? "Import failed.",
+        existingProductsShownCount: current?.existingProductsShownCount ?? 0,
         summary: "Import failed.",
         running: false,
       }));
@@ -533,17 +668,36 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
             <p className="mt-2 text-xs text-[#475569]">{importPanel.summary}</p>
             <div className="mt-2 grid gap-1 text-xs text-[#334155] sm:grid-cols-2">
               <p>Products imported: {importPanel.importedCount}</p>
+              <p>Products fetched: {importPanel.fetchedCount}</p>
               <p>Products processed: {importPanel.processedCount}</p>
+              <p>Images queued: {importPanel.queuedCount}</p>
               <p>Images found: {importPanel.foundCount}</p>
               <p>Missing/not found: {importPanel.missingCount}</p>
+              <p>Not found: {importPanel.notFoundCount}</p>
               <p>Ambiguous: {importPanel.ambiguousCount}</p>
               <p>Failed: {importPanel.failedCount}</p>
               <p>Skipped (SerpApi not connected): {importPanel.skippedNoProviderCount}</p>
-              <p>SerpApi: {importPanel.providerConnected ? "Connected" : "Not connected"}</p>
+              <p>
+                SerpApi:{" "}
+                {formatSerpApiProviderStatus(importPanel.providerStatus, importPanel.providerConnected)}
+              </p>
             </div>
+            {importPanel.providerStatusReason ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">{importPanel.providerStatusReason}</p>
+            ) : null}
             {importPanel.noImageReason ? (
               <p className="mt-2 text-xs text-[#7C2D12]">
                 {importPanel.noImageReason}
+              </p>
+            ) : null}
+            {importPanel.stage === "failed" && importPanel.importErrorReason ? (
+              <p className="mt-2 text-xs text-rose-700">
+                Import error ({importPanel.importErrorCategory}): {importPanel.importErrorReason}
+              </p>
+            ) : null}
+            {importPanel.stage === "failed" && importPanel.existingProductsShownCount > 0 ? (
+              <p className="mt-2 text-xs text-[#334155]">
+                Existing products shown below are from the previous successful import.
               </p>
             ) : null}
           </div>
