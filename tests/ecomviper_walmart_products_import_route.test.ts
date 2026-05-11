@@ -4,6 +4,7 @@ import { NextRequest } from "next/server";
 const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
   importWalmartProducts: vi.fn(),
+  isWalmartImportFailureError: vi.fn(),
   retryWalmartPublicImageEnrichmentForUser: vi.fn(),
   listWalmartProductsForUser: vi.fn(),
   getSerpApiCredentialsForUser: vi.fn(),
@@ -15,6 +16,7 @@ vi.mock("@/lib/auth/requireSignedInUser", () => ({
 
 vi.mock("@/lib/ecomviper/walmart/walmart-products", () => ({
   importWalmartProducts: mocks.importWalmartProducts,
+  isWalmartImportFailureError: mocks.isWalmartImportFailureError,
   retryWalmartPublicImageEnrichmentForUser: mocks.retryWalmartPublicImageEnrichmentForUser,
   listWalmartProductsForUser: mocks.listWalmartProductsForUser,
 }));
@@ -28,10 +30,12 @@ describe("walmart products import route", () => {
     vi.resetModules();
     mocks.requireSignedInUser.mockReset();
     mocks.importWalmartProducts.mockReset();
+    mocks.isWalmartImportFailureError.mockReset();
     mocks.retryWalmartPublicImageEnrichmentForUser.mockReset();
     mocks.listWalmartProductsForUser.mockReset();
     mocks.getSerpApiCredentialsForUser.mockReset();
     mocks.listWalmartProductsForUser.mockResolvedValue([]);
+    mocks.isWalmartImportFailureError.mockReturnValue(false);
     mocks.getSerpApiCredentialsForUser.mockResolvedValue({
       connected: false,
       apiKey: null,
@@ -203,10 +207,128 @@ describe("walmart products import route", () => {
     expect(payload.ok).toBe(false);
     expect(payload.error?.code).toBe("IMPORT_FAILED");
     expect(payload.importProgress?.stage).toBe("failed");
-    expect(payload.importProgress?.importErrorCategory).toBe("walmart_auth");
+    expect(payload.importProgress?.importErrorCategory).toBe("walmart_auth_failed");
+    expect(payload.importProgress?.importErrorPhase).toBe("walmart_auth");
+    expect(payload.importProgress?.importErrorStatusCode).toBe(401);
     expect(payload.importProgress?.providerStatus).toBe("connected");
     expect(payload.importProgress?.totals?.importedCount).toBe(0);
     expect(payload.importProgress?.existingProductsShownCount).toBe(2);
+  });
+
+  it("returns structured request validation failure for malformed mode body", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: 123 }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("IMPORT_REQUEST_INVALID");
+    expect(payload.importProgress?.stage).toBe("failed");
+    expect(payload.importProgress?.importErrorCategory).toBe("import_request_invalid");
+    expect(payload.importProgress?.importErrorPhase).toBe("request_validation");
+  });
+
+  it("preserves typed importer diagnostics and partial progress on failure", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.isWalmartImportFailureError.mockImplementation(
+      (error: unknown) => Boolean(error && typeof error === "object" && (error as { name?: string }).name === "WalmartImportFailureError")
+    );
+    const typedError = Object.assign(new Error("Walmart catalog read failed with HTTP 503."), {
+      name: "WalmartImportFailureError",
+      category: "walmart_products_fetch_failed",
+      phase: "walmart_products_fetch",
+      statusCode: 503,
+      endpointFamily: "walmart_catalog_items",
+      correlationId: "corr-123",
+      responseShapeSummary: "object:errors",
+      partialProgress: {
+        importedCount: 0,
+        fetchedCount: 27,
+        processedCount: 0,
+        queuedCount: 0,
+        imageFoundCount: 0,
+        imageMissingCount: 0,
+        imageNotFoundCount: 0,
+        imageAmbiguousCount: 0,
+        imageFailedCount: 0,
+        imageSkippedNoProviderCount: 0,
+      },
+    });
+    mocks.importWalmartProducts.mockRejectedValue(typedError);
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.importProgress?.importErrorCategory).toBe("walmart_products_fetch_failed");
+    expect(payload.importProgress?.importErrorPhase).toBe("walmart_products_fetch");
+    expect(payload.importProgress?.importErrorStatusCode).toBe(503);
+    expect(payload.importProgress?.importErrorEndpointFamily).toBe("walmart_catalog_items");
+    expect(payload.importProgress?.totals?.fetchedCount).toBe(27);
+  });
+
+  it("returns walmart_credentials_missing when importer surfaces missing credential category", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.isWalmartImportFailureError.mockImplementation(
+      (error: unknown) => Boolean(error && typeof error === "object" && (error as { name?: string }).name === "WalmartImportFailureError")
+    );
+    mocks.importWalmartProducts.mockRejectedValue(
+      Object.assign(new Error("Missing Walmart Client ID or Client Secret."), {
+        name: "WalmartImportFailureError",
+        category: "walmart_credentials_missing",
+        phase: "walmart_credentials",
+      })
+    );
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.importProgress?.importErrorCategory).toBe("walmart_credentials_missing");
+    expect(payload.importProgress?.importErrorPhase).toBe("walmart_credentials");
+  });
+
+  it("maps non-error importer rejection to import_unknown_error with safe fallback", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockRejectedValue({
+      code: "RUNTIME_BLOWUP",
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.importProgress?.importErrorCategory).toBe("import_unknown_error");
+    expect(payload.importProgress?.importErrorReason).toBe("Import failed due to an unknown runtime error.");
   });
 
   it("keeps import as completed_with_warnings when catalog import succeeds but SerpApi key is invalid", async () => {
