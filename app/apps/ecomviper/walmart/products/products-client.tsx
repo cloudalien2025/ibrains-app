@@ -78,6 +78,10 @@ interface ImportPanelState {
   foundCount: number;
   fromImportPayloadCount: number;
   enrichedCount: number;
+  walmartSearchResolvedCount: number;
+  walmartSearchImageFoundCount: number;
+  serpApiFallbackImageFoundCount: number;
+  walmartSearchNotFoundCount: number;
   stillMissingCount: number;
   missingCount: number;
   notFoundCount: number;
@@ -276,6 +280,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
     imageFromImportPayloadCount: number;
     imageEnrichedCount: number;
+    imageFromWalmartSearchCount: number;
+    imageFromSerpApiFallbackCount: number;
     imageStillMissingCount: number;
     imageNotFoundCount: number;
     imageAmbiguousCount: number;
@@ -371,6 +377,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       foundCount: 0,
       fromImportPayloadCount: 0,
       enrichedCount: 0,
+      walmartSearchResolvedCount: 0,
+      walmartSearchImageFoundCount: 0,
+      serpApiFallbackImageFoundCount: 0,
+      walmartSearchNotFoundCount: 0,
       stillMissingCount: 0,
       missingCount: 0,
       notFoundCount: 0,
@@ -507,6 +517,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             imageFoundCount?: number;
             imageFromImportPayloadCount?: number;
             imageEnrichedCount?: number;
+            imageFromWalmartSearchCount?: number;
+            imageFromSerpApiFallbackCount?: number;
+            walmartSearchNotFoundCount?: number;
             imageStillMissingCount?: number;
             imageMissingCount?: number;
             imageNotFoundCount?: number;
@@ -522,6 +535,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           imageFoundCount?: number;
           imageFromImportPayloadCount?: number;
           imageEnrichedCount?: number;
+          imageFromWalmartSearchCount?: number;
+          imageFromSerpApiFallbackCount?: number;
+          walmartSearchNotFoundCount?: number;
           imageStillMissingCount?: number;
           imageNotFoundCount?: number;
           imageAmbiguousCount?: number;
@@ -584,6 +600,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           foundCount: totals?.imageFoundCount ?? 0,
           fromImportPayloadCount: totals?.imageFromImportPayloadCount ?? 0,
           enrichedCount: totals?.imageEnrichedCount ?? 0,
+          walmartSearchResolvedCount: totals?.imageFromWalmartSearchCount ?? 0,
+          walmartSearchImageFoundCount: totals?.imageFromWalmartSearchCount ?? 0,
+          serpApiFallbackImageFoundCount: totals?.imageFromSerpApiFallbackCount ?? 0,
+          walmartSearchNotFoundCount: totals?.walmartSearchNotFoundCount ?? 0,
           stillMissingCount: totals?.imageStillMissingCount ?? totals?.imageMissingCount ?? 0,
           missingCount:
             totals?.imageStillMissingCount ?? totals?.imageMissingCount ?? 0,
@@ -624,6 +644,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         totals?.imageFoundCount !== undefined ||
         totals?.imageFromImportPayloadCount !== undefined ||
         totals?.imageEnrichedCount !== undefined ||
+        totals?.imageFromWalmartSearchCount !== undefined ||
+        totals?.imageFromSerpApiFallbackCount !== undefined ||
         totals?.imageStillMissingCount !== undefined ||
         totals?.imageNotFoundCount !== undefined ||
         totals?.imageAmbiguousCount !== undefined ||
@@ -632,6 +654,8 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         payload.importDiagnostics?.imageFoundCount !== undefined ||
         payload.importDiagnostics?.imageFromImportPayloadCount !== undefined ||
         payload.importDiagnostics?.imageEnrichedCount !== undefined ||
+        payload.importDiagnostics?.imageFromWalmartSearchCount !== undefined ||
+        payload.importDiagnostics?.imageFromSerpApiFallbackCount !== undefined ||
         payload.importDiagnostics?.imageStillMissingCount !== undefined ||
         payload.importDiagnostics?.imageNotFoundCount !== undefined ||
         payload.importDiagnostics?.imageAmbiguousCount !== undefined ||
@@ -646,6 +670,18 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         totals?.imageEnrichedCount ??
         payload.importDiagnostics?.imageEnrichedCount ??
         Math.max(0, imageFoundCount - imageFromImportPayloadCount);
+      const imageFromWalmartSearchCount =
+        totals?.imageFromWalmartSearchCount ??
+        payload.importDiagnostics?.imageFromWalmartSearchCount ??
+        0;
+      const imageFromSerpApiFallbackCount =
+        totals?.imageFromSerpApiFallbackCount ??
+        payload.importDiagnostics?.imageFromSerpApiFallbackCount ??
+        0;
+      const walmartSearchNotFoundCount =
+        totals?.walmartSearchNotFoundCount ??
+        payload.importDiagnostics?.walmartSearchNotFoundCount ??
+        0;
       const imageStillMissingCount =
         totals?.imageStillMissingCount ??
         payload.importDiagnostics?.imageStillMissingCount ??
@@ -698,11 +734,13 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         imageFailedCount > 0
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Fallback enriched: ${imageEnrichedCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi fallback images: ${imageFromSerpApiFallbackCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
         imageFromImportPayloadCount,
         imageEnrichedCount,
+        imageFromWalmartSearchCount,
+        imageFromSerpApiFallbackCount,
         imageStillMissingCount,
         imageNotFoundCount,
         imageAmbiguousCount,
@@ -722,6 +760,14 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         fromImportPayloadCount:
           totals?.imageFromImportPayloadCount ?? imageFromImportPayloadCount,
         enrichedCount: totals?.imageEnrichedCount ?? imageEnrichedCount,
+        walmartSearchResolvedCount:
+          totals?.imageFromWalmartSearchCount ?? imageFromWalmartSearchCount,
+        walmartSearchImageFoundCount:
+          totals?.imageFromWalmartSearchCount ?? imageFromWalmartSearchCount,
+        serpApiFallbackImageFoundCount:
+          totals?.imageFromSerpApiFallbackCount ?? imageFromSerpApiFallbackCount,
+        walmartSearchNotFoundCount:
+          totals?.walmartSearchNotFoundCount ?? walmartSearchNotFoundCount,
         stillMissingCount:
           totals?.imageStillMissingCount ?? imageStillMissingCount,
         missingCount: totals?.imageStillMissingCount ?? missingCount,
@@ -776,6 +822,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         foundCount: current?.foundCount ?? 0,
         fromImportPayloadCount: current?.fromImportPayloadCount ?? 0,
         enrichedCount: current?.enrichedCount ?? 0,
+        walmartSearchResolvedCount: current?.walmartSearchResolvedCount ?? 0,
+        walmartSearchImageFoundCount: current?.walmartSearchImageFoundCount ?? 0,
+        serpApiFallbackImageFoundCount: current?.serpApiFallbackImageFoundCount ?? 0,
+        walmartSearchNotFoundCount: current?.walmartSearchNotFoundCount ?? 0,
         stillMissingCount: current?.stillMissingCount ?? 0,
         missingCount: current?.missingCount ?? 0,
         notFoundCount: current?.notFoundCount ?? 0,
@@ -932,15 +982,19 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Products imported: {importPanel.importedCount}</p>
               <p>Products fetched: {importPanel.fetchedCount}</p>
               <p>Products processed: {importPanel.processedCount}</p>
-              <p>Queued for fallback enrichment: {importPanel.queuedCount}</p>
+              <p>Queued for resolver + fallback: {importPanel.queuedCount}</p>
               <p>Images found: {importPanel.foundCount}</p>
               <p>Images from import payload: {importPanel.fromImportPayloadCount}</p>
-              <p>Fallback enriched successfully: {importPanel.enrichedCount}</p>
+              <p>Resolved via Walmart Item Search: {importPanel.walmartSearchResolvedCount}</p>
+              <p>Images from Walmart Item Search: {importPanel.walmartSearchImageFoundCount}</p>
+              <p>Images from SerpApi fallback: {importPanel.serpApiFallbackImageFoundCount}</p>
+              <p>Total fallback enriched successfully: {importPanel.enrichedCount}</p>
               <p>Still missing images: {importPanel.stillMissingCount}</p>
-              <p>Failed (SerpApi/provider): {importPanel.failedCount}</p>
+              <p>Failed (provider/request): {importPanel.failedCount}</p>
               <p>Missing/not found: {importPanel.missingCount}</p>
               <p>Not found: {importPanel.notFoundCount}</p>
               <p>Ambiguous: {importPanel.ambiguousCount}</p>
+              <p>Walmart Item Search not found: {importPanel.walmartSearchNotFoundCount}</p>
               <p>Skipped (SerpApi not connected): {importPanel.skippedNoProviderCount}</p>
               <p>
                 SerpApi:{" "}
@@ -957,7 +1011,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             {importPanel.providerStatusReason ? (
               <p className="mt-2 text-xs text-[#7C2D12]">{importPanel.providerStatusReason}</p>
             ) : null}
-            {importPanel.providerStatus === "not_connected" ? (
+            {importPanel.providerStatus === "not_connected" && importPanel.stillMissingCount > 0 ? (
               <p className="mt-2 text-xs text-[#7C2D12]">
                 Connect SerpApi to enable automated public Walmart image enrichment.
               </p>

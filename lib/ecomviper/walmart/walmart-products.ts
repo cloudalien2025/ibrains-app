@@ -1127,6 +1127,10 @@ interface ImageEnrichmentStats {
     queuedCount: number;
     completedCount: number;
     foundCount: number;
+    walmartSearchResolvedCount: number;
+    walmartSearchImageFoundCount: number;
+    serpApiFallbackFoundCount: number;
+    walmartSearchNotFoundCount: number;
     notFoundCount: number;
     ambiguousCount: number;
     failedCount: number;
@@ -1141,6 +1145,18 @@ interface ImageEnrichmentStats {
       networkErrorCount: number;
       malformedResponseCount: number;
       unknownErrorCount: number;
+    };
+    identifierPathCounts: {
+      seller_catalog_only: number;
+      walmart_search_upc: number;
+      walmart_search_gtin: number;
+      walmart_search_title_brand: number;
+      public_item_id_direct: number;
+      serpapi_public_item_id: number;
+      serpapi_title_brand_fallback: number;
+      skipped_gtin_as_product_id: number;
+      walmart_search_not_found: number;
+      no_searchable_identifier: number;
     };
   };
   itemReport: {
@@ -1188,6 +1204,10 @@ function createInitialImageEnrichmentStats(): ImageEnrichmentStats {
       queuedCount: 0,
       completedCount: 0,
       foundCount: 0,
+      walmartSearchResolvedCount: 0,
+      walmartSearchImageFoundCount: 0,
+      serpApiFallbackFoundCount: 0,
+      walmartSearchNotFoundCount: 0,
       notFoundCount: 0,
       ambiguousCount: 0,
       failedCount: 0,
@@ -1202,6 +1222,18 @@ function createInitialImageEnrichmentStats(): ImageEnrichmentStats {
         networkErrorCount: 0,
         malformedResponseCount: 0,
         unknownErrorCount: 0,
+      },
+      identifierPathCounts: {
+        seller_catalog_only: 0,
+        walmart_search_upc: 0,
+        walmart_search_gtin: 0,
+        walmart_search_title_brand: 0,
+        public_item_id_direct: 0,
+        serpapi_public_item_id: 0,
+        serpapi_title_brand_fallback: 0,
+        skipped_gtin_as_product_id: 0,
+        walmart_search_not_found: 0,
+        no_searchable_identifier: 0,
       },
     },
     itemReport: {
@@ -1539,6 +1571,7 @@ async function enrichProductImages(
 
   const publicListingQueue = await runPublicListingImageEnrichmentQueue({
     userId,
+    accessToken,
     products: enriched,
     importedCount: products.length,
   });
@@ -1552,6 +1585,10 @@ async function enrichProductImages(
     queuedCount: publicListingQueue.progress.enrichmentQueuedCount,
     completedCount: publicListingQueue.progress.enrichmentCompletedCount,
     foundCount: publicListingQueue.progress.foundCount,
+    walmartSearchResolvedCount: publicListingQueue.progress.walmartSearchResolvedCount,
+    walmartSearchImageFoundCount: publicListingQueue.progress.walmartSearchImageFoundCount,
+    serpApiFallbackFoundCount: publicListingQueue.progress.serpApiFallbackFoundCount,
+    walmartSearchNotFoundCount: publicListingQueue.progress.walmartSearchNotFoundCount,
     notFoundCount: publicListingQueue.progress.notFoundCount,
     ambiguousCount: publicListingQueue.progress.ambiguousCount,
     failedCount: publicListingQueue.progress.failedCount,
@@ -1559,6 +1596,9 @@ async function enrichProductImages(
     lastEnrichedAt: publicListingQueue.progress.lastEnrichedAt,
     errorCategories: {
       ...publicListingQueue.progress.errorCategories,
+    },
+    identifierPathCounts: {
+      ...publicListingQueue.progress.identifierPathCounts,
     },
   };
 
@@ -1913,6 +1953,9 @@ export async function importWalmartProducts(
         imageFoundCount,
         imageFromImportPayloadCount,
         imageEnrichedCount,
+        imageFromWalmartSearchCount: imageStats.publicListing.walmartSearchImageFoundCount,
+        imageFromSerpApiFallbackCount: imageStats.publicListing.serpApiFallbackFoundCount,
+        walmartSearchNotFoundCount: imageStats.publicListing.walmartSearchNotFoundCount,
         imageStillMissingCount,
         imageNotFoundCount: imageStats.notFound,
         imageAmbiguousCount: imageStats.ambiguous,
@@ -1954,6 +1997,9 @@ export async function importWalmartProducts(
           walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,
           walmartItemSearch: imageStats.sourceBreakdown.walmartItemSearch,
           publicWalmartListingSerpApi: imageStats.sourceBreakdown.publicWalmartListingSerpApi,
+        },
+        imageIdentifierPathCounts: {
+          ...imageStats.publicListing.identifierPathCounts,
         },
         importErrorCategory: "none",
         importErrorReason: null,
@@ -2011,8 +2057,11 @@ export async function retryWalmartPublicImageEnrichmentForUser(
   const initialCatalogImageCount = currentProducts.filter(
     (product) => product.imageSource === "walmart_catalog" && product.imageUrl.trim().length > 0
   ).length;
+  const token = await requestWalmartTokenForUser(userId);
+  const accessToken = token.ok && token.accessToken ? token.accessToken : undefined;
   const queue = await runPublicListingImageEnrichmentQueue({
     userId,
+    accessToken,
     products: repairedProducts,
     importedCount: repairedProducts.length,
   });
@@ -2039,6 +2088,9 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       imageFoundCount: finalImageFoundCount,
       imageFromImportPayloadCount: initialCatalogImageCount,
       imageEnrichedCount: queue.progress.foundCount,
+      imageFromWalmartSearchCount: queue.progress.walmartSearchImageFoundCount,
+      imageFromSerpApiFallbackCount: queue.progress.serpApiFallbackFoundCount,
+      walmartSearchNotFoundCount: queue.progress.walmartSearchNotFoundCount,
       imageStillMissingCount: finalImageStillMissingCount,
       imageNotFoundCount: queue.progress.notFoundCount,
       imageAmbiguousCount: queue.progress.ambiguousCount,
@@ -2079,6 +2131,9 @@ export async function retryWalmartPublicImageEnrichmentForUser(
             product.imageSource === "public_walmart_listing_serpapi" &&
             product.imageSyncStatus === "found"
         ).length,
+      },
+      imageIdentifierPathCounts: {
+        ...queue.progress.identifierPathCounts,
       },
       importErrorCategory: "none",
       importErrorReason: null,
