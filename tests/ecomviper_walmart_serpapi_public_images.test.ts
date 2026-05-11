@@ -193,6 +193,70 @@ describe("Walmart SerpApi public listing images", () => {
     expect(result.statusReason).toBe("SerpApi account does not have permission.");
   });
 
+  it("maps SerpApi provider quota errors to rate_limited", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: "You have run out of searches for this account." }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "quota_key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("rate_limited");
+    expect(result.errorCode).toBe("SERPAPI_RATE_LIMITED");
+    expect(result.statusReason).toBe("SerpApi account has no remaining searches.");
+  });
+
+  it("maps SerpApi plan restriction errors to forbidden", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: "Walmart API is not available on your current plan. Please upgrade." }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "plan_key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("forbidden");
+    expect(result.errorCode).toBe("SERPAPI_FORBIDDEN");
+    expect(result.statusReason).toBe("SerpApi account does not include Walmart API access.");
+  });
+
+  it("retries transient SerpApi timeout before succeeding", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new DOMException("The operation was aborted.", "AbortError"))
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            product_result: {
+              title: "OPA Sleep Magnesium Gummies",
+              images: ["https://i5.walmartimages.com/asr/retry-success.jpg"],
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "retry_key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.primaryImageUrl).toContain("retry-success.jpg");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("resolves images via route using URL product ID and returns source metadata", async () => {
     const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
       method: "POST",
