@@ -282,8 +282,67 @@ describe("Walmart import progress UI", () => {
     );
     expect(container.textContent).toContain("Still missing images: 4");
     expect(container.textContent).toContain("Failed (SerpApi/provider): 4");
-    expect(container.textContent).toContain("Test SerpApi connection in Connect.");
+    expect(container.textContent).toContain(
+      "SerpApi is connected, but Walmart did not find a product for the identifier used. Verify identifier mapping."
+    );
+    expect(container.textContent).not.toContain("Connect SerpApi to enable automated public Walmart image enrichment.");
+    expect(container.textContent).not.toContain("Test SerpApi connection in Connect.");
     expect(container.textContent).not.toContain("api_key=secret");
+  });
+
+  it("does not show disconnected guidance when provider reports product-not-found while connected", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 4,
+          importProgress: {
+            stage: "completed_with_warnings",
+            providerConnected: true,
+            providerStatus: "bad_request",
+            providerStatusReason: "SerpApi bad request: The product has not found.",
+            providerCanAttempt: true,
+            noImageReason: "SerpApi bad request: The product has not found.",
+            totals: {
+              importedCount: 4,
+              fetchedCount: 4,
+              processedCount: 4,
+              queuedCount: 4,
+              imageFoundCount: 0,
+              imageFromImportPayloadCount: 0,
+              imageEnrichedCount: 0,
+              imageStillMissingCount: 4,
+              imageMissingCount: 4,
+              imageNotFoundCount: 4,
+              imageAmbiguousCount: 0,
+              imageFailedCount: 0,
+              imageSkippedNoProviderCount: 0,
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("SerpApi: Bad request");
+    expect(container.textContent).toContain(
+      "SerpApi is connected, but Walmart did not find a product for the identifier used. Verify identifier mapping."
+    );
+    expect(container.textContent).not.toContain("Connect SerpApi to enable automated public Walmart image enrichment.");
+    expect(container.textContent).not.toContain("Test SerpApi connection in Connect.");
   });
 
   it("shows gateway timeout failure without incorrectly marking SerpApi as not connected", async () => {
