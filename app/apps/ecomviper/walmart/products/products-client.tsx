@@ -34,6 +34,29 @@ function normalizeSkuKey(sku: string): string {
   return sku.trim().toUpperCase();
 }
 
+function safeString(value: unknown, fallback = ""): string {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed || fallback;
+  }
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return fallback;
+}
+
+function safeNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function safeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => safeString(entry)).filter((entry) => entry.length > 0);
+}
+
 type SkuSortDirection = "none" | "asc" | "desc";
 type ImportPanelStage =
   | "idle"
@@ -171,6 +194,35 @@ function formatSerpApiProviderStatus(
   return fallbackConnected ? "Connected" : "Not connected";
 }
 
+function normalizeProductForRender(product: WalmartEffectiveProductRecord): WalmartEffectiveProductRecord {
+  const normalizedImageUrl = safeString(product.imageUrl);
+  const normalizedLiveImageUrl = safeString(product.liveImageUrl);
+  return {
+    ...product,
+    sku: safeString(product.sku, "UNKNOWN-SKU"),
+    title: safeString(product.title, "Untitled product"),
+    brand: safeString(product.brand, "Unknown"),
+    price: safeNumber(product.price, 0),
+    inventoryQuantity: Math.max(0, safeNumber(product.inventoryQuantity, 0)),
+    imageUrl: normalizedImageUrl,
+    liveImageUrl: normalizedLiveImageUrl,
+    imageStatusMessage: safeString(product.imageStatusMessage) || undefined,
+    issues: safeStringArray(product.issues),
+    lastSyncedAt: safeString(product.lastSyncedAt, "—"),
+    publicWalmartUrl: safeString(product.publicWalmartUrl) || undefined,
+    publicWalmartProductId: safeString(product.publicWalmartProductId) || undefined,
+    liveBrand: safeString(product.liveBrand) || undefined,
+    liveTitle: safeString(product.liveTitle) || undefined,
+    livePrice: safeNumber(product.livePrice, 0),
+    liveInventoryQuantity: Math.max(0, safeNumber(product.liveInventoryQuantity, 0)),
+    liveGalleryImageUrls: safeStringArray(product.liveGalleryImageUrls),
+    galleryImageUrls: safeStringArray(product.galleryImageUrls),
+    variantImageUrls: safeStringArray(product.variantImageUrls),
+    draftUpdatedAt: safeString(product.draftUpdatedAt) || null,
+    hasDraftChanges: Boolean(product.hasDraftChanges),
+  };
+}
+
 export default function WalmartProductsClient({ products }: ProductsClientProps) {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -195,7 +247,9 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
 
   const allProducts = useMemo(
     () =>
-      products.filter((product) => !locallyRemovedSkuKeys.includes(normalizeSkuKey(product.sku))),
+      products
+        .map((product) => normalizeProductForRender(product))
+        .filter((product) => !locallyRemovedSkuKeys.includes(normalizeSkuKey(product.sku))),
     [products, locallyRemovedSkuKeys]
   );
 

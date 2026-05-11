@@ -33,6 +33,57 @@ declare global {
 
 const PRODUCTS_TABLE = "walmart_products";
 const STATE_TABLE = "walmart_product_import_state";
+const WALMART_PRODUCT_STATUSES = new Set<WalmartProductRecord["status"]>([
+  "active",
+  "attention",
+  "draft",
+  "sync_failed",
+]);
+const WALMART_INVENTORY_STATUSES = new Set<WalmartProductRecord["inventoryStatus"]>([
+  "known",
+  "unknown",
+  "out_of_stock",
+]);
+const WALMART_IMAGE_STATUSES = new Set<NonNullable<WalmartProductRecord["imageStatus"]>>([
+  "image_available",
+  "catalog_missing",
+  "enrichment_unconfigured",
+]);
+const WALMART_IMAGE_SYNC_STATUSES = new Set<NonNullable<WalmartProductRecord["imageSyncStatus"]>>([
+  "found",
+  "not_found",
+  "ambiguous",
+  "failed",
+  "not_synced",
+]);
+const WALMART_IMAGE_SOURCES = new Set<NonNullable<WalmartProductRecord["imageSource"]>>([
+  "walmart_item_report",
+  "walmart_catalog",
+  "walmart_item_search",
+  "public_walmart_listing_serpapi",
+  "manual",
+  "shopify_placeholder",
+  "manual_placeholder",
+  "none",
+]);
+const WALMART_IMAGE_MATCH_METHODS = new Set<NonNullable<WalmartProductRecord["imageMatchMethod"]>>([
+  "gtin",
+  "upc",
+  "itemId",
+  "wpid",
+  "query",
+  "catalog",
+  "public_url_product_id",
+  "serpapi_product_id",
+  "serpapi_search_upc",
+  "serpapi_search_gtin",
+  "serpapi_search_title_brand",
+  "item_report_sku",
+  "item_report_productid",
+  "item_report_itemid",
+  "item_report_wpid",
+  "item_report_title_brand",
+]);
 
 function dbConfigured(): boolean {
   return Boolean(process.env.DIRECTORYIQ_DATABASE_URL?.trim() || process.env.DATABASE_URL?.trim());
@@ -61,8 +112,124 @@ function toIsoTimestamp(value: string | Date | null | undefined): string | null 
   return null;
 }
 
-function normalizeSku(sku: string): string {
-  return sku.trim().toUpperCase();
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asString(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function asNumber(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asString(entry))
+    .filter((entry) => entry.length > 0);
+}
+
+function asStringRecord(value: unknown): Record<string, string> {
+  const row = asObject(value);
+  if (!row) return {};
+  return Object.fromEntries(
+    Object.entries(row)
+      .map(([key, entry]) => [key.trim(), asString(entry)] as const)
+      .filter(([key, entry]) => key.length > 0 && entry.length > 0)
+  );
+}
+
+function asEnum<T extends string>(value: unknown, allowed: Set<T>): T | undefined {
+  const normalized = asString(value) as T;
+  if (!normalized) return undefined;
+  return allowed.has(normalized) ? normalized : undefined;
+}
+
+function normalizeSku(sku: unknown): string {
+  return asString(sku).toUpperCase();
+}
+
+function sanitizePersistedWalmartProduct(payload: unknown): WalmartProductRecord | null {
+  const row = asObject(payload);
+  if (!row) return null;
+
+  const now = new Date().toISOString();
+  const sku = asString(row.sku) || "UNKNOWN-SKU";
+  const imageUrl = asString(row.imageUrl);
+  const galleryImageUrls = asStringArray(row.galleryImageUrls);
+  const variantImageUrls = asStringArray(row.variantImageUrls);
+  const primaryImageUrl = asString(row.primaryImageUrl);
+  const normalizedPrice = asNumber(row.price, 0);
+  const normalizedInventory = Math.max(0, asNumber(row.inventoryQuantity, 0));
+  const issues = asStringArray(row.issues);
+
+  const searchBrowseAttributes = asStringRecord(row.searchBrowseAttributes);
+  const mediaRecommendations = asStringArray(row.mediaRecommendations);
+
+  const imageStatus = asEnum(row.imageStatus, WALMART_IMAGE_STATUSES);
+  const imageSyncStatus = asEnum(row.imageSyncStatus, WALMART_IMAGE_SYNC_STATUSES);
+  const imageSource = asEnum(row.imageSource, WALMART_IMAGE_SOURCES);
+  const imageMatchMethod = asEnum(row.imageMatchMethod, WALMART_IMAGE_MATCH_METHODS);
+
+  return {
+    id: asString(row.id) || `walmart_${sku.toLowerCase()}`,
+    marketplace: "walmart",
+    sku,
+    externalItemId: asString(row.externalItemId) || `wm_${sku.toLowerCase()}`,
+    upc: asString(row.upc) || undefined,
+    gtin: asString(row.gtin) || undefined,
+    wpid: asString(row.wpid) || undefined,
+    itemId: asString(row.itemId) || undefined,
+    publishedStatus: asString(row.publishedStatus) || undefined,
+    title: asString(row.title) || sku,
+    brand: asString(row.brand) || "Unknown",
+    category: asString(row.category) || "Supplements",
+    price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
+    inventoryQuantity: normalizedInventory,
+    inventoryStatus: asEnum(row.inventoryStatus, WALMART_INVENTORY_STATUSES) ?? "unknown",
+    status: asEnum(row.status, WALMART_PRODUCT_STATUSES) ?? "attention",
+    imageUrl,
+    galleryImageUrls,
+    variantImageUrls,
+    imageStatus,
+    imageStatusMessage: asString(row.imageStatusMessage) || undefined,
+    imageSource,
+    imageSyncStatus,
+    imageMatchMethod,
+    matchedItemId: asString(row.matchedItemId) || undefined,
+    publicWalmartUrl: asString(row.publicWalmartUrl) || undefined,
+    publicWalmartProductId: asString(row.publicWalmartProductId) || undefined,
+    primaryImageUrl: primaryImageUrl || undefined,
+    lastImageSyncedAt: asString(row.lastImageSyncedAt) || null,
+    imageSyncReason: asString(row.imageSyncReason) || null,
+    issues,
+    attributes: asStringRecord(row.attributes),
+    searchBrowseAttributes:
+      Object.keys(searchBrowseAttributes).length > 0 ? searchBrowseAttributes : undefined,
+    mediaRecommendations:
+      mediaRecommendations.length > 0 ? mediaRecommendations : undefined,
+    altText: asString(row.altText) || undefined,
+    shortDescription: asString(row.shortDescription),
+    longDescription: asString(row.longDescription),
+    bulletPoints: asStringArray(row.bulletPoints),
+    rawPayload: row.rawPayload ?? row,
+    normalizedPayload: row.normalizedPayload ?? row,
+    lastSyncedAt: asString(row.lastSyncedAt) || now,
+    createdAt: asString(row.createdAt) || now,
+    updatedAt: asString(row.updatedAt) || now,
+  };
 }
 
 function getFallbackStore(): FallbackStore {
@@ -138,7 +305,10 @@ async function ensureTables(): Promise<void> {
 export async function listPersistedWalmartProducts(userId: string): Promise<WalmartProductRecord[]> {
   if (allowFallbackStore()) {
     const state = getFallbackUserState(userId);
-    return Array.from(state.productsBySku.values()).sort((left, right) => left.sku.localeCompare(right.sku));
+    return Array.from(state.productsBySku.values())
+      .map((product) => sanitizePersistedWalmartProduct(product))
+      .filter((product): product is WalmartProductRecord => Boolean(product))
+      .sort((left, right) => left.sku.localeCompare(right.sku));
   }
 
   if (!dbConfigured()) {
@@ -159,8 +329,8 @@ export async function listPersistedWalmartProducts(userId: string): Promise<Walm
     );
 
     return rows
-      .map((row) => row.product_payload)
-      .filter((payload): payload is WalmartProductRecord => Boolean(payload && typeof payload === "object"));
+      .map((row) => sanitizePersistedWalmartProduct(row.product_payload))
+      .filter((payload): payload is WalmartProductRecord => Boolean(payload));
   } catch (error) {
     if (isUndefinedRelationError(error, PRODUCTS_TABLE) || isUndefinedRelationError(error, STATE_TABLE)) {
       throw tableMissingError();
@@ -181,7 +351,10 @@ export async function getPersistedWalmartProductBySkuWithArchiveState(input: {
     if (state.archivedSkus.has(normalizedSku)) {
       return { product: null, archived: true };
     }
-    return { product: state.productsBySku.get(normalizedSku) ?? null, archived: false };
+    return {
+      product: sanitizePersistedWalmartProduct(state.productsBySku.get(normalizedSku) ?? null),
+      archived: false,
+    };
   }
 
   if (!dbConfigured()) {
@@ -209,7 +382,7 @@ export async function getPersistedWalmartProductBySkuWithArchiveState(input: {
       return { product: null, archived: true };
     }
 
-    return { product: row.product_payload ?? null, archived: false };
+    return { product: sanitizePersistedWalmartProduct(row.product_payload), archived: false };
   } catch (error) {
     if (isUndefinedRelationError(error, PRODUCTS_TABLE) || isUndefinedRelationError(error, STATE_TABLE)) {
       throw tableMissingError();
