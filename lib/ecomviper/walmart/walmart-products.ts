@@ -1631,7 +1631,7 @@ async function enrichProductImages(
       publicListingQueue.progress.errorCategories.unknownErrorCount;
 
     if (providerStatus === "not_connected") {
-      stats.noImageReason = "SerpApi is not connected.";
+      stats.noImageReason = "Connect SerpApi to enable automated public Walmart image enrichment.";
     } else if (providerErrorCount > 0 && providerStatusReason) {
       stats.noImageReason = providerStatusReason;
     } else if (
@@ -1941,6 +1941,8 @@ export async function importWalmartProducts(
         lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
         inventoryLookupSkippedCount: Math.max(0, bySku.size - Math.min(bySku.size, inventoryLookupCap)),
         imageEnrichmentDeferredCount: deferredProducts.length,
+        imageEnrichmentImportLimit: options?.boundedRuntime ? enrichmentCap : null,
+        imageEnrichmentBounded: Boolean(options?.boundedRuntime),
         imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
         itemReportRequested: imageStats.itemReport.requested,
         itemReportDownloaded: imageStats.itemReport.downloaded,
@@ -2025,9 +2027,11 @@ export async function retryWalmartPublicImageEnrichmentForUser(
         queue.progress.foundCount > 0
           ? null
           : queue.progress.providerStatus === "not_connected"
-          ? "SerpApi is not connected."
+          ? "Connect SerpApi to enable automated public Walmart image enrichment."
           : queue.progress.providerStatusReason ?? "Provider returned no image-bearing matches.",
       lastEnrichedAt: queue.progress.lastEnrichedAt,
+      imageEnrichmentImportLimit: null,
+      imageEnrichmentBounded: false,
       imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
       imageSourceBreakdown: {
         walmartItemReport: queue.products.filter(

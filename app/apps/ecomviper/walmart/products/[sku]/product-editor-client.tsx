@@ -1069,7 +1069,7 @@ export default function ProductEditorClient({
 
   function toPublicImageErrorMessage(code: string, fallback: string): string {
     if (code === "SERPAPI_NOT_CONNECTED") {
-      return "Connect your SerpApi key to fetch public Walmart listing images.";
+      return "SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment.";
     }
     if (code === "INVALID_PUBLIC_WALMART_URL") {
       return "Public Walmart listing URL is invalid. Use a valid walmart.com product URL.";
@@ -1087,7 +1087,7 @@ export default function ProductEditorClient({
       return "SerpApi account does not have permission for this request.";
     }
     if (code === "SERPAPI_BAD_REQUEST") {
-      return "SerpApi rejected this image lookup request.";
+      return fallback.trim() || "SerpApi bad request.";
     }
     if (code === "SERPAPI_RATE_LIMITED") {
       return "SerpApi rate limited this request. Retry in a moment.";
@@ -2031,7 +2031,7 @@ export default function ProductEditorClient({
                     ) : null}
                     {!serpApiProviderConnected ? (
                       <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
-                        <p>Connect your SerpApi key to fetch public Walmart listing images.</p>
+                        <p>SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment.</p>
                         <a
                           href="/apps/ecomviper/walmart/connect"
                           className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"

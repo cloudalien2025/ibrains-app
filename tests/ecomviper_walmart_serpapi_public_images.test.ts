@@ -7,8 +7,10 @@ import {
   extractWalmartPublicProductIdFromUrl,
   fetchWalmartProductImagesViaSerpApi,
   normalizeSerpApiWalmartImages,
+  serpApiWalmartImageInternals,
 } from "@/lib/ecomviper/walmart/serpapi-walmart-images";
 import { GET as getSerpApiRoute, POST as saveSerpApiRoute } from "@/app/api/ecomviper/walmart/connect/serpapi/route";
+import { POST as testSerpApiRoute } from "@/app/api/ecomviper/walmart/connect/serpapi/test/route";
 import { POST as resolvePublicImageRoute } from "@/app/api/ecomviper/walmart/products/[sku]/images/resolve/route";
 
 const authMocks = vi.hoisted(() => ({
@@ -78,6 +80,122 @@ describe("Walmart SerpApi public listing images", () => {
     expect(statusPayload.connected).toBe(true);
     expect(statusPayload.maskedApiKey.endsWith(rawApiKey.slice(-4))).toBe(true);
     expect(JSON.stringify(statusPayload)).not.toContain(rawApiKey);
+  });
+
+  it("SerpApi test route returns not_connected when no key is available", async () => {
+    const resp = await testSerpApiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi/test", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "" }),
+      })
+    );
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.providerStatus).toBe("not_connected");
+    expect(payload.providerStatusReason).toContain("SerpApi key missing");
+  });
+
+  it("SerpApi test route classifies invalid key safely", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Invalid API key api_key=secret_should_hide" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const resp = await testSerpApiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi/test", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "serpapi_invalid_123" }),
+      })
+    );
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.providerStatus).toBe("invalid_key");
+    expect(payload.providerStatusReason).toBe("SerpApi key was rejected.");
+    expect(JSON.stringify(payload)).not.toContain("serpapi_invalid_123");
+    expect(JSON.stringify(payload)).not.toContain("secret_should_hide");
+  });
+
+  it("SerpApi test route classifies forbidden and rate-limited states", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "forbidden for this plan" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ error: "out of searches" }), {
+          status: 429,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+    const forbiddenResp = await testSerpApiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi/test", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "serpapi_forbidden_123" }),
+      })
+    );
+    const forbiddenPayload = await forbiddenResp.json();
+    expect(forbiddenPayload.providerStatus).toBe("forbidden");
+
+    const rateResp = await testSerpApiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi/test", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "serpapi_rate_123" }),
+      })
+    );
+    const ratePayload = await rateResp.json();
+    expect(ratePayload.providerStatus).toBe("rate_limited");
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("SerpApi test route returns connected with safe usage diagnostics", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            total_searches_left: 112,
+            this_month_usage: 18,
+            plan_searches_per_month: 250,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            product_result: {
+              title: "OPA Sleep Magnesium Gummies",
+              image: "https://i5.walmartimages.com/asr/c-test.jpg",
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    const resp = await testSerpApiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi/test", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "serpapi_connected_123" }),
+      })
+    );
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.providerStatus).toBe("connected");
+    expect(payload.statusCode).toBe(200);
+    expect(payload.usage).toEqual({
+      totalSearchesLeft: 112,
+      thisMonthUsage: 18,
+      planSearchesPerMonth: 250,
+    });
+    expect(JSON.stringify(payload)).not.toContain("serpapi_connected_123");
   });
 
   it("extracts Walmart public product ID from supported URL formats", () => {
@@ -229,6 +347,174 @@ describe("Walmart SerpApi public listing images", () => {
     expect(result.statusCategory).toBe("forbidden");
     expect(result.errorCode).toBe("SERPAPI_FORBIDDEN");
     expect(result.statusReason).toBe("SerpApi account does not include Walmart API access.");
+  });
+
+  it("maps bad-request provider messages with safe detail", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ error: "Unable to process request: product_id is required. api_key=secret_key_123" }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "bad-request-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("validation_error");
+    expect(result.errorCode).toBe("SERPAPI_BAD_REQUEST");
+    expect(result.statusReason).toContain("SerpApi bad request:");
+    expect(result.statusReason).toContain("product_id is required");
+    expect(result.statusReason).not.toContain("secret_key_123");
+  });
+
+  it("maps 429 status responses to rate_limited", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ error: "Too many requests" }), {
+        status: 429,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "rate-limit-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("rate_limited");
+    expect(result.errorCode).toBe("SERPAPI_RATE_LIMITED");
+  });
+
+  it("maps HTTP 400 missing-parameter errors to bad_request", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "product_id is required" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "bad-request-http-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("validation_error");
+    expect(result.errorCode).toBe("SERPAPI_BAD_REQUEST");
+    expect(result.statusReason).toContain("SerpApi bad request");
+  });
+
+  it("maps 5xx status responses to provider_error with safe detail", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response("Upstream provider error api_key=leak_me", {
+        status: 503,
+        headers: { "Content-Type": "text/plain" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "provider-error-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("provider_error");
+    expect(result.errorCode).toBe("SERPAPI_PROVIDER_ERROR");
+    expect(result.statusReason).toContain("SerpApi provider request failed");
+    expect(result.statusReason).not.toContain("leak_me");
+  });
+
+  it("maps repeated ETIMEDOUT failures to network_error", async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValue(new Error("connect ETIMEDOUT token=abc123"));
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "network-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("network_error");
+    expect(result.errorCode).toBe("SERPAPI_NETWORK_ERROR");
+    expect(result.statusReason).toContain("network error");
+    expect(result.statusReason).not.toContain("abc123");
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("maps malformed JSON responses to malformed_response", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("not-json", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "malformed-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("malformed_response");
+    expect(result.errorCode).toBe("SERPAPI_MALFORMED_RESPONSE");
+  });
+
+  it("uses safe detail for unknown provider errors instead of generic-only text", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error:
+            "Something odd happened in upstream provider module XYZ. request=https://serpapi.com/search.json?api_key=secret-key",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "unknown-provider-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("provider_error");
+    expect(result.statusReason).toContain("SerpApi returned a provider error:");
+    expect(result.statusReason).not.toContain("secret-key");
+  });
+
+  it("treats valid payload without image fields as not_found", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          product_result: {
+            title: "Product without media",
+            brand: "Brandless",
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "no-image-key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("not_found");
+    expect(result.errorCode).toBe("SERPAPI_NO_IMAGES_FOUND");
+  });
+
+  it("sanitizes api_key values from provider error detail", () => {
+    const detail = serpApiWalmartImageInternals.sanitizeSerpApiErrorDetail(
+      "Provider error request=https://serpapi.com/search.json?engine=walmart_product&api_key=secret_123"
+    );
+
+    expect(detail).toContain("api_key=[REDACTED]");
+    expect(detail).not.toContain("secret_123");
   });
 
   it("retries transient SerpApi timeout before succeeding", async () => {

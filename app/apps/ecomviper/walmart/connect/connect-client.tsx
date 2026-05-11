@@ -77,6 +77,25 @@ type SerpApiConnectionApiPayload = {
   maskedApiKey: string;
   updatedAt: string | null;
   saveSupported: boolean;
+  providerStatus?:
+    | "connected"
+    | "not_connected"
+    | "invalid_key"
+    | "forbidden"
+    | "rate_limited"
+    | "bad_request"
+    | "network_error"
+    | "malformed_response"
+    | "provider_error"
+    | "unknown_error";
+  providerStatusReason?: string | null;
+  safeProviderErrorDetail?: string | null;
+  statusCode?: number | null;
+  usage?: {
+    totalSearchesLeft: number | null;
+    thisMonthUsage: number | null;
+    planSearchesPerMonth: number | null;
+  } | null;
   message?: string;
 };
 
@@ -230,6 +249,27 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     updatedAt: null,
     saveSupported: true,
   });
+  const [serpApiDiagnostics, setSerpApiDiagnostics] = useState<{
+    providerStatus:
+      | "connected"
+      | "not_connected"
+      | "invalid_key"
+      | "forbidden"
+      | "rate_limited"
+      | "bad_request"
+      | "network_error"
+      | "malformed_response"
+      | "provider_error"
+      | "unknown_error";
+    providerStatusReason: string;
+    safeProviderErrorDetail: string | null;
+    statusCode: number | null;
+    usage: {
+      totalSearchesLeft: number | null;
+      thisMonthUsage: number | null;
+      planSearchesPerMonth: number | null;
+    } | null;
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [openAiLoading, setOpenAiLoading] = useState(false);
   const [serpApiLoading, setSerpApiLoading] = useState(false);
@@ -438,6 +478,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         }
       );
       setSerpApiStatus(toSerpApiStatus(response));
+      setSerpApiDiagnostics({
+        providerStatus: response.providerStatus ?? (response.connected ? "connected" : "not_connected"),
+        providerStatusReason: response.providerStatusReason ?? (response.connected ? "Connected to SerpApi." : "SerpApi key missing."),
+        safeProviderErrorDetail: response.safeProviderErrorDetail ?? null,
+        statusCode: response.statusCode ?? null,
+        usage: response.usage ?? null,
+      });
       setMessage(response.message ?? "SerpApi test completed.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -460,6 +507,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         }
       );
       setSerpApiStatus(toSerpApiStatus(response));
+      setSerpApiDiagnostics(null);
       setSerpApiForm({ apiKey: "" });
       setMessage(response.message ?? "SerpApi key saved securely.");
     } catch (error) {
@@ -480,6 +528,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         "/api/ecomviper/walmart/connect/serpapi"
       );
       setSerpApiStatus(toSerpApiStatus(response));
+      setSerpApiDiagnostics(null);
       setSerpApiForm({ apiKey: "" });
       setMessage(response.message ?? "SerpApi disconnected.");
     } catch (error) {
@@ -838,6 +887,58 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               <dt>Last updated</dt>
               <dd className="font-medium">{serpApiStatus.updatedAt ?? "Never"}</dd>
             </div>
+            {serpApiDiagnostics ? (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <dt>Test status</dt>
+                  <dd className="font-medium">{serpApiDiagnostics.providerStatus}</dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt>Test HTTP status</dt>
+                  <dd className="font-medium">
+                    {serpApiDiagnostics.statusCode === null ? "N/A" : String(serpApiDiagnostics.statusCode)}
+                  </dd>
+                </div>
+                <div className="flex items-start justify-between gap-3">
+                  <dt>Test reason</dt>
+                  <dd className="font-medium text-right">{serpApiDiagnostics.providerStatusReason}</dd>
+                </div>
+                {serpApiDiagnostics.safeProviderErrorDetail ? (
+                  <div className="flex items-start justify-between gap-3">
+                    <dt>Safe detail</dt>
+                    <dd className="font-medium text-right">{serpApiDiagnostics.safeProviderErrorDetail}</dd>
+                  </div>
+                ) : null}
+                {serpApiDiagnostics.usage ? (
+                  <>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt>Searches left</dt>
+                      <dd className="font-medium">
+                        {serpApiDiagnostics.usage.totalSearchesLeft === null
+                          ? "N/A"
+                          : String(serpApiDiagnostics.usage.totalSearchesLeft)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt>Month usage</dt>
+                      <dd className="font-medium">
+                        {serpApiDiagnostics.usage.thisMonthUsage === null
+                          ? "N/A"
+                          : String(serpApiDiagnostics.usage.thisMonthUsage)}
+                      </dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3">
+                      <dt>Plan/month</dt>
+                      <dd className="font-medium">
+                        {serpApiDiagnostics.usage.planSearchesPerMonth === null
+                          ? "N/A"
+                          : String(serpApiDiagnostics.usage.planSearchesPerMonth)}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : null}
           </dl>
         </article>
       </section>

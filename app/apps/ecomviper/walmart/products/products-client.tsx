@@ -88,11 +88,17 @@ interface ImportPanelState {
     | "invalid_key"
     | "forbidden"
     | "rate_limited"
+    | "bad_request"
+    | "network_error"
+    | "malformed_response"
     | "provider_error"
     | "unknown_error";
   providerStatusReason: string | null;
   providerCanAttempt: boolean;
   noImageReason: string | null;
+  enrichmentBounded: boolean;
+  enrichmentBoundedLimit: number | null;
+  enrichmentDeferredCount: number;
   importErrorCategory:
     | "none"
     | "walmart_credentials_missing"
@@ -146,15 +152,19 @@ function compareSkuNatural(
 
 function formatImageStatus(product: WalmartEffectiveProductRecord): string {
   if (product.imageStatusMessage?.trim()) {
-    if (product.imageStatusMessage.trim() === "SerpApi returned an error response.") {
-      return "SerpApi returned a provider error.";
+    const message = product.imageStatusMessage.trim();
+    if (message === "SerpApi returned an error response.") {
+      return "SerpApi provider error.";
     }
-    return product.imageStatusMessage;
+    if (message.includes("Connect your SerpApi key")) {
+      return "SerpApi key missing.";
+    }
+    return message;
   }
   if (product.imageSyncStatus === "not_found") {
     if (product.imageSource === "walmart_item_report") return "No matching row found in Walmart Item Report.";
     if (product.imageSource === "public_walmart_listing_serpapi")
-      return "No public Walmart listing images found via SerpApi.";
+      return "No safe public Walmart image match found.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Item Search returned no usable image.";
   }
@@ -166,12 +176,12 @@ function formatImageStatus(product: WalmartEffectiveProductRecord): string {
   if (product.imageSyncStatus === "failed") {
     if (product.imageSource === "walmart_item_report") return "Walmart Item Report request failed.";
     if (product.imageSource === "public_walmart_listing_serpapi")
-      return "Public Walmart listing image lookup failed.";
+      return "SerpApi provider error.";
     return "Item Search request failed after retry.";
   }
   if (product.imageSyncStatus === "not_synced") {
     if (product.imageSource === "public_walmart_listing_serpapi")
-      return "Public Walmart listing images not synced.";
+      return "SerpApi key missing.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Image enrichment not synced.";
   }
@@ -215,6 +225,9 @@ function formatSerpApiProviderStatus(
   if (status === "invalid_key") return "Invalid key";
   if (status === "forbidden") return "Forbidden";
   if (status === "rate_limited") return "Rate limited";
+  if (status === "bad_request") return "Bad request";
+  if (status === "network_error") return "Network error";
+  if (status === "malformed_response") return "Malformed response";
   if (status === "provider_error") return "Provider error";
   if (status === "unknown_error") return "Unknown error";
   return fallbackConnected ? "Connected" : "Not connected";
@@ -350,6 +363,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       providerStatusReason: null,
       providerCanAttempt: false,
       noImageReason: null,
+      enrichmentBounded: mode !== "retry_image_enrichment",
+      enrichmentBoundedLimit: null,
+      enrichmentDeferredCount: 0,
       importErrorCategory: "none",
       importErrorReason: null,
       importErrorPhase: null,
@@ -418,11 +434,17 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             | "invalid_key"
             | "forbidden"
             | "rate_limited"
+            | "bad_request"
+            | "network_error"
+            | "malformed_response"
             | "provider_error"
             | "unknown_error";
           providerStatusReason?: string | null;
           providerCanAttempt?: boolean;
           noImageReason?: string | null;
+          enrichmentBounded?: boolean;
+          enrichmentBoundedLimit?: number | null;
+          enrichmentDeferredCount?: number;
           importErrorCategory?:
             | "none"
             | "walmart_credentials_missing"
@@ -491,10 +513,16 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             | "invalid_key"
             | "forbidden"
             | "rate_limited"
+            | "bad_request"
+            | "network_error"
+            | "malformed_response"
             | "provider_error"
             | "unknown_error";
           serpApiStatusReason?: string | null;
           serpApiCanAttempt?: boolean;
+          imageEnrichmentBounded?: boolean;
+          imageEnrichmentImportLimit?: number | null;
+          imageEnrichmentDeferredCount?: number;
         };
         error?: { message?: string };
       };
@@ -539,6 +567,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           providerStatusReason,
           providerCanAttempt: payload.importProgress?.providerCanAttempt ?? providerConnected,
           noImageReason: payload.importProgress?.noImageReason ?? null,
+          enrichmentBounded: payload.importProgress?.enrichmentBounded ?? false,
+          enrichmentBoundedLimit: payload.importProgress?.enrichmentBoundedLimit ?? null,
+          enrichmentDeferredCount: payload.importProgress?.enrichmentDeferredCount ?? 0,
           importErrorCategory:
             payload.importProgress?.importErrorCategory ??
             (isGatewayTimeout ? "import_gateway_timeout" : "import_unknown_error"),
@@ -590,6 +621,18 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         payload.importProgress?.noImageReason ??
         payload.importDiagnostics?.imageEnrichmentNoImageReason ??
         null;
+      const enrichmentBounded =
+        payload.importProgress?.enrichmentBounded ??
+        payload.importDiagnostics?.imageEnrichmentBounded ??
+        false;
+      const enrichmentBoundedLimit =
+        payload.importProgress?.enrichmentBoundedLimit ??
+        payload.importDiagnostics?.imageEnrichmentImportLimit ??
+        null;
+      const enrichmentDeferredCount =
+        payload.importProgress?.enrichmentDeferredCount ??
+        payload.importDiagnostics?.imageEnrichmentDeferredCount ??
+        0;
       const finalStage: ImportPanelStage =
         payload.importProgress?.stage === "completed_with_warnings" ||
         missingCount > 0 ||
@@ -625,6 +668,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         providerStatusReason,
         providerCanAttempt,
         noImageReason,
+        enrichmentBounded,
+        enrichmentBoundedLimit,
+        enrichmentDeferredCount,
         importErrorCategory: payload.importProgress?.importErrorCategory ?? "none",
         importErrorReason: payload.importProgress?.importErrorReason ?? null,
         importErrorPhase: payload.importProgress?.importErrorPhase ?? null,
@@ -671,6 +717,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         providerStatusReason: current?.providerStatusReason ?? null,
         providerCanAttempt: current?.providerCanAttempt ?? false,
         noImageReason: current?.noImageReason ?? null,
+        enrichmentBounded: current?.enrichmentBounded ?? false,
+        enrichmentBoundedLimit: current?.enrichmentBoundedLimit ?? null,
+        enrichmentDeferredCount: current?.enrichmentDeferredCount ?? 0,
         importErrorCategory: current?.importErrorCategory ?? "import_unknown_error",
         importErrorReason:
           current?.importErrorReason ??
@@ -825,8 +874,26 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                 {formatSerpApiProviderStatus(importPanel.providerStatus, importPanel.providerConnected)}
               </p>
             </div>
+            {importPanel.enrichmentBounded &&
+            importPanel.enrichmentDeferredCount > 0 &&
+            importPanel.enrichmentBoundedLimit !== null ? (
+              <p className="mt-2 text-xs text-[#334155]">
+                Import image enrichment checks the first {importPanel.enrichmentBoundedLimit} missing-image products during import. Use Retry image enrichment to continue processing the remaining products.
+              </p>
+            ) : null}
             {importPanel.providerStatusReason ? (
               <p className="mt-2 text-xs text-[#7C2D12]">{importPanel.providerStatusReason}</p>
+            ) : null}
+            {importPanel.providerStatus === "not_connected" ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">
+                Connect SerpApi to enable automated public Walmart image enrichment.
+              </p>
+            ) : null}
+            {importPanel.providerStatus === "provider_error" ||
+            importPanel.providerStatus === "bad_request" ||
+            importPanel.providerStatus === "network_error" ||
+            importPanel.providerStatus === "malformed_response" ? (
+              <p className="mt-2 text-xs text-[#7C2D12]">Test SerpApi connection in Connect.</p>
             ) : null}
             {importPanel.noImageReason ? (
               <p className="mt-2 text-xs text-[#7C2D12]">
@@ -865,7 +932,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             onClick={() => void handleImport("retry_image_enrichment")}
             className="mt-2 rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-xs text-[#0F172A]"
           >
-            Retry image enrichment
+            Retry image enrichment (continue remaining products)
           </button>
         ) : null}
 

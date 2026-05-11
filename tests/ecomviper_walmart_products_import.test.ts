@@ -144,7 +144,7 @@ describe("walmart product import", () => {
     serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValue({
       imageSyncStatus: "not_synced",
       imageSource: "public_walmart_listing_serpapi",
-      statusReason: "Connect your SerpApi key to fetch public Walmart listing images.",
+      statusReason: "SerpApi key missing. Connect SerpApi to enable automated public Walmart image enrichment.",
       imageMatchMethod: null,
       publicWalmartUrl: "",
       publicWalmartProductId: "",
@@ -885,7 +885,9 @@ describe("walmart product import", () => {
 
     expect(result.importDiagnostics?.enrichmentProviderConnected).toBe(false);
     expect(result.importDiagnostics?.imageSkippedNoProviderCount).toBe(1);
-    expect(result.importDiagnostics?.imageEnrichmentNoImageReason).toBe("SerpApi is not connected.");
+    expect(result.importDiagnostics?.imageEnrichmentNoImageReason).toBe(
+      "Connect SerpApi to enable automated public Walmart image enrichment."
+    );
     expect(result.importDiagnostics?.serpApiStatus).toBe("not_connected");
     expect(result.importDiagnostics?.serpApiCanAttempt).toBe(false);
   });
