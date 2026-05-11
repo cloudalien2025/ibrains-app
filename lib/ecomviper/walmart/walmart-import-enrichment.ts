@@ -1,4 +1,7 @@
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type {
+  WalmartProductRecord,
+  WalmartSerpApiProviderStatus,
+} from "@/lib/ecomviper/walmart/walmart-types";
 import { normalizeWalmartImageUrlList } from "@/lib/ecomviper/walmart/walmart-image-fields";
 import {
   enrichProductImagesFromPublicWalmartListing,
@@ -34,6 +37,19 @@ export interface WalmartPublicImportEnrichmentProgress {
   skippedNoProviderCount: number;
   lastEnrichedAt: string | null;
   providerConnected: boolean;
+  providerStatus: WalmartSerpApiProviderStatus;
+  providerStatusReason: string | null;
+  providerCanAttempt: boolean;
+  errorCategories: {
+    invalidKeyCount: number;
+    forbiddenCount: number;
+    rateLimitedCount: number;
+    badRequestCount: number;
+    providerErrorCount: number;
+    networkErrorCount: number;
+    malformedResponseCount: number;
+    unknownErrorCount: number;
+  };
 }
 
 export interface WalmartPublicImportEnrichmentResult {
@@ -43,7 +59,66 @@ export interface WalmartPublicImportEnrichmentResult {
 
 function shouldRetryTransientFailure(errorCode: string | undefined): boolean {
   if (!errorCode) return false;
-  return errorCode === "SERPAPI_REQUEST_FAILED" || errorCode === "SERPAPI_RATE_LIMITED";
+  return (
+    errorCode === "SERPAPI_PROVIDER_ERROR" ||
+    errorCode === "SERPAPI_NETWORK_ERROR" ||
+    errorCode === "SERPAPI_REQUEST_FAILED" ||
+    errorCode === "SERPAPI_RATE_LIMITED"
+  );
+}
+
+function providerStatusPriority(status: WalmartSerpApiProviderStatus): number {
+  if (status === "invalid_key") return 70;
+  if (status === "forbidden") return 65;
+  if (status === "rate_limited") return 60;
+  if (status === "provider_error") return 55;
+  if (status === "unknown_error") return 50;
+  if (status === "not_connected") return 40;
+  return 10;
+}
+
+function applyProviderErrorToProgress(input: {
+  progress: WalmartPublicImportEnrichmentProgress;
+  errorCode?: string;
+  statusReason: string;
+}) {
+  const next = input.progress;
+  const reason = input.statusReason.trim() || null;
+  let status: WalmartSerpApiProviderStatus = "unknown_error";
+
+  if (input.errorCode === "SERPAPI_INVALID_KEY" || input.errorCode === "SERPAPI_AUTH_FAILED") {
+    next.errorCategories.invalidKeyCount += 1;
+    status = "invalid_key";
+  } else if (input.errorCode === "SERPAPI_FORBIDDEN") {
+    next.errorCategories.forbiddenCount += 1;
+    status = "forbidden";
+  } else if (input.errorCode === "SERPAPI_RATE_LIMITED") {
+    next.errorCategories.rateLimitedCount += 1;
+    status = "rate_limited";
+  } else if (input.errorCode === "SERPAPI_BAD_REQUEST") {
+    next.errorCategories.badRequestCount += 1;
+    status = "provider_error";
+  } else if (input.errorCode === "SERPAPI_NETWORK_ERROR") {
+    next.errorCategories.networkErrorCount += 1;
+    status = "provider_error";
+  } else if (input.errorCode === "SERPAPI_MALFORMED_RESPONSE") {
+    next.errorCategories.malformedResponseCount += 1;
+    status = "provider_error";
+  } else if (
+    input.errorCode === "SERPAPI_PROVIDER_ERROR" ||
+    input.errorCode === "SERPAPI_REQUEST_FAILED"
+  ) {
+    next.errorCategories.providerErrorCount += 1;
+    status = "provider_error";
+  } else {
+    next.errorCategories.unknownErrorCount += 1;
+    status = "unknown_error";
+  }
+
+  if (providerStatusPriority(status) >= providerStatusPriority(next.providerStatus)) {
+    next.providerStatus = status;
+    next.providerStatusReason = reason;
+  }
 }
 
 function applyFoundPublicListingImages(
@@ -217,10 +292,26 @@ export async function runPublicListingImageEnrichmentQueue(input: {
     skippedNoProviderCount: 0,
     lastEnrichedAt: candidates.length > 0 ? now : null,
     providerConnected: credentials.connected,
+    providerStatus: credentials.status === "connected" ? "connected" : "not_connected",
+    providerStatusReason: credentials.statusReason,
+    providerCanAttempt: Boolean(credentials.connected && credentials.apiKey),
+    errorCategories: {
+      invalidKeyCount: 0,
+      forbiddenCount: 0,
+      rateLimitedCount: 0,
+      badRequestCount: 0,
+      providerErrorCount: 0,
+      networkErrorCount: 0,
+      malformedResponseCount: 0,
+      unknownErrorCount: 0,
+    },
   };
 
   if (!credentials.connected || !credentials.apiKey) {
     progress.skippedNoProviderCount = candidates.length;
+    progress.providerStatus = "not_connected";
+    progress.providerStatusReason = "SerpApi key is missing.";
+    progress.providerCanAttempt = false;
     return { products, progress };
   }
 
@@ -266,7 +357,14 @@ export async function runPublicListingImageEnrichmentQueue(input: {
 
       if (resolution.imageSyncStatus === "not_found") progress.notFoundCount += 1;
       else if (resolution.imageSyncStatus === "ambiguous") progress.ambiguousCount += 1;
-      else if (resolution.imageSyncStatus === "failed") progress.failedCount += 1;
+      else if (resolution.imageSyncStatus === "failed") {
+        progress.failedCount += 1;
+        applyProviderErrorToProgress({
+          progress,
+          errorCode: resolution.errorCode,
+          statusReason: resolution.statusReason,
+        });
+      }
 
       products[targetIndex] = applyNonFoundResolution(products[targetIndex], {
         imageSyncStatus: resolution.imageSyncStatus,

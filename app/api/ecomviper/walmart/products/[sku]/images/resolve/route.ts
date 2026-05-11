@@ -11,9 +11,15 @@ function toHttpStatusFromErrorCode(errorCode: string | undefined): number {
   if (errorCode === "SERPAPI_NOT_CONNECTED") return 400;
   if (errorCode === "INVALID_PUBLIC_WALMART_URL") return 400;
   if (errorCode === "INVALID_PUBLIC_WALMART_PRODUCT_ID") return 400;
+  if (errorCode === "SERPAPI_INVALID_KEY") return 401;
+  if (errorCode === "SERPAPI_FORBIDDEN") return 403;
+  if (errorCode === "SERPAPI_BAD_REQUEST") return 400;
   if (errorCode === "SERPAPI_AUTH_FAILED") return 502;
   if (errorCode === "SERPAPI_RATE_LIMITED") return 429;
   if (errorCode === "SERPAPI_AMBIGUOUS_MATCH") return 409;
+  if (errorCode === "SERPAPI_PROVIDER_ERROR") return 502;
+  if (errorCode === "SERPAPI_NETWORK_ERROR") return 503;
+  if (errorCode === "SERPAPI_MALFORMED_RESPONSE") return 502;
   if (errorCode === "SERPAPI_NOT_FOUND" || errorCode === "SERPAPI_NO_IMAGES_FOUND") return 404;
   return 502;
 }

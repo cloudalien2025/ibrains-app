@@ -155,6 +155,44 @@ describe("Walmart SerpApi public listing images", () => {
     expect(parsed.searchParams.get("product_id")).toBe("18410702298");
   });
 
+  it("categorizes SerpApi 401 as invalid_key", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Invalid API key" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "bad_key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("invalid_key");
+    expect(result.errorCode).toBe("SERPAPI_INVALID_KEY");
+    expect(result.statusReason).toBe("SerpApi key was rejected.");
+  });
+
+  it("categorizes SerpApi 403 as forbidden", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ error: "Forbidden" }), {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
+
+    const result = await fetchWalmartProductImagesViaSerpApi({
+      apiKey: "forbidden_key",
+      productId: "18410702298",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.statusCategory).toBe("forbidden");
+    expect(result.errorCode).toBe("SERPAPI_FORBIDDEN");
+    expect(result.statusReason).toBe("SerpApi account does not have permission.");
+  });
+
   it("resolves images via route using URL product ID and returns source metadata", async () => {
     const saveReq = new NextRequest("http://localhost/api/ecomviper/walmart/connect/serpapi", {
       method: "POST",

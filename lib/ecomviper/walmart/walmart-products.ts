@@ -36,6 +36,7 @@ import type {
   WalmartImportResult,
   WalmartInventoryStatus,
   WalmartProductRecord,
+  WalmartSerpApiProviderStatus,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const WALMART_IMPORT_PAGE_LIMIT = 100;
@@ -950,6 +951,9 @@ interface ImageEnrichmentStats {
   };
   publicListing: {
     providerConnected: boolean;
+    providerStatus: WalmartSerpApiProviderStatus;
+    providerStatusReason: string | null;
+    providerCanAttempt: boolean;
     queuedCount: number;
     completedCount: number;
     foundCount: number;
@@ -958,6 +962,16 @@ interface ImageEnrichmentStats {
     failedCount: number;
     skippedNoProviderCount: number;
     lastEnrichedAt: string | null;
+    errorCategories: {
+      invalidKeyCount: number;
+      forbiddenCount: number;
+      rateLimitedCount: number;
+      badRequestCount: number;
+      providerErrorCount: number;
+      networkErrorCount: number;
+      malformedResponseCount: number;
+      unknownErrorCount: number;
+    };
   };
   itemReport: {
     requested: boolean;
@@ -1171,6 +1185,9 @@ async function enrichProductImages(
     },
     publicListing: {
       providerConnected: false,
+      providerStatus: "not_connected",
+      providerStatusReason: null,
+      providerCanAttempt: false,
       queuedCount: 0,
       completedCount: 0,
       foundCount: 0,
@@ -1179,6 +1196,16 @@ async function enrichProductImages(
       failedCount: 0,
       skippedNoProviderCount: 0,
       lastEnrichedAt: null,
+      errorCategories: {
+        invalidKeyCount: 0,
+        forbiddenCount: 0,
+        rateLimitedCount: 0,
+        badRequestCount: 0,
+        providerErrorCount: 0,
+        networkErrorCount: 0,
+        malformedResponseCount: 0,
+        unknownErrorCount: 0,
+      },
     },
     itemReport: {
       requested: false,
@@ -1337,6 +1364,9 @@ async function enrichProductImages(
   const finalized = publicListingQueue.products;
   stats.publicListing = {
     providerConnected: publicListingQueue.progress.providerConnected,
+    providerStatus: publicListingQueue.progress.providerStatus,
+    providerStatusReason: publicListingQueue.progress.providerStatusReason,
+    providerCanAttempt: publicListingQueue.progress.providerCanAttempt,
     queuedCount: publicListingQueue.progress.enrichmentQueuedCount,
     completedCount: publicListingQueue.progress.enrichmentCompletedCount,
     foundCount: publicListingQueue.progress.foundCount,
@@ -1345,6 +1375,9 @@ async function enrichProductImages(
     failedCount: publicListingQueue.progress.failedCount,
     skippedNoProviderCount: publicListingQueue.progress.skippedNoProviderCount,
     lastEnrichedAt: publicListingQueue.progress.lastEnrichedAt,
+    errorCategories: {
+      ...publicListingQueue.progress.errorCategories,
+    },
   };
 
   stats.sourceBreakdown = {
@@ -1378,8 +1411,22 @@ async function enrichProductImages(
 
   if (stats.found === 0) {
     const identifierCoverage = firstIdentifierCount(enriched.filter((product) => !product.imageUrl.trim()));
-    if (!publicListingQueue.progress.providerConnected) {
+    const providerStatus = publicListingQueue.progress.providerStatus;
+    const providerStatusReason = publicListingQueue.progress.providerStatusReason;
+    const providerErrorCount =
+      publicListingQueue.progress.errorCategories.invalidKeyCount +
+      publicListingQueue.progress.errorCategories.forbiddenCount +
+      publicListingQueue.progress.errorCategories.rateLimitedCount +
+      publicListingQueue.progress.errorCategories.badRequestCount +
+      publicListingQueue.progress.errorCategories.providerErrorCount +
+      publicListingQueue.progress.errorCategories.networkErrorCount +
+      publicListingQueue.progress.errorCategories.malformedResponseCount +
+      publicListingQueue.progress.errorCategories.unknownErrorCount;
+
+    if (providerStatus === "not_connected") {
       stats.noImageReason = "SerpApi is not connected.";
+    } else if (providerErrorCount > 0 && providerStatusReason) {
+      stats.noImageReason = providerStatusReason;
     } else if (
       identifierCoverage.withPublicProductId === 0 &&
       identifierCoverage.withPublicUrl === 0 &&
@@ -1407,101 +1454,145 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
     );
   }
 
-  const now = new Date().toISOString();
-  const collected: Record<string, unknown>[] = [];
-  const payloadShapes = new Set<string>();
-  let pageCount = 0;
-  let nextCursor: string | null = null;
-
-  for (let pageIndex = 0; pageIndex < WALMART_IMPORT_MAX_PAGES; pageIndex += 1) {
-    const page = await fetchCatalogPage(token.accessToken, nextCursor);
-    collected.push(...page.items);
-    payloadShapes.add(page.payloadShape);
-    pageCount += 1;
-
-    if (!page.nextCursor || page.nextCursor === nextCursor || page.items.length === 0) {
-      break;
-    }
-    nextCursor = page.nextCursor;
-  }
-
-  const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected);
-
-  const bySku = new Map<string, WalmartProductRecord>();
-  let skippedCount = 0;
-  for (const item of collected) {
-    const normalized = normalizeImportedItem(item, inventorySnapshotsBySku);
-    if (!normalized) {
-      skippedCount += 1;
-      continue;
-    }
-    bySku.set(normalized.sku.toUpperCase(), normalized);
-  }
-
-  const baseProducts = Array.from(bySku.values());
-  const { products, stats: imageStats } = await enrichProductImages(token.accessToken, userId, baseProducts);
-  const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
-  const inventoryOutOfStockCount = products.filter((product) => product.inventoryStatus === "out_of_stock").length;
-  const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
-  await replaceWalmartProductsForUser({
-    userId,
-    products,
-    importedAt: now,
-  });
-
-  appendActivityLog({
-    marketplace: "walmart",
-    actionType: "product_import",
-    result: products.length > 0 ? "success" : "warning",
-    message:
-      products.length > 0
-        ? `Imported ${products.length} Walmart product(s).`
-        : "Walmart import completed with no product rows returned.",
-  });
-
-  return {
-    importedCount: products.length,
-    fetchedCount: collected.length,
-    skippedCount,
-    lastImportAt: now,
-    mode: getWalmartRuntimeMode(),
-    importDiagnostics: {
-      fetchedCount: collected.length,
-      payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
-      pageCount,
-      inventoryKnownCount,
-      inventoryUnknownCount,
-      inventoryOutOfStockCount,
-      imageFoundCount: imageStats.found,
-      imageNotFoundCount: imageStats.notFound,
-      imageAmbiguousCount: imageStats.ambiguous,
-      imageFailedCount: imageStats.failed,
-      imageSkippedNoProviderCount: imageStats.publicListing.skippedNoProviderCount,
-      enrichmentQueuedCount: imageStats.publicListing.queuedCount,
-      enrichmentCompletedCount: imageStats.publicListing.completedCount,
-      enrichmentProviderConnected: imageStats.publicListing.providerConnected,
-      enrichmentProcessedCount: imageStats.publicListing.completedCount,
-      imageEnrichmentNoImageReason: imageStats.noImageReason,
-      lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
-      imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
-      itemReportRequested: imageStats.itemReport.requested,
-      itemReportDownloaded: imageStats.itemReport.downloaded,
-      itemReportRowsParsed: imageStats.itemReport.rowsParsed,
-      itemReportRequestId: imageStats.itemReport.requestId,
-      itemReportRequestEndpointTried: imageStats.itemReport.requestEndpointTried,
-      itemReportRequestEndpointUsed: imageStats.itemReport.requestEndpointUsed,
-      itemReportRequestStatusCode: imageStats.itemReport.requestStatusCode,
-      itemReportStatusEndpointUsed: imageStats.itemReport.statusEndpointUsed,
-      itemReportDownloadEndpointUsed: imageStats.itemReport.downloadEndpointUsed,
-      itemReportFailureCategory: imageStats.itemReport.failureCategory,
-      imageSourceBreakdown: {
-        walmartItemReport: imageStats.sourceBreakdown.walmartItemReport,
-        walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,
-        walmartItemSearch: imageStats.sourceBreakdown.walmartItemSearch,
-        publicWalmartListingSerpApi: imageStats.sourceBreakdown.publicWalmartListingSerpApi,
-      },
-    },
+  const partialProgress = {
+    importedCount: 0,
+    fetchedCount: 0,
+    processedCount: 0,
+    queuedCount: 0,
+    imageFoundCount: 0,
+    imageMissingCount: 0,
+    imageNotFoundCount: 0,
+    imageAmbiguousCount: 0,
+    imageFailedCount: 0,
+    imageSkippedNoProviderCount: 0,
   };
+
+  try {
+    const now = new Date().toISOString();
+    const collected: Record<string, unknown>[] = [];
+    const payloadShapes = new Set<string>();
+    let pageCount = 0;
+    let nextCursor: string | null = null;
+
+    for (let pageIndex = 0; pageIndex < WALMART_IMPORT_MAX_PAGES; pageIndex += 1) {
+      const page = await fetchCatalogPage(token.accessToken, nextCursor);
+      collected.push(...page.items);
+      payloadShapes.add(page.payloadShape);
+      pageCount += 1;
+      partialProgress.fetchedCount = collected.length;
+
+      if (!page.nextCursor || page.nextCursor === nextCursor || page.items.length === 0) {
+        break;
+      }
+      nextCursor = page.nextCursor;
+    }
+
+    const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected);
+
+    const bySku = new Map<string, WalmartProductRecord>();
+    let skippedCount = 0;
+    for (const item of collected) {
+      const normalized = normalizeImportedItem(item, inventorySnapshotsBySku);
+      if (!normalized) {
+        skippedCount += 1;
+        continue;
+      }
+      bySku.set(normalized.sku.toUpperCase(), normalized);
+    }
+
+    const baseProducts = Array.from(bySku.values());
+    partialProgress.importedCount = baseProducts.length;
+    const { products, stats: imageStats } = await enrichProductImages(token.accessToken, userId, baseProducts);
+    const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
+    const inventoryOutOfStockCount = products.filter(
+      (product) => product.inventoryStatus === "out_of_stock"
+    ).length;
+    const inventoryUnknownCount = products.filter((product) => product.inventoryStatus === "unknown").length;
+    partialProgress.importedCount = products.length;
+    partialProgress.queuedCount = imageStats.publicListing.queuedCount;
+    partialProgress.processedCount = imageStats.publicListing.completedCount;
+    partialProgress.imageFoundCount = imageStats.found;
+    partialProgress.imageNotFoundCount = imageStats.notFound;
+    partialProgress.imageAmbiguousCount = imageStats.ambiguous;
+    partialProgress.imageFailedCount = imageStats.failed;
+    partialProgress.imageSkippedNoProviderCount = imageStats.publicListing.skippedNoProviderCount;
+    partialProgress.imageMissingCount =
+      imageStats.notFound + imageStats.publicListing.skippedNoProviderCount;
+
+    await replaceWalmartProductsForUser({
+      userId,
+      products,
+      importedAt: now,
+    });
+
+    appendActivityLog({
+      marketplace: "walmart",
+      actionType: "product_import",
+      result: products.length > 0 ? "success" : "warning",
+      message:
+        products.length > 0
+          ? `Imported ${products.length} Walmart product(s).`
+          : "Walmart import completed with no product rows returned.",
+    });
+
+    return {
+      importedCount: products.length,
+      fetchedCount: collected.length,
+      skippedCount,
+      lastImportAt: now,
+      mode: getWalmartRuntimeMode(),
+      importDiagnostics: {
+        fetchedCount: collected.length,
+        payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
+        pageCount,
+        inventoryKnownCount,
+        inventoryUnknownCount,
+        inventoryOutOfStockCount,
+        imageFoundCount: imageStats.found,
+        imageNotFoundCount: imageStats.notFound,
+        imageAmbiguousCount: imageStats.ambiguous,
+        imageFailedCount: imageStats.failed,
+        imageSkippedNoProviderCount: imageStats.publicListing.skippedNoProviderCount,
+        enrichmentQueuedCount: imageStats.publicListing.queuedCount,
+        enrichmentCompletedCount: imageStats.publicListing.completedCount,
+        enrichmentProviderConnected: imageStats.publicListing.providerConnected,
+        serpApiStatus: imageStats.publicListing.providerStatus,
+        serpApiStatusReason: imageStats.publicListing.providerStatusReason,
+        serpApiCanAttempt: imageStats.publicListing.providerCanAttempt,
+        enrichmentErrorCategories: {
+          ...imageStats.publicListing.errorCategories,
+        },
+        enrichmentProcessedCount: imageStats.publicListing.completedCount,
+        imageEnrichmentNoImageReason: imageStats.noImageReason,
+        lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
+        imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
+        itemReportRequested: imageStats.itemReport.requested,
+        itemReportDownloaded: imageStats.itemReport.downloaded,
+        itemReportRowsParsed: imageStats.itemReport.rowsParsed,
+        itemReportRequestId: imageStats.itemReport.requestId,
+        itemReportRequestEndpointTried: imageStats.itemReport.requestEndpointTried,
+        itemReportRequestEndpointUsed: imageStats.itemReport.requestEndpointUsed,
+        itemReportRequestStatusCode: imageStats.itemReport.requestStatusCode,
+        itemReportStatusEndpointUsed: imageStats.itemReport.statusEndpointUsed,
+        itemReportDownloadEndpointUsed: imageStats.itemReport.downloadEndpointUsed,
+        itemReportFailureCategory: imageStats.itemReport.failureCategory,
+        imageSourceBreakdown: {
+          walmartItemReport: imageStats.sourceBreakdown.walmartItemReport,
+          walmartSellerCatalogSearch: imageStats.sourceBreakdown.walmartSellerCatalogSearch,
+          walmartItemSearch: imageStats.sourceBreakdown.walmartItemSearch,
+          publicWalmartListingSerpApi: imageStats.sourceBreakdown.publicWalmartListingSerpApi,
+        },
+        importErrorCategory: "none",
+        importErrorReason: null,
+      },
+    };
+  } catch (error) {
+    const nextError = error instanceof Error ? error : new Error("Walmart import failed.");
+    (nextError as Error & { partialProgress?: typeof partialProgress }).partialProgress = {
+      ...partialProgress,
+    };
+    throw nextError;
+  }
 }
 
 export async function retryWalmartPublicImageEnrichmentForUser(
@@ -1539,13 +1630,19 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       enrichmentQueuedCount: queue.progress.enrichmentQueuedCount,
       enrichmentCompletedCount: queue.progress.enrichmentCompletedCount,
       enrichmentProviderConnected: queue.progress.providerConnected,
+      serpApiStatus: queue.progress.providerStatus,
+      serpApiStatusReason: queue.progress.providerStatusReason,
+      serpApiCanAttempt: queue.progress.providerCanAttempt,
+      enrichmentErrorCategories: {
+        ...queue.progress.errorCategories,
+      },
       enrichmentProcessedCount: queue.progress.enrichmentCompletedCount,
       imageEnrichmentNoImageReason:
         queue.progress.foundCount > 0
           ? null
-          : queue.progress.providerConnected
-          ? "Provider returned no image-bearing matches."
-          : "SerpApi is not connected.",
+          : queue.progress.providerStatus === "not_connected"
+          ? "SerpApi is not connected."
+          : queue.progress.providerStatusReason ?? "Provider returned no image-bearing matches.",
       lastEnrichedAt: queue.progress.lastEnrichedAt,
       imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
       imageSourceBreakdown: {
@@ -1564,6 +1661,8 @@ export async function retryWalmartPublicImageEnrichmentForUser(
             product.imageSyncStatus === "found"
         ).length,
       },
+      importErrorCategory: "none",
+      importErrorReason: null,
     },
   };
 }
