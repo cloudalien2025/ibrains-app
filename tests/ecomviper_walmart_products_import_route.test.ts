@@ -81,7 +81,10 @@ describe("walmart products import route", () => {
     expect(payload.fetchedCount).toBe(3);
     expect(payload.message).toContain("Imported 3 products.");
     expect(payload.importProgress?.stage).toBe("complete");
-    expect(mocks.importWalmartProducts).toHaveBeenCalledWith("user_clerk_1");
+    expect(mocks.importWalmartProducts).toHaveBeenCalledWith(
+      "user_clerk_1",
+      expect.objectContaining({ boundedRuntime: true })
+    );
   });
 
   it("includes inventory pending diagnostics in success message when inventory is unknown", async () => {

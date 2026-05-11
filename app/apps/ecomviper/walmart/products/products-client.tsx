@@ -493,7 +493,9 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         const failureMessage =
           payload.importProgress?.importErrorReason ??
           payload.error?.message ??
-          "Import failed.";
+          (response.status === 504
+            ? "Import request timed out at the gateway before completion. Try Import Products again or run Retry image enrichment after products are imported."
+            : `Import failed (HTTP ${response.status}).`);
         const totals = payload.importProgress?.totals;
         const existingProductsShownCount = payload.importProgress?.existingProductsShownCount ?? 0;
         const providerConnected = payload.importProgress?.providerConnected ?? false;
@@ -631,7 +633,7 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
       }
       router.refresh();
     } catch {
-      setMessage("Import failed.");
+      setMessage("Import request failed before the server returned progress.");
       setImportPanel((current) => ({
         stage: "failed",
         percent: 100,
@@ -651,14 +653,16 @@ export default function WalmartProductsClient({ products }: ProductsClientProps)
         providerCanAttempt: current?.providerCanAttempt ?? false,
         noImageReason: current?.noImageReason ?? null,
         importErrorCategory: current?.importErrorCategory ?? "import_unknown_error",
-        importErrorReason: current?.importErrorReason ?? "Import failed.",
+        importErrorReason:
+          current?.importErrorReason ??
+          "Import request failed before the server returned progress.",
         importErrorPhase: current?.importErrorPhase ?? "import_unknown",
         importErrorStatusCode: current?.importErrorStatusCode ?? null,
         importErrorEndpointFamily: current?.importErrorEndpointFamily ?? null,
         importErrorCorrelationId: current?.importErrorCorrelationId ?? null,
         importErrorResponseShape: current?.importErrorResponseShape ?? null,
         existingProductsShownCount: current?.existingProductsShownCount ?? 0,
-        summary: "Import failed.",
+        summary: "Import request failed before server progress was returned.",
         running: false,
       }));
     } finally {

@@ -46,6 +46,10 @@ const WALMART_IMPORT_MAX_PAGES = 5;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
 const WALMART_HOST_SUFFIX = ".walmart.com";
 const WALMART_IMPORT_FAILURE_NAME = "WalmartImportFailureError";
+const WALMART_CATALOG_REQUEST_TIMEOUT_MS = 12_000;
+const WALMART_INVENTORY_REQUEST_TIMEOUT_MS = 4_500;
+const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS = 45;
+const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
 
 type WalmartImportPartialProgress = {
   importedCount: number;
@@ -69,6 +73,12 @@ export interface WalmartImportFailureError extends Error {
   endpointFamily?: string | null;
   responseShapeSummary?: string | null;
   partialProgress?: WalmartImportPartialProgress;
+}
+
+interface WalmartImportOptions {
+  boundedRuntime?: boolean;
+  maxImageEnrichmentProducts?: number;
+  maxInventoryLookups?: number;
 }
 
 function createWalmartImportFailure(input: {
@@ -738,11 +748,14 @@ async function fetchInventorySnapshotForSku(accessToken: string, sku: string): P
   url.searchParams.set("sku", sku);
 
   const correlationId = crypto.randomUUID();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WALMART_INVENTORY_REQUEST_TIMEOUT_MS);
   const response = await fetch(url.toString(), {
     method: "GET",
     headers: buildWalmartApiHeaders(accessToken, correlationId),
     cache: "no-store",
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timeout));
 
   if (!response.ok) {
     return {
@@ -753,7 +766,18 @@ async function fetchInventorySnapshotForSku(accessToken: string, sku: string): P
   }
 
   const text = await response.text();
-  const payload = text ? (JSON.parse(text) as unknown) : {};
+  let payload: unknown = {};
+  if (text.trim()) {
+    try {
+      payload = JSON.parse(text) as unknown;
+    } catch {
+      return {
+        status: "unknown",
+        quantity: 0,
+        source: "inventory_api_invalid_json",
+      };
+    }
+  }
   const quantity = extractInventoryQuantity(payload);
   if (quantity !== null) {
     return {
@@ -781,7 +805,8 @@ async function fetchInventorySnapshotForSku(accessToken: string, sku: string): P
 
 async function fetchInventorySnapshotsForItems(
   accessToken: string,
-  items: Record<string, unknown>[]
+  items: Record<string, unknown>[],
+  options?: { maxLookups?: number }
 ): Promise<Map<string, InventorySnapshot>> {
   const bySku = new Map<string, string>();
   for (const item of items) {
@@ -793,7 +818,8 @@ async function fetchInventorySnapshotsForItems(
   }
 
   const snapshots = new Map<string, InventorySnapshot>();
-  const skus = Array.from(bySku.entries());
+  const maxLookups = Math.max(1, options?.maxLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS);
+  const skus = Array.from(bySku.entries()).slice(0, maxLookups);
   const concurrency = 8;
 
   for (let index = 0; index < skus.length; index += concurrency) {
@@ -1020,11 +1046,31 @@ async function fetchCatalogPage(accessToken: string, nextCursor?: string | null)
   }
 
   const correlationId = crypto.randomUUID();
-  const response = await fetch(url.toString(), {
-    method: "GET",
-    headers: buildWalmartApiHeaders(accessToken, correlationId),
-    cache: "no-store",
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), WALMART_CATALOG_REQUEST_TIMEOUT_MS);
+  let response: Response;
+  try {
+    response = await fetch(url.toString(), {
+      method: "GET",
+      headers: buildWalmartApiHeaders(accessToken, correlationId),
+      cache: "no-store",
+      signal: controller.signal,
+    });
+  } catch {
+    const error = new Error("Walmart catalog request timed out or failed.") as Error & {
+      statusCode?: number;
+      correlationId?: string | null;
+      endpointFamily?: string;
+      responseShapeSummary?: string;
+    };
+    error.statusCode = 504;
+    error.correlationId = correlationId;
+    error.endpointFamily = "walmart_catalog_items";
+    error.responseShapeSummary = "network_or_timeout";
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const responseBody = await response.text();
   if (!response.ok) {
@@ -1589,7 +1635,10 @@ function categorizeWalmartTokenFailure(code: string | null | undefined): Walmart
   return "walmart_token_failed";
 }
 
-export async function importWalmartProducts(userId: string): Promise<WalmartImportResult> {
+export async function importWalmartProducts(
+  userId: string,
+  options?: WalmartImportOptions
+): Promise<WalmartImportResult> {
   const partialProgress: WalmartImportPartialProgress = {
     importedCount: 0,
     fetchedCount: 0,
@@ -1693,7 +1742,12 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
       nextCursor = page.nextCursor;
     }
 
-    const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected);
+    const inventoryLookupCap = options?.boundedRuntime
+      ? Math.max(1, options.maxInventoryLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS)
+      : Number.MAX_SAFE_INTEGER;
+    const inventorySnapshotsBySku = await fetchInventorySnapshotsForItems(token.accessToken, collected, {
+      maxLookups: inventoryLookupCap,
+    });
 
     const bySku = new Map<string, WalmartProductRecord>();
     let skippedCount = 0;
@@ -1722,7 +1776,56 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
 
     const baseProducts = Array.from(bySku.values());
     partialProgress.importedCount = baseProducts.length;
-    const { products, stats: imageStats } = await enrichProductImages(token.accessToken, userId, baseProducts);
+    const enrichmentCap = options?.boundedRuntime
+      ? Math.max(
+          1,
+          options.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS
+        )
+      : Number.MAX_SAFE_INTEGER;
+    const productsForImageEnrichment = baseProducts.slice(0, enrichmentCap);
+    const deferredProducts = baseProducts.slice(productsForImageEnrichment.length);
+    const { products: enrichedProducts, stats: imageStats } = await enrichProductImages(
+      token.accessToken,
+      userId,
+      productsForImageEnrichment
+    );
+    const deferredReason =
+      deferredProducts.length > 0
+        ? "Image enrichment deferred during import to keep this request responsive. Use Retry image enrichment to continue."
+        : null;
+    const deferredEnrichmentProducts =
+      deferredProducts.length > 0
+        ? deferredProducts.map((product) =>
+            withImageEnrichment(product, {
+              imageSyncStatus: product.imageUrl.trim() ? "found" : "not_synced",
+              statusReason: deferredReason ?? undefined,
+              imageSource: product.imageSource ?? "public_walmart_listing_serpapi",
+              primaryImageUrl: product.imageUrl,
+              galleryImageUrls: [...(product.galleryImageUrls ?? [])],
+              variantImageUrls: [...(product.variantImageUrls ?? [])],
+              matchedItemId: product.matchedItemId ?? null,
+              matchMethod: product.imageMatchMethod ?? null,
+              lastImageSyncedAt: new Date().toISOString(),
+              diagnostics: {
+                attempts: [],
+                decision: {
+                  outcome: product.imageUrl.trim() ? "found" : "not_synced",
+                  reason:
+                    deferredReason ??
+                    (product.imageUrl.trim()
+                      ? "Image available"
+                      : "Image enrichment deferred during import."),
+                  matchMethod: product.imageMatchMethod ?? null,
+                  candidateCount: 0,
+                  selectedScore: null,
+                  runnerUpScore: null,
+                  acceptedBy: "none",
+                },
+              },
+            })
+          )
+        : [];
+    const products = [...enrichedProducts, ...deferredEnrichmentProducts];
     const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
     const inventoryOutOfStockCount = products.filter(
       (product) => product.inventoryStatus === "out_of_stock"
@@ -1795,8 +1898,14 @@ export async function importWalmartProducts(userId: string): Promise<WalmartImpo
           ...imageStats.publicListing.errorCategories,
         },
         enrichmentProcessedCount: imageStats.publicListing.completedCount,
-        imageEnrichmentNoImageReason: imageStats.noImageReason,
+        imageEnrichmentNoImageReason: deferredReason
+          ? imageStats.noImageReason
+            ? `${imageStats.noImageReason} ${deferredReason}`
+            : deferredReason
+          : imageStats.noImageReason,
         lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
+        inventoryLookupSkippedCount: Math.max(0, bySku.size - Math.min(bySku.size, inventoryLookupCap)),
+        imageEnrichmentDeferredCount: deferredProducts.length,
         imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
         itemReportRequested: imageStats.itemReport.requested,
         itemReportDownloaded: imageStats.itemReport.downloaded,

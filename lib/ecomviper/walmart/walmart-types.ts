@@ -282,6 +282,7 @@ export interface WalmartImportResult {
     inventoryKnownCount?: number;
     inventoryUnknownCount?: number;
     inventoryOutOfStockCount?: number;
+    inventoryLookupSkippedCount?: number;
     imageFoundCount?: number;
     imageNotFoundCount?: number;
     imageAmbiguousCount?: number;
@@ -292,6 +293,7 @@ export interface WalmartImportResult {
     enrichmentProcessedCount?: number;
     enrichmentProviderConnected?: boolean;
     lastEnrichedAt?: string | null;
+    imageEnrichmentDeferredCount?: number;
     imageEnrichmentNoImageReason?: string | null;
     serpApiStatus?: WalmartSerpApiProviderStatus;
     serpApiStatusReason?: string | null;
