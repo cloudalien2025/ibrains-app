@@ -377,7 +377,9 @@ export async function POST(req: NextRequest) {
 
     const result = isRetryMode
       ? await retryWalmartPublicImageEnrichmentForUser(userId)
-      : await importWalmartProducts(userId);
+      : await importWalmartProducts(userId, {
+          boundedRuntime: true,
+        });
 
     const progress = buildSuccessProgress({
       result,

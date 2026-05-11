@@ -6,6 +6,7 @@ import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-cli
 import type { WalmartImageMatchMethod, WalmartImageSyncStatus, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 const ITEM_REPORT_STATUS_POLL_DELAYS_MS = [700, 1200, 1800, 2600, 3500] as const;
+const ITEM_REPORT_REQUEST_TIMEOUT_MS = 10_000;
 
 type WalmartItemReportEndpointFamily = "report_requests" | "requests";
 
@@ -364,6 +365,19 @@ async function sleep(ms: number): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = ITEM_REPORT_REQUEST_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function requestItemReport(accessToken: string): Promise<{
   ok: boolean;
   reportRequestId: string | null;
@@ -390,7 +404,7 @@ async function requestItemReport(accessToken: string): Promise<{
     requestEndpointTried.push(attempt.path);
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithTimeout(endpoint, {
         method: "POST",
         headers: buildWalmartApiHeaders(accessToken, correlationId),
         body: JSON.stringify(attempt.body),
@@ -542,7 +556,7 @@ async function getReportRequestStatus(params: {
     const endpoint = new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
 
     try {
-      const response = await fetch(endpoint, {
+      const response = await fetchWithTimeout(endpoint, {
         method: "GET",
         headers: buildWalmartApiHeaders(params.accessToken, correlationId),
         cache: "no-store",
@@ -867,7 +881,7 @@ async function downloadReport(params: {
 
   async function fetchReport(url: string, includeHeaders: boolean): Promise<Response> {
     const correlationId = crypto.randomUUID();
-    return fetch(url, {
+    return fetchWithTimeout(url, {
       method: "GET",
       headers: includeHeaders ? buildWalmartApiHeaders(params.accessToken, correlationId) : { Accept: "*/*" },
       cache: "no-store",

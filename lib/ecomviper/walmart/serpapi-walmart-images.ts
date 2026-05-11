@@ -11,6 +11,7 @@ import type {
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const SERPAPI_ENDPOINT = "https://serpapi.com/search.json";
+const SERPAPI_REQUEST_TIMEOUT_MS = 10_000;
 const WALMART_HOST_SUFFIX = ".walmart.com";
 
 type SerpApiEndpointFamily = "walmart_product" | "walmart_search";
@@ -404,10 +405,13 @@ async function fetchSerpApiJson(params: {
   }
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), SERPAPI_REQUEST_TIMEOUT_MS);
     const response = await fetch(url.toString(), {
       method: "GET",
       cache: "no-store",
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
 
     const responseText = await response.text();
     let payload: unknown = {};

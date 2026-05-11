@@ -57,6 +57,7 @@ declare global {
 
 const WALMART_TOKEN_URL = `${WALMART_PRODUCTION_BASE_URL}/v3/token`;
 const FALLBACK_CONNECTION_USER_ID = "ecomviper-system";
+const WALMART_TOKEN_TIMEOUT_MS = 12_000;
 
 function permissionsDefault(state: WalmartPermissionCheck["state"] = "unknown"): WalmartPermissionCheck[] {
   return [
@@ -464,6 +465,8 @@ export async function requestServerSideWalmartToken(params?: {
   const basicAuth = Buffer.from(`${clientId}:${clientSecret}`).toString("base64");
 
   try {
+    const controller = new AbortController();
+    const timeoutHandle = setTimeout(() => controller.abort(), WALMART_TOKEN_TIMEOUT_MS);
     const response = await fetch(WALMART_TOKEN_URL, {
       method: "POST",
       headers: {
@@ -475,7 +478,8 @@ export async function requestServerSideWalmartToken(params?: {
       },
       body: new URLSearchParams({ grant_type: "client_credentials" }).toString(),
       cache: "no-store",
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeoutHandle));
 
     const raw = await response.text();
     const payload = raw ? safeJsonParse(raw) : null;
