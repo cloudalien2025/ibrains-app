@@ -21,6 +21,10 @@ import {
   SUPPLEMENT_FDA_DISCLAIMER,
 } from "@/lib/ecomviper/walmart/walmart-ai-visibility-content-policy";
 import {
+  pickMeaningfulAiText,
+  sanitizeWalmartAiSearchBrowseAttributes,
+} from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
+import {
   buildSearchBrowseAttributesFromSources,
   normalizeSearchBrowseAttributes,
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
@@ -365,14 +369,20 @@ function toSuggestionFromGenerated(
       ? suggestedBrandRaw
       : fallback.suggestedBrand;
 
-  const generatedAttributes = {
+  const generatedAttributesRaw = {
     ...toAttributeRecord(payload.suggestedAttributes),
     ...toAttributeRecord(payload.attributes),
     ...toAttributeRecord(payload.keyAttributes),
     ...normalizeSearchBrowseSuggestions(payload.searchBrowseAttributes),
   };
 
-  const searchBrowseAttributes = normalizeSearchBrowseSuggestions(generatedAttributes);
+  const searchBrowseAttributes = sanitizeWalmartAiSearchBrowseAttributes({
+    candidates: normalizeSearchBrowseSuggestions(generatedAttributesRaw),
+    existingKeys: [
+      ...Object.keys(product.attributes ?? {}),
+      ...Object.keys(product.searchBrowseAttributes ?? {}),
+    ],
+  }).accepted;
   const missingAttributes =
     toStringArray(payload.missingAttributes).length > 0
       ? toStringArray(payload.missingAttributes)
@@ -389,9 +399,13 @@ function toSuggestionFromGenerated(
   return {
     sku: product.sku,
     qualityScore: clampScore(payload.qualityScore) ?? fallback.qualityScore,
-    suggestedTitle,
-    suggestedShortDescription,
-    suggestedDescription,
+    suggestedTitle: pickMeaningfulAiText(suggestedTitle) ?? fallback.suggestedTitle,
+    suggestedShortDescription:
+      pickMeaningfulAiText(suggestedShortDescription) ??
+      fallback.suggestedShortDescription ??
+      "",
+    suggestedDescription:
+      pickMeaningfulAiText(suggestedDescription) ?? fallback.suggestedDescription,
     suggestedBullets,
     suggestedBrand,
     suggestedAttributes: searchBrowseAttributes,

@@ -137,6 +137,44 @@ describe("Walmart listing quality scoring", () => {
     expect(assessment.factors).toContain("Key attributes are missing");
   });
 
+  it("filters protected and low-confidence AI search/browse attributes during merge", () => {
+    const merged = mergeWalmartAiSuggestionIntoProduct(createProduct(), {
+      sku: "30066-841",
+      qualityScore: 88,
+      suggestedTitle: "Optimized title",
+      suggestedDescription: "Optimized long description",
+      suggestedBullets: ["Bullet one", "Bullet two", "Bullet three"],
+      suggestedAttributes: {
+        target_audience: "Adults",
+        sku: "DO-NOT-OVERWRITE",
+        support_areas: "Needs product label confirmation",
+      },
+      searchBrowseAttributes: {
+        search_terms: "daily wellness, mobility",
+        inventory_quantity: "500",
+      },
+      missingAttributes: [],
+      complianceWarnings: [],
+      disclaimer: "compliance disclaimer",
+    });
+
+    expect(merged.attributes).toMatchObject({
+      target_audience: "Adults",
+      search_terms: "daily wellness, mobility",
+    });
+    expect(merged.attributes).not.toHaveProperty("sku");
+    expect(merged.attributes).not.toHaveProperty("support_areas");
+    expect(merged.attributes).not.toHaveProperty("inventory_quantity");
+
+    expect(merged.searchBrowseAttributes).toMatchObject({
+      target_audience: "Adults",
+      search_terms: "daily wellness, mobility",
+    });
+    expect(merged.searchBrowseAttributes).not.toHaveProperty("sku");
+    expect(merged.searchBrowseAttributes).not.toHaveProperty("support_areas");
+    expect(merged.searchBrowseAttributes).not.toHaveProperty("inventory_quantity");
+  });
+
   it("keeps score healthy when image is the only major issue", () => {
     const assessment = assessWalmartListingQuality(
       createProduct({

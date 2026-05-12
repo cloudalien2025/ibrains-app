@@ -7,6 +7,11 @@ import type {
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
 import { applyDraftImageFieldsToProduct } from "@/lib/ecomviper/walmart/walmart-image-fields";
+import {
+  isLowConfidenceAiFieldValue,
+  pickMeaningfulAiText,
+  sanitizeWalmartAiSearchBrowseAttributes,
+} from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values));
@@ -221,32 +226,35 @@ export function mergeWalmartAiSuggestionIntoProduct(
   product: WalmartProductRecord,
   suggestion: WalmartAiSuggestion
 ): WalmartProductRecord {
-  const title = suggestion.suggestedTitle.trim() || product.title;
-  const suggestedLongDescription = suggestion.suggestedDescription.trim();
+  const title = pickMeaningfulAiText(suggestion.suggestedTitle) || product.title;
+  const suggestedLongDescription = pickMeaningfulAiText(suggestion.suggestedDescription) || "";
   const longDescription = suggestedLongDescription || product.longDescription;
+  const suggestedShortDescription = pickMeaningfulAiText(
+    suggestion.suggestedShortDescription
+  );
   const shortDescription =
-    suggestion.suggestedShortDescription?.trim() ||
+    suggestedShortDescription ||
     product.shortDescription.trim() ||
     inferShortDescriptionFromLongDescription(longDescription);
   const suggestedBullets = suggestion.suggestedBullets
     .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
+    .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry));
   const bulletPoints = suggestedBullets.length > 0 ? suggestedBullets : product.bulletPoints;
-  const suggestedBrand = suggestion.suggestedBrand?.trim() ?? "";
+  const suggestedBrand = pickMeaningfulAiText(suggestion.suggestedBrand) ?? "";
   const brand =
     suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
       ? suggestedBrand
       : product.brand;
-  const suggestedAttributes = Object.fromEntries(
-    Object.entries(suggestion.suggestedAttributes ?? {})
-      .map(([key, value]) => [key.trim(), value.trim()] as const)
-      .filter(([key, value]) => key.length > 0 && value.length > 0)
-  );
-  const suggestedSearchBrowseAttributes = Object.fromEntries(
-    Object.entries(suggestion.searchBrowseAttributes ?? {})
-      .map(([key, value]) => [key.trim(), value.trim()] as const)
-      .filter(([key, value]) => key.length > 0 && value.length > 0)
-  );
+  const sanitizedAttributes = sanitizeWalmartAiSearchBrowseAttributes({
+    candidates: {
+      ...(suggestion.suggestedAttributes ?? {}),
+      ...(suggestion.searchBrowseAttributes ?? {}),
+    },
+    existingKeys: [
+      ...Object.keys(product.attributes ?? {}),
+      ...Object.keys(product.searchBrowseAttributes ?? {}),
+    ],
+  }).accepted;
 
   return {
     ...product,
@@ -257,13 +265,11 @@ export function mergeWalmartAiSuggestionIntoProduct(
     brand,
     attributes: {
       ...product.attributes,
-      ...suggestedAttributes,
-      ...suggestedSearchBrowseAttributes,
+      ...sanitizedAttributes,
     },
     searchBrowseAttributes: {
       ...(product.searchBrowseAttributes ?? {}),
-      ...suggestedAttributes,
-      ...suggestedSearchBrowseAttributes,
+      ...sanitizedAttributes,
     },
   };
 }

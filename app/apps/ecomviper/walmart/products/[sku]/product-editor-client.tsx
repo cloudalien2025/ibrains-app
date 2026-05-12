@@ -15,6 +15,11 @@ import {
   normalizeWalmartImageUrlList,
 } from "@/lib/ecomviper/walmart/walmart-image-fields";
 import {
+  isLowConfidenceAiFieldValue,
+  pickMeaningfulAiText,
+  sanitizeWalmartAiSearchBrowseAttributes,
+} from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
+import {
   appendUnknownSearchBrowseFields,
   buildSearchBrowseAttributesFromSources,
   getSearchBrowseFieldDefinitions,
@@ -449,10 +454,29 @@ function hydrateEditorForm(
       "itemImageUrl",
     ]);
   const imageUrl = preferredImageUrl || product.imageUrl;
+  const imageSource =
+    normalizedDraftImages.imageSource ??
+    draftImageSource ??
+    firstNonEmptyStringValue(
+      product.imageSource,
+      normalized?.imageSource,
+      raw?.imageSource
+    );
+  const fallbackAdditionalImageUrls = fallbackGalleryImageUrls.filter(
+    (entry) => entry !== imageUrl
+  );
+  const shouldUseShopifyGalleryFallback =
+    (imageSource === "shopify_product" || imageSource === "shopify_variant") &&
+    fallbackAdditionalImageUrls.length > 0 &&
+    (!draftAdditionalImages || draftAdditionalImages.length === 0);
   const additionalImageUrls =
     draftAdditionalFromNormalized ??
-    draftAdditionalImages ??
-    fallbackGalleryImageUrls.filter((entry) => entry !== imageUrl);
+    (draftAdditionalImages && draftAdditionalImages.length > 0
+      ? draftAdditionalImages
+      : shouldUseShopifyGalleryFallback
+      ? fallbackAdditionalImageUrls
+      : draftAdditionalImages ??
+        fallbackAdditionalImageUrls);
   const publicWalmartUrl =
     normalizedDraftImages.publicWalmartUrl ??
     draftPublicWalmartUrl ??
@@ -468,14 +492,6 @@ function hydrateEditorForm(
       product.publicWalmartProductId,
       normalized?.publicWalmartProductId,
       raw?.publicWalmartProductId
-    );
-  const imageSource =
-    normalizedDraftImages.imageSource ??
-    draftImageSource ??
-    firstNonEmptyStringValue(
-      product.imageSource,
-      normalized?.imageSource,
-      raw?.imageSource
     );
   const imageMatchMethod =
     normalizedDraftImages.imageMatchMethod ??
@@ -640,8 +656,14 @@ function formatImageSource(product: WalmartProductRecord): string {
     return "SerpApi Walmart brand search";
   if (product.imageSource === "public_walmart_listing_serpapi")
     return "Public Walmart listing via SerpApi";
+  if (product.imageSource === "shopify_variant") return "Shopify variant image";
+  if (product.imageSource === "shopify_product") return "Shopify product image";
   if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
+}
+
+function isShopifyImageSource(source: WalmartProductRecord["imageSource"] | string | undefined): boolean {
+  return source === "shopify_product" || source === "shopify_variant";
 }
 
 function changedProposalFields(
@@ -838,6 +860,31 @@ export default function ProductEditorClient({
       publicWalmartProductId: form.publicWalmartProductId,
       lastImageSyncedAt: form.lastImageSyncedAt,
     });
+    const normalizedImageSource = normalizedImageFields.imageSource ?? form.imageSource;
+    const shouldBackfillShopifyGallery =
+      isShopifyImageSource(normalizedImageSource) &&
+      (normalizedImageFields.additionalImageUrls?.length ?? 0) === 0;
+    const resolvedVariantImageUrls = shouldBackfillShopifyGallery
+      ? normalizeWalmartImageUrlList([
+          normalizedImageFields.variantImageUrls ?? [],
+          product.variantImageUrls ?? [],
+        ])
+      : normalizedImageFields.variantImageUrls;
+    const resolvedGalleryImageUrls = shouldBackfillShopifyGallery
+      ? normalizeWalmartImageUrlList([
+          normalizedImageFields.primaryImageUrl ?? normalizedImageFields.imageUrl ?? form.imageUrl,
+          product.galleryImageUrls ?? [],
+          resolvedVariantImageUrls ?? [],
+        ])
+      : normalizedImageFields.galleryImageUrls;
+    const resolvedPrimaryImageUrl =
+      normalizedImageFields.primaryImageUrl ||
+      normalizedImageFields.imageUrl ||
+      resolvedGalleryImageUrls?.[0] ||
+      "";
+    const resolvedAdditionalImageUrls = shouldBackfillShopifyGallery
+      ? (resolvedGalleryImageUrls ?? []).filter((entry) => entry !== resolvedPrimaryImageUrl)
+      : normalizedImageFields.additionalImageUrls;
 
     const mergedSearchBrowseAttributes = mergeAttributesWithSearchBrowse({
       baseAttributes: parsedAttributes,
@@ -852,11 +899,11 @@ export default function ProductEditorClient({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean),
-      imageUrl: normalizedImageFields.imageUrl,
-      primaryImageUrl: normalizedImageFields.primaryImageUrl,
-      additionalImageUrls: normalizedImageFields.additionalImageUrls,
-      galleryImageUrls: normalizedImageFields.galleryImageUrls,
-      variantImageUrls: normalizedImageFields.variantImageUrls,
+      imageUrl: normalizedImageFields.imageUrl || resolvedPrimaryImageUrl || undefined,
+      primaryImageUrl: resolvedPrimaryImageUrl || undefined,
+      additionalImageUrls: resolvedAdditionalImageUrls,
+      galleryImageUrls: resolvedGalleryImageUrls,
+      variantImageUrls: resolvedVariantImageUrls,
       publicWalmartUrl: normalizedImageFields.publicWalmartUrl,
       publicWalmartProductId: normalizedImageFields.publicWalmartProductId,
       imageSource: normalizedImageFields.imageSource,
@@ -879,7 +926,7 @@ export default function ProductEditorClient({
         .map((line) => line.trim())
         .filter(Boolean),
     };
-  }, [form]);
+  }, [form, product.galleryImageUrls, product.variantImageUrls]);
 
   const scoringProduct = useMemo(
     () => mergeWalmartDraftPayloadIntoProduct(product, preview),
@@ -980,14 +1027,52 @@ export default function ProductEditorClient({
   const displayTitle = form.title.trim() || product.title;
   const displayBrand = form.brand.trim() || product.brand.trim() || "Unknown";
   const displayPrimaryImageUrl = scoringProduct.imageUrl?.trim() || "";
+  const fallbackShopifyVariantPreviewUrls = useMemo(
+    () =>
+      isShopifyImageSource(scoringProduct.imageSource) &&
+      (scoringProduct.variantImageUrls?.length ?? 0) === 0
+        ? normalizeWalmartImageUrlList([product.variantImageUrls ?? []])
+        : [],
+    [scoringProduct.imageSource, scoringProduct.variantImageUrls, product.variantImageUrls]
+  );
+  const displayVariantPreviewUrls = useMemo(
+    () =>
+      normalizeWalmartImageUrlList([
+        scoringProduct.variantImageUrls ?? [],
+        fallbackShopifyVariantPreviewUrls,
+      ]),
+    [scoringProduct.variantImageUrls, fallbackShopifyVariantPreviewUrls]
+  );
+  const fallbackShopifyGalleryPreviewUrls = useMemo(
+    () =>
+      isShopifyImageSource(scoringProduct.imageSource) &&
+      (scoringProduct.galleryImageUrls?.length ?? 0) <= 1
+        ? normalizeWalmartImageUrlList([
+            product.galleryImageUrls ?? [],
+            product.variantImageUrls ?? [],
+          ])
+        : [],
+    [
+      scoringProduct.imageSource,
+      scoringProduct.galleryImageUrls,
+      product.galleryImageUrls,
+      product.variantImageUrls,
+    ]
+  );
   const displayGalleryPreviewUrls = useMemo(
     () =>
       normalizeWalmartImageUrlList([
         displayPrimaryImageUrl,
         scoringProduct.galleryImageUrls ?? [],
-        scoringProduct.variantImageUrls ?? [],
+        displayVariantPreviewUrls,
+        fallbackShopifyGalleryPreviewUrls,
       ]),
-    [displayPrimaryImageUrl, scoringProduct.galleryImageUrls, scoringProduct.variantImageUrls]
+    [
+      displayPrimaryImageUrl,
+      scoringProduct.galleryImageUrls,
+      displayVariantPreviewUrls,
+      fallbackShopifyGalleryPreviewUrls,
+    ]
   );
   const persistedDraftImagePreview = useMemo(() => {
     if (resolvedPublicImages || displayGalleryPreviewUrls.length === 0) return null;
@@ -1005,7 +1090,6 @@ export default function ProductEditorClient({
   }, [
     resolvedPublicImages,
     displayGalleryPreviewUrls,
-    scoringProduct.imageSource,
     scoringProduct,
     form.publicWalmartProductId,
     displayPrimaryImageUrl,
@@ -1257,28 +1341,22 @@ export default function ProductEditorClient({
     }
 
     const attributeMap = readAttributesFromForm(form.attributesJson);
-    const aiAttributeMap = {
+    const aiAttributeMap: Record<string, unknown> = {
       ...(inlineAiSuggestion.suggestedAttributes ?? {}),
       ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
     };
-    for (const [key, value] of Object.entries(aiAttributeMap)) {
-      const normalizedKey = key.trim();
-      const normalizedValue = value.trim();
-      if (!normalizedKey) continue;
-      if (normalizedValue) {
-        attributeMap[normalizedKey] = normalizedValue;
-      } else if (!hasOwn(attributeMap as unknown as Record<string, unknown>, normalizedKey)) {
-        attributeMap[normalizedKey] = "";
-      }
-    }
-    for (const attribute of inlineAiSuggestion.missingAttributes) {
-      const key = attribute.trim();
-      if (key && !hasOwn(attributeMap as unknown as Record<string, unknown>, key)) {
-        attributeMap[key] = "";
-      }
+    const sanitizedAiSearchBrowse = sanitizeWalmartAiSearchBrowseAttributes({
+      candidates: aiAttributeMap,
+      existingKeys: [
+        ...Object.keys(form.searchBrowseAttributes),
+        ...Object.keys(attributeMap),
+      ],
+    });
+    for (const [key, value] of Object.entries(sanitizedAiSearchBrowse.accepted)) {
+      attributeMap[key] = value;
     }
 
-    const suggestedBrand = inlineAiSuggestion.suggestedBrand?.trim() ?? "";
+    const suggestedBrand = pickMeaningfulAiText(inlineAiSuggestion.suggestedBrand) ?? "";
     const safeBrand =
       suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
         ? suggestedBrand
@@ -1286,18 +1364,36 @@ export default function ProductEditorClient({
 
     const mergedSearchBrowseAttributes = {
       ...form.searchBrowseAttributes,
-      ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
-      ...(inlineAiSuggestion.suggestedAttributes ?? {}),
+      ...sanitizedAiSearchBrowse.accepted,
     };
+    const meaningfulTitle = pickMeaningfulAiText(inlineAiSuggestion.suggestedTitle);
+    const meaningfulLongDescription = pickMeaningfulAiText(inlineAiSuggestion.suggestedDescription);
+    const meaningfulShortDescription = pickMeaningfulAiText(
+      inlineAiSuggestion.suggestedShortDescription
+    );
+    const meaningfulBullets = inlineAiSuggestion.suggestedBullets
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry));
+    const appliedSearchBrowseCount = Object.keys(sanitizedAiSearchBrowse.accepted).length;
+    const skippedSearchBrowseCount = sanitizedAiSearchBrowse.skipped.length;
+    const skippedProtectedCount = sanitizedAiSearchBrowse.skipped.filter(
+      (entry) => entry.reason === "protected_field"
+    ).length;
+    const skippedLowConfidenceCount = sanitizedAiSearchBrowse.skipped.filter(
+      (entry) => entry.reason === "low_confidence"
+    ).length;
 
     patchForm({
-      title: inlineAiSuggestion.suggestedTitle,
-      longDescription: inlineAiSuggestion.suggestedDescription,
+      title: meaningfulTitle ?? form.title,
+      longDescription: meaningfulLongDescription ?? form.longDescription,
       shortDescription:
-        inlineAiSuggestion.suggestedShortDescription?.trim() ||
-        form.shortDescription.trim() ||
-        inferShortDescriptionFromAi(inlineAiSuggestion.suggestedDescription),
-      bulletPoints: inlineAiSuggestion.suggestedBullets.join("\n"),
+        (meaningfulShortDescription ??
+          form.shortDescription.trim()) ||
+        inferShortDescriptionFromAi(meaningfulLongDescription ?? form.longDescription),
+      bulletPoints:
+        meaningfulBullets.length > 0
+          ? meaningfulBullets.join("\n")
+          : form.bulletPoints,
       brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
       searchBrowseAttributes: mergedSearchBrowseAttributes,
@@ -1310,7 +1406,11 @@ export default function ProductEditorClient({
     setActiveTab("Content");
     setShowAiDetails(false);
     setInlineAiState("success");
-    setInlineAiMessage("AI improvements applied to draft fields. Save Draft when ready.");
+    setInlineAiMessage(
+      skippedSearchBrowseCount > 0
+        ? `AI improvements applied to draft fields. Save Draft when ready. Search & Browse applied: ${appliedSearchBrowseCount}; skipped: ${skippedSearchBrowseCount} (${skippedProtectedCount} protected, ${skippedLowConfidenceCount} low-confidence).`
+        : "AI improvements applied to draft fields. Save Draft when ready."
+    );
   }
 
   function handleDismissInlineAiSuggestion() {
@@ -2183,8 +2283,8 @@ export default function ProductEditorClient({
                   <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-xs text-[#475569] md:col-span-2">
                     <p>Image sync status: {formatImageStatus(scoringProduct)}</p>
                     <p className="mt-1">Source: {formatImageSource(scoringProduct)}</p>
-                    <p className="mt-1">Gallery images: {scoringProduct.galleryImageUrls?.length ?? 0}</p>
-                    <p className="mt-1">Variant images: {scoringProduct.variantImageUrls?.length ?? 0}</p>
+                    <p className="mt-1">Gallery images: {displayGalleryPreviewUrls.length}</p>
+                    <p className="mt-1">Variant images: {displayVariantPreviewUrls.length}</p>
                   </div>
                 </>
               ) : null}
