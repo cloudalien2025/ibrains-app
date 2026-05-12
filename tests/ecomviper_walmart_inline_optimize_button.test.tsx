@@ -544,6 +544,136 @@ describe("Walmart inline optimize button workflow", () => {
     expect(saveBody.draftPayload.attributes).not.toHaveProperty("gtin");
   });
 
+  it("renders layered enrichment diagnostics in apply summary", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              suggestion: {
+                sku: "ROC808",
+                qualityScore: 89,
+                suggestedTitle:
+                  "OPA Nutrition Magnesium Glycinate Gummies, Sleep Quality & Relaxation Support, Grape, 60 Ct",
+                suggestedShortDescription:
+                  "Fact-grounded magnesium glycinate gummies for relaxation and sleep quality support.",
+                suggestedDescription:
+                  "OPA Nutrition Magnesium Glycinate Gummies are designed for adults seeking relaxation and sleep quality support.\n\nThese statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                suggestedBullets: [
+                  "Magnesium glycinate gummy format",
+                  "Sleep quality and relaxation support",
+                  "Serving size: 1 gummy daily",
+                  "Grape flavor, 60-count bottle",
+                ],
+                suggestedBrand: "OPA Nutrition",
+                suggestedAttributes: {
+                  product_form: "Gummy",
+                  flavor: "Grape",
+                  search_keywords:
+                    "magnesium glycinate gummies, sleep quality support gummies",
+                },
+                searchBrowseAttributes: {
+                  manufacturer: "OPA Nutrition",
+                  directions_suggested_use:
+                    "Adults take one gummy daily, or as directed by your healthcare professional.",
+                },
+                missingAttributes: [],
+                complianceWarnings: [],
+                disclaimer:
+                  "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                applyDiagnostics: {
+                  factsUpdated: ["brand", "productName", "form", "flavor"],
+                  factsSources: ["label_image", "shopify"],
+                  staleFieldsReplaced: ["flavor", "product_form"],
+                  staleFieldsCleared: ["main_ingredients"],
+                  copyFieldsUpdated: ["title", "longDescription"],
+                  searchBrowseFieldsUpdated: ["manufacturer", "search_keywords"],
+                  searchBrowseFieldsReplaced: ["product_form", "flavor"],
+                  complianceChanges: ["disclaimer_preserved"],
+                  skippedProtectedFields: ["sku"],
+                  skippedLowConfidenceFields: ["age_group"],
+                  rejectedClaims: [],
+                  disclaimerStatus: "preserved",
+                  finalDecision: "accepted_with_changes",
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (url.includes("/api/ecomviper/walmart/drafts")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              draft: {
+                updatedAt: "2026-05-10T00:00:00.000Z",
+                validationResult: {
+                  valid: true,
+                  violations: [],
+                  warnings: [],
+                  suggestions: [],
+                },
+              },
+            }),
+            { status: 201, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      optimizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const applyButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-apply-ai-suggestions"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      applyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Facts updated:");
+    expect(container.textContent).toContain("Sources used:");
+    expect(container.textContent).toContain("Stale fields cleared/replaced:");
+    expect(container.textContent).toContain("Compliance changes:");
+    expect(container.textContent).toContain("FDA disclaimer status:");
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-ai-apply-diagnostics"]')
+    ).not.toBeNull();
+  });
+
   it("keeps existing content fields when AI returns empty or low-confidence content", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url =

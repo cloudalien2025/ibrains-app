@@ -1,35 +1,26 @@
 import "server-only";
 
-import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
 import {
   assessWalmartListingQuality,
   mergeWalmartAiSuggestionIntoProduct,
 } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import {
-  buildAiAnswerShortDescription,
-  buildCompliantSearchKeywords,
   buildDefaultAltText,
   buildDefaultMediaRecommendations,
-  buildEntityRichTitle,
-  buildStructuredLongDescription,
-  buildWalmartVisibilityEntitySet,
-  detectRiskyClaims,
-  ensureSingleSupplementDisclaimer,
   normalizeMediaRecommendations,
   normalizeSearchBrowseSuggestions,
-  safeSupportedBenefits,
-  sanitizeRiskyClaims,
   SUPPLEMENT_FDA_DISCLAIMER,
 } from "@/lib/ecomviper/walmart/walmart-ai-visibility-content-policy";
-import {
-  pickMeaningfulAiText,
-  sanitizeWalmartAiSearchBrowseAttributes,
-} from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
-import {
-  buildSearchBrowseAttributesFromSources,
-  normalizeSearchBrowseAttributes,
-} from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import { pickMeaningfulAiText } from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
+import { buildSearchBrowseAttributesFromSources } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import { buildAgenticReferralCopy } from "@/lib/ecomviper/walmart/agentic-referral-copy-agent";
+import {
+  extractCanonicalProductFacts,
+  type CanonicalProductFacts,
+} from "@/lib/ecomviper/walmart/product-facts-agent";
+import { mapCanonicalFactsToSearchBrowse } from "@/lib/ecomviper/walmart/walmart-search-browse-mapper";
+import { reviewWalmartSupplementCopy } from "@/lib/ecomviper/walmart/walmart-compliance-agent";
 
 const OPENAI_MODEL = process.env.WALMART_OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
@@ -61,6 +52,31 @@ interface GeneratedSuggestionPayload {
   altText?: unknown;
   qualityScore?: unknown;
   entitySet?: unknown;
+  aiVisibilitySummary?: unknown;
+  structuredProductFactsSummary?: unknown;
+  customerFitDescriptors?: unknown;
+  compliantBenefitClusters?: unknown;
+  faqSnippets?: unknown;
+}
+
+interface LayeredSuggestionInput {
+  preferredTitle?: string;
+  preferredShortDescription?: string;
+  preferredLongDescription?: string;
+  preferredBullets?: string[];
+  preferredBrand?: string;
+  aiCandidateAttributes?: Record<string, unknown>;
+  missingAttributes?: string[];
+  complianceWarnings?: string[];
+  rejectedRiskyClaims?: string[];
+  qualityScoreHint?: number | null;
+  mediaRecommendations?: string[];
+  altText?: string;
+  aiVisibilitySummary?: string;
+  structuredProductFactsSummary?: string;
+  customerFitDescriptors?: string[];
+  compliantBenefitClusters?: string[];
+  faqSnippets?: string[];
 }
 
 function unique(items: string[]): string[] {
@@ -142,126 +158,224 @@ function inferMissingSearchBrowseAttributes(attributes: Record<string, string>):
   return required.filter((key) => !attributes[key]?.trim());
 }
 
-const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
-const DEFAULT_SUPPLEMENT_WARNINGS =
-  "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
-
-function buildInferredSearchBrowseAttributes(input: {
-  product: WalmartProductRecord;
-  baseSearchBrowse: Record<string, string>;
-  entitySet: ReturnType<typeof buildWalmartVisibilityEntitySet>;
-  supportedBenefits: string[];
-}): Record<string, string> {
-  const keywords = buildCompliantSearchKeywords(input.entitySet).join(", ");
-  const inferredManufacturer =
-    input.baseSearchBrowse.manufacturer ||
-    input.entitySet.brand ||
-    input.product.brand;
-
-  return normalizeSearchBrowseAttributes({
-    ...input.baseSearchBrowse,
-    brand:
-      input.baseSearchBrowse.brand ||
-      input.entitySet.brand ||
-      input.product.brand,
-    manufacturer: inferredManufacturer,
-    supplement_type:
-      input.baseSearchBrowse.supplement_type ||
-      input.entitySet.category ||
-      input.product.category ||
-      "Supplement",
-    product_form: input.baseSearchBrowse.product_form || input.entitySet.form,
-    count: input.baseSearchBrowse.count || input.entitySet.count,
-    main_ingredients:
-      input.baseSearchBrowse.main_ingredients ||
-      input.entitySet.keyIngredients.join(", "),
-    target_audience:
-      input.baseSearchBrowse.target_audience || input.entitySet.audience,
-    support_areas:
-      input.baseSearchBrowse.support_areas || input.supportedBenefits.join(", "),
-    directions_suggested_use:
-      input.baseSearchBrowse.directions_suggested_use || DEFAULT_SUPPLEMENT_DIRECTIONS,
-    safety_warnings:
-      input.baseSearchBrowse.safety_warnings || DEFAULT_SUPPLEMENT_WARNINGS,
-    search_keywords: input.baseSearchBrowse.search_keywords || keywords,
-    search_terms: input.baseSearchBrowse.search_terms || keywords,
-  });
+function buildEntitySetFromFacts(facts: CanonicalProductFacts, fallback: WalmartProductRecord) {
+  return {
+    brand: facts.brand || fallback.brand,
+    productName: facts.productName || fallback.title,
+    category: facts.productType || facts.category || fallback.category || "Supplement",
+    keyIngredients: unique(facts.activeIngredients).slice(0, 8),
+    form: facts.form || "",
+    count: facts.count || "",
+    audience: facts.targetAudience || "Adults",
+    supportedBenefits: unique(facts.claimsFromLabel).slice(0, 8),
+  };
 }
 
-export function buildDeterministicAiSuggestion(product: WalmartProductRecord): WalmartAiSuggestion {
-  const baseSearchBrowse = buildSearchBrowseAttributesFromSources({ product });
-  const entitySet = buildWalmartVisibilityEntitySet(product);
-  const supportedBenefits = safeSupportedBenefits(entitySet.supportedBenefits);
-  const enrichedEntitySet = {
-    ...entitySet,
-    supportedBenefits,
+function buildLayeredSuggestion(
+  product: WalmartProductRecord,
+  input: LayeredSuggestionInput
+): WalmartAiSuggestion {
+  const sourceSearchBrowse = buildSearchBrowseAttributesFromSources({ product });
+  const factsResult = extractCanonicalProductFacts({ product });
+  const facts = factsResult.facts;
+  const baseCopy = buildAgenticReferralCopy({ facts, product });
+
+  const candidateCopy = {
+    ...baseCopy,
+    title: pickMeaningfulAiText(input.preferredTitle) ?? baseCopy.title,
+    shortDescription:
+      pickMeaningfulAiText(input.preferredShortDescription) ?? baseCopy.shortDescription,
+    longDescription: pickMeaningfulAiText(input.preferredLongDescription) ?? baseCopy.longDescription,
+    bullets:
+      (input.preferredBullets ?? [])
+        .map((entry) => pickMeaningfulAiText(entry) ?? "")
+        .filter(Boolean)
+        .slice(0, 8).length >= 3
+        ? unique(
+            (input.preferredBullets ?? [])
+              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+              .filter(Boolean)
+          ).slice(0, 8)
+        : baseCopy.bullets,
+    aiVisibilitySummary:
+      pickMeaningfulAiText(input.aiVisibilitySummary) ?? baseCopy.aiVisibilitySummary,
+    structuredProductFactsSummary:
+      pickMeaningfulAiText(input.structuredProductFactsSummary) ??
+      baseCopy.structuredProductFactsSummary,
+    customerFitDescriptors:
+      (input.customerFitDescriptors ?? [])
+        .map((entry) => pickMeaningfulAiText(entry) ?? "")
+        .filter(Boolean).length > 0
+        ? unique(
+            (input.customerFitDescriptors ?? [])
+              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+              .filter(Boolean)
+          ).slice(0, 8)
+        : baseCopy.customerFitDescriptors,
+    compliantBenefitClusters:
+      (input.compliantBenefitClusters ?? [])
+        .map((entry) => pickMeaningfulAiText(entry) ?? "")
+        .filter(Boolean).length > 0
+        ? unique(
+            (input.compliantBenefitClusters ?? [])
+              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+              .filter(Boolean)
+          ).slice(0, 8)
+        : baseCopy.compliantBenefitClusters,
+    faqSnippets:
+      (input.faqSnippets ?? [])
+        .map((entry) => pickMeaningfulAiText(entry) ?? "")
+        .filter(Boolean).length > 0
+        ? unique(
+            (input.faqSnippets ?? [])
+              .map((entry) => pickMeaningfulAiText(entry) ?? "")
+              .filter(Boolean)
+          ).slice(0, 8)
+        : baseCopy.faqSnippets,
   };
 
-  const suggestedTitle = buildEntityRichTitle(enrichedEntitySet) || product.title;
-  const suggestedShortDescription = buildAiAnswerShortDescription(enrichedEntitySet);
-  const suggestedDescription = buildStructuredLongDescription({
-    entitySet: enrichedEntitySet,
-    suggestedUse: baseSearchBrowse.directions_suggested_use,
-    ingredientsList: baseSearchBrowse.ingredients_list,
+  const compliance = reviewWalmartSupplementCopy(candidateCopy);
+  const fallbackCompliance =
+    compliance.finalDecision === "rejected"
+      ? reviewWalmartSupplementCopy(baseCopy)
+      : compliance;
+
+  const compliantCopy = fallbackCompliance.compliantContent;
+
+  const searchBrowseMap = mapCanonicalFactsToSearchBrowse({
+    facts,
+    copy: {
+      ...baseCopy,
+      ...compliantCopy,
+      disclaimer: SUPPLEMENT_FDA_DISCLAIMER,
+    },
+    existingSearchBrowse: sourceSearchBrowse,
+    aiCandidates: input.aiCandidateAttributes,
+    staleFieldReplacements: factsResult.staleFieldReplacements,
+    usedSources: factsResult.usedSources,
   });
 
-  const keywords = buildCompliantSearchKeywords(enrichedEntitySet);
-  const suggestedBullets = unique([
-    `${enrichedEntitySet.productName || "Daily wellness supplement"} from ${
-      enrichedEntitySet.brand || product.brand || "the brand"
-    }.`,
-    `Key ingredients: ${
-      enrichedEntitySet.keyIngredients.length
-        ? enrichedEntitySet.keyIngredients.slice(0, 4).join(", ")
-        : "See product label for complete ingredient list"
-    }.`,
-    `Benefit profile: ${
-      supportedBenefits.length ? supportedBenefits.slice(0, 3).join(", ") : "daily wellness support"
-    }.`,
-    `Format and count: ${
-      [enrichedEntitySet.count, enrichedEntitySet.form].filter(Boolean).join(" ") || "See product label"
-    }.`,
-    `Suggested use: ${baseSearchBrowse.directions_suggested_use || DEFAULT_SUPPLEMENT_DIRECTIONS}`,
-    `Customer fit: ${(enrichedEntitySet.audience || "Adults").trim()}.`,
-  ]).slice(0, 6);
+  const entitySet = buildEntitySetFromFacts(facts, product);
+  const suggestedBrand =
+    pickMeaningfulAiText(input.preferredBrand) ?? facts.brand ?? product.brand;
 
-  const searchBrowseAttributes = buildInferredSearchBrowseAttributes({
-    product,
-    baseSearchBrowse,
-    entitySet: enrichedEntitySet,
-    supportedBenefits,
-  });
+  const rejectedRiskyClaims = unique([
+    ...(input.rejectedRiskyClaims ?? []),
+    ...fallbackCompliance.rejectedClaims,
+  ]);
 
-  const qualityScore = Math.max(55, 90 - product.issues.length * 6 - (product.imageUrl ? 0 : 4));
+  const complianceWarnings = unique([
+    ...(input.complianceWarnings ?? []),
+    ...(compliance.finalDecision === "rejected"
+      ? [
+          "Generated copy failed compliance review and was replaced with deterministic compliant copy.",
+        ]
+      : []),
+    ...(fallbackCompliance.repetitionWarnings.length > 0
+      ? [
+          "Repetitive filler was removed to improve readability and answer-engine quality.",
+        ]
+      : []),
+    ...(rejectedRiskyClaims.length > 0
+      ? [
+          "Policy blocker removed: unsafe medical/drug claims were replaced with compliant support language.",
+        ]
+      : []),
+    ...(compliance.finalDecision === "rejected"
+      ? [
+          "Policy blocker removed: unsafe medical/drug claims were replaced with compliant support language.",
+        ]
+      : []),
+  ]);
+
+  const complianceChanges = unique([
+    ...fallbackCompliance.changedFields,
+    ...(compliance.finalDecision === "rejected" ? ["copy_rejected_fallback_applied"] : []),
+    ...(fallbackCompliance.repetitionWarnings.length > 0 ? ["repetition_cleanup"] : []),
+    fallbackCompliance.disclaimerStatus === "preserved"
+      ? ""
+      : `disclaimer_${fallbackCompliance.disclaimerStatus}`,
+  ]).filter(Boolean);
+  const complianceDecision =
+    compliance.finalDecision === "rejected"
+      ? "rejected"
+      : fallbackCompliance.finalDecision;
+
+  const factsUpdated = Object.entries(facts.sourceEvidence)
+    .filter(([, evidence]) => Array.isArray(evidence) && evidence.length > 0)
+    .map(([key]) => key)
+    .slice(0, 32);
+
+  const staleFieldsReplaced = unique([
+    ...factsResult.staleFieldReplacements.map((entry) => entry.field),
+    ...searchBrowseMap.replacedFields,
+  ]);
+
+  const missingAttributes =
+    (input.missingAttributes ?? []).length > 0
+      ? unique(input.missingAttributes ?? [])
+      : inferMissingSearchBrowseAttributes(searchBrowseMap.mappedAttributes);
+
+  const qualityScore =
+    input.qualityScoreHint ?? Math.max(55, 90 - product.issues.length * 6 - (product.imageUrl ? 0 : 4));
 
   return {
     sku: product.sku,
     qualityScore,
-    suggestedTitle,
-    suggestedShortDescription,
-    suggestedDescription,
-    suggestedBullets,
-    suggestedBrand: enrichedEntitySet.brand || product.brand,
-    suggestedAttributes: searchBrowseAttributes,
-    searchBrowseAttributes,
-    mediaRecommendations: buildDefaultMediaRecommendations(),
-    altText: buildDefaultAltText(enrichedEntitySet),
-    complianceNotes: [
-      "Use factual product details that match product label and imported catalog data.",
-      "Do not invent certifications, allergen claims, or ingredient facts.",
-      "Use support language; avoid disease treatment/prevention framing.",
-      "AI visibility notes: include ingredient + format + routine-support phrasing that answer engines can summarize.",
-      `Compliant keywords: ${keywords.slice(0, 8).join(", ") || "daily wellness support"}`,
-    ],
-    rejectedRiskyClaims: [],
-    entitySet: enrichedEntitySet,
-    missingAttributes: inferMissingSearchBrowseAttributes(searchBrowseAttributes),
-    complianceWarnings: unique([
-      ...product.issues,
-      "Avoid disease claims and medication comparisons.",
+    suggestedTitle: compliantCopy.title,
+    suggestedShortDescription: compliantCopy.shortDescription,
+    suggestedDescription: compliantCopy.longDescription,
+    suggestedBullets: compliantCopy.bullets,
+    suggestedBrand,
+    suggestedAttributes: searchBrowseMap.mappedAttributes,
+    searchBrowseAttributes: searchBrowseMap.mappedAttributes,
+    mediaRecommendations:
+      normalizeMediaRecommendations(input.mediaRecommendations).length > 0
+        ? normalizeMediaRecommendations(input.mediaRecommendations)
+        : buildDefaultMediaRecommendations(),
+    altText: pickMeaningfulAiText(input.altText) ?? buildDefaultAltText(entitySet),
+    aiVisibilitySummary: compliantCopy.aiVisibilitySummary,
+    structuredProductFactsSummary: compliantCopy.structuredProductFactsSummary,
+    customerFitDescriptors: compliantCopy.customerFitDescriptors,
+    compliantBenefitClusters: compliantCopy.compliantBenefitClusters,
+    faqSnippets: compliantCopy.faqSnippets,
+    complianceNotes: unique([
+      `Facts sources used: ${factsResult.usedSources.join(", ") || "none"}`,
+      staleFieldsReplaced.length > 0
+        ? `Stale fields replaced: ${staleFieldsReplaced.join(", ")}`
+        : "No stale field replacements were required.",
+      searchBrowseMap.clearedFields.length > 0
+        ? `Cleared fields with low confidence or contradictions: ${searchBrowseMap.clearedFields.join(", ")}`
+        : "No fields required clearing.",
+      complianceChanges.length > 0
+        ? `Compliance changes: ${complianceChanges.join(", ")}`
+        : "Compliance review accepted generated copy with no changes.",
     ]),
+    rejectedRiskyClaims,
+    applyDiagnostics: {
+      factsUpdated,
+      factsSources: factsResult.usedSources,
+      staleFieldsReplaced,
+      staleFieldsCleared: searchBrowseMap.clearedFields,
+      copyFieldsUpdated: fallbackCompliance.changedFields,
+      searchBrowseFieldsUpdated: searchBrowseMap.updatedFields,
+      searchBrowseFieldsReplaced: searchBrowseMap.replacedFields,
+      complianceChanges,
+      skippedProtectedFields: searchBrowseMap.skippedProtectedFields,
+      skippedLowConfidenceFields: searchBrowseMap.skippedLowConfidenceFields,
+      rejectedClaims: rejectedRiskyClaims,
+      disclaimerStatus: fallbackCompliance.disclaimerStatus,
+      finalDecision: complianceDecision,
+    },
+    entitySet,
+    missingAttributes,
+    complianceWarnings,
     disclaimer: SUPPLEMENT_FDA_DISCLAIMER,
   };
+}
+
+export function buildDeterministicAiSuggestion(product: WalmartProductRecord): WalmartAiSuggestion {
+  return buildLayeredSuggestion(product, {});
 }
 
 function parseJsonObject(raw: string): Record<string, unknown> {
@@ -306,12 +420,12 @@ async function requestOpenAiSuggestion(params: {
         {
           role: "system",
           content:
-            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use truthful, product-specific language grounded in provided data. Never include disease/treatment/cure/prevention/drug-comparison claims, and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Use compliant structure/function language (supports, helps maintain, daily wellness, performance support, circulation support, sleep quality support). Keep copy premium, specific, and non-repetitive. Include the supplement FDA disclaimer exactly once in longDescription when appropriate.",
+            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use product-specific facts grounded in provided product data. Do not hallucinate ingredients/flavor/form/count. Never include disease/treatment/cure/prevention/drug-comparison claims and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Keep supplement FDA disclaimer exact and include it once in longDescription.",
         },
         {
           role: "user",
           content: JSON.stringify({
-            task: "Generate compliant Walmart AI visibility content improvements.",
+            task: "Generate layered Walmart enrichment suggestions with searchable, answer-engine-friendly copy.",
             requiredFields: [
               "suggestedTitle",
               "suggestedShortDescription",
@@ -321,23 +435,23 @@ async function requestOpenAiSuggestion(params: {
               "searchBrowseAttributes",
               "mediaRecommendations",
               "altText",
-              "complianceNotes",
+              "aiVisibilitySummary",
+              "structuredProductFactsSummary",
+              "customerFitDescriptors",
+              "compliantBenefitClusters",
+              "faqSnippets",
+              "complianceWarnings",
               "rejectedRiskyClaims",
-              "entitySet",
               "qualityScore",
             ],
-            titleEntityOrder:
-              "Brand -> Product Name -> Key Ingredients -> Category -> Count/Form",
             constraints: {
               titleMaxChars: 200,
-              bulletsMin: 3,
+              bulletsMin: 4,
               bulletsMax: 6,
-              bulletMaxChars: 180,
               noDiseaseClaims: true,
               noUnsupportedFacts: true,
-              noPromotionalUrgency: true,
-              avoidKeywordStuffing: true,
-              includeAiVisibilityMetadataInNotes: true,
+              noKeywordStuffing: true,
+              disclaimerExactOnce: true,
               protectedFieldsNeverOverwrite: [
                 "sku",
                 "gtin",
@@ -394,199 +508,58 @@ function toSuggestionFromGenerated(
   product: WalmartProductRecord,
   generated: Record<string, unknown>
 ): WalmartAiSuggestion {
-  const fallback = buildDeterministicAiSuggestion(product);
   const payload = generated as GeneratedSuggestionPayload;
 
-  const suggestedTitle =
-    firstNonEmptyString([payload.suggestedTitle, payload.title]) || fallback.suggestedTitle;
-  const suggestedShortDescription =
-    firstNonEmptyString([
-      payload.suggestedShortDescription,
-      payload.suggestedShortDesc,
-      payload.shortDescription,
-    ]) || fallback.suggestedShortDescription || "";
-  const suggestedDescription =
-    firstNonEmptyString([
-      payload.suggestedDescription,
-      payload.suggestedLongDescription,
-      payload.longDescription,
-      payload.description,
-    ]) || fallback.suggestedDescription;
+  const title = firstNonEmptyString([payload.suggestedTitle, payload.title]);
+  const shortDescription = firstNonEmptyString([
+    payload.suggestedShortDescription,
+    payload.suggestedShortDesc,
+    payload.shortDescription,
+  ]);
+  const longDescription = firstNonEmptyString([
+    payload.suggestedDescription,
+    payload.suggestedLongDescription,
+    payload.longDescription,
+    payload.description,
+  ]);
 
-  const suggestedBulletsRaw = firstStringArray([
+  const bullets = firstStringArray([
     payload.suggestedBullets,
     payload.suggestedBulletPoints,
     payload.bulletPoints,
     payload.keyFeatures,
-  ]);
+  ]).slice(0, 8);
 
-  const suggestedBullets =
-    suggestedBulletsRaw.length >= 3
-      ? suggestedBulletsRaw.slice(0, 6)
-      : fallback.suggestedBullets;
-
-  const suggestedBrandRaw = firstNonEmptyString([payload.suggestedBrand, payload.brand]);
-  const suggestedBrand =
-    suggestedBrandRaw && suggestedBrandRaw.toLowerCase() !== "unknown"
-      ? suggestedBrandRaw
-      : fallback.suggestedBrand;
-
-  const generatedAttributesRaw = {
+  const aiAttributes = {
     ...toAttributeRecord(payload.suggestedAttributes),
     ...toAttributeRecord(payload.attributes),
     ...toAttributeRecord(payload.keyAttributes),
     ...normalizeSearchBrowseSuggestions(payload.searchBrowseAttributes),
   };
 
-  const normalizedGeneratedAttributes =
-    normalizeSearchBrowseSuggestions(generatedAttributesRaw);
-  const fallbackSearchBrowseAttributes = normalizeSearchBrowseSuggestions({
-    ...(fallback.suggestedAttributes ?? {}),
-    ...(fallback.searchBrowseAttributes ?? {}),
-  });
-
-  const searchBrowseAttributes = sanitizeWalmartAiSearchBrowseAttributes({
-    candidates: {
-      ...fallbackSearchBrowseAttributes,
-      ...normalizedGeneratedAttributes,
-    },
-    existingKeys: [
-      ...Object.keys(product.attributes ?? {}),
-      ...Object.keys(product.searchBrowseAttributes ?? {}),
-    ],
-  }).accepted;
-  const missingAttributes =
-    toStringArray(payload.missingAttributes).length > 0
-      ? toStringArray(payload.missingAttributes)
-      : inferMissingSearchBrowseAttributes(searchBrowseAttributes);
-
-  const complianceWarnings = unique([
-    ...toStringArray(payload.complianceWarnings),
-    ...product.issues,
-  ]);
-
-  const entitySetNode = asObject(payload.entitySet);
-  const fallbackEntitySet = fallback.entitySet ?? buildWalmartVisibilityEntitySet(product);
-
-  return {
-    sku: product.sku,
-    qualityScore: clampScore(payload.qualityScore) ?? fallback.qualityScore,
-    suggestedTitle: pickMeaningfulAiText(suggestedTitle) ?? fallback.suggestedTitle,
-    suggestedShortDescription:
-      pickMeaningfulAiText(suggestedShortDescription) ??
-      fallback.suggestedShortDescription ??
-      "",
-    suggestedDescription:
-      pickMeaningfulAiText(suggestedDescription) ?? fallback.suggestedDescription,
-    suggestedBullets,
-    suggestedBrand,
-    suggestedAttributes: searchBrowseAttributes,
-    searchBrowseAttributes,
-    mediaRecommendations:
-      normalizeMediaRecommendations(payload.mediaRecommendations).length > 0
-        ? normalizeMediaRecommendations(payload.mediaRecommendations)
-        : fallback.mediaRecommendations,
-    altText: firstNonEmptyString([payload.altText]) || fallback.altText,
-    complianceNotes:
-      toStringArray(payload.complianceNotes).length > 0
-        ? toStringArray(payload.complianceNotes)
-        : fallback.complianceNotes,
-    rejectedRiskyClaims: toStringArray(payload.rejectedRiskyClaims),
-    entitySet: {
-      brand: firstNonEmptyString([entitySetNode?.brand, fallbackEntitySet.brand]),
-      productName: firstNonEmptyString([entitySetNode?.productName, fallbackEntitySet.productName]),
-      category: firstNonEmptyString([entitySetNode?.category, fallbackEntitySet.category]),
-      keyIngredients:
-        toStringArray(entitySetNode?.keyIngredients).length > 0
-          ? toStringArray(entitySetNode?.keyIngredients)
-          : fallbackEntitySet.keyIngredients,
-      form: firstNonEmptyString([entitySetNode?.form, fallbackEntitySet.form]),
-      count: firstNonEmptyString([entitySetNode?.count, fallbackEntitySet.count]),
-      audience: firstNonEmptyString([entitySetNode?.audience, fallbackEntitySet.audience]),
-      supportedBenefits:
-        toStringArray(entitySetNode?.supportedBenefits).length > 0
-          ? toStringArray(entitySetNode?.supportedBenefits)
-          : fallbackEntitySet.supportedBenefits,
-    },
-    missingAttributes,
-    complianceWarnings,
-    disclaimer: SUPPLEMENT_FDA_DISCLAIMER,
-  };
-}
-
-function applyComplianceGuardrails(
-  product: WalmartProductRecord,
-  suggestion: WalmartAiSuggestion
-): WalmartAiSuggestion {
-  const titleSanitized = sanitizeRiskyClaims(suggestion.suggestedTitle);
-  const shortDescriptionSanitized = sanitizeRiskyClaims(
-    suggestion.suggestedShortDescription ?? ""
-  );
-  const descriptionSanitized = sanitizeRiskyClaims(suggestion.suggestedDescription);
-
-  const bulletSanitized = suggestion.suggestedBullets.map((entry) => sanitizeRiskyClaims(entry));
-  const sanitizedBullets = bulletSanitized.map((entry) => entry.sanitized).filter(Boolean);
-
-  const rejectedRiskyClaims = unique([
-    ...(suggestion.rejectedRiskyClaims ?? []),
-    ...titleSanitized.rejectedRiskyClaims,
-    ...shortDescriptionSanitized.rejectedRiskyClaims,
-    ...descriptionSanitized.rejectedRiskyClaims,
-    ...bulletSanitized.flatMap((entry) => entry.rejectedRiskyClaims),
-  ]);
-
-  const compliance = evaluateWalmartListingCompliance({
-    title: titleSanitized.sanitized,
-    shortDescription: shortDescriptionSanitized.sanitized,
-    longDescription: descriptionSanitized.sanitized,
-    bulletPoints: sanitizedBullets,
-  });
-
-  const hasRiskyClaims =
-    detectRiskyClaims(titleSanitized.sanitized).length > 0 ||
-    detectRiskyClaims(shortDescriptionSanitized.sanitized).length > 0 ||
-    detectRiskyClaims(descriptionSanitized.sanitized).length > 0 ||
-    sanitizedBullets.some((bullet) => detectRiskyClaims(bullet).length > 0);
-
-  if (compliance.violations.length > 0 || hasRiskyClaims) {
-    const fallback = buildDeterministicAiSuggestion(product);
-    return {
-      ...fallback,
-      complianceWarnings: unique([
-        ...fallback.complianceWarnings,
-        ...compliance.warnings,
-        ...compliance.violations.map((entry) => `Policy blocker removed: ${entry}`),
-      ]).slice(0, 10),
-      rejectedRiskyClaims: unique([...(fallback.rejectedRiskyClaims ?? []), ...rejectedRiskyClaims]),
-    };
-  }
-
-  return {
-    ...suggestion,
-    suggestedTitle: titleSanitized.sanitized,
-    suggestedShortDescription: shortDescriptionSanitized.sanitized,
-    suggestedDescription: ensureSingleSupplementDisclaimer(descriptionSanitized.sanitized),
-    suggestedBullets: sanitizedBullets,
-    searchBrowseAttributes: normalizeSearchBrowseAttributes(suggestion.searchBrowseAttributes),
-    suggestedAttributes: normalizeSearchBrowseAttributes(suggestion.suggestedAttributes),
-    entitySet: suggestion.entitySet
-      ? {
-          ...suggestion.entitySet,
-          supportedBenefits: safeSupportedBenefits(suggestion.entitySet.supportedBenefits),
-        }
-      : suggestion.entitySet,
-    rejectedRiskyClaims: unique(rejectedRiskyClaims),
+  return buildLayeredSuggestion(product, {
+    preferredTitle: title,
+    preferredShortDescription: shortDescription,
+    preferredLongDescription: longDescription,
+    preferredBullets: bullets,
+    preferredBrand: firstNonEmptyString([payload.suggestedBrand, payload.brand]),
+    aiCandidateAttributes: aiAttributes,
+    missingAttributes: toStringArray(payload.missingAttributes),
     complianceWarnings: unique([
-      ...suggestion.complianceWarnings,
-      ...compliance.warnings,
-      ...(rejectedRiskyClaims.length > 0
-        ? [
-            "Policy blocker removed: unsafe medical/drug claims were replaced with compliant support language.",
-          ]
-        : []),
-    ]).slice(0, 10),
-    disclaimer: SUPPLEMENT_FDA_DISCLAIMER,
-  };
+      ...toStringArray(payload.complianceWarnings),
+      ...toStringArray(payload.complianceNotes),
+      ...product.issues,
+    ]),
+    rejectedRiskyClaims: toStringArray(payload.rejectedRiskyClaims),
+    qualityScoreHint: clampScore(payload.qualityScore),
+    mediaRecommendations: normalizeMediaRecommendations(payload.mediaRecommendations),
+    altText: firstNonEmptyString([payload.altText]),
+    aiVisibilitySummary: firstNonEmptyString([payload.aiVisibilitySummary]),
+    structuredProductFactsSummary: firstNonEmptyString([payload.structuredProductFactsSummary]),
+    customerFitDescriptors: toStringArray(payload.customerFitDescriptors),
+    compliantBenefitClusters: toStringArray(payload.compliantBenefitClusters),
+    faqSnippets: toStringArray(payload.faqSnippets),
+  });
 }
 
 function alignSuggestionQualityScore(
@@ -607,7 +580,10 @@ export async function generateWalmartAiSuggestion(params: {
 }): Promise<WalmartAiSuggestion> {
   const useDeterministicMock = process.env.WALMART_AI_DETERMINISTIC_MOCK === "1";
   if (useDeterministicMock) {
-    return buildDeterministicAiSuggestion(params.product);
+    return alignSuggestionQualityScore(
+      params.product,
+      buildDeterministicAiSuggestion(params.product)
+    );
   }
 
   const generated = await requestOpenAiSuggestion({
@@ -616,6 +592,5 @@ export async function generateWalmartAiSuggestion(params: {
   });
 
   const suggestion = toSuggestionFromGenerated(params.product, generated);
-  const guarded = applyComplianceGuardrails(params.product, suggestion);
-  return alignSuggestionQualityScore(params.product, guarded);
+  return alignSuggestionQualityScore(params.product, suggestion);
 }

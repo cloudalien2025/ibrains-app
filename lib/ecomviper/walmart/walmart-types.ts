@@ -519,8 +519,28 @@ export interface WalmartAiSuggestion {
   searchBrowseAttributes?: Record<string, string>;
   mediaRecommendations?: string[];
   altText?: string;
+  aiVisibilitySummary?: string;
+  structuredProductFactsSummary?: string;
+  customerFitDescriptors?: string[];
+  compliantBenefitClusters?: string[];
+  faqSnippets?: string[];
   complianceNotes?: string[];
   rejectedRiskyClaims?: string[];
+  applyDiagnostics?: {
+    factsUpdated: string[];
+    factsSources: string[];
+    staleFieldsReplaced: string[];
+    staleFieldsCleared: string[];
+    copyFieldsUpdated: string[];
+    searchBrowseFieldsUpdated: string[];
+    searchBrowseFieldsReplaced: string[];
+    complianceChanges: string[];
+    skippedProtectedFields: string[];
+    skippedLowConfidenceFields: string[];
+    rejectedClaims: string[];
+    disclaimerStatus: "inserted" | "preserved" | "deduped" | "missing";
+    finalDecision: "accepted" | "accepted_with_changes" | "rejected";
+  };
   entitySet?: {
     brand: string;
     productName: string;
