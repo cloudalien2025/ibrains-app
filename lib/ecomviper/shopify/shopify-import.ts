@@ -136,6 +136,7 @@ function normalizeSelectedOptions(value: unknown): ShopifyVariantRecord["selecte
 
 function normalizeGalleryImages(params: {
   featuredImage: Record<string, unknown> | null;
+  imageNodes: unknown[];
   mediaNodes: unknown[];
   variants: ShopifyVariantRecord[];
 }): {
@@ -153,6 +154,24 @@ function normalizeGalleryImages(params: {
       altText: asString(params.featuredImage?.altText) || null,
       width: asNumber(params.featuredImage?.width),
       height: asNumber(params.featuredImage?.height),
+      source: "product",
+      variantId: null,
+    });
+  }
+
+  for (const imageNodeRaw of params.imageNodes) {
+    const imageNode = asRecord(imageNodeRaw);
+    if (!imageNode) continue;
+
+    const url = normalizeHttpsUrl(imageNode.url);
+    if (!url) continue;
+
+    galleryImages.push({
+      id: asString(imageNode.id) || `shopify_image_${url}`,
+      url,
+      altText: asString(imageNode.altText) || null,
+      width: asNumber(imageNode.width),
+      height: asNumber(imageNode.height),
       source: "product",
       variantId: null,
     });
@@ -252,10 +271,13 @@ function normalizeProductNode(node: Record<string, unknown>, storeDomain: string
 
   const mediaConnection = asRecord(node.media);
   const mediaNodes = Array.isArray(mediaConnection?.nodes) ? mediaConnection.nodes : [];
+  const imagesConnection = asRecord(node.images);
+  const imageNodes = Array.isArray(imagesConnection?.nodes) ? imagesConnection.nodes : [];
   const featuredImage = asRecord(node.featuredImage);
 
   const normalizedImages = normalizeGalleryImages({
     featuredImage,
+    imageNodes,
     mediaNodes,
     variants,
   });
@@ -327,6 +349,15 @@ const SHOPIFY_PRODUCTS_QUERY = `#graphql
           altText
           width
           height
+        }
+        images(first: 250) {
+          nodes {
+            id
+            url
+            altText
+            width
+            height
+          }
         }
         media(first: 50) {
           nodes {

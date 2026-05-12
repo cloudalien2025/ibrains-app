@@ -221,6 +221,37 @@ const KEY_ALIASES: Record<string, string> = {
   safety_warnings: "safety_warnings",
 };
 
+const FIELD_VALUE_ALIASES: Record<string, Record<string, string>> = {
+  age_group: {
+    adult: "Adult",
+    adults: "Adult",
+    teen: "Teen",
+    teens: "Teen",
+    child: "Child",
+    children: "Child",
+    kids: "Child",
+    kid: "Child",
+    senior: "Senior",
+    seniors: "Senior",
+    all_ages: "All Ages",
+    all_age: "All Ages",
+    all: "All Ages",
+  },
+  product_form: {
+    capsule: "Capsule",
+    capsules: "Capsule",
+    tablet: "Tablet",
+    tablets: "Tablet",
+    softgel: "Softgel",
+    softgels: "Softgel",
+    gummy: "Gummy",
+    gummies: "Gummy",
+    powder: "Powder",
+    liquid: "Liquid",
+    other: "Other",
+  },
+};
+
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -261,6 +292,20 @@ function normalizeValue(value: unknown): string {
   return asString(value);
 }
 
+function normalizeFieldValue(key: string, value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+
+  const aliases = FIELD_VALUE_ALIASES[key];
+  if (!aliases) return trimmed;
+
+  const normalizedAliasKey = trimmed
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  return aliases[normalizedAliasKey] ?? trimmed;
+}
+
 function splitCandidateText(value: string): string[] {
   if (!value) return [];
   return value
@@ -279,13 +324,26 @@ function normalizeRecord(input: Record<string, unknown>): Record<string, string>
     const value = normalizeValue(rawValue);
     if (!value) continue;
 
-    if (FIELD_BY_KEY.get(key)?.type === "multi-select") {
-      const deduped = Array.from(new Set(splitCandidateText(value))).join(MULTI_VALUE_DELIMITER);
+    const field = FIELD_BY_KEY.get(key);
+    if (field?.type === "multi-select") {
+      const deduped = Array.from(
+        new Set(
+          splitCandidateText(value)
+            .map((entry) => normalizeFieldValue(key, entry))
+            .filter(Boolean)
+        )
+      ).join(MULTI_VALUE_DELIMITER);
       if (deduped) normalized[key] = deduped;
       continue;
     }
 
-    normalized[key] = value;
+    if (field?.type === "select") {
+      const canonical = normalizeFieldValue(key, value);
+      if (canonical) normalized[key] = canonical;
+      continue;
+    }
+
+    normalized[key] = normalizeFieldValue(key, value);
   }
 
   return normalized;
@@ -323,6 +381,7 @@ export function normalizeSearchBrowseAttributes(input: unknown): Record<string, 
       const trimmed = value.trim();
       if (!trimmed) return false;
       if (/needs\s+(product\s+label|confirmation)/i.test(trimmed)) return false;
+      if (/^(unknown|n\/a|na|null|undefined)$/i.test(trimmed)) return false;
       return true;
     })
   );

@@ -7,6 +7,7 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-listing-quality";
 import {
   buildAiAnswerShortDescription,
+  buildCompliantSearchKeywords,
   buildDefaultAltText,
   buildDefaultMediaRecommendations,
   buildEntityRichTitle,
@@ -141,6 +142,52 @@ function inferMissingSearchBrowseAttributes(attributes: Record<string, string>):
   return required.filter((key) => !attributes[key]?.trim());
 }
 
+const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
+const DEFAULT_SUPPLEMENT_WARNINGS =
+  "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
+
+function buildInferredSearchBrowseAttributes(input: {
+  product: WalmartProductRecord;
+  baseSearchBrowse: Record<string, string>;
+  entitySet: ReturnType<typeof buildWalmartVisibilityEntitySet>;
+  supportedBenefits: string[];
+}): Record<string, string> {
+  const keywords = buildCompliantSearchKeywords(input.entitySet).join(", ");
+  const inferredManufacturer =
+    input.baseSearchBrowse.manufacturer ||
+    input.entitySet.brand ||
+    input.product.brand;
+
+  return normalizeSearchBrowseAttributes({
+    ...input.baseSearchBrowse,
+    brand:
+      input.baseSearchBrowse.brand ||
+      input.entitySet.brand ||
+      input.product.brand,
+    manufacturer: inferredManufacturer,
+    supplement_type:
+      input.baseSearchBrowse.supplement_type ||
+      input.entitySet.category ||
+      input.product.category ||
+      "Supplement",
+    product_form: input.baseSearchBrowse.product_form || input.entitySet.form,
+    count: input.baseSearchBrowse.count || input.entitySet.count,
+    main_ingredients:
+      input.baseSearchBrowse.main_ingredients ||
+      input.entitySet.keyIngredients.join(", "),
+    target_audience:
+      input.baseSearchBrowse.target_audience || input.entitySet.audience,
+    support_areas:
+      input.baseSearchBrowse.support_areas || input.supportedBenefits.join(", "),
+    directions_suggested_use:
+      input.baseSearchBrowse.directions_suggested_use || DEFAULT_SUPPLEMENT_DIRECTIONS,
+    safety_warnings:
+      input.baseSearchBrowse.safety_warnings || DEFAULT_SUPPLEMENT_WARNINGS,
+    search_keywords: input.baseSearchBrowse.search_keywords || keywords,
+    search_terms: input.baseSearchBrowse.search_terms || keywords,
+  });
+}
+
 export function buildDeterministicAiSuggestion(product: WalmartProductRecord): WalmartAiSuggestion {
   const baseSearchBrowse = buildSearchBrowseAttributesFromSources({ product });
   const entitySet = buildWalmartVisibilityEntitySet(product);
@@ -158,33 +205,31 @@ export function buildDeterministicAiSuggestion(product: WalmartProductRecord): W
     ingredientsList: baseSearchBrowse.ingredients_list,
   });
 
+  const keywords = buildCompliantSearchKeywords(enrichedEntitySet);
   const suggestedBullets = unique([
-    `${enrichedEntitySet.brand || product.brand} ${enrichedEntitySet.productName || "supplement"}`,
+    `${enrichedEntitySet.productName || "Daily wellness supplement"} from ${
+      enrichedEntitySet.brand || product.brand || "the brand"
+    }.`,
     `Key ingredients: ${
       enrichedEntitySet.keyIngredients.length
-        ? enrichedEntitySet.keyIngredients.join(", ")
-        : "See product label"
-    }`,
-    `Benefit areas: ${
-      supportedBenefits.length ? supportedBenefits.join(", ") : "daily wellness support"
-    }`,
-    `Count and form: ${
-      [enrichedEntitySet.count, enrichedEntitySet.form].filter(Boolean).join(" ") || "See label"
-    }`,
-    `Target audience: ${enrichedEntitySet.audience || "Adults"}`,
+        ? enrichedEntitySet.keyIngredients.slice(0, 4).join(", ")
+        : "See product label for complete ingredient list"
+    }.`,
+    `Benefit profile: ${
+      supportedBenefits.length ? supportedBenefits.slice(0, 3).join(", ") : "daily wellness support"
+    }.`,
+    `Format and count: ${
+      [enrichedEntitySet.count, enrichedEntitySet.form].filter(Boolean).join(" ") || "See product label"
+    }.`,
+    `Suggested use: ${baseSearchBrowse.directions_suggested_use || DEFAULT_SUPPLEMENT_DIRECTIONS}`,
+    `Customer fit: ${(enrichedEntitySet.audience || "Adults").trim()}.`,
   ]).slice(0, 6);
 
-  const searchBrowseAttributes = normalizeSearchBrowseAttributes({
-    ...baseSearchBrowse,
-    brand: enrichedEntitySet.brand || baseSearchBrowse.brand || product.brand,
-    supplement_type:
-      baseSearchBrowse.supplement_type || enrichedEntitySet.category || "Supplement",
-    product_form: baseSearchBrowse.product_form || enrichedEntitySet.form,
-    count: baseSearchBrowse.count || enrichedEntitySet.count,
-    main_ingredients:
-      baseSearchBrowse.main_ingredients || enrichedEntitySet.keyIngredients.join(", "),
-    target_audience: baseSearchBrowse.target_audience || enrichedEntitySet.audience,
-    support_areas: baseSearchBrowse.support_areas || supportedBenefits.join(", "),
+  const searchBrowseAttributes = buildInferredSearchBrowseAttributes({
+    product,
+    baseSearchBrowse,
+    entitySet: enrichedEntitySet,
+    supportedBenefits,
   });
 
   const qualityScore = Math.max(55, 90 - product.issues.length * 6 - (product.imageUrl ? 0 : 4));
@@ -205,6 +250,8 @@ export function buildDeterministicAiSuggestion(product: WalmartProductRecord): W
       "Use factual product details that match product label and imported catalog data.",
       "Do not invent certifications, allergen claims, or ingredient facts.",
       "Use support language; avoid disease treatment/prevention framing.",
+      "AI visibility notes: include ingredient + format + routine-support phrasing that answer engines can summarize.",
+      `Compliant keywords: ${keywords.slice(0, 8).join(", ") || "daily wellness support"}`,
     ],
     rejectedRiskyClaims: [],
     entitySet: enrichedEntitySet,
@@ -259,7 +306,7 @@ async function requestOpenAiSuggestion(params: {
         {
           role: "system",
           content:
-            "You optimize Walmart listings for visibility and compliance. Return JSON only. Requirements: truthful and accurate to provided data; no disease treatment/cure/prevention or medication-comparison claims; no fabricated certifications/ingredients; include search/browse attributes only when supported; use supplement FDA disclaimer once in longDescription when supplement-like.",
+            "You optimize Walmart supplement listings for marketplace conversion and AI visibility. Return JSON only. Use truthful, product-specific language grounded in provided data. Never include disease/treatment/cure/prevention/drug-comparison claims, and never use terms like ED, erectile dysfunction, hypertension, anxiety, insomnia, depression, natural viagra, or works like cialis. Use compliant structure/function language (supports, helps maintain, daily wellness, performance support, circulation support, sleep quality support). Keep copy premium, specific, and non-repetitive. Include the supplement FDA disclaimer exactly once in longDescription when appropriate.",
         },
         {
           role: "user",
@@ -289,6 +336,20 @@ async function requestOpenAiSuggestion(params: {
               noDiseaseClaims: true,
               noUnsupportedFacts: true,
               noPromotionalUrgency: true,
+              avoidKeywordStuffing: true,
+              includeAiVisibilityMetadataInNotes: true,
+              protectedFieldsNeverOverwrite: [
+                "sku",
+                "gtin",
+                "upc",
+                "wpid",
+                "itemId",
+                "publicWalmartUrl",
+                "publicWalmartProductId",
+                "price",
+                "inventoryQuantity",
+                "imageUrl",
+              ],
             },
             product: {
               sku: params.product.sku,
@@ -300,6 +361,7 @@ async function requestOpenAiSuggestion(params: {
               longDescription: params.product.longDescription,
               bulletPoints: params.product.bulletPoints,
               attributes: params.product.attributes,
+              searchBrowseAttributes: params.product.searchBrowseAttributes,
               rawPayload: params.product.rawPayload,
               normalizedPayload: params.product.normalizedPayload,
             },
@@ -376,8 +438,18 @@ function toSuggestionFromGenerated(
     ...normalizeSearchBrowseSuggestions(payload.searchBrowseAttributes),
   };
 
+  const normalizedGeneratedAttributes =
+    normalizeSearchBrowseSuggestions(generatedAttributesRaw);
+  const fallbackSearchBrowseAttributes = normalizeSearchBrowseSuggestions({
+    ...(fallback.suggestedAttributes ?? {}),
+    ...(fallback.searchBrowseAttributes ?? {}),
+  });
+
   const searchBrowseAttributes = sanitizeWalmartAiSearchBrowseAttributes({
-    candidates: normalizeSearchBrowseSuggestions(generatedAttributesRaw),
+    candidates: {
+      ...fallbackSearchBrowseAttributes,
+      ...normalizedGeneratedAttributes,
+    },
     existingKeys: [
       ...Object.keys(product.attributes ?? {}),
       ...Object.keys(product.searchBrowseAttributes ?? {}),
@@ -447,6 +519,9 @@ function applyComplianceGuardrails(
   suggestion: WalmartAiSuggestion
 ): WalmartAiSuggestion {
   const titleSanitized = sanitizeRiskyClaims(suggestion.suggestedTitle);
+  const shortDescriptionSanitized = sanitizeRiskyClaims(
+    suggestion.suggestedShortDescription ?? ""
+  );
   const descriptionSanitized = sanitizeRiskyClaims(suggestion.suggestedDescription);
 
   const bulletSanitized = suggestion.suggestedBullets.map((entry) => sanitizeRiskyClaims(entry));
@@ -455,18 +530,21 @@ function applyComplianceGuardrails(
   const rejectedRiskyClaims = unique([
     ...(suggestion.rejectedRiskyClaims ?? []),
     ...titleSanitized.rejectedRiskyClaims,
+    ...shortDescriptionSanitized.rejectedRiskyClaims,
     ...descriptionSanitized.rejectedRiskyClaims,
     ...bulletSanitized.flatMap((entry) => entry.rejectedRiskyClaims),
   ]);
 
   const compliance = evaluateWalmartListingCompliance({
     title: titleSanitized.sanitized,
+    shortDescription: shortDescriptionSanitized.sanitized,
     longDescription: descriptionSanitized.sanitized,
     bulletPoints: sanitizedBullets,
   });
 
   const hasRiskyClaims =
     detectRiskyClaims(titleSanitized.sanitized).length > 0 ||
+    detectRiskyClaims(shortDescriptionSanitized.sanitized).length > 0 ||
     detectRiskyClaims(descriptionSanitized.sanitized).length > 0 ||
     sanitizedBullets.some((bullet) => detectRiskyClaims(bullet).length > 0);
 
@@ -486,6 +564,7 @@ function applyComplianceGuardrails(
   return {
     ...suggestion,
     suggestedTitle: titleSanitized.sanitized,
+    suggestedShortDescription: shortDescriptionSanitized.sanitized,
     suggestedDescription: ensureSingleSupplementDisclaimer(descriptionSanitized.sanitized),
     suggestedBullets: sanitizedBullets,
     searchBrowseAttributes: normalizeSearchBrowseAttributes(suggestion.searchBrowseAttributes),
@@ -497,7 +576,15 @@ function applyComplianceGuardrails(
         }
       : suggestion.entitySet,
     rejectedRiskyClaims: unique(rejectedRiskyClaims),
-    complianceWarnings: unique([...suggestion.complianceWarnings, ...compliance.warnings]).slice(0, 10),
+    complianceWarnings: unique([
+      ...suggestion.complianceWarnings,
+      ...compliance.warnings,
+      ...(rejectedRiskyClaims.length > 0
+        ? [
+            "Policy blocker removed: unsafe medical/drug claims were replaced with compliant support language.",
+          ]
+        : []),
+    ]).slice(0, 10),
     disclaimer: SUPPLEMENT_FDA_DISCLAIMER,
   };
 }

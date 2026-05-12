@@ -121,6 +121,9 @@ type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type InlineAiOutcome = "improved" | "unchanged" | "worse";
 
 const INLINE_AI_LOADING_MESSAGE = "Generating AI improvements...";
+const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
+const DEFAULT_SUPPLEMENT_WARNINGS =
+  "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
@@ -735,6 +738,12 @@ function inferShortDescriptionFromAi(suggestedDescription: string): string {
   return compact.length > 180 ? `${compact.slice(0, 177)}...` : compact;
 }
 
+function shouldBackfillSearchBrowseValue(value: string | undefined): boolean {
+  const trimmed = value?.trim() ?? "";
+  if (!trimmed) return true;
+  return isLowConfidenceAiFieldValue(trimmed);
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -1094,6 +1103,15 @@ export default function ProductEditorClient({
     form.publicWalmartProductId,
     displayPrimaryImageUrl,
   ]);
+  const isShopifyMediaSource = isShopifyImageSource(scoringProduct.imageSource);
+  const importedShopifyMediaImageCount = isShopifyMediaSource
+    ? displayGalleryPreviewUrls.length
+    : 0;
+  const missingShopifyAdditionalImageReason =
+    isShopifyMediaSource && importedShopifyMediaImageCount <= 1
+      ? "Shopify returned no additional attached product media."
+      : null;
+
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
     setFormDirty(true);
@@ -1341,7 +1359,90 @@ export default function ProductEditorClient({
     }
 
     const attributeMap = readAttributesFromForm(form.attributesJson);
+    const suggestedBrand = pickMeaningfulAiText(inlineAiSuggestion.suggestedBrand) ?? "";
+    const safeBrand =
+      suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
+        ? suggestedBrand
+        : form.brand;
+    const entitySet = inlineAiSuggestion.entitySet;
+    const inferredManufacturer =
+      pickMeaningfulAiText(
+        (inlineAiSuggestion.searchBrowseAttributes ?? {}).manufacturer ??
+          (inlineAiSuggestion.suggestedAttributes ?? {}).manufacturer
+      ) ??
+      pickMeaningfulAiText(safeBrand) ??
+      "";
+    const inferredSearchKeywords = unique([
+      safeBrand,
+      pickMeaningfulAiText(entitySet?.productName) ?? "",
+      pickMeaningfulAiText(entitySet?.category) ?? "",
+      pickMeaningfulAiText(entitySet?.form) ?? "",
+      ...(entitySet?.keyIngredients ?? []),
+      ...(entitySet?.supportedBenefits ?? []),
+    ])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 1 && !isLowConfidenceAiFieldValue(entry))
+      .slice(0, 12)
+      .join(", ");
+
+    const inferredSearchBrowseCandidates: Record<string, string> = {};
+    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.brand) && safeBrand.trim()) {
+      inferredSearchBrowseCandidates.brand = safeBrand.trim();
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.manufacturer) &&
+      inferredManufacturer.trim()
+    ) {
+      inferredSearchBrowseCandidates.manufacturer = inferredManufacturer.trim();
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.supplement_type) &&
+      pickMeaningfulAiText(entitySet?.category)
+    ) {
+      inferredSearchBrowseCandidates.supplement_type = String(entitySet?.category).trim();
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.product_form) &&
+      pickMeaningfulAiText(entitySet?.form)
+    ) {
+      inferredSearchBrowseCandidates.product_form = String(entitySet?.form).trim();
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.target_audience) &&
+      pickMeaningfulAiText(entitySet?.audience)
+    ) {
+      inferredSearchBrowseCandidates.target_audience = String(entitySet?.audience).trim();
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.main_ingredients) &&
+      (entitySet?.keyIngredients?.length ?? 0) > 0
+    ) {
+      inferredSearchBrowseCandidates.main_ingredients = entitySet!.keyIngredients.join(", ");
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.support_areas) &&
+      (entitySet?.supportedBenefits?.length ?? 0) > 0
+    ) {
+      inferredSearchBrowseCandidates.support_areas = entitySet!.supportedBenefits.join(", ");
+    }
+    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.search_keywords) && inferredSearchKeywords) {
+      inferredSearchBrowseCandidates.search_keywords = inferredSearchKeywords;
+    }
+    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.search_terms) && inferredSearchKeywords) {
+      inferredSearchBrowseCandidates.search_terms = inferredSearchKeywords;
+    }
+    if (
+      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.directions_suggested_use)
+    ) {
+      inferredSearchBrowseCandidates.directions_suggested_use =
+        DEFAULT_SUPPLEMENT_DIRECTIONS;
+    }
+    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.safety_warnings)) {
+      inferredSearchBrowseCandidates.safety_warnings = DEFAULT_SUPPLEMENT_WARNINGS;
+    }
+
     const aiAttributeMap: Record<string, unknown> = {
+      ...inferredSearchBrowseCandidates,
       ...(inlineAiSuggestion.suggestedAttributes ?? {}),
       ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
     };
@@ -1352,20 +1453,16 @@ export default function ProductEditorClient({
         ...Object.keys(attributeMap),
       ],
     });
+    const mergedSearchBrowseAttributes = { ...form.searchBrowseAttributes };
+    const appliedSearchBrowseFields: string[] = [];
     for (const [key, value] of Object.entries(sanitizedAiSearchBrowse.accepted)) {
+      const currentValue = (mergedSearchBrowseAttributes[key] ?? "").trim();
+      if (currentValue === value.trim()) continue;
+      mergedSearchBrowseAttributes[key] = value;
       attributeMap[key] = value;
+      appliedSearchBrowseFields.push(key);
     }
 
-    const suggestedBrand = pickMeaningfulAiText(inlineAiSuggestion.suggestedBrand) ?? "";
-    const safeBrand =
-      suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
-        ? suggestedBrand
-        : form.brand;
-
-    const mergedSearchBrowseAttributes = {
-      ...form.searchBrowseAttributes,
-      ...sanitizedAiSearchBrowse.accepted,
-    };
     const meaningfulTitle = pickMeaningfulAiText(inlineAiSuggestion.suggestedTitle);
     const meaningfulLongDescription = pickMeaningfulAiText(inlineAiSuggestion.suggestedDescription);
     const meaningfulShortDescription = pickMeaningfulAiText(
@@ -1374,42 +1471,85 @@ export default function ProductEditorClient({
     const meaningfulBullets = inlineAiSuggestion.suggestedBullets
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry));
-    const appliedSearchBrowseCount = Object.keys(sanitizedAiSearchBrowse.accepted).length;
-    const skippedSearchBrowseCount = sanitizedAiSearchBrowse.skipped.length;
-    const skippedProtectedCount = sanitizedAiSearchBrowse.skipped.filter(
-      (entry) => entry.reason === "protected_field"
-    ).length;
-    const skippedLowConfidenceCount = sanitizedAiSearchBrowse.skipped.filter(
-      (entry) => entry.reason === "low_confidence"
-    ).length;
+    const nextTitle = meaningfulTitle ?? form.title;
+    const nextLongDescription = meaningfulLongDescription ?? form.longDescription;
+    const nextShortDescription =
+      (meaningfulShortDescription ??
+        form.shortDescription.trim()) ||
+      inferShortDescriptionFromAi(nextLongDescription);
+    const nextBulletPoints =
+      meaningfulBullets.length > 0
+        ? meaningfulBullets.join("\n")
+        : form.bulletPoints;
+    const nextMediaRecommendations = (inlineAiSuggestion.mediaRecommendations ?? [])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    const nextComplianceNotes = (inlineAiSuggestion.complianceNotes ?? [])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    const nextAltText = pickMeaningfulAiText(inlineAiSuggestion.altText) ?? form.altText;
+
+    const appliedContentFields: string[] = [];
+    if (nextTitle.trim() !== form.title.trim()) appliedContentFields.push("title");
+    if (nextShortDescription.trim() !== form.shortDescription.trim()) {
+      appliedContentFields.push("short description");
+    }
+    if (nextLongDescription.trim() !== form.longDescription.trim()) {
+      appliedContentFields.push("long description");
+    }
+    if (nextBulletPoints.trim() !== form.bulletPoints.trim()) {
+      appliedContentFields.push("bullet points");
+    }
+    if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
+
+    const skippedProtectedFields = unique(
+      sanitizedAiSearchBrowse.skipped
+        .filter((entry) => entry.reason === "protected_field")
+        .map((entry) => entry.key)
+    ).slice(0, 5);
+    const skippedLowConfidenceFields = unique(
+      sanitizedAiSearchBrowse.skipped
+        .filter((entry) => entry.reason === "low_confidence")
+        .map((entry) => entry.key)
+    ).slice(0, 5);
 
     patchForm({
-      title: meaningfulTitle ?? form.title,
-      longDescription: meaningfulLongDescription ?? form.longDescription,
-      shortDescription:
-        (meaningfulShortDescription ??
-          form.shortDescription.trim()) ||
-        inferShortDescriptionFromAi(meaningfulLongDescription ?? form.longDescription),
-      bulletPoints:
-        meaningfulBullets.length > 0
-          ? meaningfulBullets.join("\n")
-          : form.bulletPoints,
+      title: nextTitle,
+      longDescription: nextLongDescription,
+      shortDescription: nextShortDescription,
+      bulletPoints: nextBulletPoints,
       brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
       searchBrowseAttributes: mergedSearchBrowseAttributes,
-      mediaRecommendations: (inlineAiSuggestion.mediaRecommendations ?? []).join("\n"),
-      altText: inlineAiSuggestion.altText ?? form.altText,
-      complianceNotes: (inlineAiSuggestion.complianceNotes ?? []).join("\n"),
+      mediaRecommendations:
+        nextMediaRecommendations.length > 0
+          ? nextMediaRecommendations.join("\n")
+          : form.mediaRecommendations,
+      altText: nextAltText,
+      complianceNotes:
+        nextComplianceNotes.length > 0
+          ? nextComplianceNotes.join("\n")
+          : form.complianceNotes,
     });
     setAiSuggestionApplied(true);
     setDraftEditorOpen(true);
     setActiveTab("Content");
     setShowAiDetails(false);
     setInlineAiState("success");
+    const contentSummary = appliedContentFields.length
+      ? appliedContentFields.join(", ")
+      : "none";
+    const searchBrowseSummary = appliedSearchBrowseFields.length
+      ? appliedSearchBrowseFields.join(", ")
+      : "none";
+    const protectedSummary = skippedProtectedFields.length
+      ? skippedProtectedFields.join(", ")
+      : "none";
+    const lowConfidenceSummary = skippedLowConfidenceFields.length
+      ? skippedLowConfidenceFields.join(", ")
+      : "none";
     setInlineAiMessage(
-      skippedSearchBrowseCount > 0
-        ? `AI improvements applied to draft fields. Save Draft when ready. Search & Browse applied: ${appliedSearchBrowseCount}; skipped: ${skippedSearchBrowseCount} (${skippedProtectedCount} protected, ${skippedLowConfidenceCount} low-confidence).`
-        : "AI improvements applied to draft fields. Save Draft when ready."
+      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}.`
     );
   }
 
@@ -2285,6 +2425,19 @@ export default function ProductEditorClient({
                     <p className="mt-1">Source: {formatImageSource(scoringProduct)}</p>
                     <p className="mt-1">Gallery images: {displayGalleryPreviewUrls.length}</p>
                     <p className="mt-1">Variant images: {displayVariantPreviewUrls.length}</p>
+                    {isShopifyMediaSource ? (
+                      <>
+                        <p className="mt-1">
+                          Imported Shopify media images: {importedShopifyMediaImageCount}
+                        </p>
+                        {missingShopifyAdditionalImageReason ? (
+                          <p className="mt-1">
+                            Reason additional images are blank:{" "}
+                            {missingShopifyAdditionalImageReason}
+                          </p>
+                        ) : null}
+                      </>
+                    ) : null}
                   </div>
                 </>
               ) : null}

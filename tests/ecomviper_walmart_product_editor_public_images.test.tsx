@@ -400,4 +400,50 @@ describe("Walmart product editor public listing image flow", () => {
       "https://cdn.shopify.com/gallery-3.jpg?v=3",
     ]);
   });
+
+  it("shows Shopify one-image diagnostics when no additional gallery media exists", async () => {
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            imageUrl: "https://cdn.shopify.com/variant-only.jpg?v=1",
+            primaryImageUrl: "https://cdn.shopify.com/variant-only.jpg?v=1",
+            galleryImageUrls: ["https://cdn.shopify.com/variant-only.jpg?v=1"],
+            variantImageUrls: ["https://cdn.shopify.com/variant-only.jpg?v=1"],
+            imageStatus: "image_available",
+            imageStatusMessage: "Image available",
+            imageSyncStatus: "found",
+            imageSyncReason: "Shopify variant image matched and applied.",
+            imageSource: "shopify_variant",
+            issues: [],
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const openEditorButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Open Draft Editor"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      openEditorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Source: Shopify variant image");
+    expect(container.textContent).toContain("Imported Shopify media images: 1");
+    expect(container.textContent).toContain(
+      "Reason additional images are blank: Shopify returned no additional attached product media."
+    );
+  });
 });
