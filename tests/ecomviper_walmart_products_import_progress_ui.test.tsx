@@ -216,6 +216,164 @@ describe("Walmart import progress UI", () => {
     expect(routerRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("renders per-product image enrichment diagnostics for common rejection outcomes", async () => {
+    const diagnostics = [
+      {
+        sku: "SKU-NC-1",
+        title: "OPA Sleep Magnesium Glycinate",
+        attemptedMethods: ["serpapi_brand_search", "serpapi_per_product_search"],
+        queryUsed: "OPA Nutrition",
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 120,
+        topCandidateTitle: "OPA Sleep Magnesium Glycinate 120 Capsules",
+        topCandidateItemOrProductId: "18180001",
+        topCandidateProductId: "18180001",
+        topCandidateUsItemId: "18180001",
+        topCandidateThumbnailPresent: true,
+        matchScore: 58,
+        confidence: "medium",
+        rejectionReason: "No confident brand-search match.",
+        finalStatus: "not_synced",
+      },
+      {
+        sku: "SKU-AM-2",
+        title: "OPA Joint Flex Glucosamine Chondroitin MSM",
+        attemptedMethods: ["serpapi_brand_search"],
+        queryUsed: "OPA Nutrition",
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 120,
+        topCandidateTitle: "OPA Joint Flex Support",
+        topCandidateItemOrProductId: "18180002",
+        topCandidateProductId: "18180002",
+        topCandidateUsItemId: "18180002",
+        topCandidateThumbnailPresent: true,
+        matchScore: 67,
+        confidence: "medium",
+        rejectionReason: "Ambiguous match from brand search.",
+        finalStatus: "ambiguous",
+      },
+      {
+        sku: "SKU-ZERO-3",
+        title: "OPA Prostate Support Saw Palmetto Pumpkin Seed",
+        attemptedMethods: ["serpapi_per_product_search"],
+        queryUsed: "OPA Prostate Support Saw Palmetto Pumpkin Seed",
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 0,
+        topCandidateTitle: null,
+        topCandidateItemOrProductId: null,
+        topCandidateProductId: null,
+        topCandidateUsItemId: null,
+        topCandidateThumbnailPresent: null,
+        matchScore: null,
+        confidence: null,
+        rejectionReason: "SerpApi per-product search returned 0 results.",
+        finalStatus: "not_found",
+      },
+      {
+        sku: "SKU-REJECT-4",
+        title: "OPA Liver Cleanse Milk Thistle",
+        attemptedMethods: ["walmart_item_search", "serpapi_per_product_search"],
+        queryUsed: "OPA Liver Cleanse Milk Thistle",
+        walmartItemSearchQueryOrIdentifier: "OPA Liver Cleanse Milk Thistle",
+        walmartItemSearchMethod: "query",
+        resultCount: 3,
+        topCandidateTitle: "OPA Liver Detox Formula",
+        topCandidateItemOrProductId: "18180004",
+        topCandidateProductId: "18180004",
+        topCandidateUsItemId: null,
+        topCandidateThumbnailPresent: true,
+        matchScore: 41,
+        confidence: "low",
+        rejectionReason: "Top candidate rejected due low match score.",
+        finalStatus: "not_found",
+      },
+      ...Array.from({ length: 7 }, (_, index) => ({
+        sku: index === 6 ? "SKU-HIDDEN-11" : `SKU-FILL-${index + 5}`,
+        title: `Filler SKU ${index + 5}`,
+        attemptedMethods: ["serpapi_per_product_search"],
+        queryUsed: `Filler Query ${index + 5}`,
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 1,
+        topCandidateTitle: `Filler Candidate ${index + 5}`,
+        topCandidateItemOrProductId: `1818${index + 5}`,
+        topCandidateProductId: `1818${index + 5}`,
+        topCandidateUsItemId: null,
+        topCandidateThumbnailPresent: index % 2 === 0,
+        matchScore: 72,
+        confidence: "medium",
+        rejectionReason: "No confident match.",
+        finalStatus: "not_synced",
+      })),
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 11,
+          message: "Imported 11 Walmart product(s).",
+          importProgress: {
+            stage: "completed_with_warnings",
+            providerConnected: true,
+            providerStatus: "connected",
+            providerCanAttempt: true,
+            totals: {
+              importedCount: 11,
+              fetchedCount: 11,
+              processedCount: 11,
+              queuedCount: 11,
+              imageFoundCount: 0,
+              imageFromImportPayloadCount: 0,
+              imageEnrichedCount: 0,
+              imageFromWalmartSearchCount: 0,
+              imageStillMissingCount: 11,
+              imageMissingCount: 11,
+              imageNotFoundCount: 5,
+              imageAmbiguousCount: 1,
+              imageFailedCount: 0,
+              imageSkippedNoProviderCount: 0,
+            },
+            perProductAttemptDiagnostics: diagnostics,
+          },
+          importDiagnostics: {
+            perProductAttemptDiagnostics: diagnostics,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Image enrichment diagnostics");
+    expect(container.textContent).toContain("Showing 10 processed products (1 additional not shown).");
+    expect(container.textContent).toContain("SKU-NC-1");
+    expect(container.textContent).toContain("OPA Nutrition");
+    expect(container.textContent).toContain("No confident brand-search match.");
+    expect(container.textContent).toContain("SKU-AM-2");
+    expect(container.textContent).toContain("Ambiguous match from brand search.");
+    expect(container.textContent).toContain("SKU-ZERO-3");
+    expect(container.textContent).toContain("SerpApi per-product search returned 0 results.");
+    expect(container.textContent).toContain("SKU-REJECT-4");
+    expect(container.textContent).toContain("Top candidate rejected due low match score.");
+    expect(container.textContent).not.toContain("SKU-HIDDEN-11");
+  });
+
   it("renders completed progress safely when new diagnostics fields are missing or null", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

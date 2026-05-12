@@ -54,6 +54,25 @@ interface ImportProgressTotals {
   imageSkippedNoProviderCount: number;
 }
 
+interface ImportProgressPerProductDiagnostic {
+  sku: string;
+  title: string;
+  attemptedMethods: string[];
+  queryUsed: string | null;
+  walmartItemSearchQueryOrIdentifier: string | null;
+  walmartItemSearchMethod: string | null;
+  resultCount: number;
+  topCandidateTitle: string | null;
+  topCandidateItemOrProductId: string | null;
+  topCandidateProductId: string | null;
+  topCandidateUsItemId: string | null;
+  topCandidateThumbnailPresent: boolean | null;
+  matchScore: number | null;
+  confidence: "high" | "medium" | "low" | null;
+  rejectionReason: string | null;
+  finalStatus: "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
+}
+
 interface ImportProgressPayload {
   stage: "complete" | "completed_with_warnings" | "failed";
   providerConnected: boolean;
@@ -65,6 +84,7 @@ interface ImportProgressPayload {
   enrichmentBoundedLimit: number | null;
   enrichmentDeferredCount: number;
   totals: ImportProgressTotals;
+  perProductAttemptDiagnostics: ImportProgressPerProductDiagnostic[];
   importErrorCategory: WalmartImportErrorCategory;
   importErrorReason: string | null;
   importErrorPhase: WalmartImportFailurePhase | null;
@@ -97,6 +117,23 @@ const EMPTY_ERROR_CATEGORIES: ImportProgressPayload["enrichmentErrorCategories"]
   malformedResponseCount: 0,
   unknownErrorCount: 0,
 };
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asNullableString(value: unknown): string | null {
+  const normalized = asString(value);
+  return normalized || null;
+}
+
+function asNullableBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function asNullableNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
 
 function normalizeErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim()) return error.message.trim();
@@ -423,6 +460,47 @@ function buildSuccessProgress(input: {
   };
   const warningCount = imageStillMissingCount + imageAmbiguousCount + imageFailedCount;
   const stage = warningCount > 0 ? "completed_with_warnings" : "complete";
+  const perProductAttemptDiagnostics: ImportProgressPerProductDiagnostic[] = (
+    result.importDiagnostics?.perProductAttemptDiagnostics ?? []
+  ).map((entry) => ({
+    sku: asString(entry?.sku),
+    title: asString(entry?.title),
+    attemptedMethods: Array.isArray(entry?.attemptedMethods)
+      ? entry.attemptedMethods
+          .map((method) => asString(method))
+          .filter((method) => method.length > 0)
+      : [],
+    queryUsed: asNullableString(entry?.queryUsed),
+    walmartItemSearchQueryOrIdentifier: asNullableString(
+      entry?.walmartItemSearchQueryOrIdentifier
+    ),
+    walmartItemSearchMethod: asNullableString(entry?.walmartItemSearchMethod),
+    resultCount:
+      typeof entry?.resultCount === "number" && Number.isFinite(entry.resultCount)
+        ? Math.max(0, Math.trunc(entry.resultCount))
+        : 0,
+    topCandidateTitle: asNullableString(entry?.topCandidateTitle),
+    topCandidateItemOrProductId: asNullableString(entry?.topCandidateItemOrProductId),
+    topCandidateProductId: asNullableString(entry?.topCandidateProductId),
+    topCandidateUsItemId: asNullableString(entry?.topCandidateUsItemId),
+    topCandidateThumbnailPresent: asNullableBoolean(entry?.topCandidateThumbnailPresent),
+    matchScore: asNullableNumber(entry?.matchScore),
+    confidence:
+      entry?.confidence === "high" ||
+      entry?.confidence === "medium" ||
+      entry?.confidence === "low"
+        ? entry.confidence
+        : null,
+    rejectionReason: asNullableString(entry?.rejectionReason),
+    finalStatus:
+      entry?.finalStatus === "found" ||
+      entry?.finalStatus === "not_found" ||
+      entry?.finalStatus === "ambiguous" ||
+      entry?.finalStatus === "failed" ||
+      entry?.finalStatus === "not_synced"
+        ? entry.finalStatus
+        : "not_synced",
+  }));
 
   return {
     stage,
@@ -469,6 +547,7 @@ function buildSuccessProgress(input: {
       imageFailedCount,
       imageSkippedNoProviderCount,
     },
+    perProductAttemptDiagnostics,
     importErrorCategory: "none",
     importErrorReason: null,
     importErrorPhase: null,
@@ -515,6 +594,7 @@ export async function POST(req: NextRequest) {
         enrichmentBounded: false,
         enrichmentBoundedLimit: null,
         enrichmentDeferredCount: 0,
+        perProductAttemptDiagnostics: [],
         totals: {
           importedCount: 0,
           fetchedCount: 0,
@@ -660,6 +740,7 @@ export async function POST(req: NextRequest) {
       enrichmentBounded: false,
       enrichmentBoundedLimit: null,
       enrichmentDeferredCount: 0,
+      perProductAttemptDiagnostics: [],
       totals: {
         importedCount: partialTotals?.importedCount ?? 0,
         fetchedCount: partialTotals?.fetchedCount ?? 0,

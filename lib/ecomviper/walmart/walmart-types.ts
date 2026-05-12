@@ -429,9 +429,16 @@ export interface WalmartImportResult {
       title: string;
       attemptedMethods: string[];
       queryUsed: string | null;
+      walmartItemSearchQueryOrIdentifier?: string | null;
+      walmartItemSearchMethod?: string | null;
       resultCount: number;
       topCandidateTitle: string | null;
       topCandidateItemOrProductId: string | null;
+      topCandidateProductId?: string | null;
+      topCandidateUsItemId?: string | null;
+      topCandidateThumbnailPresent?: boolean | null;
+      matchScore?: number | null;
+      confidence?: "high" | "medium" | "low" | null;
       rejectionReason: string | null;
       finalStatus: "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
     }>;

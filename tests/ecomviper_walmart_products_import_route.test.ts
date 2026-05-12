@@ -87,6 +87,82 @@ describe("walmart products import route", () => {
     );
   });
 
+  it("serializes per-product image enrichment diagnostics into import progress", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 1,
+      fetchedCount: 1,
+      skippedCount: 0,
+      lastImportAt: "2026-05-12T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 1,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        imageFoundCount: 0,
+        imageFromImportPayloadCount: 0,
+        imageEnrichedCount: 0,
+        imageStillMissingCount: 1,
+        enrichmentQueuedCount: 1,
+        enrichmentCompletedCount: 1,
+        enrichmentProviderConnected: true,
+        serpApiStatus: "connected",
+        serpApiCanAttempt: true,
+        perProductAttemptDiagnostics: [
+          {
+            sku: "OPA-SLEEP-001",
+            title: "OPA Sleep Magnesium Glycinate",
+            attemptedMethods: ["walmart_item_search", "serpapi_brand_search", "serpapi_per_product_search"],
+            queryUsed: "OPA Sleep Magnesium Glycinate",
+            walmartItemSearchQueryOrIdentifier: "OPA Sleep Magnesium Glycinate",
+            walmartItemSearchMethod: "query",
+            resultCount: 4,
+            topCandidateTitle: "OPA Sleep Magnesium Glycinate 120 Capsules",
+            topCandidateItemOrProductId: "18273645",
+            topCandidateProductId: "18273645",
+            topCandidateUsItemId: "18273645",
+            topCandidateThumbnailPresent: true,
+            matchScore: 64,
+            confidence: "medium",
+            rejectionReason: "No confident brand-search match.",
+            finalStatus: "not_synced",
+          },
+        ],
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.importProgress?.perProductAttemptDiagnostics).toEqual([
+      {
+        sku: "OPA-SLEEP-001",
+        title: "OPA Sleep Magnesium Glycinate",
+        attemptedMethods: ["walmart_item_search", "serpapi_brand_search", "serpapi_per_product_search"],
+        queryUsed: "OPA Sleep Magnesium Glycinate",
+        walmartItemSearchQueryOrIdentifier: "OPA Sleep Magnesium Glycinate",
+        walmartItemSearchMethod: "query",
+        resultCount: 4,
+        topCandidateTitle: "OPA Sleep Magnesium Glycinate 120 Capsules",
+        topCandidateItemOrProductId: "18273645",
+        topCandidateProductId: "18273645",
+        topCandidateUsItemId: "18273645",
+        topCandidateThumbnailPresent: true,
+        matchScore: 64,
+        confidence: "medium",
+        rejectionReason: "No confident brand-search match.",
+        finalStatus: "not_synced",
+      },
+    ]);
+  });
+
   it("includes inventory pending diagnostics in success message when inventory is unknown", async () => {
     mocks.requireSignedInUser.mockResolvedValue({
       userId: "user_clerk_1",

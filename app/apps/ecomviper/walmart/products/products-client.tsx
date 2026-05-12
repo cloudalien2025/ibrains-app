@@ -57,6 +57,19 @@ function safeNumber(value: unknown, fallback = 0): number {
   return fallback;
 }
 
+function safeNullableNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
+function safeNullableBoolean(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -67,6 +80,56 @@ function asObject(value: unknown): Record<string, unknown> | null {
 function safeStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   return value.map((entry) => safeString(entry)).filter((entry) => entry.length > 0);
+}
+
+function normalizePerProductAttemptDiagnostics(
+  value: unknown
+): ImportPanelPerProductDiagnostic[] {
+  if (!Array.isArray(value)) return [];
+
+  const output: ImportPanelPerProductDiagnostic[] = [];
+  for (const entry of value) {
+    const objectEntry = asObject(entry);
+    if (!objectEntry) continue;
+
+    const finalStatusRaw = safeString(objectEntry.finalStatus);
+    const finalStatus: ImportPanelDiagnosticFinalStatus =
+      finalStatusRaw === "found" ||
+      finalStatusRaw === "not_found" ||
+      finalStatusRaw === "ambiguous" ||
+      finalStatusRaw === "failed" ||
+      finalStatusRaw === "not_synced"
+        ? finalStatusRaw
+        : "not_synced";
+
+    const confidenceRaw = safeString(objectEntry.confidence).toLowerCase();
+    const confidence: "high" | "medium" | "low" | null =
+      confidenceRaw === "high" || confidenceRaw === "medium" || confidenceRaw === "low"
+        ? confidenceRaw
+        : null;
+
+    output.push({
+      sku: safeString(objectEntry.sku),
+      title: safeString(objectEntry.title),
+      attemptedMethods: safeStringArray(objectEntry.attemptedMethods),
+      queryUsed: safeString(objectEntry.queryUsed) || null,
+      walmartItemSearchQueryOrIdentifier:
+        safeString(objectEntry.walmartItemSearchQueryOrIdentifier) || null,
+      walmartItemSearchMethod: safeString(objectEntry.walmartItemSearchMethod) || null,
+      resultCount: Math.max(0, Math.trunc(safeNumber(objectEntry.resultCount))),
+      topCandidateTitle: safeString(objectEntry.topCandidateTitle) || null,
+      topCandidateItemOrProductId: safeString(objectEntry.topCandidateItemOrProductId) || null,
+      topCandidateProductId: safeString(objectEntry.topCandidateProductId) || null,
+      topCandidateUsItemId: safeString(objectEntry.topCandidateUsItemId) || null,
+      topCandidateThumbnailPresent: safeNullableBoolean(objectEntry.topCandidateThumbnailPresent),
+      matchScore: safeNullableNumber(objectEntry.matchScore),
+      confidence,
+      rejectionReason: safeString(objectEntry.rejectionReason) || null,
+      finalStatus,
+    });
+  }
+
+  return output;
 }
 
 function deriveWalmartListingUrlFromId(productId: string): string {
@@ -145,6 +208,32 @@ type ImportPanelStage =
   | "complete"
   | "completed_with_warnings"
   | "failed";
+
+type ImportPanelDiagnosticFinalStatus =
+  | "found"
+  | "not_found"
+  | "ambiguous"
+  | "failed"
+  | "not_synced";
+
+interface ImportPanelPerProductDiagnostic {
+  sku: string;
+  title: string;
+  attemptedMethods: string[];
+  queryUsed: string | null;
+  walmartItemSearchQueryOrIdentifier: string | null;
+  walmartItemSearchMethod: string | null;
+  resultCount: number;
+  topCandidateTitle: string | null;
+  topCandidateItemOrProductId: string | null;
+  topCandidateProductId: string | null;
+  topCandidateUsItemId: string | null;
+  topCandidateThumbnailPresent: boolean | null;
+  matchScore: number | null;
+  confidence: "high" | "medium" | "low" | null;
+  rejectionReason: string | null;
+  finalStatus: ImportPanelDiagnosticFinalStatus;
+}
 
 interface ImportPanelState {
   stage: ImportPanelStage;
@@ -237,6 +326,7 @@ interface ImportPanelState {
   importErrorCorrelationId: string | null;
   importErrorResponseShape: string | null;
   existingProductsShownCount: number;
+  perProductAttemptDiagnostics: ImportPanelPerProductDiagnostic[];
   summary: string;
   running: boolean;
 }
@@ -387,6 +477,14 @@ function formatSerpApiProviderStatus(
   return fallbackConnected ? "Connected" : "Not connected";
 }
 
+function formatDiagnosticFinalStatus(status: ImportPanelDiagnosticFinalStatus): string {
+  if (status === "found") return "Found";
+  if (status === "not_found") return "Not found";
+  if (status === "ambiguous") return "Ambiguous";
+  if (status === "failed") return "Provider failed";
+  return "Not synced";
+}
+
 function normalizeProductForRender(product: WalmartEffectiveProductRecord): WalmartEffectiveProductRecord {
   const normalizedImageUrl = safeString(product.imageUrl);
   const normalizedLiveImageUrl = safeString(product.liveImageUrl);
@@ -485,6 +583,23 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       importPanel.providerStatus !== "rate_limited" &&
       (importPanel.failedCount > 0 || importPanel.notFoundCount > 0 || importPanel.ambiguousCount > 0)
   );
+  const perProductDiagnosticsPreview = useMemo(
+    () =>
+      (importPanel?.perProductAttemptDiagnostics ?? [])
+        .filter(
+          (entry) =>
+            entry.attemptedMethods.length > 0 ||
+            Boolean(entry.queryUsed) ||
+            Boolean(entry.walmartItemSearchQueryOrIdentifier) ||
+            Boolean(entry.rejectionReason)
+        )
+        .slice(0, 10),
+    [importPanel]
+  );
+  const hiddenPerProductDiagnosticCount = Math.max(
+    0,
+    (importPanel?.perProductAttemptDiagnostics ?? []).length - perProductDiagnosticsPreview.length
+  );
 
   const emptyStateMessage = useMemo(() => {
     if (isImportEmpty) {
@@ -580,6 +695,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       importErrorCorrelationId: null,
       importErrorResponseShape: null,
       existingProductsShownCount: 0,
+      perProductAttemptDiagnostics: [],
       summary:
         mode === "retry_image_enrichment"
           ? "Retrying image enrichment..."
@@ -686,6 +802,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           importErrorCorrelationId?: string | null;
           importErrorResponseShape?: string | null;
           existingProductsShownCount?: number;
+          perProductAttemptDiagnostics?: unknown[];
           totals?: {
             importedCount?: number;
             fetchedCount?: number;
@@ -798,6 +915,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             ambiguous_continued_to_fallback?: number;
             ambiguous_skipped?: number;
           };
+          perProductAttemptDiagnostics?: unknown[];
         };
         error?: { message?: string };
       };
@@ -911,6 +1029,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           importErrorCorrelationId: payload.importProgress?.importErrorCorrelationId ?? null,
           importErrorResponseShape: payload.importProgress?.importErrorResponseShape ?? null,
           existingProductsShownCount,
+          perProductAttemptDiagnostics: normalizePerProductAttemptDiagnostics(
+            payload.importProgress?.perProductAttemptDiagnostics ??
+              payload.importDiagnostics?.perProductAttemptDiagnostics ??
+              []
+          ),
           summary: summaryWithContext,
           running: false,
         });
@@ -1233,6 +1356,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         importErrorCorrelationId: payload.importProgress?.importErrorCorrelationId ?? null,
         importErrorResponseShape: payload.importProgress?.importErrorResponseShape ?? null,
         existingProductsShownCount: payload.importProgress?.existingProductsShownCount ?? 0,
+        perProductAttemptDiagnostics: normalizePerProductAttemptDiagnostics(
+          payload.importProgress?.perProductAttemptDiagnostics ??
+            payload.importDiagnostics?.perProductAttemptDiagnostics ??
+            []
+        ),
         summary: noImageReason ? `${finalSummary} ${noImageReason}` : finalSummary,
         running: false,
       });
@@ -1320,6 +1448,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         importErrorCorrelationId: current?.importErrorCorrelationId ?? null,
         importErrorResponseShape: current?.importErrorResponseShape ?? null,
         existingProductsShownCount: current?.existingProductsShownCount ?? 0,
+        perProductAttemptDiagnostics: current?.perProductAttemptDiagnostics ?? [],
         summary: "Import request failed before server progress was returned.",
         running: false,
       }));
@@ -1516,6 +1645,96 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                 {formatSerpApiProviderStatus(importPanel.providerStatus, importPanel.providerConnected)}
               </p>
             </div>
+            {perProductDiagnosticsPreview.length > 0 ? (
+              <div className="mt-3 rounded-md border border-[#D9E4F0] bg-white px-2 py-2">
+                <p className="text-xs font-semibold text-[#0F172A]">Image enrichment diagnostics</p>
+                <p className="mt-1 text-[11px] text-[#64748B]">
+                  Showing {perProductDiagnosticsPreview.length} processed products
+                  {hiddenPerProductDiagnosticCount > 0
+                    ? ` (${hiddenPerProductDiagnosticCount} additional not shown)`
+                    : ""}.
+                </p>
+                <div className="mt-2 overflow-x-auto">
+                  <table className="min-w-full text-[11px] text-[#334155]">
+                    <thead>
+                      <tr className="border-b border-[#E2E8F0] text-left text-[10px] uppercase tracking-[0.08em] text-[#64748B]">
+                        <th className="px-1 py-1.5">SKU</th>
+                        <th className="px-1 py-1.5">Query</th>
+                        <th className="px-1 py-1.5">Result count</th>
+                        <th className="px-1 py-1.5">Top candidate</th>
+                        <th className="px-1 py-1.5">Reason rejected</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {perProductDiagnosticsPreview.map((entry) => {
+                        const query = entry.queryUsed || entry.walmartItemSearchQueryOrIdentifier || "—";
+                        const topCandidate = entry.topCandidateTitle || "—";
+                        const topCandidateId =
+                          entry.topCandidateProductId ||
+                          entry.topCandidateUsItemId ||
+                          entry.topCandidateItemOrProductId ||
+                          null;
+                        const rejectionReason =
+                          entry.rejectionReason ||
+                          (entry.finalStatus === "found"
+                            ? "Matched and persisted."
+                            : "No explicit rejection reason provided.");
+                        return (
+                          <tr key={`${entry.sku}:${query}:${entry.finalStatus}`} className="border-b border-[#F1F5F9] align-top">
+                            <td className="px-1 py-1.5">
+                              <div className="font-medium text-[#0F172A]">{entry.sku || "—"}</div>
+                              <div className="text-[10px] text-[#64748B]">{entry.title || "Untitled product"}</div>
+                            </td>
+                            <td className="px-1 py-1.5">
+                              <div>{query}</div>
+                              {entry.walmartItemSearchMethod ? (
+                                <div className="text-[10px] text-[#64748B]">
+                                  Walmart Item Search input ({entry.walmartItemSearchMethod}):{" "}
+                                  {entry.walmartItemSearchQueryOrIdentifier || "—"}
+                                </div>
+                              ) : null}
+                            </td>
+                            <td className="px-1 py-1.5">
+                              <div>{entry.resultCount}</div>
+                              <div className="text-[10px] text-[#64748B]">
+                                Score: {entry.matchScore !== null ? entry.matchScore : "—"} · Confidence:{" "}
+                                {entry.confidence ?? "—"}
+                              </div>
+                            </td>
+                            <td className="px-1 py-1.5">
+                              <div>{topCandidate}</div>
+                              <div className="text-[10px] text-[#64748B]">
+                                product_id/us_item_id: {topCandidateId ?? "—"}
+                              </div>
+                              <div className="text-[10px] text-[#64748B]">
+                                Thumbnail:{" "}
+                                {entry.topCandidateThumbnailPresent === null
+                                  ? "unknown"
+                                  : entry.topCandidateThumbnailPresent
+                                  ? "yes"
+                                  : "no"}
+                              </div>
+                              <div className="text-[10px] text-[#64748B]">
+                                Methods:{" "}
+                                {entry.attemptedMethods.length > 0
+                                  ? entry.attemptedMethods.join(" -> ")
+                                  : "none"}
+                              </div>
+                            </td>
+                            <td className="px-1 py-1.5">
+                              <div>{rejectionReason}</div>
+                              <div className="text-[10px] text-[#64748B]">
+                                Final status: {formatDiagnosticFinalStatus(entry.finalStatus)}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
             {importPanel.enrichmentBounded &&
             importPanel.enrichmentDeferredCount > 0 &&
             importPanel.enrichmentBoundedLimit !== null ? (
