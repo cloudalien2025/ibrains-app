@@ -19,18 +19,35 @@ export async function GET() {
     }
 
     const health = await getWalmartConnectionHealthForUser(userId);
-    const dashboard = await getWalmartDashboardSnapshotForUser(userId);
+    let mode = health.summary.mode;
+    let cards = {
+      productsImported: 0,
+      draftChanges: 0,
+      feedErrors: 0,
+      listingsNeedingAttention: {
+        count: 0,
+        categories: [] as string[],
+      },
+    };
 
-    return ok({
-      ok: true,
-      mode: dashboard.mode,
-      connectionHealth: health,
-      cards: {
+    try {
+      const dashboard = await getWalmartDashboardSnapshotForUser(userId);
+      mode = dashboard.mode;
+      cards = {
         productsImported: dashboard.productsImported,
         draftChanges: dashboard.draftChanges,
         feedErrors: dashboard.feedErrors,
         listingsNeedingAttention: dashboard.listingsNeedingAttention,
-      },
+      };
+    } catch {
+      // Connection status should still load even when dashboard metrics are unavailable.
+    }
+
+    return ok({
+      ok: true,
+      mode,
+      connectionHealth: health,
+      cards,
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to load Walmart health.");

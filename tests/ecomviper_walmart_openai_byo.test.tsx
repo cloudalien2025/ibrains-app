@@ -57,8 +57,8 @@ describe("EcomViper Walmart OpenAI BYO flow", () => {
     delete process.env.WALMART_AI_DETERMINISTIC_MOCK;
   });
 
-  it("renders OpenAI API connection section in Walmart Connect tab", () => {
-    const html = renderToStaticMarkup(<WalmartConnectPage />);
+  it("renders OpenAI API connection section in Walmart Connect tab", async () => {
+    const html = renderToStaticMarkup(await WalmartConnectPage());
 
     expect(html).toContain("OpenAI API");
     expect(html).toContain("Save OpenAI Key");

@@ -295,8 +295,8 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).not.toContain(">Manage Walmart Connection<");
   });
 
-  it("renders walmart connect credential form in production-only mode", () => {
-    const html = renderToStaticMarkup(<WalmartConnectPage />);
+  it("renders walmart connect credential form in production-only mode", async () => {
+    const html = renderToStaticMarkup(await WalmartConnectPage());
     expect(html).toContain("ecomviper-walmart-connect-page");
     expect(html).toContain("Account nickname");
     expect(html).toContain("Client ID");
