@@ -105,7 +105,7 @@ function classifyTokenExchangeFailure(statusCode: number | null, payloadText: st
   ) {
     return toApiError(
       "app_not_installed",
-      "Shopify app is not installed on this store or application could not be found."
+      "The Shopify app may be created but not installed on this exact store. Release the app version, install it on the store, then test again. Also confirm you are using the correct myshopify.com domain."
     );
   }
 

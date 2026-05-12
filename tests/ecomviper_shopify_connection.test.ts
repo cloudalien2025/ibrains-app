@@ -87,7 +87,6 @@ describe("Shopify connection config", () => {
         storeDomain: "opanutrition.myshopify.com",
         clientId: "shopify_client_123456",
         clientSecret: "shopify_secret_super_long",
-        apiVersion: "2025-10",
       }),
     });
 
@@ -102,6 +101,48 @@ describe("Shopify connection config", () => {
     expect(payload.storeDomain).toBe("opanutrition.myshopify.com");
     expect(JSON.stringify(payload)).not.toContain("shopify_access_token_live");
     expect(JSON.stringify(payload)).not.toContain("shopify_secret_super_long");
+  });
+
+  it("saves Shopify credentials when apiVersion is omitted and defaults version internally", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "shopify_access_token_live",
+            scope: "read_products,read_product_listings",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", "X-Request-Id": "req_token_2" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition", myshopifyDomain: "opanutrition.myshopify.com" },
+              products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", "X-Request-Id": "req_shopify_2" } }
+        )
+      );
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/shopify/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        storeDomain: "opanutrition.myshopify.com",
+        clientId: "shopify_client_123456",
+        clientSecret: "shopify_secret_super_long",
+      }),
+    });
+
+    const saveResponse = await shopifySaveRoute(saveReq);
+    const savePayload = await saveResponse.json();
+
+    expect(saveResponse.status).toBe(200);
+    expect(savePayload.ok).toBe(true);
+    expect(savePayload.apiVersion).toBe("2025-10");
+    expect(savePayload.tokenStatus).toBe("valid");
   });
 
   it("flags missing read_products scope during connection test", async () => {
@@ -177,6 +218,34 @@ describe("Shopify connection config", () => {
     expect(payload.diagnosticEvent).toBe("shopify_connection_token_exchange_failed");
     expect(payload.lastApiError?.code).toBe("invalid_client_credentials");
     expect(JSON.stringify(payload)).not.toContain("wrong_client_secret");
+  });
+
+  it("returns explicit created-vs-installed guidance for app_not_installed failures", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({ errors: "Application cannot be found for this store." }),
+        { status: 404, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/shopify/connect/test", {
+      method: "POST",
+      body: JSON.stringify({
+        storeDomain: "opanutrition.myshopify.com",
+        clientId: "shopify_client_123456",
+        clientSecret: "wrong_or_not_installed",
+      }),
+    });
+
+    const response = await shopifyTestRoute(req);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(false);
+    expect(payload.lastApiError?.code).toBe("app_not_installed");
+    expect(payload.lastApiError?.message).toContain("created but not installed");
+    expect(payload.lastApiError?.message).toContain("Release the app version");
+    expect(payload.lastApiError?.message).toContain("myshopify.com domain");
   });
 
   it("redacts Shopify client secret and access token in save/status responses", async () => {
@@ -268,6 +337,25 @@ describe("Shopify connection config", () => {
 
     expect(first.accessToken).toBe("token_short_lived_1");
     expect(second.accessToken).toBe("token_short_lived_2");
+  });
+
+  it("loads existing saved configs that already include apiVersion", async () => {
+    await saveShopifyConnectionForUser({
+      userId: "user_ibrains",
+      storeDomain: "opanutrition.myshopify.com",
+      clientId: "shopify_client_123456",
+      clientSecret: "shopify_secret_legacy_config",
+      apiVersion: "2024-10",
+    });
+
+    const statusResponse = await shopifyConnectStatusRoute();
+    const statusPayload = await statusResponse.json();
+
+    expect(statusResponse.status).toBe(200);
+    expect(statusPayload.storeDomain).toBe("opanutrition.myshopify.com");
+    expect(statusPayload.apiVersion).toBe("2024-10");
+    expect(statusPayload.maskedClientId).toMatch(/^sh\*\*\*/);
+    expect(statusPayload.clientSecretStored).toBe(true);
   });
 
   it("rejects unauthenticated Shopify test requests", async () => {

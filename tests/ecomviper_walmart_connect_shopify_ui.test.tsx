@@ -153,6 +153,10 @@ describe("Walmart connect Shopify UI", () => {
     expect(container.textContent).toContain("Shopify Source Catalog");
     expect(container.textContent).toContain("Shopify Status");
     expect(container.textContent).toContain("opanutrition.myshopify.com");
+    expect(container.querySelector('input[placeholder="2025-10"]')).toBeNull();
+    expect(container.querySelector('input[placeholder="opanutrition.myshopify.com"]')).not.toBeNull();
+    expect(container.querySelector('input[placeholder="Shopify client id"]')).not.toBeNull();
+    expect(container.querySelector('input[placeholder="Shopify client secret"]')).not.toBeNull();
     expect(container.textContent).toContain("Client ID");
     expect(container.textContent).toContain("sh***3456");
     expect(container.textContent).toContain("Token status");
