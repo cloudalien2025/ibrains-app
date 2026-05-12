@@ -32,6 +32,22 @@ type SerpApiForm = {
   apiKey: string;
 };
 
+type ShopifyForm = {
+  storeDomain: string;
+  adminApiToken: string;
+  apiVersion: string;
+};
+
+type ShopifyStatus = {
+  connected: boolean;
+  status: "connected" | "disconnected";
+  storeDomain: string;
+  apiVersion: string;
+  maskedAccessToken: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+};
+
 type ConnectApiPayload = {
   ok: boolean;
   status: WalmartConnectionHealth["connectionStatus"];
@@ -96,6 +112,47 @@ type SerpApiConnectionApiPayload = {
     thisMonthUsage: number | null;
     planSearchesPerMonth: number | null;
   } | null;
+  message?: string;
+};
+
+type ShopifyImportState = {
+  lastImportAt: string | null;
+  lastImportStatus: "success" | "failed" | "unknown";
+  lastImportMessage: string | null;
+  productCount: number;
+  imageCount: number;
+  updatedAt: string | null;
+};
+
+type ShopifyConnectionApiPayload = {
+  ok: boolean;
+  provider: "shopify";
+  connected: boolean;
+  status: "connected" | "disconnected";
+  storeDomain: string;
+  apiVersion: string;
+  maskedAccessToken: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+  importState: ShopifyImportState;
+  requiredScope?: "read_products";
+  missingScope?: boolean;
+  statusCode?: number | null;
+  requestId?: string | null;
+  diagnosticEvent?: "shopify_connection_test_success" | "shopify_connection_missing_scope";
+  message?: string;
+};
+
+type ShopifyImportApiPayload = {
+  ok: boolean;
+  provider: "shopify";
+  importedCount: number;
+  imageCount: number;
+  pageCount: number;
+  hasNextPage: boolean;
+  fetchedNodeCount: number;
+  lastImportAt: string;
+  importState: ShopifyImportState;
   message?: string;
 };
 
@@ -194,6 +251,18 @@ function toSerpApiStatus(
   };
 }
 
+function toShopifyStatus(response: ShopifyConnectionApiPayload): ShopifyStatus {
+  return {
+    connected: response.connected,
+    status: response.status,
+    storeDomain: response.storeDomain,
+    apiVersion: response.apiVersion,
+    maskedAccessToken: response.maskedAccessToken,
+    updatedAt: response.updatedAt,
+    saveSupported: response.saveSupported,
+  };
+}
+
 function formatApiError(error: WalmartApiError | null | undefined): string {
   if (!error) return "None";
   return `${error.message} (${error.code})`;
@@ -234,6 +303,11 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   });
   const [openAiForm, setOpenAiForm] = useState<OpenAiForm>({ apiKey: "" });
   const [serpApiForm, setSerpApiForm] = useState<SerpApiForm>({ apiKey: "" });
+  const [shopifyForm, setShopifyForm] = useState<ShopifyForm>({
+    storeDomain: "",
+    adminApiToken: "",
+    apiVersion: "2025-10",
+  });
   const [health, setHealth] = useState(initialHealth);
   const [openAiStatus, setOpenAiStatus] = useState<WalmartOpenAiConnectionStatus>({
     connected: false,
@@ -248,6 +322,23 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     maskedApiKey: "Not configured",
     updatedAt: null,
     saveSupported: true,
+  });
+  const [shopifyStatus, setShopifyStatus] = useState<ShopifyStatus>({
+    connected: false,
+    status: "disconnected",
+    storeDomain: "",
+    apiVersion: "2025-10",
+    maskedAccessToken: "Not configured",
+    updatedAt: null,
+    saveSupported: true,
+  });
+  const [shopifyImportState, setShopifyImportState] = useState<ShopifyImportState>({
+    lastImportAt: null,
+    lastImportStatus: "unknown",
+    lastImportMessage: null,
+    productCount: 0,
+    imageCount: 0,
+    updatedAt: null,
   });
   const [serpApiDiagnostics, setSerpApiDiagnostics] = useState<{
     providerStatus:
@@ -273,11 +364,16 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [loading, setLoading] = useState(false);
   const [openAiLoading, setOpenAiLoading] = useState(false);
   const [serpApiLoading, setSerpApiLoading] = useState(false);
+  const [shopifyLoading, setShopifyLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
   const canSaveOpenAi = useMemo(() => Boolean(openAiForm.apiKey.trim()), [openAiForm.apiKey]);
   const canSaveSerpApi = useMemo(() => Boolean(serpApiForm.apiKey.trim()), [serpApiForm.apiKey]);
+  const canSaveShopify = useMemo(
+    () => Boolean(shopifyForm.storeDomain.trim() && shopifyForm.adminApiToken.trim()),
+    [shopifyForm.storeDomain, shopifyForm.adminApiToken]
+  );
 
   useEffect(() => {
     let cancelled = false;
@@ -333,9 +429,28 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     }
 
+    async function loadShopifyConnection() {
+      try {
+        const response = await fetch("/api/ecomviper/shopify/connect", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json().catch(() => null)) as ShopifyConnectionApiPayload | null;
+        if (!payload || cancelled) return;
+        setShopifyStatus(toShopifyStatus(payload));
+        setShopifyImportState(payload.importState);
+        setShopifyForm((current) => ({
+          ...current,
+          storeDomain: payload.storeDomain || current.storeDomain,
+          apiVersion: payload.apiVersion || current.apiVersion,
+        }));
+      } catch {
+        // Intentionally silent; operator can still submit credentials manually.
+      }
+    }
+
     void loadPersistedHealth();
     void loadOpenAiConnection();
     void loadSerpApiConnection();
+    void loadShopifyConnection();
 
     return () => {
       cancelled = true;
@@ -539,6 +654,100 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       }
     } finally {
       setSerpApiLoading(false);
+    }
+  }
+
+  async function handleShopifyTest() {
+    try {
+      setShopifyLoading(true);
+      const response = await postJson<ShopifyConnectionApiPayload>(
+        "/api/ecomviper/shopify/connect/test",
+        {
+          storeDomain: shopifyForm.storeDomain,
+          adminApiToken: shopifyForm.adminApiToken,
+          apiVersion: shopifyForm.apiVersion,
+        }
+      );
+      setShopifyStatus(toShopifyStatus(response));
+      setShopifyImportState(response.importState);
+      setMessage(response.message ?? "Shopify connection test completed.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Shopify connection test failed.");
+      }
+    } finally {
+      setShopifyLoading(false);
+    }
+  }
+
+  async function handleShopifySave() {
+    try {
+      setShopifyLoading(true);
+      const response = await postJson<ShopifyConnectionApiPayload>(
+        "/api/ecomviper/shopify/connect",
+        {
+          storeDomain: shopifyForm.storeDomain,
+          adminApiToken: shopifyForm.adminApiToken,
+          apiVersion: shopifyForm.apiVersion,
+        }
+      );
+      setShopifyStatus(toShopifyStatus(response));
+      setShopifyImportState(response.importState);
+      setShopifyForm((current) => ({ ...current, adminApiToken: "" }));
+      setMessage(response.message ?? "Shopify connection saved securely.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to save Shopify credentials.");
+      }
+    } finally {
+      setShopifyLoading(false);
+    }
+  }
+
+  async function handleShopifyDisconnect() {
+    try {
+      setShopifyLoading(true);
+      const response = await deleteJson<ShopifyConnectionApiPayload>(
+        "/api/ecomviper/shopify/connect"
+      );
+      setShopifyStatus(toShopifyStatus(response));
+      setShopifyImportState(response.importState);
+      setShopifyForm((current) => ({ ...current, adminApiToken: "" }));
+      setMessage(response.message ?? "Shopify disconnected.");
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to disconnect Shopify.");
+      }
+    } finally {
+      setShopifyLoading(false);
+    }
+  }
+
+  async function handleShopifyImport() {
+    try {
+      setShopifyLoading(true);
+      const response = await postJson<ShopifyImportApiPayload>(
+        "/api/ecomviper/shopify/import",
+        {
+          boundedRuntime: true,
+        }
+      );
+      setShopifyImportState(response.importState);
+      setMessage(response.message ?? `Imported ${response.importedCount} Shopify products.`);
+    } catch (error) {
+      if (error instanceof ApiRequestError) {
+        setMessage(error.message);
+      } else {
+        setMessage("Failed to import Shopify products.");
+      }
+    } finally {
+      setShopifyLoading(false);
     }
   }
 
@@ -938,6 +1147,144 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
                   </>
                 ) : null}
               </>
+            ) : null}
+          </dl>
+        </article>
+      </section>
+
+      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">Shopify Source Catalog</h2>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Connect Shopify as the product/image source of truth for Walmart catalog reconciliation.
+          </p>
+
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm text-[#334155] sm:col-span-2">
+              Shopify store domain
+              <input
+                value={shopifyForm.storeDomain}
+                onChange={(event) =>
+                  setShopifyForm((current) => ({ ...current, storeDomain: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="opanutrition.myshopify.com"
+              />
+            </label>
+
+            <label className="text-sm text-[#334155] sm:col-span-2">
+              Admin API access token
+              <input
+                type="password"
+                value={shopifyForm.adminApiToken}
+                onChange={(event) =>
+                  setShopifyForm((current) => ({ ...current, adminApiToken: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="shpat_..."
+              />
+            </label>
+
+            <label className="text-sm text-[#334155]">
+              API version
+              <input
+                value={shopifyForm.apiVersion}
+                onChange={(event) =>
+                  setShopifyForm((current) => ({ ...current, apiVersion: event.target.value }))
+                }
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="2025-10"
+              />
+            </label>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={handleShopifyTest}
+              disabled={shopifyLoading}
+              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Test Connection
+            </button>
+            <button
+              type="button"
+              onClick={handleShopifySave}
+              disabled={shopifyLoading || !canSaveShopify || !shopifyStatus.saveSupported}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              Save Shopify
+            </button>
+            <button
+              type="button"
+              onClick={handleShopifyImport}
+              disabled={shopifyLoading || !shopifyStatus.connected}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+            >
+              Import/Sync Shopify products
+            </button>
+            <button
+              type="button"
+              onClick={handleShopifyDisconnect}
+              disabled={shopifyLoading || !shopifyStatus.saveSupported}
+              className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 disabled:opacity-50"
+            >
+              Disconnect Shopify
+            </button>
+          </div>
+
+          {!shopifyStatus.saveSupported ? (
+            <p className="mt-3 text-sm text-amber-700">
+              Shopify credential saving is not available in this environment.
+            </p>
+          ) : null}
+        </article>
+
+        <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
+          <h2 className="text-lg font-semibold text-[#0F172A]">Shopify Status</h2>
+          <div className="mt-3"><StatusBadge status={shopifyStatus.connected ? "Connected" : "Not Connected"} /></div>
+          <dl className="mt-3 space-y-2 text-sm text-[#334155]">
+            <div className="flex items-start justify-between gap-3">
+              <dt>Connection</dt>
+              <dd className="font-medium">{shopifyStatus.connected ? "Connected" : "Disconnected"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Store domain</dt>
+              <dd className="font-medium">{shopifyStatus.storeDomain || "Not configured"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>API version</dt>
+              <dd className="font-medium">{shopifyStatus.apiVersion}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Admin token</dt>
+              <dd className="font-medium">{shopifyStatus.maskedAccessToken}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last updated</dt>
+              <dd className="font-medium">{shopifyStatus.updatedAt ?? "Never"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last sync status</dt>
+              <dd className="font-medium">{shopifyImportState.lastImportStatus}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last sync at</dt>
+              <dd className="font-medium">{shopifyImportState.lastImportAt ?? "Never"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Product count imported</dt>
+              <dd className="font-medium">{shopifyImportState.productCount}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Image count imported</dt>
+              <dd className="font-medium">{shopifyImportState.imageCount}</dd>
+            </div>
+            {shopifyImportState.lastImportMessage ? (
+              <div className="flex items-start justify-between gap-3">
+                <dt>Sync note</dt>
+                <dd className="font-medium text-right">{shopifyImportState.lastImportMessage}</dd>
+              </div>
             ) : null}
           </dl>
         </article>

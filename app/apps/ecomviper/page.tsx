@@ -40,11 +40,11 @@ const marketplaceCards = [
   {
     id: "shopify",
     name: "Shopify Source Catalog",
-    status: "Future",
-    description: "Future source-catalog workflow that can feed marketplace listings to Walmart, Amazon, and eBay.",
+    status: "Active",
+    description: "Connect Shopify store domain + Admin API token, import Shopify products/images, and reconcile Walmart images by SKU/barcode/title.",
     href: "/apps/ecomviper/shopify",
-    actionLabel: "Future",
-    disabled: true,
+    actionLabel: "Open Shopify",
+    disabled: false,
   },
 ] as const;
 

@@ -52,6 +52,22 @@ interface ImportProgressTotals {
   imageAmbiguousCount: number;
   imageFailedCount: number;
   imageSkippedNoProviderCount: number;
+  shopifyProductsImported: number;
+  shopifyImagesImported: number;
+  walmartProductsMatchedToShopify: number;
+  imagesAppliedFromShopify: number;
+  ambiguousShopifyMatches: number;
+  shopifyNoMatchCount: number;
+  shopifyNoImageAvailableCount: number;
+  stillMissingAfterShopify: number;
+  shopifyVariantSkuMatch: number;
+  shopifyVariantBarcodeMatch: number;
+  shopifyBarcodeNormalizedMatch: number;
+  shopifyTitleVendorMatch: number;
+  shopifyAmbiguousMatch: number;
+  shopifyNoMatch: number;
+  shopifyImageApplied: number;
+  shopifyNoImageAvailable: number;
 }
 
 interface ImportProgressPerProductDiagnostic {
@@ -459,6 +475,24 @@ function buildSuccessProgress(input: {
   const enrichmentBounded = Boolean(result.importDiagnostics?.imageEnrichmentBounded);
   const enrichmentBoundedLimit = result.importDiagnostics?.imageEnrichmentImportLimit ?? null;
   const enrichmentDeferredCount = result.importDiagnostics?.imageEnrichmentDeferredCount ?? 0;
+  const shopifyProductsImported = result.importDiagnostics?.shopifyProductsImported ?? 0;
+  const shopifyImagesImported = result.importDiagnostics?.shopifyImagesImported ?? 0;
+  const walmartProductsMatchedToShopify =
+    result.importDiagnostics?.walmartProductsMatchedToShopify ?? 0;
+  const imagesAppliedFromShopify = result.importDiagnostics?.imagesAppliedFromShopify ?? 0;
+  const ambiguousShopifyMatches = result.importDiagnostics?.ambiguousShopifyMatches ?? 0;
+  const shopifyNoMatchCount = result.importDiagnostics?.shopifyNoMatchCount ?? 0;
+  const shopifyNoImageAvailableCount =
+    result.importDiagnostics?.shopifyNoImageAvailableCount ?? 0;
+  const stillMissingAfterShopify = result.importDiagnostics?.stillMissingAfterShopify ?? imageStillMissingCount;
+  const shopifyVariantSkuMatch = result.importDiagnostics?.shopifyVariantSkuMatch ?? 0;
+  const shopifyVariantBarcodeMatch = result.importDiagnostics?.shopifyVariantBarcodeMatch ?? 0;
+  const shopifyBarcodeNormalizedMatch = result.importDiagnostics?.shopifyBarcodeNormalizedMatch ?? 0;
+  const shopifyTitleVendorMatch = result.importDiagnostics?.shopifyTitleVendorMatch ?? 0;
+  const shopifyAmbiguousMatch = result.importDiagnostics?.shopifyAmbiguousMatch ?? 0;
+  const shopifyNoMatch = result.importDiagnostics?.shopifyNoMatch ?? 0;
+  const shopifyImageApplied = result.importDiagnostics?.shopifyImageApplied ?? 0;
+  const shopifyNoImageAvailable = result.importDiagnostics?.shopifyNoImageAvailable ?? 0;
   const enrichmentErrorCategories = {
     ...EMPTY_ERROR_CATEGORIES,
     ...(result.importDiagnostics?.enrichmentErrorCategories ?? {}),
@@ -557,6 +591,22 @@ function buildSuccessProgress(input: {
       imageAmbiguousCount,
       imageFailedCount,
       imageSkippedNoProviderCount,
+      shopifyProductsImported,
+      shopifyImagesImported,
+      walmartProductsMatchedToShopify,
+      imagesAppliedFromShopify,
+      ambiguousShopifyMatches,
+      shopifyNoMatchCount,
+      shopifyNoImageAvailableCount,
+      stillMissingAfterShopify,
+      shopifyVariantSkuMatch,
+      shopifyVariantBarcodeMatch,
+      shopifyBarcodeNormalizedMatch,
+      shopifyTitleVendorMatch,
+      shopifyAmbiguousMatch,
+      shopifyNoMatch,
+      shopifyImageApplied,
+      shopifyNoImageAvailable,
     },
     perProductAttemptDiagnostics,
     importErrorCategory: "none",
@@ -640,6 +690,22 @@ export async function POST(req: NextRequest) {
           imageAmbiguousCount: 0,
           imageFailedCount: 0,
           imageSkippedNoProviderCount: 0,
+          shopifyProductsImported: 0,
+          shopifyImagesImported: 0,
+          walmartProductsMatchedToShopify: 0,
+          imagesAppliedFromShopify: 0,
+          ambiguousShopifyMatches: 0,
+          shopifyNoMatchCount: 0,
+          shopifyNoImageAvailableCount: 0,
+          stillMissingAfterShopify: 0,
+          shopifyVariantSkuMatch: 0,
+          shopifyVariantBarcodeMatch: 0,
+          shopifyBarcodeNormalizedMatch: 0,
+          shopifyTitleVendorMatch: 0,
+          shopifyAmbiguousMatch: 0,
+          shopifyNoMatch: 0,
+          shopifyImageApplied: 0,
+          shopifyNoImageAvailable: 0,
         },
         importErrorCategory: "import_request_invalid",
         importErrorReason: "Import request mode must be a string value.",
@@ -684,7 +750,7 @@ export async function POST(req: NextRequest) {
       existingProductsShownCount,
     });
 
-    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${progress.totals.perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${progress.totals.perProductSerpApiMatches}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Processed this run: ${progress.totals.processedCount}. Total still missing: ${progress.totals.imageStillMissingCount}. Queued for remaining retry: ${Math.max(0, progress.totals.queuedCount - progress.totals.processedCount)}. Provider failed: ${progress.totals.imageFailedCount}.`;
+    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${progress.totals.perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${progress.totals.perProductSerpApiMatches}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${progress.totals.shopifyProductsImported}. Shopify images imported: ${progress.totals.shopifyImagesImported}. Walmart products matched to Shopify: ${progress.totals.walmartProductsMatchedToShopify}. Shopify images applied: ${progress.totals.imagesAppliedFromShopify}. Shopify ambiguous matches: ${progress.totals.ambiguousShopifyMatches}. Shopify no match: ${progress.totals.shopifyNoMatchCount}. Processed this run: ${progress.totals.processedCount}. Total still missing: ${progress.totals.imageStillMissingCount}. Queued for remaining retry: ${Math.max(0, progress.totals.queuedCount - progress.totals.processedCount)}. Provider failed: ${progress.totals.imageFailedCount}.`;
     const message =
       progress.totals.importedCount > 0
         ? isRetryMode
@@ -786,6 +852,22 @@ export async function POST(req: NextRequest) {
         imageAmbiguousCount: partialTotals?.imageAmbiguousCount ?? 0,
         imageFailedCount: partialTotals?.imageFailedCount ?? 0,
         imageSkippedNoProviderCount: partialTotals?.imageSkippedNoProviderCount ?? 0,
+        shopifyProductsImported: 0,
+        shopifyImagesImported: 0,
+        walmartProductsMatchedToShopify: 0,
+        imagesAppliedFromShopify: 0,
+        ambiguousShopifyMatches: 0,
+        shopifyNoMatchCount: 0,
+        shopifyNoImageAvailableCount: 0,
+        stillMissingAfterShopify: 0,
+        shopifyVariantSkuMatch: 0,
+        shopifyVariantBarcodeMatch: 0,
+        shopifyBarcodeNormalizedMatch: 0,
+        shopifyTitleVendorMatch: 0,
+        shopifyAmbiguousMatch: 0,
+        shopifyNoMatch: 0,
+        shopifyImageApplied: 0,
+        shopifyNoImageAvailable: 0,
       },
       importErrorCategory: classified.category,
       importErrorReason: classified.reason,

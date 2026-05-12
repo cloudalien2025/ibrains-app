@@ -169,13 +169,21 @@ export type WalmartImageMatchMethod =
   | "item_report_productid"
   | "item_report_itemid"
   | "item_report_wpid"
-  | "item_report_title_brand";
+  | "item_report_title_brand"
+  | "shopify_sku_exact"
+  | "shopify_barcode_exact"
+  | "shopify_barcode_normalized"
+  | "shopify_title_vendor_high"
+  | "shopify_ambiguous"
+  | "shopify_no_match";
 export type WalmartImageSource =
   | "walmart_item_report"
   | "walmart_catalog"
   | "walmart_item_search"
   | "serpapi_walmart_brand_search"
   | "public_walmart_listing_serpapi"
+  | "shopify_product"
+  | "shopify_variant"
   | "manual"
   | "shopify_placeholder"
   | "manual_placeholder"
@@ -206,6 +214,8 @@ export interface WalmartProductRecord {
   imageSource?: WalmartImageSource;
   imageSyncStatus?: WalmartImageSyncStatus;
   imageMatchMethod?: WalmartImageMatchMethod;
+  shopifyProductId?: string;
+  shopifyVariantId?: string;
   matchedItemId?: string;
   publicWalmartUrl?: string;
   publicWalmartProductId?: string;
@@ -338,6 +348,38 @@ export interface WalmartImportResult {
     imageEnrichmentImportLimit?: number | null;
     imageEnrichmentBounded?: boolean;
     imageEnrichmentNoImageReason?: string | null;
+    shopifyProductsImported?: number;
+    shopifyImagesImported?: number;
+    walmartProductsMatchedToShopify?: number;
+    imagesAppliedFromShopify?: number;
+    ambiguousShopifyMatches?: number;
+    shopifyNoMatchCount?: number;
+    shopifyNoImageAvailableCount?: number;
+    stillMissingAfterShopify?: number;
+    shopifyVariantSkuMatch?: number;
+    shopifyVariantBarcodeMatch?: number;
+    shopifyBarcodeNormalizedMatch?: number;
+    shopifyTitleVendorMatch?: number;
+    shopifyAmbiguousMatch?: number;
+    shopifyNoMatch?: number;
+    shopifyImageApplied?: number;
+    shopifyNoImageAvailable?: number;
+    shopifyMatchDiagnostics?: Array<{
+      walmartSku: string;
+      walmartUpcOrGtin: string;
+      matchedShopifyProductTitle: string;
+      matchedShopifyProductId: string;
+      matchedShopifyVariantId: string;
+      matchMethod:
+        | "shopify_sku_exact"
+        | "shopify_barcode_exact"
+        | "shopify_barcode_normalized"
+        | "shopify_title_vendor_high"
+        | "shopify_ambiguous"
+        | "shopify_no_match";
+      imageApplied: boolean;
+      ambiguousCandidateCount: number;
+    }>;
     serpApiStatus?: WalmartSerpApiProviderStatus;
     serpApiStatusReason?: string | null;
     serpApiCanAttempt?: boolean;

@@ -3,6 +3,9 @@ import "server-only";
 import crypto from "crypto";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
+import {
+  reconcileWalmartProductsWithShopifyForUser,
+} from "@/lib/ecomviper/shopify/walmart-shopify-reconciliation";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
 import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
@@ -32,6 +35,9 @@ import {
   listPersistedWalmartProducts,
   replacePersistedWalmartProducts,
 } from "@/lib/ecomviper/walmart/walmart-product-repository";
+import type {
+  WalmartShopifyReconcileResult,
+} from "@/lib/ecomviper/shopify/shopify-types";
 import type {
   WalmartDashboardSnapshot,
   WalmartImportErrorCategory,
@@ -1800,6 +1806,30 @@ function categorizeWalmartTokenFailure(code: string | null | undefined): Walmart
   return "walmart_token_failed";
 }
 
+function createEmptyShopifyReconcileResult(): WalmartShopifyReconcileResult {
+  return {
+    shopifyProductsImported: 0,
+    shopifyImagesImported: 0,
+    walmartProductsMatchedToShopify: 0,
+    imagesAppliedFromShopify: 0,
+    ambiguousShopifyMatches: 0,
+    shopifyNoMatch: 0,
+    shopifyNoImageAvailable: 0,
+    stillMissingAfterShopify: 0,
+    diagnosticsEvents: {
+      shopifyVariantSkuMatch: 0,
+      shopifyVariantBarcodeMatch: 0,
+      shopifyBarcodeNormalizedMatch: 0,
+      shopifyTitleVendorMatch: 0,
+      shopifyAmbiguousMatch: 0,
+      shopifyNoMatch: 0,
+      shopifyImageApplied: 0,
+      shopifyNoImageAvailable: 0,
+    },
+    diagnostics: [],
+  };
+}
+
 export async function importWalmartProducts(
   userId: string,
   options?: WalmartImportOptions
@@ -2009,7 +2039,29 @@ export async function importWalmartProducts(
             })
           )
         : [];
-    const products = [...enrichedProducts, ...deferredEnrichmentProducts];
+    let products = [...enrichedProducts, ...deferredEnrichmentProducts];
+    let shopifyReconcileResult = createEmptyShopifyReconcileResult();
+    try {
+      const shopifyReconcile = await reconcileWalmartProductsWithShopifyForUser({
+        userId,
+        walmartProducts: products,
+        applyMode: "prefer_shopify",
+      });
+      products = shopifyReconcile.products;
+      shopifyReconcileResult = shopifyReconcile.result;
+    } catch (error) {
+      appendActivityLog({
+        marketplace: "walmart",
+        actionType: "product_import",
+        result: "warning",
+        message:
+          "Shopify reconciliation skipped due to a recoverable error. Walmart/SerpApi image fallback remains active.",
+        afterPayload: {
+          reason: normalizeUnknownErrorMessage(error, "shopify_reconcile_failed"),
+        },
+      });
+    }
+
     const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
     const inventoryOutOfStockCount = products.filter(
       (product) => product.inventoryStatus === "out_of_stock"
@@ -2144,6 +2196,25 @@ export async function importWalmartProducts(
             ? `${imageStats.noImageReason} ${deferredReason}`
             : deferredReason
           : imageStats.noImageReason,
+        shopifyProductsImported: shopifyReconcileResult.shopifyProductsImported,
+        shopifyImagesImported: shopifyReconcileResult.shopifyImagesImported,
+        walmartProductsMatchedToShopify: shopifyReconcileResult.walmartProductsMatchedToShopify,
+        imagesAppliedFromShopify: shopifyReconcileResult.imagesAppliedFromShopify,
+        ambiguousShopifyMatches: shopifyReconcileResult.ambiguousShopifyMatches,
+        shopifyNoMatchCount: shopifyReconcileResult.shopifyNoMatch,
+        shopifyNoImageAvailableCount: shopifyReconcileResult.shopifyNoImageAvailable,
+        stillMissingAfterShopify: shopifyReconcileResult.stillMissingAfterShopify,
+        shopifyVariantSkuMatch: shopifyReconcileResult.diagnosticsEvents.shopifyVariantSkuMatch,
+        shopifyVariantBarcodeMatch: shopifyReconcileResult.diagnosticsEvents.shopifyVariantBarcodeMatch,
+        shopifyBarcodeNormalizedMatch: shopifyReconcileResult.diagnosticsEvents.shopifyBarcodeNormalizedMatch,
+        shopifyTitleVendorMatch: shopifyReconcileResult.diagnosticsEvents.shopifyTitleVendorMatch,
+        shopifyAmbiguousMatch: shopifyReconcileResult.diagnosticsEvents.shopifyAmbiguousMatch,
+        shopifyNoMatch: shopifyReconcileResult.diagnosticsEvents.shopifyNoMatch,
+        shopifyImageApplied: shopifyReconcileResult.diagnosticsEvents.shopifyImageApplied,
+        shopifyNoImageAvailable: shopifyReconcileResult.diagnosticsEvents.shopifyNoImageAvailable,
+        shopifyMatchDiagnostics: shopifyReconcileResult.diagnostics.map((entry) => ({
+          ...entry,
+        })),
         lastEnrichedAt: imageStats.publicListing.lastEnrichedAt,
         inventoryLookupSkippedCount: Math.max(0, bySku.size - Math.min(bySku.size, inventoryLookupCap)),
         imageEnrichmentDeferredCount: deferredProducts.length,
@@ -2374,6 +2445,47 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       importErrorCategory: "none",
       importErrorReason: null,
     },
+  };
+}
+
+export async function reconcileWalmartImagesFromShopifyForUser(input: {
+  userId: string;
+  applyMode?: "missing_first" | "prefer_shopify";
+}): Promise<WalmartShopifyReconcileResult & { walmartProductsProcessed: number }> {
+  const currentProducts = await listPersistedWalmartProducts(input.userId);
+  const reconcile = await reconcileWalmartProductsWithShopifyForUser({
+    userId: input.userId,
+    walmartProducts: currentProducts,
+    applyMode: input.applyMode ?? "missing_first",
+  });
+
+  const importedAt = await getPersistedWalmartLastImportAt(input.userId);
+  await replaceWalmartProductsForUser({
+    userId: input.userId,
+    products: reconcile.products,
+    importedAt,
+  });
+
+  appendActivityLog({
+    marketplace: "walmart",
+    actionType: "product_sync",
+    result: reconcile.result.imagesAppliedFromShopify > 0 ? "success" : "warning",
+    message: `Shopify reconciliation completed: ${reconcile.result.imagesAppliedFromShopify} image(s) applied.`,
+    afterPayload: {
+      applyMode: input.applyMode ?? "missing_first",
+      walmartProductsProcessed: reconcile.products.length,
+      walmartProductsMatchedToShopify: reconcile.result.walmartProductsMatchedToShopify,
+      imagesAppliedFromShopify: reconcile.result.imagesAppliedFromShopify,
+      ambiguousShopifyMatches: reconcile.result.ambiguousShopifyMatches,
+      shopifyNoMatch: reconcile.result.shopifyNoMatch,
+      shopifyNoImageAvailable: reconcile.result.shopifyNoImageAvailable,
+      stillMissingAfterShopify: reconcile.result.stillMissingAfterShopify,
+    },
+  });
+
+  return {
+    ...reconcile.result,
+    walmartProductsProcessed: reconcile.products.length,
   };
 }
 

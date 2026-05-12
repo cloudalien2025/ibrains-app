@@ -26,6 +26,8 @@ const WALMART_IMAGE_SOURCES = new Set<WalmartImageSource>([
   "walmart_item_search",
   "serpapi_walmart_brand_search",
   "public_walmart_listing_serpapi",
+  "shopify_product",
+  "shopify_variant",
   "manual",
   "shopify_placeholder",
   "manual_placeholder",
@@ -57,6 +59,12 @@ const WALMART_IMAGE_MATCH_METHODS = new Set<WalmartImageMatchMethod>([
   "item_report_itemid",
   "item_report_wpid",
   "item_report_title_brand",
+  "shopify_sku_exact",
+  "shopify_barcode_exact",
+  "shopify_barcode_normalized",
+  "shopify_title_vendor_high",
+  "shopify_ambiguous",
+  "shopify_no_match",
 ]);
 
 function asObject(value: unknown): Record<string, unknown> | null {

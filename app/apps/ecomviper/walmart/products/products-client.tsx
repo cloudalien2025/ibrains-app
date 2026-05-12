@@ -269,6 +269,22 @@ interface ImportPanelState {
   queuedForRemainingRetryCount: number;
   stillMissingCount: number;
   missingCount: number;
+  shopifyProductsImported?: number;
+  shopifyImagesImported?: number;
+  walmartProductsMatchedToShopify?: number;
+  imagesAppliedFromShopify?: number;
+  ambiguousShopifyMatches?: number;
+  shopifyNoMatchCount?: number;
+  shopifyNoImageAvailableCount?: number;
+  stillMissingAfterShopify?: number;
+  shopifyVariantSkuMatch?: number;
+  shopifyVariantBarcodeMatch?: number;
+  shopifyBarcodeNormalizedMatch?: number;
+  shopifyTitleVendorMatch?: number;
+  shopifyAmbiguousMatch?: number;
+  shopifyNoMatch?: number;
+  shopifyImageApplied?: number;
+  shopifyNoImageAvailable?: number;
   notFoundCount: number;
   ambiguousCount: number;
   failedCount: number;
@@ -331,6 +347,68 @@ interface ImportPanelState {
   running: boolean;
 }
 
+function createDefaultImportPanelState(partial?: Partial<ImportPanelState>): ImportPanelState {
+  return {
+    stage: "idle",
+    percent: 0,
+    importedCount: 0,
+    fetchedCount: 0,
+    processedCount: 0,
+    queuedCount: 0,
+    foundCount: 0,
+    fromImportPayloadCount: 0,
+    enrichedCount: 0,
+    walmartSearchResolvedCount: 0,
+    walmartSearchImageFoundCount: 0,
+    serpApiBrandSearchThumbnailImageFoundCount: 0,
+    serpApiBrandSearchPublicListingMatchedCount: 0,
+    serpApiBrandSearchAmbiguousCount: 0,
+    serpApiBrandSearchNoConfidentMatchCount: 0,
+    serpApiFallbackImageFoundCount: 0,
+    serpApiProductGalleryImageFoundCount: 0,
+    serpApiSearchFallbackImageFoundCount: 0,
+    perProductSerpApiSearchesAttempted: 0,
+    perProductSerpApiMatches: 0,
+    perProductSerpApiThumbnailsSaved: 0,
+    noConfidentMatchContinuedToFallback: 0,
+    ambiguousContinuedToFallback: 0,
+    ambiguousSkippedCount: 0,
+    walmartItemSearchExactIdentifierMatchCount: 0,
+    walmartItemSearchIdentifierNormalizedMatchCount: 0,
+    walmartItemSearchIdentifierAssistedMatchCount: 0,
+    walmartItemSearchMultipleCandidatesRejectedCount: 0,
+    walmartItemSearchSingleCandidateNoImageCount: 0,
+    walmartSearchNotFoundCount: 0,
+    queuedForRemainingRetryCount: 0,
+    stillMissingCount: 0,
+    missingCount: 0,
+    notFoundCount: 0,
+    ambiguousCount: 0,
+    failedCount: 0,
+    skippedNoProviderCount: 0,
+    providerConnected: false,
+    providerStatus: "not_connected",
+    providerStatusReason: null,
+    providerCanAttempt: false,
+    noImageReason: null,
+    enrichmentBounded: false,
+    enrichmentBoundedLimit: null,
+    enrichmentDeferredCount: 0,
+    importErrorCategory: "none",
+    importErrorReason: null,
+    importErrorPhase: null,
+    importErrorStatusCode: null,
+    importErrorEndpointFamily: null,
+    importErrorCorrelationId: null,
+    importErrorResponseShape: null,
+    existingProductsShownCount: 0,
+    perProductAttemptDiagnostics: [],
+    summary: "",
+    running: false,
+    ...partial,
+  };
+}
+
 const ALLOWED_INVENTORY_STATUSES = new Set<WalmartEffectiveProductRecord["inventoryStatus"]>([
   "known",
   "unknown",
@@ -354,6 +432,8 @@ const ALLOWED_IMAGE_SOURCES = new Set<NonNullable<WalmartEffectiveProductRecord[
   "walmart_item_search",
   "serpapi_walmart_brand_search",
   "public_walmart_listing_serpapi",
+  "shopify_product",
+  "shopify_variant",
   "manual",
   "shopify_placeholder",
   "manual_placeholder",
@@ -400,6 +480,8 @@ function formatImageStatus(product: WalmartEffectiveProductRecord): string {
     return message;
   }
   if (product.imageSyncStatus === "not_found") {
+    if (product.imageSource === "shopify_product" || product.imageSource === "shopify_variant")
+      return "Matched Shopify product has no usable image.";
     if (product.imageSource === "walmart_item_report") return "No matching row found in Walmart Item Report.";
     if (product.imageSource === "serpapi_walmart_brand_search")
       return "No confident public listing match from SerpApi brand search.";
@@ -409,6 +491,7 @@ function formatImageStatus(product: WalmartEffectiveProductRecord): string {
     return "Item Search returned no usable image.";
   }
   if (product.imageSyncStatus === "ambiguous") {
+    if (product.imageMatchMethod === "shopify_ambiguous") return "Multiple Shopify candidates matched.";
     if (product.imageSource === "serpapi_walmart_brand_search")
       return "SerpApi brand-search listing match is ambiguous.";
     if (product.imageSource === "public_walmart_listing_serpapi")
@@ -422,6 +505,7 @@ function formatImageStatus(product: WalmartEffectiveProductRecord): string {
     return "Item Search request failed after retry.";
   }
   if (product.imageSyncStatus === "not_synced") {
+    if (product.imageMatchMethod === "shopify_no_match") return "No Shopify match found.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "SerpApi key missing.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
@@ -439,8 +523,22 @@ function formatImageSource(product: WalmartEffectiveProductRecord): string {
     return "SerpApi Walmart brand search";
   if (product.imageSource === "public_walmart_listing_serpapi")
     return "Public Walmart listing via SerpApi";
+  if (product.imageSource === "shopify_variant") return "Shopify variant";
+  if (product.imageSource === "shopify_product") return "Shopify product";
   if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
+}
+
+function formatShopifyMatchLabel(
+  matchMethod: WalmartEffectiveProductRecord["imageMatchMethod"] | undefined
+): string {
+  if (matchMethod === "shopify_sku_exact") return "SKU exact";
+  if (matchMethod === "shopify_barcode_exact") return "Barcode exact";
+  if (matchMethod === "shopify_barcode_normalized") return "Barcode normalized";
+  if (matchMethod === "shopify_title_vendor_high") return "Title + vendor";
+  if (matchMethod === "shopify_ambiguous") return "Ambiguous";
+  if (matchMethod === "shopify_no_match") return "No match";
+  return "Matched";
 }
 
 function hasPendingDraftImage(product: WalmartEffectiveProductRecord): boolean {
@@ -525,6 +623,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const [skuSortDirection, setSkuSortDirection] = useState<SkuSortDirection>("none");
   const [message, setMessage] = useState<string | null>(loadError);
   const [isImporting, setIsImporting] = useState(false);
+  const [isSyncingShopify, setIsSyncingShopify] = useState(false);
   const [importPanel, setImportPanel] = useState<ImportPanelState | null>(null);
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
     imageFromImportPayloadCount: number;
@@ -837,6 +936,22 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             imageAmbiguousCount?: number;
             imageFailedCount?: number;
             imageSkippedNoProviderCount?: number;
+            shopifyProductsImported?: number;
+            shopifyImagesImported?: number;
+            walmartProductsMatchedToShopify?: number;
+            imagesAppliedFromShopify?: number;
+            ambiguousShopifyMatches?: number;
+            shopifyNoMatchCount?: number;
+            shopifyNoImageAvailableCount?: number;
+            stillMissingAfterShopify?: number;
+            shopifyVariantSkuMatch?: number;
+            shopifyVariantBarcodeMatch?: number;
+            shopifyBarcodeNormalizedMatch?: number;
+            shopifyTitleVendorMatch?: number;
+            shopifyAmbiguousMatch?: number;
+            shopifyNoMatch?: number;
+            shopifyImageApplied?: number;
+            shopifyNoImageAvailable?: number;
           };
         };
         importDiagnostics?: {
@@ -1258,6 +1373,24 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         payload.importProgress?.enrichmentDeferredCount ??
         payload.importDiagnostics?.imageEnrichmentDeferredCount ??
         0;
+      const shopifyProductsImported = totals?.shopifyProductsImported ?? 0;
+      const shopifyImagesImported = totals?.shopifyImagesImported ?? 0;
+      const walmartProductsMatchedToShopify =
+        totals?.walmartProductsMatchedToShopify ?? 0;
+      const imagesAppliedFromShopify = totals?.imagesAppliedFromShopify ?? 0;
+      const ambiguousShopifyMatches = totals?.ambiguousShopifyMatches ?? 0;
+      const shopifyNoMatchCount = totals?.shopifyNoMatchCount ?? 0;
+      const shopifyNoImageAvailableCount = totals?.shopifyNoImageAvailableCount ?? 0;
+      const stillMissingAfterShopify =
+        totals?.stillMissingAfterShopify ?? imageStillMissingCount;
+      const shopifyVariantSkuMatch = totals?.shopifyVariantSkuMatch ?? 0;
+      const shopifyVariantBarcodeMatch = totals?.shopifyVariantBarcodeMatch ?? 0;
+      const shopifyBarcodeNormalizedMatch = totals?.shopifyBarcodeNormalizedMatch ?? 0;
+      const shopifyTitleVendorMatch = totals?.shopifyTitleVendorMatch ?? 0;
+      const shopifyAmbiguousMatch = totals?.shopifyAmbiguousMatch ?? 0;
+      const shopifyNoMatch = totals?.shopifyNoMatch ?? 0;
+      const shopifyImageApplied = totals?.shopifyImageApplied ?? 0;
+      const shopifyNoImageAvailable = totals?.shopifyNoImageAvailable ?? 0;
       const finalStage: ImportPanelStage =
         payload.importProgress?.stage === "completed_with_warnings" ||
         imageStillMissingCount > 0 ||
@@ -1265,7 +1398,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         imageFailedCount > 0
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${perProductSerpApiMatches}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${serpApiBrandSearchNoConfidentMatchCount}. Processed this run: ${enrichmentCompletedCount}. Total still missing: ${imageStillMissingCount}. Queued for remaining retry: ${queuedForRemainingRetryCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${perProductSerpApiMatches}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${shopifyProductsImported}. Shopify images imported: ${shopifyImagesImported}. Walmart products matched to Shopify: ${walmartProductsMatchedToShopify}. Shopify images applied: ${imagesAppliedFromShopify}. Shopify ambiguous matches: ${ambiguousShopifyMatches}. Shopify no match: ${shopifyNoMatchCount}. Processed this run: ${enrichmentCompletedCount}. Total still missing: ${imageStillMissingCount}. Queued for remaining retry: ${queuedForRemainingRetryCount}. Provider failures: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
         imageFromImportPayloadCount,
@@ -1335,6 +1468,22 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         stillMissingCount:
           totals?.imageStillMissingCount ?? imageStillMissingCount,
         missingCount: totals?.imageStillMissingCount ?? missingCount,
+        shopifyProductsImported,
+        shopifyImagesImported,
+        walmartProductsMatchedToShopify,
+        imagesAppliedFromShopify,
+        ambiguousShopifyMatches,
+        shopifyNoMatchCount,
+        shopifyNoImageAvailableCount,
+        stillMissingAfterShopify,
+        shopifyVariantSkuMatch,
+        shopifyVariantBarcodeMatch,
+        shopifyBarcodeNormalizedMatch,
+        shopifyTitleVendorMatch,
+        shopifyAmbiguousMatch,
+        shopifyNoMatch,
+        shopifyImageApplied,
+        shopifyNoImageAvailable,
         notFoundCount: totals?.imageNotFoundCount ?? imageNotFoundCount,
         ambiguousCount: totals?.imageAmbiguousCount ?? imageAmbiguousCount,
         failedCount: totals?.imageFailedCount ?? imageFailedCount,
@@ -1460,6 +1609,121 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     }
   }
 
+  async function handleSyncImagesFromShopify() {
+    setIsSyncingShopify(true);
+    setMessage(null);
+    setImportPanel(
+      createDefaultImportPanelState({
+        stage: "enriching_images",
+        percent: 35,
+        summary: "Syncing Walmart images from Shopify...",
+        running: true,
+      })
+    );
+
+    try {
+      const response = await fetch("/api/ecomviper/shopify/reconcile", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: "missing_first" }),
+      });
+
+      const payload = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        message?: string;
+        shopifyProductsImported?: number;
+        shopifyImagesImported?: number;
+        walmartProductsProcessed?: number;
+        walmartProductsMatchedToShopify?: number;
+        imagesAppliedFromShopify?: number;
+        ambiguousShopifyMatches?: number;
+        shopifyNoMatch?: number;
+        shopifyNoImageAvailable?: number;
+        stillMissingAfterShopify?: number;
+        diagnosticsEvents?: {
+          shopifyVariantSkuMatch?: number;
+          shopifyVariantBarcodeMatch?: number;
+          shopifyBarcodeNormalizedMatch?: number;
+          shopifyTitleVendorMatch?: number;
+          shopifyAmbiguousMatch?: number;
+          shopifyNoMatch?: number;
+          shopifyImageApplied?: number;
+          shopifyNoImageAvailable?: number;
+        };
+        error?: { message?: string };
+      };
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error?.message ?? payload.message ?? "Shopify image sync failed.");
+      }
+
+      const stage: ImportPanelStage =
+        (payload.stillMissingAfterShopify ?? 0) > 0 || (payload.ambiguousShopifyMatches ?? 0) > 0
+          ? "completed_with_warnings"
+          : "complete";
+
+      setImportPanel(
+        createDefaultImportPanelState({
+          stage,
+          percent: 100,
+          importedCount: payload.walmartProductsProcessed ?? 0,
+          fetchedCount: payload.walmartProductsProcessed ?? 0,
+          processedCount: payload.walmartProductsProcessed ?? 0,
+          foundCount: payload.imagesAppliedFromShopify ?? 0,
+          stillMissingCount: payload.stillMissingAfterShopify ?? 0,
+          missingCount: payload.stillMissingAfterShopify ?? 0,
+          ambiguousCount: payload.ambiguousShopifyMatches ?? 0,
+          shopifyProductsImported: payload.shopifyProductsImported ?? 0,
+          shopifyImagesImported: payload.shopifyImagesImported ?? 0,
+          walmartProductsMatchedToShopify: payload.walmartProductsMatchedToShopify ?? 0,
+          imagesAppliedFromShopify: payload.imagesAppliedFromShopify ?? 0,
+          ambiguousShopifyMatches: payload.ambiguousShopifyMatches ?? 0,
+          shopifyNoMatchCount: payload.shopifyNoMatch ?? 0,
+          shopifyNoImageAvailableCount: payload.shopifyNoImageAvailable ?? 0,
+          stillMissingAfterShopify: payload.stillMissingAfterShopify ?? 0,
+          shopifyVariantSkuMatch: payload.diagnosticsEvents?.shopifyVariantSkuMatch ?? 0,
+          shopifyVariantBarcodeMatch: payload.diagnosticsEvents?.shopifyVariantBarcodeMatch ?? 0,
+          shopifyBarcodeNormalizedMatch: payload.diagnosticsEvents?.shopifyBarcodeNormalizedMatch ?? 0,
+          shopifyTitleVendorMatch: payload.diagnosticsEvents?.shopifyTitleVendorMatch ?? 0,
+          shopifyAmbiguousMatch: payload.diagnosticsEvents?.shopifyAmbiguousMatch ?? 0,
+          shopifyNoMatch: payload.diagnosticsEvents?.shopifyNoMatch ?? 0,
+          shopifyImageApplied: payload.diagnosticsEvents?.shopifyImageApplied ?? 0,
+          shopifyNoImageAvailable: payload.diagnosticsEvents?.shopifyNoImageAvailable ?? 0,
+          summary:
+            payload.message ??
+            `Shopify sync complete. Matched ${payload.walmartProductsMatchedToShopify ?? 0} Walmart products.`,
+          running: false,
+        })
+      );
+
+      setMessage(
+        payload.message ??
+          `Shopify sync complete. Applied ${payload.imagesAppliedFromShopify ?? 0} images.`
+      );
+      router.refresh();
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Shopify image sync failed.";
+      setMessage(errorMessage);
+      setImportPanel((current) =>
+        createDefaultImportPanelState({
+          ...(current ?? {}),
+          stage: "failed",
+          percent: 100,
+          summary: errorMessage,
+          importErrorCategory: "import_unknown_error",
+          importErrorReason: errorMessage,
+          importErrorPhase: "import_unknown",
+          running: false,
+        })
+      );
+    } finally {
+      setIsSyncingShopify(false);
+    }
+  }
+
   function handleSyncClick(sku: string) {
     setMessage(`Sync request queued for ${sku}. Run Import Products to refresh catalog data.`);
   }
@@ -1518,14 +1782,24 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         title="Products"
         subtitle="Search and manage Walmart catalog products with safe staging and sync workflows."
         actions={
-          <button
-            type="button"
-            onClick={() => void handleImport("import")}
-            disabled={isImporting}
-            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-          >
-            {isImporting ? `${importStageLabel(importPanel?.stage ?? "importing_products")}...` : "Import Products"}
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => void handleImport("import")}
+              disabled={isImporting || isSyncingShopify}
+              className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {isImporting ? `${importStageLabel(importPanel?.stage ?? "importing_products")}...` : "Import Products"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void handleSyncImagesFromShopify()}
+              disabled={isImporting || isSyncingShopify}
+              className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+            >
+              {isSyncingShopify ? "Syncing Shopify..." : "Sync images from Shopify"}
+            </button>
+          </>
         }
       />
 
@@ -1627,6 +1901,18 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Images from SerpApi fallback: {importPanel.serpApiFallbackImageFoundCount}</p>
               <p>Total fallback enriched successfully: {importPanel.enrichedCount}</p>
               <p>Total still missing: {importPanel.stillMissingCount}</p>
+              <p>Shopify products imported: {importPanel.shopifyProductsImported ?? 0}</p>
+              <p>Shopify images imported: {importPanel.shopifyImagesImported ?? 0}</p>
+              <p>Walmart products matched to Shopify: {importPanel.walmartProductsMatchedToShopify ?? 0}</p>
+              <p>Images applied from Shopify: {importPanel.imagesAppliedFromShopify ?? 0}</p>
+              <p>Shopify SKU exact matches: {importPanel.shopifyVariantSkuMatch ?? 0}</p>
+              <p>Shopify barcode exact matches: {importPanel.shopifyVariantBarcodeMatch ?? 0}</p>
+              <p>Shopify barcode normalized matches: {importPanel.shopifyBarcodeNormalizedMatch ?? 0}</p>
+              <p>Shopify title/vendor matches: {importPanel.shopifyTitleVendorMatch ?? 0}</p>
+              <p>Shopify ambiguous matches: {importPanel.ambiguousShopifyMatches ?? 0}</p>
+              <p>Shopify no match: {importPanel.shopifyNoMatchCount ?? 0}</p>
+              <p>Shopify no image available: {importPanel.shopifyNoImageAvailableCount ?? 0}</p>
+              <p>Still missing after Shopify: {importPanel.stillMissingAfterShopify ?? importPanel.stillMissingCount}</p>
               <p>Provider failed: {importPanel.failedCount}</p>
               <p>Missing/not found: {importPanel.missingCount}</p>
               <p>Not found: {importPanel.notFoundCount}</p>
@@ -1833,6 +2119,12 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             <tbody>
               {visibleProducts.map((product) => {
                 const walmartListingUrl = resolveVerifiedWalmartListingUrl(product);
+                const isShopifyImageSource =
+                  product.imageSource === "shopify_product" ||
+                  product.imageSource === "shopify_variant";
+                const shopifyMatchLabel = isShopifyImageSource
+                  ? formatShopifyMatchLabel(product.imageMatchMethod)
+                  : null;
                 return (
                   <tr key={product.sku} className="border-t border-[#E2E8F0] align-top">
                   <td className="py-2 pr-2">
@@ -1846,6 +2138,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                         />
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
                         <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
+                        {isShopifyImageSource ? (
+                          <p className="max-w-[180px] text-[11px] text-[#0F766E]">
+                            Image source: Shopify · Match: {shopifyMatchLabel}
+                          </p>
+                        ) : null}
                         {hasPendingDraftImage(product) ? (
                           <p className="max-w-[180px] text-[11px] text-amber-700">Pending draft image</p>
                         ) : null}
@@ -1855,6 +2152,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                         <span className="inline-flex h-10 w-10 items-center justify-center rounded border border-dashed border-[#CBD5E1] text-xs text-[#64748B]">N/A</span>
                         <p className="max-w-[180px] text-[11px] text-[#475569]">{formatImageStatus(product)}</p>
                         <p className="max-w-[180px] text-[11px] text-[#64748B]">Source: {formatImageSource(product)}</p>
+                        {isShopifyImageSource ? (
+                          <p className="max-w-[180px] text-[11px] text-[#0F766E]">
+                            Image source: Shopify · Match: {shopifyMatchLabel}
+                          </p>
+                        ) : null}
                         {hasPendingDraftImage(product) ? (
                           <p className="max-w-[180px] text-[11px] text-amber-700">Pending draft image</p>
                         ) : null}
