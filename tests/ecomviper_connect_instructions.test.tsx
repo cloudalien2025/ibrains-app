@@ -300,4 +300,90 @@ describe("EcomViper connect instructions", () => {
     });
     expect(container.textContent).toContain("Walmart Marketplace Instructions");
   });
+
+  it("does not crash when Shopify status payload is partial or legacy-shaped", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+
+      if (url.includes("/api/ecomviper/walmart/health")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            connectionHealth: buildInitialHealth(),
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (url.includes("/api/ecomviper/walmart/connect/openai")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            provider: "openai",
+            connected: false,
+            status: "disconnected",
+            maskedApiKey: "Not configured",
+            updatedAt: null,
+            saveSupported: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (url.includes("/api/ecomviper/walmart/connect/serpapi")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            provider: "serpapi",
+            connected: false,
+            status: "disconnected",
+            maskedApiKey: "Not configured",
+            updatedAt: null,
+            saveSupported: true,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      if (url.includes("/api/ecomviper/shopify/connect")) {
+        return new Response(
+          JSON.stringify({
+            ok: true,
+            provider: "shopify",
+            connected: true,
+            status: "connected",
+            storeDomain: "opanutrition.myshopify.com",
+            authMode: "dev_dashboard_client_credentials",
+            maskedClientId: "sh***3456",
+            clientSecretStored: true,
+            tokenStatus: null,
+            grantedScopes: null,
+            saveSupported: true,
+            importState: null,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartConnectClient initialHealth={buildInitialHealth()} />);
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Shopify Status");
+    expect(container.textContent).toContain("Granted scopes");
+    expect(container.textContent).toContain("Unknown");
+    expect(container.textContent).toContain("Last sync status");
+    expect(container.textContent).toContain("unknown");
+  });
 });

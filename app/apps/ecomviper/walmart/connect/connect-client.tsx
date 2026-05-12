@@ -233,6 +233,31 @@ async function deleteJson<T>(url: string): Promise<T> {
   return data as T;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function asNullableString(value: unknown): string | null {
+  const normalized = asString(value);
+  return normalized || null;
+}
+
+function asBoolean(value: unknown, fallback = false): boolean {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asString(entry))
+    .filter((entry) => entry.length > 0);
+}
+
 function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
   return {
     connectionStatus: response.connectionStatus,
@@ -256,44 +281,255 @@ function toHealth(response: ConnectApiPayload): WalmartConnectionHealth {
   };
 }
 
-function toOpenAiStatus(response: OpenAiConnectionApiPayload): WalmartOpenAiConnectionStatus {
+function toOpenAiStatus(
+  response: Partial<OpenAiConnectionApiPayload> | null | undefined
+): WalmartOpenAiConnectionStatus {
   return {
-    connected: response.connected,
-    status: response.status,
-    maskedApiKey: response.maskedApiKey,
-    updatedAt: response.updatedAt,
-    saveSupported: response.saveSupported,
+    connected: asBoolean(response?.connected),
+    status: response?.status === "connected" ? "connected" : "disconnected",
+    maskedApiKey: asString(response?.maskedApiKey) || "Not configured",
+    updatedAt: asNullableString(response?.updatedAt),
+    saveSupported: asBoolean(response?.saveSupported, true),
   };
 }
 
 function toSerpApiStatus(
-  response: SerpApiConnectionApiPayload
+  response: Partial<SerpApiConnectionApiPayload> | null | undefined
 ): WalmartSerpApiConnectionStatus {
   return {
-    connected: response.connected,
-    status: response.status,
-    maskedApiKey: response.maskedApiKey,
-    updatedAt: response.updatedAt,
-    saveSupported: response.saveSupported,
+    connected: asBoolean(response?.connected),
+    status: response?.status === "connected" ? "connected" : "disconnected",
+    maskedApiKey: asString(response?.maskedApiKey) || "Not configured",
+    updatedAt: asNullableString(response?.updatedAt),
+    saveSupported: asBoolean(response?.saveSupported, true),
   };
 }
 
-function toShopifyStatus(response: ShopifyConnectionApiPayload): ShopifyStatus {
+function normalizeShopifyTokenStatus(
+  value: unknown
+): ShopifyStatus["tokenStatus"] {
+  if (
+    value === "valid" ||
+    value === "refresh_required" ||
+    value === "expired" ||
+    value === "missing_scope" ||
+    value === "invalid" ||
+    value === "unknown"
+  ) {
+    return value;
+  }
+  return "unknown";
+}
+
+function normalizeShopifyAuthMode(value: unknown): ShopifyStatus["authMode"] {
+  if (value === "legacy_admin_token") return "legacy_admin_token";
+  return "dev_dashboard_client_credentials";
+}
+
+function normalizeShopifyImportState(
+  value: unknown
+): ShopifyImportState {
+  const record = asRecord(value);
+  const rawStatus = asString(record?.lastImportStatus);
+  const status: ShopifyImportState["lastImportStatus"] =
+    rawStatus === "success" || rawStatus === "failed" || rawStatus === "unknown"
+      ? rawStatus
+      : "unknown";
+
+  const productCountRaw =
+    typeof record?.productCount === "number"
+      ? record.productCount
+      : Number(record?.productCount);
+  const imageCountRaw =
+    typeof record?.imageCount === "number"
+      ? record.imageCount
+      : Number(record?.imageCount);
+
   return {
-    connected: response.connected,
-    status: response.status,
-    storeDomain: response.storeDomain,
-    apiVersion: response.apiVersion,
-    authMode: response.authMode,
-    maskedClientId: response.maskedClientId,
-    clientSecretStored: response.clientSecretStored,
-    tokenStatus: response.tokenStatus,
-    lastTokenRefreshAt: response.lastTokenRefreshAt,
-    tokenExpiresAt: response.tokenExpiresAt,
-    grantedScopes: response.grantedScopes,
-    lastApiError: response.lastApiError,
-    updatedAt: response.updatedAt,
-    saveSupported: response.saveSupported,
+    lastImportAt: asNullableString(record?.lastImportAt),
+    lastImportStatus: status,
+    lastImportMessage: asNullableString(record?.lastImportMessage),
+    productCount: Number.isFinite(productCountRaw) ? Math.max(0, Math.trunc(productCountRaw)) : 0,
+    imageCount: Number.isFinite(imageCountRaw) ? Math.max(0, Math.trunc(imageCountRaw)) : 0,
+    updatedAt: asNullableString(record?.updatedAt),
+  };
+}
+
+function toShopifyStatus(
+  response: Partial<ShopifyConnectionApiPayload> | null | undefined
+): ShopifyStatus {
+  const errorRecord = asRecord(response?.lastApiError);
+  return {
+    connected: asBoolean(response?.connected),
+    status: response?.status === "connected" ? "connected" : "disconnected",
+    storeDomain: asString(response?.storeDomain),
+    apiVersion: asString(response?.apiVersion) || "2025-10",
+    authMode: normalizeShopifyAuthMode(response?.authMode),
+    maskedClientId: asString(response?.maskedClientId) || "Not configured",
+    clientSecretStored: asBoolean(response?.clientSecretStored),
+    tokenStatus: normalizeShopifyTokenStatus(response?.tokenStatus),
+    lastTokenRefreshAt: asNullableString(response?.lastTokenRefreshAt),
+    tokenExpiresAt: asNullableString(response?.tokenExpiresAt),
+    grantedScopes: asStringArray(response?.grantedScopes),
+    lastApiError:
+      errorRecord && asString(errorRecord.code) && asString(errorRecord.message)
+        ? {
+            code: asString(errorRecord.code),
+            message: asString(errorRecord.message),
+          }
+        : null,
+    updatedAt: asNullableString(response?.updatedAt),
+    saveSupported: asBoolean(response?.saveSupported, true),
+  };
+}
+
+function normalizePermissionChecks(
+  value: unknown
+): WalmartConnectionHealth["summary"]["permissionChecks"] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .map((entry) => {
+      const id = asString(entry.id) as WalmartConnectionHealth["summary"]["permissionChecks"][number]["id"];
+      const label = asString(entry.label);
+      const state = asString(entry.state);
+      const normalizedState =
+        state === "granted" || state === "missing" || state === "unknown"
+          ? state
+          : "unknown";
+
+      return {
+        id: id || "catalog_read",
+        label: label || "Permission check",
+        state: normalizedState,
+      };
+    });
+}
+
+function normalizeConnectionHealth(
+  value: unknown,
+  fallback: WalmartConnectionHealth
+): WalmartConnectionHealth {
+  const record = asRecord(value);
+  const summary = asRecord(record?.summary);
+  const diagnostic = asRecord(summary?.diagnostic);
+  const status = asString(record?.connectionStatus);
+  const tokenStatus = asString(summary?.tokenStatus);
+  const safeReadStatus = asString(summary?.safeReadStatus);
+  const environment = asString(summary?.environment);
+  const region = asString(summary?.region);
+  const mode = asString(summary?.mode);
+  const credentialStorageMode = asString(summary?.credentialStorageMode);
+  const summaryHasPermissionChecks = Array.isArray(summary?.permissionChecks);
+  const normalizedPermissionChecks = normalizePermissionChecks(summary?.permissionChecks);
+
+  return {
+    connectionStatus:
+      status === "connected" ||
+      status === "token_valid" ||
+      status === "token_valid_read_not_configured" ||
+      status === "failed" ||
+      status === "not_connected"
+        ? status
+        : fallback.connectionStatus,
+    summary: {
+      accountNickname: asString(summary?.accountNickname) || fallback.summary.accountNickname,
+      environment: environment === "production" ? "production" : fallback.summary.environment,
+      region: region === "US" ? "US" : fallback.summary.region,
+      maskedClientId: asString(summary?.maskedClientId) || fallback.summary.maskedClientId,
+      clientSecretStored:
+        typeof summary?.clientSecretStored === "boolean"
+          ? summary.clientSecretStored
+          : fallback.summary.clientSecretStored,
+      lastSuccessfulAuth:
+        asNullableString(summary?.lastSuccessfulAuth) ?? fallback.summary.lastSuccessfulAuth,
+      lastSuccessfulRead:
+        asNullableString(summary?.lastSuccessfulRead) ?? fallback.summary.lastSuccessfulRead,
+      lastApiError:
+        asRecord(summary?.lastApiError) &&
+        asString(asRecord(summary?.lastApiError)?.code) &&
+        asString(asRecord(summary?.lastApiError)?.message)
+          ? {
+              code: asString(asRecord(summary?.lastApiError)?.code),
+              message: asString(asRecord(summary?.lastApiError)?.message),
+            }
+          : fallback.summary.lastApiError,
+      tokenStatus:
+        tokenStatus === "valid" ||
+        tokenStatus === "invalid" ||
+        tokenStatus === "expired" ||
+        tokenStatus === "unknown"
+          ? tokenStatus
+          : fallback.summary.tokenStatus,
+      safeReadStatus:
+        safeReadStatus === "valid" ||
+        safeReadStatus === "invalid" ||
+        safeReadStatus === "not_configured" ||
+        safeReadStatus === "unknown"
+          ? safeReadStatus
+          : fallback.summary.safeReadStatus,
+      permissionChecks:
+        summaryHasPermissionChecks
+          ? normalizedPermissionChecks
+          : fallback.summary.permissionChecks,
+      credentialStorageMode:
+        credentialStorageMode === "env" ||
+        credentialStorageMode === "memory" ||
+        credentialStorageMode === "encrypted-db"
+          ? credentialStorageMode
+          : fallback.summary.credentialStorageMode,
+      mode:
+        mode === "mock" || mode === "dry-run" || mode === "live-ready"
+          ? mode
+          : fallback.summary.mode,
+      diagnostic: {
+        environment:
+          asString(diagnostic?.environment) === "production"
+            ? "production"
+            : fallback.summary.diagnostic.environment,
+        baseUrl: asString(diagnostic?.baseUrl) || fallback.summary.diagnostic.baseUrl,
+        tokenStatus:
+          asString(diagnostic?.tokenStatus) === "valid" ||
+          asString(diagnostic?.tokenStatus) === "invalid" ||
+          asString(diagnostic?.tokenStatus) === "expired" ||
+          asString(diagnostic?.tokenStatus) === "unknown"
+            ? (asString(diagnostic?.tokenStatus) as WalmartConnectionHealth["summary"]["diagnostic"]["tokenStatus"])
+            : fallback.summary.diagnostic.tokenStatus,
+        safeReadStatus:
+          asString(diagnostic?.safeReadStatus) === "valid" ||
+          asString(diagnostic?.safeReadStatus) === "invalid" ||
+          asString(diagnostic?.safeReadStatus) === "not_configured" ||
+          asString(diagnostic?.safeReadStatus) === "unknown"
+            ? (asString(diagnostic?.safeReadStatus) as WalmartConnectionHealth["summary"]["diagnostic"]["safeReadStatus"])
+            : fallback.summary.diagnostic.safeReadStatus,
+        httpStatus:
+          typeof diagnostic?.httpStatus === "number" && Number.isFinite(diagnostic.httpStatus)
+            ? diagnostic.httpStatus
+            : fallback.summary.diagnostic.httpStatus,
+        correlationId:
+          asNullableString(diagnostic?.correlationId) ?? fallback.summary.diagnostic.correlationId,
+        walmartErrorCode:
+          asNullableString(diagnostic?.walmartErrorCode) ??
+          fallback.summary.diagnostic.walmartErrorCode,
+        walmartErrorMessage:
+          asNullableString(diagnostic?.walmartErrorMessage) ??
+          fallback.summary.diagnostic.walmartErrorMessage,
+        timestamp:
+          asNullableString(diagnostic?.timestamp) ?? fallback.summary.diagnostic.timestamp,
+      },
+    },
+    lastSuccessfulApiCall:
+      asNullableString(record?.lastSuccessfulApiCall) ?? fallback.lastSuccessfulApiCall,
+    lastApiError:
+      asRecord(record?.lastApiError) &&
+      asString(asRecord(record?.lastApiError)?.code) &&
+      asString(asRecord(record?.lastApiError)?.message)
+        ? {
+            code: asString(asRecord(record?.lastApiError)?.code),
+            message: asString(asRecord(record?.lastApiError)?.message),
+          }
+        : fallback.lastApiError,
   };
 }
 
@@ -488,11 +724,12 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         const payload = (await response.json()) as WalmartHealthResponse;
         if (!payload.connectionHealth || cancelled) return;
 
-        setHealth(payload.connectionHealth);
+        const normalizedHealth = normalizeConnectionHealth(payload.connectionHealth, initialHealth);
+        setHealth(normalizedHealth);
         setForm((current) => ({
           ...current,
-          accountNickname: payload.connectionHealth?.summary.accountNickname ?? current.accountNickname,
-          marketplaceRegion: payload.connectionHealth?.summary.region ?? current.marketplaceRegion,
+          accountNickname: normalizedHealth.summary.accountNickname || current.accountNickname,
+          marketplaceRegion: normalizedHealth.summary.region || current.marketplaceRegion,
         }));
         setWalmartDraftDirty(false);
       } catch {
@@ -531,10 +768,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         const payload = (await response.json().catch(() => null)) as ShopifyConnectionApiPayload | null;
         if (!payload || cancelled) return;
         setShopifyStatus(toShopifyStatus(payload));
-        setShopifyImportState(payload.importState);
+        setShopifyImportState(normalizeShopifyImportState(payload.importState));
         setShopifyForm((current) => ({
           ...current,
-          storeDomain: payload.storeDomain || current.storeDomain,
+          storeDomain: asString(payload.storeDomain) || current.storeDomain,
         }));
         setShopifyDraftDirty(false);
       } catch {
@@ -550,7 +787,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialHealth]);
 
   async function handleTest() {
     try {
@@ -561,7 +798,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         region: resolvedForm.marketplaceRegion,
       });
 
-      setHealth(toHealth(response));
+      setHealth((current) => normalizeConnectionHealth(toHealth(response), current));
       setMessage(response.message ?? response.lastApiError?.message ?? "Connection test completed.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -588,7 +825,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         action,
       });
 
-      setHealth(toHealth(response));
+      setHealth((current) => normalizeConnectionHealth(toHealth(response), current));
 
       if (action === "disconnect") {
         setForm((current) => ({ ...current, clientId: "", clientSecret: "", notes: "" }));
@@ -771,7 +1008,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         }
       );
       setShopifyStatus(toShopifyStatus(response));
-      setShopifyImportState(response.importState);
+      setShopifyImportState(normalizeShopifyImportState(response.importState));
       setMessage(response.message ?? "Shopify connection test completed.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -796,7 +1033,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         }
       );
       setShopifyStatus(toShopifyStatus(response));
-      setShopifyImportState(response.importState);
+      setShopifyImportState(normalizeShopifyImportState(response.importState));
       setShopifyForm((current) => ({ ...current, clientSecret: "" }));
       setShopifyDraftDirty(false);
       setMessage(response.message ?? "Shopify connection saved securely.");
@@ -818,7 +1055,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         "/api/ecomviper/shopify/connect"
       );
       setShopifyStatus(toShopifyStatus(response));
-      setShopifyImportState(response.importState);
+      setShopifyImportState(normalizeShopifyImportState(response.importState));
       setShopifyForm((current) => ({ ...current, clientSecret: "" }));
       setShopifyDraftDirty(false);
       setMessage(response.message ?? "Shopify disconnected.");
@@ -842,7 +1079,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           boundedRuntime: true,
         }
       );
-      setShopifyImportState(response.importState);
+      setShopifyImportState(normalizeShopifyImportState(response.importState));
       setMessage(response.message ?? `Imported ${response.importedCount} Shopify products.`);
     } catch (error) {
       if (error instanceof ApiRequestError) {

@@ -4,7 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
-import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {
   return {
@@ -265,5 +265,139 @@ describe("Walmart product editor public listing image flow", () => {
     expect(saveBody.draftPayload.imageMatchMethod).toBe("public_url_product_id");
 
     expect(fetchMock.mock.calls.some((call) => String(call[0]).includes("/feeds/submit"))).toBe(false);
+  });
+
+  it("shows Shopify source labels and preserves Shopify gallery/variant previews from persisted product metadata", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/drafts")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              draft: {
+                updatedAt: "2026-05-10T00:00:00.000Z",
+                validationResult: {
+                  valid: true,
+                  violations: [],
+                  warnings: [],
+                  suggestions: [],
+                },
+              },
+            }),
+            { status: 201, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const stagedDraft: WalmartDraftRecord = {
+      id: "ev_draft_shopify_gallery",
+      productId: "walmart_roc808",
+      marketplace: "walmart",
+      sku: "ROC808",
+      productTitle: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+      draftPayload: {
+        title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+        price: 29.99,
+        inventoryQuantity: 11,
+        imageUrl: "https://cdn.shopify.com/variant-main.jpg?v=1",
+        additionalImageUrls: [],
+      },
+      changeSummary: "shopify media draft",
+      createdBy: "tester",
+      status: "validated",
+      validationResult: {
+        valid: true,
+        warnings: [],
+        suggestions: [],
+      },
+      publishStatus: "pending",
+      createdAt: "2026-05-10T00:00:00.000Z",
+      updatedAt: "2026-05-10T00:00:00.000Z",
+    };
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            imageUrl: "https://cdn.shopify.com/variant-main.jpg?v=1",
+            primaryImageUrl: "https://cdn.shopify.com/variant-main.jpg?v=1",
+            galleryImageUrls: [
+              "https://cdn.shopify.com/variant-main.jpg?v=1",
+              "https://cdn.shopify.com/gallery-2.jpg?v=2",
+              "https://cdn.shopify.com/gallery-3.jpg?v=3",
+            ],
+            variantImageUrls: ["https://cdn.shopify.com/variant-main.jpg?v=1"],
+            imageStatus: "image_available",
+            imageStatusMessage: "Image available",
+            imageSyncStatus: "found",
+            imageSyncReason: "Shopify variant image matched and applied.",
+            imageSource: "shopify_variant",
+            issues: [],
+          })}
+          stagedDrafts={[stagedDraft]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const openEditorButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Open Draft Editor"
+    ) as HTMLButtonElement | undefined;
+    expect(openEditorButton).toBeDefined();
+    await act(async () => {
+      openEditorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    expect(mediaTab).toBeDefined();
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Source: Shopify variant image");
+    expect(container.textContent).toContain("Gallery images: 3");
+    expect(container.textContent).toContain("Variant images: 1");
+
+    const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Save Draft"
+    ) as HTMLButtonElement | undefined;
+    expect(saveDraftButton).toBeDefined();
+    await act(async () => {
+      saveDraftButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const saveCall = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(saveCall[0]).toBe("/api/ecomviper/walmart/drafts");
+    const saveBody = JSON.parse(String(saveCall[1].body)) as {
+      draftPayload: Record<string, unknown>;
+    };
+    expect(saveBody.draftPayload.additionalImageUrls).toEqual([
+      "https://cdn.shopify.com/gallery-2.jpg?v=2",
+      "https://cdn.shopify.com/gallery-3.jpg?v=3",
+    ]);
+    expect(saveBody.draftPayload.galleryImageUrls).toEqual([
+      "https://cdn.shopify.com/variant-main.jpg?v=1",
+      "https://cdn.shopify.com/gallery-2.jpg?v=2",
+      "https://cdn.shopify.com/gallery-3.jpg?v=3",
+    ]);
   });
 });
