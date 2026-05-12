@@ -64,6 +64,7 @@ const WALMART_IMAGE_SOURCES = new Set<NonNullable<WalmartProductRecord["imageSou
   "public_walmart_listing_serpapi",
   "shopify_product",
   "shopify_variant",
+  "openai_generated",
   "manual",
   "shopify_placeholder",
   "manual_placeholder",

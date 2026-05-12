@@ -107,6 +107,172 @@ describe("Walmart product editor public listing image flow", () => {
     );
   });
 
+  it("shows Generate Product Images setup state when OpenAI key is not connected", async () => {
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Generate Product Images");
+    expect(container.textContent).toContain(
+      "OpenAI API key not connected. Connect OpenAI to generate product images."
+    );
+  });
+
+  it("generates image preview, approves to product media, and persists generated image metadata in draft", async () => {
+    const generatedAssetUrl =
+      "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_123";
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/images/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              sku: "ROC808",
+              imageType: "lifestyle",
+              generated: [
+                {
+                  id: "ev_wm_img_123",
+                  url: generatedAssetUrl,
+                  source: "openai_generated",
+                  imageType: "lifestyle",
+                  createdAt: "2026-05-10T00:00:00.000Z",
+                  promptSummary: "Lifestyle image for ROC808",
+                  guidance: "bedside table",
+                  approved: false,
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (url.includes("/api/ecomviper/walmart/drafts")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              draft: {
+                updatedAt: "2026-05-10T00:00:00.000Z",
+                validationResult: {
+                  valid: true,
+                  violations: [],
+                  warnings: [],
+                  suggestions: [],
+                },
+              },
+            }),
+            { status: 201, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({ imageUrl: "" })}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate"
+    ) as HTMLButtonElement | undefined;
+    expect(generateButton).toBeDefined();
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Source: OpenAI generated");
+    expect(container.textContent).toContain("Lifestyle");
+
+    const approveButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Add to Product Media"
+    ) as HTMLButtonElement | undefined;
+    expect(approveButton).toBeDefined();
+    await act(async () => {
+      approveButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain(
+      "Generated image added to product media. Save Draft to persist and include it in Walmart updates."
+    );
+    const primaryInput = Array.from(container.querySelectorAll("input")).find((entry) =>
+      entry.parentElement?.textContent?.includes("Primary image URL")
+    ) as HTMLInputElement | undefined;
+    expect(primaryInput?.value).toBe(generatedAssetUrl);
+
+    const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Save Draft"
+    ) as HTMLButtonElement | undefined;
+    expect(saveDraftButton).toBeDefined();
+    await act(async () => {
+      saveDraftButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const saveCall = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(saveCall[0]).toBe("/api/ecomviper/walmart/drafts");
+    const saveBody = JSON.parse(String(saveCall[1].body)) as {
+      draftPayload: Record<string, unknown>;
+    };
+    expect(saveBody.draftPayload.imageUrl).toBe(generatedAssetUrl);
+    expect(saveBody.draftPayload.imageSource).toBe("openai_generated");
+    expect(saveBody.draftPayload.generatedMediaAssets).toEqual([
+      expect.objectContaining({
+        id: "ev_wm_img_123",
+        url: generatedAssetUrl,
+        source: "openai_generated",
+        imageType: "lifestyle",
+        approved: true,
+      }),
+    ]);
+  });
+
   it("finds public listing images, requires explicit Use Images in Draft, and saves draft fields", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url =

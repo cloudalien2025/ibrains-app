@@ -82,6 +82,33 @@ describe("Walmart maintenance payload image submit safety", () => {
     ]);
   });
 
+  it("keeps approved OpenAI-generated image URLs in outbound updates", () => {
+    const product = createProduct();
+    const generatedImageUrl =
+      "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_123";
+    const draft = createDraft({
+      imageUrl: "https://images.example.com/manual-primary.jpg",
+      additionalImageUrls: [generatedImageUrl],
+      imageSource: "openai_generated",
+      generatedMediaAssets: [
+        {
+          id: "ev_wm_img_123",
+          url: generatedImageUrl,
+          source: "openai_generated",
+          imageType: "lifestyle",
+          createdAt: "2026-05-10T00:00:00.000Z",
+          approved: true,
+        },
+      ],
+    });
+
+    const payload = buildMaintenancePayload({ draft, product });
+    const updates = payload.updates as Record<string, unknown>;
+
+    expect(updates.imageUrl).toBe("https://images.example.com/manual-primary.jpg");
+    expect(updates.additionalImageUrls).toEqual([generatedImageUrl]);
+  });
+
   it("keeps existing non-empty product image when draft does not override image fields", () => {
     const product = createProduct();
     product.imageUrl = "https://images.example.com/current.jpg";
