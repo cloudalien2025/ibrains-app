@@ -227,6 +227,11 @@ describe("EcomViper connect instructions", () => {
     });
     expect(container.textContent).toContain("Shopify Source Catalog Instructions");
     expect(container.textContent).toContain("Client ID");
+    expect(container.textContent).toContain("read_products");
+    expect(container.textContent).toContain("read_product_listings");
+    expect(container.textContent).toContain("Create and release an app version");
+    expect(container.textContent).toContain("Install the released app on the exact Shopify store");
+    expect(container.textContent).toContain("exact store `myshopify.com` domain");
     expect(container.textContent).toContain("Do not use the App automation token");
     await act(async () => {
       getButtonsByLabel(container, "Close")[0].click();

@@ -39,7 +39,6 @@ type ShopifyForm = {
   storeDomain: string;
   clientId: string;
   clientSecret: string;
-  apiVersion: string;
 };
 
 type ShopifyStatus = {
@@ -349,7 +348,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     storeDomain: "",
     clientId: "",
     clientSecret: "",
-    apiVersion: "2025-10",
   });
   const [health, setHealth] = useState(initialHealth);
   const [openAiStatus, setOpenAiStatus] = useState<WalmartOpenAiConnectionStatus>({
@@ -437,16 +435,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     if (shopifyForm.clientSecret.trim()) return true;
     if (shopifyForm.storeDomain.trim() !== (shopifyStatus.storeDomain || "").trim()) return true;
     if (shopifyForm.clientId.trim()) return true;
-    if (shopifyForm.apiVersion.trim() !== (shopifyStatus.apiVersion || "").trim()) return true;
     return false;
   }, [
     shopifyDraftDirty,
     shopifyForm.clientSecret,
     shopifyForm.storeDomain,
     shopifyForm.clientId,
-    shopifyForm.apiVersion,
     shopifyStatus.storeDomain,
-    shopifyStatus.apiVersion,
   ]);
 
   function resolveWalmartFormForSubmit(): ConnectForm {
@@ -540,7 +535,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         setShopifyForm((current) => ({
           ...current,
           storeDomain: payload.storeDomain || current.storeDomain,
-          apiVersion: payload.apiVersion || current.apiVersion,
         }));
         setShopifyDraftDirty(false);
       } catch {
@@ -774,7 +768,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           storeDomain: shopifyForm.storeDomain,
           clientId: shopifyForm.clientId,
           clientSecret: shopifyForm.clientSecret,
-          apiVersion: shopifyForm.apiVersion,
         }
       );
       setShopifyStatus(toShopifyStatus(response));
@@ -800,7 +793,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           storeDomain: shopifyForm.storeDomain,
           clientId: shopifyForm.clientId,
           clientSecret: shopifyForm.clientSecret,
-          apiVersion: shopifyForm.apiVersion,
         }
       );
       setShopifyStatus(toShopifyStatus(response));
@@ -1368,18 +1360,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               />
             </label>
 
-            <label className="text-sm text-[#334155]">
-              API version
-              <input
-                value={shopifyForm.apiVersion}
-                onChange={(event) => {
-                  setShopifyForm((current) => ({ ...current, apiVersion: event.target.value }));
-                  setShopifyDraftDirty(true);
-                }}
-                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                placeholder="2025-10"
-              />
-            </label>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2">
