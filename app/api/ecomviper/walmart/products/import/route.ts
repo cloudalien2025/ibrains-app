@@ -135,6 +135,11 @@ function asNullableNumber(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 function normalizeErrorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message.trim()) return error.message.trim();
   if (typeof error === "string" && error.trim()) return error.trim();
@@ -460,47 +465,53 @@ function buildSuccessProgress(input: {
   };
   const warningCount = imageStillMissingCount + imageAmbiguousCount + imageFailedCount;
   const stage = warningCount > 0 ? "completed_with_warnings" : "complete";
-  const perProductAttemptDiagnostics: ImportProgressPerProductDiagnostic[] = (
-    result.importDiagnostics?.perProductAttemptDiagnostics ?? []
-  ).map((entry) => ({
-    sku: asString(entry?.sku),
-    title: asString(entry?.title),
-    attemptedMethods: Array.isArray(entry?.attemptedMethods)
-      ? entry.attemptedMethods
+  const rawPerProductDiagnostics = Array.isArray(
+    result.importDiagnostics?.perProductAttemptDiagnostics
+  )
+    ? result.importDiagnostics.perProductAttemptDiagnostics
+    : [];
+  const perProductAttemptDiagnostics: ImportProgressPerProductDiagnostic[] = rawPerProductDiagnostics
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .map((entry) => ({
+      sku: asString(entry.sku),
+      title: asString(entry.title),
+      attemptedMethods: Array.isArray(entry.attemptedMethods)
+        ? entry.attemptedMethods
           .map((method) => asString(method))
           .filter((method) => method.length > 0)
-      : [],
-    queryUsed: asNullableString(entry?.queryUsed),
-    walmartItemSearchQueryOrIdentifier: asNullableString(
-      entry?.walmartItemSearchQueryOrIdentifier
-    ),
-    walmartItemSearchMethod: asNullableString(entry?.walmartItemSearchMethod),
-    resultCount:
-      typeof entry?.resultCount === "number" && Number.isFinite(entry.resultCount)
-        ? Math.max(0, Math.trunc(entry.resultCount))
-        : 0,
-    topCandidateTitle: asNullableString(entry?.topCandidateTitle),
-    topCandidateItemOrProductId: asNullableString(entry?.topCandidateItemOrProductId),
-    topCandidateProductId: asNullableString(entry?.topCandidateProductId),
-    topCandidateUsItemId: asNullableString(entry?.topCandidateUsItemId),
-    topCandidateThumbnailPresent: asNullableBoolean(entry?.topCandidateThumbnailPresent),
-    matchScore: asNullableNumber(entry?.matchScore),
-    confidence:
-      entry?.confidence === "high" ||
-      entry?.confidence === "medium" ||
-      entry?.confidence === "low"
-        ? entry.confidence
-        : null,
-    rejectionReason: asNullableString(entry?.rejectionReason),
-    finalStatus:
-      entry?.finalStatus === "found" ||
-      entry?.finalStatus === "not_found" ||
-      entry?.finalStatus === "ambiguous" ||
-      entry?.finalStatus === "failed" ||
-      entry?.finalStatus === "not_synced"
-        ? entry.finalStatus
-        : "not_synced",
-  }));
+        : [],
+      queryUsed: asNullableString(entry.queryUsed),
+      walmartItemSearchQueryOrIdentifier: asNullableString(
+        entry.walmartItemSearchQueryOrIdentifier
+      ),
+      walmartItemSearchMethod: asNullableString(entry.walmartItemSearchMethod),
+      resultCount:
+        typeof entry.resultCount === "number" && Number.isFinite(entry.resultCount)
+          ? Math.max(0, Math.trunc(entry.resultCount))
+          : 0,
+      topCandidateTitle: asNullableString(entry.topCandidateTitle),
+      topCandidateItemOrProductId: asNullableString(entry.topCandidateItemOrProductId),
+      topCandidateProductId: asNullableString(entry.topCandidateProductId),
+      topCandidateUsItemId: asNullableString(entry.topCandidateUsItemId),
+      topCandidateThumbnailPresent: asNullableBoolean(entry.topCandidateThumbnailPresent),
+      matchScore: asNullableNumber(entry.matchScore),
+      confidence:
+        entry.confidence === "high" ||
+        entry.confidence === "medium" ||
+        entry.confidence === "low"
+          ? entry.confidence
+          : null,
+      rejectionReason: asNullableString(entry.rejectionReason),
+      finalStatus:
+        entry.finalStatus === "found" ||
+        entry.finalStatus === "not_found" ||
+        entry.finalStatus === "ambiguous" ||
+        entry.finalStatus === "failed" ||
+        entry.finalStatus === "not_synced"
+          ? entry.finalStatus
+          : "not_synced",
+    }));
 
   return {
     stage,

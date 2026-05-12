@@ -421,6 +421,160 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("SerpApi: Connected");
   });
 
+  it("renders malformed legacy per-product diagnostics without crashing", async () => {
+    const malformedDiagnostics = [
+      null,
+      "legacy-string-row",
+      {
+        sku: "SKU-LEGACY-1",
+        title: "Legacy Product 1",
+        attemptedMethods: "serpapi_brand_search",
+        queryUsed: null,
+        walmartItemSearchQueryOrIdentifier: "000123456789",
+        walmartItemSearchMethod: "upc",
+        resultCount: "7",
+        topCandidateTitle: { title: "Nested Candidate Object" },
+        topCandidateItemOrProductId: { id: "18181234" },
+        topCandidateProductId: { id: "18181234" },
+        topCandidateUsItemId: { id: "18181234" },
+        topCandidateThumbnailPresent: "yes",
+        matchScore: "not-a-number",
+        confidence: { value: "high" },
+        rejectionReason: null,
+        finalStatus: null,
+      },
+      {
+        sku: "SKU-LEGACY-2",
+        title: "Legacy Product 2",
+        attemptedMethods: ["serpapi_per_product_search"],
+        queryUsed: "OPA Legacy Product 2",
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 0,
+        topCandidateTitle: null,
+        topCandidateItemOrProductId: null,
+        topCandidateProductId: null,
+        topCandidateUsItemId: null,
+        topCandidateThumbnailPresent: null,
+        matchScore: null,
+        confidence: null,
+        rejectionReason: null,
+        finalStatus: "ambiguous",
+      },
+    ];
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 2,
+          message: "Imported 2 Walmart product(s).",
+          importProgress: {
+            stage: "completed_with_warnings",
+            providerConnected: true,
+            providerStatus: "connected",
+            providerCanAttempt: true,
+            totals: {
+              importedCount: 2,
+              fetchedCount: 2,
+              processedCount: 2,
+              queuedCount: 2,
+              imageFoundCount: 0,
+              imageFromImportPayloadCount: 0,
+              imageEnrichedCount: 0,
+              imageFromWalmartSearchCount: 0,
+              imageStillMissingCount: 2,
+              imageMissingCount: 2,
+              imageNotFoundCount: 1,
+              imageAmbiguousCount: 1,
+              imageFailedCount: 0,
+              imageSkippedNoProviderCount: 0,
+            },
+            perProductAttemptDiagnostics: malformedDiagnostics,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Image enrichment diagnostics");
+    expect(container.textContent).toContain("SKU-LEGACY-1");
+    expect(container.textContent).toContain("Final status: Not synced");
+    expect(container.textContent).toContain("Methods: none");
+    expect(container.textContent).toContain("Score: — · Confidence: —");
+    expect(container.textContent).toContain("product_id/us_item_id: —");
+    expect(container.textContent).toContain("SKU-LEGACY-2");
+    expect(container.textContent).toContain("Final status: Ambiguous");
+    expect(container.textContent).not.toContain("[object Object]");
+  });
+
+  it("handles null diagnostics list without rendering the diagnostics table", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          importedCount: 1,
+          message: "Imported 1 Walmart product(s).",
+          importProgress: {
+            stage: "complete",
+            providerConnected: true,
+            providerStatus: "connected",
+            providerCanAttempt: true,
+            totals: {
+              importedCount: 1,
+              fetchedCount: 1,
+              processedCount: 1,
+              queuedCount: 1,
+              imageFoundCount: 1,
+              imageFromImportPayloadCount: 1,
+              imageEnrichedCount: 0,
+              imageFromWalmartSearchCount: 0,
+              imageStillMissingCount: 0,
+              imageMissingCount: 0,
+              imageNotFoundCount: 0,
+              imageAmbiguousCount: 0,
+              imageFailedCount: 0,
+              imageSkippedNoProviderCount: 0,
+            },
+            perProductAttemptDiagnostics: null,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("Complete");
+    expect(container.textContent).not.toContain("Image enrichment diagnostics");
+  });
+
   it("shows failed import diagnostics without zeroing context when previous products exist", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(

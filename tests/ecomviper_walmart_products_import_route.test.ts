@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
+import type { WalmartImportResult } from "@/lib/ecomviper/walmart/walmart-types";
 
 const mocks = vi.hoisted(() => ({
   requireSignedInUser: vi.fn(),
@@ -158,6 +159,105 @@ describe("walmart products import route", () => {
         matchScore: 64,
         confidence: "medium",
         rejectionReason: "No confident brand-search match.",
+        finalStatus: "not_synced",
+      },
+    ]);
+  });
+
+  it("does not throw when per-product diagnostics are a malformed non-array legacy value", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 1,
+      fetchedCount: 1,
+      skippedCount: 0,
+      lastImportAt: "2026-05-12T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 1,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        perProductAttemptDiagnostics: {
+          sku: "OPA-LEGACY-001",
+        },
+      } as unknown as WalmartImportResult["importDiagnostics"],
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.importProgress?.perProductAttemptDiagnostics).toEqual([]);
+  });
+
+  it("normalizes malformed per-product diagnostic entries into JSON-safe values", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 1,
+      fetchedCount: 1,
+      skippedCount: 0,
+      lastImportAt: "2026-05-12T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 1,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        perProductAttemptDiagnostics: [
+          null,
+          {
+            sku: "OPA-LEGACY-002",
+            title: "Legacy Product",
+            attemptedMethods: "serpapi_brand_search",
+            queryUsed: null,
+            walmartItemSearchQueryOrIdentifier: null,
+            walmartItemSearchMethod: null,
+            resultCount: "4",
+            topCandidateTitle: { name: "Nested Candidate" },
+            topCandidateItemOrProductId: { id: "18180009" },
+            topCandidateProductId: { id: "18180009" },
+            topCandidateUsItemId: { id: "18180009" },
+            topCandidateThumbnailPresent: "true",
+            matchScore: "bad-score",
+            confidence: "certain",
+            rejectionReason: null,
+            finalStatus: null,
+          },
+        ],
+      } as unknown as WalmartImportResult["importDiagnostics"],
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.importProgress?.perProductAttemptDiagnostics).toEqual([
+      {
+        sku: "OPA-LEGACY-002",
+        title: "Legacy Product",
+        attemptedMethods: [],
+        queryUsed: null,
+        walmartItemSearchQueryOrIdentifier: null,
+        walmartItemSearchMethod: null,
+        resultCount: 0,
+        topCandidateTitle: null,
+        topCandidateItemOrProductId: null,
+        topCandidateProductId: null,
+        topCandidateUsItemId: null,
+        topCandidateThumbnailPresent: null,
+        matchScore: null,
+        confidence: null,
+        rejectionReason: null,
         finalStatus: "not_synced",
       },
     ]);
