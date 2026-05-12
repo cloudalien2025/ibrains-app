@@ -174,6 +174,7 @@ export type WalmartImageSource =
   | "walmart_item_report"
   | "walmart_catalog"
   | "walmart_item_search"
+  | "serpapi_walmart_brand_search"
   | "public_walmart_listing_serpapi"
   | "manual"
   | "shopify_placeholder"
@@ -304,6 +305,10 @@ export interface WalmartImportResult {
     imageFromImportPayloadCount?: number;
     imageEnrichedCount?: number;
     imageFromWalmartSearchCount?: number;
+    imageFromSerpApiBrandSearchThumbnailCount?: number;
+    publicListingsDiscoveredViaSerpApiBrandSearchCount?: number;
+    serpApiBrandSearchAmbiguousCount?: number;
+    serpApiBrandSearchNoConfidentMatchCount?: number;
     imageFromSerpApiFallbackCount?: number;
     imageFromSerpApiProductGalleryCount?: number;
     imageFromSerpApiSearchFallbackCount?: number;
@@ -384,6 +389,14 @@ export interface WalmartImportResult {
       skipped_no_verified_public_listing: number;
       skipped_non_public_identifier: number;
       skipped_gtin_as_product_id: number;
+    };
+    serpApiBrandSearchDiagnostics?: {
+      serpapi_brand_search_checked: number;
+      serpapi_brand_search_results_harvested: number;
+      serpapi_brand_search_public_listing_matched: number;
+      serpapi_brand_search_thumbnail_saved: number;
+      serpapi_brand_search_ambiguous: number;
+      serpapi_brand_search_no_confident_match: number;
     };
   };
 }

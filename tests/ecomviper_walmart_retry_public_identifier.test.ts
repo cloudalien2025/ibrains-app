@@ -97,6 +97,14 @@ describe("Walmart retry enrichment identifier repair", () => {
               skipped_non_public_identifier: 0,
               skipped_gtin_as_product_id: 0,
             },
+            serpApiBrandSearchDiagnostics: {
+              serpapi_brand_search_checked: 0,
+              serpapi_brand_search_results_harvested: 0,
+              serpapi_brand_search_public_listing_matched: 0,
+              serpapi_brand_search_thumbnail_saved: 0,
+              serpapi_brand_search_ambiguous: 0,
+              serpapi_brand_search_no_confident_match: 0,
+            },
           },
         };
       }

@@ -60,6 +60,7 @@ const WALMART_IMAGE_SOURCES = new Set<NonNullable<WalmartProductRecord["imageSou
   "walmart_item_report",
   "walmart_catalog",
   "walmart_item_search",
+  "serpapi_walmart_brand_search",
   "public_walmart_listing_serpapi",
   "manual",
   "shopify_placeholder",

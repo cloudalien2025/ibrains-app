@@ -597,12 +597,16 @@ function formatImageStatus(product: WalmartProductRecord): string {
   if (product.imageSyncStatus === "not_found") {
     if (product.imageSource === "walmart_item_report")
       return "No matching row found in Walmart Item Report.";
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "No confident public listing match from SerpApi brand search.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "No public Walmart listing images found via SerpApi.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Item Search returned no usable image.";
   }
   if (product.imageSyncStatus === "ambiguous") {
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "SerpApi brand-search listing match is ambiguous.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "Public Walmart listing image match is ambiguous.";
     return "Multiple Walmart Item Search candidates matched this product.";
@@ -612,11 +616,15 @@ function formatImageStatus(product: WalmartProductRecord): string {
       return "Walmart Item Report request failed.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "Public Walmart listing image lookup failed.";
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "SerpApi brand-search listing discovery failed.";
     return "Item Search request failed after retry.";
   }
   if (product.imageSyncStatus === "not_synced") {
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "Public Walmart listing images not synced.";
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "SerpApi brand-search listing discovery not synced.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Image enrichment not synced.";
   }
@@ -628,6 +636,8 @@ function formatImageSource(product: WalmartProductRecord): string {
   if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
   if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
   if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  if (product.imageSource === "serpapi_walmart_brand_search")
+    return "SerpApi Walmart brand search";
   if (product.imageSource === "public_walmart_listing_serpapi")
     return "Public Walmart listing via SerpApi";
   if (product.imageSource === "manual") return "Manual image URL";
@@ -739,7 +749,8 @@ export default function ProductEditorClient({
   const [resolvedPublicImages, setResolvedPublicImages] =
     useState<PublicListingResolveResponse["resolved"] | null>(() => {
       if (
-        initialForm.imageSource === "public_walmart_listing_serpapi" &&
+        (initialForm.imageSource === "public_walmart_listing_serpapi" ||
+          initialForm.imageSource === "serpapi_walmart_brand_search") &&
         (initialForm.imageUrl.trim() || initialForm.additionalImageUrls.trim())
       ) {
         const galleryImageUrls = unique([
@@ -751,8 +762,14 @@ export default function ProductEditorClient({
         ]);
         return {
           imageSyncStatus: initialForm.imageSyncStatus || "found",
-          imageSource: "public_walmart_listing_serpapi",
-          imageSourceLabel: "Public Walmart listing via SerpApi",
+          imageSource:
+            initialForm.imageSource === "serpapi_walmart_brand_search"
+              ? "serpapi_walmart_brand_search"
+              : "public_walmart_listing_serpapi",
+          imageSourceLabel:
+            initialForm.imageSource === "serpapi_walmart_brand_search"
+              ? "SerpApi Walmart brand search"
+              : "Public Walmart listing via SerpApi",
           imageMatchMethod: initialForm.imageMatchMethod || null,
           publicWalmartUrl: initialForm.publicWalmartUrl,
           publicWalmartProductId: initialForm.publicWalmartProductId,
@@ -976,7 +993,8 @@ export default function ProductEditorClient({
     if (resolvedPublicImages || displayGalleryPreviewUrls.length === 0) return null;
     return {
       imageSourceLabel:
-        scoringProduct.imageSource === "public_walmart_listing_serpapi"
+        scoringProduct.imageSource === "public_walmart_listing_serpapi" ||
+        scoringProduct.imageSource === "serpapi_walmart_brand_search"
           ? "Public Walmart listing via SerpApi"
           : formatImageSource(scoringProduct),
       publicWalmartProductId: form.publicWalmartProductId.trim(),
