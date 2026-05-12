@@ -1177,6 +1177,32 @@ interface ImageEnrichmentStats {
       serpapi_brand_search_ambiguous: number;
       serpapi_brand_search_no_confident_match: number;
     };
+    walmartItemSearchDiagnostics: {
+      walmart_item_search_exact_identifier_match: number;
+      walmart_item_search_identifier_normalized_match: number;
+      walmart_item_search_identifier_assisted_match: number;
+      walmart_item_search_multiple_candidates_rejected: number;
+      walmart_item_search_single_candidate_no_image: number;
+    };
+    serpApiPerProductDiagnostics: {
+      serpapi_per_product_searches_attempted: number;
+      serpapi_per_product_matches: number;
+      serpapi_per_product_thumbnails_saved: number;
+      no_confident_match_continued_to_fallback: number;
+      ambiguous_continued_to_fallback: number;
+      ambiguous_skipped: number;
+    };
+    perProductAttemptDiagnostics: Array<{
+      sku: string;
+      title: string;
+      attemptedMethods: string[];
+      queryUsed: string | null;
+      resultCount: number;
+      topCandidateTitle: string | null;
+      topCandidateItemOrProductId: string | null;
+      rejectionReason: string | null;
+      finalStatus: "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
+    }>;
   };
   itemReport: {
     requested: boolean;
@@ -1273,6 +1299,22 @@ function createInitialImageEnrichmentStats(): ImageEnrichmentStats {
         serpapi_brand_search_ambiguous: 0,
         serpapi_brand_search_no_confident_match: 0,
       },
+      walmartItemSearchDiagnostics: {
+        walmart_item_search_exact_identifier_match: 0,
+        walmart_item_search_identifier_normalized_match: 0,
+        walmart_item_search_identifier_assisted_match: 0,
+        walmart_item_search_multiple_candidates_rejected: 0,
+        walmart_item_search_single_candidate_no_image: 0,
+      },
+      serpApiPerProductDiagnostics: {
+        serpapi_per_product_searches_attempted: 0,
+        serpapi_per_product_matches: 0,
+        serpapi_per_product_thumbnails_saved: 0,
+        no_confident_match_continued_to_fallback: 0,
+        ambiguous_continued_to_fallback: 0,
+        ambiguous_skipped: 0,
+      },
+      perProductAttemptDiagnostics: [],
     },
     itemReport: {
       requested: false,
@@ -1344,7 +1386,24 @@ function withImageEnrichment(
         candidateCount: number;
         selectedScore: number | null;
         runnerUpScore: number | null;
-        acceptedBy: "identifier_exact" | "title_brand_strong" | "none";
+        acceptedBy:
+          | "identifier_exact"
+          | "identifier_normalized"
+          | "identifier_assisted"
+          | "title_brand_strong"
+          | "none";
+        decisionCode:
+          | "walmart_item_search_exact_identifier_match"
+          | "walmart_item_search_identifier_normalized_match"
+          | "walmart_item_search_identifier_assisted_match"
+          | "walmart_item_search_multiple_candidates_rejected"
+          | "walmart_item_search_single_candidate_no_image"
+          | "walmart_item_search_query_title_brand_match"
+          | "walmart_item_search_query_low_confidence"
+          | "walmart_item_search_query_ambiguous"
+          | "walmart_item_search_not_found"
+          | "walmart_item_search_provider_failed"
+          | "walmart_item_search_not_synced";
       };
     };
   }
@@ -1519,6 +1578,7 @@ async function enrichProductImages(
             selectedScore: null,
             runnerUpScore: null,
             acceptedBy: "identifier_exact",
+            decisionCode: "walmart_item_search_exact_identifier_match",
           },
         },
       });
@@ -1575,6 +1635,7 @@ async function enrichProductImages(
                     selectedScore: null,
                     runnerUpScore: null,
                     acceptedBy: "none" as const,
+                    decisionCode: "walmart_item_search_provider_failed" as const,
                   },
                 },
               },
@@ -1646,6 +1707,18 @@ async function enrichProductImages(
     serpApiBrandSearchDiagnostics: {
       ...publicListingQueue.progress.serpApiBrandSearchDiagnostics,
     },
+    walmartItemSearchDiagnostics: {
+      ...publicListingQueue.progress.walmartItemSearchDiagnostics,
+    },
+    serpApiPerProductDiagnostics: {
+      ...publicListingQueue.progress.serpApiPerProductDiagnostics,
+    },
+    perProductAttemptDiagnostics: publicListingQueue.progress.perProductAttemptDiagnostics.map(
+      (entry) => ({
+        ...entry,
+        attemptedMethods: [...entry.attemptedMethods],
+      })
+    ),
   };
 
   stats.sourceBreakdown = {
@@ -1921,6 +1994,9 @@ export async function importWalmartProducts(
                   selectedScore: null,
                   runnerUpScore: null,
                   acceptedBy: "none",
+                  decisionCode: product.imageUrl.trim()
+                    ? "walmart_item_search_exact_identifier_match"
+                    : "walmart_item_search_not_synced",
                 },
               },
             })
@@ -2013,6 +2089,33 @@ export async function importWalmartProducts(
         imageFromSerpApiFallbackCount: imageStats.publicListing.serpApiFallbackFoundCount,
         imageFromSerpApiProductGalleryCount: imageStats.publicListing.serpApiProductGalleryFoundCount,
         imageFromSerpApiSearchFallbackCount: imageStats.publicListing.serpApiSearchFallbackFoundCount,
+        perProductSerpApiSearchesAttempted:
+          imageStats.publicListing.serpApiPerProductDiagnostics.serpapi_per_product_searches_attempted,
+        perProductSerpApiMatches:
+          imageStats.publicListing.serpApiPerProductDiagnostics.serpapi_per_product_matches,
+        perProductSerpApiThumbnailsSaved:
+          imageStats.publicListing.serpApiPerProductDiagnostics.serpapi_per_product_thumbnails_saved,
+        noConfidentMatchContinuedToFallback:
+          imageStats.publicListing.serpApiPerProductDiagnostics
+            .no_confident_match_continued_to_fallback,
+        ambiguousContinuedToFallback:
+          imageStats.publicListing.serpApiPerProductDiagnostics.ambiguous_continued_to_fallback,
+        ambiguousSkippedCount: imageStats.publicListing.serpApiPerProductDiagnostics.ambiguous_skipped,
+        walmartItemSearchExactIdentifierMatchCount:
+          imageStats.publicListing.walmartItemSearchDiagnostics
+            .walmart_item_search_exact_identifier_match,
+        walmartItemSearchIdentifierNormalizedMatchCount:
+          imageStats.publicListing.walmartItemSearchDiagnostics
+            .walmart_item_search_identifier_normalized_match,
+        walmartItemSearchIdentifierAssistedMatchCount:
+          imageStats.publicListing.walmartItemSearchDiagnostics
+            .walmart_item_search_identifier_assisted_match,
+        walmartItemSearchMultipleCandidatesRejectedCount:
+          imageStats.publicListing.walmartItemSearchDiagnostics
+            .walmart_item_search_multiple_candidates_rejected,
+        walmartItemSearchSingleCandidateNoImageCount:
+          imageStats.publicListing.walmartItemSearchDiagnostics
+            .walmart_item_search_single_candidate_no_image,
         walmartSearchNotFoundCount: imageStats.publicListing.walmartSearchNotFoundCount,
         imageStillMissingCount,
         imageNotFoundCount: imageStats.notFound,
@@ -2065,6 +2168,18 @@ export async function importWalmartProducts(
         serpApiBrandSearchDiagnostics: {
           ...imageStats.publicListing.serpApiBrandSearchDiagnostics,
         },
+        walmartItemSearchDiagnostics: {
+          ...imageStats.publicListing.walmartItemSearchDiagnostics,
+        },
+        serpApiPerProductDiagnostics: {
+          ...imageStats.publicListing.serpApiPerProductDiagnostics,
+        },
+        perProductAttemptDiagnostics: imageStats.publicListing.perProductAttemptDiagnostics.map(
+          (entry) => ({
+            ...entry,
+            attemptedMethods: [...entry.attemptedMethods],
+          })
+        ),
         importErrorCategory: "none",
         importErrorReason: null,
       },
@@ -2164,6 +2279,29 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       imageFromSerpApiFallbackCount: queue.progress.serpApiFallbackFoundCount,
       imageFromSerpApiProductGalleryCount: queue.progress.serpApiProductGalleryFoundCount,
       imageFromSerpApiSearchFallbackCount: queue.progress.serpApiSearchFallbackFoundCount,
+      perProductSerpApiSearchesAttempted:
+        queue.progress.serpApiPerProductDiagnostics.serpapi_per_product_searches_attempted,
+      perProductSerpApiMatches:
+        queue.progress.serpApiPerProductDiagnostics.serpapi_per_product_matches,
+      perProductSerpApiThumbnailsSaved:
+        queue.progress.serpApiPerProductDiagnostics.serpapi_per_product_thumbnails_saved,
+      noConfidentMatchContinuedToFallback:
+        queue.progress.serpApiPerProductDiagnostics.no_confident_match_continued_to_fallback,
+      ambiguousContinuedToFallback:
+        queue.progress.serpApiPerProductDiagnostics.ambiguous_continued_to_fallback,
+      ambiguousSkippedCount: queue.progress.serpApiPerProductDiagnostics.ambiguous_skipped,
+      walmartItemSearchExactIdentifierMatchCount:
+        queue.progress.walmartItemSearchDiagnostics.walmart_item_search_exact_identifier_match,
+      walmartItemSearchIdentifierNormalizedMatchCount:
+        queue.progress.walmartItemSearchDiagnostics
+          .walmart_item_search_identifier_normalized_match,
+      walmartItemSearchIdentifierAssistedMatchCount:
+        queue.progress.walmartItemSearchDiagnostics.walmart_item_search_identifier_assisted_match,
+      walmartItemSearchMultipleCandidatesRejectedCount:
+        queue.progress.walmartItemSearchDiagnostics
+          .walmart_item_search_multiple_candidates_rejected,
+      walmartItemSearchSingleCandidateNoImageCount:
+        queue.progress.walmartItemSearchDiagnostics.walmart_item_search_single_candidate_no_image,
       walmartSearchNotFoundCount: queue.progress.walmartSearchNotFoundCount,
       imageStillMissingCount: finalImageStillMissingCount,
       imageNotFoundCount: queue.progress.notFoundCount,
@@ -2216,6 +2354,16 @@ export async function retryWalmartPublicImageEnrichmentForUser(
       serpApiBrandSearchDiagnostics: {
         ...queue.progress.serpApiBrandSearchDiagnostics,
       },
+      walmartItemSearchDiagnostics: {
+        ...queue.progress.walmartItemSearchDiagnostics,
+      },
+      serpApiPerProductDiagnostics: {
+        ...queue.progress.serpApiPerProductDiagnostics,
+      },
+      perProductAttemptDiagnostics: queue.progress.perProductAttemptDiagnostics.map((entry) => ({
+        ...entry,
+        attemptedMethods: [...entry.attemptedMethods],
+      })),
       importErrorCategory: "none",
       importErrorReason: null,
     },

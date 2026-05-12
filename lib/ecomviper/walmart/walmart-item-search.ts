@@ -42,7 +42,24 @@ export interface WalmartItemSearchDecisionDiagnostic {
   candidateCount: number;
   selectedScore: number | null;
   runnerUpScore: number | null;
-  acceptedBy: "identifier_exact" | "title_brand_strong" | "none";
+  acceptedBy:
+    | "identifier_exact"
+    | "identifier_normalized"
+    | "identifier_assisted"
+    | "title_brand_strong"
+    | "none";
+  decisionCode:
+    | "walmart_item_search_exact_identifier_match"
+    | "walmart_item_search_identifier_normalized_match"
+    | "walmart_item_search_identifier_assisted_match"
+    | "walmart_item_search_multiple_candidates_rejected"
+    | "walmart_item_search_single_candidate_no_image"
+    | "walmart_item_search_query_title_brand_match"
+    | "walmart_item_search_query_low_confidence"
+    | "walmart_item_search_query_ambiguous"
+    | "walmart_item_search_not_found"
+    | "walmart_item_search_provider_failed"
+    | "walmart_item_search_not_synced";
 }
 
 export interface WalmartItemSearchImageEnrichment {
@@ -86,6 +103,8 @@ interface SearchCandidate {
   hasUsableImage: boolean;
   exactGtin: boolean;
   exactUpc: boolean;
+  normalizedGtin: boolean;
+  normalizedUpc: boolean;
   exactItemId: boolean;
   exactWpid: boolean;
   titleCoverage: number;
@@ -99,6 +118,7 @@ interface CandidateEvaluation {
   outcome: "found" | "ambiguous" | "continue";
   reason: string;
   acceptedBy: WalmartItemSearchDecisionDiagnostic["acceptedBy"];
+  decisionCode: WalmartItemSearchDecisionDiagnostic["decisionCode"];
   candidate: SearchCandidate | null;
   candidateCount: number;
   selectedScore: number | null;
@@ -163,6 +183,41 @@ function normalizeText(value: string): string {
 
 function normalizeIdentifier(value: string): string {
   return value.replace(/[^a-z0-9]/gi, "").toUpperCase();
+}
+
+function normalizeBarcodeDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function barcodeVariants(value: string): string[] {
+  const digits = normalizeBarcodeDigits(value);
+  if (!digits) return [];
+
+  const variants = new Set<string>();
+  const stripped = digits.replace(/^0+/, "") || "0";
+  variants.add(digits);
+  variants.add(stripped);
+
+  for (const length of [12, 13, 14] as const) {
+    if (digits.length >= length) {
+      variants.add(digits.slice(-length));
+    } else {
+      variants.add(digits.padStart(length, "0"));
+    }
+
+    if (stripped.length <= length) {
+      variants.add(stripped.padStart(length, "0"));
+    }
+  }
+
+  return Array.from(variants.values()).filter(Boolean);
+}
+
+function areBarcodeValuesEquivalent(left: string, right: string): boolean {
+  const leftVariants = new Set(barcodeVariants(left));
+  const rightVariants = barcodeVariants(right);
+  if (leftVariants.size === 0 || rightVariants.length === 0) return false;
+  return rightVariants.some((entry) => leftVariants.has(entry));
 }
 
 function normalizeImageUrl(value: unknown): string {
@@ -400,6 +455,8 @@ function scoreSearchCandidate(
 
   const exactGtin = Boolean(intent.gtin) && normalizeIdentifier(intent.gtin) === normalizeIdentifier(identifiers.gtin);
   const exactUpc = Boolean(intent.upc) && normalizeIdentifier(intent.upc) === normalizeIdentifier(identifiers.upc);
+  const normalizedGtin = Boolean(intent.gtin) && areBarcodeValuesEquivalent(intent.gtin, identifiers.gtin);
+  const normalizedUpc = Boolean(intent.upc) && areBarcodeValuesEquivalent(intent.upc, identifiers.upc);
   const exactItemId =
     Boolean(intent.itemId) && normalizeIdentifier(intent.itemId) === normalizeIdentifier(identifiers.itemId);
   const exactWpid = Boolean(intent.wpid) && normalizeIdentifier(intent.wpid) === normalizeIdentifier(identifiers.wpid);
@@ -410,6 +467,8 @@ function scoreSearchCandidate(
   let score = 0;
   if (exactGtin) score += 250;
   if (exactUpc) score += 230;
+  if (!exactGtin && normalizedGtin) score += 175;
+  if (!exactUpc && normalizedUpc) score += 162;
   if (exactItemId) score += 210;
   if (exactWpid) score += 200;
 
@@ -441,6 +500,8 @@ function scoreSearchCandidate(
     hasUsableImage,
     exactGtin,
     exactUpc,
+    normalizedGtin,
+    normalizedUpc,
     exactItemId,
     exactWpid,
     titleCoverage: titleSignal.coverage,
@@ -623,6 +684,22 @@ function hasExactMatchForMethod(candidate: SearchCandidate, method: WalmartImage
   return candidate.exactGtin || candidate.exactUpc || candidate.exactItemId || candidate.exactWpid;
 }
 
+function hasNormalizedIdentifierMatchForMethod(
+  candidate: SearchCandidate,
+  method: WalmartImageMatchMethod
+): boolean {
+  if (method === "gtin") return candidate.normalizedGtin;
+  if (method === "upc") return candidate.normalizedUpc;
+  if (method === "itemId") return candidate.exactItemId;
+  if (method === "wpid") return candidate.exactWpid;
+  return (
+    candidate.normalizedGtin ||
+    candidate.normalizedUpc ||
+    candidate.exactItemId ||
+    candidate.exactWpid
+  );
+}
+
 function evaluateCandidatesForAttempt(
   candidates: SearchCandidate[],
   method: WalmartImageMatchMethod
@@ -632,6 +709,7 @@ function evaluateCandidatesForAttempt(
       outcome: "continue",
       reason: "Item Search returned no usable image.",
       acceptedBy: "none",
+      decisionCode: "walmart_item_search_not_found",
       candidate: null,
       candidateCount: 0,
       selectedScore: null,
@@ -651,11 +729,14 @@ function evaluateCandidatesForAttempt(
   const titleBrandStrong = top.titleCoverage >= 0.72 && top.titleJaccard >= 0.48 && top.brandScore >= 24;
 
   if (method !== "query") {
-    if (!exactForMethod) {
+    const normalizedForMethod = hasNormalizedIdentifierMatchForMethod(top, method);
+
+    if (!exactForMethod && !normalizedForMethod && sorted.length > 1) {
       return {
         outcome: "continue",
-        reason: "No exact identifier match in Item Search result.",
+        reason: "Multiple Walmart Item Search candidates were returned for this identifier. Skipped automatic match.",
         acceptedBy: "none",
+        decisionCode: "walmart_item_search_multiple_candidates_rejected",
         candidate: top,
         candidateCount: sorted.length,
         selectedScore: top.score,
@@ -663,12 +744,43 @@ function evaluateCandidatesForAttempt(
       };
     }
 
-    const runnerHasSameExact = Boolean(runnerUp && hasExactMatchForMethod(runnerUp, method));
-    if (runnerHasSameExact && scoreGap <= 12) {
+    if (!exactForMethod && !normalizedForMethod && sorted.length === 1 && top.hasUsableImage) {
+      return {
+        outcome: "found",
+        reason: "Single Walmart Item Search candidate with usable image accepted via identifier-assisted match.",
+        acceptedBy: "identifier_assisted",
+        decisionCode: "walmart_item_search_identifier_assisted_match",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp?.score ?? null,
+      };
+    }
+
+    if (!exactForMethod && !normalizedForMethod) {
+      return {
+        outcome: "continue",
+        reason: "No exact identifier match in Item Search result.",
+        acceptedBy: "none",
+        decisionCode: "walmart_item_search_not_found",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
+        runnerUpScore: runnerUp?.score ?? null,
+      };
+    }
+
+    const runnerHasSameIdentifier = Boolean(
+      runnerUp &&
+        (hasExactMatchForMethod(runnerUp, method) ||
+          hasNormalizedIdentifierMatchForMethod(runnerUp, method))
+    );
+    if (runnerHasSameIdentifier && scoreGap <= 12) {
       return {
         outcome: "ambiguous",
         reason: "Multiple Walmart Item Search candidates matched this product.",
         acceptedBy: "none",
+        decisionCode: "walmart_item_search_multiple_candidates_rejected",
         candidate: top,
         candidateCount: sorted.length,
         selectedScore: top.score,
@@ -681,6 +793,7 @@ function evaluateCandidatesForAttempt(
         outcome: "continue",
         reason: "Item Search returned no usable image.",
         acceptedBy: "none",
+        decisionCode: "walmart_item_search_single_candidate_no_image",
         candidate: top,
         candidateCount: sorted.length,
         selectedScore: top.score,
@@ -690,8 +803,13 @@ function evaluateCandidatesForAttempt(
 
     return {
       outcome: "found",
-      reason: "Exact identifier match with usable Walmart Item Search image.",
-      acceptedBy: "identifier_exact",
+      reason: exactForMethod
+        ? "Exact identifier match with usable Walmart Item Search image."
+        : "Normalized identifier match with usable Walmart Item Search image.",
+      acceptedBy: exactForMethod ? "identifier_exact" : "identifier_normalized",
+      decisionCode: exactForMethod
+        ? "walmart_item_search_exact_identifier_match"
+        : "walmart_item_search_identifier_normalized_match",
       candidate: top,
       candidateCount: sorted.length,
       selectedScore: top.score,
@@ -706,6 +824,7 @@ function evaluateCandidatesForAttempt(
         outcome: "ambiguous",
         reason: "Multiple Walmart Item Search candidates matched this product.",
         acceptedBy: "none",
+        decisionCode: "walmart_item_search_query_ambiguous",
         candidate: top,
         candidateCount: sorted.length,
         selectedScore: top.score,
@@ -715,25 +834,27 @@ function evaluateCandidatesForAttempt(
   }
 
   if (!titleBrandStrong) {
-    return {
-      outcome: "continue",
-      reason: "Query fallback confidence is too low for a safe image match.",
-      acceptedBy: "none",
-      candidate: top,
-      candidateCount: sorted.length,
-      selectedScore: top.score,
+      return {
+        outcome: "continue",
+        reason: "Query fallback confidence is too low for a safe image match.",
+        acceptedBy: "none",
+        decisionCode: "walmart_item_search_query_low_confidence",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
       runnerUpScore: runnerUp?.score ?? null,
     };
   }
 
   if (!top.hasUsableImage) {
-    return {
-      outcome: "continue",
-      reason: "Item Search returned no usable image.",
-      acceptedBy: "none",
-      candidate: top,
-      candidateCount: sorted.length,
-      selectedScore: top.score,
+      return {
+        outcome: "continue",
+        reason: "Item Search returned no usable image.",
+        acceptedBy: "none",
+        decisionCode: "walmart_item_search_single_candidate_no_image",
+        candidate: top,
+        candidateCount: sorted.length,
+        selectedScore: top.score,
       runnerUpScore: runnerUp?.score ?? null,
     };
   }
@@ -742,6 +863,7 @@ function evaluateCandidatesForAttempt(
     outcome: "found",
     reason: "Strong title and brand match with usable Walmart Item Search image.",
     acceptedBy: "title_brand_strong",
+    decisionCode: "walmart_item_search_query_title_brand_match",
     candidate: top,
     candidateCount: sorted.length,
     selectedScore: top.score,
@@ -760,6 +882,7 @@ function buildResult(params: {
   selectedScore: number | null;
   runnerUpScore: number | null;
   diagnostics: WalmartItemSearchAttemptDiagnostic[];
+  decisionCode: WalmartItemSearchDecisionDiagnostic["decisionCode"];
 }): WalmartItemSearchImageEnrichment {
   return {
     imageSyncStatus: params.status,
@@ -781,6 +904,7 @@ function buildResult(params: {
         selectedScore: params.selectedScore,
         runnerUpScore: params.runnerUpScore,
         acceptedBy: params.acceptedBy ?? "none",
+        decisionCode: params.decisionCode,
       },
     },
   };
@@ -805,6 +929,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
       selectedScore: null,
       runnerUpScore: null,
       diagnostics,
+      decisionCode: "walmart_item_search_not_synced",
     });
   }
 
@@ -812,6 +937,8 @@ export async function enrichWalmartImageFromItemSearch(params: {
   let ambiguousChoice: CandidateEvaluation | null = null;
   let ambiguousMethod: WalmartImageMatchMethod | null = null;
   let notFoundReason = "Item Search returned no usable image.";
+  let notFoundDecisionCode: WalmartItemSearchDecisionDiagnostic["decisionCode"] =
+    "walmart_item_search_not_found";
   let notFoundCandidate: SearchCandidate | null = null;
   let notFoundMethod: WalmartImageMatchMethod | null = null;
 
@@ -851,6 +978,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
         selectedScore: evaluated.selectedScore,
         runnerUpScore: evaluated.runnerUpScore,
         diagnostics,
+        decisionCode: evaluated.decisionCode,
       });
     }
 
@@ -875,6 +1003,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
 
     if (evaluated.reason) {
       notFoundReason = evaluated.reason;
+      notFoundDecisionCode = evaluated.decisionCode;
     }
   }
 
@@ -889,6 +1018,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
       selectedScore: ambiguousChoice.selectedScore,
       runnerUpScore: ambiguousChoice.runnerUpScore,
       diagnostics,
+      decisionCode: ambiguousChoice.decisionCode,
     });
   }
 
@@ -903,6 +1033,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
       selectedScore: null,
       runnerUpScore: null,
       diagnostics,
+      decisionCode: notFoundDecisionCode,
     });
   }
 
@@ -916,6 +1047,7 @@ export async function enrichWalmartImageFromItemSearch(params: {
     selectedScore: null,
     runnerUpScore: null,
     diagnostics,
+    decisionCode: "walmart_item_search_provider_failed",
   });
 }
 

@@ -105,6 +105,22 @@ describe("Walmart retry enrichment identifier repair", () => {
               serpapi_brand_search_ambiguous: 0,
               serpapi_brand_search_no_confident_match: 0,
             },
+            walmartItemSearchDiagnostics: {
+              walmart_item_search_exact_identifier_match: 0,
+              walmart_item_search_identifier_normalized_match: 0,
+              walmart_item_search_identifier_assisted_match: 0,
+              walmart_item_search_multiple_candidates_rejected: 0,
+              walmart_item_search_single_candidate_no_image: 0,
+            },
+            serpApiPerProductDiagnostics: {
+              serpapi_per_product_searches_attempted: 0,
+              serpapi_per_product_matches: 0,
+              serpapi_per_product_thumbnails_saved: 0,
+              no_confident_match_continued_to_fallback: 0,
+              ambiguous_continued_to_fallback: 0,
+              ambiguous_skipped: 0,
+            },
+            perProductAttemptDiagnostics: [],
           },
         };
       }
