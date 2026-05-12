@@ -136,8 +136,21 @@ describe("EcomViper Walmart generated product images", () => {
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/images/generations");
-    const body = JSON.parse(String(init.body)) as { prompt?: string; model?: string };
+    const body = JSON.parse(String(init.body)) as {
+      prompt?: string;
+      model?: string;
+      size?: string;
+      n?: number;
+      response_format?: string;
+      image?: unknown;
+      mask?: unknown;
+    };
     expect(body.model).toBeTruthy();
+    expect(body.size).toBe("1024x1024");
+    expect(body.n).toBe(1);
+    expect(body.response_format).toBeUndefined();
+    expect(body.image).toBeUndefined();
+    expect(body.mask).toBeUndefined();
     expect(body.prompt).toContain("Task: Generate one Lifestyle image");
     expect(body.prompt).toContain("Title: OPA Nutrition Magnesium Glycinate Gummies 60 Ct");
     expect(body.prompt).toContain("Brand: OPA Nutrition");
@@ -189,6 +202,53 @@ describe("EcomViper Walmart generated product images", () => {
     expect(payload.error?.code).toBe("INSUFFICIENT_SUPPLEMENT_FACTS");
     expect(payload.error?.message).toContain("Supplement facts generation needs");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns actionable sanitized error for OpenAI 400 invalid request", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          error: {
+            message: "Unsupported parameter: 'response_format'.",
+            type: "invalid_request_error",
+            param: "response_format",
+            code: "unsupported_parameter",
+          },
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "lifestyle",
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(400);
+    expect(payload.error?.code).toBe("OPENAI_UNSUPPORTED_PARAMETER");
+    expect(payload.error?.category).toBe("invalid_request");
+    expect(payload.error?.statusCode).toBe(400);
+    expect(payload.error?.message).toContain("unsupported response format parameter");
+    expect(payload.error?.recommendation).toContain("Retry with default generation settings");
+    expect(payload.error?.provider?.param).toBe("response_format");
+    expect(payload.error?.requestDiagnostics?.promptLength).toBeTypeOf("number");
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(JSON.stringify(payload)).not.toContain("sk-test-openai-secret-abcdef");
   });
 
   it("returns 401 on image generation route when unauthenticated", async () => {

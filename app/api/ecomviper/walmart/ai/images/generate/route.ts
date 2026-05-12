@@ -1,6 +1,6 @@
 export const runtime = "nodejs";
 
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { fail, ok } from "@/app/api/ecomviper/walmart/_utils/response";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { getWalmartOpenAiApiKeyForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
@@ -54,6 +54,10 @@ function parseQuantity(value: unknown): number {
 }
 
 export async function POST(req: NextRequest) {
+  let requestImageType: WalmartGeneratedImageType | null = null;
+  let requestQuantity = 1;
+  let requestStyleGuidanceLength = 0;
+
   try {
     const { userId, unauthorizedResponse } = await requireSignedInUser();
     if (unauthorizedResponse) {
@@ -78,8 +82,11 @@ export async function POST(req: NextRequest) {
         "BAD_REQUEST"
       );
     }
+    requestImageType = imageType;
     const styleGuidance = asText(body.styleGuidance);
     const quantity = parseQuantity(body.quantity);
+    requestQuantity = quantity;
+    requestStyleGuidanceLength = styleGuidance.length;
 
     const openAiApiKey = await getWalmartOpenAiApiKeyForUser(userId);
     if (!openAiApiKey) {
@@ -146,8 +153,38 @@ export async function POST(req: NextRequest) {
     });
   } catch (error) {
     if (error instanceof WalmartImageGenerationError) {
-      const status = error.code === "INSUFFICIENT_SUPPLEMENT_FACTS" ? 400 : 502;
-      return fail(status, error.message, error.code);
+      const status =
+        typeof error.statusCode === "number"
+          ? error.statusCode
+          : error.code === "INSUFFICIENT_SUPPLEMENT_FACTS"
+            ? 400
+            : 502;
+      return NextResponse.json(
+        {
+          error: {
+            code: error.code,
+            category: error.category ?? "provider_error",
+            statusCode: status,
+            message: error.message,
+            recommendation:
+              error.recommendation ??
+              "Retry generation. If this persists, test OpenAI connection settings in Connect.",
+            provider: {
+              type: error.providerErrorType ?? null,
+              param: error.providerErrorParam ?? null,
+            },
+            requestDiagnostics: {
+              imageType: requestImageType,
+              quantity: requestQuantity,
+              styleGuidanceLength: requestStyleGuidanceLength,
+              promptLength: error.promptLength ?? null,
+              model: error.requestModel ?? null,
+              size: error.requestSize ?? null,
+            },
+          },
+        },
+        { status }
+      );
     }
     const message =
       error instanceof Error ? error.message : "Failed to generate Walmart product images.";

@@ -10,13 +10,44 @@ import type {
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const OPENAI_IMAGE_MODEL = process.env.WALMART_OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
+const OPENAI_IMAGE_SIZE = "1024x1024";
+const OPENAI_IMAGE_PROMPT_MAX_CHARS = 3500;
+
+interface WalmartImageGenerationErrorOptions {
+  code: string;
+  message: string;
+  statusCode?: number;
+  category?: string;
+  recommendation?: string;
+  providerErrorType?: string;
+  providerErrorParam?: string;
+  promptLength?: number;
+  requestModel?: string;
+  requestSize?: string;
+}
 
 export class WalmartImageGenerationError extends Error {
   readonly code: string;
+  readonly statusCode?: number;
+  readonly category?: string;
+  readonly recommendation?: string;
+  readonly providerErrorType?: string;
+  readonly providerErrorParam?: string;
+  readonly promptLength?: number;
+  readonly requestModel?: string;
+  readonly requestSize?: string;
 
-  constructor(code: string, message: string) {
-    super(message);
-    this.code = code;
+  constructor(options: WalmartImageGenerationErrorOptions) {
+    super(options.message);
+    this.code = options.code;
+    this.statusCode = options.statusCode;
+    this.category = options.category;
+    this.recommendation = options.recommendation;
+    this.providerErrorType = options.providerErrorType;
+    this.providerErrorParam = options.providerErrorParam;
+    this.promptLength = options.promptLength;
+    this.requestModel = options.requestModel;
+    this.requestSize = options.requestSize;
   }
 }
 
@@ -27,6 +58,19 @@ function asText(value: unknown): string {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((entry) => entry.trim()).filter(Boolean)));
+}
+
+function normalizeWhitespace(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
+}
+
+function redactPotentialSecrets(value: string): string {
+  return value.replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[redacted]");
+}
+
+function truncate(value: string, maxLength: number): string {
+  if (value.length <= maxLength) return value;
+  return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
 }
 
 function toFactsLines(facts: CanonicalProductFacts): string[] {
@@ -108,10 +152,15 @@ function ensureSupplementFactsInput(
     facts.activeIngredients.length > 0 ||
     facts.servingSize.trim().length > 0;
   if (!hasFacts) {
-    throw new WalmartImageGenerationError(
-      "INSUFFICIENT_SUPPLEMENT_FACTS",
-      "Supplement facts generation needs serving size and/or ingredient facts. Add product facts, then try again."
-    );
+    throw new WalmartImageGenerationError({
+      code: "INSUFFICIENT_SUPPLEMENT_FACTS",
+      message:
+        "Supplement facts generation needs serving size and/or ingredient facts. Add product facts, then try again.",
+      statusCode: 400,
+      category: "input_incomplete",
+      recommendation:
+        "Add serving size and supplement facts details in product attributes, then regenerate.",
+    });
   }
 }
 
@@ -150,7 +199,7 @@ export function buildWalmartGeneratedImagePrompt(input: {
   const normalizedGuidance = asText(input.styleGuidance);
   const summary = `${imageTypeLabel(input.imageType)} image for ${input.product.sku}`;
 
-  const prompt = [
+  const promptRaw = [
     `Task: Generate one ${imageTypeLabel(input.imageType)} image for a Walmart listing.`,
     imageTypeDirections(input.imageType),
     buildComplianceGuardrails(),
@@ -168,6 +217,10 @@ export function buildWalmartGeneratedImagePrompt(input: {
   ]
     .filter(Boolean)
     .join("\n");
+  const prompt =
+    promptRaw.length > OPENAI_IMAGE_PROMPT_MAX_CHARS
+      ? `${promptRaw.slice(0, OPENAI_IMAGE_PROMPT_MAX_CHARS)}\n- Additional product context truncated for prompt length limits.`
+      : promptRaw;
 
   return {
     prompt,
@@ -197,22 +250,228 @@ function parseOpenAiImageData(payload: unknown): { b64?: string; url?: string } 
 async function downloadImage(url: string): Promise<{ imageBytes: Uint8Array; mimeType: string }> {
   const response = await fetch(url, { method: "GET", cache: "no-store" });
   if (!response.ok) {
-    throw new WalmartImageGenerationError(
-      "OPENAI_IMAGE_DOWNLOAD_FAILED",
-      `Generated image download failed: HTTP ${response.status}.`
-    );
+    throw new WalmartImageGenerationError({
+      code: "OPENAI_IMAGE_DOWNLOAD_FAILED",
+      message: `Generated image download failed: HTTP ${response.status}.`,
+      statusCode: 502,
+      category: "provider_response_invalid",
+      recommendation: "Regenerate the image. If this persists, retry later.",
+    });
   }
 
   const contentType = asText(response.headers.get("content-type")) || "image/png";
   const bytes = new Uint8Array(await response.arrayBuffer());
   if (bytes.length === 0) {
-    throw new WalmartImageGenerationError(
-      "OPENAI_IMAGE_EMPTY",
-      "Generated image is empty. Regenerate and try again."
-    );
+    throw new WalmartImageGenerationError({
+      code: "OPENAI_IMAGE_EMPTY",
+      message: "Generated image is empty. Regenerate and try again.",
+      statusCode: 502,
+      category: "provider_response_invalid",
+      recommendation: "Regenerate the image. If this persists, retry later.",
+    });
   }
 
   return { imageBytes: bytes, mimeType: contentType };
+}
+
+function buildActionableOpenAiError(params: {
+  statusCode: number;
+  providerMessage: string;
+  providerType: string;
+  providerParam: string;
+}): WalmartImageGenerationError {
+  const providerMessageLower = params.providerMessage.toLowerCase();
+  const providerParamLower = params.providerParam.toLowerCase();
+
+  if (params.statusCode === 401) {
+    return new WalmartImageGenerationError({
+      code: "OPENAI_UNAUTHORIZED",
+      message:
+        "OpenAI image generation failed: unauthorized. Verify your OpenAI API key in Connect.",
+      statusCode: 401,
+      category: "auth",
+      recommendation: "Reconnect your OpenAI API key, then test and retry.",
+      providerErrorType: params.providerType || undefined,
+      providerErrorParam: params.providerParam || undefined,
+    });
+  }
+  if (params.statusCode === 403) {
+    return new WalmartImageGenerationError({
+      code: "OPENAI_FORBIDDEN",
+      message:
+        "OpenAI image generation failed: forbidden. Your OpenAI project may not have image model access.",
+      statusCode: 403,
+      category: "permission",
+      recommendation: "Check project/model access in OpenAI, then retry.",
+      providerErrorType: params.providerType || undefined,
+      providerErrorParam: params.providerParam || undefined,
+    });
+  }
+  if (params.statusCode === 429) {
+    return new WalmartImageGenerationError({
+      code: "OPENAI_RATE_LIMITED",
+      message: "OpenAI image generation is rate-limited right now.",
+      statusCode: 429,
+      category: "rate_limit",
+      recommendation: "Wait a moment and retry.",
+      providerErrorType: params.providerType || undefined,
+      providerErrorParam: params.providerParam || undefined,
+    });
+  }
+
+  if (params.statusCode === 400) {
+    if (
+      providerParamLower.includes("response_format") ||
+      providerMessageLower.includes("response_format")
+    ) {
+      return new WalmartImageGenerationError({
+        code: "OPENAI_UNSUPPORTED_PARAMETER",
+        message:
+          "OpenAI rejected the image request: unsupported response format parameter for the selected model.",
+        statusCode: 400,
+        category: "invalid_request",
+        recommendation:
+          "Retry with default generation settings. If the issue persists, verify image model compatibility.",
+        providerErrorType: params.providerType || undefined,
+        providerErrorParam: params.providerParam || undefined,
+      });
+    }
+    if (providerParamLower.includes("size") || providerMessageLower.includes("size")) {
+      return new WalmartImageGenerationError({
+        code: "OPENAI_UNSUPPORTED_SIZE",
+        message:
+          "OpenAI rejected the image request: unsupported size for the selected model.",
+        statusCode: 400,
+        category: "invalid_request",
+        recommendation:
+          "Retry generation. If it still fails, check model/size compatibility in OpenAI settings.",
+        providerErrorType: params.providerType || undefined,
+        providerErrorParam: params.providerParam || undefined,
+      });
+    }
+    if (
+      providerParamLower.includes("model") ||
+      providerMessageLower.includes("model") ||
+      providerMessageLower.includes("not found")
+    ) {
+      return new WalmartImageGenerationError({
+        code: "OPENAI_MODEL_UNAVAILABLE",
+        message:
+          "OpenAI rejected the image request: model unavailable for this API key/project.",
+        statusCode: 400,
+        category: "model_access",
+        recommendation: "Verify OpenAI image model access and configured model name, then retry.",
+        providerErrorType: params.providerType || undefined,
+        providerErrorParam: params.providerParam || undefined,
+      });
+    }
+
+    return new WalmartImageGenerationError({
+      code: "OPENAI_BAD_REQUEST",
+      message: "OpenAI rejected the image request due to invalid generation parameters.",
+      statusCode: 400,
+      category: "invalid_request",
+      recommendation: "Retry with simpler guidance. If this persists, test your OpenAI connection settings.",
+      providerErrorType: params.providerType || undefined,
+      providerErrorParam: params.providerParam || undefined,
+    });
+  }
+
+  if (params.statusCode >= 500) {
+    return new WalmartImageGenerationError({
+      code: "OPENAI_PROVIDER_ERROR",
+      message: "OpenAI image generation is temporarily unavailable.",
+      statusCode: params.statusCode,
+      category: "provider_error",
+      recommendation: "Retry in a moment.",
+      providerErrorType: params.providerType || undefined,
+      providerErrorParam: params.providerParam || undefined,
+    });
+  }
+
+  return new WalmartImageGenerationError({
+    code: "OPENAI_IMAGE_FAILED",
+    message: `OpenAI image generation failed: HTTP ${params.statusCode}.`,
+    statusCode: params.statusCode,
+    category: "unknown",
+    recommendation: "Retry generation. If this persists, check OpenAI connection settings.",
+    providerErrorType: params.providerType || undefined,
+    providerErrorParam: params.providerParam || undefined,
+  });
+}
+
+async function toActionableOpenAiError(response: Response): Promise<WalmartImageGenerationError> {
+  const statusCode = response.status;
+  const fallbackDetail = `HTTP ${statusCode}`;
+
+  let providerMessage = "";
+  let providerType = "";
+  let providerParam = "";
+
+  const rawText = await response.text().catch(() => "");
+  if (rawText.trim()) {
+    try {
+      const parsed = JSON.parse(rawText) as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        const root = parsed as Record<string, unknown>;
+        const err = root.error;
+        if (err && typeof err === "object" && !Array.isArray(err)) {
+          const errorRow = err as Record<string, unknown>;
+          providerMessage = truncate(
+            redactPotentialSecrets(normalizeWhitespace(asText(errorRow.message))),
+            240
+          );
+          providerType = truncate(asText(errorRow.type), 80);
+          providerParam = truncate(asText(errorRow.param), 120);
+        } else {
+          providerMessage = truncate(
+            redactPotentialSecrets(normalizeWhitespace(asText(root.message))),
+            240
+          );
+        }
+      }
+    } catch {
+      providerMessage = truncate(redactPotentialSecrets(normalizeWhitespace(rawText)), 240);
+    }
+  }
+
+  const actionable = buildActionableOpenAiError({
+    statusCode,
+    providerMessage: providerMessage || fallbackDetail,
+    providerType,
+    providerParam,
+  });
+
+  if (!providerMessage) return actionable;
+
+  const detailSuffix = `. Provider detail: ${providerMessage}`;
+  return new WalmartImageGenerationError({
+    code: actionable.code,
+    message: `${actionable.message}${detailSuffix}`,
+    statusCode: actionable.statusCode,
+    category: actionable.category,
+    recommendation: actionable.recommendation,
+    providerErrorType: actionable.providerErrorType,
+    providerErrorParam: actionable.providerErrorParam,
+  });
+}
+
+function withRequestDiagnostics(
+  error: WalmartImageGenerationError,
+  params: { promptLength: number; requestModel: string; requestSize: string }
+): WalmartImageGenerationError {
+  return new WalmartImageGenerationError({
+    code: error.code,
+    message: error.message,
+    statusCode: error.statusCode,
+    category: error.category,
+    recommendation: error.recommendation,
+    providerErrorType: error.providerErrorType,
+    providerErrorParam: error.providerErrorParam,
+    promptLength: params.promptLength,
+    requestModel: params.requestModel,
+    requestSize: params.requestSize,
+  });
 }
 
 export async function generateWalmartProductImage(input: {
@@ -245,30 +504,19 @@ export async function generateWalmartProductImage(input: {
     body: JSON.stringify({
       model: OPENAI_IMAGE_MODEL,
       prompt: promptPayload.prompt,
-      size: "1024x1024",
+      size: OPENAI_IMAGE_SIZE,
       n: 1,
-      response_format: "b64_json",
     }),
     cache: "no-store",
   });
 
   if (!response.ok) {
-    if (response.status === 401) {
-      throw new WalmartImageGenerationError(
-        "OPENAI_UNAUTHORIZED",
-        "OpenAI image generation failed: HTTP 401 unauthorized. Verify your OpenAI API key."
-      );
-    }
-    if (response.status === 403) {
-      throw new WalmartImageGenerationError(
-        "OPENAI_FORBIDDEN",
-        "OpenAI image generation failed: HTTP 403 forbidden. Check OpenAI project permissions."
-      );
-    }
-    throw new WalmartImageGenerationError(
-      "OPENAI_IMAGE_FAILED",
-      `OpenAI image generation failed: HTTP ${response.status}.`
-    );
+    const actionable = await toActionableOpenAiError(response);
+    throw withRequestDiagnostics(actionable, {
+      promptLength: promptPayload.prompt.length,
+      requestModel: OPENAI_IMAGE_MODEL,
+      requestSize: OPENAI_IMAGE_SIZE,
+    });
   }
 
   const payload = (await response.json().catch(() => ({}))) as unknown;
@@ -277,10 +525,13 @@ export async function generateWalmartProductImage(input: {
   if (parsed.b64) {
     const bytes = Buffer.from(parsed.b64, "base64");
     if (bytes.length === 0) {
-      throw new WalmartImageGenerationError(
-        "OPENAI_IMAGE_EMPTY",
-        "Generated image is empty. Regenerate and try again."
-      );
+      throw new WalmartImageGenerationError({
+        code: "OPENAI_IMAGE_EMPTY",
+        message: "Generated image is empty. Regenerate and try again.",
+        statusCode: 502,
+        category: "provider_response_invalid",
+        recommendation: "Regenerate the image. If this persists, retry later.",
+      });
     }
 
     return {
@@ -300,8 +551,11 @@ export async function generateWalmartProductImage(input: {
     };
   }
 
-  throw new WalmartImageGenerationError(
-    "OPENAI_IMAGE_INVALID_RESPONSE",
-    "OpenAI image generation returned no image data."
-  );
+  throw new WalmartImageGenerationError({
+    code: "OPENAI_IMAGE_INVALID_RESPONSE",
+    message: "OpenAI image generation returned no image data.",
+    statusCode: 502,
+    category: "provider_response_invalid",
+    recommendation: "Regenerate the image. If this persists, retry later.",
+  });
 }

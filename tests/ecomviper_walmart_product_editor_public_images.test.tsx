@@ -134,6 +134,75 @@ describe("Walmart product editor public listing image flow", () => {
     );
   });
 
+  it("shows actionable OpenAI generation error message instead of generic HTTP 400", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/images/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                code: "OPENAI_UNSUPPORTED_SIZE",
+                statusCode: 400,
+                category: "invalid_request",
+                message:
+                  "OpenAI rejected the image request: unsupported size for the selected model.",
+                recommendation:
+                  "Retry generation. If it still fails, check model/size compatibility in OpenAI settings.",
+              },
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate"
+    ) as HTMLButtonElement | undefined;
+    expect(generateButton).toBeDefined();
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain(
+      "OpenAI rejected the image request: unsupported size for the selected model."
+    );
+    expect(container.textContent).not.toContain("OpenAI image generation failed: HTTP 400.");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
   it("generates image preview, approves to product media, and persists generated image metadata in draft", async () => {
     const generatedAssetUrl =
       "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_123";

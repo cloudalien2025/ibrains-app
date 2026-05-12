@@ -127,7 +127,22 @@ type GenerateProductImagesResponse = {
   generated?: WalmartGeneratedMediaAsset[];
   error?: {
     code?: string;
+    category?: string;
+    statusCode?: number;
     message?: string;
+    recommendation?: string;
+    provider?: {
+      type?: string | null;
+      param?: string | null;
+    };
+    requestDiagnostics?: {
+      imageType?: string | null;
+      quantity?: number | null;
+      styleGuidanceLength?: number | null;
+      promptLength?: number | null;
+      model?: string | null;
+      size?: string | null;
+    };
   };
 };
 
@@ -1520,23 +1535,66 @@ export default function ProductEditorClient({
     setPublicImageMessage("Images added to draft. Save Draft before submitting.");
   }
 
-  function toGeneratedImageErrorMessage(code: string, fallback: string): string {
+  function toGeneratedImageErrorMessage(
+    error: GenerateProductImagesResponse["error"] | null | undefined
+  ): string {
+    const code = error?.code?.trim().toUpperCase() ?? "";
+    const fallback = error?.message?.trim() ?? "Could not generate product images.";
+    const recommendation = error?.recommendation?.trim() ?? "";
+
+    const withRecommendation = (message: string): string =>
+      recommendation && !message.includes(recommendation)
+        ? `${message} ${recommendation}`
+        : message;
+
     if (code === "OPENAI_NOT_CONNECTED") {
-      return "Connect your OpenAI API key first to generate product images.";
+      return withRecommendation("Connect your OpenAI API key first to generate product images.");
     }
     if (code === "INSUFFICIENT_SUPPLEMENT_FACTS") {
-      return (
+      return withRecommendation(
         fallback ||
         "Supplement facts generation needs serving size and ingredient details. Add product facts, then try again."
       );
     }
+    if (code === "OPENAI_UNSUPPORTED_PARAMETER") {
+      return withRecommendation(
+        "OpenAI rejected the image request: unsupported parameter for the selected generation mode."
+      );
+    }
+    if (code === "OPENAI_UNSUPPORTED_SIZE") {
+      return withRecommendation(
+        "OpenAI rejected the image request: unsupported size for the selected model."
+      );
+    }
+    if (code === "OPENAI_MODEL_UNAVAILABLE") {
+      return withRecommendation(
+        "OpenAI rejected the image request: this image model is not available for your key/project."
+      );
+    }
+    if (code === "OPENAI_BAD_REQUEST") {
+      return withRecommendation(
+        "OpenAI rejected the image request. Check guidance text/model access and try again."
+      );
+    }
     if (code === "OPENAI_UNAUTHORIZED") {
-      return "OpenAI image generation failed with unauthorized response. Reconnect your OpenAI key.";
+      return withRecommendation(
+        "OpenAI image generation failed with unauthorized response. Reconnect your OpenAI key."
+      );
     }
     if (code === "OPENAI_FORBIDDEN") {
-      return "OpenAI image generation was forbidden. Check OpenAI project permissions.";
+      return withRecommendation(
+        "OpenAI image generation was forbidden. Check OpenAI project permissions."
+      );
     }
-    return fallback || "Could not generate product images.";
+    if (code === "OPENAI_RATE_LIMITED") {
+      return withRecommendation("OpenAI image generation is rate-limited right now. Retry shortly.");
+    }
+    if (error?.statusCode === 400) {
+      return withRecommendation(
+        "OpenAI rejected the image request. Verify your OpenAI model access and generation settings."
+      );
+    }
+    return withRecommendation(fallback || "Could not generate product images.");
   }
 
   async function handleGenerateProductImages(params?: {
@@ -1575,9 +1633,7 @@ export default function ProductEditorClient({
 
       const payload = (await response.json().catch(() => null)) as GenerateProductImagesResponse | null;
       if (!response.ok || !payload?.generated) {
-        const code = payload?.error?.code?.trim().toUpperCase() ?? "";
-        const fallback = payload?.error?.message?.trim() ?? "Could not generate product images.";
-        setProductImageGenerationMessage(toGeneratedImageErrorMessage(code, fallback));
+        setProductImageGenerationMessage(toGeneratedImageErrorMessage(payload?.error));
         return;
       }
 
