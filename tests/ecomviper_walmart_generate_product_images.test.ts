@@ -120,8 +120,7 @@ describe("EcomViper Walmart generated product images", () => {
 
     const resp = await generateImageRoute(req);
     const payload = await resp.json();
-
-    expect(resp.status).toBe(200);
+    expect(resp.status, JSON.stringify(payload)).toBe(200);
     expect(payload.ok).toBe(true);
     expect(Array.isArray(payload.generated)).toBe(true);
     expect(payload.generated?.length).toBe(1);
@@ -129,6 +128,9 @@ describe("EcomViper Walmart generated product images", () => {
     expect(payload.generated?.[0]?.imageType).toBe("lifestyle");
     expect(payload.generated?.[0]?.approved).toBe(false);
     expect(String(payload.generated?.[0]?.url)).toContain(
+      "/api/ecomviper/walmart/generated-media/"
+    );
+    expect(payload.generated?.[0]?.previewUrl).toContain(
       "/api/ecomviper/walmart/generated-media/"
     );
     expect(JSON.stringify(payload)).not.toContain("sk-test-openai-secret-abcdef");
@@ -172,8 +174,56 @@ describe("EcomViper Walmart generated product images", () => {
     expect(bytes.length).toBeGreaterThan(0);
   });
 
-  it("degrades safely when supplement facts inputs are insufficient", async () => {
+  it("builds deployment-safe generated media URL from forwarded host and keeps relative preview URL", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fakePng = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: fakePng.toString("base64") }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      headers: {
+        "x-forwarded-host": "app.ibrains.ai",
+        "x-forwarded-proto": "https",
+      },
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "lifestyle",
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.generated?.[0]?.url).toMatch(
+      /^https:\/\/app\.ibrains\.ai\/api\/ecomviper\/walmart\/generated-media\//
+    );
+    expect(payload.generated?.[0]?.previewUrl).toMatch(
+      /^\/api\/ecomviper\/walmart\/generated-media\//
+    );
+  });
+
+  it("requires an actionable supplement-facts reference when no uploaded or product media references exist", async () => {
     seedProduct({
+      imageUrl: "",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
       serving_size: "",
       main_ingredients: "",
       flavor: "",
@@ -199,9 +249,125 @@ describe("EcomViper Walmart generated product images", () => {
     const payload = await resp.json();
 
     expect(resp.status).toBe(400);
-    expect(payload.error?.code).toBe("INSUFFICIENT_SUPPLEMENT_FACTS");
-    expect(payload.error?.message).toContain("Supplement facts generation needs");
+    expect(payload.error?.code).toBe("SUPPLEMENT_FACTS_REFERENCE_REQUIRED");
+    expect(payload.error?.message).toContain("Upload a bottle supplement-facts image");
+    expect(payload.error?.recommendation).toContain("supplement-facts reference image");
     expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to draft/product media references for supplement-facts generation when uploads are absent", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fakePng = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes("cdn.shopify.com/roc949-back-label.jpg")) {
+        return Promise.resolve(
+          new Response(fakePng, { status: 200, headers: { "Content-Type": "image/png" } })
+        );
+      }
+      if (url === "https://api.openai.com/v1/images/edits") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: [{ b64_json: fakePng.toString("base64") }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      return Promise.resolve(new Response("unexpected", { status: 500 }));
+    });
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "supplement_facts",
+        draftPayload: {
+          imageUrl: "https://cdn.shopify.com/roc949-back-label.jpg?v=1",
+          galleryImageUrls: [
+            "https://cdn.shopify.com/roc949-back-label.jpg?v=1",
+            "https://cdn.shopify.com/roc949-front.jpg?v=1",
+          ],
+        },
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.generated?.length).toBe(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("roc949-back-label.jpg");
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("https://api.openai.com/v1/images/edits");
+  });
+
+  it("uses uploaded supplement-facts reference images through image edit generation mode", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fakePng = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [{ b64_json: fakePng.toString("base64") }],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "supplement_facts",
+        referenceImages: [
+          {
+            source: "uploaded",
+            url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJUb6f4AAAAASUVORK5CYII=",
+            label: "supplement-facts-label",
+            mimeType: "image/png",
+          },
+        ],
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.generated?.length).toBe(1);
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("https://api.openai.com/v1/images/edits");
+    expect(init.body).toBeInstanceOf(FormData);
+    const formData = init.body as FormData;
+    expect(formData.get("model")).toBeTruthy();
+    expect(formData.get("size")).toBe("1024x1024");
+    expect(formData.get("n")).toBe("1");
+    expect(String(formData.get("prompt") ?? "")).toContain("Supplement Facts");
   });
 
   it("returns actionable sanitized error for OpenAI 400 invalid request", async () => {

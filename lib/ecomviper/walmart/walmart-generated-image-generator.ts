@@ -6,12 +6,15 @@ import {
 } from "@/lib/ecomviper/walmart/product-facts-agent";
 import type {
   WalmartGeneratedImageType,
+  WalmartGeneratedImageReferenceInput,
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const OPENAI_IMAGE_MODEL = process.env.WALMART_OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
 const OPENAI_IMAGE_SIZE = "1024x1024";
 const OPENAI_IMAGE_PROMPT_MAX_CHARS = 3500;
+const MAX_REFERENCE_IMAGES = 4;
+const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
 
 interface WalmartImageGenerationErrorOptions {
   code: string;
@@ -51,6 +54,21 @@ export class WalmartImageGenerationError extends Error {
   }
 }
 
+interface PreparedReferenceImage {
+  source: WalmartGeneratedImageReferenceInput["source"];
+  url: string;
+  label?: string;
+  mimeType?: string;
+}
+
+interface LoadedReferenceImage {
+  source: WalmartGeneratedImageReferenceInput["source"];
+  url: string;
+  label?: string;
+  mimeType: string;
+  imageBytes: Uint8Array;
+}
+
 function asText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   return "";
@@ -71,6 +89,115 @@ function redactPotentialSecrets(value: string): string {
 function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function toHttpsUrl(value: string): string {
+  const raw = value.trim();
+  if (!raw) return "";
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return "";
+    parsed.protocol = "https:";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
+function isDataImageUrl(value: string): boolean {
+  return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$/.test(value.trim());
+}
+
+function parseDataImageUrl(value: string): { mimeType: string; imageBytes: Uint8Array } | null {
+  const trimmed = value.trim();
+  const match = trimmed.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return null;
+  const mimeType = match[1].toLowerCase();
+  const bytes = Buffer.from(match[2], "base64");
+  if (bytes.length === 0 || bytes.length > MAX_REFERENCE_BYTES) return null;
+  return {
+    mimeType,
+    imageBytes: new Uint8Array(bytes),
+  };
+}
+
+function inferReferenceLabel(url: string): string {
+  const lower = url.toLowerCase();
+  if (
+    lower.includes("supplement") ||
+    lower.includes("facts") ||
+    lower.includes("nutrition") ||
+    lower.includes("label") ||
+    lower.includes("back") ||
+    lower.includes("panel")
+  ) {
+    return "supplement_facts_label";
+  }
+  return "product_media";
+}
+
+function normalizeReferenceImageCandidates(
+  references: WalmartGeneratedImageReferenceInput[] | undefined
+): PreparedReferenceImage[] {
+  if (!Array.isArray(references) || references.length === 0) return [];
+
+  const seen = new Set<string>();
+  const normalized: PreparedReferenceImage[] = [];
+  for (const row of references) {
+    if (!row || typeof row !== "object") continue;
+    const source = row.source === "uploaded" || row.source === "product_media" ? row.source : "uploaded";
+    const rawUrl = asText(row.url);
+    const normalizedUrl = isDataImageUrl(rawUrl) ? rawUrl.trim() : toHttpsUrl(rawUrl);
+    if (!normalizedUrl || seen.has(normalizedUrl)) continue;
+    seen.add(normalizedUrl);
+    normalized.push({
+      source,
+      url: normalizedUrl,
+      label: asText(row.label) || undefined,
+      mimeType: asText(row.mimeType) || undefined,
+    });
+    if (normalized.length >= MAX_REFERENCE_IMAGES) break;
+  }
+  return normalized;
+}
+
+function collectProductMediaReferenceCandidates(
+  product: WalmartProductRecord,
+  options?: { supplementFactsOnly?: boolean }
+): PreparedReferenceImage[] {
+  const urls = unique([
+    product.primaryImageUrl ?? "",
+    product.imageUrl ?? "",
+    ...(product.galleryImageUrls ?? []),
+    ...(product.variantImageUrls ?? []),
+  ])
+    .map((entry) => toHttpsUrl(entry))
+    .filter(Boolean);
+
+  if (urls.length === 0) return [];
+
+  const scored = urls
+    .map((url, index) => {
+      const lower = url.toLowerCase();
+      const hasSupplementFactsHint = /(supplement|facts|nutrition|label|back|panel|ingredients|serving)/.test(
+        lower
+      );
+      let score = 0;
+      if (hasSupplementFactsHint) {
+        score += 10;
+      }
+      if (index > 0) score += 1;
+      return { url, score, hasSupplementFactsHint };
+    })
+    .filter((row) => (options?.supplementFactsOnly ? row.hasSupplementFactsHint : true))
+    .sort((left, right) => right.score - left.score || left.url.localeCompare(right.url));
+
+  return scored.slice(0, MAX_REFERENCE_IMAGES).map((row) => ({
+    source: "product_media",
+    url: row.url,
+    label: inferReferenceLabel(row.url),
+  }));
 }
 
 function toFactsLines(facts: CanonicalProductFacts): string[] {
@@ -144,22 +271,18 @@ function imageTypeLabel(imageType: WalmartGeneratedImageType): string {
 
 function ensureSupplementFactsInput(
   imageType: WalmartGeneratedImageType,
-  facts: CanonicalProductFacts
+  referenceImages: PreparedReferenceImage[]
 ): void {
   if (imageType !== "supplement_facts") return;
-  const hasFacts =
-    Object.keys(facts.supplementFacts).length > 0 ||
-    facts.activeIngredients.length > 0 ||
-    facts.servingSize.trim().length > 0;
-  if (!hasFacts) {
+  if (referenceImages.length === 0) {
     throw new WalmartImageGenerationError({
-      code: "INSUFFICIENT_SUPPLEMENT_FACTS",
+      code: "SUPPLEMENT_FACTS_REFERENCE_REQUIRED",
       message:
-        "Supplement facts generation needs serving size and/or ingredient facts. Add product facts, then try again.",
+        "Upload a bottle supplement-facts image or back-label reference to generate this image type.",
       statusCode: 400,
       category: "input_incomplete",
       recommendation:
-        "Add serving size and supplement facts details in product attributes, then regenerate.",
+        "Add at least one supplement-facts reference image, then regenerate.",
     });
   }
 }
@@ -193,10 +316,18 @@ export function buildWalmartGeneratedImagePrompt(input: {
   facts: CanonicalProductFacts;
   imageType: WalmartGeneratedImageType;
   styleGuidance?: string;
+  referenceImages?: PreparedReferenceImage[];
 }): { prompt: string; promptSummary: string } {
   const productLines = toProductContextLines(input.product);
   const factsLines = toFactsLines(input.facts);
   const normalizedGuidance = asText(input.styleGuidance);
+  const referenceImages = input.referenceImages ?? [];
+  const referenceSummary =
+    referenceImages.length > 0
+      ? `Reference images provided (${referenceImages.length}): ${referenceImages
+          .map((entry, index) => `#${index + 1} ${entry.label || entry.source}`)
+          .join(", ")}`
+      : "";
   const summary = `${imageTypeLabel(input.imageType)} image for ${input.product.sku}`;
 
   const promptRaw = [
@@ -204,6 +335,10 @@ export function buildWalmartGeneratedImagePrompt(input: {
     imageTypeDirections(input.imageType),
     buildComplianceGuardrails(),
     "Keep brand/product identity consistent with provided context.",
+    referenceSummary,
+    input.imageType === "supplement_facts" && referenceImages.length > 0
+      ? "For Supplement Facts: follow the uploaded/reference label panel truth. Preserve legibility and do not invent values."
+      : "",
     normalizedGuidance ? `User style guidance: ${normalizedGuidance}` : "",
     "Product context:",
     ...productLines.map((line) => `- ${line}`),
@@ -272,6 +407,106 @@ async function downloadImage(url: string): Promise<{ imageBytes: Uint8Array; mim
   }
 
   return { imageBytes: bytes, mimeType: contentType };
+}
+
+async function loadReferenceImage(reference: PreparedReferenceImage): Promise<LoadedReferenceImage> {
+  const dataUrlParsed = parseDataImageUrl(reference.url);
+  if (dataUrlParsed) {
+    return {
+      source: reference.source,
+      url: reference.url,
+      label: reference.label,
+      mimeType: dataUrlParsed.mimeType,
+      imageBytes: dataUrlParsed.imageBytes,
+    };
+  }
+
+  const httpsUrl = toHttpsUrl(reference.url);
+  if (!httpsUrl) {
+    throw new WalmartImageGenerationError({
+      code: "INVALID_REFERENCE_IMAGE",
+      message: "Reference image URL is invalid. Use uploaded images or valid https image URLs.",
+      statusCode: 400,
+      category: "invalid_request",
+      recommendation: "Upload a valid image file and retry.",
+    });
+  }
+
+  const response = await fetch(httpsUrl, { method: "GET", cache: "no-store" });
+  if (!response.ok) {
+    throw new WalmartImageGenerationError({
+      code: "REFERENCE_IMAGE_DOWNLOAD_FAILED",
+      message: `Reference image download failed: HTTP ${response.status}.`,
+      statusCode: 400,
+      category: "input_incomplete",
+      recommendation:
+        "Upload the supplement-facts label image directly in Media tab and retry.",
+    });
+  }
+  const downloaded = {
+    imageBytes: new Uint8Array(await response.arrayBuffer()),
+    mimeType: asText(response.headers.get("content-type")) || "image/png",
+  };
+  if (downloaded.imageBytes.length === 0) {
+    throw new WalmartImageGenerationError({
+      code: "REFERENCE_IMAGE_EMPTY",
+      message: "Reference image is empty and cannot be used for generation.",
+      statusCode: 400,
+      category: "input_incomplete",
+      recommendation: "Upload a non-empty supplement-facts reference image and retry.",
+    });
+  }
+  if (downloaded.imageBytes.length > MAX_REFERENCE_BYTES) {
+    throw new WalmartImageGenerationError({
+      code: "REFERENCE_IMAGE_TOO_LARGE",
+      message: "Reference image is too large for generation.",
+      statusCode: 400,
+      category: "invalid_request",
+      recommendation: "Use a smaller reference image (under 8MB).",
+    });
+  }
+
+  return {
+    source: reference.source,
+    url: httpsUrl,
+    label: reference.label,
+    mimeType: downloaded.mimeType || "image/png",
+    imageBytes: downloaded.imageBytes,
+  };
+}
+
+async function requestOpenAiImageEdit(input: {
+  openAiApiKey: string;
+  prompt: string;
+  referenceImage: LoadedReferenceImage;
+}): Promise<Response> {
+  const formData = new FormData();
+  formData.append("model", OPENAI_IMAGE_MODEL);
+  formData.append("prompt", input.prompt);
+  formData.append("size", OPENAI_IMAGE_SIZE);
+  formData.append("n", "1");
+  const extension = input.referenceImage.mimeType.includes("jpeg")
+    ? "jpg"
+    : input.referenceImage.mimeType.includes("webp")
+      ? "webp"
+      : "png";
+  const filename = `${input.referenceImage.label || "reference"}.${extension}`;
+  formData.append(
+    "image",
+    new Blob([Buffer.from(input.referenceImage.imageBytes)], {
+      type: input.referenceImage.mimeType || "image/png",
+    }),
+    filename
+  );
+
+  return fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.openAiApiKey}`,
+    },
+    body: formData,
+    cache: "no-store",
+  });
 }
 
 function buildActionableOpenAiError(params: {
@@ -361,6 +596,23 @@ function buildActionableOpenAiError(params: {
         statusCode: 400,
         category: "model_access",
         recommendation: "Verify OpenAI image model access and configured model name, then retry.",
+        providerErrorType: params.providerType || undefined,
+        providerErrorParam: params.providerParam || undefined,
+      });
+    }
+    if (
+      providerParamLower.includes("image") ||
+      providerMessageLower.includes("image") ||
+      providerMessageLower.includes("invalid image")
+    ) {
+      return new WalmartImageGenerationError({
+        code: "OPENAI_REFERENCE_INVALID",
+        message:
+          "OpenAI rejected the reference image input for this generation request.",
+        statusCode: 400,
+        category: "invalid_request",
+        recommendation:
+          "Use a clear PNG/JPG reference image and retry. If this persists, test OpenAI image model access.",
         providerErrorType: params.providerType || undefined,
         providerErrorParam: params.providerParam || undefined,
       });
@@ -479,36 +731,58 @@ export async function generateWalmartProductImage(input: {
   product: WalmartProductRecord;
   imageType: WalmartGeneratedImageType;
   styleGuidance?: string;
+  referenceImages?: WalmartGeneratedImageReferenceInput[];
 }): Promise<{
   imageBytes: Uint8Array;
   mimeType: string;
   imageType: WalmartGeneratedImageType;
   promptSummary: string;
+  referenceCount: number;
 }> {
   const factsResult = extractCanonicalProductFacts({ product: input.product });
-  ensureSupplementFactsInput(input.imageType, factsResult.facts);
+  const uploadedReferences = normalizeReferenceImageCandidates(input.referenceImages);
+  const fallbackReferences =
+    input.imageType === "supplement_facts" && uploadedReferences.length === 0
+      ? collectProductMediaReferenceCandidates(input.product, { supplementFactsOnly: true })
+      : [];
+  const selectedReferences =
+    uploadedReferences.length > 0 ? uploadedReferences : fallbackReferences;
+
+  ensureSupplementFactsInput(input.imageType, selectedReferences);
 
   const promptPayload = buildWalmartGeneratedImagePrompt({
     product: input.product,
     facts: factsResult.facts,
     imageType: input.imageType,
     styleGuidance: input.styleGuidance,
+    referenceImages: selectedReferences,
   });
 
-  const response = await fetch("https://api.openai.com/v1/images/generations", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${input.openAiApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: OPENAI_IMAGE_MODEL,
-      prompt: promptPayload.prompt,
-      size: OPENAI_IMAGE_SIZE,
-      n: 1,
-    }),
-    cache: "no-store",
-  });
+  const primaryReference =
+    selectedReferences.length > 0
+      ? await loadReferenceImage(selectedReferences[0])
+      : null;
+
+  const response = primaryReference
+    ? await requestOpenAiImageEdit({
+        openAiApiKey: input.openAiApiKey,
+        prompt: promptPayload.prompt,
+        referenceImage: primaryReference,
+      })
+    : await fetch("https://api.openai.com/v1/images/generations", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${input.openAiApiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: OPENAI_IMAGE_MODEL,
+          prompt: promptPayload.prompt,
+          size: OPENAI_IMAGE_SIZE,
+          n: 1,
+        }),
+        cache: "no-store",
+      });
 
   if (!response.ok) {
     const actionable = await toActionableOpenAiError(response);
@@ -539,6 +813,7 @@ export async function generateWalmartProductImage(input: {
       mimeType: "image/png",
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
+      referenceCount: selectedReferences.length,
     };
   }
 
@@ -548,6 +823,7 @@ export async function generateWalmartProductImage(input: {
       ...downloaded,
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
+      referenceCount: selectedReferences.length,
     };
   }
 
