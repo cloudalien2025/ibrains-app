@@ -11,14 +11,19 @@ import {
   WalmartImageGenerationError,
   generateWalmartProductImage,
 } from "@/lib/ecomviper/walmart/walmart-generated-image-generator";
+import { resolveEcomViperPublicAppOrigin } from "@/lib/ecomviper/walmart/walmart-public-app-origin";
 import { saveGeneratedWalmartMediaForUser } from "@/lib/ecomviper/walmart/walmart-generated-media-store";
-import type { WalmartGeneratedImageType } from "@/lib/ecomviper/walmart/walmart-types";
+import type {
+  WalmartGeneratedImageReferenceInput,
+  WalmartGeneratedImageType,
+} from "@/lib/ecomviper/walmart/walmart-types";
 
 interface GenerateWalmartImageRequestBody {
   sku?: unknown;
   imageType?: unknown;
   styleGuidance?: unknown;
   quantity?: unknown;
+  referenceImages?: unknown;
   draftPayload?: unknown;
 }
 
@@ -53,10 +58,36 @@ function parseQuantity(value: unknown): number {
   return 1;
 }
 
+function parseReferenceImages(value: unknown): WalmartGeneratedImageReferenceInput[] {
+  if (!Array.isArray(value)) return [];
+  const normalized: WalmartGeneratedImageReferenceInput[] = [];
+  const seen = new Set<string>();
+  for (const candidate of value) {
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) continue;
+    const row = candidate as Record<string, unknown>;
+    const source =
+      row.source === "uploaded" || row.source === "product_media"
+        ? row.source
+        : "uploaded";
+    const url = asText(row.url);
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    normalized.push({
+      source,
+      url,
+      label: asText(row.label) || undefined,
+      mimeType: asText(row.mimeType) || undefined,
+    });
+    if (normalized.length >= 4) break;
+  }
+  return normalized;
+}
+
 export async function POST(req: NextRequest) {
   let requestImageType: WalmartGeneratedImageType | null = null;
   let requestQuantity = 1;
   let requestStyleGuidanceLength = 0;
+  let requestReferenceCount = 0;
 
   try {
     const { userId, unauthorizedResponse } = await requireSignedInUser();
@@ -85,8 +116,10 @@ export async function POST(req: NextRequest) {
     requestImageType = imageType;
     const styleGuidance = asText(body.styleGuidance);
     const quantity = parseQuantity(body.quantity);
+    const referenceImages = parseReferenceImages(body.referenceImages);
     requestQuantity = quantity;
     requestStyleGuidanceLength = styleGuidance.length;
+    requestReferenceCount = referenceImages.length;
 
     const openAiApiKey = await getWalmartOpenAiApiKeyForUser(userId);
     if (!openAiApiKey) {
@@ -108,6 +141,7 @@ export async function POST(req: NextRequest) {
     const generatedAssets: Array<{
       id: string;
       url: string;
+      previewUrl: string;
       source: "openai_generated";
       imageType: WalmartGeneratedImageType;
       createdAt: string;
@@ -115,6 +149,7 @@ export async function POST(req: NextRequest) {
       guidance?: string;
       approved: boolean;
     }> = [];
+    const publicOrigin = resolveEcomViperPublicAppOrigin(req);
 
     for (let index = 0; index < quantity; index += 1) {
       const generated = await generateWalmartProductImage({
@@ -122,6 +157,7 @@ export async function POST(req: NextRequest) {
         product: mergedProduct,
         imageType,
         styleGuidance,
+        referenceImages,
       });
       const saved = await saveGeneratedWalmartMediaForUser({
         userId,
@@ -132,9 +168,11 @@ export async function POST(req: NextRequest) {
         promptSummary: generated.promptSummary,
         guidance: styleGuidance || undefined,
       });
+      const previewPath = `/api/ecomviper/walmart/generated-media/${saved.assetId}`;
       generatedAssets.push({
         id: saved.assetId,
-        url: `${req.nextUrl.origin}/api/ecomviper/walmart/generated-media/${saved.assetId}`,
+        url: `${publicOrigin}${previewPath}`,
+        previewUrl: previewPath,
         source: "openai_generated",
         imageType: saved.imageType,
         createdAt: saved.createdAt,
@@ -176,6 +214,7 @@ export async function POST(req: NextRequest) {
             requestDiagnostics: {
               imageType: requestImageType,
               quantity: requestQuantity,
+              referenceCount: requestReferenceCount,
               styleGuidanceLength: requestStyleGuidanceLength,
               promptLength: error.promptLength ?? null,
               model: error.requestModel ?? null,

@@ -199,12 +199,20 @@ export type WalmartGeneratedImageType =
 export interface WalmartGeneratedMediaAsset {
   id: string;
   url: string;
+  previewUrl?: string;
   source: "openai_generated";
   imageType: WalmartGeneratedImageType;
   createdAt: string;
   promptSummary?: string;
   guidance?: string;
   approved?: boolean;
+}
+
+export interface WalmartGeneratedImageReferenceInput {
+  source: "uploaded" | "product_media";
+  url: string;
+  label?: string;
+  mimeType?: string;
 }
 
 export interface WalmartProductRecord {

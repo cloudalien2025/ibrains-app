@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, type ChangeEvent } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
@@ -138,6 +138,7 @@ type GenerateProductImagesResponse = {
     requestDiagnostics?: {
       imageType?: string | null;
       quantity?: number | null;
+      referenceCount?: number | null;
       styleGuidanceLength?: number | null;
       promptLength?: number | null;
       model?: string | null;
@@ -145,6 +146,14 @@ type GenerateProductImagesResponse = {
     };
   };
 };
+
+interface WalmartGeneratedReferenceImage {
+  id: string;
+  name: string;
+  mimeType: string;
+  dataUrl: string;
+  source: "uploaded";
+}
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type InlineAiOutcome = "improved" | "unchanged" | "worse";
@@ -154,6 +163,7 @@ const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
 const DEFAULT_GENERATED_IMAGE_TYPE: WalmartGeneratedImageType = "lifestyle";
+const MAX_GENERATED_REFERENCE_IMAGES = 4;
 const GENERATED_IMAGE_TYPE_OPTIONS: Array<{
   value: WalmartGeneratedImageType;
   label: string;
@@ -340,7 +350,51 @@ function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsse
   if (!row) return null;
 
   const id = asText(row.id)?.trim() ?? "";
-  const url = normalizeWalmartImageUrlList([row.url])[0] ?? "";
+  let url = normalizeWalmartImageUrlList([row.url])[0] ?? "";
+  const rawPreviewUrl = asText(row.previewUrl)?.trim() ?? "";
+  const previewUrl =
+    rawPreviewUrl.startsWith("/api/ecomviper/walmart/generated-media/")
+      ? rawPreviewUrl
+      : (() => {
+          if (!url) return "";
+          try {
+            const parsed = new URL(url);
+            if (!parsed.pathname.startsWith("/api/ecomviper/walmart/generated-media/")) {
+              return "";
+            }
+            const host = parsed.hostname.toLowerCase();
+            if (
+              host === "localhost" ||
+              host === "127.0.0.1" ||
+              host === "::1" ||
+              host.endsWith(".localhost")
+            ) {
+              return parsed.pathname;
+            }
+          } catch {
+            return "";
+          }
+          return "";
+        })();
+  if (url) {
+    try {
+      const parsed = new URL(url);
+      const host = parsed.hostname.toLowerCase();
+      if (
+        parsed.pathname.startsWith("/api/ecomviper/walmart/generated-media/") &&
+        (host === "localhost" ||
+          host === "127.0.0.1" ||
+          host === "::1" ||
+          host.endsWith(".localhost")) &&
+        typeof window !== "undefined" &&
+        window.location.origin
+      ) {
+        url = `${window.location.origin}${parsed.pathname}`;
+      }
+    } catch {
+      // Keep original normalized URL when parsing fails.
+    }
+  }
   const imageTypeRaw = asText(row.imageType)?.trim() ?? "";
   const imageType = isGeneratedImageType(imageTypeRaw)
     ? imageTypeRaw
@@ -354,6 +408,7 @@ function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsse
   return {
     id,
     url,
+    previewUrl: previewUrl || undefined,
     source: "openai_generated",
     imageType,
     createdAt,
@@ -361,6 +416,21 @@ function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsse
     guidance: guidance || undefined,
     approved: Boolean(row.approved),
   };
+}
+
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("Failed to read selected file."));
+    reader.onload = () => {
+      if (typeof reader.result === "string" && reader.result.trim()) {
+        resolve(reader.result.trim());
+        return;
+      }
+      reject(new Error("Selected file could not be read as an image."));
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function readGeneratedMediaAssetsFromDraft(
@@ -1015,10 +1085,16 @@ export default function ProductEditorClient({
     useState<WalmartGeneratedImageType>(DEFAULT_GENERATED_IMAGE_TYPE);
   const [generatedImageGuidance, setGeneratedImageGuidance] = useState("");
   const [generatedImageQuantity, setGeneratedImageQuantity] = useState("1");
+  const [generatedReferenceImages, setGeneratedReferenceImages] = useState<
+    WalmartGeneratedReferenceImage[]
+  >([]);
+  const [generatedReferenceMessage, setGeneratedReferenceMessage] = useState<string | null>(null);
+  const [generatedPreviewErrors, setGeneratedPreviewErrors] = useState<Record<string, string>>({});
   const [generatingProductImages, setGeneratingProductImages] = useState(false);
   const [productImageGenerationMessage, setProductImageGenerationMessage] = useState<
     string | null
   >(null);
+  const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
   const optimizingWithAi = inlineAiState === "loading";
 
   const stagedOptimizations = useMemo(() => {
@@ -1556,6 +1632,12 @@ export default function ProductEditorClient({
         "Supplement facts generation needs serving size and ingredient details. Add product facts, then try again."
       );
     }
+    if (code === "SUPPLEMENT_FACTS_REFERENCE_REQUIRED") {
+      return withRecommendation(
+        fallback ||
+          "Upload a bottle supplement-facts image or back-label reference before generating this image type."
+      );
+    }
     if (code === "OPENAI_UNSUPPORTED_PARAMETER") {
       return withRecommendation(
         "OpenAI rejected the image request: unsupported parameter for the selected generation mode."
@@ -1574,6 +1656,11 @@ export default function ProductEditorClient({
     if (code === "OPENAI_BAD_REQUEST") {
       return withRecommendation(
         "OpenAI rejected the image request. Check guidance text/model access and try again."
+      );
+    }
+    if (code === "OPENAI_REFERENCE_INVALID") {
+      return withRecommendation(
+        "OpenAI rejected the selected reference image. Use a clear PNG/JPG reference and try again."
       );
     }
     if (code === "OPENAI_UNAUTHORIZED") {
@@ -1595,6 +1682,77 @@ export default function ProductEditorClient({
       );
     }
     return withRecommendation(fallback || "Could not generate product images.");
+  }
+
+  async function handleAttachReferenceImages(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (files.length === 0) return;
+
+    const remainingSlots = Math.max(
+      0,
+      MAX_GENERATED_REFERENCE_IMAGES - generatedReferenceImages.length
+    );
+    if (remainingSlots <= 0) {
+      setGeneratedReferenceMessage(
+        `You can add up to ${MAX_GENERATED_REFERENCE_IMAGES} reference images. Remove one to add another.`
+      );
+      return;
+    }
+
+    const nextFiles = files.slice(0, remainingSlots);
+    const loaded: WalmartGeneratedReferenceImage[] = [];
+    for (const file of nextFiles) {
+      if (!file.type.startsWith("image/")) continue;
+      try {
+        const dataUrl = await readFileAsDataUrl(file);
+        const randomId =
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+        loaded.push({
+          id: `ref_${randomId}`,
+          name: file.name || "reference-image",
+          mimeType: file.type || "image/png",
+          dataUrl,
+          source: "uploaded",
+        });
+      } catch {
+        setGeneratedReferenceMessage("One or more files could not be read. Try uploading again.");
+      }
+    }
+
+    if (loaded.length === 0) {
+      if (!generatedReferenceMessage) {
+        setGeneratedReferenceMessage("No valid image files were selected.");
+      }
+      return;
+    }
+
+    setGeneratedReferenceImages((current) => {
+      const seen = new Set(current.map((entry) => entry.dataUrl));
+      const deduped = loaded.filter((entry) => !seen.has(entry.dataUrl));
+      return [...current, ...deduped].slice(0, MAX_GENERATED_REFERENCE_IMAGES);
+    });
+    setGeneratedReferenceMessage(
+      `${loaded.length} reference image${loaded.length === 1 ? "" : "s"} ready for generation.`
+    );
+  }
+
+  function handleRemoveReferenceImage(referenceId: string) {
+    setGeneratedReferenceImages((current) =>
+      current.filter((reference) => reference.id !== referenceId)
+    );
+    setGeneratedReferenceMessage("Reference image removed.");
+  }
+
+  function handleGeneratedPreviewLoadError(asset: WalmartGeneratedMediaAsset) {
+    const previewTarget = asset.previewUrl || asset.url;
+    setGeneratedPreviewErrors((current) => ({
+      ...current,
+      [asset.id]:
+        `Preview could not load from ${previewTarget}. Save Draft still retains the asset URL.`,
+    }));
   }
 
   async function handleGenerateProductImages(params?: {
@@ -1627,6 +1785,12 @@ export default function ProductEditorClient({
           imageType,
           styleGuidance,
           quantity,
+          referenceImages: generatedReferenceImages.map((reference) => ({
+            source: reference.source,
+            url: reference.dataUrl,
+            label: reference.name,
+            mimeType: reference.mimeType,
+          })),
           draftPayload: preview,
         }),
       });
@@ -1654,6 +1818,14 @@ export default function ProductEditorClient({
           ...current,
           generatedMediaAssets: nextAssets,
         };
+      });
+      setGeneratedPreviewErrors((current) => {
+        const next = { ...current };
+        if (params?.replaceAssetId) delete next[params.replaceAssetId];
+        for (const asset of nextGeneratedAssets) {
+          delete next[asset.id];
+        }
+        return next;
       });
       setFormDirty(true);
       setProductImageGenerationMessage(
@@ -1736,6 +1908,11 @@ export default function ProductEditorClient({
       generatedMediaAssets: remainingAssets,
       imageUrl: nextPrimary,
       additionalImageUrls: nextAdditional.join("\n"),
+    });
+    setGeneratedPreviewErrors((current) => {
+      const next = { ...current };
+      delete next[assetId];
+      return next;
     });
     setProductImageGenerationMessage("Generated media preview removed from this draft.");
   }
@@ -3009,6 +3186,70 @@ export default function ProductEditorClient({
                         />
                       </label>
 
+                      <div className="md:col-span-2 rounded-md border border-[#D9E4F0] bg-white p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-sm font-medium text-[#0F172A]">
+                            Reference images (optional)
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => referenceFileInputRef.current?.click()}
+                            className="rounded border border-[#0F172A] bg-white px-2 py-1 text-xs text-[#0F172A]"
+                          >
+                            Upload reference images
+                          </button>
+                          <input
+                            ref={referenceFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            multiple
+                            onChange={handleAttachReferenceImages}
+                            className="hidden"
+                            data-testid="ecomviper-generated-reference-input"
+                          />
+                        </div>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {generatedImageType === "supplement_facts"
+                            ? "Upload a bottle label or supplement-facts reference image for best results."
+                            : "Optional reference images can guide product appearance or scene style."}
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {generatedImageType === "supplement_facts"
+                            ? "If no upload is provided, EcomViper will try existing product media. Uploading a facts panel is more reliable."
+                            : "Lifestyle and hero generations can use references to keep packaging/brand identity aligned."}
+                        </p>
+                        {generatedReferenceMessage ? (
+                          <p className="mt-2 text-xs text-[#334155]">{generatedReferenceMessage}</p>
+                        ) : null}
+                        {generatedReferenceImages.length > 0 ? (
+                          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                            {generatedReferenceImages.map((reference) => (
+                              <article
+                                key={reference.id}
+                                className="rounded border border-[#E2E8F0] bg-[#F8FBFF] p-2"
+                              >
+                                <img
+                                  src={reference.dataUrl}
+                                  alt={`Reference preview ${reference.name}`}
+                                  className="h-20 w-full rounded border border-[#D9E4F0] bg-white object-cover"
+                                  loading="lazy"
+                                />
+                                <p className="mt-1 truncate text-[11px] text-[#334155]">
+                                  {reference.name}
+                                </p>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveReferenceImage(reference.id)}
+                                  className="mt-1 rounded border border-[#D9E4F0] bg-white px-2 py-1 text-[11px] text-[#334155]"
+                                >
+                                  Remove reference
+                                </button>
+                              </article>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+
                       <div className="md:col-span-2">
                         <button
                           type="button"
@@ -3042,10 +3283,11 @@ export default function ProductEditorClient({
                             className="rounded-lg border border-[#E2E8F0] bg-white p-2"
                           >
                             <img
-                              src={asset.url}
+                              src={asset.previewUrl || asset.url}
                               alt={`${formatGeneratedImageTypeLabel(asset.imageType)} preview`}
                               className="h-36 w-full rounded-md border border-[#D9E4F0] bg-[#F8FBFF] object-cover"
                               loading="lazy"
+                              onError={() => handleGeneratedPreviewLoadError(asset)}
                             />
                             <p className="mt-2 text-xs font-medium text-[#0F172A]">
                               {formatGeneratedImageTypeLabel(asset.imageType)}
@@ -3056,6 +3298,11 @@ export default function ProductEditorClient({
                             <p className="mt-1 break-all text-[11px] text-[#64748B]">
                               URL: {asset.url}
                             </p>
+                            {generatedPreviewErrors[asset.id] ? (
+                              <p className="mt-1 text-[11px] text-amber-700">
+                                {generatedPreviewErrors[asset.id]}
+                              </p>
+                            ) : null}
                             {asset.promptSummary ? (
                               <p className="mt-1 text-[11px] text-[#64748B]">
                                 Prompt: {asset.promptSummary}

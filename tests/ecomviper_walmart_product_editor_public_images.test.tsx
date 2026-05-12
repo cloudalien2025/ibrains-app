@@ -55,6 +55,14 @@ function setInputValue(element: HTMLInputElement, value: string) {
   element.dispatchEvent(new Event("change", { bubbles: true }));
 }
 
+function setFileInputFiles(element: HTMLInputElement, files: File[]) {
+  Object.defineProperty(element, "files", {
+    value: files,
+    configurable: true,
+  });
+  element.dispatchEvent(new Event("change", { bubbles: true }));
+}
+
 describe("Walmart product editor public listing image flow", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -134,6 +142,177 @@ describe("Walmart product editor public listing image flow", () => {
     );
   });
 
+  it("allows attaching and removing reference images before generation", async () => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+      onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+      readAsDataURL() {
+        this.result =
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJUb6f4AAAAASUVORK5CYII=";
+        this.onload?.call(this as unknown as FileReader, new ProgressEvent("load"));
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const fileInput = container.querySelector(
+      '[data-testid="ecomviper-generated-reference-input"]'
+    ) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    await act(async () => {
+      setFileInputFiles(
+        fileInput as HTMLInputElement,
+        [new File(["abc"], "supplement-label.png", { type: "image/png" })]
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("supplement-label.png");
+    const removeReferenceButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Remove reference"
+    ) as HTMLButtonElement | undefined;
+    expect(removeReferenceButton).toBeDefined();
+    await act(async () => {
+      removeReferenceButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).not.toContain("supplement-label.png");
+  });
+
+  it("sends uploaded reference images with generate request payload", async () => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+      onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+      readAsDataURL() {
+        this.result =
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJUb6f4AAAAASUVORK5CYII=";
+        this.onload?.call(this as unknown as FileReader, new ProgressEvent("load"));
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes("/api/ecomviper/walmart/ai/images/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              sku: "ROC808",
+              imageType: "supplement_facts",
+              generated: [
+                {
+                  id: "ev_wm_img_ref",
+                  url: "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_ref",
+                  previewUrl: "/api/ecomviper/walmart/generated-media/ev_wm_img_ref",
+                  source: "openai_generated",
+                  imageType: "supplement_facts",
+                  createdAt: "2026-05-10T00:00:00.000Z",
+                  approved: false,
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const imageTypeSelect = Array.from(container.querySelectorAll("select")).find((entry) =>
+      entry.parentElement?.textContent?.includes("Image type")
+    ) as HTMLSelectElement | undefined;
+    await act(async () => {
+      if (imageTypeSelect) {
+        imageTypeSelect.value = "supplement_facts";
+        imageTypeSelect.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+    });
+    await flush();
+
+    const fileInput = container.querySelector(
+      '[data-testid="ecomviper-generated-reference-input"]'
+    ) as HTMLInputElement | null;
+    await act(async () => {
+      setFileInputFiles(
+        fileInput as HTMLInputElement,
+        [new File(["abc"], "supplement-facts.png", { type: "image/png" })]
+      );
+    });
+    await flush();
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const call = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(String(call[1].body)) as {
+      referenceImages?: Array<{ source?: string; url?: string; mimeType?: string }>;
+      imageType?: string;
+    };
+    expect(body.imageType).toBe("supplement_facts");
+    expect(body.referenceImages?.length).toBe(1);
+    expect(body.referenceImages?.[0]?.source).toBe("uploaded");
+    expect(body.referenceImages?.[0]?.mimeType).toBe("image/png");
+    expect(String(body.referenceImages?.[0]?.url ?? "")).toContain("data:image/png;base64,");
+  });
+
   it("shows actionable OpenAI generation error message instead of generic HTTP 400", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url =
@@ -201,6 +380,80 @@ describe("Walmart product editor public listing image flow", () => {
     );
     expect(container.textContent).not.toContain("OpenAI image generation failed: HTTP 400.");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses relative preview URL when generated asset URL is localhost-style absolute", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/images/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              sku: "ROC808",
+              imageType: "lifestyle",
+              generated: [
+                {
+                  id: "ev_wm_img_localhost",
+                  url: "https://localhost:3001/api/ecomviper/walmart/generated-media/ev_wm_img_localhost",
+                  previewUrl: "/api/ecomviper/walmart/generated-media/ev_wm_img_localhost",
+                  source: "openai_generated",
+                  imageType: "lifestyle",
+                  createdAt: "2026-05-10T00:00:00.000Z",
+                  approved: false,
+                },
+              ],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const previewImage = Array.from(container.querySelectorAll("img")).find((img) =>
+      img.getAttribute("alt")?.includes("Lifestyle preview")
+    );
+    expect(previewImage?.getAttribute("src")).toBe(
+      "/api/ecomviper/walmart/generated-media/ev_wm_img_localhost"
+    );
   });
 
   it("generates image preview, approves to product media, and persists generated image metadata in draft", async () => {
