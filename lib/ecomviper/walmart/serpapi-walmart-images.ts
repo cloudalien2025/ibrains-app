@@ -96,6 +96,47 @@ export interface WalmartSearchCandidate {
   raw: Record<string, unknown>;
 }
 
+export interface SerpApiWalmartBrandSearchListing {
+  sourceQuery: string;
+  page: number;
+  rank: number;
+  title: string;
+  thumbnail: string;
+  productPageUrl: string;
+  usItemId: string;
+  productId: string;
+  upc: string;
+  sellerId: string;
+  sellerName: string;
+  brand: string;
+  manufacturer: string;
+  raw: Record<string, unknown>;
+}
+
+export interface SerpApiWalmartBrandSearchHarvestResult {
+  ok: boolean;
+  statusCategory: SerpApiStatusCategory;
+  errorCode?: SerpApiResolveErrorCode;
+  statusReason: string;
+  query: string;
+  pagesFetched: number;
+  resultsHarvested: number;
+  listings: SerpApiWalmartBrandSearchListing[];
+}
+
+export interface SerpApiWalmartBrandSearchMatchResult {
+  status: "matched" | "ambiguous" | "no_confident_match";
+  confidence: "high" | "medium" | "low";
+  score: number;
+  matchedListing: SerpApiWalmartBrandSearchListing | null;
+  runnerUpListing: SerpApiWalmartBrandSearchListing | null;
+  runnerUpScore: number;
+  titleCoverage: number;
+  titleJaccard: number;
+  keyTokenOverlap: number;
+  exactTitle: boolean;
+}
+
 interface SerpApiProductImageResult {
   ok: boolean;
   statusCategory: SerpApiStatusCategory;
@@ -111,7 +152,10 @@ interface SerpApiProductImageResult {
 }
 
 function asString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "bigint") return value.toString();
+  return "";
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {
@@ -620,6 +664,9 @@ async function fetchSerpApiJson(params: {
   endpointFamily: SerpApiEndpointFamily;
   productId?: string;
   query?: string;
+  page?: number;
+  walmartDomain?: string;
+  device?: string;
 }): Promise<{
   ok: boolean;
   statusCategory: SerpApiStatusCategory;
@@ -636,6 +683,11 @@ async function fetchSerpApiJson(params: {
   } else {
     url.searchParams.set("engine", "walmart");
     url.searchParams.set("query", params.query ?? "");
+    url.searchParams.set("walmart_domain", params.walmartDomain ?? "walmart.com");
+    url.searchParams.set("device", params.device ?? "desktop");
+    if (typeof params.page === "number" && Number.isFinite(params.page) && params.page > 0) {
+      url.searchParams.set("page", String(Math.trunc(params.page)));
+    }
   }
 
   for (let attempt = 0; attempt <= SERPAPI_RETRY_BACKOFF_MS.length; attempt += 1) {
@@ -851,6 +903,265 @@ function extractSerpApiSearchCandidates(payload: unknown): WalmartSearchCandidat
   });
 }
 
+function normalizeSerpApiSearchProductId(value: unknown): string {
+  const candidate = asString(value);
+  if (!candidate) return "";
+  const normalized = candidate.replace(/[^0-9a-z_-]/gi, "");
+  return normalized.length >= 3 ? normalized : "";
+}
+
+function extractSerpApiBrandSearchListings(
+  payload: unknown,
+  context: { sourceQuery: string; page: number }
+): SerpApiWalmartBrandSearchListing[] {
+  const root = asObject(payload) ?? {};
+  const featuredItem = asObject(root.featured_item);
+  const organicResults = asObjectArray(root.organic_results);
+  const rows: Array<{ row: Record<string, unknown>; rank: number }> = [];
+
+  if (featuredItem) {
+    rows.push({ row: featuredItem, rank: 0 });
+  }
+  organicResults.forEach((row, index) => {
+    rows.push({ row, rank: index + 1 });
+  });
+
+  const uniqueListings = new Map<string, SerpApiWalmartBrandSearchListing>();
+
+  for (const { row, rank } of rows) {
+    const rowProduct = asObject(row.product);
+    const primaryOffer = asObject(row.primary_offer);
+    const identifierNode = asObject(row.identifiers);
+    const title = firstNonEmptyString(row.title, row.name, rowProduct?.title, rowProduct?.name);
+
+    const usItemIdRaw = firstNonEmptyString(
+      row.us_item_id,
+      row.usItemId,
+      row.item_id,
+      row.itemId,
+      rowProduct?.us_item_id,
+      rowProduct?.usItemId,
+      rowProduct?.item_id,
+      rowProduct?.itemId,
+      primaryOffer?.us_item_id,
+      primaryOffer?.item_id
+    );
+    const usItemId = normalizeWalmartPublicProductId(usItemIdRaw);
+    const productId = normalizeSerpApiSearchProductId(
+      firstNonEmptyString(
+        row.product_id,
+        row.productId,
+        rowProduct?.product_id,
+        rowProduct?.productId,
+        primaryOffer?.product_id
+      )
+    );
+    const rawProductPageUrl = sanitizePublicWalmartUrl(
+      firstNonEmptyString(
+        row.product_page_url,
+        row.productPageUrl,
+        row.product_url,
+        row.productUrl,
+        row.link,
+        row.url,
+        rowProduct?.product_page_url,
+        rowProduct?.productPageUrl,
+        rowProduct?.product_url,
+        rowProduct?.productUrl
+      )
+    );
+    const extractedIdFromUrl = rawProductPageUrl
+      ? extractWalmartPublicProductIdFromUrl(rawProductPageUrl) ?? ""
+      : "";
+    const resolvedUsItemId = usItemId || extractedIdFromUrl;
+    const productPageUrl =
+      rawProductPageUrl || (resolvedUsItemId ? derivePublicWalmartUrl(resolvedUsItemId) : "");
+
+    if (!resolvedUsItemId && !productId && !productPageUrl) {
+      continue;
+    }
+
+    const thumbnail = normalizeImageUrl(
+      firstNonEmptyString(
+        row.thumbnail,
+        row.image,
+        row.image_url,
+        row.imageUrl,
+        row.primary_image,
+        row.primaryImage,
+        rowProduct?.thumbnail,
+        rowProduct?.image,
+        rowProduct?.image_url,
+        rowProduct?.imageUrl
+      )
+    );
+
+    const listing: SerpApiWalmartBrandSearchListing = {
+      sourceQuery: context.sourceQuery,
+      page: context.page,
+      rank,
+      title,
+      thumbnail,
+      productPageUrl,
+      usItemId: resolvedUsItemId,
+      productId,
+      upc: normalizeIdentifier(
+        firstNonEmptyString(
+          row.upc,
+          row.gtin,
+          identifierNode?.upc,
+          identifierNode?.gtin,
+          rowProduct?.upc,
+          rowProduct?.gtin
+        )
+      ),
+      sellerId: firstNonEmptyString(
+        row.seller_id,
+        row.sellerId,
+        primaryOffer?.seller_id,
+        primaryOffer?.sellerId
+      ),
+      sellerName: firstNonEmptyString(
+        row.seller_name,
+        row.sellerName,
+        primaryOffer?.seller_name,
+        primaryOffer?.sellerName
+      ),
+      brand: firstNonEmptyString(row.brand, row.brand_name, rowProduct?.brand, rowProduct?.brand_name),
+      manufacturer: firstNonEmptyString(
+        row.manufacturer,
+        row.manufacturer_name,
+        rowProduct?.manufacturer,
+        rowProduct?.manufacturer_name
+      ),
+      raw: row,
+    };
+
+    const key = listing.usItemId || listing.productId || listing.productPageUrl;
+    if (!key || uniqueListings.has(key)) continue;
+    uniqueListings.set(key, listing);
+  }
+
+  return Array.from(uniqueListings.values());
+}
+
+function normalizeMatchText(value: string): string {
+  return asString(value)
+    .toLowerCase()
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function tokenizeMatchText(value: string): string[] {
+  return normalizeMatchText(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length > 1);
+}
+
+function listingLikelyMatchesBrandQuery(
+  listing: SerpApiWalmartBrandSearchListing,
+  queryTokens: string[]
+): boolean {
+  if (queryTokens.length === 0) return true;
+  const haystack = normalizeMatchText(
+    `${listing.title} ${listing.brand} ${listing.manufacturer} ${listing.sellerName}`
+  );
+  const matches = queryTokens.filter((token) => haystack.includes(token));
+  if (queryTokens.includes("opa")) {
+    return matches.includes("opa");
+  }
+  return matches.length >= Math.min(2, queryTokens.length);
+}
+
+export async function harvestWalmartBrandSearchListingsViaSerpApi(input: {
+  apiKey: string;
+  query: string;
+  maxPages?: number;
+  maxResults?: number;
+}): Promise<SerpApiWalmartBrandSearchHarvestResult> {
+  const query = asString(input.query);
+  if (!query) {
+    return {
+      ok: false,
+      statusCategory: "validation_error",
+      errorCode: "SERPAPI_BAD_REQUEST",
+      statusReason: "Brand search query is required.",
+      query: "",
+      pagesFetched: 0,
+      resultsHarvested: 0,
+      listings: [],
+    };
+  }
+
+  const maxPages = Math.max(1, Math.min(6, input.maxPages ?? 3));
+  const maxResults = Math.max(1, Math.min(300, input.maxResults ?? 120));
+  const queryTokens = tokenizeMatchText(query).filter((token) => token.length > 2);
+  const collected = new Map<string, SerpApiWalmartBrandSearchListing>();
+  let pagesFetched = 0;
+
+  for (let page = 1; page <= maxPages && collected.size < maxResults; page += 1) {
+    const response = await fetchSerpApiJson({
+      apiKey: input.apiKey,
+      endpointFamily: "walmart_search",
+      query,
+      page,
+      walmartDomain: "walmart.com",
+      device: "desktop",
+    });
+
+    if (!response.ok) {
+      return {
+        ok: false,
+        statusCategory: response.statusCategory,
+        errorCode: response.errorCode,
+        statusReason: response.statusReason ?? "SerpApi brand search failed.",
+        query,
+        pagesFetched,
+        resultsHarvested: collected.size,
+        listings: Array.from(collected.values()),
+      };
+    }
+
+    const pageListings = extractSerpApiBrandSearchListings(response.payload, {
+      sourceQuery: query,
+      page,
+    });
+    pagesFetched = page;
+    if (pageListings.length === 0) break;
+
+    for (const listing of pageListings) {
+      if (collected.size >= maxResults) break;
+      const key = listing.usItemId || listing.productId || listing.productPageUrl;
+      if (!key || collected.has(key)) continue;
+      collected.set(key, listing);
+    }
+
+    const hasPlausibleListings = pageListings.some((listing) =>
+      listingLikelyMatchesBrandQuery(listing, queryTokens)
+    );
+    if (page > 1 && !hasPlausibleListings) {
+      break;
+    }
+  }
+
+  const listings = Array.from(collected.values());
+  return {
+    ok: true,
+    statusCategory: listings.length > 0 ? "ok" : "not_found",
+    statusReason:
+      listings.length > 0
+        ? `Harvested ${listings.length} brand-search public listing candidate(s).`
+        : "No brand-search public listing candidates found.",
+    query,
+    pagesFetched,
+    resultsHarvested: listings.length,
+    listings,
+  };
+}
+
 function normalizeCandidateScore(candidate: WalmartSearchCandidate, product: WalmartProductRecord): {
   score: number;
   titleCoverage: number;
@@ -888,6 +1199,234 @@ function tokenizeText(value: string): string[] {
     .split(/[^a-z0-9]+/)
     .map((token) => token.trim())
     .filter((token) => token.length > 1);
+}
+
+const BRAND_SEARCH_TITLE_NOISE_TOKENS = new Set([
+  "supplement",
+  "supplements",
+  "capsule",
+  "capsules",
+  "tablet",
+  "tablets",
+  "gummy",
+  "gummies",
+  "daily",
+  "wellness",
+  "support",
+  "count",
+  "ct",
+]);
+const BRAND_SEARCH_PRODUCT_SIGNAL_TOKENS = new Set([
+  "magnesium",
+  "glycinate",
+  "sleep",
+  "joint",
+  "flex",
+  "turmeric",
+  "rhino",
+  "prostate",
+  "inositol",
+  "berberine",
+  "coffee",
+  "green",
+  "cortisol",
+  "focus",
+]);
+
+function isBrandSearchNoiseToken(token: string): boolean {
+  if (BRAND_SEARCH_TITLE_NOISE_TOKENS.has(token)) return true;
+  if (/^\d+(ct|count)$/i.test(token)) return true;
+  if (/^\d+$/.test(token)) return true;
+  return false;
+}
+
+function titleTokensForBrandSearchMatching(value: string): string[] {
+  return tokenizeMatchText(value).filter((token) => !isBrandSearchNoiseToken(token));
+}
+
+function brandSearchCompositeText(listing: SerpApiWalmartBrandSearchListing): string {
+  return normalizeMatchText(
+    `${listing.title} ${listing.brand} ${listing.manufacturer} ${listing.sellerName}`
+  );
+}
+
+function scoreBrandSearchListingMatch(input: {
+  product: WalmartProductRecord;
+  listing: SerpApiWalmartBrandSearchListing;
+  sourceQuery: string;
+}): {
+  score: number;
+  confidence: "high" | "medium" | "low";
+  titleCoverage: number;
+  titleJaccard: number;
+  keyTokenOverlap: number;
+  exactTitle: boolean;
+} {
+  const productTokens = titleTokensForBrandSearchMatching(input.product.title);
+  const listingTokens = titleTokensForBrandSearchMatching(input.listing.title);
+  const listingTokenSet = new Set(listingTokens);
+  const overlapTokens = Array.from(new Set(productTokens.filter((token) => listingTokenSet.has(token))));
+  const titleCoverage = productTokens.length > 0 ? overlapTokens.length / productTokens.length : 0;
+  const unionCount = new Set([...productTokens, ...listingTokens]).size;
+  const titleJaccard = unionCount > 0 ? overlapTokens.length / unionCount : 0;
+  const keyTokenOverlap = overlapTokens.filter((token) =>
+    BRAND_SEARCH_PRODUCT_SIGNAL_TOKENS.has(token)
+  ).length;
+  const exactTitle = normalizeMatchText(input.product.title) === normalizeMatchText(input.listing.title);
+
+  const listingComposite = brandSearchCompositeText(input.listing);
+  const productBrandTokens = tokenizeBrand(input.product.brand);
+  const queryBrandTokens = tokenizeBrand(input.sourceQuery);
+  const requiredBrandTokens = new Set([...productBrandTokens, ...queryBrandTokens]);
+  const requiresOpaSignal = requiredBrandTokens.has("opa");
+  const hasOpaSignal = listingComposite.includes("opa");
+  const brandTokenOverlap = Array.from(requiredBrandTokens.values()).filter((token) =>
+    listingComposite.includes(token)
+  ).length;
+  const brandSignal = requiresOpaSignal ? hasOpaSignal : brandTokenOverlap > 0;
+  const sellerSignal = normalizeMatchText(input.listing.sellerName).includes("opa");
+
+  const productBarcode = normalizeIdentifier(
+    firstNonEmptyString(input.product.upc, input.product.gtin)
+  );
+  const listingBarcode = normalizeIdentifier(input.listing.upc);
+  const upcMatch = Boolean(productBarcode && listingBarcode && productBarcode === listingBarcode);
+
+  let score = Math.round(titleCoverage * 70 + titleJaccard * 20);
+  if (exactTitle) score += 30;
+  if (brandSignal) score += 18;
+  if (sellerSignal) score += 8;
+  if (upcMatch) score += 24;
+  if (keyTokenOverlap > 0) score += Math.min(14, keyTokenOverlap * 5);
+  if (input.listing.thumbnail) score += 4;
+
+  let confidence: "high" | "medium" | "low" = "low";
+  if (
+    (exactTitle && brandSignal) ||
+    (upcMatch && brandSignal && titleCoverage >= 0.55) ||
+    (brandSignal && titleCoverage >= 0.74 && keyTokenOverlap >= 2 && score >= 78)
+  ) {
+    confidence = "high";
+  } else if (
+    brandSignal &&
+    titleCoverage >= 0.58 &&
+    (keyTokenOverlap >= 1 || exactTitle || titleJaccard >= 0.45)
+  ) {
+    confidence = "medium";
+  }
+
+  return {
+    score,
+    confidence,
+    titleCoverage,
+    titleJaccard,
+    keyTokenOverlap,
+    exactTitle,
+  };
+}
+
+export function matchImportedWalmartProductToBrandSearchListings(input: {
+  product: WalmartProductRecord;
+  listings: SerpApiWalmartBrandSearchListing[];
+  sourceQuery: string;
+}): SerpApiWalmartBrandSearchMatchResult {
+  const listings = Array.isArray(input.listings) ? input.listings : [];
+  if (listings.length === 0) {
+    return {
+      status: "no_confident_match",
+      confidence: "low",
+      score: 0,
+      matchedListing: null,
+      runnerUpListing: null,
+      runnerUpScore: 0,
+      titleCoverage: 0,
+      titleJaccard: 0,
+      keyTokenOverlap: 0,
+      exactTitle: false,
+    };
+  }
+
+  const scored = listings
+    .map((listing) => {
+      const score = scoreBrandSearchListingMatch({
+        product: input.product,
+        listing,
+        sourceQuery: input.sourceQuery,
+      });
+      return {
+        listing,
+        ...score,
+      };
+    })
+    .filter((entry) => entry.confidence !== "low" || entry.exactTitle)
+    .sort((left, right) => right.score - left.score);
+
+  if (scored.length === 0) {
+    return {
+      status: "no_confident_match",
+      confidence: "low",
+      score: 0,
+      matchedListing: null,
+      runnerUpListing: null,
+      runnerUpScore: 0,
+      titleCoverage: 0,
+      titleJaccard: 0,
+      keyTokenOverlap: 0,
+      exactTitle: false,
+    };
+  }
+
+  const top = scored[0]!;
+  const runnerUp = scored[1] ?? null;
+
+  if (top.confidence !== "high") {
+    return {
+      status: "no_confident_match",
+      confidence: top.confidence,
+      score: top.score,
+      matchedListing: null,
+      runnerUpListing: runnerUp?.listing ?? null,
+      runnerUpScore: runnerUp?.score ?? 0,
+      titleCoverage: top.titleCoverage,
+      titleJaccard: top.titleJaccard,
+      keyTokenOverlap: top.keyTokenOverlap,
+      exactTitle: top.exactTitle,
+    };
+  }
+
+  if (runnerUp) {
+    const delta = top.score - runnerUp.score;
+    const highAmbiguous = runnerUp.confidence === "high" && delta < 10;
+    const mediumAmbiguous =
+      runnerUp.confidence === "medium" && delta < 6 && runnerUp.titleCoverage >= 0.68;
+    if (highAmbiguous || mediumAmbiguous) {
+      return {
+        status: "ambiguous",
+        confidence: top.confidence,
+        score: top.score,
+        matchedListing: top.listing,
+        runnerUpListing: runnerUp.listing,
+        runnerUpScore: runnerUp.score,
+        titleCoverage: top.titleCoverage,
+        titleJaccard: top.titleJaccard,
+        keyTokenOverlap: top.keyTokenOverlap,
+        exactTitle: top.exactTitle,
+      };
+    }
+  }
+
+  return {
+    status: "matched",
+    confidence: "high",
+    score: top.score,
+    matchedListing: top.listing,
+    runnerUpListing: runnerUp?.listing ?? null,
+    runnerUpScore: runnerUp?.score ?? 0,
+    titleCoverage: top.titleCoverage,
+    titleJaccard: top.titleJaccard,
+    keyTokenOverlap: top.keyTokenOverlap,
+    exactTitle: top.exactTitle,
+  };
 }
 
 const BRAND_STOPWORDS = new Set(["inc", "llc", "co", "company", "corp", "corporation", "ltd", "the"]);
@@ -1681,10 +2220,13 @@ export const serpApiWalmartImageInternals = {
   normalizeWalmartPublicProductId,
   normalizeSerpApiWalmartImages,
   extractSerpApiSearchCandidates,
+  extractSerpApiBrandSearchListings,
   sanitizeSerpApiErrorDetail,
   extractSerpApiErrorDetail,
   normalizeIdentifier,
+  normalizeMatchText,
   firstMatchedCandidateByTitleBrand,
+  matchImportedWalmartProductToBrandSearchListings,
   normalizeCandidateScore,
   tokenizeText,
   isLikelyBrandEquivalent,

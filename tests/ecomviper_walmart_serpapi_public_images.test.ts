@@ -6,6 +6,8 @@ import {
   enrichProductImagesFromPublicWalmartListing,
   extractWalmartPublicProductIdFromUrl,
   fetchWalmartProductImagesViaSerpApi,
+  harvestWalmartBrandSearchListingsViaSerpApi,
+  matchImportedWalmartProductToBrandSearchListings,
   normalizeSerpApiWalmartImages,
   serpApiWalmartImageInternals,
 } from "@/lib/ecomviper/walmart/serpapi-walmart-images";
@@ -244,6 +246,86 @@ describe("Walmart SerpApi public listing images", () => {
     expect(normalized.galleryImageUrls.length).toBeGreaterThan(0);
     expect(new Set(normalized.galleryImageUrls).size).toBe(normalized.galleryImageUrls.length);
     expect(normalized.galleryImageUrls.every((url) => url.startsWith("https://"))).toBe(true);
+  });
+
+  it("harvests Walmart brand-search listings from organic_results and featured_item", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          featured_item: {
+            title: "OPA Sleep Magnesium Glycinate Capsules 60ct",
+            thumbnail: "https://i5.walmartimages.com/asr/featured.jpg",
+            us_item_id: "18410702298",
+            product_id: "X1Y2Z3",
+            seller_name: "OPA Nutrition",
+          },
+          organic_results: [
+            {
+              title: "OPA Joint Flex Turmeric Capsules 60ct",
+              thumbnail: "https://i5.walmartimages.com/asr/joint.jpg",
+              us_item_id: "18410703333",
+              product_id: "Q4W5E6",
+              product_page_url: "https://www.walmart.com/ip/18410703333",
+              seller_name: "OPA Nutrition",
+            },
+            {
+              title: "OPA Rhino Support Capsules 60ct",
+              thumbnail: "https://i5.walmartimages.com/asr/rhino.jpg",
+              us_item_id: "18410704444",
+              product_id: "R7T8Y9",
+              link: "https://www.walmart.com/ip/18410704444",
+              seller_name: "OPA Nutrition",
+            },
+          ],
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const result = await harvestWalmartBrandSearchListingsViaSerpApi({
+      apiKey: "serpapi_test_key",
+      query: "OPA Nutrition",
+      maxPages: 1,
+      maxResults: 120,
+    });
+
+    expect(result.ok).toBe(true);
+    expect(result.resultsHarvested).toBe(3);
+    expect(result.listings[0]?.usItemId).toBe("18410702298");
+    expect(result.listings[0]?.sourceQuery).toBe("OPA Nutrition");
+    expect(result.listings[0]?.page).toBe(1);
+    expect(result.listings[1]?.productPageUrl).toContain("/18410703333");
+  });
+
+  it("matches exact OPA title with high confidence from brand-search listings", () => {
+    const product = createProduct();
+    const listing = {
+      sourceQuery: "OPA Nutrition",
+      page: 1,
+      rank: 1,
+      title: "OPA Sleep Magnesium Glycinate Relaxation Gummies 60ct",
+      thumbnail: "https://i5.walmartimages.com/asr/opa-match.jpg",
+      productPageUrl:
+        "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate-Relaxation-Gummies-60ct/18410702298",
+      usItemId: "18410702298",
+      productId: "P12345",
+      upc: "123456789012",
+      sellerId: "401",
+      sellerName: "OPA Nutrition",
+      brand: "OPA Nutrition",
+      manufacturer: "OPA Nutrition",
+      raw: {},
+    };
+
+    const matched = matchImportedWalmartProductToBrandSearchListings({
+      product,
+      listings: [listing],
+      sourceQuery: "OPA Nutrition",
+    });
+
+    expect(matched.status).toBe("matched");
+    expect(matched.confidence).toBe("high");
+    expect(matched.matchedListing?.usItemId).toBe("18410702298");
   });
 
   it("calls SerpApi Walmart Product API with engine/product_id and captures gallery metadata", async () => {

@@ -98,6 +98,10 @@ describe("Walmart import progress UI", () => {
               imageFromImportPayloadCount: 1,
               imageEnrichedCount: 0,
               imageFromWalmartSearchCount: 0,
+              imageFromSerpApiBrandSearchThumbnailCount: 1,
+              publicListingsDiscoveredViaSerpApiBrandSearchCount: 1,
+              serpApiBrandSearchAmbiguousCount: 1,
+              serpApiBrandSearchNoConfidentMatchCount: 2,
               imageFromSerpApiFallbackCount: 0,
               imageFromSerpApiProductGalleryCount: 0,
               imageFromSerpApiSearchFallbackCount: 0,
@@ -126,6 +130,10 @@ describe("Walmart import progress UI", () => {
             imageFromImportPayloadCount: 1,
             imageEnrichedCount: 0,
             imageFromWalmartSearchCount: 0,
+            imageFromSerpApiBrandSearchThumbnailCount: 1,
+            publicListingsDiscoveredViaSerpApiBrandSearchCount: 1,
+            serpApiBrandSearchAmbiguousCount: 1,
+            serpApiBrandSearchNoConfidentMatchCount: 2,
             imageFromSerpApiFallbackCount: 0,
             imageFromSerpApiProductGalleryCount: 0,
             imageFromSerpApiSearchFallbackCount: 0,
@@ -160,6 +168,8 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Images from import payload: 1");
     expect(container.textContent).toContain("Resolved via Walmart Item Search: 0");
     expect(container.textContent).toContain("Images from Walmart Item Search: 0");
+    expect(container.textContent).toContain("Images from SerpApi brand-search thumbnails: 1");
+    expect(container.textContent).toContain("Public listings discovered via brand search: 1");
     expect(container.textContent).toContain("Images from SerpApi product gallery: 0");
     expect(container.textContent).toContain("Images from SerpApi search fallback: 0");
     expect(container.textContent).toContain("Images from SerpApi fallback: 0");
@@ -168,6 +178,8 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Failed (provider/request): 0");
     expect(container.textContent).toContain("Missing/not found: 2");
     expect(container.textContent).toContain("Not found: 1");
+    expect(container.textContent).toContain("Brand-search ambiguous matches: 1");
+    expect(container.textContent).toContain("Skipped (no confident brand-search match): 2");
     expect(container.textContent).toContain("Walmart Item Search not found: 1");
     expect(container.textContent).toContain("Skipped (SerpApi not connected): 1");
     expect(container.textContent).toContain("SerpApi: Not connected");

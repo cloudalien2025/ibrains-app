@@ -158,6 +158,10 @@ interface ImportPanelState {
   enrichedCount: number;
   walmartSearchResolvedCount: number;
   walmartSearchImageFoundCount: number;
+  serpApiBrandSearchThumbnailImageFoundCount: number;
+  serpApiBrandSearchPublicListingMatchedCount: number;
+  serpApiBrandSearchAmbiguousCount: number;
+  serpApiBrandSearchNoConfidentMatchCount: number;
   serpApiFallbackImageFoundCount: number;
   serpApiProductGalleryImageFoundCount: number;
   serpApiSearchFallbackImageFoundCount: number;
@@ -246,6 +250,7 @@ const ALLOWED_IMAGE_SOURCES = new Set<NonNullable<WalmartEffectiveProductRecord[
   "walmart_item_report",
   "walmart_catalog",
   "walmart_item_search",
+  "serpapi_walmart_brand_search",
   "public_walmart_listing_serpapi",
   "manual",
   "shopify_placeholder",
@@ -294,12 +299,16 @@ function formatImageStatus(product: WalmartEffectiveProductRecord): string {
   }
   if (product.imageSyncStatus === "not_found") {
     if (product.imageSource === "walmart_item_report") return "No matching row found in Walmart Item Report.";
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "No confident public listing match from SerpApi brand search.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "No safe public Walmart image match found.";
     if (product.imageSource === "manual") return "Manual image URL not provided.";
     return "Item Search returned no usable image.";
   }
   if (product.imageSyncStatus === "ambiguous") {
+    if (product.imageSource === "serpapi_walmart_brand_search")
+      return "SerpApi brand-search listing match is ambiguous.";
     if (product.imageSource === "public_walmart_listing_serpapi")
       return "Public Walmart listing image match is ambiguous.";
     return "Multiple Walmart Item Search candidates matched this product.";
@@ -324,6 +333,8 @@ function formatImageSource(product: WalmartEffectiveProductRecord): string {
   if (product.imageSource === "walmart_item_report") return "Walmart Item Report";
   if (product.imageSource === "walmart_catalog") return "Walmart Seller Catalog Search";
   if (product.imageSource === "walmart_item_search") return "Walmart Item Search";
+  if (product.imageSource === "serpapi_walmart_brand_search")
+    return "SerpApi Walmart brand search";
   if (product.imageSource === "public_walmart_listing_serpapi")
     return "Public Walmart listing via SerpApi";
   if (product.imageSource === "manual") return "Manual image URL";
@@ -409,6 +420,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     imageFromImportPayloadCount: number;
     imageEnrichedCount: number;
     imageFromWalmartSearchCount: number;
+    imageFromSerpApiBrandSearchThumbnailCount: number;
+    publicListingsDiscoveredViaSerpApiBrandSearchCount: number;
+    serpApiBrandSearchAmbiguousCount: number;
+    serpApiBrandSearchNoConfidentMatchCount: number;
     imageFromSerpApiFallbackCount: number;
     imageFromSerpApiProductGalleryCount: number;
     imageFromSerpApiSearchFallbackCount: number;
@@ -511,6 +526,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       enrichedCount: 0,
       walmartSearchResolvedCount: 0,
       walmartSearchImageFoundCount: 0,
+      serpApiBrandSearchThumbnailImageFoundCount: 0,
+      serpApiBrandSearchPublicListingMatchedCount: 0,
+      serpApiBrandSearchAmbiguousCount: 0,
+      serpApiBrandSearchNoConfidentMatchCount: 0,
       serpApiFallbackImageFoundCount: 0,
       serpApiProductGalleryImageFoundCount: 0,
       serpApiSearchFallbackImageFoundCount: 0,
@@ -652,6 +671,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             imageFromImportPayloadCount?: number;
             imageEnrichedCount?: number;
             imageFromWalmartSearchCount?: number;
+            imageFromSerpApiBrandSearchThumbnailCount?: number;
+            publicListingsDiscoveredViaSerpApiBrandSearchCount?: number;
+            serpApiBrandSearchAmbiguousCount?: number;
+            serpApiBrandSearchNoConfidentMatchCount?: number;
             imageFromSerpApiFallbackCount?: number;
             imageFromSerpApiProductGalleryCount?: number;
             imageFromSerpApiSearchFallbackCount?: number;
@@ -672,6 +695,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           imageFromImportPayloadCount?: number;
           imageEnrichedCount?: number;
           imageFromWalmartSearchCount?: number;
+          imageFromSerpApiBrandSearchThumbnailCount?: number;
+          publicListingsDiscoveredViaSerpApiBrandSearchCount?: number;
+          serpApiBrandSearchAmbiguousCount?: number;
+          serpApiBrandSearchNoConfidentMatchCount?: number;
           imageFromSerpApiFallbackCount?: number;
           imageFromSerpApiProductGalleryCount?: number;
           imageFromSerpApiSearchFallbackCount?: number;
@@ -702,6 +729,14 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           imageEnrichmentBounded?: boolean;
           imageEnrichmentImportLimit?: number | null;
           imageEnrichmentDeferredCount?: number;
+          serpApiBrandSearchDiagnostics?: {
+            serpapi_brand_search_checked?: number;
+            serpapi_brand_search_results_harvested?: number;
+            serpapi_brand_search_public_listing_matched?: number;
+            serpapi_brand_search_thumbnail_saved?: number;
+            serpapi_brand_search_ambiguous?: number;
+            serpapi_brand_search_no_confident_match?: number;
+          };
         };
         error?: { message?: string };
       };
@@ -740,6 +775,13 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           enrichedCount: totals?.imageEnrichedCount ?? 0,
           walmartSearchResolvedCount: totals?.imageFromWalmartSearchCount ?? 0,
           walmartSearchImageFoundCount: totals?.imageFromWalmartSearchCount ?? 0,
+          serpApiBrandSearchThumbnailImageFoundCount:
+            totals?.imageFromSerpApiBrandSearchThumbnailCount ?? 0,
+          serpApiBrandSearchPublicListingMatchedCount:
+            totals?.publicListingsDiscoveredViaSerpApiBrandSearchCount ?? 0,
+          serpApiBrandSearchAmbiguousCount: totals?.serpApiBrandSearchAmbiguousCount ?? 0,
+          serpApiBrandSearchNoConfidentMatchCount:
+            totals?.serpApiBrandSearchNoConfidentMatchCount ?? 0,
           serpApiFallbackImageFoundCount: totals?.imageFromSerpApiFallbackCount ?? 0,
           serpApiProductGalleryImageFoundCount:
             totals?.imageFromSerpApiProductGalleryCount ?? 0,
@@ -787,6 +829,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         totals?.imageFromImportPayloadCount !== undefined ||
         totals?.imageEnrichedCount !== undefined ||
         totals?.imageFromWalmartSearchCount !== undefined ||
+        totals?.imageFromSerpApiBrandSearchThumbnailCount !== undefined ||
+        totals?.publicListingsDiscoveredViaSerpApiBrandSearchCount !== undefined ||
+        totals?.serpApiBrandSearchAmbiguousCount !== undefined ||
+        totals?.serpApiBrandSearchNoConfidentMatchCount !== undefined ||
         totals?.imageFromSerpApiFallbackCount !== undefined ||
         totals?.imageFromSerpApiProductGalleryCount !== undefined ||
         totals?.imageFromSerpApiSearchFallbackCount !== undefined ||
@@ -799,6 +845,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         payload.importDiagnostics?.imageFromImportPayloadCount !== undefined ||
         payload.importDiagnostics?.imageEnrichedCount !== undefined ||
         payload.importDiagnostics?.imageFromWalmartSearchCount !== undefined ||
+        payload.importDiagnostics?.imageFromSerpApiBrandSearchThumbnailCount !== undefined ||
+        payload.importDiagnostics?.publicListingsDiscoveredViaSerpApiBrandSearchCount !== undefined ||
+        payload.importDiagnostics?.serpApiBrandSearchAmbiguousCount !== undefined ||
+        payload.importDiagnostics?.serpApiBrandSearchNoConfidentMatchCount !== undefined ||
         payload.importDiagnostics?.imageFromSerpApiFallbackCount !== undefined ||
         payload.importDiagnostics?.imageFromSerpApiProductGalleryCount !== undefined ||
         payload.importDiagnostics?.imageFromSerpApiSearchFallbackCount !== undefined ||
@@ -819,6 +869,26 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       const imageFromWalmartSearchCount =
         totals?.imageFromWalmartSearchCount ??
         payload.importDiagnostics?.imageFromWalmartSearchCount ??
+        0;
+      const imageFromSerpApiBrandSearchThumbnailCount =
+        totals?.imageFromSerpApiBrandSearchThumbnailCount ??
+        payload.importDiagnostics?.imageFromSerpApiBrandSearchThumbnailCount ??
+        0;
+      const publicListingsDiscoveredViaSerpApiBrandSearchCount =
+        totals?.publicListingsDiscoveredViaSerpApiBrandSearchCount ??
+        payload.importDiagnostics?.publicListingsDiscoveredViaSerpApiBrandSearchCount ??
+        payload.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_public_listing_matched ??
+        0;
+      const serpApiBrandSearchAmbiguousCount =
+        totals?.serpApiBrandSearchAmbiguousCount ??
+        payload.importDiagnostics?.serpApiBrandSearchAmbiguousCount ??
+        payload.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_ambiguous ??
+        0;
+      const serpApiBrandSearchNoConfidentMatchCount =
+        totals?.serpApiBrandSearchNoConfidentMatchCount ??
+        payload.importDiagnostics?.serpApiBrandSearchNoConfidentMatchCount ??
+        payload.importDiagnostics?.serpApiBrandSearchDiagnostics
+          ?.serpapi_brand_search_no_confident_match ??
         0;
       const imageFromSerpApiProductGalleryCount =
         totals?.imageFromSerpApiProductGalleryCount ??
@@ -888,12 +958,16 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         imageFailedCount > 0
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${imageFromSerpApiSearchFallbackCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${imageFromSerpApiBrandSearchThumbnailCount}. Public listings discovered via brand search: ${publicListingsDiscoveredViaSerpApiBrandSearchCount}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${serpApiBrandSearchNoConfidentMatchCount}. Still missing images: ${imageStillMissingCount}. Provider failures: ${imageFailedCount}.`;
 
       setLastImportDiagnostics({
         imageFromImportPayloadCount,
         imageEnrichedCount,
         imageFromWalmartSearchCount,
+        imageFromSerpApiBrandSearchThumbnailCount,
+        publicListingsDiscoveredViaSerpApiBrandSearchCount,
+        serpApiBrandSearchAmbiguousCount,
+        serpApiBrandSearchNoConfidentMatchCount,
         imageFromSerpApiFallbackCount,
         imageFromSerpApiProductGalleryCount,
         imageFromSerpApiSearchFallbackCount,
@@ -920,6 +994,17 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           totals?.imageFromWalmartSearchCount ?? imageFromWalmartSearchCount,
         walmartSearchImageFoundCount:
           totals?.imageFromWalmartSearchCount ?? imageFromWalmartSearchCount,
+        serpApiBrandSearchThumbnailImageFoundCount:
+          totals?.imageFromSerpApiBrandSearchThumbnailCount ??
+          imageFromSerpApiBrandSearchThumbnailCount,
+        serpApiBrandSearchPublicListingMatchedCount:
+          totals?.publicListingsDiscoveredViaSerpApiBrandSearchCount ??
+          publicListingsDiscoveredViaSerpApiBrandSearchCount,
+        serpApiBrandSearchAmbiguousCount:
+          totals?.serpApiBrandSearchAmbiguousCount ?? serpApiBrandSearchAmbiguousCount,
+        serpApiBrandSearchNoConfidentMatchCount:
+          totals?.serpApiBrandSearchNoConfidentMatchCount ??
+          serpApiBrandSearchNoConfidentMatchCount,
         serpApiFallbackImageFoundCount:
           totals?.imageFromSerpApiFallbackCount ?? imageFromSerpApiFallbackCount,
         serpApiProductGalleryImageFoundCount:
@@ -984,6 +1069,13 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         enrichedCount: current?.enrichedCount ?? 0,
         walmartSearchResolvedCount: current?.walmartSearchResolvedCount ?? 0,
         walmartSearchImageFoundCount: current?.walmartSearchImageFoundCount ?? 0,
+        serpApiBrandSearchThumbnailImageFoundCount:
+          current?.serpApiBrandSearchThumbnailImageFoundCount ?? 0,
+        serpApiBrandSearchPublicListingMatchedCount:
+          current?.serpApiBrandSearchPublicListingMatchedCount ?? 0,
+        serpApiBrandSearchAmbiguousCount: current?.serpApiBrandSearchAmbiguousCount ?? 0,
+        serpApiBrandSearchNoConfidentMatchCount:
+          current?.serpApiBrandSearchNoConfidentMatchCount ?? 0,
         serpApiFallbackImageFoundCount: current?.serpApiFallbackImageFoundCount ?? 0,
         serpApiProductGalleryImageFoundCount:
           current?.serpApiProductGalleryImageFoundCount ?? 0,
@@ -1151,6 +1243,14 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Images from import payload: {importPanel.fromImportPayloadCount}</p>
               <p>Resolved via Walmart Item Search: {importPanel.walmartSearchResolvedCount}</p>
               <p>Images from Walmart Item Search: {importPanel.walmartSearchImageFoundCount}</p>
+              <p>
+                Images from SerpApi brand-search thumbnails:{" "}
+                {importPanel.serpApiBrandSearchThumbnailImageFoundCount}
+              </p>
+              <p>
+                Public listings discovered via brand search:{" "}
+                {importPanel.serpApiBrandSearchPublicListingMatchedCount}
+              </p>
               <p>Images from SerpApi product gallery: {importPanel.serpApiProductGalleryImageFoundCount}</p>
               <p>Images from SerpApi search fallback: {importPanel.serpApiSearchFallbackImageFoundCount}</p>
               <p>Images from SerpApi fallback: {importPanel.serpApiFallbackImageFoundCount}</p>
@@ -1160,6 +1260,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Missing/not found: {importPanel.missingCount}</p>
               <p>Not found: {importPanel.notFoundCount}</p>
               <p>Ambiguous: {importPanel.ambiguousCount}</p>
+              <p>Brand-search ambiguous matches: {importPanel.serpApiBrandSearchAmbiguousCount}</p>
+              <p>
+                Skipped (no confident brand-search match):{" "}
+                {importPanel.serpApiBrandSearchNoConfidentMatchCount}
+              </p>
               <p>Walmart Item Search not found: {importPanel.walmartSearchNotFoundCount}</p>
               <p>Skipped (SerpApi not connected): {importPanel.skippedNoProviderCount}</p>
               <p>

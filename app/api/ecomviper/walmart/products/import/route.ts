@@ -27,6 +27,10 @@ interface ImportProgressTotals {
   imageFromImportPayloadCount: number;
   imageEnrichedCount: number;
   imageFromWalmartSearchCount: number;
+  imageFromSerpApiBrandSearchThumbnailCount: number;
+  publicListingsDiscoveredViaSerpApiBrandSearchCount: number;
+  serpApiBrandSearchAmbiguousCount: number;
+  serpApiBrandSearchNoConfidentMatchCount: number;
   imageFromSerpApiFallbackCount: number;
   imageFromSerpApiProductGalleryCount: number;
   imageFromSerpApiSearchFallbackCount: number;
@@ -274,6 +278,10 @@ function buildSuccessProgress(input: {
     diagnostics?.imageFromImportPayloadCount !== undefined ||
     diagnostics?.imageEnrichedCount !== undefined ||
     diagnostics?.imageFromWalmartSearchCount !== undefined ||
+    diagnostics?.imageFromSerpApiBrandSearchThumbnailCount !== undefined ||
+    diagnostics?.publicListingsDiscoveredViaSerpApiBrandSearchCount !== undefined ||
+    diagnostics?.serpApiBrandSearchAmbiguousCount !== undefined ||
+    diagnostics?.serpApiBrandSearchNoConfidentMatchCount !== undefined ||
     diagnostics?.imageFromSerpApiFallbackCount !== undefined ||
     diagnostics?.walmartSearchNotFoundCount !== undefined ||
     diagnostics?.imageStillMissingCount !== undefined ||
@@ -291,6 +299,22 @@ function buildSuccessProgress(input: {
     result.importDiagnostics?.imageEnrichedCount ??
     (hasImageDiagnostics ? Math.max(0, imageFoundCount - imageFromImportPayloadCount) : 0);
   const imageFromWalmartSearchCount = result.importDiagnostics?.imageFromWalmartSearchCount ?? 0;
+  const imageFromSerpApiBrandSearchThumbnailCount =
+    result.importDiagnostics?.imageFromSerpApiBrandSearchThumbnailCount ??
+    result.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_thumbnail_saved ??
+    0;
+  const publicListingsDiscoveredViaSerpApiBrandSearchCount =
+    result.importDiagnostics?.publicListingsDiscoveredViaSerpApiBrandSearchCount ??
+    result.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_public_listing_matched ??
+    0;
+  const serpApiBrandSearchAmbiguousCount =
+    result.importDiagnostics?.serpApiBrandSearchAmbiguousCount ??
+    result.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_ambiguous ??
+    0;
+  const serpApiBrandSearchNoConfidentMatchCount =
+    result.importDiagnostics?.serpApiBrandSearchNoConfidentMatchCount ??
+    result.importDiagnostics?.serpApiBrandSearchDiagnostics?.serpapi_brand_search_no_confident_match ??
+    0;
   const imageFromSerpApiFallbackCount = result.importDiagnostics?.imageFromSerpApiFallbackCount ?? 0;
   const imageFromSerpApiProductGalleryCount =
     result.importDiagnostics?.imageFromSerpApiProductGalleryCount ?? 0;
@@ -348,6 +372,10 @@ function buildSuccessProgress(input: {
       imageFromImportPayloadCount,
       imageEnrichedCount,
       imageFromWalmartSearchCount,
+      imageFromSerpApiBrandSearchThumbnailCount,
+      publicListingsDiscoveredViaSerpApiBrandSearchCount,
+      serpApiBrandSearchAmbiguousCount,
+      serpApiBrandSearchNoConfidentMatchCount,
       imageFromSerpApiFallbackCount,
       imageFromSerpApiProductGalleryCount,
       imageFromSerpApiSearchFallbackCount,
@@ -414,6 +442,10 @@ export async function POST(req: NextRequest) {
           imageFromImportPayloadCount: 0,
           imageEnrichedCount: 0,
           imageFromWalmartSearchCount: 0,
+          imageFromSerpApiBrandSearchThumbnailCount: 0,
+          publicListingsDiscoveredViaSerpApiBrandSearchCount: 0,
+          serpApiBrandSearchAmbiguousCount: 0,
+          serpApiBrandSearchNoConfidentMatchCount: 0,
           imageFromSerpApiFallbackCount: 0,
           imageFromSerpApiProductGalleryCount: 0,
           imageFromSerpApiSearchFallbackCount: 0,
@@ -468,7 +500,7 @@ export async function POST(req: NextRequest) {
       existingProductsShownCount,
     });
 
-    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Still missing images: ${progress.totals.imageStillMissingCount}. Ambiguous: ${progress.totals.imageAmbiguousCount}. Failed: ${progress.totals.imageFailedCount}.`;
+    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. Public listings discovered via brand search: ${progress.totals.publicListingsDiscoveredViaSerpApiBrandSearchCount}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Still missing images: ${progress.totals.imageStillMissingCount}. Ambiguous: ${progress.totals.imageAmbiguousCount}. Failed: ${progress.totals.imageFailedCount}.`;
     const message =
       progress.totals.importedCount > 0
         ? isRetryMode
@@ -544,6 +576,10 @@ export async function POST(req: NextRequest) {
         imageFromImportPayloadCount: 0,
         imageEnrichedCount: 0,
         imageFromWalmartSearchCount: 0,
+        imageFromSerpApiBrandSearchThumbnailCount: 0,
+        publicListingsDiscoveredViaSerpApiBrandSearchCount: 0,
+        serpApiBrandSearchAmbiguousCount: 0,
+        serpApiBrandSearchNoConfidentMatchCount: 0,
         imageFromSerpApiFallbackCount: 0,
         imageFromSerpApiProductGalleryCount: 0,
         imageFromSerpApiSearchFallbackCount: 0,
