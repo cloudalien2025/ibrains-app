@@ -664,6 +664,46 @@ describe("walmart products persistence", () => {
     expect(html).toContain('value="OPA Nutrition"');
   });
 
+  it("renders product editor safely when legacy drafts contain malformed sku values", async () => {
+    const userId = "user_editor_legacy_malformed_sku";
+    await replaceWalmartProductsForUser({
+      userId,
+      products: [buildProduct("ROC822")],
+      importedAt: new Date().toISOString(),
+    });
+
+    const malformedDraft = {
+      id: "legacy_draft_bad_sku",
+      productId: "walmart_roc822",
+      marketplace: "walmart",
+      sku: null,
+      productTitle: "Legacy malformed draft",
+      draftPayload: {
+        brand: "Legacy Brand",
+      },
+      changeSummary: "legacy malformed sku",
+      createdBy: userId,
+      status: "draft",
+      publishStatus: "pending",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    const fallbackStore = new Map<string, Map<string, unknown>>();
+    fallbackStore.set(userId, new Map([["legacy_draft_bad_sku", malformedDraft]]));
+    (globalThis as Record<string, unknown>).__ecomviper_walmart_draft_fallback__ = fallbackStore;
+
+    authMocks.requireSignedInUser.mockResolvedValue({ userId, unauthorizedResponse: null });
+    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+
+    const html = renderToStaticMarkup(
+      await WalmartProductEditorPage({ params: Promise.resolve({ sku: "ROC822" }) })
+    );
+
+    expect(html).toContain("Product Editor");
+    expect(html).toContain("SKU: ROC822");
+  });
+
   it("hydrates saved draft images in product editor and products list from primary/gallery aliases", async () => {
     const userId = "user_editor_image_hydration";
     await replaceWalmartProductsForUser({

@@ -674,6 +674,126 @@ describe("Walmart inline optimize button workflow", () => {
     ).not.toBeNull();
   });
 
+  it("does not crash when AI apply diagnostics payload is partial or null-shaped", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/api/ecomviper/walmart/ai/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              suggestion: {
+                sku: "ROC808",
+                qualityScore: 88,
+                suggestedTitle: "OPA Nutrition Magnesium Glycinate Gummies, Grape, 60 Ct",
+                suggestedShortDescription:
+                  "Magnesium glycinate gummies for sleep quality and relaxation support.",
+                suggestedDescription:
+                  "Fact-grounded supplement copy.\n\nThese statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                suggestedBullets: [
+                  "Magnesium glycinate gummies",
+                  "Sleep quality support",
+                  "Relaxation support",
+                  "Grape flavor",
+                ],
+                suggestedBrand: "OPA Nutrition",
+                suggestedAttributes: {
+                  search_keywords: "magnesium glycinate gummies",
+                },
+                searchBrowseAttributes: {},
+                missingAttributes: [],
+                complianceWarnings: [],
+                disclaimer:
+                  "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+                applyDiagnostics: {
+                  factsUpdated: null,
+                  factsSources: undefined,
+                  staleFieldsReplaced: null,
+                  staleFieldsCleared: null,
+                  copyFieldsUpdated: null,
+                  searchBrowseFieldsUpdated: null,
+                  searchBrowseFieldsReplaced: null,
+                  complianceChanges: null,
+                  skippedProtectedFields: null,
+                  skippedLowConfidenceFields: null,
+                  rejectedClaims: null,
+                  disclaimerStatus: null,
+                  finalDecision: null,
+                },
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      if (url.includes("/api/ecomviper/walmart/drafts")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              draft: {
+                updatedAt: "2026-05-10T00:00:00.000Z",
+                validationResult: {
+                  valid: true,
+                  violations: [],
+                  warnings: [],
+                  suggestions: [],
+                },
+              },
+            }),
+            { status: 201, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      optimizeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const applyButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-apply-ai-suggestions"]'
+    ) as HTMLButtonElement | null;
+    expect(applyButton).not.toBeNull();
+    await act(async () => {
+      applyButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-ai-apply-diagnostics"]')
+    ).not.toBeNull();
+    expect(container.textContent).toContain("FDA disclaimer status: unknown");
+    expect(container.textContent).toContain("AI improvements applied to draft fields.");
+  });
+
   it("keeps existing content fields when AI returns empty or low-confidence content", async () => {
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url =
