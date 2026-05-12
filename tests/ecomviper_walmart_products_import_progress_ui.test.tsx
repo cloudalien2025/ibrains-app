@@ -123,6 +123,22 @@ describe("Walmart import progress UI", () => {
               imageAmbiguousCount: 1,
               imageFailedCount: 0,
               imageSkippedNoProviderCount: 1,
+              shopifyProductsImported: 12,
+              shopifyImagesImported: 34,
+              walmartProductsMatchedToShopify: 2,
+              imagesAppliedFromShopify: 2,
+              ambiguousShopifyMatches: 1,
+              shopifyNoMatchCount: 1,
+              shopifyNoImageAvailableCount: 0,
+              stillMissingAfterShopify: 0,
+              shopifyVariantSkuMatch: 1,
+              shopifyVariantBarcodeMatch: 1,
+              shopifyBarcodeNormalizedMatch: 0,
+              shopifyTitleVendorMatch: 0,
+              shopifyAmbiguousMatch: 1,
+              shopifyNoMatch: 1,
+              shopifyImageApplied: 2,
+              shopifyNoImageAvailable: 0,
             },
           },
           importDiagnostics: {
@@ -198,6 +214,12 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Images from SerpApi fallback: 0");
     expect(container.textContent).toContain("Total fallback enriched successfully: 0");
     expect(container.textContent).toContain("Total still missing: 2");
+    expect(container.textContent).toContain("Shopify products imported: 12");
+    expect(container.textContent).toContain("Shopify images imported: 34");
+    expect(container.textContent).toContain("Walmart products matched to Shopify: 2");
+    expect(container.textContent).toContain("Images applied from Shopify: 2");
+    expect(container.textContent).toContain("Shopify SKU exact matches: 1");
+    expect(container.textContent).toContain("Shopify barcode exact matches: 1");
     expect(container.textContent).toContain("Provider failed: 0");
     expect(container.textContent).toContain("Missing/not found: 2");
     expect(container.textContent).toContain("Not found: 1");
@@ -759,6 +781,31 @@ describe("Walmart import progress UI", () => {
     );
     expect(container.textContent).not.toContain("Connect SerpApi to enable automated public Walmart image enrichment.");
     expect(container.textContent).not.toContain("Test SerpApi connection in Connect.");
+  });
+
+  it("renders Shopify image source/match metadata without crashing legacy records", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct({
+              sku: "SHOP-1",
+              imageUrl: "https://cdn.shopify.com/shop-1.jpg",
+              imageSource: "shopify_variant",
+              imageMatchMethod: "shopify_sku_exact",
+              imageSyncStatus: "found",
+            }),
+            createProduct({
+              sku: "LEGACY-1",
+              imageSource: null as unknown as WalmartEffectiveProductRecord["imageSource"],
+            }),
+          ]}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain("Image source: Shopify · Match: SKU exact");
+    expect(container.textContent).toContain("LEGACY-1");
   });
 
   it("shows gateway timeout failure without incorrectly marking SerpApi as not connected", async () => {
