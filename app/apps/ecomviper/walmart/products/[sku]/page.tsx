@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 export default async function WalmartProductEditorPage({ params }: { params: Promise<{ sku: string }> }) {
   const { sku } = await params;
+  const normalizedRequestedSku = typeof sku === "string" ? sku.trim().toUpperCase() : "";
   let product = null;
   let stagedDrafts: WalmartDraftRecord[] = [];
   let aiProviderConnected = false;
@@ -25,7 +26,9 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       }
       const allDrafts = await listWalmartDraftsForUser(userId);
       stagedDrafts = allDrafts.filter(
-        (entry) => entry.sku.trim().toUpperCase() === sku.trim().toUpperCase()
+        (entry) =>
+          typeof entry?.sku === "string" &&
+          entry.sku.trim().toUpperCase() === normalizedRequestedSku
       );
       const openAiStatus = await getWalmartOpenAiConnectionStatusForUser(userId);
       aiProviderConnected = openAiStatus.connected;

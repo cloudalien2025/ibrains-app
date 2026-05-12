@@ -125,6 +125,22 @@ const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
 
+const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
+  factsUpdated: [] as string[],
+  factsSources: [] as string[],
+  staleFieldsReplaced: [] as string[],
+  staleFieldsCleared: [] as string[],
+  copyFieldsUpdated: [] as string[],
+  searchBrowseFieldsUpdated: [] as string[],
+  searchBrowseFieldsReplaced: [] as string[],
+  complianceChanges: [] as string[],
+  skippedProtectedFields: [] as string[],
+  skippedLowConfidenceFields: [] as string[],
+  rejectedClaims: [] as string[],
+  disclaimerStatus: "unknown",
+  finalDecision: "accepted",
+};
+
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -245,6 +261,56 @@ function imageListFromUnknown(value: unknown): string[] {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.map((entry) => entry.trim()).filter(Boolean)));
+}
+
+function toSafeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asText(entry)?.trim() ?? "")
+    .filter(Boolean);
+}
+
+function normalizeInlineAiApplyDiagnostics(
+  value: WalmartAiSuggestion["applyDiagnostics"] | null | undefined
+) {
+  const diagnostics = asObject(value);
+  if (!diagnostics) {
+    return DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS;
+  }
+
+  const disclaimerStatusRaw = asText(diagnostics.disclaimerStatus)?.trim().toLowerCase() ?? "";
+  const finalDecisionRaw = asText(diagnostics.finalDecision)?.trim().toLowerCase() ?? "";
+
+  const disclaimerStatus =
+    disclaimerStatusRaw === "inserted" ||
+    disclaimerStatusRaw === "preserved" ||
+    disclaimerStatusRaw === "deduped" ||
+    disclaimerStatusRaw === "missing"
+      ? disclaimerStatusRaw
+      : "unknown";
+
+  const finalDecision =
+    finalDecisionRaw === "accepted" ||
+    finalDecisionRaw === "accepted_with_changes" ||
+    finalDecisionRaw === "rejected"
+      ? finalDecisionRaw
+      : "accepted";
+
+  return {
+    factsUpdated: toSafeStringArray(diagnostics.factsUpdated),
+    factsSources: toSafeStringArray(diagnostics.factsSources),
+    staleFieldsReplaced: toSafeStringArray(diagnostics.staleFieldsReplaced),
+    staleFieldsCleared: toSafeStringArray(diagnostics.staleFieldsCleared),
+    copyFieldsUpdated: toSafeStringArray(diagnostics.copyFieldsUpdated),
+    searchBrowseFieldsUpdated: toSafeStringArray(diagnostics.searchBrowseFieldsUpdated),
+    searchBrowseFieldsReplaced: toSafeStringArray(diagnostics.searchBrowseFieldsReplaced),
+    complianceChanges: toSafeStringArray(diagnostics.complianceChanges),
+    skippedProtectedFields: toSafeStringArray(diagnostics.skippedProtectedFields),
+    skippedLowConfidenceFields: toSafeStringArray(diagnostics.skippedLowConfidenceFields),
+    rejectedClaims: toSafeStringArray(diagnostics.rejectedClaims),
+    disclaimerStatus,
+    finalDecision,
+  };
 }
 
 function readLatestDraftPayload(
@@ -1111,6 +1177,9 @@ export default function ProductEditorClient({
     isShopifyMediaSource && importedShopifyMediaImageCount <= 1
       ? "Shopify returned no additional attached product media."
       : null;
+  const inlineAiDiagnostics = inlineAiSuggestion
+    ? normalizeInlineAiApplyDiagnostics(inlineAiSuggestion.applyDiagnostics)
+    : DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS;
 
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
@@ -1502,18 +1571,20 @@ export default function ProductEditorClient({
     }
     if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
 
-    const diagnostics = inlineAiSuggestion.applyDiagnostics;
+    const diagnostics = normalizeInlineAiApplyDiagnostics(
+      inlineAiSuggestion.applyDiagnostics
+    );
     const skippedProtectedFields = unique([
       ...sanitizedAiSearchBrowse.skipped
         .filter((entry) => entry.reason === "protected_field")
         .map((entry) => entry.key),
-      ...(diagnostics?.skippedProtectedFields ?? []),
+      ...diagnostics.skippedProtectedFields,
     ]).slice(0, 8);
     const skippedLowConfidenceFields = unique([
       ...sanitizedAiSearchBrowse.skipped
         .filter((entry) => entry.reason === "low_confidence")
         .map((entry) => entry.key),
-      ...(diagnostics?.skippedLowConfidenceFields ?? []),
+      ...diagnostics.skippedLowConfidenceFields,
     ]).slice(0, 8);
 
     patchForm({
@@ -1552,26 +1623,23 @@ export default function ProductEditorClient({
       ? skippedLowConfidenceFields.join(", ")
       : "none";
     const staleSummary = unique([
-      ...(diagnostics?.staleFieldsReplaced ?? []),
-      ...(diagnostics?.staleFieldsCleared ?? []),
+      ...diagnostics.staleFieldsReplaced,
+      ...diagnostics.staleFieldsCleared,
     ]);
     const staleSummaryText = staleSummary.length ? staleSummary.join(", ") : "none";
     const factsSummaryText =
-      diagnostics?.factsUpdated?.length && diagnostics.factsUpdated.length > 0
+      diagnostics.factsUpdated.length > 0
         ? diagnostics.factsUpdated.join(", ")
         : "none";
     const sourceSummaryText =
-      diagnostics?.factsSources?.length && diagnostics.factsSources.length > 0
+      diagnostics.factsSources.length > 0
         ? diagnostics.factsSources.join(", ")
         : "none";
     const complianceSummaryText =
-      diagnostics?.complianceChanges?.length && diagnostics.complianceChanges.length > 0
+      diagnostics.complianceChanges.length > 0
         ? diagnostics.complianceChanges.join(", ")
         : "none";
-    const disclaimerSummaryText =
-      diagnostics?.disclaimerStatus && diagnostics.disclaimerStatus.length > 0
-        ? diagnostics.disclaimerStatus
-        : "unknown";
+    const disclaimerSummaryText = diagnostics.disclaimerStatus;
     setInlineAiMessage(
       `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
@@ -2154,7 +2222,7 @@ export default function ProductEditorClient({
                 )}
               </ul>
 
-              {inlineAiSuggestion.applyDiagnostics ? (
+              {inlineAiSuggestion ? (
                 <div
                   className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]"
                   data-testid="ecomviper-walmart-ai-apply-diagnostics"
@@ -2163,48 +2231,48 @@ export default function ProductEditorClient({
                   <ul className="mt-2 space-y-1">
                     <li>
                       Facts updated:{" "}
-                      {inlineAiSuggestion.applyDiagnostics.factsUpdated.length
-                        ? inlineAiSuggestion.applyDiagnostics.factsUpdated.join(", ")
+                      {inlineAiDiagnostics.factsUpdated.length
+                        ? inlineAiDiagnostics.factsUpdated.join(", ")
                         : "none"}
                     </li>
                     <li>
                       Sources used:{" "}
-                      {inlineAiSuggestion.applyDiagnostics.factsSources.length
-                        ? inlineAiSuggestion.applyDiagnostics.factsSources.join(", ")
+                      {inlineAiDiagnostics.factsSources.length
+                        ? inlineAiDiagnostics.factsSources.join(", ")
                         : "none"}
                     </li>
                     <li>
                       Stale fields cleared/replaced:{" "}
                       {unique([
-                        ...inlineAiSuggestion.applyDiagnostics.staleFieldsReplaced,
-                        ...inlineAiSuggestion.applyDiagnostics.staleFieldsCleared,
+                        ...inlineAiDiagnostics.staleFieldsReplaced,
+                        ...inlineAiDiagnostics.staleFieldsCleared,
                       ]).length
                         ? unique([
-                            ...inlineAiSuggestion.applyDiagnostics.staleFieldsReplaced,
-                            ...inlineAiSuggestion.applyDiagnostics.staleFieldsCleared,
+                            ...inlineAiDiagnostics.staleFieldsReplaced,
+                            ...inlineAiDiagnostics.staleFieldsCleared,
                           ]).join(", ")
                         : "none"}
                     </li>
                     <li>
                       Compliance changes:{" "}
-                      {inlineAiSuggestion.applyDiagnostics.complianceChanges.length
-                        ? inlineAiSuggestion.applyDiagnostics.complianceChanges.join(", ")
+                      {inlineAiDiagnostics.complianceChanges.length
+                        ? inlineAiDiagnostics.complianceChanges.join(", ")
                         : "none"}
                     </li>
                     <li>
                       Skipped protected fields:{" "}
-                      {inlineAiSuggestion.applyDiagnostics.skippedProtectedFields.length
-                        ? inlineAiSuggestion.applyDiagnostics.skippedProtectedFields.join(", ")
+                      {inlineAiDiagnostics.skippedProtectedFields.length
+                        ? inlineAiDiagnostics.skippedProtectedFields.join(", ")
                         : "none"}
                     </li>
                     <li>
                       Skipped low-confidence fields:{" "}
-                      {inlineAiSuggestion.applyDiagnostics.skippedLowConfidenceFields.length
-                        ? inlineAiSuggestion.applyDiagnostics.skippedLowConfidenceFields.join(", ")
+                      {inlineAiDiagnostics.skippedLowConfidenceFields.length
+                        ? inlineAiDiagnostics.skippedLowConfidenceFields.join(", ")
                         : "none"}
                     </li>
                     <li>
-                      FDA disclaimer status: {inlineAiSuggestion.applyDiagnostics.disclaimerStatus}
+                      FDA disclaimer status: {inlineAiDiagnostics.disclaimerStatus}
                     </li>
                   </ul>
                 </div>
