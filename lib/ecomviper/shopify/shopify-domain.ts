@@ -1,4 +1,5 @@
 const SHOPIFY_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.myshopify\.com$/;
+const SHOPIFY_STORE_HANDLE_PATTERN = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
 const GENERIC_HOST_PATTERN = /^[a-z0-9](?:[a-z0-9-.]{0,251}[a-z0-9])?$/;
 
 export function allowsCustomShopifyDomains(): boolean {
@@ -7,11 +8,18 @@ export function allowsCustomShopifyDomains(): boolean {
 }
 
 export function normalizeShopifyStoreDomain(input: string, options?: { allowCustomDomain?: boolean }): string | null {
-  const raw = input.trim();
+  const raw = input.trim().toLowerCase();
   if (!raw) return null;
 
   const allowCustomDomain = options?.allowCustomDomain ?? allowsCustomShopifyDomains();
-  const candidate = raw.includes("://") ? raw : `https://${raw}`;
+  const normalizedRaw =
+    !raw.includes("://") &&
+    !raw.includes(".") &&
+    SHOPIFY_STORE_HANDLE_PATTERN.test(raw)
+      ? `${raw}.myshopify.com`
+      : raw;
+
+  const candidate = normalizedRaw.includes("://") ? normalizedRaw : `https://${normalizedRaw}`;
 
   let hostname = "";
   try {

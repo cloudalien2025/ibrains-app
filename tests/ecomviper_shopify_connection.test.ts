@@ -1,6 +1,10 @@
-import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest, NextResponse } from "next/server";
 import { normalizeShopifyStoreDomain } from "@/lib/ecomviper/shopify/shopify-domain";
+import {
+  resolveShopifyAccessTokenForUser,
+  saveShopifyConnectionForUser,
+} from "@/lib/ecomviper/shopify/shopify-connection";
 import { POST as shopifySaveRoute, GET as shopifyConnectStatusRoute } from "@/app/api/ecomviper/shopify/connect/route";
 import { POST as shopifyTestRoute } from "@/app/api/ecomviper/shopify/connect/test/route";
 
@@ -17,6 +21,7 @@ const TEST_ENCRYPTION_KEY = Buffer.alloc(32, 11).toString("base64");
 describe("Shopify connection config", () => {
   beforeEach(() => {
     (globalThis as Record<string, unknown>).__ecomviper_shopify_connection_fallback__ = undefined;
+    (globalThis as Record<string, unknown>).__ecomviper_shopify_access_token_cache__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_shopify_product_fallback__ = undefined;
     (globalThis as Record<string, unknown>).__ecomviper_shopify_product_tables_checked__ = undefined;
 
@@ -32,16 +37,17 @@ describe("Shopify connection config", () => {
     delete process.env.ECOMVIPER_SHOPIFY_ALLOW_CUSTOM_DOMAIN;
   });
 
-  it("normalizes Shopify store domains and rejects non-Shopify hosts by default", () => {
+  it("normalizes Shopify store domains, including bare store handles", () => {
     expect(normalizeShopifyStoreDomain("opanutrition.myshopify.com")).toBe("opanutrition.myshopify.com");
     expect(normalizeShopifyStoreDomain("https://opanutrition.myshopify.com")).toBe("opanutrition.myshopify.com");
+    expect(normalizeShopifyStoreDomain("opanutrition")).toBe("opanutrition.myshopify.com");
     expect(normalizeShopifyStoreDomain("https://example.com")).toBeNull();
   });
 
-  it("returns validation error when saving without domain/token", async () => {
+  it("returns validation error when saving without domain/client credentials", async () => {
     const req = new NextRequest("http://localhost/api/ecomviper/shopify/connect", {
       method: "POST",
-      body: JSON.stringify({ storeDomain: "", adminApiToken: "" }),
+      body: JSON.stringify({ storeDomain: "", clientId: "", clientSecret: "" }),
     });
 
     const response = await shopifySaveRoute(req);
@@ -51,24 +57,36 @@ describe("Shopify connection config", () => {
     expect(payload.error?.code).toBe("VALIDATION_ERROR");
   });
 
-  it("tests Shopify connection successfully and records success diagnostic event", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition" },
-            products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json", "X-Request-Id": "req_shopify_1" } }
+  it("tests Shopify connection successfully using client credentials and returns safe metadata", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "shopify_access_token_live",
+            scope: "read_products,write_orders",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", "X-Request-Id": "req_token_1" } }
+        )
       )
-    );
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition", myshopifyDomain: "opanutrition.myshopify.com" },
+              products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json", "X-Request-Id": "req_shopify_1" } }
+        )
+      );
 
     const req = new NextRequest("http://localhost/api/ecomviper/shopify/connect/test", {
       method: "POST",
       body: JSON.stringify({
         storeDomain: "opanutrition.myshopify.com",
-        adminApiToken: "shpat_live_token",
+        clientId: "shopify_client_123456",
+        clientSecret: "shopify_secret_super_long",
         apiVersion: "2025-10",
       }),
     });
@@ -80,32 +98,47 @@ describe("Shopify connection config", () => {
     expect(payload.ok).toBe(true);
     expect(payload.diagnosticEvent).toBe("shopify_connection_test_success");
     expect(payload.requiredScope).toBe("read_products");
+    expect(payload.tokenStatus).toBe("valid");
     expect(payload.storeDomain).toBe("opanutrition.myshopify.com");
+    expect(JSON.stringify(payload)).not.toContain("shopify_access_token_live");
+    expect(JSON.stringify(payload)).not.toContain("shopify_secret_super_long");
   });
 
   it("flags missing read_products scope during connection test", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({
-          data: {
-            shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition" },
-            products: null,
-          },
-          errors: [
-            {
-              message: "Access denied for products field. Required access: read_products.",
-            },
-          ],
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "shopify_access_scope_missing",
+            scope: "read_orders",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
       )
-    );
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition" },
+              products: null,
+            },
+            errors: [
+              {
+                message: "Access denied for products field. Required access: read_products.",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
 
     const req = new NextRequest("http://localhost/api/ecomviper/shopify/connect/test", {
       method: "POST",
       body: JSON.stringify({
         storeDomain: "opanutrition.myshopify.com",
-        adminApiToken: "shpat_scope_missing",
+        clientId: "shopify_client_123456",
+        clientSecret: "shopify_secret_scope_missing",
       }),
     });
 
@@ -116,28 +149,68 @@ describe("Shopify connection config", () => {
     expect(payload.ok).toBe(false);
     expect(payload.missingScope).toBe(true);
     expect(payload.diagnosticEvent).toBe("shopify_connection_missing_scope");
+    expect(payload.lastApiError?.code).toBe("insufficient_scope");
   });
 
-  it("redacts Admin API token in save/status responses", async () => {
-    const token = "shpat_super_secret_token";
-
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+  it("returns safe token-exchange errors for invalid client credentials", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
       new Response(
-        JSON.stringify({
-          data: {
-            shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition" },
-            products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
-          },
-        }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({ error: "invalid_client", error_description: "Invalid client credentials" }),
+        { status: 401, headers: { "Content-Type": "application/json" } }
       )
     );
+
+    const req = new NextRequest("http://localhost/api/ecomviper/shopify/connect/test", {
+      method: "POST",
+      body: JSON.stringify({
+        storeDomain: "opanutrition.myshopify.com",
+        clientId: "wrong_client_id",
+        clientSecret: "wrong_client_secret",
+      }),
+    });
+
+    const response = await shopifyTestRoute(req);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.ok).toBe(false);
+    expect(payload.diagnosticEvent).toBe("shopify_connection_token_exchange_failed");
+    expect(payload.lastApiError?.code).toBe("invalid_client_credentials");
+    expect(JSON.stringify(payload)).not.toContain("wrong_client_secret");
+  });
+
+  it("redacts Shopify client secret and access token in save/status responses", async () => {
+    const clientSecret = "shopify_secret_super_secret_token";
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "shopify_exchange_token_super_secret",
+            scope: "read_products",
+            expires_in: 1800,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition", myshopifyDomain: "opanutrition.myshopify.com" },
+              products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
 
     const saveReq = new NextRequest("http://localhost/api/ecomviper/shopify/connect", {
       method: "POST",
       body: JSON.stringify({
         storeDomain: "opanutrition.myshopify.com",
-        adminApiToken: token,
+        clientId: "shopify_client_123456",
+        clientSecret,
         apiVersion: "2025-10",
       }),
     });
@@ -146,14 +219,55 @@ describe("Shopify connection config", () => {
     const savePayload = await saveResponse.json();
 
     expect(saveResponse.status).toBe(200);
-    expect(savePayload.maskedAccessToken).not.toContain("shpat_super");
-    expect(JSON.stringify(savePayload)).not.toContain(token);
+    expect(savePayload.maskedClientId).toMatch(/^sh\*\*\*/);
+    expect(savePayload.clientSecretStored).toBe(true);
+    expect(JSON.stringify(savePayload)).not.toContain(clientSecret);
+    expect(JSON.stringify(savePayload)).not.toContain("shopify_exchange_token_super_secret");
 
     const statusResponse = await shopifyConnectStatusRoute();
     const statusPayload = await statusResponse.json();
 
-    expect(statusPayload.maskedAccessToken).not.toContain("shpat_super");
-    expect(JSON.stringify(statusPayload)).not.toContain(token);
+    expect(statusPayload.clientSecretStored).toBe(true);
+    expect(statusPayload.maskedClientId).toMatch(/^sh\*\*\*/);
+    expect(JSON.stringify(statusPayload)).not.toContain(clientSecret);
+  });
+
+  it("refreshes exchanged token when it is near expiry", async () => {
+    await saveShopifyConnectionForUser({
+      userId: "user_ibrains",
+      storeDomain: "opanutrition.myshopify.com",
+      clientId: "shopify_client_123456",
+      clientSecret: "shopify_secret_123456",
+      apiVersion: "2025-10",
+    });
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "token_short_lived_1",
+            scope: "read_products",
+            expires_in: 1,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "token_short_lived_2",
+            scope: "read_products",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    const first = await resolveShopifyAccessTokenForUser("user_ibrains");
+    const second = await resolveShopifyAccessTokenForUser("user_ibrains");
+
+    expect(first.accessToken).toBe("token_short_lived_1");
+    expect(second.accessToken).toBe("token_short_lived_2");
   });
 
   it("rejects unauthenticated Shopify test requests", async () => {

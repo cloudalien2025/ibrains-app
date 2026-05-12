@@ -37,7 +37,8 @@ type SerpApiForm = {
 
 type ShopifyForm = {
   storeDomain: string;
-  adminApiToken: string;
+  clientId: string;
+  clientSecret: string;
   apiVersion: string;
 };
 
@@ -46,7 +47,17 @@ type ShopifyStatus = {
   status: "connected" | "disconnected";
   storeDomain: string;
   apiVersion: string;
-  maskedAccessToken: string;
+  authMode: "dev_dashboard_client_credentials" | "legacy_admin_token";
+  maskedClientId: string;
+  clientSecretStored: boolean;
+  tokenStatus: "valid" | "refresh_required" | "expired" | "missing_scope" | "invalid" | "unknown";
+  lastTokenRefreshAt: string | null;
+  tokenExpiresAt: string | null;
+  grantedScopes: string[];
+  lastApiError: {
+    code: string;
+    message: string;
+  } | null;
   updatedAt: string | null;
   saveSupported: boolean;
 };
@@ -134,7 +145,17 @@ type ShopifyConnectionApiPayload = {
   status: "connected" | "disconnected";
   storeDomain: string;
   apiVersion: string;
-  maskedAccessToken: string;
+  authMode: "dev_dashboard_client_credentials" | "legacy_admin_token";
+  maskedClientId: string;
+  clientSecretStored: boolean;
+  tokenStatus: "valid" | "refresh_required" | "expired" | "missing_scope" | "invalid" | "unknown";
+  lastTokenRefreshAt: string | null;
+  tokenExpiresAt: string | null;
+  grantedScopes: string[];
+  lastApiError: {
+    code: string;
+    message: string;
+  } | null;
   updatedAt: string | null;
   saveSupported: boolean;
   importState: ShopifyImportState;
@@ -142,7 +163,11 @@ type ShopifyConnectionApiPayload = {
   missingScope?: boolean;
   statusCode?: number | null;
   requestId?: string | null;
-  diagnosticEvent?: "shopify_connection_test_success" | "shopify_connection_missing_scope";
+  diagnosticEvent?:
+    | "shopify_connection_test_success"
+    | "shopify_connection_missing_scope"
+    | "shopify_connection_token_exchange_failed"
+    | "shopify_connection_graphql_failed";
   message?: string;
 };
 
@@ -260,13 +285,25 @@ function toShopifyStatus(response: ShopifyConnectionApiPayload): ShopifyStatus {
     status: response.status,
     storeDomain: response.storeDomain,
     apiVersion: response.apiVersion,
-    maskedAccessToken: response.maskedAccessToken,
+    authMode: response.authMode,
+    maskedClientId: response.maskedClientId,
+    clientSecretStored: response.clientSecretStored,
+    tokenStatus: response.tokenStatus,
+    lastTokenRefreshAt: response.lastTokenRefreshAt,
+    tokenExpiresAt: response.tokenExpiresAt,
+    grantedScopes: response.grantedScopes,
+    lastApiError: response.lastApiError,
     updatedAt: response.updatedAt,
     saveSupported: response.saveSupported,
   };
 }
 
 function formatApiError(error: WalmartApiError | null | undefined): string {
+  if (!error) return "None";
+  return `${error.message} (${error.code})`;
+}
+
+function formatShopifyApiError(error: ShopifyStatus["lastApiError"]): string {
   if (!error) return "None";
   return `${error.message} (${error.code})`;
 }
@@ -310,7 +347,8 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [serpApiForm, setSerpApiForm] = useState<SerpApiForm>({ apiKey: "" });
   const [shopifyForm, setShopifyForm] = useState<ShopifyForm>({
     storeDomain: "",
-    adminApiToken: "",
+    clientId: "",
+    clientSecret: "",
     apiVersion: "2025-10",
   });
   const [health, setHealth] = useState(initialHealth);
@@ -333,7 +371,14 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     status: "disconnected",
     storeDomain: "",
     apiVersion: "2025-10",
-    maskedAccessToken: "Not configured",
+    authMode: "dev_dashboard_client_credentials",
+    maskedClientId: "Not configured",
+    clientSecretStored: false,
+    tokenStatus: "unknown",
+    lastTokenRefreshAt: null,
+    tokenExpiresAt: null,
+    grantedScopes: [],
+    lastApiError: null,
     updatedAt: null,
     saveSupported: true,
   });
@@ -371,6 +416,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [serpApiLoading, setSerpApiLoading] = useState(false);
   const [shopifyLoading, setShopifyLoading] = useState(false);
   const [walmartDraftDirty, setWalmartDraftDirty] = useState(false);
+  const [shopifyDraftDirty, setShopifyDraftDirty] = useState(false);
   const [instructionsProvider, setInstructionsProvider] = useState<ConnectionInstructionsProvider | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -378,14 +424,30 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const canSaveOpenAi = useMemo(() => Boolean(openAiForm.apiKey.trim()), [openAiForm.apiKey]);
   const canSaveSerpApi = useMemo(() => Boolean(serpApiForm.apiKey.trim()), [serpApiForm.apiKey]);
   const canSaveShopify = useMemo(
-    () => Boolean(shopifyForm.storeDomain.trim() && shopifyForm.adminApiToken.trim()),
-    [shopifyForm.storeDomain, shopifyForm.adminApiToken]
+    () => Boolean(shopifyForm.storeDomain.trim() && shopifyForm.clientId.trim() && shopifyForm.clientSecret.trim()),
+    [shopifyForm.storeDomain, shopifyForm.clientId, shopifyForm.clientSecret]
   );
   const hasUnsavedWalmartChanges = useMemo(() => {
     if (!walmartDraftDirty) return false;
     if (form.clientId.trim() || form.clientSecret.trim() || form.notes.trim()) return true;
     return form.accountNickname.trim() !== health.summary.accountNickname.trim();
   }, [form.accountNickname, form.clientId, form.clientSecret, form.notes, health.summary.accountNickname, walmartDraftDirty]);
+  const hasUnsavedShopifyChanges = useMemo(() => {
+    if (!shopifyDraftDirty) return false;
+    if (shopifyForm.clientSecret.trim()) return true;
+    if (shopifyForm.storeDomain.trim() !== (shopifyStatus.storeDomain || "").trim()) return true;
+    if (shopifyForm.clientId.trim()) return true;
+    if (shopifyForm.apiVersion.trim() !== (shopifyStatus.apiVersion || "").trim()) return true;
+    return false;
+  }, [
+    shopifyDraftDirty,
+    shopifyForm.clientSecret,
+    shopifyForm.storeDomain,
+    shopifyForm.clientId,
+    shopifyForm.apiVersion,
+    shopifyStatus.storeDomain,
+    shopifyStatus.apiVersion,
+  ]);
 
   function resolveWalmartFormForSubmit(): ConnectForm {
     const clientIdFromInput = walmartClientIdInputRef.current?.value?.trim() ?? "";
@@ -480,6 +542,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           storeDomain: payload.storeDomain || current.storeDomain,
           apiVersion: payload.apiVersion || current.apiVersion,
         }));
+        setShopifyDraftDirty(false);
       } catch {
         // Intentionally silent; operator can still submit credentials manually.
       }
@@ -709,7 +772,8 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         "/api/ecomviper/shopify/connect/test",
         {
           storeDomain: shopifyForm.storeDomain,
-          adminApiToken: shopifyForm.adminApiToken,
+          clientId: shopifyForm.clientId,
+          clientSecret: shopifyForm.clientSecret,
           apiVersion: shopifyForm.apiVersion,
         }
       );
@@ -734,13 +798,15 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
         "/api/ecomviper/shopify/connect",
         {
           storeDomain: shopifyForm.storeDomain,
-          adminApiToken: shopifyForm.adminApiToken,
+          clientId: shopifyForm.clientId,
+          clientSecret: shopifyForm.clientSecret,
           apiVersion: shopifyForm.apiVersion,
         }
       );
       setShopifyStatus(toShopifyStatus(response));
       setShopifyImportState(response.importState);
-      setShopifyForm((current) => ({ ...current, adminApiToken: "" }));
+      setShopifyForm((current) => ({ ...current, clientSecret: "" }));
+      setShopifyDraftDirty(false);
       setMessage(response.message ?? "Shopify connection saved securely.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -761,7 +827,8 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       );
       setShopifyStatus(toShopifyStatus(response));
       setShopifyImportState(response.importState);
-      setShopifyForm((current) => ({ ...current, adminApiToken: "" }));
+      setShopifyForm((current) => ({ ...current, clientSecret: "" }));
+      setShopifyDraftDirty(false);
       setMessage(response.message ?? "Shopify disconnected.");
     } catch (error) {
       if (error instanceof ApiRequestError) {
@@ -1256,30 +1323,48 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           <p className="mt-1 text-sm text-[#64748B]">
             Connect Shopify as the product/image source of truth for Walmart catalog reconciliation.
           </p>
+          <p className="mt-1 text-sm text-[#64748B]">
+            Use the Client ID and Secret from your Shopify Dev Dashboard app settings. Do not paste the App automation token.
+          </p>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2">
             <label className="text-sm text-[#334155] sm:col-span-2">
               Shopify store domain
               <input
                 value={shopifyForm.storeDomain}
-                onChange={(event) =>
-                  setShopifyForm((current) => ({ ...current, storeDomain: event.target.value }))
-                }
+                onChange={(event) => {
+                  setShopifyForm((current) => ({ ...current, storeDomain: event.target.value }));
+                  setShopifyDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="opanutrition.myshopify.com"
               />
             </label>
 
-            <label className="text-sm text-[#334155] sm:col-span-2">
-              Admin API access token
+            <label className="text-sm text-[#334155]">
+              Client ID
+              <input
+                value={shopifyForm.clientId}
+                onChange={(event) => {
+                  setShopifyForm((current) => ({ ...current, clientId: event.target.value }));
+                  setShopifyDraftDirty(true);
+                }}
+                className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                placeholder="Shopify client id"
+              />
+            </label>
+
+            <label className="text-sm text-[#334155]">
+              Client Secret
               <input
                 type="password"
-                value={shopifyForm.adminApiToken}
-                onChange={(event) =>
-                  setShopifyForm((current) => ({ ...current, adminApiToken: event.target.value }))
-                }
+                value={shopifyForm.clientSecret}
+                onChange={(event) => {
+                  setShopifyForm((current) => ({ ...current, clientSecret: event.target.value }));
+                  setShopifyDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                placeholder="shpat_..."
+                placeholder="Shopify client secret"
               />
             </label>
 
@@ -1287,9 +1372,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               API version
               <input
                 value={shopifyForm.apiVersion}
-                onChange={(event) =>
-                  setShopifyForm((current) => ({ ...current, apiVersion: event.target.value }))
-                }
+                onChange={(event) => {
+                  setShopifyForm((current) => ({ ...current, apiVersion: event.target.value }));
+                  setShopifyDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="2025-10"
               />
@@ -1343,6 +1429,11 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               Shopify credential saving is not available in this environment.
             </p>
           ) : null}
+          {hasUnsavedShopifyChanges ? (
+            <p className="mt-3 text-xs text-amber-700">
+              You have unsaved Shopify credential changes. The status panel shows only the last saved connection state.
+            </p>
+          ) : null}
         </article>
 
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -1362,8 +1453,44 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               <dd className="font-medium">{shopifyStatus.apiVersion}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
-              <dt>Admin token</dt>
-              <dd className="font-medium">{shopifyStatus.maskedAccessToken}</dd>
+              <dt>Auth mode</dt>
+              <dd className="font-medium">
+                {shopifyStatus.authMode === "dev_dashboard_client_credentials"
+                  ? "Dev Dashboard Client Credentials"
+                  : "Legacy Admin token"}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Client ID</dt>
+              <dd className="font-medium">{shopifyStatus.maskedClientId}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Client Secret</dt>
+              <dd className="font-medium">{shopifyStatus.clientSecretStored ? "Stored" : "Not stored"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Token status</dt>
+              <dd className="font-medium">{shopifyStatus.tokenStatus}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last token refresh</dt>
+              <dd className="font-medium">{shopifyStatus.lastTokenRefreshAt ?? "Never"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Token expiry</dt>
+              <dd className="font-medium">{shopifyStatus.tokenExpiresAt ?? "Unknown"}</dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Granted scopes</dt>
+              <dd className="font-medium text-right">
+                {shopifyStatus.grantedScopes.length > 0
+                  ? shopifyStatus.grantedScopes.join(", ")
+                  : "Unknown"}
+              </dd>
+            </div>
+            <div className="flex items-start justify-between gap-3">
+              <dt>Last API error</dt>
+              <dd className="font-medium text-right">{formatShopifyApiError(shopifyStatus.lastApiError)}</dd>
             </div>
             <div className="flex items-start justify-between gap-3">
               <dt>Last updated</dt>

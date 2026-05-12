@@ -111,7 +111,14 @@ describe("Walmart connect Shopify UI", () => {
             status: "connected",
             storeDomain: "opanutrition.myshopify.com",
             apiVersion: "2025-10",
-            maskedAccessToken: "************cdef",
+            authMode: "dev_dashboard_client_credentials",
+            maskedClientId: "sh***3456",
+            clientSecretStored: true,
+            tokenStatus: "valid",
+            lastTokenRefreshAt: "2026-05-12T00:30:00.000Z",
+            tokenExpiresAt: "2026-05-12T01:30:00.000Z",
+            grantedScopes: ["read_products"],
+            lastApiError: null,
             updatedAt: "2026-05-12T00:00:00.000Z",
             saveSupported: true,
             importState: {
@@ -146,6 +153,10 @@ describe("Walmart connect Shopify UI", () => {
     expect(container.textContent).toContain("Shopify Source Catalog");
     expect(container.textContent).toContain("Shopify Status");
     expect(container.textContent).toContain("opanutrition.myshopify.com");
+    expect(container.textContent).toContain("Client ID");
+    expect(container.textContent).toContain("sh***3456");
+    expect(container.textContent).toContain("Token status");
+    expect(container.textContent).toContain("valid");
     expect(container.textContent).toContain("Product count imported");
     expect(container.textContent).toContain("12");
     expect(container.textContent).toContain("Image count imported");

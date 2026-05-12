@@ -106,7 +106,14 @@ function createConnectionFetchMock(options?: {
           status: "disconnected",
           storeDomain: "",
           apiVersion: "2025-10",
-          maskedAccessToken: "Not configured",
+          authMode: "dev_dashboard_client_credentials",
+          maskedClientId: "Not configured",
+          clientSecretStored: false,
+          tokenStatus: "unknown",
+          lastTokenRefreshAt: null,
+          tokenExpiresAt: null,
+          grantedScopes: [],
+          lastApiError: null,
           updatedAt: null,
           saveSupported: true,
           importState: {
@@ -219,6 +226,8 @@ describe("EcomViper connect instructions", () => {
       instructionButtons[3].click();
     });
     expect(container.textContent).toContain("Shopify Source Catalog Instructions");
+    expect(container.textContent).toContain("Client ID");
+    expect(container.textContent).toContain("Do not use the App automation token");
     await act(async () => {
       getButtonsByLabel(container, "Close")[0].click();
     });
