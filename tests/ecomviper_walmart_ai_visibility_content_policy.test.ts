@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import {
   buildAiAnswerShortDescription,
+  buildCompliantSearchKeywords,
   buildDefaultAltText,
   buildEntityRichTitle,
   buildStructuredLongDescription,
@@ -86,6 +87,36 @@ describe("Walmart AI visibility content policy", () => {
     expect(sanitized.rejectedRiskyClaims.length).toBeGreaterThan(0);
     expect(sanitized.sanitized.toLowerCase()).not.toContain("arthritis");
     expect(sanitized.sanitized.toLowerCase()).not.toContain("medication");
+  });
+
+  it("preserves FDA disclaimer wording during sanitization", () => {
+    const sanitized = sanitizeRiskyClaims(SUPPLEMENT_FDA_DISCLAIMER);
+    expect(sanitized.sanitized).toBe(SUPPLEMENT_FDA_DISCLAIMER);
+    expect(sanitized.rejectedRiskyClaims).toEqual([]);
+  });
+
+  it("builds long description without repetitive supports-wellness filler", () => {
+    const entitySet = buildWalmartVisibilityEntitySet(
+      createProduct({
+        attributes: {
+          product_form: "Capsules",
+          count: "60",
+          main_ingredients: "Turmeric, Glucosamine, Chondroitin",
+          support_areas: "supports wellness, supports wellness, mobility support",
+        },
+      })
+    );
+    const longDescription = buildStructuredLongDescription({ entitySet });
+
+    expect(longDescription.toLowerCase()).not.toContain("supports wellness, supports wellness");
+    expect(longDescription.split(SUPPLEMENT_FDA_DISCLAIMER).length - 1).toBe(1);
+  });
+
+  it("builds compliant search keywords from product entities", () => {
+    const keywords = buildCompliantSearchKeywords(buildWalmartVisibilityEntitySet(createProduct()));
+    expect(keywords.some((entry) => entry.toLowerCase().includes("opa"))).toBe(true);
+    expect(keywords.some((entry) => entry.toLowerCase().includes("turmeric"))).toBe(true);
+    expect(keywords.some((entry) => /erectile dysfunction|viagra|cialis/i.test(entry))).toBe(false);
   });
 
   it("builds entity-rich alt text", () => {

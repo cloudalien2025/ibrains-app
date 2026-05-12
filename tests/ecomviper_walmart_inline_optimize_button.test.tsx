@@ -499,8 +499,10 @@ describe("Walmart inline optimize button workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain("Search & Browse applied:");
-    expect(container.textContent).toContain("skipped:");
+    expect(container.textContent).toContain("Updated Content:");
+    expect(container.textContent).toContain("Updated Search & Browse:");
+    expect(container.textContent).toContain("Skipped protected fields:");
+    expect(container.textContent).toContain("Skipped low-confidence fields:");
 
     const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"

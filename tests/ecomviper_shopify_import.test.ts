@@ -156,6 +156,106 @@ describe("Shopify product import normalization", () => {
     expect(product.variants[0].imageUrl).toBe("https://cdn.shopify.com/variant.jpg?v=5");
   });
 
+  it("imports full product gallery from Shopify images connection when media nodes are empty", async () => {
+    await saveShopifyConnectionForUser({
+      userId: "user_ibrains",
+      storeDomain: "opanutrition.myshopify.com",
+      clientId: "shopify_client_images_123",
+      clientSecret: "shopify_secret_images_123",
+      apiVersion: "2025-10",
+    });
+
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            access_token: "shopify_exchange_token_images",
+            scope: "read_products",
+            expires_in: 3600,
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            data: {
+              products: {
+                pageInfo: { hasNextPage: false, endCursor: null },
+                nodes: [
+                  {
+                    id: "gid://shopify/Product/202",
+                    title: "OPA Recovery Complex",
+                    handle: "opa-recovery-complex",
+                    vendor: "OPA Nutrition",
+                    productType: "Supplements",
+                    status: "ACTIVE",
+                    tags: ["recovery"],
+                    description: "Recovery support",
+                    descriptionHtml: "<p>Recovery support</p>",
+                    onlineStoreUrl: null,
+                    createdAt: "2026-05-10T00:00:00.000Z",
+                    updatedAt: "2026-05-11T00:00:00.000Z",
+                    featuredImage: {
+                      id: "gid://shopify/MediaImage/featured_202",
+                      url: "https://cdn.shopify.com/recovery-main.jpg?v=1",
+                      altText: "Main image",
+                      width: 2000,
+                      height: 2000,
+                    },
+                    images: {
+                      nodes: [
+                        {
+                          id: "gid://shopify/Image/202-1",
+                          url: "https://cdn.shopify.com/recovery-main.jpg?v=1",
+                          altText: "Main duplicate",
+                          width: 2000,
+                          height: 2000,
+                        },
+                        {
+                          id: "gid://shopify/Image/202-2",
+                          url: "https://cdn.shopify.com/recovery-side.jpg?v=2",
+                          altText: "Side angle",
+                          width: 2000,
+                          height: 2000,
+                        },
+                        {
+                          id: "gid://shopify/Image/202-3",
+                          url: "https://cdn.shopify.com/recovery-back.jpg?v=3",
+                          altText: "Back label",
+                          width: 2000,
+                          height: 2000,
+                        },
+                      ],
+                    },
+                    media: {
+                      nodes: [],
+                    },
+                    variants: {
+                      nodes: [],
+                    },
+                  },
+                ],
+              },
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+
+    const result = await importShopifyProductsForUser("user_ibrains", { boundedRuntime: true });
+    expect(result.importedCount).toBe(1);
+    expect(result.imageCount).toBe(3);
+
+    const products = await listShopifyProductsForUser("user_ibrains");
+    expect(products).toHaveLength(1);
+    expect(products[0].galleryImageUrls).toEqual([
+      "https://cdn.shopify.com/recovery-main.jpg?v=1",
+      "https://cdn.shopify.com/recovery-side.jpg?v=2",
+      "https://cdn.shopify.com/recovery-back.jpg?v=3",
+    ]);
+  });
+
   it("records import state counters for products and images", async () => {
     await saveShopifyConnectionForUser({
       userId: "user_ibrains",

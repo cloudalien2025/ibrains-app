@@ -121,6 +121,52 @@ describe("Walmart-to-Shopify matching", () => {
     expect(result.products[0].imageSource).toBe("shopify_variant");
     expect(result.products[0].imageMatchMethod).toBe("shopify_sku_exact");
     expect(result.products[0].imageUrl).toBe("https://cdn.shopify.com/variant-sku.jpg");
+    expect(result.products[0].galleryImageUrls).toEqual([
+      "https://cdn.shopify.com/variant-sku.jpg",
+      "https://cdn.shopify.com/product-main.jpg",
+      "https://cdn.shopify.com/product-gallery.jpg",
+    ]);
+  });
+
+  it("deduplicates variant/product gallery URLs while keeping variant image first", () => {
+    const walmart = createWalmartProduct({ sku: "SKU-DEDUPE", upc: "" });
+    const shopify = createShopifyProduct({
+      galleryImageUrls: [
+        "https://cdn.shopify.com/variant-repeat.jpg",
+        "https://cdn.shopify.com/variant-repeat.jpg",
+        "https://cdn.shopify.com/product-alt.jpg",
+      ],
+      variants: [
+        {
+          id: "gid://shopify/ProductVariant/sku_dedupe",
+          productId: "gid://shopify/Product/1",
+          title: "Default Title",
+          sku: "SKU-DEDUPE",
+          barcode: "",
+          price: 19.99,
+          compareAtPrice: null,
+          inventoryQuantity: 10,
+          selectedOptions: [],
+          imageUrl: "https://cdn.shopify.com/variant-repeat.jpg",
+          imageAltText: null,
+          imageUrls: [
+            "https://cdn.shopify.com/variant-repeat.jpg",
+            "https://cdn.shopify.com/variant-repeat.jpg",
+          ],
+        },
+      ],
+    });
+
+    const result = reconcileWalmartProductsWithShopify({
+      walmartProducts: [walmart],
+      shopifyProducts: [shopify],
+      applyMode: "prefer_shopify",
+    });
+
+    expect(result.products[0].galleryImageUrls).toEqual([
+      "https://cdn.shopify.com/variant-repeat.jpg",
+      "https://cdn.shopify.com/product-alt.jpg",
+    ]);
   });
 
   it("applies image for barcode exact and barcode normalized matches", () => {

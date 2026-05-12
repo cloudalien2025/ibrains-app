@@ -61,6 +61,18 @@ describe("walmart search & browse attributes foundation", () => {
     expect(normalized.support_areas).toBeUndefined();
   });
 
+  it("canonicalizes select-like values for age group and product form", () => {
+    const normalized = normalizeSearchBrowseAttributes({
+      age_group: "Adults",
+      product_form: "capsules",
+      manufacturer: "Unknown",
+    });
+
+    expect(normalized.age_group).toBe("Adult");
+    expect(normalized.product_form).toBe("Capsule");
+    expect(normalized.manufacturer).toBeUndefined();
+  });
+
   it("builds draft-hydration attributes from product + draft + raw aliases", () => {
     const product = createProduct();
 
