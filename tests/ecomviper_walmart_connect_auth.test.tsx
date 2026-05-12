@@ -6,6 +6,7 @@ import { POST as testConnectionRoute } from "@/app/api/ecomviper/walmart/connect
 import { POST as saveConnectionRoute } from "@/app/api/ecomviper/walmart/connect/save/route";
 import { GET as healthRoute } from "@/app/api/ecomviper/walmart/health/route";
 import { requestServerSideWalmartToken } from "@/lib/ecomviper/walmart/walmart-auth";
+import * as walmartProducts from "@/lib/ecomviper/walmart/walmart-products";
 import type { WalmartConnectionHealth } from "@/lib/ecomviper/walmart/walmart-types";
 
 const authMocks = vi.hoisted(() => ({
@@ -264,6 +265,10 @@ describe("EcomViper Walmart connect auth", () => {
     expect(testPayload.status).toBe("connected");
     expect(testPayload.clientSecretStored).toBe(true);
     expect(testPayload.maskedClientId).toBe("st***t_id");
+    expect(testPayload.tokenStatus).toBe("valid");
+    expect(testPayload.safeReadStatus).toBe("valid");
+    expect(typeof testPayload.lastSuccessfulAuth).toBe("string");
+    expect(typeof testPayload.lastSuccessfulRead).toBe("string");
 
     const [tokenUrl, tokenInit] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(tokenUrl).toBe("https://marketplace.walmartapis.com/v3/token");
@@ -320,6 +325,90 @@ describe("EcomViper Walmart connect auth", () => {
     expect(healthAfterDisconnectPayload.connectionHealth.connectionStatus).toBe("not_connected");
     expect(healthAfterDisconnectPayload.connectionHealth.summary.clientSecretStored).toBe(false);
     expect(healthAfterDisconnectPayload.connectionHealth.summary.maskedClientId).toBe("Not configured");
+  });
+
+  it("health route still returns connection status when dashboard metrics fail to load", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "wm_live_access_token", expires_in: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ elements: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+    await saveConnectionRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "save",
+          accountNickname: "OPA Nutrition Walmart",
+          clientId: "health_guard_client",
+          clientSecret: "health_guard_secret",
+          marketplaceRegion: "US",
+        }),
+      })
+    );
+
+    vi.spyOn(walmartProducts, "getWalmartDashboardSnapshotForUser").mockRejectedValueOnce(
+      new Error("dashboard unavailable")
+    );
+
+    const healthResp = await healthRoute(new NextRequest("http://localhost/api/ecomviper/walmart/health"));
+    const healthPayload = await healthResp.json();
+
+    expect(healthResp.status).toBe(200);
+    expect(healthPayload.ok).toBe(true);
+    expect(healthPayload.connectionHealth.summary.maskedClientId).toBe("he***ient");
+    expect(healthPayload.cards.productsImported).toBe(0);
+    expect(healthPayload.cards.listingsNeedingAttention.count).toBe(0);
+  });
+
+  it("scopes persisted Walmart connection records by user and prevents cross-user status bleed", async () => {
+    vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ access_token: "wm_live_access_token", expires_in: 900 }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ elements: [] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        })
+      );
+
+    await saveConnectionRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/save", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "save",
+          accountNickname: "User One Walmart",
+          clientId: "user_one_client_id",
+          clientSecret: "user_one_secret",
+          marketplaceRegion: "US",
+        }),
+      })
+    );
+
+    authMocks.requireSignedInUser.mockResolvedValueOnce({
+      userId: "user_two",
+      unauthorizedResponse: null,
+    });
+
+    const healthResp = await healthRoute(new NextRequest("http://localhost/api/ecomviper/walmart/health"));
+    const healthPayload = await healthResp.json();
+
+    expect(healthResp.status).toBe(200);
+    expect(healthPayload.connectionHealth.summary.maskedClientId).toBe("Not configured");
+    expect(healthPayload.connectionHealth.summary.clientSecretStored).toBe(false);
+    expect(healthPayload.connectionHealth.summary.tokenStatus).toBe("unknown");
   });
 
   it("token request returns sanitized failure details and never leaks secret/token/auth", async () => {

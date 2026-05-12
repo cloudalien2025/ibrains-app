@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-header";
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
+import ConnectionInstructionsDialog, {
+  type ConnectionInstructionsProvider,
+} from "@/app/apps/ecomviper/walmart/connect/_components/connection-instructions-dialog";
 import type {
   WalmartApiError,
   WalmartConnectionDiagnostic,
@@ -294,6 +297,8 @@ function buildDiagnosticText(diagnostic: WalmartConnectionDiagnostic): string {
 }
 
 export default function WalmartConnectClient({ initialHealth }: ConnectClientProps) {
+  const walmartClientIdInputRef = useRef<HTMLInputElement | null>(null);
+  const walmartClientSecretInputRef = useRef<HTMLInputElement | null>(null);
   const [form, setForm] = useState<ConnectForm>({
     accountNickname: initialHealth.summary.accountNickname,
     clientId: "",
@@ -365,6 +370,8 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [openAiLoading, setOpenAiLoading] = useState(false);
   const [serpApiLoading, setSerpApiLoading] = useState(false);
   const [shopifyLoading, setShopifyLoading] = useState(false);
+  const [walmartDraftDirty, setWalmartDraftDirty] = useState(false);
+  const [instructionsProvider, setInstructionsProvider] = useState<ConnectionInstructionsProvider | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => Boolean(form.accountNickname.trim()), [form.accountNickname]);
@@ -374,6 +381,36 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
     () => Boolean(shopifyForm.storeDomain.trim() && shopifyForm.adminApiToken.trim()),
     [shopifyForm.storeDomain, shopifyForm.adminApiToken]
   );
+  const hasUnsavedWalmartChanges = useMemo(() => {
+    if (!walmartDraftDirty) return false;
+    if (form.clientId.trim() || form.clientSecret.trim() || form.notes.trim()) return true;
+    return form.accountNickname.trim() !== health.summary.accountNickname.trim();
+  }, [form.accountNickname, form.clientId, form.clientSecret, form.notes, health.summary.accountNickname, walmartDraftDirty]);
+
+  function resolveWalmartFormForSubmit(): ConnectForm {
+    const clientIdFromInput = walmartClientIdInputRef.current?.value?.trim() ?? "";
+    const clientSecretFromInput = walmartClientSecretInputRef.current?.value ?? "";
+
+    const resolved: ConnectForm = {
+      ...form,
+      clientId: clientIdFromInput || form.clientId,
+      clientSecret: clientSecretFromInput || form.clientSecret,
+    };
+
+    if (
+      resolved.clientId !== form.clientId ||
+      resolved.clientSecret !== form.clientSecret
+    ) {
+      setForm((current) => ({
+        ...current,
+        clientId: resolved.clientId,
+        clientSecret: resolved.clientSecret,
+      }));
+      setWalmartDraftDirty(true);
+    }
+
+    return resolved;
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -400,6 +437,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           accountNickname: payload.connectionHealth?.summary.accountNickname ?? current.accountNickname,
           marketplaceRegion: payload.connectionHealth?.summary.region ?? current.marketplaceRegion,
         }));
+        setWalmartDraftDirty(false);
       } catch {
         // Intentionally silent; form remains usable with initial server snapshot.
       }
@@ -460,9 +498,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   async function handleTest() {
     try {
       setLoading(true);
+      const resolvedForm = resolveWalmartFormForSubmit();
       const response = await postJson<ConnectApiPayload>("/api/ecomviper/walmart/connect/test", {
-        ...form,
-        region: form.marketplaceRegion,
+        ...resolvedForm,
+        region: resolvedForm.marketplaceRegion,
       });
 
       setHealth(toHealth(response));
@@ -481,20 +520,26 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   async function handleSave(action: "save" | "rotate" | "disconnect" | "permissions") {
     try {
       setLoading(true);
+      const resolvedForm = resolveWalmartFormForSubmit();
       const response = await postJson<
         ConnectApiPayload & {
           action?: "save" | "rotate" | "disconnect" | "permissions";
         }
       >("/api/ecomviper/walmart/connect/save", {
-        ...form,
-        region: form.marketplaceRegion,
+        ...resolvedForm,
+        region: resolvedForm.marketplaceRegion,
         action,
       });
 
       setHealth(toHealth(response));
 
-      if (action !== "permissions") {
+      if (action === "disconnect") {
+        setForm((current) => ({ ...current, clientId: "", clientSecret: "", notes: "" }));
+      } else if (action !== "permissions") {
         setForm((current) => ({ ...current, clientSecret: "" }));
+      }
+      if (action !== "permissions") {
+        setWalmartDraftDirty(false);
       }
 
       setMessage(
@@ -778,7 +823,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               Account nickname
               <input
                 value={form.accountNickname}
-                onChange={(event) => setForm((current) => ({ ...current, accountNickname: event.target.value }))}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, accountNickname: event.target.value }));
+                  setWalmartDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="OPA Nutrition Walmart"
               />
@@ -787,8 +835,17 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             <label className="text-sm text-[#334155]">
               Client ID
               <input
+                ref={walmartClientIdInputRef}
                 value={form.clientId}
-                onChange={(event) => setForm((current) => ({ ...current, clientId: event.target.value }))}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, clientId: event.target.value }));
+                  setWalmartDraftDirty(true);
+                }}
+                onInput={(event) => {
+                  const target = event.target as HTMLInputElement;
+                  setForm((current) => ({ ...current, clientId: target.value }));
+                  setWalmartDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="Walmart client id"
               />
@@ -797,9 +854,18 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             <label className="text-sm text-[#334155]">
               Client Secret
               <input
+                ref={walmartClientSecretInputRef}
                 type="password"
                 value={form.clientSecret}
-                onChange={(event) => setForm((current) => ({ ...current, clientSecret: event.target.value }))}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, clientSecret: event.target.value }));
+                  setWalmartDraftDirty(true);
+                }}
+                onInput={(event) => {
+                  const target = event.target as HTMLInputElement;
+                  setForm((current) => ({ ...current, clientSecret: target.value }));
+                  setWalmartDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="Leave blank to keep stored secret"
               />
@@ -814,7 +880,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               Marketplace region
               <select
                 value={form.marketplaceRegion}
-                onChange={() => setForm((current) => ({ ...current, marketplaceRegion: "US" }))}
+                onChange={() => {
+                  setForm((current) => ({ ...current, marketplaceRegion: "US" }));
+                  setWalmartDraftDirty(true);
+                }}
                 className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
               >
                 <option value="US">US</option>
@@ -825,7 +894,10 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               Optional notes / label
               <textarea
                 value={form.notes}
-                onChange={(event) => setForm((current) => ({ ...current, notes: event.target.value }))}
+                onChange={(event) => {
+                  setForm((current) => ({ ...current, notes: event.target.value }));
+                  setWalmartDraftDirty(true);
+                }}
                 className="mt-1 min-h-24 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                 placeholder="Optional operator notes"
               />
@@ -881,8 +953,20 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             >
               Copy Diagnostic
             </button>
+            <button
+              type="button"
+              onClick={() => setInstructionsProvider("walmart")}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+            >
+              Instructions
+            </button>
           </div>
 
+          {hasUnsavedWalmartChanges ? (
+            <p className="mt-3 text-xs text-amber-700">
+              You have unsaved Walmart credential changes. The status panel shows only the last saved connection state.
+            </p>
+          ) : null}
           {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
         </article>
 
@@ -989,6 +1073,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             >
               Disconnect OpenAI
             </button>
+            <button
+              type="button"
+              onClick={() => setInstructionsProvider("openai")}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+            >
+              Instructions
+            </button>
           </div>
 
           {!openAiStatus.saveSupported ? (
@@ -1066,6 +1157,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
               className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700 disabled:opacity-50"
             >
               Disconnect SerpApi
+            </button>
+            <button
+              type="button"
+              onClick={() => setInstructionsProvider("serpapi")}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+            >
+              Instructions
             </button>
           </div>
 
@@ -1231,6 +1329,13 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             >
               Disconnect Shopify
             </button>
+            <button
+              type="button"
+              onClick={() => setInstructionsProvider("shopify")}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
+            >
+              Instructions
+            </button>
           </div>
 
           {!shopifyStatus.saveSupported ? (
@@ -1289,6 +1394,11 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
           </dl>
         </article>
       </section>
+
+      <ConnectionInstructionsDialog
+        provider={instructionsProvider}
+        onClose={() => setInstructionsProvider(null)}
+      />
     </div>
   );
 }
