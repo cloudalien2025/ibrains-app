@@ -110,6 +110,7 @@ describe("walmart import enrichment queue", () => {
           selectedScore: null,
           runnerUpScore: null,
           acceptedBy: "none",
+          decisionCode: "walmart_item_search_not_found",
         },
       },
     });
@@ -188,7 +189,7 @@ describe("walmart import enrichment queue", () => {
       retries: 0,
     });
 
-    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledTimes(3);
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledTimes(4);
     expect(result.progress.enrichmentQueuedCount).toBe(3);
     expect(result.progress.enrichmentCompletedCount).toBe(3);
     expect(result.progress.foundCount).toBe(1);
@@ -235,6 +236,7 @@ describe("walmart import enrichment queue", () => {
           selectedScore: 320,
           runnerUpScore: null,
           acceptedBy: "identifier_exact",
+          decisionCode: "walmart_item_search_exact_identifier_match",
         },
       },
     });
@@ -254,6 +256,9 @@ describe("walmart import enrichment queue", () => {
     expect(itemSearchMocks.enrichWalmartImageFromItemSearch).toHaveBeenCalledTimes(1);
     expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).not.toHaveBeenCalled();
     expect(result.progress.walmartSearchImageFoundCount).toBe(1);
+    expect(
+      result.progress.walmartItemSearchDiagnostics.walmart_item_search_exact_identifier_match
+    ).toBe(1);
     expect(result.products[0]?.imageUrl).toBe("https://i5.walmartimages.com/asr/upc-1.jpg");
     expect(result.products[0]?.publicWalmartProductId).toBe("17812552813");
     expect(result.products[0]?.publicWalmartUrl).toContain("/17812552813");
@@ -289,6 +294,7 @@ describe("walmart import enrichment queue", () => {
           selectedScore: null,
           runnerUpScore: null,
           acceptedBy: "none",
+          decisionCode: "walmart_item_search_not_found",
         },
       },
     });
@@ -445,7 +451,7 @@ describe("walmart import enrichment queue", () => {
     expect(result.progress.serpApiProductGalleryDiagnostics.serpapi_product_gallery_checked).toBe(1);
   });
 
-  it("marks brand-search ambiguity and skips automatic persistence and gallery fallback", async () => {
+  it("does not persist ambiguous brand-search match and keeps strict listing behavior after per-product fallback", async () => {
     const product = {
       ...createProduct("OPA-AMBIG-1"),
       title: "OPA Sleep Magnesium Glycinate Capsules 60ct",
@@ -499,6 +505,33 @@ describe("walmart import enrichment queue", () => {
       keyTokenOverlap: 3,
       exactTitle: false,
     });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValueOnce({
+      imageSyncStatus: "ambiguous",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason:
+        "Multiple title+brand candidates were found. Add a direct public Walmart listing URL for a confident match.",
+      imageMatchMethod: "serpapi_search_title_brand",
+      publicWalmartUrl: "",
+      publicWalmartProductId: "",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-11T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_search",
+        statusCategory: "ambiguous",
+        productId: null,
+        productIdentifierType: "search_title_brand",
+        queryUsed: "OPA Sleep Magnesium Glycinate",
+        candidateCount: 2,
+        imageCount: 0,
+        matchMethod: "serpapi_search_title_brand",
+        topCandidateTitle: "OPA Sleep Magnesium Glycinate Capsules 60ct",
+        topCandidateProductId: "18410702298",
+      },
+      errorCode: "SERPAPI_AMBIGUOUS_MATCH",
+    });
 
     const { runPublicListingImageEnrichmentQueue } = await import(
       "@/lib/ecomviper/walmart/walmart-import-enrichment"
@@ -511,14 +544,14 @@ describe("walmart import enrichment queue", () => {
       retries: 0,
     });
 
-    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).not.toHaveBeenCalled();
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledTimes(1);
     expect(result.products[0]?.publicWalmartProductId).toBe("");
     expect(result.products[0]?.publicWalmartUrl).toBe("");
     expect(result.products[0]?.imageSyncStatus).toBe("ambiguous");
     expect(result.progress.serpApiBrandSearchDiagnostics.serpapi_brand_search_ambiguous).toBe(1);
   });
 
-  it("does not run gallery fallback or persist generic listing when brand search has no confident match", async () => {
+  it("continues no_confident_match into per-product SerpApi fallback with bounded title query seeds", async () => {
     const product = {
       ...createProduct("OPA-NOMATCH-1"),
       title: "OPA Joint Flex Turmeric Daily Capsules 60ct",
@@ -553,6 +586,57 @@ describe("walmart import enrichment queue", () => {
       keyTokenOverlap: 1,
       exactTitle: false,
     });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing
+      .mockResolvedValueOnce({
+        imageSyncStatus: "found",
+        imageSource: "public_walmart_listing_serpapi",
+        statusReason: "Public Walmart listing images found via title+brand match through SerpApi.",
+        imageMatchMethod: "serpapi_search_title_brand",
+        publicWalmartUrl: "https://www.walmart.com/ip/17812552813",
+        publicWalmartProductId: "17812552813",
+        primaryImageUrl: "https://i5.walmartimages.com/asr/opa-joint-thumb.jpg",
+        galleryImageUrls: ["https://i5.walmartimages.com/asr/opa-joint-thumb.jpg"],
+        variantImageUrls: [],
+        lastImageSyncedAt: "2026-05-11T00:00:00.000Z",
+        diagnostics: {
+          provider: "serpapi",
+          endpointFamily: "walmart_search",
+          statusCategory: "ok",
+          productId: "17812552813",
+          productIdentifierType: "search_title_brand",
+          queryUsed: "OPA Nutrition Joint Flex Turmeric",
+          candidateCount: 1,
+          imageCount: 1,
+          matchMethod: "serpapi_search_title_brand",
+          topCandidateTitle: "OPA Joint Flex Turmeric Capsules 60ct",
+          topCandidateProductId: "17812552813",
+        },
+      })
+      .mockResolvedValueOnce({
+        imageSyncStatus: "not_found",
+        imageSource: "public_walmart_listing_serpapi",
+        statusReason: "No public Walmart listing images were found for this product.",
+        imageMatchMethod: "serpapi_product_id",
+        publicWalmartUrl: "https://www.walmart.com/ip/17812552813",
+        publicWalmartProductId: "17812552813",
+        primaryImageUrl: "",
+        galleryImageUrls: [],
+        variantImageUrls: [],
+        lastImageSyncedAt: "2026-05-11T00:00:00.000Z",
+        diagnostics: {
+          provider: "serpapi",
+          endpointFamily: "walmart_product",
+          statusCategory: "not_found",
+          productId: "17812552813",
+          productIdentifierType: "walmart_item_id",
+          candidateCount: 0,
+          imageCount: 0,
+          matchMethod: "serpapi_product_id",
+          topCandidateTitle: null,
+          topCandidateProductId: null,
+        },
+        errorCode: "SERPAPI_NOT_FOUND",
+      });
 
     const { runPublicListingImageEnrichmentQueue } = await import(
       "@/lib/ecomviper/walmart/walmart-import-enrichment"
@@ -565,10 +649,106 @@ describe("walmart import enrichment queue", () => {
       retries: 0,
     });
 
-    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).not.toHaveBeenCalled();
-    expect(result.products[0]?.publicWalmartProductId).toBe("");
-    expect(result.products[0]?.publicWalmartUrl).toBe("");
-    expect(result.products[0]?.imageSyncStatus).toBe("not_found");
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledTimes(2);
+    expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        skipProductLookup: true,
+        searchTitleBrandQuery: expect.stringContaining("OPA"),
+      })
+    );
+    expect(result.products[0]?.publicWalmartProductId).toBe("17812552813");
+    expect(result.products[0]?.publicWalmartUrl).toBe("https://www.walmart.com/ip/17812552813");
+    expect(result.products[0]?.imageSyncStatus).toBe("found");
     expect(result.progress.serpApiBrandSearchDiagnostics.serpapi_brand_search_no_confident_match).toBe(1);
+    expect(
+      result.progress.serpApiPerProductDiagnostics.no_confident_match_continued_to_fallback
+    ).toBe(1);
+    expect(result.progress.serpApiPerProductDiagnostics.serpapi_per_product_searches_attempted).toBe(1);
+    expect(result.progress.serpApiPerProductDiagnostics.serpapi_per_product_matches).toBe(1);
+    const firstQuery = (
+      serpApiMocks.enrichProductImagesFromPublicWalmartListing.mock.calls[0]?.[0] as
+        | { searchTitleBrandQuery?: string }
+        | undefined
+    )?.searchTitleBrandQuery;
+    expect(firstQuery).toContain("OPA");
+    expect(firstQuery).toContain("Joint");
+    expect(firstQuery).toContain("Flex");
+    expect(firstQuery).not.toContain("850054016119");
+  });
+
+  it("keeps no_confident_match, not_found, and provider-failed counters distinct", async () => {
+    const product = {
+      ...createProduct("OPA-FAILED-1"),
+      title: "OPA Prostate Support Saw Palmetto Pumpkin Seed",
+      brand: "OPA Nutrition",
+      itemId: "",
+      publicWalmartProductId: "",
+      publicWalmartUrl: "",
+      imageUrl: "",
+    };
+
+    serpApiMocks.harvestWalmartBrandSearchListingsViaSerpApi.mockResolvedValueOnce({
+      ok: true,
+      statusCategory: "ok",
+      statusReason: "Harvested 1 brand-search public listing candidate(s).",
+      query: "OPA Nutrition",
+      pagesFetched: 1,
+      resultsHarvested: 1,
+      listings: [],
+    });
+    serpApiMocks.matchImportedWalmartProductToBrandSearchListings.mockReturnValueOnce({
+      status: "no_confident_match",
+      confidence: "low",
+      score: 28,
+      matchedListing: null,
+      runnerUpListing: null,
+      runnerUpScore: 0,
+      titleCoverage: 0.32,
+      titleJaccard: 0.2,
+      keyTokenOverlap: 0,
+      exactTitle: false,
+    });
+    serpApiMocks.enrichProductImagesFromPublicWalmartListing.mockResolvedValueOnce({
+      imageSyncStatus: "failed",
+      imageSource: "public_walmart_listing_serpapi",
+      statusReason: "SerpApi provider request failed.",
+      imageMatchMethod: "serpapi_search_title_brand",
+      publicWalmartUrl: "",
+      publicWalmartProductId: "",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      lastImageSyncedAt: "2026-05-11T00:00:00.000Z",
+      diagnostics: {
+        provider: "serpapi",
+        endpointFamily: "walmart_search",
+        statusCategory: "provider_error",
+        productId: null,
+        productIdentifierType: "search_title_brand",
+        queryUsed: "OPA Prostate Support Saw Palmetto Pumpkin Seed",
+        candidateCount: 0,
+        imageCount: 0,
+        matchMethod: "serpapi_search_title_brand",
+        topCandidateTitle: null,
+        topCandidateProductId: null,
+      },
+      errorCode: "SERPAPI_PROVIDER_ERROR",
+    });
+
+    const { runPublicListingImageEnrichmentQueue } = await import(
+      "@/lib/ecomviper/walmart/walmart-import-enrichment"
+    );
+    const result = await runPublicListingImageEnrichmentQueue({
+      userId: "user_clerk_1",
+      accessToken: "wm_token",
+      products: [product],
+      importedCount: 1,
+      retries: 0,
+    });
+
+    expect(result.progress.serpApiBrandSearchDiagnostics.serpapi_brand_search_no_confident_match).toBe(1);
+    expect(result.progress.failedCount).toBe(1);
+    expect(result.progress.notFoundCount).toBe(0);
   });
 });

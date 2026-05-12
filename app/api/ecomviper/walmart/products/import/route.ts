@@ -34,6 +34,17 @@ interface ImportProgressTotals {
   imageFromSerpApiFallbackCount: number;
   imageFromSerpApiProductGalleryCount: number;
   imageFromSerpApiSearchFallbackCount: number;
+  perProductSerpApiSearchesAttempted: number;
+  perProductSerpApiMatches: number;
+  perProductSerpApiThumbnailsSaved: number;
+  noConfidentMatchContinuedToFallback: number;
+  ambiguousContinuedToFallback: number;
+  ambiguousSkippedCount: number;
+  walmartItemSearchExactIdentifierMatchCount: number;
+  walmartItemSearchIdentifierNormalizedMatchCount: number;
+  walmartItemSearchIdentifierAssistedMatchCount: number;
+  walmartItemSearchMultipleCandidatesRejectedCount: number;
+  walmartItemSearchSingleCandidateNoImageCount: number;
   walmartSearchNotFoundCount: number;
   imageStillMissingCount: number;
   imageMissingCount: number;
@@ -283,6 +294,17 @@ function buildSuccessProgress(input: {
     diagnostics?.serpApiBrandSearchAmbiguousCount !== undefined ||
     diagnostics?.serpApiBrandSearchNoConfidentMatchCount !== undefined ||
     diagnostics?.imageFromSerpApiFallbackCount !== undefined ||
+    diagnostics?.perProductSerpApiSearchesAttempted !== undefined ||
+    diagnostics?.perProductSerpApiMatches !== undefined ||
+    diagnostics?.perProductSerpApiThumbnailsSaved !== undefined ||
+    diagnostics?.noConfidentMatchContinuedToFallback !== undefined ||
+    diagnostics?.ambiguousContinuedToFallback !== undefined ||
+    diagnostics?.ambiguousSkippedCount !== undefined ||
+    diagnostics?.walmartItemSearchExactIdentifierMatchCount !== undefined ||
+    diagnostics?.walmartItemSearchIdentifierNormalizedMatchCount !== undefined ||
+    diagnostics?.walmartItemSearchIdentifierAssistedMatchCount !== undefined ||
+    diagnostics?.walmartItemSearchMultipleCandidatesRejectedCount !== undefined ||
+    diagnostics?.walmartItemSearchSingleCandidateNoImageCount !== undefined ||
     diagnostics?.walmartSearchNotFoundCount !== undefined ||
     diagnostics?.imageStillMissingCount !== undefined ||
     diagnostics?.imageNotFoundCount !== undefined ||
@@ -320,6 +342,55 @@ function buildSuccessProgress(input: {
     result.importDiagnostics?.imageFromSerpApiProductGalleryCount ?? 0;
   const imageFromSerpApiSearchFallbackCount =
     result.importDiagnostics?.imageFromSerpApiSearchFallbackCount ?? 0;
+  const perProductSerpApiSearchesAttempted =
+    result.importDiagnostics?.perProductSerpApiSearchesAttempted ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.serpapi_per_product_searches_attempted ??
+    0;
+  const perProductSerpApiMatches =
+    result.importDiagnostics?.perProductSerpApiMatches ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.serpapi_per_product_matches ??
+    0;
+  const perProductSerpApiThumbnailsSaved =
+    result.importDiagnostics?.perProductSerpApiThumbnailsSaved ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.serpapi_per_product_thumbnails_saved ??
+    0;
+  const noConfidentMatchContinuedToFallback =
+    result.importDiagnostics?.noConfidentMatchContinuedToFallback ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.no_confident_match_continued_to_fallback ??
+    0;
+  const ambiguousContinuedToFallback =
+    result.importDiagnostics?.ambiguousContinuedToFallback ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.ambiguous_continued_to_fallback ??
+    0;
+  const ambiguousSkippedCount =
+    result.importDiagnostics?.ambiguousSkippedCount ??
+    result.importDiagnostics?.serpApiPerProductDiagnostics?.ambiguous_skipped ??
+    0;
+  const walmartItemSearchExactIdentifierMatchCount =
+    result.importDiagnostics?.walmartItemSearchExactIdentifierMatchCount ??
+    result.importDiagnostics?.walmartItemSearchDiagnostics
+      ?.walmart_item_search_exact_identifier_match ??
+    0;
+  const walmartItemSearchIdentifierNormalizedMatchCount =
+    result.importDiagnostics?.walmartItemSearchIdentifierNormalizedMatchCount ??
+    result.importDiagnostics?.walmartItemSearchDiagnostics
+      ?.walmart_item_search_identifier_normalized_match ??
+    0;
+  const walmartItemSearchIdentifierAssistedMatchCount =
+    result.importDiagnostics?.walmartItemSearchIdentifierAssistedMatchCount ??
+    result.importDiagnostics?.walmartItemSearchDiagnostics
+      ?.walmart_item_search_identifier_assisted_match ??
+    0;
+  const walmartItemSearchMultipleCandidatesRejectedCount =
+    result.importDiagnostics?.walmartItemSearchMultipleCandidatesRejectedCount ??
+    result.importDiagnostics?.walmartItemSearchDiagnostics
+      ?.walmart_item_search_multiple_candidates_rejected ??
+    0;
+  const walmartItemSearchSingleCandidateNoImageCount =
+    result.importDiagnostics?.walmartItemSearchSingleCandidateNoImageCount ??
+    result.importDiagnostics?.walmartItemSearchDiagnostics
+      ?.walmart_item_search_single_candidate_no_image ??
+    0;
   const walmartSearchNotFoundCount = result.importDiagnostics?.walmartSearchNotFoundCount ?? 0;
   const imageStillMissingCount =
     result.importDiagnostics?.imageStillMissingCount ??
@@ -379,6 +450,17 @@ function buildSuccessProgress(input: {
       imageFromSerpApiFallbackCount,
       imageFromSerpApiProductGalleryCount,
       imageFromSerpApiSearchFallbackCount,
+      perProductSerpApiSearchesAttempted,
+      perProductSerpApiMatches,
+      perProductSerpApiThumbnailsSaved,
+      noConfidentMatchContinuedToFallback,
+      ambiguousContinuedToFallback,
+      ambiguousSkippedCount,
+      walmartItemSearchExactIdentifierMatchCount,
+      walmartItemSearchIdentifierNormalizedMatchCount,
+      walmartItemSearchIdentifierAssistedMatchCount,
+      walmartItemSearchMultipleCandidatesRejectedCount,
+      walmartItemSearchSingleCandidateNoImageCount,
       walmartSearchNotFoundCount,
       imageStillMissingCount,
       imageMissingCount: missingCount,
@@ -449,6 +531,17 @@ export async function POST(req: NextRequest) {
           imageFromSerpApiFallbackCount: 0,
           imageFromSerpApiProductGalleryCount: 0,
           imageFromSerpApiSearchFallbackCount: 0,
+          perProductSerpApiSearchesAttempted: 0,
+          perProductSerpApiMatches: 0,
+          perProductSerpApiThumbnailsSaved: 0,
+          noConfidentMatchContinuedToFallback: 0,
+          ambiguousContinuedToFallback: 0,
+          ambiguousSkippedCount: 0,
+          walmartItemSearchExactIdentifierMatchCount: 0,
+          walmartItemSearchIdentifierNormalizedMatchCount: 0,
+          walmartItemSearchIdentifierAssistedMatchCount: 0,
+          walmartItemSearchMultipleCandidatesRejectedCount: 0,
+          walmartItemSearchSingleCandidateNoImageCount: 0,
           walmartSearchNotFoundCount: 0,
           imageStillMissingCount: 0,
           imageMissingCount: 0,
@@ -500,7 +593,7 @@ export async function POST(req: NextRequest) {
       existingProductsShownCount,
     });
 
-    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. Public listings discovered via brand search: ${progress.totals.publicListingsDiscoveredViaSerpApiBrandSearchCount}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi search fallback images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Still missing images: ${progress.totals.imageStillMissingCount}. Ambiguous: ${progress.totals.imageAmbiguousCount}. Failed: ${progress.totals.imageFailedCount}.`;
+    const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${progress.totals.perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${progress.totals.perProductSerpApiMatches}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Processed this run: ${progress.totals.processedCount}. Total still missing: ${progress.totals.imageStillMissingCount}. Queued for remaining retry: ${Math.max(0, progress.totals.queuedCount - progress.totals.processedCount)}. Provider failed: ${progress.totals.imageFailedCount}.`;
     const message =
       progress.totals.importedCount > 0
         ? isRetryMode
@@ -583,6 +676,17 @@ export async function POST(req: NextRequest) {
         imageFromSerpApiFallbackCount: 0,
         imageFromSerpApiProductGalleryCount: 0,
         imageFromSerpApiSearchFallbackCount: 0,
+        perProductSerpApiSearchesAttempted: 0,
+        perProductSerpApiMatches: 0,
+        perProductSerpApiThumbnailsSaved: 0,
+        noConfidentMatchContinuedToFallback: 0,
+        ambiguousContinuedToFallback: 0,
+        ambiguousSkippedCount: 0,
+        walmartItemSearchExactIdentifierMatchCount: 0,
+        walmartItemSearchIdentifierNormalizedMatchCount: 0,
+        walmartItemSearchIdentifierAssistedMatchCount: 0,
+        walmartItemSearchMultipleCandidatesRejectedCount: 0,
+        walmartItemSearchSingleCandidateNoImageCount: 0,
         walmartSearchNotFoundCount: 0,
         imageStillMissingCount: partialTotals?.imageMissingCount ?? 0,
         imageMissingCount: partialTotals?.imageMissingCount ?? 0,

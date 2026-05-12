@@ -128,6 +128,112 @@ describe("Walmart Item Search image enrichment", () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
+  it("accepts normalized UPC/GTIN identifier variants with leading-zero differences", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      buildSearchResponse([
+        {
+          itemId: "UPC-NORMALIZED-1",
+          upc: "850054016119",
+          productName: "OPA Sleep Magnesium Glycinate",
+          brand: "OPA Nutrition",
+          images: [{ url: "https://images.example.com/upc-normalized.jpg" }],
+        },
+      ])
+    );
+
+    const result = await enrichWalmartImageFromItemSearch({
+      accessToken: "token",
+      product: {
+        gtin: "",
+        upc: "0850054016119",
+        itemId: "",
+        wpid: "",
+        title: "OPA Sleep Magnesium Glycinate",
+        brand: "OPA Nutrition",
+      },
+    });
+
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.matchMethod).toBe("upc");
+    expect(result.statusReason).toContain("Normalized identifier match");
+    expect(result.diagnostics.decision.acceptedBy).toBe("identifier_normalized");
+    expect(result.diagnostics.decision.decisionCode).toBe(
+      "walmart_item_search_identifier_normalized_match"
+    );
+  });
+
+  it("accepts a single structured identifier candidate with image as identifier-assisted", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      buildSearchResponse([
+        {
+          itemId: "ASSISTED-1",
+          upc: "999999999999",
+          productName: "OPA Joint Flex Glucosamine Chondroitin MSM",
+          brand: "OPA Nutrition",
+          images: [{ url: "https://images.example.com/assisted.jpg" }],
+        },
+      ])
+    );
+
+    const result = await enrichWalmartImageFromItemSearch({
+      accessToken: "token",
+      product: {
+        gtin: "",
+        upc: "850054016119",
+        itemId: "",
+        wpid: "",
+        title: "OPA Joint Flex Glucosamine Chondroitin MSM",
+        brand: "OPA Nutrition",
+      },
+    });
+
+    expect(result.imageSyncStatus).toBe("found");
+    expect(result.matchMethod).toBe("upc");
+    expect(result.diagnostics.decision.acceptedBy).toBe("identifier_assisted");
+    expect(result.diagnostics.decision.decisionCode).toBe(
+      "walmart_item_search_identifier_assisted_match"
+    );
+  });
+
+  it("rejects multiple structured identifier candidates when confidence is not singular", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      buildSearchResponse([
+        {
+          itemId: "MULTI-1",
+          upc: "999999999999",
+          productName: "OPA Prostate Support Saw Palmetto Pumpkin Seed",
+          brand: "OPA Nutrition",
+          images: [{ url: "https://images.example.com/multi-1.jpg" }],
+        },
+        {
+          itemId: "MULTI-2",
+          upc: "888888888888",
+          productName: "OPA Prostate Support Formula",
+          brand: "OPA Nutrition",
+          images: [{ url: "https://images.example.com/multi-2.jpg" }],
+        },
+      ])
+    );
+
+    const result = await enrichWalmartImageFromItemSearch({
+      accessToken: "token",
+      product: {
+        gtin: "",
+        upc: "850054016119",
+        itemId: "",
+        wpid: "",
+        title: "",
+        brand: "",
+      },
+    });
+
+    expect(result.imageSyncStatus).toBe("not_found");
+    expect(result.statusReason).toContain("Multiple Walmart Item Search candidates were returned");
+    expect(result.diagnostics.decision.decisionCode).toBe(
+      "walmart_item_search_multiple_candidates_rejected"
+    );
+  });
+
   it("never sends UPC/GTIN barcode through generic query parameter", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;

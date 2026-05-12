@@ -105,6 +105,17 @@ describe("Walmart import progress UI", () => {
               imageFromSerpApiFallbackCount: 0,
               imageFromSerpApiProductGalleryCount: 0,
               imageFromSerpApiSearchFallbackCount: 0,
+              perProductSerpApiSearchesAttempted: 0,
+              perProductSerpApiMatches: 0,
+              perProductSerpApiThumbnailsSaved: 0,
+              noConfidentMatchContinuedToFallback: 0,
+              ambiguousContinuedToFallback: 0,
+              ambiguousSkippedCount: 0,
+              walmartItemSearchExactIdentifierMatchCount: 0,
+              walmartItemSearchIdentifierNormalizedMatchCount: 0,
+              walmartItemSearchIdentifierAssistedMatchCount: 0,
+              walmartItemSearchMultipleCandidatesRejectedCount: 0,
+              walmartItemSearchSingleCandidateNoImageCount: 0,
               walmartSearchNotFoundCount: 1,
               imageStillMissingCount: 2,
               imageMissingCount: 2,
@@ -137,6 +148,17 @@ describe("Walmart import progress UI", () => {
             imageFromSerpApiFallbackCount: 0,
             imageFromSerpApiProductGalleryCount: 0,
             imageFromSerpApiSearchFallbackCount: 0,
+            perProductSerpApiSearchesAttempted: 0,
+            perProductSerpApiMatches: 0,
+            perProductSerpApiThumbnailsSaved: 0,
+            noConfidentMatchContinuedToFallback: 0,
+            ambiguousContinuedToFallback: 0,
+            ambiguousSkippedCount: 0,
+            walmartItemSearchExactIdentifierMatchCount: 0,
+            walmartItemSearchIdentifierNormalizedMatchCount: 0,
+            walmartItemSearchIdentifierAssistedMatchCount: 0,
+            walmartItemSearchMultipleCandidatesRejectedCount: 0,
+            walmartItemSearchSingleCandidateNoImageCount: 0,
             walmartSearchNotFoundCount: 1,
             imageStillMissingCount: 2,
           },
@@ -162,8 +184,9 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Completed with warnings");
     expect(container.textContent).toContain("Products imported: 3");
     expect(container.textContent).toContain("Products fetched: 3");
-    expect(container.textContent).toContain("Products processed: 2");
+    expect(container.textContent).toContain("Processed this run: 2");
     expect(container.textContent).toContain("Queued for resolver + fallback: 2");
+    expect(container.textContent).toContain("Queued for remaining retry: 0");
     expect(container.textContent).toContain("Images found: 1");
     expect(container.textContent).toContain("Images from import payload: 1");
     expect(container.textContent).toContain("Resolved via Walmart Item Search: 0");
@@ -171,15 +194,15 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Images from SerpApi brand-search thumbnails: 1");
     expect(container.textContent).toContain("Public listings discovered via brand search: 1");
     expect(container.textContent).toContain("Images from SerpApi product gallery: 0");
-    expect(container.textContent).toContain("Images from SerpApi search fallback: 0");
+    expect(container.textContent).toContain("Images from SerpApi per-product search: 0");
     expect(container.textContent).toContain("Images from SerpApi fallback: 0");
     expect(container.textContent).toContain("Total fallback enriched successfully: 0");
-    expect(container.textContent).toContain("Still missing images: 2");
-    expect(container.textContent).toContain("Failed (provider/request): 0");
+    expect(container.textContent).toContain("Total still missing: 2");
+    expect(container.textContent).toContain("Provider failed: 0");
     expect(container.textContent).toContain("Missing/not found: 2");
     expect(container.textContent).toContain("Not found: 1");
     expect(container.textContent).toContain("Brand-search ambiguous matches: 1");
-    expect(container.textContent).toContain("Skipped (no confident brand-search match): 2");
+    expect(container.textContent).toContain("No confident brand-search match: 2");
     expect(container.textContent).toContain("Walmart Item Search not found: 1");
     expect(container.textContent).toContain("Skipped (SerpApi not connected): 1");
     expect(container.textContent).toContain("SerpApi: Not connected");
@@ -234,9 +257,9 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain("Complete");
     expect(container.textContent).toContain("Products imported: 2");
     expect(container.textContent).toContain("Products fetched: 2");
-    expect(container.textContent).toContain("Products processed: 0");
+    expect(container.textContent).toContain("Processed this run: 0");
     expect(container.textContent).toContain("Images found: 0");
-    expect(container.textContent).toContain("Still missing images: 0");
+    expect(container.textContent).toContain("Total still missing: 0");
     expect(container.textContent).toContain("SerpApi: Connected");
   });
 
@@ -358,8 +381,8 @@ describe("Walmart import progress UI", () => {
     expect(container.textContent).toContain(
       "SerpApi returned a provider error: timeout from upstream api_key=[REDACTED]"
     );
-    expect(container.textContent).toContain("Still missing images: 4");
-    expect(container.textContent).toContain("Failed (provider/request): 4");
+    expect(container.textContent).toContain("Total still missing: 4");
+    expect(container.textContent).toContain("Provider failed: 4");
     expect(container.textContent).toContain(
       "SerpApi is connected, but Walmart did not find a product for the identifier used. Verify identifier mapping."
     );

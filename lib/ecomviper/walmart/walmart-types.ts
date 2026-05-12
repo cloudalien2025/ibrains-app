@@ -312,6 +312,17 @@ export interface WalmartImportResult {
     imageFromSerpApiFallbackCount?: number;
     imageFromSerpApiProductGalleryCount?: number;
     imageFromSerpApiSearchFallbackCount?: number;
+    perProductSerpApiSearchesAttempted?: number;
+    perProductSerpApiMatches?: number;
+    perProductSerpApiThumbnailsSaved?: number;
+    noConfidentMatchContinuedToFallback?: number;
+    ambiguousContinuedToFallback?: number;
+    ambiguousSkippedCount?: number;
+    walmartItemSearchExactIdentifierMatchCount?: number;
+    walmartItemSearchIdentifierNormalizedMatchCount?: number;
+    walmartItemSearchIdentifierAssistedMatchCount?: number;
+    walmartItemSearchMultipleCandidatesRejectedCount?: number;
+    walmartItemSearchSingleCandidateNoImageCount?: number;
     walmartSearchNotFoundCount?: number;
     imageStillMissingCount?: number;
     imageNotFoundCount?: number;
@@ -398,6 +409,32 @@ export interface WalmartImportResult {
       serpapi_brand_search_ambiguous: number;
       serpapi_brand_search_no_confident_match: number;
     };
+    walmartItemSearchDiagnostics?: {
+      walmart_item_search_exact_identifier_match: number;
+      walmart_item_search_identifier_normalized_match: number;
+      walmart_item_search_identifier_assisted_match: number;
+      walmart_item_search_multiple_candidates_rejected: number;
+      walmart_item_search_single_candidate_no_image: number;
+    };
+    serpApiPerProductDiagnostics?: {
+      serpapi_per_product_searches_attempted: number;
+      serpapi_per_product_matches: number;
+      serpapi_per_product_thumbnails_saved: number;
+      no_confident_match_continued_to_fallback: number;
+      ambiguous_continued_to_fallback: number;
+      ambiguous_skipped: number;
+    };
+    perProductAttemptDiagnostics?: Array<{
+      sku: string;
+      title: string;
+      attemptedMethods: string[];
+      queryUsed: string | null;
+      resultCount: number;
+      topCandidateTitle: string | null;
+      topCandidateItemOrProductId: string | null;
+      rejectionReason: string | null;
+      finalStatus: "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
+    }>;
   };
 }
 
