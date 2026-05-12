@@ -42,6 +42,10 @@ export interface WalmartItemSearchDecisionDiagnostic {
   candidateCount: number;
   selectedScore: number | null;
   runnerUpScore: number | null;
+  topCandidateTitle?: string | null;
+  topCandidateItemId?: string | null;
+  topCandidateWpid?: string | null;
+  topCandidateThumbnailPresent?: boolean | null;
   acceptedBy:
     | "identifier_exact"
     | "identifier_normalized"
@@ -903,6 +907,14 @@ function buildResult(params: {
         candidateCount: params.candidateCount,
         selectedScore: params.selectedScore,
         runnerUpScore: params.runnerUpScore,
+        topCandidateTitle: params.candidate?.title ?? null,
+        topCandidateItemId: params.candidate?.itemId ?? null,
+        topCandidateWpid: params.candidate?.wpid ?? null,
+        topCandidateThumbnailPresent: params.candidate
+          ? Boolean(
+              params.candidate.images.primaryImageUrl || params.candidate.images.galleryImageUrls.length
+            )
+          : null,
         acceptedBy: params.acceptedBy ?? "none",
         decisionCode: params.decisionCode,
       },

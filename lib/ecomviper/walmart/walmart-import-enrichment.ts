@@ -132,9 +132,16 @@ interface WalmartPerProductAttemptDiagnostic {
   title: string;
   attemptedMethods: WalmartEnrichmentMethod[];
   queryUsed: string | null;
+  walmartItemSearchQueryOrIdentifier: string | null;
+  walmartItemSearchMethod: string | null;
   resultCount: number;
   topCandidateTitle: string | null;
   topCandidateItemOrProductId: string | null;
+  topCandidateProductId: string | null;
+  topCandidateUsItemId: string | null;
+  topCandidateThumbnailPresent: boolean | null;
+  matchScore: number | null;
+  confidence: "high" | "medium" | "low" | null;
   rejectionReason: string | null;
   finalStatus: WalmartEnrichmentFinalStatus;
 }
@@ -511,9 +518,16 @@ function createEmptyPerProductAttemptDiagnostic(product: WalmartProductRecord): 
     title: asString(product.title),
     attemptedMethods: [],
     queryUsed: null,
+    walmartItemSearchQueryOrIdentifier: null,
+    walmartItemSearchMethod: null,
     resultCount: 0,
     topCandidateTitle: null,
     topCandidateItemOrProductId: null,
+    topCandidateProductId: null,
+    topCandidateUsItemId: null,
+    topCandidateThumbnailPresent: null,
+    matchScore: null,
+    confidence: null,
     rejectionReason: null,
     finalStatus: "not_synced",
   };
@@ -534,15 +548,30 @@ function applyAttemptSnapshot(
   diagnostic: WalmartPerProductAttemptDiagnostic,
   patch: {
     queryUsed?: string | null;
+    walmartItemSearchQueryOrIdentifier?: string | null;
+    walmartItemSearchMethod?: string | null;
     resultCount?: number;
     topCandidateTitle?: string | null;
     topCandidateItemOrProductId?: string | null;
+    topCandidateProductId?: string | null;
+    topCandidateUsItemId?: string | null;
+    topCandidateThumbnailPresent?: boolean | null;
+    matchScore?: number | null;
+    confidence?: "high" | "medium" | "low" | null;
     rejectionReason?: string | null;
   }
 ): WalmartPerProductAttemptDiagnostic {
   return {
     ...diagnostic,
     queryUsed: patch.queryUsed !== undefined ? patch.queryUsed : diagnostic.queryUsed,
+    walmartItemSearchQueryOrIdentifier:
+      patch.walmartItemSearchQueryOrIdentifier !== undefined
+        ? patch.walmartItemSearchQueryOrIdentifier
+        : diagnostic.walmartItemSearchQueryOrIdentifier,
+    walmartItemSearchMethod:
+      patch.walmartItemSearchMethod !== undefined
+        ? patch.walmartItemSearchMethod
+        : diagnostic.walmartItemSearchMethod,
     resultCount: patch.resultCount !== undefined ? patch.resultCount : diagnostic.resultCount,
     topCandidateTitle:
       patch.topCandidateTitle !== undefined ? patch.topCandidateTitle : diagnostic.topCandidateTitle,
@@ -550,6 +579,20 @@ function applyAttemptSnapshot(
       patch.topCandidateItemOrProductId !== undefined
         ? patch.topCandidateItemOrProductId
         : diagnostic.topCandidateItemOrProductId,
+    topCandidateProductId:
+      patch.topCandidateProductId !== undefined
+        ? patch.topCandidateProductId
+        : diagnostic.topCandidateProductId,
+    topCandidateUsItemId:
+      patch.topCandidateUsItemId !== undefined
+        ? patch.topCandidateUsItemId
+        : diagnostic.topCandidateUsItemId,
+    topCandidateThumbnailPresent:
+      patch.topCandidateThumbnailPresent !== undefined
+        ? patch.topCandidateThumbnailPresent
+        : diagnostic.topCandidateThumbnailPresent,
+    matchScore: patch.matchScore !== undefined ? patch.matchScore : diagnostic.matchScore,
+    confidence: patch.confidence !== undefined ? patch.confidence : diagnostic.confidence,
     rejectionReason:
       patch.rejectionReason !== undefined ? patch.rejectionReason : diagnostic.rejectionReason,
   };
@@ -819,9 +862,16 @@ function writePerProductAttemptDiagnostic(
         title: diagnostic.title,
         attempted_methods: [...diagnostic.attemptedMethods],
         query_used: diagnostic.queryUsed,
+        walmart_item_search_query_or_identifier: diagnostic.walmartItemSearchQueryOrIdentifier,
+        walmart_item_search_method: diagnostic.walmartItemSearchMethod,
         result_count: diagnostic.resultCount,
         top_candidate_title: diagnostic.topCandidateTitle,
         top_candidate_item_or_product_id: diagnostic.topCandidateItemOrProductId,
+        top_candidate_product_id: diagnostic.topCandidateProductId,
+        top_candidate_us_item_id: diagnostic.topCandidateUsItemId,
+        top_candidate_thumbnail_present: diagnostic.topCandidateThumbnailPresent,
+        match_score: diagnostic.matchScore,
+        confidence: diagnostic.confidence,
         rejection_reason: diagnostic.rejectionReason,
         final_status: diagnostic.finalStatus,
       },
@@ -962,6 +1012,28 @@ function applyWalmartItemSearchDecisionDiagnostics(input: {
   if (decision.decisionCode === "walmart_item_search_single_candidate_no_image") {
     counters.walmart_item_search_single_candidate_no_image += 1;
   }
+}
+
+function confidenceFromWalmartItemSearchDecision(
+  decision: Awaited<ReturnType<typeof enrichWalmartImageFromItemSearch>>["diagnostics"]["decision"] | undefined
+): "high" | "medium" | "low" | null {
+  if (!decision) return null;
+  if (
+    decision.acceptedBy === "identifier_exact" ||
+    decision.acceptedBy === "identifier_normalized" ||
+    decision.acceptedBy === "title_brand_strong"
+  ) {
+    return "high";
+  }
+  if (decision.acceptedBy === "identifier_assisted") return "medium";
+  if (decision.decisionCode === "walmart_item_search_query_low_confidence") return "low";
+  if (
+    decision.decisionCode === "walmart_item_search_query_ambiguous" ||
+    decision.decisionCode === "walmart_item_search_multiple_candidates_rejected"
+  ) {
+    return "medium";
+  }
+  return null;
 }
 
 async function resolveWithRetry(input: {
@@ -1240,7 +1312,37 @@ export async function runPublicListingImageEnrichmentQueue(input: {
               : enriched.matchMethod === "wpid"
               ? asString(repairedForSearch.wpid) || null
               : null,
+          walmartItemSearchQueryOrIdentifier:
+            enriched.matchMethod === "query"
+              ? [asString(repairedForSearch.brand), asString(repairedForSearch.title)]
+                  .filter(Boolean)
+                  .join(" ")
+                  .trim() || null
+              : enriched.matchMethod === "upc"
+              ? asString(repairedForSearch.upc) || null
+              : enriched.matchMethod === "gtin"
+              ? asString(repairedForSearch.gtin) || null
+              : enriched.matchMethod === "itemId"
+              ? asString(repairedForSearch.itemId) || null
+              : enriched.matchMethod === "wpid"
+              ? asString(repairedForSearch.wpid) || null
+              : null,
+          walmartItemSearchMethod: enriched.matchMethod ?? null,
           resultCount: topAttempt?.candidateCount ?? 0,
+          topCandidateTitle: asString(topAttempt?.topCandidateTitle) || null,
+          topCandidateItemOrProductId:
+            asString(topAttempt?.topCandidateItemId) ||
+            asString(topAttempt?.topCandidateWpid) ||
+            null,
+          topCandidateProductId: asString(topAttempt?.topCandidateItemId) || null,
+          topCandidateUsItemId: asString(topAttempt?.topCandidateItemId) || null,
+          topCandidateThumbnailPresent:
+            typeof topAttempt?.topCandidateThumbnailPresent === "boolean"
+              ? topAttempt.topCandidateThumbnailPresent
+              : null,
+          matchScore:
+            typeof topAttempt?.selectedScore === "number" ? topAttempt.selectedScore : null,
+          confidence: confidenceFromWalmartItemSearchDecision(topAttempt),
           rejectionReason:
             enriched.imageSyncStatus === "found" ? null : asString(enriched.statusReason) || null,
         })
@@ -1430,6 +1532,11 @@ export async function runPublicListingImageEnrichmentQueue(input: {
               topCandidateTitle: topListing?.title ?? null,
               topCandidateItemOrProductId:
                 asString(topListing?.usItemId) || asString(topListing?.productId) || null,
+              topCandidateProductId: asString(topListing?.productId) || null,
+              topCandidateUsItemId: asString(topListing?.usItemId) || null,
+              topCandidateThumbnailPresent: topListing ? Boolean(topListing.thumbnail) : null,
+              matchScore: matched.score,
+              confidence: matched.confidence,
               rejectionReason:
                 matched.status === "matched"
                   ? null
@@ -1745,6 +1852,25 @@ export async function runPublicListingImageEnrichmentQueue(input: {
             asString(result.resolution?.diagnostics?.topCandidateProductId) ||
             asString(result.resolution?.publicWalmartProductId) ||
             null,
+          topCandidateProductId:
+            asString(result.resolution?.diagnostics?.topCandidateProductId) ||
+            asString(result.resolution?.publicWalmartProductId) ||
+            null,
+          topCandidateUsItemId: null,
+          topCandidateThumbnailPresent:
+            typeof result.resolution?.diagnostics?.topCandidateThumbnailPresent === "boolean"
+              ? result.resolution.diagnostics.topCandidateThumbnailPresent
+              : null,
+          matchScore:
+            typeof result.resolution?.diagnostics?.topCandidateScore === "number"
+              ? result.resolution.diagnostics.topCandidateScore
+              : null,
+          confidence:
+            result.resolution?.diagnostics?.matchConfidence === "high" ||
+            result.resolution?.diagnostics?.matchConfidence === "medium" ||
+            result.resolution?.diagnostics?.matchConfidence === "low"
+              ? result.resolution.diagnostics.matchConfidence
+              : null,
         })
       );
 
@@ -1992,6 +2118,24 @@ export async function runPublicListingImageEnrichmentQueue(input: {
             asString(resolution.diagnostics?.topCandidateProductId) ||
             asString(resolution.publicWalmartProductId) ||
             current.topCandidateItemOrProductId,
+          topCandidateProductId:
+            asString(resolution.diagnostics?.topCandidateProductId) ||
+            asString(resolution.publicWalmartProductId) ||
+            current.topCandidateProductId,
+          topCandidateThumbnailPresent:
+            typeof resolution.diagnostics?.topCandidateThumbnailPresent === "boolean"
+              ? resolution.diagnostics.topCandidateThumbnailPresent
+              : current.topCandidateThumbnailPresent,
+          matchScore:
+            typeof resolution.diagnostics?.topCandidateScore === "number"
+              ? resolution.diagnostics.topCandidateScore
+              : current.matchScore,
+          confidence:
+            resolution.diagnostics?.matchConfidence === "high" ||
+            resolution.diagnostics?.matchConfidence === "medium" ||
+            resolution.diagnostics?.matchConfidence === "low"
+              ? resolution.diagnostics.matchConfidence
+              : current.confidence,
           rejectionReason: resolution.imageSyncStatus === "found" ? null : resolution.statusReason,
         })
       );

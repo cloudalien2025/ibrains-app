@@ -70,6 +70,9 @@ interface SerpApiRequestDiagnostics {
   matchMethod: WalmartImageMatchMethod | null;
   topCandidateTitle?: string | null;
   topCandidateProductId?: string | null;
+  topCandidateThumbnailPresent?: boolean | null;
+  topCandidateScore?: number | null;
+  matchConfidence?: "high" | "medium" | "low" | null;
 }
 
 export interface WalmartPublicListingImageResolution {
@@ -1798,6 +1801,9 @@ function firstMatchedCandidateByTitleBrand(candidates: WalmartSearchCandidate[],
   candidate: WalmartSearchCandidate | null;
   topCandidate: WalmartSearchCandidate | null;
   candidateCount: number;
+  topCandidateScore: number | null;
+  runnerUpScore: number | null;
+  matchConfidence: "high" | "medium" | "low" | null;
 } {
   const scored = candidates
     .map((candidate) => {
@@ -1822,15 +1828,27 @@ function firstMatchedCandidateByTitleBrand(candidates: WalmartSearchCandidate[],
       candidate: null,
       topCandidate: null,
       candidateCount: 0,
+      topCandidateScore: null,
+      runnerUpScore: null,
+      matchConfidence: null,
     };
   }
 
   if (scored.length === 1) {
+    const top = scored[0] ?? null;
     return {
       status: "found",
-      candidate: scored[0]?.candidate ?? null,
-      topCandidate: scored[0]?.candidate ?? null,
+      candidate: top?.candidate ?? null,
+      topCandidate: top?.candidate ?? null,
       candidateCount: scored.length,
+      topCandidateScore: top?.score ?? null,
+      runnerUpScore: null,
+      matchConfidence:
+        top && top.score >= 85
+          ? "high"
+          : top && top.score >= 70
+          ? "medium"
+          : "low",
     };
   }
 
@@ -1842,6 +1860,9 @@ function firstMatchedCandidateByTitleBrand(candidates: WalmartSearchCandidate[],
       candidate: top.candidate,
       topCandidate: top.candidate,
       candidateCount: scored.length,
+      topCandidateScore: top.score,
+      runnerUpScore: runnerUp.score,
+      matchConfidence: top.score >= 85 ? "high" : "medium",
     };
   }
 
@@ -1850,6 +1871,14 @@ function firstMatchedCandidateByTitleBrand(candidates: WalmartSearchCandidate[],
     candidate: null,
     topCandidate: top?.candidate ?? null,
     candidateCount: scored.length,
+    topCandidateScore: top?.score ?? null,
+    runnerUpScore: runnerUp?.score ?? null,
+    matchConfidence:
+      top && top.score >= 70
+        ? "medium"
+        : top
+        ? "low"
+        : null,
   };
 }
 
@@ -2061,6 +2090,11 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
                 : "serpapi_product_id",
             topCandidateTitle: exactCandidate.title || null,
             topCandidateProductId: exactCandidate.productId || null,
+            topCandidateThumbnailPresent: Boolean(
+              exactCandidate.primaryImageUrl || exactCandidate.galleryImageUrls.length
+            ),
+            topCandidateScore: null,
+            matchConfidence: "high",
           },
         });
       }
@@ -2152,6 +2186,9 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
           matchMethod: "serpapi_search_title_brand",
           topCandidateTitle: null,
           topCandidateProductId: null,
+          topCandidateThumbnailPresent: null,
+          topCandidateScore: null,
+          matchConfidence: null,
         },
       });
     }
@@ -2184,6 +2221,11 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
           matchMethod: "serpapi_search_title_brand",
           topCandidateTitle: found.title || null,
           topCandidateProductId: found.productId || null,
+          topCandidateThumbnailPresent: Boolean(
+            found.primaryImageUrl || found.galleryImageUrls.length
+          ),
+          topCandidateScore: titleBrandMatch.topCandidateScore,
+          matchConfidence: titleBrandMatch.matchConfidence,
         },
       });
     }
@@ -2211,6 +2253,11 @@ export async function enrichProductImagesFromPublicWalmartListing(input: {
           matchMethod: "serpapi_search_title_brand",
           topCandidateTitle: topCandidate?.title || null,
           topCandidateProductId: topCandidate?.productId || null,
+          topCandidateThumbnailPresent: topCandidate
+            ? Boolean(topCandidate.primaryImageUrl || topCandidate.galleryImageUrls.length)
+            : null,
+          topCandidateScore: titleBrandMatch.topCandidateScore,
+          matchConfidence: titleBrandMatch.matchConfidence,
         },
       });
     }
