@@ -35,6 +35,8 @@ import {
 import type {
   WalmartAiSuggestion,
   WalmartDraftRecord,
+  WalmartGeneratedImageType,
+  WalmartGeneratedMediaAsset,
   WalmartListingRecommendation,
   WalmartOptimizationProposalRecord,
   WalmartOptimizationProposalStatus,
@@ -83,6 +85,7 @@ interface ProductEditorFormState {
   mediaRecommendations: string;
   altText: string;
   complianceNotes: string;
+  generatedMediaAssets: WalmartGeneratedMediaAsset[];
 }
 
 type GenerateSuggestionResponse = {
@@ -117,6 +120,17 @@ type PublicListingResolveResponse = {
   };
 };
 
+type GenerateProductImagesResponse = {
+  ok: boolean;
+  sku?: string;
+  imageType?: WalmartGeneratedImageType;
+  generated?: WalmartGeneratedMediaAsset[];
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type InlineAiOutcome = "improved" | "unchanged" | "worse";
 
@@ -124,6 +138,33 @@ const INLINE_AI_LOADING_MESSAGE = "Generating AI improvements...";
 const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
+const DEFAULT_GENERATED_IMAGE_TYPE: WalmartGeneratedImageType = "lifestyle";
+const GENERATED_IMAGE_TYPE_OPTIONS: Array<{
+  value: WalmartGeneratedImageType;
+  label: string;
+  description: string;
+}> = [
+  {
+    value: "lifestyle",
+    label: "Lifestyle",
+    description: "Create a contextual lifestyle product image.",
+  },
+  {
+    value: "supplement_facts",
+    label: "Supplement Facts",
+    description: "Create a clean supplement-facts-style informational image.",
+  },
+  {
+    value: "ingredient_spotlight",
+    label: "Ingredient Spotlight",
+    description: "Create an ingredient/benefits spotlight image with compliant language.",
+  },
+  {
+    value: "product_hero",
+    label: "Product Hero",
+    description: "Create a clean studio hero product image.",
+  },
+];
 
 const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
   factsUpdated: [] as string[],
@@ -268,6 +309,62 @@ function toSafeStringArray(value: unknown): string[] {
   return value
     .map((entry) => asText(entry)?.trim() ?? "")
     .filter(Boolean);
+}
+
+function isGeneratedImageType(value: string): value is WalmartGeneratedImageType {
+  return (
+    value === "lifestyle" ||
+    value === "supplement_facts" ||
+    value === "ingredient_spotlight" ||
+    value === "product_hero"
+  );
+}
+
+function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsset | null {
+  const row = asObject(value);
+  if (!row) return null;
+
+  const id = asText(row.id)?.trim() ?? "";
+  const url = normalizeWalmartImageUrlList([row.url])[0] ?? "";
+  const imageTypeRaw = asText(row.imageType)?.trim() ?? "";
+  const imageType = isGeneratedImageType(imageTypeRaw)
+    ? imageTypeRaw
+    : DEFAULT_GENERATED_IMAGE_TYPE;
+  const createdAt = asText(row.createdAt)?.trim() || new Date().toISOString();
+  const promptSummary = asText(row.promptSummary)?.trim() ?? "";
+  const guidance = asText(row.guidance)?.trim() ?? "";
+
+  if (!id || !url) return null;
+
+  return {
+    id,
+    url,
+    source: "openai_generated",
+    imageType,
+    createdAt,
+    promptSummary: promptSummary || undefined,
+    guidance: guidance || undefined,
+    approved: Boolean(row.approved),
+  };
+}
+
+function readGeneratedMediaAssetsFromDraft(
+  draft: Record<string, unknown> | null
+): WalmartGeneratedMediaAsset[] {
+  if (!draft) return [];
+  const candidates = draft.generatedMediaAssets ?? draft.openAiGeneratedImages ?? [];
+  if (!Array.isArray(candidates)) return [];
+
+  const seen = new Set<string>();
+  const normalized: WalmartGeneratedMediaAsset[] = [];
+  for (const candidate of candidates) {
+    const parsed = normalizeGeneratedMediaAsset(candidate);
+    if (!parsed) continue;
+    if (seen.has(parsed.id)) continue;
+    seen.add(parsed.id);
+    normalized.push(parsed);
+  }
+  return normalized;
 }
 
 function normalizeInlineAiApplyDiagnostics(
@@ -462,6 +559,10 @@ function hydrateEditorForm(
       (entry) => entry !== (normalizedDraftImages.imageUrl ?? "")
     ) ??
     null;
+  const generatedMediaAssets = readGeneratedMediaAssetsFromDraft(draft);
+  const approvedGeneratedUrls = generatedMediaAssets
+    .filter((asset) => asset.approved)
+    .map((asset) => asset.url);
   const draftAttributes = readDraftAttributes(draft, ["attributes"]);
   const draftSearchBrowseAttributes = readDraftAttributes(draft, [
     "searchBrowseAttributes",
@@ -546,6 +647,10 @@ function hydrateEditorForm(
       ? fallbackAdditionalImageUrls
       : draftAdditionalImages ??
         fallbackAdditionalImageUrls);
+  const mergedAdditionalImageUrls = normalizeWalmartImageUrlList([
+    additionalImageUrls,
+    approvedGeneratedUrls,
+  ]).filter((entry) => entry !== imageUrl);
   const publicWalmartUrl =
     normalizedDraftImages.publicWalmartUrl ??
     draftPublicWalmartUrl ??
@@ -652,7 +757,7 @@ function hydrateEditorForm(
     longDescription,
     bulletPoints: bulletPoints.join("\n"),
     imageUrl,
-    additionalImageUrls: normalizeWalmartImageUrlList(additionalImageUrls).join("\n"),
+    additionalImageUrls: mergedAdditionalImageUrls.join("\n"),
     publicWalmartUrl,
     publicWalmartProductId,
     imageSource,
@@ -668,6 +773,7 @@ function hydrateEditorForm(
     mediaRecommendations,
     altText,
     complianceNotes,
+    generatedMediaAssets,
   };
 }
 
@@ -727,8 +833,16 @@ function formatImageSource(product: WalmartProductRecord): string {
     return "Public Walmart listing via SerpApi";
   if (product.imageSource === "shopify_variant") return "Shopify variant image";
   if (product.imageSource === "shopify_product") return "Shopify product image";
+  if (product.imageSource === "openai_generated") return "OpenAI generated image";
   if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
+}
+
+function formatGeneratedImageTypeLabel(imageType: WalmartGeneratedImageType): string {
+  if (imageType === "lifestyle") return "Lifestyle";
+  if (imageType === "supplement_facts") return "Supplement Facts";
+  if (imageType === "ingredient_spotlight") return "Ingredient Spotlight";
+  return "Product Hero";
 }
 
 function isShopifyImageSource(source: WalmartProductRecord["imageSource"] | string | undefined): boolean {
@@ -882,6 +996,14 @@ export default function ProductEditorClient({
       return null;
     });
   const [publicImageMessage, setPublicImageMessage] = useState<string | null>(null);
+  const [generatedImageType, setGeneratedImageType] =
+    useState<WalmartGeneratedImageType>(DEFAULT_GENERATED_IMAGE_TYPE);
+  const [generatedImageGuidance, setGeneratedImageGuidance] = useState("");
+  const [generatedImageQuantity, setGeneratedImageQuantity] = useState("1");
+  const [generatingProductImages, setGeneratingProductImages] = useState(false);
+  const [productImageGenerationMessage, setProductImageGenerationMessage] = useState<
+    string | null
+  >(null);
   const optimizingWithAi = inlineAiState === "loading";
 
   const stagedOptimizations = useMemo(() => {
@@ -960,6 +1082,26 @@ export default function ProductEditorClient({
     const resolvedAdditionalImageUrls = shouldBackfillShopifyGallery
       ? (resolvedGalleryImageUrls ?? []).filter((entry) => entry !== resolvedPrimaryImageUrl)
       : normalizedImageFields.additionalImageUrls;
+    const approvedGeneratedMediaAssets = (form.generatedMediaAssets ?? []).filter(
+      (asset) => asset.approved
+    );
+    const approvedGeneratedUrls = normalizeWalmartImageUrlList(
+      approvedGeneratedMediaAssets.map((asset) => asset.url)
+    );
+    const finalPrimaryImageUrl = resolvedPrimaryImageUrl || approvedGeneratedUrls[0] || "";
+    const finalAdditionalImageUrls = normalizeWalmartImageUrlList([
+      ...(resolvedAdditionalImageUrls ?? []),
+      approvedGeneratedUrls,
+    ]).filter((entry) => entry !== finalPrimaryImageUrl);
+    const finalGalleryImageUrls = normalizeWalmartImageUrlList([
+      finalPrimaryImageUrl,
+      finalAdditionalImageUrls,
+      resolvedVariantImageUrls ?? [],
+    ]);
+    const resolvedImageSource =
+      finalPrimaryImageUrl && approvedGeneratedUrls.includes(finalPrimaryImageUrl)
+        ? "openai_generated"
+        : normalizedImageFields.imageSource;
 
     const mergedSearchBrowseAttributes = mergeAttributesWithSearchBrowse({
       baseAttributes: parsedAttributes,
@@ -974,14 +1116,15 @@ export default function ProductEditorClient({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean),
-      imageUrl: normalizedImageFields.imageUrl || resolvedPrimaryImageUrl || undefined,
-      primaryImageUrl: resolvedPrimaryImageUrl || undefined,
-      additionalImageUrls: resolvedAdditionalImageUrls,
-      galleryImageUrls: resolvedGalleryImageUrls,
+      imageUrl: finalPrimaryImageUrl || normalizedImageFields.imageUrl || undefined,
+      primaryImageUrl: finalPrimaryImageUrl || undefined,
+      additionalImageUrls:
+        finalAdditionalImageUrls.length > 0 ? finalAdditionalImageUrls : undefined,
+      galleryImageUrls: finalGalleryImageUrls.length > 0 ? finalGalleryImageUrls : undefined,
       variantImageUrls: resolvedVariantImageUrls,
       publicWalmartUrl: normalizedImageFields.publicWalmartUrl,
       publicWalmartProductId: normalizedImageFields.publicWalmartProductId,
-      imageSource: normalizedImageFields.imageSource,
+      imageSource: resolvedImageSource,
       imageMatchMethod: normalizedImageFields.imageMatchMethod,
       imageSyncStatus: normalizedImageFields.imageSyncStatus,
       imageSyncReason: normalizedImageFields.imageSyncReason,
@@ -1000,6 +1143,8 @@ export default function ProductEditorClient({
         .split("\n")
         .map((line) => line.trim())
         .filter(Boolean),
+      generatedMediaAssets:
+        form.generatedMediaAssets.length > 0 ? form.generatedMediaAssets : undefined,
     };
   }, [form, product.galleryImageUrls, product.variantImageUrls]);
 
@@ -1177,6 +1322,21 @@ export default function ProductEditorClient({
     isShopifyMediaSource && importedShopifyMediaImageCount <= 1
       ? "Shopify returned no additional attached product media."
       : null;
+  const approvedGeneratedMediaAssets = useMemo(
+    () => (form.generatedMediaAssets ?? []).filter((asset) => asset.approved),
+    [form.generatedMediaAssets]
+  );
+  const pendingGeneratedMediaAssets = useMemo(
+    () => (form.generatedMediaAssets ?? []).filter((asset) => !asset.approved),
+    [form.generatedMediaAssets]
+  );
+  const approvedGeneratedMediaUrls = useMemo(
+    () =>
+      normalizeWalmartImageUrlList(
+        approvedGeneratedMediaAssets.map((asset) => asset.url)
+      ),
+    [approvedGeneratedMediaAssets]
+  );
   const inlineAiDiagnostics = inlineAiSuggestion
     ? normalizeInlineAiApplyDiagnostics(inlineAiSuggestion.applyDiagnostics)
     : DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS;
@@ -1358,6 +1518,179 @@ export default function ProductEditorClient({
       lastImageSyncedAt: resolvedPublicImages.lastImageSyncedAt || new Date().toISOString(),
     });
     setPublicImageMessage("Images added to draft. Save Draft before submitting.");
+  }
+
+  function toGeneratedImageErrorMessage(code: string, fallback: string): string {
+    if (code === "OPENAI_NOT_CONNECTED") {
+      return "Connect your OpenAI API key first to generate product images.";
+    }
+    if (code === "INSUFFICIENT_SUPPLEMENT_FACTS") {
+      return (
+        fallback ||
+        "Supplement facts generation needs serving size and ingredient details. Add product facts, then try again."
+      );
+    }
+    if (code === "OPENAI_UNAUTHORIZED") {
+      return "OpenAI image generation failed with unauthorized response. Reconnect your OpenAI key.";
+    }
+    if (code === "OPENAI_FORBIDDEN") {
+      return "OpenAI image generation was forbidden. Check OpenAI project permissions.";
+    }
+    return fallback || "Could not generate product images.";
+  }
+
+  async function handleGenerateProductImages(params?: {
+    replaceAssetId?: string;
+    overrideImageType?: WalmartGeneratedImageType;
+    overrideGuidance?: string;
+    overrideQuantity?: number;
+  }) {
+    if (!aiProviderConnected) {
+      setProductImageGenerationMessage(
+        "Connect your OpenAI API key first to generate product images."
+      );
+      return;
+    }
+
+    const imageType = params?.overrideImageType ?? generatedImageType;
+    const styleGuidance = (params?.overrideGuidance ?? generatedImageGuidance).trim();
+    const quantity =
+      params?.overrideQuantity ??
+      Math.max(1, Math.min(3, Number.parseInt(generatedImageQuantity, 10) || 1));
+
+    try {
+      setGeneratingProductImages(true);
+      setProductImageGenerationMessage("Generating product image preview...");
+      const response = await fetch("/api/ecomviper/walmart/ai/images/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          imageType,
+          styleGuidance,
+          quantity,
+          draftPayload: preview,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as GenerateProductImagesResponse | null;
+      if (!response.ok || !payload?.generated) {
+        const code = payload?.error?.code?.trim().toUpperCase() ?? "";
+        const fallback = payload?.error?.message?.trim() ?? "Could not generate product images.";
+        setProductImageGenerationMessage(toGeneratedImageErrorMessage(code, fallback));
+        return;
+      }
+
+      const nextGeneratedAssets = payload.generated
+        .map((entry) => normalizeGeneratedMediaAsset(entry))
+        .filter((entry): entry is WalmartGeneratedMediaAsset => entry !== null);
+      if (nextGeneratedAssets.length === 0) {
+        setProductImageGenerationMessage("No valid image previews were returned. Try regenerating.");
+        return;
+      }
+
+      setForm((current) => {
+        const nextAssets = current.generatedMediaAssets.filter(
+          (asset) => asset.id !== params?.replaceAssetId
+        );
+        nextAssets.push(...nextGeneratedAssets);
+        return {
+          ...current,
+          generatedMediaAssets: nextAssets,
+        };
+      });
+      setFormDirty(true);
+      setProductImageGenerationMessage(
+        `${nextGeneratedAssets.length} generated image preview${
+          nextGeneratedAssets.length === 1 ? "" : "s"
+        } ready. Click Add to Product Media to include in Walmart draft images.`
+      );
+    } catch {
+      setProductImageGenerationMessage("Product image generation failed. Try again.");
+    } finally {
+      setGeneratingProductImages(false);
+    }
+  }
+
+  function handleApproveGeneratedMediaAsset(assetId: string) {
+    const asset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
+    if (!asset) {
+      setProductImageGenerationMessage("Generated image not found.");
+      return;
+    }
+    if (asset.approved) {
+      setProductImageGenerationMessage("Generated image is already approved in this draft.");
+      return;
+    }
+
+    const currentPrimary = form.imageUrl.trim();
+    const currentAdditional = normalizeWalmartImageUrlList([form.additionalImageUrls]);
+    let nextPrimary = currentPrimary;
+    let nextAdditional = currentAdditional;
+
+    if (!nextPrimary) {
+      nextPrimary = asset.url;
+    } else if (nextPrimary !== asset.url) {
+      nextAdditional = normalizeWalmartImageUrlList([nextAdditional, asset.url]).filter(
+        (entry) => entry !== nextPrimary
+      );
+    }
+    if (nextPrimary === asset.url) {
+      nextAdditional = nextAdditional.filter((entry) => entry !== asset.url);
+    }
+
+    const nextAssets = form.generatedMediaAssets.map((entry) =>
+      entry.id === assetId ? { ...entry, approved: true } : entry
+    );
+
+    patchForm({
+      generatedMediaAssets: nextAssets,
+      imageUrl: nextPrimary,
+      additionalImageUrls: nextAdditional.join("\n"),
+      imageSource: nextPrimary === asset.url ? "openai_generated" : form.imageSource,
+      imageSyncStatus: nextPrimary === asset.url ? "found" : form.imageSyncStatus,
+      imageSyncReason:
+        nextPrimary === asset.url
+          ? "Primary image approved from OpenAI generated media."
+          : form.imageSyncReason,
+      lastImageSyncedAt: new Date().toISOString(),
+    });
+    setProductImageGenerationMessage(
+      "Generated image added to product media. Save Draft to persist and include it in Walmart updates."
+    );
+  }
+
+  function handleRemoveGeneratedMediaAsset(assetId: string) {
+    const asset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
+    if (!asset) return;
+
+    const remainingAssets = form.generatedMediaAssets.filter((entry) => entry.id !== assetId);
+    const currentAdditional = normalizeWalmartImageUrlList([form.additionalImageUrls]).filter(
+      (entry) => entry !== asset.url
+    );
+
+    let nextPrimary = form.imageUrl.trim();
+    let nextAdditional = currentAdditional;
+    if (nextPrimary === asset.url) {
+      nextPrimary = currentAdditional[0] ?? "";
+      nextAdditional = currentAdditional.filter((entry) => entry !== nextPrimary);
+    }
+
+    patchForm({
+      generatedMediaAssets: remainingAssets,
+      imageUrl: nextPrimary,
+      additionalImageUrls: nextAdditional.join("\n"),
+    });
+    setProductImageGenerationMessage("Generated media preview removed from this draft.");
+  }
+
+  async function handleRegenerateGeneratedMediaAsset(asset: WalmartGeneratedMediaAsset) {
+    await handleGenerateProductImages({
+      replaceAssetId: asset.id,
+      overrideImageType: asset.imageType,
+      overrideGuidance: asset.guidance ?? "",
+      overrideQuantity: 1,
+    });
   }
 
   function revealInlineAiPanel() {
@@ -2552,6 +2885,166 @@ export default function ProductEditorClient({
                       </div>
                     ) : null}
                   </div>
+                  <div
+                    className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2"
+                    data-testid="ecomviper-walmart-generate-product-images"
+                  >
+                    <p className="font-medium text-[#0F172A]">Generate Product Images</p>
+                    <p className="mt-1 text-xs text-[#475569]">
+                      Create product images using OpenAI and add approved results to this Walmart listing.
+                    </p>
+
+                    {!aiProviderConnected ? (
+                      <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
+                        <p>OpenAI API key not connected. Connect OpenAI to generate product images.</p>
+                        <a
+                          href="/apps/ecomviper/walmart/connect"
+                          className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
+                        >
+                          Connect OpenAI key
+                        </a>
+                      </div>
+                    ) : null}
+
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <label className="text-sm text-[#334155]">
+                        Image type
+                        <select
+                          value={generatedImageType}
+                          onChange={(event) =>
+                            setGeneratedImageType(event.target.value as WalmartGeneratedImageType)
+                          }
+                          className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                        >
+                          {GENERATED_IMAGE_TYPE_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-[#64748B]">
+                          {
+                            GENERATED_IMAGE_TYPE_OPTIONS.find(
+                              (option) => option.value === generatedImageType
+                            )?.description
+                          }
+                        </p>
+                      </label>
+
+                      <label className="text-sm text-[#334155]">
+                        Quantity
+                        <select
+                          value={generatedImageQuantity}
+                          onChange={(event) => setGeneratedImageQuantity(event.target.value)}
+                          className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                        >
+                          <option value="1">1 image</option>
+                          <option value="2">2 images</option>
+                        </select>
+                      </label>
+
+                      <label className="text-sm text-[#334155] md:col-span-2">
+                        Scene/style guidance (optional)
+                        <textarea
+                          value={generatedImageGuidance}
+                          onChange={(event) => setGeneratedImageGuidance(event.target.value)}
+                          placeholder="Example: warm bedside table with calming evening mood, premium packaging focus."
+                          className="mt-1 min-h-20 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                        />
+                      </label>
+
+                      <div className="md:col-span-2">
+                        <button
+                          type="button"
+                          onClick={() => handleGenerateProductImages()}
+                          disabled={!aiProviderConnected || generatingProductImages}
+                          className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
+                        >
+                          {generatingProductImages ? "Generating Images..." : "Generate"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {productImageGenerationMessage ? (
+                      <p className="mt-2 text-xs text-[#334155]">
+                        {productImageGenerationMessage}
+                      </p>
+                    ) : null}
+
+                    <div className="mt-2 rounded-md border border-[#E2E8F0] bg-white px-2 py-2 text-xs text-[#475569]">
+                      <p>Approved generated images: {approvedGeneratedMediaAssets.length}</p>
+                      <p className="mt-1">
+                        Pending previews: {pendingGeneratedMediaAssets.length}
+                      </p>
+                    </div>
+
+                    {form.generatedMediaAssets.length > 0 ? (
+                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                        {form.generatedMediaAssets.map((asset) => (
+                          <article
+                            key={asset.id}
+                            className="rounded-lg border border-[#E2E8F0] bg-white p-2"
+                          >
+                            <img
+                              src={asset.url}
+                              alt={`${formatGeneratedImageTypeLabel(asset.imageType)} preview`}
+                              className="h-36 w-full rounded-md border border-[#D9E4F0] bg-[#F8FBFF] object-cover"
+                              loading="lazy"
+                            />
+                            <p className="mt-2 text-xs font-medium text-[#0F172A]">
+                              {formatGeneratedImageTypeLabel(asset.imageType)}
+                            </p>
+                            <p className="mt-1 text-[11px] text-[#64748B]">
+                              Source: OpenAI generated
+                            </p>
+                            <p className="mt-1 break-all text-[11px] text-[#64748B]">
+                              URL: {asset.url}
+                            </p>
+                            {asset.promptSummary ? (
+                              <p className="mt-1 text-[11px] text-[#64748B]">
+                                Prompt: {asset.promptSummary}
+                              </p>
+                            ) : null}
+                            <p className="mt-1 text-[11px] text-[#64748B]">
+                              Created: {asset.createdAt}
+                            </p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {!asset.approved ? (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleApproveGeneratedMediaAsset(asset.id)}
+                                    className="rounded border border-[#2563EB] bg-[#2563EB] px-2 py-1 text-xs text-white"
+                                  >
+                                    Add to Product Media
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRegenerateGeneratedMediaAsset(asset)}
+                                    disabled={generatingProductImages}
+                                    className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A] disabled:opacity-50"
+                                  >
+                                    Regenerate
+                                  </button>
+                                </>
+                              ) : (
+                                <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+                                  Approved for Walmart
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveGeneratedMediaAsset(asset.id)}
+                                className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#334155]"
+                              >
+                                Remove draft preview
+                              </button>
+                            </div>
+                          </article>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   <label className="text-sm text-[#334155] md:col-span-2">
                     Primary image URL
                     <input
@@ -2573,6 +3066,7 @@ export default function ProductEditorClient({
                     <p className="mt-1">Source: {formatImageSource(scoringProduct)}</p>
                     <p className="mt-1">Gallery images: {displayGalleryPreviewUrls.length}</p>
                     <p className="mt-1">Variant images: {displayVariantPreviewUrls.length}</p>
+                    <p className="mt-1">Approved generated images: {approvedGeneratedMediaUrls.length}</p>
                     {isShopifyMediaSource ? (
                       <>
                         <p className="mt-1">

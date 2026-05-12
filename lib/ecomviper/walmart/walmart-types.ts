@@ -184,10 +184,28 @@ export type WalmartImageSource =
   | "public_walmart_listing_serpapi"
   | "shopify_product"
   | "shopify_variant"
+  | "openai_generated"
   | "manual"
   | "shopify_placeholder"
   | "manual_placeholder"
   | "none";
+
+export type WalmartGeneratedImageType =
+  | "lifestyle"
+  | "supplement_facts"
+  | "ingredient_spotlight"
+  | "product_hero";
+
+export interface WalmartGeneratedMediaAsset {
+  id: string;
+  url: string;
+  source: "openai_generated";
+  imageType: WalmartGeneratedImageType;
+  createdAt: string;
+  promptSummary?: string;
+  guidance?: string;
+  approved?: boolean;
+}
 
 export interface WalmartProductRecord {
   id: string;
@@ -222,6 +240,7 @@ export interface WalmartProductRecord {
   primaryImageUrl?: string;
   lastImageSyncedAt?: string | null;
   imageSyncReason?: string | null;
+  generatedMediaAssets?: WalmartGeneratedMediaAsset[];
   issues: string[];
   attributes: Record<string, string>;
   searchBrowseAttributes?: Record<string, string>;
