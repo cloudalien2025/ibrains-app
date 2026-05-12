@@ -32,19 +32,25 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json().catch(() => ({}))) as {
       storeDomain?: unknown;
-      adminApiToken?: unknown;
+      clientId?: unknown;
+      clientSecret?: unknown;
       apiVersion?: unknown;
+      adminApiToken?: unknown;
     };
 
     const storeDomain = typeof body.storeDomain === "string" ? body.storeDomain.trim() : "";
-    const adminApiToken = typeof body.adminApiToken === "string" ? body.adminApiToken.trim() : "";
+    const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+    const clientSecret = typeof body.clientSecret === "string" ? body.clientSecret.trim() : "";
     const apiVersion = typeof body.apiVersion === "string" ? body.apiVersion.trim() : null;
+    const adminApiToken = typeof body.adminApiToken === "string" ? body.adminApiToken.trim() : "";
 
     const test = await testShopifyConnectionForUser({
       userId,
       storeDomain,
-      adminApiToken,
+      clientId,
+      clientSecret,
       apiVersion,
+      adminApiToken: adminApiToken || null,
     });
 
     const status = await getShopifyConnectionStatusForUser(userId);
@@ -65,8 +71,12 @@ export async function POST(req: NextRequest) {
       statusCode: test.statusCode,
       requestId: test.requestId,
       diagnosticEvent: test.diagnosticEvent,
+      tokenStatus: test.tokenStatus,
+      tokenExpiresAt: test.tokenExpiresAt,
+      grantedScopes: test.grantedScopes,
+      lastApiError: test.lastApiError,
       message: test.message,
-      securityNote: "Shopify Admin API tokens are processed server-side and never returned.",
+      securityNote: "Shopify Client Secret and exchanged access tokens are processed server-side and never returned.",
     });
   } catch (error) {
     return fail(502, error instanceof Error ? error.message : "Failed to test Shopify credentials.", "TEST_FAILED");

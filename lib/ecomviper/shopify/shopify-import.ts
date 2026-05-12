@@ -3,7 +3,7 @@ import "server-only";
 import { buildShopifyOnlineStoreProductUrl } from "@/lib/ecomviper/shopify/shopify-domain";
 import { runShopifyGraphqlRequest, detectShopifyMissingScope } from "@/lib/ecomviper/shopify/shopify-client";
 import {
-  getShopifyAdminCredentialsForUser,
+  resolveShopifyAccessTokenForUser,
 } from "@/lib/ecomviper/shopify/shopify-connection";
 import {
   markShopifyImportFailure,
@@ -369,13 +369,32 @@ const SHOPIFY_PRODUCTS_QUERY = `#graphql
   }
 `;
 
+function hasReadProductsScope(scopes: string[]): boolean {
+  return scopes.some((scope) => scope.trim().toLowerCase() === "read_products");
+}
+
 export async function importShopifyProductsForUser(
   userId: string,
   options?: ShopifyImportOptions
 ): Promise<ShopifyImportResult> {
-  const credentials = await getShopifyAdminCredentialsForUser(userId);
-  if (!credentials.connected || !credentials.storeDomain || !credentials.adminApiToken) {
-    const message = "Connect Shopify (store domain + Admin API token) before importing products.";
+  let credentials: Awaited<ReturnType<typeof resolveShopifyAccessTokenForUser>>;
+  try {
+    credentials = await resolveShopifyAccessTokenForUser(userId);
+  } catch (error) {
+    const message = error instanceof Error && error.message.trim()
+      ? error.message.trim()
+      : "Connect Shopify (store domain + Client ID + Client Secret) before importing products.";
+
+    try {
+      await markShopifyImportFailure({ userId, message });
+    } catch {
+      // Non-fatal in environments where Shopify import state persistence is unavailable.
+    }
+    throw new Error(message);
+  }
+
+  if (credentials.grantedScopes.length > 0 && !hasReadProductsScope(credentials.grantedScopes)) {
+    const message = "Shopify token is missing required scope: read_products.";
     try {
       await markShopifyImportFailure({ userId, message });
     } catch {
@@ -399,7 +418,7 @@ export async function importShopifyProductsForUser(
       ReturnType<typeof runShopifyGraphqlRequest<ShopifyProductsPageData>>
     > = await runShopifyGraphqlRequest<ShopifyProductsPageData>({
       storeDomain: credentials.storeDomain,
-      adminApiToken: credentials.adminApiToken,
+      accessToken: credentials.accessToken,
       apiVersion: credentials.apiVersion,
       query: SHOPIFY_PRODUCTS_QUERY,
       variables: {

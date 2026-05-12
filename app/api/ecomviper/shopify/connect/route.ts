@@ -46,7 +46,7 @@ export async function GET() {
       provider: "shopify",
       ...status,
       importState,
-      securityNote: "Shopify Admin API tokens are encrypted server-side and never returned.",
+      securityNote: "Shopify Client Secret and exchanged access tokens are handled server-side and never returned.",
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to load Shopify status.");
@@ -77,23 +77,29 @@ export async function POST(req: NextRequest) {
 
     const body = (await req.json().catch(() => ({}))) as {
       storeDomain?: unknown;
-      adminApiToken?: unknown;
+      clientId?: unknown;
+      clientSecret?: unknown;
       apiVersion?: unknown;
+      adminApiToken?: unknown;
     };
 
     const storeDomain = typeof body.storeDomain === "string" ? body.storeDomain.trim() : "";
-    const adminApiToken = typeof body.adminApiToken === "string" ? body.adminApiToken.trim() : "";
+    const clientId = typeof body.clientId === "string" ? body.clientId.trim() : "";
+    const clientSecret = typeof body.clientSecret === "string" ? body.clientSecret.trim() : "";
     const apiVersion = typeof body.apiVersion === "string" ? body.apiVersion.trim() : null;
+    const adminApiToken = typeof body.adminApiToken === "string" ? body.adminApiToken.trim() : "";
 
-    if (!storeDomain || !adminApiToken) {
-      return fail(400, "Shopify store domain and Admin API token are required.", "VALIDATION_ERROR");
+    if (!storeDomain || !clientId || !clientSecret) {
+      return fail(400, "Shopify store domain, Client ID, and Client Secret are required.", "VALIDATION_ERROR");
     }
 
     const test = await testShopifyConnectionForUser({
       userId,
       storeDomain,
-      adminApiToken,
+      clientId,
+      clientSecret,
       apiVersion,
+      adminApiToken: adminApiToken || null,
     });
 
     if (!test.ok && test.missingScope) {
@@ -107,8 +113,10 @@ export async function POST(req: NextRequest) {
     const status = await saveShopifyConnectionForUser({
       userId,
       storeDomain,
-      adminApiToken,
+      clientId,
+      clientSecret,
       apiVersion,
+      connectionTest: test,
     });
 
     const importState = await getShopifyImportStateForUser(userId);
@@ -121,7 +129,7 @@ export async function POST(req: NextRequest) {
       requiredScope: test.requiredScope,
       diagnosticEvent: test.diagnosticEvent,
       message: "Shopify connection saved securely.",
-      securityNote: "Shopify Admin API tokens are encrypted server-side and never returned.",
+      securityNote: "Shopify Client Secret and exchanged access tokens are handled server-side and never returned.",
     });
   } catch (error) {
     return fail(500, error instanceof Error ? error.message : "Failed to save Shopify credentials.");
