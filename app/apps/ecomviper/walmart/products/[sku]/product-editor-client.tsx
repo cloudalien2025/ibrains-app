@@ -1502,16 +1502,19 @@ export default function ProductEditorClient({
     }
     if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
 
-    const skippedProtectedFields = unique(
-      sanitizedAiSearchBrowse.skipped
+    const diagnostics = inlineAiSuggestion.applyDiagnostics;
+    const skippedProtectedFields = unique([
+      ...sanitizedAiSearchBrowse.skipped
         .filter((entry) => entry.reason === "protected_field")
-        .map((entry) => entry.key)
-    ).slice(0, 5);
-    const skippedLowConfidenceFields = unique(
-      sanitizedAiSearchBrowse.skipped
+        .map((entry) => entry.key),
+      ...(diagnostics?.skippedProtectedFields ?? []),
+    ]).slice(0, 8);
+    const skippedLowConfidenceFields = unique([
+      ...sanitizedAiSearchBrowse.skipped
         .filter((entry) => entry.reason === "low_confidence")
-        .map((entry) => entry.key)
-    ).slice(0, 5);
+        .map((entry) => entry.key),
+      ...(diagnostics?.skippedLowConfidenceFields ?? []),
+    ]).slice(0, 8);
 
     patchForm({
       title: nextTitle,
@@ -1548,8 +1551,29 @@ export default function ProductEditorClient({
     const lowConfidenceSummary = skippedLowConfidenceFields.length
       ? skippedLowConfidenceFields.join(", ")
       : "none";
+    const staleSummary = unique([
+      ...(diagnostics?.staleFieldsReplaced ?? []),
+      ...(diagnostics?.staleFieldsCleared ?? []),
+    ]);
+    const staleSummaryText = staleSummary.length ? staleSummary.join(", ") : "none";
+    const factsSummaryText =
+      diagnostics?.factsUpdated?.length && diagnostics.factsUpdated.length > 0
+        ? diagnostics.factsUpdated.join(", ")
+        : "none";
+    const sourceSummaryText =
+      diagnostics?.factsSources?.length && diagnostics.factsSources.length > 0
+        ? diagnostics.factsSources.join(", ")
+        : "none";
+    const complianceSummaryText =
+      diagnostics?.complianceChanges?.length && diagnostics.complianceChanges.length > 0
+        ? diagnostics.complianceChanges.join(", ")
+        : "none";
+    const disclaimerSummaryText =
+      diagnostics?.disclaimerStatus && diagnostics.disclaimerStatus.length > 0
+        ? diagnostics.disclaimerStatus
+        : "unknown";
     setInlineAiMessage(
-      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}.`
+      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
   }
 
@@ -2129,6 +2153,62 @@ export default function ProductEditorClient({
                   </li>
                 )}
               </ul>
+
+              {inlineAiSuggestion.applyDiagnostics ? (
+                <div
+                  className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]"
+                  data-testid="ecomviper-walmart-ai-apply-diagnostics"
+                >
+                  <h4 className="text-sm font-semibold text-[#0F172A]">Apply diagnostics</h4>
+                  <ul className="mt-2 space-y-1">
+                    <li>
+                      Facts updated:{" "}
+                      {inlineAiSuggestion.applyDiagnostics.factsUpdated.length
+                        ? inlineAiSuggestion.applyDiagnostics.factsUpdated.join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      Sources used:{" "}
+                      {inlineAiSuggestion.applyDiagnostics.factsSources.length
+                        ? inlineAiSuggestion.applyDiagnostics.factsSources.join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      Stale fields cleared/replaced:{" "}
+                      {unique([
+                        ...inlineAiSuggestion.applyDiagnostics.staleFieldsReplaced,
+                        ...inlineAiSuggestion.applyDiagnostics.staleFieldsCleared,
+                      ]).length
+                        ? unique([
+                            ...inlineAiSuggestion.applyDiagnostics.staleFieldsReplaced,
+                            ...inlineAiSuggestion.applyDiagnostics.staleFieldsCleared,
+                          ]).join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      Compliance changes:{" "}
+                      {inlineAiSuggestion.applyDiagnostics.complianceChanges.length
+                        ? inlineAiSuggestion.applyDiagnostics.complianceChanges.join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      Skipped protected fields:{" "}
+                      {inlineAiSuggestion.applyDiagnostics.skippedProtectedFields.length
+                        ? inlineAiSuggestion.applyDiagnostics.skippedProtectedFields.join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      Skipped low-confidence fields:{" "}
+                      {inlineAiSuggestion.applyDiagnostics.skippedLowConfidenceFields.length
+                        ? inlineAiSuggestion.applyDiagnostics.skippedLowConfidenceFields.join(", ")
+                        : "none"}
+                    </li>
+                    <li>
+                      FDA disclaimer status: {inlineAiSuggestion.applyDiagnostics.disclaimerStatus}
+                    </li>
+                  </ul>
+                </div>
+              ) : null}
             </article>
           </div>
         )}
