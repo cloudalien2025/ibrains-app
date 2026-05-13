@@ -32,6 +32,21 @@ function asText(value: unknown): string {
   return "";
 }
 
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function normalizeMimeType(value: unknown): string {
+  const normalized = asText(value).toLowerCase().split(";")[0] || "";
+  if (normalized === "image/jpg") return "image/jpeg";
+  return normalized;
+}
+
 function parseImageType(value: unknown): WalmartGeneratedImageType | null {
   const normalized = asText(value);
   if (
@@ -76,7 +91,12 @@ function parseReferenceImages(value: unknown): WalmartGeneratedImageReferenceInp
       source,
       url,
       label: asText(row.label) || undefined,
-      mimeType: asText(row.mimeType) || undefined,
+      mimeType: normalizeMimeType(row.mimeType) || undefined,
+      byteSize: (() => {
+        const parsed = asNumber(row.byteSize);
+        if (parsed === null || parsed <= 0) return undefined;
+        return Math.floor(parsed);
+      })(),
     });
     if (normalized.length >= 4) break;
   }
@@ -88,6 +108,13 @@ export async function POST(req: NextRequest) {
   let requestQuantity = 1;
   let requestStyleGuidanceLength = 0;
   let requestReferenceCount = 0;
+  let requestReferenceMimeTypes: string[] = [];
+  let requestReferenceByteSizes: number[] = [];
+  let requestGenerationMode: string | null = null;
+  let requestRoutePhase = "route_input";
+  let requestModel: string | null = null;
+  let requestSize: string | null = null;
+  let requestPromptLength: number | null = null;
 
   try {
     const { userId, unauthorizedResponse } = await requireSignedInUser();
@@ -120,6 +147,13 @@ export async function POST(req: NextRequest) {
     requestQuantity = quantity;
     requestStyleGuidanceLength = styleGuidance.length;
     requestReferenceCount = referenceImages.length;
+    requestReferenceMimeTypes = referenceImages
+      .map((entry) => normalizeMimeType(entry.mimeType))
+      .filter(Boolean);
+    requestReferenceByteSizes = referenceImages
+      .map((entry) => entry.byteSize ?? 0)
+      .filter((size) => Number.isFinite(size) && size > 0)
+      .map((size) => Math.floor(size));
 
     const openAiApiKey = await getWalmartOpenAiApiKeyForUser(userId);
     if (!openAiApiKey) {
@@ -138,6 +172,7 @@ export async function POST(req: NextRequest) {
     }
 
     const mergedProduct = mergeWalmartDraftPayloadIntoProduct(product, body.draftPayload);
+    requestRoutePhase = "provider_generation";
     const generatedAssets: Array<{
       id: string;
       url: string;
@@ -149,6 +184,15 @@ export async function POST(req: NextRequest) {
       guidance?: string;
       approved: boolean;
     }> = [];
+    let generationDiagnostics: {
+      generationMode: string;
+      model: string;
+      size: string;
+      promptLength: number;
+      referenceCount: number;
+      referenceMimeTypes: string[];
+      referenceByteSizes: number[];
+    } | null = null;
     const publicOrigin = resolveEcomViperPublicAppOrigin(req);
 
     for (let index = 0; index < quantity; index += 1) {
@@ -159,6 +203,22 @@ export async function POST(req: NextRequest) {
         styleGuidance,
         referenceImages,
       });
+      requestGenerationMode = generated.generationMode;
+      requestModel = generated.requestModel;
+      requestSize = generated.requestSize;
+      requestPromptLength = generated.promptLength;
+      requestReferenceMimeTypes = generated.referenceMimeTypes;
+      requestReferenceByteSizes = generated.referenceByteSizes;
+      generationDiagnostics = {
+        generationMode: generated.generationMode,
+        model: generated.requestModel,
+        size: generated.requestSize,
+        promptLength: generated.promptLength,
+        referenceCount: generated.referenceCount,
+        referenceMimeTypes: generated.referenceMimeTypes,
+        referenceByteSizes: generated.referenceByteSizes,
+      };
+      requestRoutePhase = "storage_persist";
       const saved = await saveGeneratedWalmartMediaForUser({
         userId,
         sku,
@@ -167,6 +227,24 @@ export async function POST(req: NextRequest) {
         imageType: generated.imageType,
         promptSummary: generated.promptSummary,
         guidance: styleGuidance || undefined,
+      }).catch(() => {
+        throw new WalmartImageGenerationError({
+          code: "GENERATED_MEDIA_STORAGE_FAILED",
+          message:
+            "Generated image storage failed after provider success. Retry generation.",
+          statusCode: 502,
+          category: "storage_error",
+          recommendation:
+            "Retry generation. If this persists, check generated-media store/database availability.",
+          generationMode: generated.generationMode,
+          routePhase: "storage_persist",
+          promptLength: generated.promptLength,
+          requestModel: generated.requestModel,
+          requestSize: generated.requestSize,
+          referenceCount: generated.referenceCount,
+          referenceMimeTypes: generated.referenceMimeTypes,
+          referenceByteSizes: generated.referenceByteSizes,
+        });
       });
       const previewPath = `/api/ecomviper/walmart/generated-media/${saved.assetId}`;
       generatedAssets.push({
@@ -187,6 +265,7 @@ export async function POST(req: NextRequest) {
       sku,
       imageType,
       generated: generatedAssets,
+      generationDiagnostics,
       message: "Generated product image previews are ready.",
     });
   } catch (error) {
@@ -215,10 +294,16 @@ export async function POST(req: NextRequest) {
               imageType: requestImageType,
               quantity: requestQuantity,
               referenceCount: requestReferenceCount,
+              referenceMimeTypes:
+                error.referenceMimeTypes ?? requestReferenceMimeTypes,
+              referenceByteSizes:
+                error.referenceByteSizes ?? requestReferenceByteSizes,
               styleGuidanceLength: requestStyleGuidanceLength,
-              promptLength: error.promptLength ?? null,
-              model: error.requestModel ?? null,
-              size: error.requestSize ?? null,
+              promptLength: error.promptLength ?? requestPromptLength,
+              model: error.requestModel ?? requestModel,
+              size: error.requestSize ?? requestSize,
+              generationMode: error.generationMode ?? requestGenerationMode,
+              routePhase: error.routePhase ?? requestRoutePhase,
             },
           },
         },
@@ -227,6 +312,31 @@ export async function POST(req: NextRequest) {
     }
     const message =
       error instanceof Error ? error.message : "Failed to generate Walmart product images.";
-    return fail(502, message, "IMAGE_GENERATION_FAILED");
+    return NextResponse.json(
+      {
+        error: {
+          code: "IMAGE_GENERATION_FAILED",
+          category: "server_error",
+          statusCode: 502,
+          message,
+          recommendation:
+            "Retry generation. If this persists, test OpenAI connection settings in Connect.",
+          requestDiagnostics: {
+            imageType: requestImageType,
+            quantity: requestQuantity,
+            referenceCount: requestReferenceCount,
+            referenceMimeTypes: requestReferenceMimeTypes,
+            referenceByteSizes: requestReferenceByteSizes,
+            styleGuidanceLength: requestStyleGuidanceLength,
+            promptLength: requestPromptLength,
+            model: requestModel,
+            size: requestSize,
+            generationMode: requestGenerationMode,
+            routePhase: requestRoutePhase,
+          },
+        },
+      },
+      { status: 502 }
+    );
   }
 }

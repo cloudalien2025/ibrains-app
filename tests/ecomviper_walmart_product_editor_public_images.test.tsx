@@ -257,6 +257,56 @@ describe("Walmart product editor public listing image flow", () => {
     expect(container.textContent).not.toContain("supplement-label.png");
   });
 
+  it("shows actionable validation message when uploaded reference image is too large", async () => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+      onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+      readAsDataURL() {
+        const hugePayload = "A".repeat(700_000);
+        this.result = `data:image/png;base64,${hugePayload}`;
+        this.onload?.call(this as unknown as FileReader, new ProgressEvent("load"));
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const fileInput = container.querySelector(
+      '[data-testid="ecomviper-generated-reference-input"]'
+    ) as HTMLInputElement | null;
+    expect(fileInput).toBeTruthy();
+
+    await act(async () => {
+      setFileInputFiles(
+        fileInput as HTMLInputElement,
+        [new File(["abc"], "large-reference.png", { type: "image/png" })]
+      );
+    });
+    await flush();
+
+    expect(container.textContent).toContain("max per reference is");
+    expect(container.textContent).toContain("large-reference.png");
+  });
+
   it("sends uploaded reference images with generate request payload", async () => {
     class MockFileReader {
       result: string | null = null;
@@ -436,6 +486,87 @@ describe("Walmart product editor public listing image flow", () => {
     );
     expect(container.textContent).not.toContain("OpenAI image generation failed: HTTP 400.");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("surfaces actionable message and diagnostics when generation endpoint returns non-JSON 413", async () => {
+    class MockFileReader {
+      result: string | null = null;
+      onload: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+      onerror: ((this: FileReader, ev: ProgressEvent<FileReader>) => unknown) | null = null;
+
+      readAsDataURL() {
+        this.result =
+          "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJUb6f4AAAAASUVORK5CYII=";
+        this.onload?.call(this as unknown as FileReader, new ProgressEvent("load"));
+      }
+    }
+    vi.stubGlobal("FileReader", MockFileReader as unknown as typeof FileReader);
+
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes("/api/ecomviper/walmart/ai/images/generate")) {
+        return Promise.resolve(
+          new Response("Request Entity Too Large", {
+            status: 413,
+            headers: { "Content-Type": "text/plain" },
+          })
+        );
+      }
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    const fileInput = container.querySelector(
+      '[data-testid="ecomviper-generated-reference-input"]'
+    ) as HTMLInputElement | null;
+    await act(async () => {
+      setFileInputFiles(
+        fileInput as HTMLInputElement,
+        [new File(["abc"], "reference.png", { type: "image/png" })]
+      );
+    });
+    await flush();
+
+    const generateButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Generate"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      generateButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain(
+      "Reference image payload is too large for this request. Upload smaller images and retry."
+    );
+    expect(container.textContent).toContain("Generation diagnostics");
+    expect(container.textContent).toContain("Status: 413");
+    expect(container.textContent).toContain("request_body");
   });
 
   it("uses relative preview URL when generated asset URL is localhost-style absolute", async () => {

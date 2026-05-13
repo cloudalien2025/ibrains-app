@@ -370,6 +370,118 @@ describe("EcomViper Walmart generated product images", () => {
     expect(String(formData.get("prompt") ?? "")).toContain("Supplement Facts");
   });
 
+  it("returns actionable error when uploaded reference data URL is malformed", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "supplement_facts",
+        referenceImages: [
+          {
+            source: "uploaded",
+            url: "data:image/png;base64,not-valid-*-base64",
+            label: "bad-reference",
+            mimeType: "image/png",
+          },
+        ],
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(400);
+    expect(payload.error?.code).toBe("INVALID_REFERENCE_IMAGE");
+    expect(payload.error?.message).toContain("invalid");
+    expect(payload.error?.requestDiagnostics?.routePhase).toBe("reference_validation");
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to text-to-image for lifestyle when reference edit mode is rejected", async () => {
+    seedProduct();
+
+    await saveOpenAiRoute(
+      new NextRequest("http://localhost/api/ecomviper/walmart/connect/openai", {
+        method: "POST",
+        body: JSON.stringify({ apiKey: "sk-test-openai-secret-abcdef" }),
+      })
+    );
+
+    const fakePng = Buffer.from("89504e470d0a1a0a0000000d49484452", "hex");
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url === "https://api.openai.com/v1/images/edits") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              error: {
+                message: "Unsupported parameter: 'image'.",
+                type: "invalid_request_error",
+                param: "image",
+              },
+            }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      if (url === "https://api.openai.com/v1/images/generations") {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              data: [{ b64_json: fakePng.toString("base64") }],
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
+      }
+      return Promise.resolve(new Response("unexpected", { status: 500 }));
+    });
+
+    const req = new NextRequest("http://localhost/api/ecomviper/walmart/ai/images/generate", {
+      method: "POST",
+      body: JSON.stringify({
+        sku: "ROC949",
+        imageType: "lifestyle",
+        referenceImages: [
+          {
+            source: "uploaded",
+            url: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAJUb6f4AAAAASUVORK5CYII=",
+            label: "front-label",
+            mimeType: "image/png",
+          },
+        ],
+      }),
+    });
+
+    const resp = await generateImageRoute(req);
+    const payload = await resp.json();
+
+    expect(resp.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.generationDiagnostics?.generationMode).toBe(
+      "reference_fallback_text_to_image"
+    );
+    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy.mock.calls[0]?.[0]).toBe("https://api.openai.com/v1/images/edits");
+    expect(fetchSpy.mock.calls[1]?.[0]).toBe("https://api.openai.com/v1/images/generations");
+  });
+
   it("returns actionable sanitized error for OpenAI 400 invalid request", async () => {
     seedProduct();
 
