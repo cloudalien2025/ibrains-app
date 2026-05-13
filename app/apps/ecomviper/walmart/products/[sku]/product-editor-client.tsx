@@ -32,6 +32,10 @@ import {
   readOptimizerProposalFromDraft,
   toOptimizerDraftPayload,
 } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
+import {
+  compareDraftUpdatedAtDesc,
+  normalizeWalmartDraftsForEditor,
+} from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
 import type {
   WalmartAiSuggestion,
   WalmartDraftRecord,
@@ -452,6 +456,28 @@ function readGeneratedMediaAssetsFromDraft(
   return normalized;
 }
 
+function countMalformedGeneratedMediaAssetsFromDraft(
+  draft: Record<string, unknown> | null
+): number {
+  if (!draft) return 0;
+  const candidates = draft.generatedMediaAssets ?? draft.openAiGeneratedImages ?? [];
+  if (!Array.isArray(candidates)) return 0;
+  let malformed = 0;
+  for (const candidate of candidates) {
+    const parsed = normalizeGeneratedMediaAsset(candidate);
+    if (parsed) continue;
+    const row = asObject(candidate);
+    if (!row) {
+      malformed += 1;
+      continue;
+    }
+    if (Object.keys(row).length > 0) {
+      malformed += 1;
+    }
+  }
+  return malformed;
+}
+
 function normalizeInlineAiApplyDiagnostics(
   value: WalmartAiSuggestion["applyDiagnostics"] | null | undefined
 ) {
@@ -500,7 +526,7 @@ function readLatestDraftPayload(
 ): Record<string, unknown> | null {
   return (
     [...stagedDrafts]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
+      .sort(compareDraftUpdatedAtDesc)
       .map((draft) => asObject(draft.draftPayload))
       .find((draft): draft is Record<string, unknown> => draft !== null) ?? null
   );
@@ -1015,8 +1041,16 @@ export default function ProductEditorClient({
   aiProviderConnected,
   serpApiProviderConnected,
 }: ProductEditorClientProps) {
+  const draftHardening = useMemo(
+    () => normalizeWalmartDraftsForEditor(stagedDrafts),
+    [stagedDrafts]
+  );
+  const safeStagedDrafts = draftHardening.drafts;
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Content");
-  const initialForm = useMemo(() => hydrateEditorForm(product, stagedDrafts), [product, stagedDrafts]);
+  const initialForm = useMemo(
+    () => hydrateEditorForm(product, safeStagedDrafts),
+    [product, safeStagedDrafts]
+  );
   const [form, setForm] = useState<ProductEditorFormState>(() => initialForm);
   const [message, setMessage] = useState<string | null>(null);
   const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
@@ -1029,8 +1063,7 @@ export default function ProductEditorClient({
     useState<WalmartOptimizationProposalRecord | null>(null);
   const [formDirty, setFormDirty] = useState(false);
   const [lastDraftSavedAt, setLastDraftSavedAt] = useState<string | null>(() => {
-    return [...stagedDrafts]
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))[0]?.updatedAt ?? null;
+    return [...safeStagedDrafts].sort(compareDraftUpdatedAtDesc)[0]?.updatedAt ?? null;
   });
 
   const inlineAiPanelRef = useRef<HTMLElement | null>(null);
@@ -1099,7 +1132,7 @@ export default function ProductEditorClient({
 
   const stagedOptimizations = useMemo(() => {
     const indexed = new Map<string, WalmartOptimizationProposalRecord>();
-    for (const draft of stagedDrafts) {
+    for (const draft of safeStagedDrafts) {
       const proposal = readOptimizerProposalFromDraft(draft);
       if (!proposal) continue;
       indexed.set(proposal.id, proposal);
@@ -1114,8 +1147,16 @@ export default function ProductEditorClient({
         ...proposal,
         status: localStatusOverrides[proposal.id] ?? proposal.status,
       }))
-      .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt));
-  }, [stagedDrafts, localStagedProposal, localStatusOverrides]);
+      .sort((left, right) => compareDraftUpdatedAtDesc(left, right));
+  }, [safeStagedDrafts, localStagedProposal, localStatusOverrides]);
+  const latestDraftPayload = useMemo(
+    () => readLatestDraftPayload(safeStagedDrafts),
+    [safeStagedDrafts]
+  );
+  const malformedGeneratedMediaCount = useMemo(
+    () => countMalformedGeneratedMediaAssetsFromDraft(latestDraftPayload),
+    [latestDraftPayload]
+  );
 
   const preview = useMemo(() => {
     let parsedAttributes: Record<string, string> = {};
@@ -2883,6 +2924,17 @@ export default function ProductEditorClient({
             Apply AI improvements first, or open the draft editor to make manual changes.
           </p>
         ) : null}
+        {draftHardening.diagnostics.repairedCount > 0 || draftHardening.diagnostics.droppedCount > 0 ? (
+          <p
+            className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
+            data-testid="ecomviper-walmart-draft-hardening-warning"
+          >
+            Legacy draft rows were normalized while loading this editor.
+            {" "}
+            Repaired: {draftHardening.diagnostics.repairedCount}. Dropped:{" "}
+            {draftHardening.diagnostics.droppedCount}.
+          </p>
+        ) : null}
 
         <details open={draftEditorIsActive || hasExistingDraft} className="mt-3">
           <summary className="cursor-pointer text-sm font-medium text-[#334155]">
@@ -3274,6 +3326,12 @@ export default function ProductEditorClient({
                         Pending previews: {pendingGeneratedMediaAssets.length}
                       </p>
                     </div>
+                    {malformedGeneratedMediaCount > 0 ? (
+                      <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
+                        {malformedGeneratedMediaCount} malformed generated-media entr
+                        {malformedGeneratedMediaCount === 1 ? "y was" : "ies were"} skipped during load.
+                      </p>
+                    ) : null}
 
                     {form.generatedMediaAssets.length > 0 ? (
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">

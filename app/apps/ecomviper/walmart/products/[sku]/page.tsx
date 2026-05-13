@@ -3,6 +3,7 @@ import { getWalmartProductBySkuForUser, isWalmartProductArchivedForUser } from "
 import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { getWalmartSerpApiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-serpapi-connection";
+import { normalizeWalmartDraftsForEditor } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
@@ -25,11 +26,23 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
         wasRemovedLocally = await isWalmartProductArchivedForUser(userId, sku);
       }
       const allDrafts = await listWalmartDraftsForUser(userId);
-      stagedDrafts = allDrafts.filter(
+      const normalizedDrafts = normalizeWalmartDraftsForEditor(allDrafts);
+      stagedDrafts = normalizedDrafts.drafts.filter(
         (entry) =>
           typeof entry?.sku === "string" &&
           entry.sku.trim().toUpperCase() === normalizedRequestedSku
       );
+      if (
+        normalizedDrafts.diagnostics.repairedCount > 0 ||
+        normalizedDrafts.diagnostics.droppedCount > 0
+      ) {
+        console.warn("[ecomviper:walmart:product-editor] normalized legacy staged drafts", {
+          sku: normalizedRequestedSku || "unknown",
+          repairedCount: normalizedDrafts.diagnostics.repairedCount,
+          droppedCount: normalizedDrafts.diagnostics.droppedCount,
+          warnings: normalizedDrafts.diagnostics.warnings.slice(0, 5),
+        });
+      }
       const openAiStatus = await getWalmartOpenAiConnectionStatusForUser(userId);
       aiProviderConnected = openAiStatus.connected;
       const serpApiStatus = await getWalmartSerpApiConnectionStatusForUser(userId);
