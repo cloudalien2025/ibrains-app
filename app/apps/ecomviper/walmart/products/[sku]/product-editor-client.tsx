@@ -129,6 +129,15 @@ type GenerateProductImagesResponse = {
   sku?: string;
   imageType?: WalmartGeneratedImageType;
   generated?: WalmartGeneratedMediaAsset[];
+  generationDiagnostics?: {
+    generationMode?: string | null;
+    model?: string | null;
+    size?: string | null;
+    promptLength?: number | null;
+    referenceCount?: number | null;
+    referenceMimeTypes?: string[];
+    referenceByteSizes?: number[];
+  };
   error?: {
     code?: string;
     category?: string;
@@ -143,10 +152,14 @@ type GenerateProductImagesResponse = {
       imageType?: string | null;
       quantity?: number | null;
       referenceCount?: number | null;
+      referenceMimeTypes?: string[];
+      referenceByteSizes?: number[];
       styleGuidanceLength?: number | null;
       promptLength?: number | null;
       model?: string | null;
       size?: string | null;
+      generationMode?: string | null;
+      routePhase?: string | null;
     };
   };
 };
@@ -157,6 +170,7 @@ interface WalmartGeneratedReferenceImage {
   mimeType: string;
   dataUrl: string;
   source: "uploaded";
+  byteSize: number;
 }
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
@@ -168,6 +182,14 @@ const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
 const DEFAULT_GENERATED_IMAGE_TYPE: WalmartGeneratedImageType = "lifestyle";
 const MAX_GENERATED_REFERENCE_IMAGES = 4;
+const MAX_GENERATED_REFERENCE_IMAGE_BYTES = 450 * 1024;
+const MAX_GENERATED_REFERENCE_TOTAL_BYTES = 900 * 1024;
+const ALLOWED_GENERATED_REFERENCE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
 const GENERATED_IMAGE_TYPE_OPTIONS: Array<{
   value: WalmartGeneratedImageType;
   label: string;
@@ -435,6 +457,27 @@ function readFileAsDataUrl(file: File): Promise<string> {
     };
     reader.readAsDataURL(file);
   });
+}
+
+function normalizeImageMimeType(value: string): string {
+  const normalized = value.trim().toLowerCase().split(";")[0] || "";
+  if (normalized === "image/jpg") return "image/jpeg";
+  return normalized;
+}
+
+function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  if (value >= 1024) return `${Math.round(value / 1024)} KB`;
+  return `${Math.floor(value)} B`;
+}
+
+function estimateDataUrlByteSize(dataUrl: string): number {
+  const match = dataUrl.match(/^data:[^;]+;base64,([A-Za-z0-9+/=\s]+)$/);
+  if (!match) return 0;
+  const payload = match[1].replace(/\s+/g, "");
+  const padding = payload.endsWith("==") ? 2 : payload.endsWith("=") ? 1 : 0;
+  return Math.max(0, Math.floor((payload.length * 3) / 4) - padding);
 }
 
 function readGeneratedMediaAssetsFromDraft(
@@ -1127,6 +1170,8 @@ export default function ProductEditorClient({
   const [productImageGenerationMessage, setProductImageGenerationMessage] = useState<
     string | null
   >(null);
+  const [productImageGenerationError, setProductImageGenerationError] =
+    useState<GenerateProductImagesResponse["error"] | null>(null);
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
   const optimizingWithAi = inlineAiState === "loading";
 
@@ -1704,6 +1749,31 @@ export default function ProductEditorClient({
         "OpenAI rejected the selected reference image. Use a clear PNG/JPG reference and try again."
       );
     }
+    if (code === "REFERENCE_IMAGE_UNSUPPORTED_TYPE") {
+      return withRecommendation(
+        "Reference image type is unsupported. Use PNG or JPEG and retry."
+      );
+    }
+    if (code === "REFERENCE_IMAGE_TOO_LARGE") {
+      return withRecommendation(
+        "Reference image is too large for generation. Upload a smaller image and retry."
+      );
+    }
+    if (code === "INVALID_REFERENCE_IMAGE") {
+      return withRecommendation(
+        "Reference image could not be parsed. Re-upload a valid PNG/JPEG image."
+      );
+    }
+    if (code === "GENERATED_MEDIA_STORAGE_FAILED") {
+      return withRecommendation(
+        "Generated image storage failed after provider success. Retry generation."
+      );
+    }
+    if (code === "REQUEST_BODY_TOO_LARGE") {
+      return withRecommendation(
+        "Reference image payload is too large for this request. Upload smaller images and retry."
+      );
+    }
     if (code === "OPENAI_UNAUTHORIZED") {
       return withRecommendation(
         "OpenAI image generation failed with unauthorized response. Reconnect your OpenAI key."
@@ -1725,6 +1795,64 @@ export default function ProductEditorClient({
     return withRecommendation(fallback || "Could not generate product images.");
   }
 
+  function buildSyntheticGenerationError(
+    status: number,
+    rawBody: string
+  ): GenerateProductImagesResponse["error"] {
+    if (status === 413) {
+      return {
+        code: "REQUEST_BODY_TOO_LARGE",
+        category: "request_too_large",
+        statusCode: status,
+        message: "Reference image payload is too large for generation.",
+        recommendation:
+          "Upload smaller PNG/JPEG references (around 450KB each, total under 900KB).",
+        requestDiagnostics: {
+          generationMode: generatedReferenceImages.length > 0 ? "reference_image_edit" : "text_to_image",
+          referenceCount: generatedReferenceImages.length,
+          referenceMimeTypes: generatedReferenceImages.map((entry) =>
+            normalizeImageMimeType(entry.mimeType)
+          ),
+          referenceByteSizes: generatedReferenceImages.map((entry) => entry.byteSize),
+          routePhase: "request_body",
+          imageType: generatedImageType,
+          quantity: Math.max(1, Math.min(3, Number.parseInt(generatedImageQuantity, 10) || 1)),
+          styleGuidanceLength: generatedImageGuidance.trim().length,
+        },
+      };
+    }
+    if (status === 415) {
+      return {
+        code: "UNSUPPORTED_MEDIA_TYPE",
+        category: "invalid_request",
+        statusCode: status,
+        message: "Server rejected reference media type.",
+        recommendation: "Use PNG or JPEG reference images and retry.",
+      };
+    }
+    const clipped = rawBody.trim().slice(0, 160);
+    return {
+      code: "IMAGE_GENERATION_FAILED",
+      category: "server_error",
+      statusCode: status || 502,
+      message:
+        clipped ||
+        `Image generation failed with HTTP ${status || 502}.`,
+      recommendation:
+        "Retry generation. If this persists, verify OpenAI connection and image model access.",
+    };
+  }
+
+  function formatGenerationMode(value: string | null | undefined): string {
+    if (!value) return "Unknown";
+    if (value === "reference_image_edit") return "Reference image edit";
+    if (value === "reference_fallback_text_to_image") {
+      return "Reference fallback to text-to-image";
+    }
+    if (value === "text_to_image") return "Text-to-image";
+    return value.replace(/_/g, " ");
+  }
+
   async function handleAttachReferenceImages(event: ChangeEvent<HTMLInputElement>) {
     const files = Array.from(event.target.files ?? []);
     event.target.value = "";
@@ -1743,10 +1871,33 @@ export default function ProductEditorClient({
 
     const nextFiles = files.slice(0, remainingSlots);
     const loaded: WalmartGeneratedReferenceImage[] = [];
+    const uploadErrors: string[] = [];
     for (const file of nextFiles) {
-      if (!file.type.startsWith("image/")) continue;
+      const normalizedMimeType = normalizeImageMimeType(file.type || "");
+      if (!normalizedMimeType.startsWith("image/")) continue;
+      if (!ALLOWED_GENERATED_REFERENCE_MIME_TYPES.has(normalizedMimeType)) {
+        uploadErrors.push(
+          `${file.name || "reference-image"} skipped: unsupported format. Use PNG, JPEG, or WEBP.`
+        );
+        continue;
+      }
       try {
         const dataUrl = await readFileAsDataUrl(file);
+        const estimatedBytes = estimateDataUrlByteSize(dataUrl);
+        if (!estimatedBytes) {
+          uploadErrors.push(
+            `${file.name || "reference-image"} skipped: invalid image data.`
+          );
+          continue;
+        }
+        if (estimatedBytes > MAX_GENERATED_REFERENCE_IMAGE_BYTES) {
+          uploadErrors.push(
+            `${file.name || "reference-image"} is ${formatBytes(
+              estimatedBytes
+            )}; max per reference is ${formatBytes(MAX_GENERATED_REFERENCE_IMAGE_BYTES)}.`
+          );
+          continue;
+        }
         const randomId =
           typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
             ? crypto.randomUUID()
@@ -1754,29 +1905,43 @@ export default function ProductEditorClient({
         loaded.push({
           id: `ref_${randomId}`,
           name: file.name || "reference-image",
-          mimeType: file.type || "image/png",
+          mimeType: normalizedMimeType || "image/png",
           dataUrl,
           source: "uploaded",
+          byteSize: estimatedBytes,
         });
       } catch {
-        setGeneratedReferenceMessage("One or more files could not be read. Try uploading again.");
+        uploadErrors.push(`${file.name || "reference-image"} could not be read.`);
       }
     }
 
     if (loaded.length === 0) {
-      if (!generatedReferenceMessage) {
-        setGeneratedReferenceMessage("No valid image files were selected.");
-      }
+      setGeneratedReferenceMessage(
+        uploadErrors[0] ?? "No valid image files were selected."
+      );
       return;
     }
 
     setGeneratedReferenceImages((current) => {
       const seen = new Set(current.map((entry) => entry.dataUrl));
       const deduped = loaded.filter((entry) => !seen.has(entry.dataUrl));
-      return [...current, ...deduped].slice(0, MAX_GENERATED_REFERENCE_IMAGES);
+      const merged = [...current, ...deduped].slice(0, MAX_GENERATED_REFERENCE_IMAGES);
+      let totalBytes = merged.reduce((sum, entry) => sum + entry.byteSize, 0);
+      while (merged.length > 0 && totalBytes > MAX_GENERATED_REFERENCE_TOTAL_BYTES) {
+        const removed = merged.pop();
+        if (!removed) break;
+        totalBytes -= removed.byteSize;
+      }
+      return merged;
     });
+    const acceptedBytes = loaded.reduce((sum, entry) => sum + entry.byteSize, 0);
+    const successMessage = `${loaded.length} reference image${
+      loaded.length === 1 ? "" : "s"
+    } ready for generation (${formatBytes(acceptedBytes)}).`;
     setGeneratedReferenceMessage(
-      `${loaded.length} reference image${loaded.length === 1 ? "" : "s"} ready for generation.`
+      uploadErrors.length > 0
+        ? `${successMessage} ${uploadErrors[0]}`
+        : successMessage
     );
   }
 
@@ -1803,6 +1968,7 @@ export default function ProductEditorClient({
     overrideQuantity?: number;
   }) {
     if (!aiProviderConnected) {
+      setProductImageGenerationError(null);
       setProductImageGenerationMessage(
         "Connect your OpenAI API key first to generate product images."
       );
@@ -1818,6 +1984,7 @@ export default function ProductEditorClient({
     try {
       setGeneratingProductImages(true);
       setProductImageGenerationMessage("Generating product image preview...");
+      setProductImageGenerationError(null);
       const response = await fetch("/api/ecomviper/walmart/ai/images/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1831,14 +1998,25 @@ export default function ProductEditorClient({
             url: reference.dataUrl,
             label: reference.name,
             mimeType: reference.mimeType,
+            byteSize: reference.byteSize,
           })),
           draftPayload: preview,
         }),
       });
 
-      const payload = (await response.json().catch(() => null)) as GenerateProductImagesResponse | null;
+      const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+      let payload: GenerateProductImagesResponse | null = null;
+      let rawBody = "";
+      if (contentType.includes("application/json")) {
+        payload = (await response.json().catch(() => null)) as GenerateProductImagesResponse | null;
+      } else {
+        rawBody = await response.text().catch(() => "");
+      }
+
       if (!response.ok || !payload?.generated) {
-        setProductImageGenerationMessage(toGeneratedImageErrorMessage(payload?.error));
+        const normalizedError = payload?.error ?? buildSyntheticGenerationError(response.status, rawBody);
+        setProductImageGenerationError(normalizedError);
+        setProductImageGenerationMessage(toGeneratedImageErrorMessage(normalizedError));
         return;
       }
 
@@ -1846,6 +2024,24 @@ export default function ProductEditorClient({
         .map((entry) => normalizeGeneratedMediaAsset(entry))
         .filter((entry): entry is WalmartGeneratedMediaAsset => entry !== null);
       if (nextGeneratedAssets.length === 0) {
+        setProductImageGenerationError({
+          code: "NO_VALID_PREVIEW_ASSETS",
+          category: "provider_response_invalid",
+          statusCode: response.status,
+          message: "No valid image previews were returned by the generator.",
+          recommendation: "Retry generation. If this persists, adjust guidance/reference images.",
+          requestDiagnostics: payload.generationDiagnostics
+            ? {
+                generationMode: payload.generationDiagnostics.generationMode ?? null,
+                model: payload.generationDiagnostics.model ?? null,
+                size: payload.generationDiagnostics.size ?? null,
+                promptLength: payload.generationDiagnostics.promptLength ?? null,
+                referenceCount: payload.generationDiagnostics.referenceCount ?? null,
+                referenceMimeTypes: payload.generationDiagnostics.referenceMimeTypes ?? [],
+                referenceByteSizes: payload.generationDiagnostics.referenceByteSizes ?? [],
+              }
+            : undefined,
+        });
         setProductImageGenerationMessage("No valid image previews were returned. Try regenerating.");
         return;
       }
@@ -1869,13 +2065,25 @@ export default function ProductEditorClient({
         return next;
       });
       setFormDirty(true);
+      setProductImageGenerationError(null);
       setProductImageGenerationMessage(
         `${nextGeneratedAssets.length} generated image preview${
           nextGeneratedAssets.length === 1 ? "" : "s"
         } ready. Click Add to Product Media to include in Walmart draft images.`
       );
-    } catch {
-      setProductImageGenerationMessage("Product image generation failed. Try again.");
+    } catch (error) {
+      const fallback = {
+        code: "IMAGE_GENERATION_CLIENT_ERROR",
+        category: "network_error",
+        message:
+          error instanceof Error && error.message.trim()
+            ? error.message.trim()
+            : "Product image generation request failed before a server response.",
+        recommendation:
+          "Check your network connection and retry. If this persists, reload and test again.",
+      } as GenerateProductImagesResponse["error"];
+      setProductImageGenerationError(fallback);
+      setProductImageGenerationMessage(toGeneratedImageErrorMessage(fallback));
     } finally {
       setGeneratingProductImages(false);
     }
@@ -3266,6 +3474,11 @@ export default function ProductEditorClient({
                             : "Optional reference images can guide product appearance or scene style."}
                         </p>
                         <p className="mt-1 text-xs text-[#64748B]">
+                          Accepted formats: PNG, JPEG, WEBP. Use smaller files (about{" "}
+                          {formatBytes(MAX_GENERATED_REFERENCE_IMAGE_BYTES)} each,{" "}
+                          {formatBytes(MAX_GENERATED_REFERENCE_TOTAL_BYTES)} total) for reliable generation.
+                        </p>
+                        <p className="mt-1 text-xs text-[#64748B]">
                           {generatedImageType === "supplement_facts"
                             ? "If no upload is provided, EcomViper will try existing product media. Uploading a facts panel is more reliable."
                             : "Lifestyle and hero generations can use references to keep packaging/brand identity aligned."}
@@ -3288,6 +3501,9 @@ export default function ProductEditorClient({
                                 />
                                 <p className="mt-1 truncate text-[11px] text-[#334155]">
                                   {reference.name}
+                                </p>
+                                <p className="mt-1 text-[11px] text-[#64748B]">
+                                  {reference.mimeType} · {formatBytes(reference.byteSize)}
                                 </p>
                                 <button
                                   type="button"
@@ -3318,6 +3534,66 @@ export default function ProductEditorClient({
                       <p className="mt-2 text-xs text-[#334155]">
                         {productImageGenerationMessage}
                       </p>
+                    ) : null}
+                    {productImageGenerationError ? (
+                      <div
+                        className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-900"
+                        data-testid="ecomviper-generated-image-error-details"
+                      >
+                        <p className="font-medium">Generation diagnostics</p>
+                        <p className="mt-1">
+                          Code: {productImageGenerationError.code || "unknown"}
+                          {productImageGenerationError.category
+                            ? ` | Category: ${productImageGenerationError.category}`
+                            : ""}
+                          {typeof productImageGenerationError.statusCode === "number"
+                            ? ` | Status: ${productImageGenerationError.statusCode}`
+                            : ""}
+                        </p>
+                        <p className="mt-1">
+                          Mode:{" "}
+                          {formatGenerationMode(
+                            productImageGenerationError.requestDiagnostics?.generationMode
+                          )}
+                        </p>
+                        <p className="mt-1">
+                          Model:{" "}
+                          {productImageGenerationError.requestDiagnostics?.model || "unknown"}
+                          {" | "}Size:{" "}
+                          {productImageGenerationError.requestDiagnostics?.size || "unknown"}
+                        </p>
+                        <p className="mt-1">
+                          Reference images:{" "}
+                          {productImageGenerationError.requestDiagnostics?.referenceCount ??
+                            generatedReferenceImages.length}
+                        </p>
+                        {productImageGenerationError.requestDiagnostics?.referenceMimeTypes &&
+                        productImageGenerationError.requestDiagnostics?.referenceMimeTypes?.length >
+                          0 ? (
+                          <p className="mt-1">
+                            Reference MIME types:{" "}
+                            {productImageGenerationError.requestDiagnostics?.referenceMimeTypes?.join(
+                              ", "
+                            )}
+                          </p>
+                        ) : null}
+                        {productImageGenerationError.requestDiagnostics?.referenceByteSizes &&
+                        productImageGenerationError.requestDiagnostics?.referenceByteSizes?.length >
+                          0 ? (
+                          <p className="mt-1">
+                            Reference sizes:{" "}
+                            {productImageGenerationError.requestDiagnostics?.referenceByteSizes
+                              ?.map((size) => formatBytes(size))
+                              .join(", ")}
+                          </p>
+                        ) : null}
+                        {productImageGenerationError.requestDiagnostics?.routePhase ? (
+                          <p className="mt-1">
+                            Failed phase:{" "}
+                            {productImageGenerationError.requestDiagnostics?.routePhase}
+                          </p>
+                        ) : null}
+                      </div>
                     ) : null}
 
                     <div className="mt-2 rounded-md border border-[#E2E8F0] bg-white px-2 py-2 text-xs text-[#475569]">

@@ -15,6 +15,17 @@ const OPENAI_IMAGE_SIZE = "1024x1024";
 const OPENAI_IMAGE_PROMPT_MAX_CHARS = 3500;
 const MAX_REFERENCE_IMAGES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
+const SUPPORTED_REFERENCE_MIME_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+]);
+
+export type WalmartImageGenerationMode =
+  | "text_to_image"
+  | "reference_image_edit"
+  | "reference_fallback_text_to_image";
 
 interface WalmartImageGenerationErrorOptions {
   code: string;
@@ -27,6 +38,11 @@ interface WalmartImageGenerationErrorOptions {
   promptLength?: number;
   requestModel?: string;
   requestSize?: string;
+  generationMode?: WalmartImageGenerationMode;
+  routePhase?: string;
+  referenceMimeTypes?: string[];
+  referenceByteSizes?: number[];
+  referenceCount?: number;
 }
 
 export class WalmartImageGenerationError extends Error {
@@ -39,6 +55,11 @@ export class WalmartImageGenerationError extends Error {
   readonly promptLength?: number;
   readonly requestModel?: string;
   readonly requestSize?: string;
+  readonly generationMode?: WalmartImageGenerationMode;
+  readonly routePhase?: string;
+  readonly referenceMimeTypes?: string[];
+  readonly referenceByteSizes?: number[];
+  readonly referenceCount?: number;
 
   constructor(options: WalmartImageGenerationErrorOptions) {
     super(options.message);
@@ -51,6 +72,11 @@ export class WalmartImageGenerationError extends Error {
     this.promptLength = options.promptLength;
     this.requestModel = options.requestModel;
     this.requestSize = options.requestSize;
+    this.generationMode = options.generationMode;
+    this.routePhase = options.routePhase;
+    this.referenceMimeTypes = options.referenceMimeTypes;
+    this.referenceByteSizes = options.referenceByteSizes;
+    this.referenceCount = options.referenceCount;
   }
 }
 
@@ -59,6 +85,7 @@ interface PreparedReferenceImage {
   url: string;
   label?: string;
   mimeType?: string;
+  byteSize?: number;
 }
 
 interface LoadedReferenceImage {
@@ -67,6 +94,7 @@ interface LoadedReferenceImage {
   label?: string;
   mimeType: string;
   imageBytes: Uint8Array;
+  byteSize: number;
 }
 
 function asText(value: unknown): string {
@@ -91,6 +119,12 @@ function truncate(value: string, maxLength: number): string {
   return `${value.slice(0, Math.max(0, maxLength - 1))}…`;
 }
 
+function normalizeMimeType(value: string): string {
+  const normalized = value.trim().toLowerCase().split(";")[0] || "";
+  if (normalized === "image/jpg") return "image/jpeg";
+  return normalized;
+}
+
 function toHttpsUrl(value: string): string {
   const raw = value.trim();
   if (!raw) return "";
@@ -109,14 +143,34 @@ function isDataImageUrl(value: string): boolean {
   return /^data:image\/[a-zA-Z0-9.+-]+;base64,[A-Za-z0-9+/=\s]+$/.test(value.trim());
 }
 
-function parseDataImageUrl(value: string): { mimeType: string; imageBytes: Uint8Array } | null {
+function parseDataImageUrl(value: string): {
+  ok: true;
+  mimeType: string;
+  imageBytes: Uint8Array;
+} | {
+  ok: false;
+  reason: "invalid_format" | "unsupported_mime" | "empty" | "too_large";
+  mimeType?: string;
+  byteSize?: number;
+} {
   const trimmed = value.trim();
   const match = trimmed.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/);
-  if (!match) return null;
-  const mimeType = match[1].toLowerCase();
+  if (!match) {
+    return { ok: false, reason: "invalid_format" };
+  }
+  const mimeType = normalizeMimeType(match[1]);
+  if (!SUPPORTED_REFERENCE_MIME_TYPES.has(mimeType)) {
+    return { ok: false, reason: "unsupported_mime", mimeType };
+  }
   const bytes = Buffer.from(match[2], "base64");
-  if (bytes.length === 0 || bytes.length > MAX_REFERENCE_BYTES) return null;
+  if (bytes.length === 0) {
+    return { ok: false, reason: "empty", mimeType, byteSize: bytes.length };
+  }
+  if (bytes.length > MAX_REFERENCE_BYTES) {
+    return { ok: false, reason: "too_large", mimeType, byteSize: bytes.length };
+  }
   return {
+    ok: true,
     mimeType,
     imageBytes: new Uint8Array(bytes),
   };
@@ -148,14 +202,20 @@ function normalizeReferenceImageCandidates(
     if (!row || typeof row !== "object") continue;
     const source = row.source === "uploaded" || row.source === "product_media" ? row.source : "uploaded";
     const rawUrl = asText(row.url);
-    const normalizedUrl = isDataImageUrl(rawUrl) ? rawUrl.trim() : toHttpsUrl(rawUrl);
+    const normalizedUrl = rawUrl.trim().toLowerCase().startsWith("data:image/")
+      ? rawUrl.trim()
+      : toHttpsUrl(rawUrl);
     if (!normalizedUrl || seen.has(normalizedUrl)) continue;
     seen.add(normalizedUrl);
     normalized.push({
       source,
       url: normalizedUrl,
       label: asText(row.label) || undefined,
-      mimeType: asText(row.mimeType) || undefined,
+      mimeType: normalizeMimeType(asText(row.mimeType)),
+      byteSize:
+        typeof row.byteSize === "number" && Number.isFinite(row.byteSize) && row.byteSize > 0
+          ? Math.floor(row.byteSize)
+          : undefined,
     });
     if (normalized.length >= MAX_REFERENCE_IMAGES) break;
   }
@@ -411,14 +471,43 @@ async function downloadImage(url: string): Promise<{ imageBytes: Uint8Array; mim
 
 async function loadReferenceImage(reference: PreparedReferenceImage): Promise<LoadedReferenceImage> {
   const dataUrlParsed = parseDataImageUrl(reference.url);
-  if (dataUrlParsed) {
+  if (dataUrlParsed.ok) {
     return {
       source: reference.source,
       url: reference.url,
       label: reference.label,
       mimeType: dataUrlParsed.mimeType,
       imageBytes: dataUrlParsed.imageBytes,
+      byteSize: dataUrlParsed.imageBytes.length,
     };
+  }
+  if (isDataImageUrl(reference.url)) {
+    if (dataUrlParsed.reason === "too_large") {
+      throw new WalmartImageGenerationError({
+        code: "REFERENCE_IMAGE_TOO_LARGE",
+        message: "Reference image is too large for generation.",
+        statusCode: 400,
+        category: "invalid_request",
+        recommendation:
+          "Use a smaller PNG/JPEG reference image (under 8MB) and retry.",
+      });
+    }
+    if (dataUrlParsed.reason === "unsupported_mime") {
+      throw new WalmartImageGenerationError({
+        code: "REFERENCE_IMAGE_UNSUPPORTED_TYPE",
+        message: "Reference image type is not supported for image generation.",
+        statusCode: 400,
+        category: "invalid_request",
+        recommendation: "Use PNG or JPEG reference images and retry.",
+      });
+    }
+    throw new WalmartImageGenerationError({
+      code: "INVALID_REFERENCE_IMAGE",
+      message: "Reference image data is invalid. Re-upload and try again.",
+      statusCode: 400,
+      category: "invalid_request",
+      recommendation: "Upload a valid PNG/JPEG image and retry.",
+    });
   }
 
   const httpsUrl = toHttpsUrl(reference.url);
@@ -445,7 +534,7 @@ async function loadReferenceImage(reference: PreparedReferenceImage): Promise<Lo
   }
   const downloaded = {
     imageBytes: new Uint8Array(await response.arrayBuffer()),
-    mimeType: asText(response.headers.get("content-type")) || "image/png",
+    mimeType: normalizeMimeType(asText(response.headers.get("content-type")) || "image/png"),
   };
   if (downloaded.imageBytes.length === 0) {
     throw new WalmartImageGenerationError({
@@ -465,6 +554,15 @@ async function loadReferenceImage(reference: PreparedReferenceImage): Promise<Lo
       recommendation: "Use a smaller reference image (under 8MB).",
     });
   }
+  if (!SUPPORTED_REFERENCE_MIME_TYPES.has(downloaded.mimeType)) {
+    throw new WalmartImageGenerationError({
+      code: "REFERENCE_IMAGE_UNSUPPORTED_TYPE",
+      message: "Reference image type is not supported for generation.",
+      statusCode: 400,
+      category: "invalid_request",
+      recommendation: "Use PNG or JPEG reference images and retry.",
+    });
+  }
 
   return {
     source: reference.source,
@@ -472,6 +570,7 @@ async function loadReferenceImage(reference: PreparedReferenceImage): Promise<Lo
     label: reference.label,
     mimeType: downloaded.mimeType || "image/png",
     imageBytes: downloaded.imageBytes,
+    byteSize: downloaded.imageBytes.length,
   };
 }
 
@@ -507,6 +606,41 @@ async function requestOpenAiImageEdit(input: {
     body: formData,
     cache: "no-store",
   });
+}
+
+async function requestOpenAiImageGeneration(input: {
+  openAiApiKey: string;
+  prompt: string;
+}): Promise<Response> {
+  return fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${input.openAiApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: OPENAI_IMAGE_MODEL,
+      prompt: input.prompt,
+      size: OPENAI_IMAGE_SIZE,
+      n: 1,
+    }),
+    cache: "no-store",
+  });
+}
+
+function shouldFallbackToTextMode(
+  imageType: WalmartGeneratedImageType,
+  error: WalmartImageGenerationError
+): boolean {
+  if (imageType === "supplement_facts") return false;
+  return (
+    error.code === "OPENAI_UNSUPPORTED_PARAMETER" ||
+    error.code === "OPENAI_UNSUPPORTED_SIZE" ||
+    error.code === "OPENAI_MODEL_UNAVAILABLE" ||
+    error.code === "OPENAI_REFERENCE_INVALID" ||
+    error.code === "OPENAI_BAD_REQUEST" ||
+    error.code === "REFERENCE_IMAGE_UNSUPPORTED_TYPE"
+  );
 }
 
 function buildActionableOpenAiError(params: {
@@ -710,7 +844,16 @@ async function toActionableOpenAiError(response: Response): Promise<WalmartImage
 
 function withRequestDiagnostics(
   error: WalmartImageGenerationError,
-  params: { promptLength: number; requestModel: string; requestSize: string }
+  params: {
+    promptLength: number;
+    requestModel: string;
+    requestSize: string;
+    generationMode: WalmartImageGenerationMode;
+    routePhase: string;
+    referenceMimeTypes: string[];
+    referenceByteSizes: number[];
+    referenceCount: number;
+  }
 ): WalmartImageGenerationError {
   return new WalmartImageGenerationError({
     code: error.code,
@@ -723,6 +866,11 @@ function withRequestDiagnostics(
     promptLength: params.promptLength,
     requestModel: params.requestModel,
     requestSize: params.requestSize,
+    generationMode: params.generationMode,
+    routePhase: params.routePhase,
+    referenceMimeTypes: params.referenceMimeTypes,
+    referenceByteSizes: params.referenceByteSizes,
+    referenceCount: params.referenceCount,
   });
 }
 
@@ -738,6 +886,12 @@ export async function generateWalmartProductImage(input: {
   imageType: WalmartGeneratedImageType;
   promptSummary: string;
   referenceCount: number;
+  generationMode: WalmartImageGenerationMode;
+  requestModel: string;
+  requestSize: string;
+  promptLength: number;
+  referenceMimeTypes: string[];
+  referenceByteSizes: number[];
 }> {
   const factsResult = extractCanonicalProductFacts({ product: input.product });
   const uploadedReferences = normalizeReferenceImageCandidates(input.referenceImages);
@@ -758,39 +912,134 @@ export async function generateWalmartProductImage(input: {
     referenceImages: selectedReferences,
   });
 
-  const primaryReference =
-    selectedReferences.length > 0
-      ? await loadReferenceImage(selectedReferences[0])
-      : null;
+  const fallbackMimeTypes = selectedReferences
+    .map((entry) => normalizeMimeType(entry.mimeType || ""))
+    .filter(Boolean);
+  const fallbackByteSizes = selectedReferences
+    .map((entry) => entry.byteSize ?? 0)
+    .filter((size) => Number.isFinite(size) && size > 0)
+    .map((size) => Math.floor(size));
+  const loadedReferences: LoadedReferenceImage[] = [];
+  const currentReferenceMimeTypes = (): string[] => {
+    const loaded = loadedReferences.map((entry) => normalizeMimeType(entry.mimeType)).filter(Boolean);
+    return loaded.length > 0 ? loaded : fallbackMimeTypes;
+  };
+  const currentReferenceByteSizes = (): number[] => {
+    const loaded = loadedReferences.map((entry) => entry.byteSize).filter((size) => size > 0);
+    return loaded.length > 0 ? loaded : fallbackByteSizes;
+  };
 
-  const response = primaryReference
-    ? await requestOpenAiImageEdit({
-        openAiApiKey: input.openAiApiKey,
-        prompt: promptPayload.prompt,
-        referenceImage: primaryReference,
-      })
-    : await fetch("https://api.openai.com/v1/images/generations", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${input.openAiApiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: OPENAI_IMAGE_MODEL,
-          prompt: promptPayload.prompt,
-          size: OPENAI_IMAGE_SIZE,
-          n: 1,
-        }),
-        cache: "no-store",
-      });
-
-  if (!response.ok) {
-    const actionable = await toActionableOpenAiError(response);
-    throw withRequestDiagnostics(actionable, {
+  const withCurrentDiagnostics = (
+    error: WalmartImageGenerationError,
+    generationMode: WalmartImageGenerationMode,
+    routePhase: string
+  ): WalmartImageGenerationError =>
+    withRequestDiagnostics(error, {
       promptLength: promptPayload.prompt.length,
       requestModel: OPENAI_IMAGE_MODEL,
       requestSize: OPENAI_IMAGE_SIZE,
+      generationMode,
+      routePhase,
+      referenceMimeTypes: currentReferenceMimeTypes(),
+      referenceByteSizes: currentReferenceByteSizes(),
+      referenceCount: selectedReferences.length,
     });
+
+  let generationMode: WalmartImageGenerationMode =
+    selectedReferences.length > 0 ? "reference_image_edit" : "text_to_image";
+  let response: Response;
+  if (selectedReferences.length > 0) {
+    try {
+      loadedReferences.push(await loadReferenceImage(selectedReferences[0]));
+    } catch (error) {
+      if (error instanceof WalmartImageGenerationError) {
+        throw withCurrentDiagnostics(error, generationMode, "reference_validation");
+      }
+      throw withCurrentDiagnostics(
+        new WalmartImageGenerationError({
+          code: "REFERENCE_IMAGE_LOAD_FAILED",
+          message: "Reference image could not be prepared for generation.",
+          statusCode: 400,
+          category: "invalid_request",
+          recommendation: "Upload a valid PNG/JPEG image and retry.",
+        }),
+        generationMode,
+        "reference_validation"
+      );
+    }
+    try {
+      response = await requestOpenAiImageEdit({
+        openAiApiKey: input.openAiApiKey,
+        prompt: promptPayload.prompt,
+        referenceImage: loadedReferences[0],
+      });
+    } catch {
+      throw withCurrentDiagnostics(
+        new WalmartImageGenerationError({
+          code: "OPENAI_IMAGE_PROVIDER_UNREACHABLE",
+          message: "OpenAI image generation request failed before provider response.",
+          statusCode: 502,
+          category: "provider_error",
+          recommendation: "Retry generation. If this persists, verify network/provider status.",
+        }),
+        generationMode,
+        "provider_request"
+      );
+    }
+    if (!response.ok) {
+      const actionable = await toActionableOpenAiError(response);
+      if (shouldFallbackToTextMode(input.imageType, actionable)) {
+        generationMode = "reference_fallback_text_to_image";
+        try {
+          response = await requestOpenAiImageGeneration({
+            openAiApiKey: input.openAiApiKey,
+            prompt: promptPayload.prompt,
+          });
+        } catch {
+          throw withCurrentDiagnostics(
+            new WalmartImageGenerationError({
+              code: "OPENAI_IMAGE_PROVIDER_UNREACHABLE",
+              message: "OpenAI image generation request failed before provider response.",
+              statusCode: 502,
+              category: "provider_error",
+              recommendation: "Retry generation. If this persists, verify network/provider status.",
+            }),
+            generationMode,
+            "provider_request"
+          );
+        }
+        if (!response.ok) {
+          const fallbackActionable = await toActionableOpenAiError(response);
+          throw withCurrentDiagnostics(fallbackActionable, generationMode, "provider_response");
+        }
+      } else {
+        throw withCurrentDiagnostics(actionable, generationMode, "provider_response");
+      }
+    }
+  } else {
+    generationMode = "text_to_image";
+    try {
+      response = await requestOpenAiImageGeneration({
+        openAiApiKey: input.openAiApiKey,
+        prompt: promptPayload.prompt,
+      });
+    } catch {
+      throw withCurrentDiagnostics(
+        new WalmartImageGenerationError({
+          code: "OPENAI_IMAGE_PROVIDER_UNREACHABLE",
+          message: "OpenAI image generation request failed before provider response.",
+          statusCode: 502,
+          category: "provider_error",
+          recommendation: "Retry generation. If this persists, verify network/provider status.",
+        }),
+        generationMode,
+        "provider_request"
+      );
+    }
+    if (!response.ok) {
+      const actionable = await toActionableOpenAiError(response);
+      throw withCurrentDiagnostics(actionable, generationMode, "provider_response");
+    }
   }
 
   const payload = (await response.json().catch(() => ({}))) as unknown;
@@ -799,13 +1048,17 @@ export async function generateWalmartProductImage(input: {
   if (parsed.b64) {
     const bytes = Buffer.from(parsed.b64, "base64");
     if (bytes.length === 0) {
-      throw new WalmartImageGenerationError({
-        code: "OPENAI_IMAGE_EMPTY",
-        message: "Generated image is empty. Regenerate and try again.",
-        statusCode: 502,
-        category: "provider_response_invalid",
-        recommendation: "Regenerate the image. If this persists, retry later.",
-      });
+      throw withCurrentDiagnostics(
+        new WalmartImageGenerationError({
+          code: "OPENAI_IMAGE_EMPTY",
+          message: "Generated image is empty. Regenerate and try again.",
+          statusCode: 502,
+          category: "provider_response_invalid",
+          recommendation: "Regenerate the image. If this persists, retry later.",
+        }),
+        generationMode,
+        "provider_response"
+      );
     }
 
     return {
@@ -814,24 +1067,58 @@ export async function generateWalmartProductImage(input: {
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
       referenceCount: selectedReferences.length,
+      generationMode,
+      requestModel: OPENAI_IMAGE_MODEL,
+      requestSize: OPENAI_IMAGE_SIZE,
+      promptLength: promptPayload.prompt.length,
+      referenceMimeTypes: currentReferenceMimeTypes(),
+      referenceByteSizes: currentReferenceByteSizes(),
     };
   }
 
   if (parsed.url) {
-    const downloaded = await downloadImage(parsed.url);
+    let downloaded: { imageBytes: Uint8Array; mimeType: string };
+    try {
+      downloaded = await downloadImage(parsed.url);
+    } catch (error) {
+      if (error instanceof WalmartImageGenerationError) {
+        throw withCurrentDiagnostics(error, generationMode, "provider_download");
+      }
+      throw withCurrentDiagnostics(
+        new WalmartImageGenerationError({
+          code: "OPENAI_IMAGE_DOWNLOAD_FAILED",
+          message: "Generated image download failed.",
+          statusCode: 502,
+          category: "provider_response_invalid",
+          recommendation: "Regenerate the image. If this persists, retry later.",
+        }),
+        generationMode,
+        "provider_download"
+      );
+    }
     return {
       ...downloaded,
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
       referenceCount: selectedReferences.length,
+      generationMode,
+      requestModel: OPENAI_IMAGE_MODEL,
+      requestSize: OPENAI_IMAGE_SIZE,
+      promptLength: promptPayload.prompt.length,
+      referenceMimeTypes: currentReferenceMimeTypes(),
+      referenceByteSizes: currentReferenceByteSizes(),
     };
   }
 
-  throw new WalmartImageGenerationError({
-    code: "OPENAI_IMAGE_INVALID_RESPONSE",
-    message: "OpenAI image generation returned no image data.",
-    statusCode: 502,
-    category: "provider_response_invalid",
-    recommendation: "Regenerate the image. If this persists, retry later.",
-  });
+  throw withCurrentDiagnostics(
+    new WalmartImageGenerationError({
+      code: "OPENAI_IMAGE_INVALID_RESPONSE",
+      message: "OpenAI image generation returned no image data.",
+      statusCode: 502,
+      category: "provider_response_invalid",
+      recommendation: "Regenerate the image. If this persists, retry later.",
+    }),
+    generationMode,
+    "provider_response"
+  );
 }

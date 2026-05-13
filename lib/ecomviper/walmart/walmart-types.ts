@@ -213,6 +213,7 @@ export interface WalmartGeneratedImageReferenceInput {
   url: string;
   label?: string;
   mimeType?: string;
+  byteSize?: number;
 }
 
 export interface WalmartProductRecord {
