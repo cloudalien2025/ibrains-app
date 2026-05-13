@@ -14,6 +14,7 @@ import {
   normalizeDraftImageFields,
   normalizeWalmartImageUrlList,
 } from "@/lib/ecomviper/walmart/walmart-image-fields";
+import { sanitizeSeoFilename } from "@/lib/ecomviper/walmart/walmart-generated-media-seo";
 import {
   isLowConfidenceAiFieldValue,
   pickMeaningfulAiText,
@@ -137,6 +138,10 @@ type GenerateProductImagesResponse = {
     referenceCount?: number | null;
     referenceMimeTypes?: string[];
     referenceByteSizes?: number[];
+    width?: number | null;
+    height?: number | null;
+    isSquare?: boolean | null;
+    squareNormalized?: boolean | null;
   };
   error?: {
     code?: string;
@@ -160,6 +165,10 @@ type GenerateProductImagesResponse = {
       size?: string | null;
       generationMode?: string | null;
       routePhase?: string | null;
+      width?: number | null;
+      height?: number | null;
+      isSquare?: boolean | null;
+      squareNormalized?: boolean | null;
     };
   };
 };
@@ -255,6 +264,16 @@ function asNumber(value: unknown): number | null {
   if (typeof value === "string" && value.trim()) {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function asBoolean(value: unknown): boolean | null {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
   }
   return null;
 }
@@ -428,6 +447,16 @@ function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsse
   const createdAt = asText(row.createdAt)?.trim() || new Date().toISOString();
   const promptSummary = asText(row.promptSummary)?.trim() ?? "";
   const guidance = asText(row.guidance)?.trim() ?? "";
+  const seoFilenameRaw = asText(row.seoFilename)?.trim() ?? "";
+  const altText = asText(row.altText)?.trim() ?? "";
+  const productSku = asText(row.productSku)?.trim() ?? "";
+  const brand = asText(row.brand)?.trim() ?? "";
+  const width = asNumber(row.width);
+  const height = asNumber(row.height);
+  const isSquare = asBoolean(row.isSquare);
+  const squareNormalized = asBoolean(row.squareNormalized);
+  const approvedForWalmart = asBoolean(row.approvedForWalmart);
+  const approved = asBoolean(row.approved) ?? false;
 
   if (!id || !url) return null;
 
@@ -440,7 +469,20 @@ function normalizeGeneratedMediaAsset(value: unknown): WalmartGeneratedMediaAsse
     createdAt,
     promptSummary: promptSummary || undefined,
     guidance: guidance || undefined,
-    approved: Boolean(row.approved),
+    seoFilename: seoFilenameRaw ? sanitizeSeoFilename(seoFilenameRaw, "image/png") : undefined,
+    altText: altText || undefined,
+    productSku: productSku || undefined,
+    brand: brand || undefined,
+    approvedForWalmart: approvedForWalmart ?? (approved ? true : undefined),
+    width: width !== null && width >= 0 ? Math.floor(width) : undefined,
+    height: height !== null && height >= 0 ? Math.floor(height) : undefined,
+    isSquare:
+      isSquare ??
+      (width !== null && width >= 0 && height !== null && height >= 0
+        ? Math.floor(width) === Math.floor(height)
+        : undefined),
+    squareNormalized: squareNormalized ?? undefined,
+    approved,
   };
 }
 
@@ -1172,6 +1214,10 @@ export default function ProductEditorClient({
   >(null);
   const [productImageGenerationError, setProductImageGenerationError] =
     useState<GenerateProductImagesResponse["error"] | null>(null);
+  const [focusedGeneratedAssetId, setFocusedGeneratedAssetId] = useState<string | null>(() => {
+    const firstPending = initialForm.generatedMediaAssets.find((asset) => !asset.approved);
+    return firstPending?.id ?? initialForm.generatedMediaAssets[0]?.id ?? null;
+  });
   const referenceFileInputRef = useRef<HTMLInputElement | null>(null);
   const optimizingWithAi = inlineAiState === "loading";
 
@@ -1507,6 +1553,15 @@ export default function ProductEditorClient({
     () => (form.generatedMediaAssets ?? []).filter((asset) => !asset.approved),
     [form.generatedMediaAssets]
   );
+  const focusedGeneratedMediaAsset = useMemo(() => {
+    const allAssets = form.generatedMediaAssets ?? [];
+    if (allAssets.length === 0) return null;
+    if (focusedGeneratedAssetId) {
+      const focused = allAssets.find((asset) => asset.id === focusedGeneratedAssetId);
+      if (focused) return focused;
+    }
+    return allAssets.find((asset) => !asset.approved) ?? allAssets[0];
+  }, [focusedGeneratedAssetId, form.generatedMediaAssets]);
   const approvedGeneratedMediaUrls = useMemo(
     () =>
       normalizeWalmartImageUrlList(
@@ -2035,12 +2090,16 @@ export default function ProductEditorClient({
                 generationMode: payload.generationDiagnostics.generationMode ?? null,
                 model: payload.generationDiagnostics.model ?? null,
                 size: payload.generationDiagnostics.size ?? null,
-                promptLength: payload.generationDiagnostics.promptLength ?? null,
-                referenceCount: payload.generationDiagnostics.referenceCount ?? null,
-                referenceMimeTypes: payload.generationDiagnostics.referenceMimeTypes ?? [],
-                referenceByteSizes: payload.generationDiagnostics.referenceByteSizes ?? [],
-              }
-            : undefined,
+                  promptLength: payload.generationDiagnostics.promptLength ?? null,
+                  referenceCount: payload.generationDiagnostics.referenceCount ?? null,
+                  referenceMimeTypes: payload.generationDiagnostics.referenceMimeTypes ?? [],
+                  referenceByteSizes: payload.generationDiagnostics.referenceByteSizes ?? [],
+                  width: payload.generationDiagnostics.width ?? null,
+                  height: payload.generationDiagnostics.height ?? null,
+                  isSquare: payload.generationDiagnostics.isSquare ?? null,
+                  squareNormalized: payload.generationDiagnostics.squareNormalized ?? null,
+                }
+              : undefined,
         });
         setProductImageGenerationMessage("No valid image previews were returned. Try regenerating.");
         return;
@@ -2064,12 +2123,13 @@ export default function ProductEditorClient({
         }
         return next;
       });
+      setFocusedGeneratedAssetId(nextGeneratedAssets[0]?.id ?? null);
       setFormDirty(true);
       setProductImageGenerationError(null);
       setProductImageGenerationMessage(
         `${nextGeneratedAssets.length} generated image preview${
           nextGeneratedAssets.length === 1 ? "" : "s"
-        } ready. Click Add to Product Media to include in Walmart draft images.`
+        } ready. Review below, open full size if needed, then click Add to Product Media.`
       );
     } catch (error) {
       const fallback = {
@@ -2090,74 +2150,92 @@ export default function ProductEditorClient({
   }
 
   function handleApproveGeneratedMediaAsset(assetId: string) {
-    const asset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
-    if (!asset) {
+    const selectedAsset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
+    if (!selectedAsset) {
       setProductImageGenerationMessage("Generated image not found.");
       return;
     }
-    if (asset.approved) {
+    if (selectedAsset.approved) {
       setProductImageGenerationMessage("Generated image is already approved in this draft.");
       return;
     }
 
-    const currentPrimary = form.imageUrl.trim();
-    const currentAdditional = normalizeWalmartImageUrlList([form.additionalImageUrls]);
-    let nextPrimary = currentPrimary;
-    let nextAdditional = currentAdditional;
+    setForm((current) => {
+      const asset = current.generatedMediaAssets.find((entry) => entry.id === assetId);
+      if (!asset) return current;
 
-    if (!nextPrimary) {
-      nextPrimary = asset.url;
-    } else if (nextPrimary !== asset.url) {
-      nextAdditional = normalizeWalmartImageUrlList([nextAdditional, asset.url]).filter(
-        (entry) => entry !== nextPrimary
+      const currentPrimary = current.imageUrl.trim();
+      const currentAdditional = normalizeWalmartImageUrlList([current.additionalImageUrls]);
+      let nextPrimary = currentPrimary;
+      let nextAdditional = currentAdditional;
+
+      if (!nextPrimary) {
+        nextPrimary = asset.url;
+      } else if (nextPrimary !== asset.url) {
+        nextAdditional = normalizeWalmartImageUrlList([nextAdditional, asset.url]).filter(
+          (entry) => entry !== nextPrimary
+        );
+      }
+      if (nextPrimary === asset.url) {
+        nextAdditional = nextAdditional.filter((entry) => entry !== asset.url);
+      }
+
+      const nextAssets = current.generatedMediaAssets.map((entry) =>
+        entry.id === assetId
+          ? { ...entry, approved: true, approvedForWalmart: true }
+          : entry
       );
-    }
-    if (nextPrimary === asset.url) {
-      nextAdditional = nextAdditional.filter((entry) => entry !== asset.url);
-    }
-
-    const nextAssets = form.generatedMediaAssets.map((entry) =>
-      entry.id === assetId ? { ...entry, approved: true } : entry
-    );
-
-    patchForm({
-      generatedMediaAssets: nextAssets,
-      imageUrl: nextPrimary,
-      additionalImageUrls: nextAdditional.join("\n"),
-      imageSource: nextPrimary === asset.url ? "openai_generated" : form.imageSource,
-      imageSyncStatus: nextPrimary === asset.url ? "found" : form.imageSyncStatus,
-      imageSyncReason:
-        nextPrimary === asset.url
-          ? "Primary image approved from OpenAI generated media."
-          : form.imageSyncReason,
-      lastImageSyncedAt: new Date().toISOString(),
+      return {
+        ...current,
+        generatedMediaAssets: nextAssets,
+        imageUrl: nextPrimary,
+        additionalImageUrls: nextAdditional.join("\n"),
+        imageSource: nextPrimary === asset.url ? "openai_generated" : current.imageSource,
+        imageSyncStatus: nextPrimary === asset.url ? "found" : current.imageSyncStatus,
+        imageSyncReason:
+          nextPrimary === asset.url
+            ? "Primary image approved from OpenAI generated media."
+            : current.imageSyncReason,
+        lastImageSyncedAt: new Date().toISOString(),
+      };
     });
+    setFocusedGeneratedAssetId(assetId);
+    setFormDirty(true);
     setProductImageGenerationMessage(
-      "Generated image added to product media. Save Draft to persist and include it in Walmart updates."
+      "Generated image added to product media and approved for Walmart in this editor state. Save Draft to persist."
     );
   }
 
   function handleRemoveGeneratedMediaAsset(assetId: string) {
-    const asset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
-    if (!asset) return;
+    const selectedAsset = form.generatedMediaAssets.find((entry) => entry.id === assetId);
+    if (!selectedAsset) return;
 
-    const remainingAssets = form.generatedMediaAssets.filter((entry) => entry.id !== assetId);
-    const currentAdditional = normalizeWalmartImageUrlList([form.additionalImageUrls]).filter(
-      (entry) => entry !== asset.url
-    );
+    let nextFocusId: string | null = null;
+    setForm((current) => {
+      const asset = current.generatedMediaAssets.find((entry) => entry.id === assetId);
+      if (!asset) return current;
 
-    let nextPrimary = form.imageUrl.trim();
-    let nextAdditional = currentAdditional;
-    if (nextPrimary === asset.url) {
-      nextPrimary = currentAdditional[0] ?? "";
-      nextAdditional = currentAdditional.filter((entry) => entry !== nextPrimary);
-    }
+      const remainingAssets = current.generatedMediaAssets.filter((entry) => entry.id !== assetId);
+      const currentAdditional = normalizeWalmartImageUrlList([current.additionalImageUrls]).filter(
+        (entry) => entry !== asset.url
+      );
 
-    patchForm({
-      generatedMediaAssets: remainingAssets,
-      imageUrl: nextPrimary,
-      additionalImageUrls: nextAdditional.join("\n"),
+      let nextPrimary = current.imageUrl.trim();
+      let nextAdditional = currentAdditional;
+      if (nextPrimary === asset.url) {
+        nextPrimary = currentAdditional[0] ?? "";
+        nextAdditional = currentAdditional.filter((entry) => entry !== nextPrimary);
+      }
+      nextFocusId = remainingAssets.find((entry) => !entry.approved)?.id ?? remainingAssets[0]?.id ?? null;
+      return {
+        ...current,
+        generatedMediaAssets: remainingAssets,
+        imageUrl: nextPrimary,
+        additionalImageUrls: nextAdditional.join("\n"),
+      };
     });
+    setFormDirty(true);
+    setFocusedGeneratedAssetId(nextFocusId);
     setGeneratedPreviewErrors((current) => {
       const next = { ...current };
       delete next[assetId];
@@ -3587,6 +3665,19 @@ export default function ProductEditorClient({
                               .join(", ")}
                           </p>
                         ) : null}
+                        {typeof productImageGenerationError.requestDiagnostics?.width === "number" &&
+                        typeof productImageGenerationError.requestDiagnostics?.height === "number" ? (
+                          <p className="mt-1">
+                            Output dimensions:{" "}
+                            {productImageGenerationError.requestDiagnostics?.width}x
+                            {productImageGenerationError.requestDiagnostics?.height}
+                            {" | "}Square:{" "}
+                            {productImageGenerationError.requestDiagnostics?.isSquare ? "yes" : "no"}
+                            {productImageGenerationError.requestDiagnostics?.squareNormalized
+                              ? " (normalized to square canvas)"
+                              : ""}
+                          </p>
+                        ) : null}
                         {productImageGenerationError.requestDiagnostics?.routePhase ? (
                           <p className="mt-1">
                             Failed phase:{" "}
@@ -3601,12 +3692,117 @@ export default function ProductEditorClient({
                       <p className="mt-1">
                         Pending previews: {pendingGeneratedMediaAssets.length}
                       </p>
+                      <p className="mt-1">
+                        Editor state updates immediately after generation and approval.
+                      </p>
                     </div>
                     {malformedGeneratedMediaCount > 0 ? (
                       <p className="mt-2 rounded border border-amber-200 bg-amber-50 px-2 py-2 text-xs text-amber-800">
                         {malformedGeneratedMediaCount} malformed generated-media entr
                         {malformedGeneratedMediaCount === 1 ? "y was" : "ies were"} skipped during load.
                       </p>
+                    ) : null}
+
+                    {focusedGeneratedMediaAsset ? (
+                      <article
+                        className="mt-3 rounded-lg border border-[#BFDBFE] bg-white p-3"
+                        data-testid="ecomviper-generated-media-focused-preview"
+                      >
+                        <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#1D4ED8]">
+                          Current generated preview
+                        </p>
+                        <div className="mt-2 aspect-square w-full overflow-hidden rounded-md border border-[#D9E4F0] bg-white">
+                          <img
+                            data-testid="ecomviper-generated-media-focused-image"
+                            src={focusedGeneratedMediaAsset.previewUrl || focusedGeneratedMediaAsset.url}
+                            alt={`${formatGeneratedImageTypeLabel(focusedGeneratedMediaAsset.imageType)} preview`}
+                            className="h-full w-full object-contain p-1"
+                            loading="lazy"
+                            onError={() => handleGeneratedPreviewLoadError(focusedGeneratedMediaAsset)}
+                          />
+                        </div>
+                        <p className="mt-2 text-xs font-medium text-[#0F172A]">
+                          {formatGeneratedImageTypeLabel(focusedGeneratedMediaAsset.imageType)}
+                        </p>
+                        <p className="mt-1 text-[11px] text-[#64748B]">Source: OpenAI generated</p>
+                        {typeof focusedGeneratedMediaAsset.width === "number" &&
+                        typeof focusedGeneratedMediaAsset.height === "number" ? (
+                          <p className="mt-1 text-[11px] text-[#64748B]">
+                            Dimensions: {focusedGeneratedMediaAsset.width}x
+                            {focusedGeneratedMediaAsset.height}
+                            {" | "}Square: {focusedGeneratedMediaAsset.isSquare ? "yes" : "no"}
+                            {focusedGeneratedMediaAsset.squareNormalized
+                              ? " (normalized to square canvas)"
+                              : ""}
+                          </p>
+                        ) : null}
+                        {focusedGeneratedMediaAsset.seoFilename ? (
+                          <p className="mt-1 break-all text-[11px] text-[#64748B]">
+                            SEO filename: {focusedGeneratedMediaAsset.seoFilename}
+                          </p>
+                        ) : null}
+                        {focusedGeneratedMediaAsset.altText ? (
+                          <p className="mt-1 text-[11px] text-[#64748B]">
+                            Alt text: {focusedGeneratedMediaAsset.altText}
+                          </p>
+                        ) : null}
+                        {focusedGeneratedMediaAsset.promptSummary ? (
+                          <p className="mt-1 text-[11px] text-[#64748B]">
+                            Prompt: {focusedGeneratedMediaAsset.promptSummary}
+                          </p>
+                        ) : null}
+                        {generatedPreviewErrors[focusedGeneratedMediaAsset.id] ? (
+                          <p className="mt-1 text-[11px] text-amber-700">
+                            {generatedPreviewErrors[focusedGeneratedMediaAsset.id]}
+                          </p>
+                        ) : null}
+                        <div className="mt-2 flex flex-wrap gap-2">
+                          <a
+                            href={focusedGeneratedMediaAsset.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A]"
+                          >
+                            Open full size
+                          </a>
+                          {!focusedGeneratedMediaAsset.approved ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleApproveGeneratedMediaAsset(focusedGeneratedMediaAsset.id)
+                                }
+                                className="rounded border border-[#2563EB] bg-[#2563EB] px-2 py-1 text-xs text-white"
+                              >
+                                Add to Product Media
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleRegenerateGeneratedMediaAsset(focusedGeneratedMediaAsset)
+                                }
+                                disabled={generatingProductImages}
+                                className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A] disabled:opacity-50"
+                              >
+                                Regenerate
+                              </button>
+                            </>
+                          ) : (
+                            <span className="rounded border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs text-emerald-700">
+                              Approved for Walmart
+                            </span>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() =>
+                              handleRemoveGeneratedMediaAsset(focusedGeneratedMediaAsset.id)
+                            }
+                            className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#334155]"
+                          >
+                            Remove draft preview
+                          </button>
+                        </div>
+                      </article>
                     ) : null}
 
                     {form.generatedMediaAssets.length > 0 ? (
@@ -3616,19 +3812,26 @@ export default function ProductEditorClient({
                             key={asset.id}
                             className="rounded-lg border border-[#E2E8F0] bg-white p-2"
                           >
-                            <img
-                              src={asset.previewUrl || asset.url}
-                              alt={`${formatGeneratedImageTypeLabel(asset.imageType)} preview`}
-                              className="h-36 w-full rounded-md border border-[#D9E4F0] bg-[#F8FBFF] object-cover"
-                              loading="lazy"
-                              onError={() => handleGeneratedPreviewLoadError(asset)}
-                            />
+                            <div className="aspect-square w-full overflow-hidden rounded-md border border-[#D9E4F0] bg-[#F8FBFF]">
+                              <img
+                                src={asset.previewUrl || asset.url}
+                                alt={`${formatGeneratedImageTypeLabel(asset.imageType)} preview`}
+                                className="h-full w-full object-contain p-1"
+                                loading="lazy"
+                                onError={() => handleGeneratedPreviewLoadError(asset)}
+                              />
+                            </div>
                             <p className="mt-2 text-xs font-medium text-[#0F172A]">
                               {formatGeneratedImageTypeLabel(asset.imageType)}
                             </p>
                             <p className="mt-1 text-[11px] text-[#64748B]">
                               Source: OpenAI generated
                             </p>
+                            {asset.seoFilename ? (
+                              <p className="mt-1 break-all text-[11px] text-[#64748B]">
+                                SEO filename: {asset.seoFilename}
+                              </p>
+                            ) : null}
                             <p className="mt-1 break-all text-[11px] text-[#64748B]">
                               URL: {asset.url}
                             </p>
@@ -3646,6 +3849,21 @@ export default function ProductEditorClient({
                               Created: {asset.createdAt}
                             </p>
                             <div className="mt-2 flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setFocusedGeneratedAssetId(asset.id)}
+                                className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A]"
+                              >
+                                View preview
+                              </button>
+                              <a
+                                href={asset.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="rounded border border-[#D9E4F0] bg-white px-2 py-1 text-xs text-[#0F172A]"
+                              >
+                                Open full size
+                              </a>
                               {!asset.approved ? (
                                 <>
                                   <button

@@ -12,6 +12,7 @@ import type {
 
 const OPENAI_IMAGE_MODEL = process.env.WALMART_OPENAI_IMAGE_MODEL?.trim() || "gpt-image-1";
 const OPENAI_IMAGE_SIZE = "1024x1024";
+const OPENAI_IMAGE_SQUARE_EDGE = 1024;
 const OPENAI_IMAGE_PROMPT_MAX_CHARS = 3500;
 const MAX_REFERENCE_IMAGES = 4;
 const MAX_REFERENCE_BYTES = 8 * 1024 * 1024;
@@ -349,15 +350,15 @@ function ensureSupplementFactsInput(
 
 function imageTypeDirections(imageType: WalmartGeneratedImageType): string {
   if (imageType === "lifestyle") {
-    return "Create a photorealistic lifestyle scene featuring the product package naturally placed in a believable environment that matches intended use. Avoid medical claims text overlays.";
+    return "Create a photorealistic 1:1 square lifestyle scene featuring the full product package naturally placed in a believable environment that matches intended use. Keep the product centered, fully visible, and not cropped. Avoid medical claims text overlays.";
   }
   if (imageType === "supplement_facts") {
-    return "Create a clean, high-legibility supplement-facts-style informational graphic using only provided factual data. White or light neutral background, crisp typography, no invented nutrition values.";
+    return "Create a clean 1:1 square, high-legibility supplement-facts informational graphic using only provided factual data. Center the facts panel on a clean white canvas with crisp typography and no invented nutrition values.";
   }
   if (imageType === "ingredient_spotlight") {
-    return "Create a product ingredient spotlight graphic highlighting key ingredients and compliant structure/function support language only. Keep it premium, clean, and marketplace-safe.";
+    return "Create a square product ingredient spotlight graphic highlighting key ingredients and compliant structure/function support language only. Keep it premium, clean, centered, and marketplace-safe.";
   }
-  return "Create a clean studio hero image of the product package on a neutral background with high clarity and retail-ready composition.";
+  return "Create a square clean studio hero image of the full product package on a neutral background with high clarity, centered framing, and retail-ready composition.";
 }
 
 function buildComplianceGuardrails(): string {
@@ -405,7 +406,14 @@ export function buildWalmartGeneratedImagePrompt(input: {
     "Canonical product facts:",
     ...factsLines.map((line) => `- ${line}`),
     "Output requirements:",
-    "- 1:1 square composition, 1024x1024 target.",
+    "- 1:1 square composition, exactly 1024x1024 output.",
+    "- Marketplace-ready media quality suitable for Walmart listing image workflows.",
+    input.imageType === "supplement_facts"
+      ? "- Supplement Facts readability is critical: center the panel, high contrast text, white background, no cropped or tilted facts panel."
+      : "",
+    input.imageType === "lifestyle"
+      ? "- Lifestyle composition must keep the full product package centered and fully visible with no cut-off product edges."
+      : "",
     "- No logos or trademarks that are not part of the described product identity.",
     "- No misleading before/after medical implication imagery.",
     "- No watermark.",
@@ -874,6 +882,123 @@ function withRequestDiagnostics(
   });
 }
 
+async function normalizeGeneratedImageToSquare(input: {
+  imageBytes: Uint8Array;
+  mimeType: string;
+  imageType: WalmartGeneratedImageType;
+}): Promise<{
+  imageBytes: Uint8Array;
+  mimeType: string;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized: boolean;
+}> {
+  type SquareCanvasColor = { r: number; g: number; b: number; alpha: number };
+  type SquareResizeResult = { png: () => { toBuffer: () => Promise<Buffer> } };
+  type SquareSharpInstance = {
+    metadata: () => Promise<{ width?: number; height?: number }>;
+    resize: (
+      width: number,
+      height: number,
+      options: {
+        fit: "contain";
+        position: "center";
+        background: SquareCanvasColor;
+        withoutEnlargement: boolean;
+      }
+    ) => SquareResizeResult;
+  };
+  type SquareSharpFactory = (input?: Buffer | Uint8Array) => SquareSharpInstance;
+
+  let sharpFactory: SquareSharpFactory | null = null;
+
+  try {
+    const sharpModule = await import("sharp");
+    const resolved = (sharpModule.default ?? sharpModule) as unknown;
+    if (typeof resolved !== "function") {
+      return {
+        imageBytes: input.imageBytes,
+        mimeType: input.mimeType,
+        squareNormalized: false,
+      };
+    }
+    sharpFactory = resolved as unknown as SquareSharpFactory;
+  } catch {
+    return {
+      imageBytes: input.imageBytes,
+      mimeType: input.mimeType,
+      squareNormalized: false,
+    };
+  }
+  if (!sharpFactory) {
+    return {
+      imageBytes: input.imageBytes,
+      mimeType: input.mimeType,
+      squareNormalized: false,
+    };
+  }
+
+  try {
+    const metadata = await sharpFactory(Buffer.from(input.imageBytes)).metadata();
+    const width =
+      typeof metadata.width === "number" && Number.isFinite(metadata.width)
+        ? Math.floor(metadata.width)
+        : undefined;
+    const height =
+      typeof metadata.height === "number" && Number.isFinite(metadata.height)
+        ? Math.floor(metadata.height)
+        : undefined;
+    if (!width || !height) {
+      return {
+        imageBytes: input.imageBytes,
+        mimeType: input.mimeType,
+        squareNormalized: false,
+      };
+    }
+    if (width === height) {
+      return {
+        imageBytes: input.imageBytes,
+        mimeType: input.mimeType,
+        width,
+        height,
+        isSquare: true,
+        squareNormalized: false,
+      };
+    }
+
+    const squareEdge = OPENAI_IMAGE_SQUARE_EDGE;
+    const background =
+      input.imageType === "supplement_facts"
+        ? { r: 255, g: 255, b: 255, alpha: 1 }
+        : { r: 250, g: 250, b: 250, alpha: 1 };
+    const normalizedBuffer = await sharpFactory(Buffer.from(input.imageBytes))
+      .resize(squareEdge, squareEdge, {
+        fit: "contain",
+        position: "center",
+        background,
+        withoutEnlargement: false,
+      })
+      .png()
+      .toBuffer();
+
+    return {
+      imageBytes: new Uint8Array(normalizedBuffer),
+      mimeType: "image/png",
+      width: squareEdge,
+      height: squareEdge,
+      isSquare: true,
+      squareNormalized: true,
+    };
+  } catch {
+    return {
+      imageBytes: input.imageBytes,
+      mimeType: input.mimeType,
+      squareNormalized: false,
+    };
+  }
+}
+
 export async function generateWalmartProductImage(input: {
   openAiApiKey: string;
   product: WalmartProductRecord;
@@ -892,6 +1017,10 @@ export async function generateWalmartProductImage(input: {
   promptLength: number;
   referenceMimeTypes: string[];
   referenceByteSizes: number[];
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
 }> {
   const factsResult = extractCanonicalProductFacts({ product: input.product });
   const uploadedReferences = normalizeReferenceImageCandidates(input.referenceImages);
@@ -1061,9 +1190,15 @@ export async function generateWalmartProductImage(input: {
       );
     }
 
-    return {
-      imageBytes: bytes,
+    const normalized = await normalizeGeneratedImageToSquare({
+      imageBytes: new Uint8Array(bytes),
       mimeType: "image/png",
+      imageType: input.imageType,
+    });
+
+    return {
+      imageBytes: normalized.imageBytes,
+      mimeType: normalized.mimeType,
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
       referenceCount: selectedReferences.length,
@@ -1073,6 +1208,10 @@ export async function generateWalmartProductImage(input: {
       promptLength: promptPayload.prompt.length,
       referenceMimeTypes: currentReferenceMimeTypes(),
       referenceByteSizes: currentReferenceByteSizes(),
+      width: normalized.width,
+      height: normalized.height,
+      isSquare: normalized.isSquare,
+      squareNormalized: normalized.squareNormalized,
     };
   }
 
@@ -1096,8 +1235,14 @@ export async function generateWalmartProductImage(input: {
         "provider_download"
       );
     }
+    const normalized = await normalizeGeneratedImageToSquare({
+      imageBytes: downloaded.imageBytes,
+      mimeType: downloaded.mimeType,
+      imageType: input.imageType,
+    });
     return {
-      ...downloaded,
+      imageBytes: normalized.imageBytes,
+      mimeType: normalized.mimeType,
       imageType: input.imageType,
       promptSummary: promptPayload.promptSummary,
       referenceCount: selectedReferences.length,
@@ -1107,6 +1252,10 @@ export async function generateWalmartProductImage(input: {
       promptLength: promptPayload.prompt.length,
       referenceMimeTypes: currentReferenceMimeTypes(),
       referenceByteSizes: currentReferenceByteSizes(),
+      width: normalized.width,
+      height: normalized.height,
+      isSquare: normalized.isSquare,
+      squareNormalized: normalized.squareNormalized,
     };
   }
 

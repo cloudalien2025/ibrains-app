@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 import { query } from "@/app/api/ecomviper/_utils/db";
+import { sanitizeSeoFilename } from "@/lib/ecomviper/walmart/walmart-generated-media-seo";
 import type { WalmartGeneratedImageType } from "@/lib/ecomviper/walmart/walmart-types";
 
 const GENERATED_MEDIA_TABLE = "ecomviper_walmart_generated_media";
@@ -11,6 +12,15 @@ interface GeneratedMediaMetadata {
   imageType: WalmartGeneratedImageType;
   promptSummary?: string;
   guidance?: string;
+  seoFilename?: string;
+  altText?: string;
+  productSku?: string;
+  brand?: string;
+  approvedForWalmart?: boolean;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
 }
 
 interface GeneratedMediaRow {
@@ -55,6 +65,24 @@ function asText(value: unknown): string {
   return "";
 }
 
+function asBoolean(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") return value;
+  return undefined;
+}
+
+function asNonNegativeInteger(value: unknown): number | undefined {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.floor(parsed);
+    }
+  }
+  return undefined;
+}
+
 function asMetadata(value: unknown): GeneratedMediaMetadata {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {
@@ -75,12 +103,34 @@ function asMetadata(value: unknown): GeneratedMediaMetadata {
 
   const promptSummary = asText(row.promptSummary);
   const guidance = asText(row.guidance);
+  const productSku = asText(row.productSku);
+  const brand = asText(row.brand);
+  const altText = asText(row.altText);
+  const seoFilename = asText(row.seoFilename);
+  const width = asNonNegativeInteger(row.width);
+  const height = asNonNegativeInteger(row.height);
+  const isSquare =
+    asBoolean(row.isSquare) ??
+    (typeof width === "number" && typeof height === "number" ? width === height : undefined);
+  const squareNormalized = asBoolean(row.squareNormalized);
+  const approvedForWalmart = asBoolean(row.approvedForWalmart);
 
   return {
     source: "openai_generated",
     imageType,
     promptSummary: promptSummary || undefined,
     guidance: guidance || undefined,
+    seoFilename: seoFilename
+      ? sanitizeSeoFilename(seoFilename, "image/png")
+      : undefined,
+    altText: altText || undefined,
+    productSku: productSku || undefined,
+    brand: brand || undefined,
+    approvedForWalmart,
+    width,
+    height,
+    isSquare,
+    squareNormalized,
   };
 }
 
@@ -137,6 +187,15 @@ export interface SavedGeneratedMediaAsset {
   imageType: WalmartGeneratedImageType;
   promptSummary?: string;
   guidance?: string;
+  seoFilename?: string;
+  altText?: string;
+  productSku?: string;
+  brand?: string;
+  approvedForWalmart?: boolean;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
 }
 
 export async function saveGeneratedWalmartMediaForUser(input: {
@@ -147,6 +206,15 @@ export async function saveGeneratedWalmartMediaForUser(input: {
   imageType: WalmartGeneratedImageType;
   promptSummary?: string;
   guidance?: string;
+  seoFilename?: string;
+  altText?: string;
+  productSku?: string;
+  brand?: string;
+  approvedForWalmart?: boolean;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
 }): Promise<SavedGeneratedMediaAsset> {
   const assetId = `ev_wm_img_${crypto.randomUUID()}`;
   const now = new Date().toISOString();
@@ -156,6 +224,34 @@ export async function saveGeneratedWalmartMediaForUser(input: {
     imageType: input.imageType,
     promptSummary: asText(input.promptSummary) || undefined,
     guidance: asText(input.guidance) || undefined,
+    seoFilename: input.seoFilename
+      ? sanitizeSeoFilename(input.seoFilename, input.mimeType || "image/png")
+      : undefined,
+    altText: asText(input.altText) || undefined,
+    productSku: asText(input.productSku) || undefined,
+    brand: asText(input.brand) || undefined,
+    approvedForWalmart: Boolean(input.approvedForWalmart),
+    width:
+      typeof input.width === "number" && Number.isFinite(input.width) && input.width >= 0
+        ? Math.floor(input.width)
+        : undefined,
+    height:
+      typeof input.height === "number" && Number.isFinite(input.height) && input.height >= 0
+        ? Math.floor(input.height)
+        : undefined,
+    isSquare:
+      typeof input.isSquare === "boolean"
+        ? input.isSquare
+        : typeof input.width === "number" &&
+            Number.isFinite(input.width) &&
+            input.width >= 0 &&
+            typeof input.height === "number" &&
+            Number.isFinite(input.height) &&
+            input.height >= 0
+          ? Math.floor(input.width) === Math.floor(input.height)
+          : undefined,
+    squareNormalized:
+      typeof input.squareNormalized === "boolean" ? input.squareNormalized : undefined,
   };
 
   if (allowFallbackStore()) {
@@ -178,6 +274,15 @@ export async function saveGeneratedWalmartMediaForUser(input: {
       imageType: metadata.imageType,
       promptSummary: metadata.promptSummary,
       guidance: metadata.guidance,
+      seoFilename: metadata.seoFilename,
+      altText: metadata.altText,
+      productSku: metadata.productSku,
+      brand: metadata.brand,
+      approvedForWalmart: metadata.approvedForWalmart,
+      width: metadata.width,
+      height: metadata.height,
+      isSquare: metadata.isSquare,
+      squareNormalized: metadata.squareNormalized,
     };
   }
 
@@ -209,6 +314,15 @@ export async function saveGeneratedWalmartMediaForUser(input: {
     imageType: metadata.imageType,
     promptSummary: metadata.promptSummary,
     guidance: metadata.guidance,
+    seoFilename: metadata.seoFilename,
+    altText: metadata.altText,
+    productSku: metadata.productSku,
+    brand: metadata.brand,
+    approvedForWalmart: metadata.approvedForWalmart,
+    width: metadata.width,
+    height: metadata.height,
+    isSquare: metadata.isSquare,
+    squareNormalized: metadata.squareNormalized,
   };
 }
 
@@ -222,6 +336,15 @@ export interface RetrievedGeneratedMediaAsset {
   createdAt: string;
   promptSummary?: string;
   guidance?: string;
+  seoFilename?: string;
+  altText?: string;
+  productSku?: string;
+  brand?: string;
+  approvedForWalmart?: boolean;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
 }
 
 export async function getGeneratedWalmartMediaByAssetId(
@@ -244,6 +367,15 @@ export async function getGeneratedWalmartMediaByAssetId(
       createdAt: row.createdAt,
       promptSummary: metadata.promptSummary,
       guidance: metadata.guidance,
+      seoFilename: metadata.seoFilename,
+      altText: metadata.altText,
+      productSku: metadata.productSku,
+      brand: metadata.brand,
+      approvedForWalmart: metadata.approvedForWalmart,
+      width: metadata.width,
+      height: metadata.height,
+      isSquare: metadata.isSquare,
+      squareNormalized: metadata.squareNormalized,
     };
   }
 
@@ -274,5 +406,14 @@ export async function getGeneratedWalmartMediaByAssetId(
     createdAt: asText(row.created_at),
     promptSummary: metadata.promptSummary,
     guidance: metadata.guidance,
+    seoFilename: metadata.seoFilename,
+    altText: metadata.altText,
+    productSku: metadata.productSku,
+    brand: metadata.brand,
+    approvedForWalmart: metadata.approvedForWalmart,
+    width: metadata.width,
+    height: metadata.height,
+    isSquare: metadata.isSquare,
+    squareNormalized: metadata.squareNormalized,
   };
 }

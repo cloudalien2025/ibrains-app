@@ -645,7 +645,7 @@ describe("Walmart product editor public listing image flow", () => {
 
   it("generates image preview, approves to product media, and persists generated image metadata in draft", async () => {
     const generatedAssetUrl =
-      "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_123";
+      "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_123/opa-sleep-magnesium-glycinate-relaxation-gummies-60ct-roc808-lifestyle.png";
 
     const fetchMock = vi.fn((input: RequestInfo | URL) => {
       const url =
@@ -666,11 +666,23 @@ describe("Walmart product editor public listing image flow", () => {
                 {
                   id: "ev_wm_img_123",
                   url: generatedAssetUrl,
+                  previewUrl:
+                    "/api/ecomviper/walmart/generated-media/ev_wm_img_123/opa-sleep-magnesium-glycinate-relaxation-gummies-60ct-roc808-lifestyle.png",
                   source: "openai_generated",
                   imageType: "lifestyle",
                   createdAt: "2026-05-10T00:00:00.000Z",
                   promptSummary: "Lifestyle image for ROC808",
                   guidance: "bedside table",
+                  seoFilename:
+                    "opa-sleep-magnesium-glycinate-relaxation-gummies-60ct-roc808-lifestyle.png",
+                  altText: "OPA Sleep ROC808 lifestyle product image for Walmart listing",
+                  productSku: "ROC808",
+                  brand: "OPA Sleep",
+                  approvedForWalmart: false,
+                  width: 1024,
+                  height: 1024,
+                  isSquare: true,
+                  squareNormalized: false,
                   approved: false,
                 },
               ],
@@ -736,6 +748,16 @@ describe("Walmart product editor public listing image flow", () => {
 
     expect(container.textContent).toContain("Source: OpenAI generated");
     expect(container.textContent).toContain("Lifestyle");
+    expect(container.textContent).toContain("SEO filename:");
+    expect(container.textContent).toContain("Open full size");
+    expect(container.textContent).toContain("Current generated preview");
+    expect(
+      container.querySelector('[data-testid="ecomviper-generated-media-focused-preview"]')
+    ).toBeTruthy();
+    const focusedPreviewImage = container.querySelector(
+      '[data-testid="ecomviper-generated-media-focused-image"]'
+    ) as HTMLImageElement | null;
+    expect(focusedPreviewImage?.className).toContain("object-contain");
 
     const approveButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Add to Product Media"
@@ -747,8 +769,9 @@ describe("Walmart product editor public listing image flow", () => {
     await flush();
 
     expect(container.textContent).toContain(
-      "Generated image added to product media. Save Draft to persist and include it in Walmart updates."
+      "Generated image added to product media and approved for Walmart in this editor state. Save Draft to persist."
     );
+    expect(container.textContent).toContain("Approved generated images: 1");
     const primaryInput = Array.from(container.querySelectorAll("input")).find((entry) =>
       entry.parentElement?.textContent?.includes("Primary image URL")
     ) as HTMLInputElement | undefined;
@@ -777,6 +800,13 @@ describe("Walmart product editor public listing image flow", () => {
         url: generatedAssetUrl,
         source: "openai_generated",
         imageType: "lifestyle",
+        seoFilename:
+          "opa-sleep-magnesium-glycinate-relaxation-gummies-60ct-roc808-lifestyle.png",
+        altText: "OPA Sleep ROC808 lifestyle product image for Walmart listing",
+        approvedForWalmart: true,
+        width: 1024,
+        height: 1024,
+        isSquare: true,
         approved: true,
       }),
     ]);
