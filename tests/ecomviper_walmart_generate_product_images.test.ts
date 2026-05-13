@@ -337,6 +337,10 @@ describe("EcomViper Walmart generated product images", () => {
     expect(resp.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.generated?.length).toBe(1);
+    expect(payload.generationDiagnostics?.generationMode).toBe("reference_image_edit");
+    expect(payload.generationDiagnostics?.layoutMode).toBe("standard");
+    expect(payload.generationDiagnostics?.layoutPreservationInstruction).toBe(false);
+    expect(payload.generationDiagnostics?.imageType).toBe("supplement_facts");
     expect(fetchSpy).toHaveBeenCalledTimes(2);
     expect(String(fetchSpy.mock.calls[0]?.[0])).toContain("roc949-back-label.jpg");
     expect(fetchSpy.mock.calls[1]?.[0]).toBe("https://api.openai.com/v1/images/edits");
@@ -367,6 +371,8 @@ describe("EcomViper Walmart generated product images", () => {
       body: JSON.stringify({
         sku: "ROC949",
         imageType: "supplement_facts",
+        styleGuidance:
+          "Create an image similar to the reference image with the patches on either side",
         referenceImages: [
           {
             source: "uploaded",
@@ -384,6 +390,12 @@ describe("EcomViper Walmart generated product images", () => {
     expect(resp.status).toBe(200);
     expect(payload.ok).toBe(true);
     expect(payload.generated?.length).toBe(1);
+    expect(payload.generationDiagnostics?.generationMode).toBe("reference_image_edit");
+    expect(payload.generationDiagnostics?.imageType).toBe("supplement_facts");
+    expect(payload.generationDiagnostics?.layoutMode).toBe("reference_layout");
+    expect(payload.generationDiagnostics?.layoutPreservationInstruction).toBe(true);
+    expect(payload.generationDiagnostics?.userGuidanceIncluded).toBe(true);
+    expect(payload.generationDiagnostics?.productFactsSource).toBe("product_data");
     expect(fetchSpy).toHaveBeenCalledTimes(1);
     const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
     expect(url).toBe("https://api.openai.com/v1/images/edits");
@@ -393,7 +405,23 @@ describe("EcomViper Walmart generated product images", () => {
     expect(formData.get("size")).toBe("1024x1024");
     expect(formData.get("n")).toBe("1");
     expect(String(formData.get("prompt") ?? "")).toContain("Supplement Facts");
-    expect(String(formData.get("prompt") ?? "")).toContain("Center the facts panel");
+    expect(String(formData.get("prompt") ?? "")).toContain(
+      "Use the uploaded reference image as the primary visual layout reference."
+    );
+    expect(String(formData.get("prompt") ?? "")).toContain("central supplement facts panel");
+    expect(String(formData.get("prompt") ?? "")).toContain("circular quality badges/patches");
+    expect(String(formData.get("prompt") ?? "")).toContain("left and right sides");
+    expect(String(formData.get("prompt") ?? "")).toContain(
+      "Use a clean square 1:1 white marketplace-ready canvas."
+    );
+    expect(String(formData.get("prompt") ?? "")).toContain(
+      "Do not remove the side badges/patches if the reference includes them."
+    );
+    expect(String(formData.get("prompt") ?? "")).toContain(
+      "User style guidance (high priority): Create an image similar to the reference image with the patches on either side"
+    );
+    expect(String(formData.get("prompt") ?? "")).toContain("Canonical product facts:");
+    expect(String(formData.get("prompt") ?? "")).toContain("Magnesium glycinate");
     expect(String(formData.get("prompt") ?? "")).toContain("exactly 1024x1024 output");
   });
 

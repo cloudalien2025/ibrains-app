@@ -131,6 +131,7 @@ type GenerateProductImagesResponse = {
   imageType?: WalmartGeneratedImageType;
   generated?: WalmartGeneratedMediaAsset[];
   generationDiagnostics?: {
+    imageType?: string | null;
     generationMode?: string | null;
     model?: string | null;
     size?: string | null;
@@ -138,6 +139,10 @@ type GenerateProductImagesResponse = {
     referenceCount?: number | null;
     referenceMimeTypes?: string[];
     referenceByteSizes?: number[];
+    layoutMode?: string | null;
+    userGuidanceIncluded?: boolean | null;
+    layoutPreservationInstruction?: boolean | null;
+    productFactsSource?: string | null;
     width?: number | null;
     height?: number | null;
     isSquare?: boolean | null;
@@ -164,6 +169,10 @@ type GenerateProductImagesResponse = {
       model?: string | null;
       size?: string | null;
       generationMode?: string | null;
+      layoutMode?: string | null;
+      userGuidanceIncluded?: boolean | null;
+      layoutPreservationInstruction?: boolean | null;
+      productFactsSource?: string | null;
       routePhase?: string | null;
       width?: number | null;
       height?: number | null;
@@ -1869,6 +1878,16 @@ export default function ProductEditorClient({
             normalizeImageMimeType(entry.mimeType)
           ),
           referenceByteSizes: generatedReferenceImages.map((entry) => entry.byteSize),
+          layoutMode:
+            generatedImageType === "supplement_facts" && generatedReferenceImages.length > 0
+              ? "reference_layout"
+              : generatedImageType === "supplement_facts"
+                ? "standard"
+                : null,
+          userGuidanceIncluded: generatedImageGuidance.trim().length > 0,
+          layoutPreservationInstruction:
+            generatedImageType === "supplement_facts" && generatedReferenceImages.length > 0,
+          productFactsSource: generatedImageType === "supplement_facts" ? "product_data" : null,
           routePhase: "request_body",
           imageType: generatedImageType,
           quantity: Math.max(1, Math.min(3, Number.parseInt(generatedImageQuantity, 10) || 1)),
@@ -1905,6 +1924,21 @@ export default function ProductEditorClient({
       return "Reference fallback to text-to-image";
     }
     if (value === "text_to_image") return "Text-to-image";
+    return value.replace(/_/g, " ");
+  }
+
+  function formatLayoutMode(value: string | null | undefined): string {
+    if (!value) return "Unknown";
+    if (value === "reference_layout") return "Reference layout";
+    if (value === "standard") return "Standard";
+    return value.replace(/_/g, " ");
+  }
+
+  function formatProductFactsSource(value: string | null | undefined): string {
+    if (!value) return "Unknown";
+    if (value === "product_data") return "Product data";
+    if (value === "reference") return "Reference";
+    if (value === "fallback") return "Fallback";
     return value.replace(/_/g, " ");
   }
 
@@ -2087,19 +2121,27 @@ export default function ProductEditorClient({
           recommendation: "Retry generation. If this persists, adjust guidance/reference images.",
           requestDiagnostics: payload.generationDiagnostics
             ? {
+                imageType: payload.generationDiagnostics.imageType ?? null,
                 generationMode: payload.generationDiagnostics.generationMode ?? null,
                 model: payload.generationDiagnostics.model ?? null,
                 size: payload.generationDiagnostics.size ?? null,
-                  promptLength: payload.generationDiagnostics.promptLength ?? null,
-                  referenceCount: payload.generationDiagnostics.referenceCount ?? null,
-                  referenceMimeTypes: payload.generationDiagnostics.referenceMimeTypes ?? [],
-                  referenceByteSizes: payload.generationDiagnostics.referenceByteSizes ?? [],
-                  width: payload.generationDiagnostics.width ?? null,
-                  height: payload.generationDiagnostics.height ?? null,
-                  isSquare: payload.generationDiagnostics.isSquare ?? null,
-                  squareNormalized: payload.generationDiagnostics.squareNormalized ?? null,
-                }
-              : undefined,
+                promptLength: payload.generationDiagnostics.promptLength ?? null,
+                referenceCount: payload.generationDiagnostics.referenceCount ?? null,
+                referenceMimeTypes: payload.generationDiagnostics.referenceMimeTypes ?? [],
+                referenceByteSizes: payload.generationDiagnostics.referenceByteSizes ?? [],
+                layoutMode: payload.generationDiagnostics.layoutMode ?? null,
+                userGuidanceIncluded:
+                  payload.generationDiagnostics.userGuidanceIncluded ?? null,
+                layoutPreservationInstruction:
+                  payload.generationDiagnostics.layoutPreservationInstruction ?? null,
+                productFactsSource:
+                  payload.generationDiagnostics.productFactsSource ?? null,
+                width: payload.generationDiagnostics.width ?? null,
+                height: payload.generationDiagnostics.height ?? null,
+                isSquare: payload.generationDiagnostics.isSquare ?? null,
+                squareNormalized: payload.generationDiagnostics.squareNormalized ?? null,
+              }
+            : undefined,
         });
         setProductImageGenerationMessage("No valid image previews were returned. Try regenerating.");
         return;
@@ -2126,10 +2168,13 @@ export default function ProductEditorClient({
       setFocusedGeneratedAssetId(nextGeneratedAssets[0]?.id ?? null);
       setFormDirty(true);
       setProductImageGenerationError(null);
+      const generationModeSummary = payload.generationDiagnostics?.layoutMode
+        ? ` Layout mode: ${formatLayoutMode(payload.generationDiagnostics.layoutMode)}.`
+        : "";
       setProductImageGenerationMessage(
         `${nextGeneratedAssets.length} generated image preview${
           nextGeneratedAssets.length === 1 ? "" : "s"
-        } ready. Review below, open full size if needed, then click Add to Product Media.`
+        } ready. Review below, open full size if needed, then click Add to Product Media.${generationModeSummary}`
       );
     } catch (error) {
       const fallback = {
@@ -3632,6 +3677,30 @@ export default function ProductEditorClient({
                           Mode:{" "}
                           {formatGenerationMode(
                             productImageGenerationError.requestDiagnostics?.generationMode
+                          )}
+                        </p>
+                        <p className="mt-1">
+                          Image type:{" "}
+                          {productImageGenerationError.requestDiagnostics?.imageType || "unknown"}
+                          {" | "}Layout mode:{" "}
+                          {formatLayoutMode(
+                            productImageGenerationError.requestDiagnostics?.layoutMode
+                          )}
+                        </p>
+                        <p className="mt-1">
+                          Layout preservation instruction:{" "}
+                          {productImageGenerationError.requestDiagnostics?.layoutPreservationInstruction
+                            ? "yes"
+                            : "no"}
+                          {" | "}User guidance included:{" "}
+                          {productImageGenerationError.requestDiagnostics?.userGuidanceIncluded
+                            ? "yes"
+                            : "no"}
+                        </p>
+                        <p className="mt-1">
+                          Product facts source:{" "}
+                          {formatProductFactsSource(
+                            productImageGenerationError.requestDiagnostics?.productFactsSource
                           )}
                         </p>
                         <p className="mt-1">
