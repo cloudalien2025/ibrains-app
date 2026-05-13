@@ -27,6 +27,11 @@ export type WalmartImageGenerationMode =
   | "text_to_image"
   | "reference_image_edit"
   | "reference_fallback_text_to_image";
+export type WalmartSupplementFactsLayoutMode = "standard" | "reference_layout";
+export type WalmartSupplementFactsProductFactsSource =
+  | "product_data"
+  | "reference"
+  | "fallback";
 
 interface WalmartImageGenerationErrorOptions {
   code: string;
@@ -44,6 +49,10 @@ interface WalmartImageGenerationErrorOptions {
   referenceMimeTypes?: string[];
   referenceByteSizes?: number[];
   referenceCount?: number;
+  layoutMode?: WalmartSupplementFactsLayoutMode;
+  userGuidanceIncluded?: boolean;
+  layoutPreservationInstruction?: boolean;
+  productFactsSource?: WalmartSupplementFactsProductFactsSource;
 }
 
 export class WalmartImageGenerationError extends Error {
@@ -61,6 +70,10 @@ export class WalmartImageGenerationError extends Error {
   readonly referenceMimeTypes?: string[];
   readonly referenceByteSizes?: number[];
   readonly referenceCount?: number;
+  readonly layoutMode?: WalmartSupplementFactsLayoutMode;
+  readonly userGuidanceIncluded?: boolean;
+  readonly layoutPreservationInstruction?: boolean;
+  readonly productFactsSource?: WalmartSupplementFactsProductFactsSource;
 
   constructor(options: WalmartImageGenerationErrorOptions) {
     super(options.message);
@@ -78,6 +91,10 @@ export class WalmartImageGenerationError extends Error {
     this.referenceMimeTypes = options.referenceMimeTypes;
     this.referenceByteSizes = options.referenceByteSizes;
     this.referenceCount = options.referenceCount;
+    this.layoutMode = options.layoutMode;
+    this.userGuidanceIncluded = options.userGuidanceIncluded;
+    this.layoutPreservationInstruction = options.layoutPreservationInstruction;
+    this.productFactsSource = options.productFactsSource;
   }
 }
 
@@ -361,6 +378,41 @@ function imageTypeDirections(imageType: WalmartGeneratedImageType): string {
   return "Create a square clean studio hero image of the full product package on a neutral background with high clarity, centered framing, and retail-ready composition.";
 }
 
+function hasMeaningfulSupplementFacts(facts: CanonicalProductFacts): boolean {
+  if (Object.keys(facts.supplementFacts).length > 0) return true;
+  if (facts.activeIngredients.length > 0) return true;
+  if (facts.otherIngredients.length > 0) return true;
+  if (facts.servingSize) return true;
+  if (facts.servingsPerContainer) return true;
+  if (facts.suggestedUse) return true;
+  if (facts.warnings) return true;
+  return false;
+}
+
+function resolveSupplementFactsProductFactsSource(params: {
+  facts: CanonicalProductFacts;
+  hasUploadedReference: boolean;
+}): WalmartSupplementFactsProductFactsSource {
+  if (hasMeaningfulSupplementFacts(params.facts)) return "product_data";
+  return params.hasUploadedReference ? "reference" : "fallback";
+}
+
+function buildSupplementFactsReferenceLayoutInstructions(params: {
+  hasUploadedReference: boolean;
+}): string[] {
+  if (!params.hasUploadedReference) return [];
+  return [
+    "Supplement Facts reference-layout instructions (high priority):",
+    "- Use the uploaded reference image as the primary visual layout reference.",
+    "- Preserve the composition: central supplement facts panel with circular quality badges/patches on both left and right sides when present in the reference.",
+    "- Use a clean square 1:1 white marketplace-ready canvas.",
+    "- Keep the central Supplement Facts panel readable.",
+    "- Use current product facts where available, but do not invent unsupported supplement facts.",
+    "- If exact product facts are incomplete, keep the layout and include only known facts.",
+    "- Do not remove the side badges/patches if the reference includes them.",
+  ];
+}
+
 function buildComplianceGuardrails(): string {
   return [
     "Compliance guardrails:",
@@ -383,6 +435,11 @@ export function buildWalmartGeneratedImagePrompt(input: {
   const factsLines = toFactsLines(input.facts);
   const normalizedGuidance = asText(input.styleGuidance);
   const referenceImages = input.referenceImages ?? [];
+  const hasUploadedReference = referenceImages.some((entry) => entry.source === "uploaded");
+  const supplementFactsReferenceLayoutInstructions =
+    input.imageType === "supplement_facts"
+      ? buildSupplementFactsReferenceLayoutInstructions({ hasUploadedReference })
+      : [];
   const referenceSummary =
     referenceImages.length > 0
       ? `Reference images provided (${referenceImages.length}): ${referenceImages
@@ -393,6 +450,12 @@ export function buildWalmartGeneratedImagePrompt(input: {
 
   const promptRaw = [
     `Task: Generate one ${imageTypeLabel(input.imageType)} image for a Walmart listing.`,
+    ...supplementFactsReferenceLayoutInstructions,
+    normalizedGuidance
+      ? input.imageType === "supplement_facts" && hasUploadedReference
+        ? `User style guidance (high priority): ${normalizedGuidance}`
+        : `User style guidance: ${normalizedGuidance}`
+      : "",
     imageTypeDirections(input.imageType),
     buildComplianceGuardrails(),
     "Keep brand/product identity consistent with provided context.",
@@ -400,7 +463,6 @@ export function buildWalmartGeneratedImagePrompt(input: {
     input.imageType === "supplement_facts" && referenceImages.length > 0
       ? "For Supplement Facts: follow the uploaded/reference label panel truth. Preserve legibility and do not invent values."
       : "",
-    normalizedGuidance ? `User style guidance: ${normalizedGuidance}` : "",
     "Product context:",
     ...productLines.map((line) => `- ${line}`),
     "Canonical product facts:",
@@ -861,6 +923,10 @@ function withRequestDiagnostics(
     referenceMimeTypes: string[];
     referenceByteSizes: number[];
     referenceCount: number;
+    layoutMode?: WalmartSupplementFactsLayoutMode;
+    userGuidanceIncluded?: boolean;
+    layoutPreservationInstruction?: boolean;
+    productFactsSource?: WalmartSupplementFactsProductFactsSource;
   }
 ): WalmartImageGenerationError {
   return new WalmartImageGenerationError({
@@ -879,6 +945,10 @@ function withRequestDiagnostics(
     referenceMimeTypes: params.referenceMimeTypes,
     referenceByteSizes: params.referenceByteSizes,
     referenceCount: params.referenceCount,
+    layoutMode: params.layoutMode,
+    userGuidanceIncluded: params.userGuidanceIncluded,
+    layoutPreservationInstruction: params.layoutPreservationInstruction,
+    productFactsSource: params.productFactsSource,
   });
 }
 
@@ -1017,6 +1087,10 @@ export async function generateWalmartProductImage(input: {
   promptLength: number;
   referenceMimeTypes: string[];
   referenceByteSizes: number[];
+  layoutMode?: WalmartSupplementFactsLayoutMode;
+  userGuidanceIncluded?: boolean;
+  layoutPreservationInstruction?: boolean;
+  productFactsSource?: WalmartSupplementFactsProductFactsSource;
   width?: number;
   height?: number;
   isSquare?: boolean;
@@ -1030,6 +1104,22 @@ export async function generateWalmartProductImage(input: {
       : [];
   const selectedReferences =
     uploadedReferences.length > 0 ? uploadedReferences : fallbackReferences;
+  const normalizedGuidance = asText(input.styleGuidance);
+  const hasUploadedReference = uploadedReferences.length > 0;
+  const supplementFactsDiagnostics =
+    input.imageType === "supplement_facts"
+      ? {
+          layoutMode: (hasUploadedReference
+            ? "reference_layout"
+            : "standard") as WalmartSupplementFactsLayoutMode,
+          userGuidanceIncluded: Boolean(normalizedGuidance),
+          layoutPreservationInstruction: hasUploadedReference,
+          productFactsSource: resolveSupplementFactsProductFactsSource({
+            facts: factsResult.facts,
+            hasUploadedReference,
+          }),
+        }
+      : null;
 
   ensureSupplementFactsInput(input.imageType, selectedReferences);
 
@@ -1072,6 +1162,11 @@ export async function generateWalmartProductImage(input: {
       referenceMimeTypes: currentReferenceMimeTypes(),
       referenceByteSizes: currentReferenceByteSizes(),
       referenceCount: selectedReferences.length,
+      layoutMode: supplementFactsDiagnostics?.layoutMode,
+      userGuidanceIncluded: supplementFactsDiagnostics?.userGuidanceIncluded,
+      layoutPreservationInstruction:
+        supplementFactsDiagnostics?.layoutPreservationInstruction,
+      productFactsSource: supplementFactsDiagnostics?.productFactsSource,
     });
 
   let generationMode: WalmartImageGenerationMode =
@@ -1208,6 +1303,11 @@ export async function generateWalmartProductImage(input: {
       promptLength: promptPayload.prompt.length,
       referenceMimeTypes: currentReferenceMimeTypes(),
       referenceByteSizes: currentReferenceByteSizes(),
+      layoutMode: supplementFactsDiagnostics?.layoutMode,
+      userGuidanceIncluded: supplementFactsDiagnostics?.userGuidanceIncluded,
+      layoutPreservationInstruction:
+        supplementFactsDiagnostics?.layoutPreservationInstruction,
+      productFactsSource: supplementFactsDiagnostics?.productFactsSource,
       width: normalized.width,
       height: normalized.height,
       isSquare: normalized.isSquare,
@@ -1252,6 +1352,11 @@ export async function generateWalmartProductImage(input: {
       promptLength: promptPayload.prompt.length,
       referenceMimeTypes: currentReferenceMimeTypes(),
       referenceByteSizes: currentReferenceByteSizes(),
+      layoutMode: supplementFactsDiagnostics?.layoutMode,
+      userGuidanceIncluded: supplementFactsDiagnostics?.userGuidanceIncluded,
+      layoutPreservationInstruction:
+        supplementFactsDiagnostics?.layoutPreservationInstruction,
+      productFactsSource: supplementFactsDiagnostics?.productFactsSource,
       width: normalized.width,
       height: normalized.height,
       isSquare: normalized.isSquare,

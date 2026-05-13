@@ -133,6 +133,10 @@ export async function POST(req: NextRequest) {
   let requestModel: string | null = null;
   let requestSize: string | null = null;
   let requestPromptLength: number | null = null;
+  let requestLayoutMode: string | null = null;
+  let requestUserGuidanceIncluded: boolean | null = null;
+  let requestLayoutPreservationInstruction: boolean | null = null;
+  let requestProductFactsSource: string | null = null;
 
   try {
     const { userId, unauthorizedResponse } = await requireSignedInUser();
@@ -212,6 +216,7 @@ export async function POST(req: NextRequest) {
       approved: boolean;
     }> = [];
     let generationDiagnostics: {
+      imageType: WalmartGeneratedImageType;
       generationMode: string;
       model: string;
       size: string;
@@ -219,6 +224,10 @@ export async function POST(req: NextRequest) {
       referenceCount: number;
       referenceMimeTypes: string[];
       referenceByteSizes: number[];
+      layoutMode?: string;
+      userGuidanceIncluded?: boolean;
+      layoutPreservationInstruction?: boolean;
+      productFactsSource?: string;
       width?: number;
       height?: number;
       isSquare?: boolean;
@@ -243,7 +252,18 @@ export async function POST(req: NextRequest) {
       requestPromptLength = generated.promptLength;
       requestReferenceMimeTypes = generated.referenceMimeTypes;
       requestReferenceByteSizes = generated.referenceByteSizes;
+      requestLayoutMode = generated.layoutMode ?? null;
+      requestUserGuidanceIncluded =
+        typeof generated.userGuidanceIncluded === "boolean"
+          ? generated.userGuidanceIncluded
+          : null;
+      requestLayoutPreservationInstruction =
+        typeof generated.layoutPreservationInstruction === "boolean"
+          ? generated.layoutPreservationInstruction
+          : null;
+      requestProductFactsSource = generated.productFactsSource ?? null;
       generationDiagnostics = {
+        imageType: generated.imageType,
         generationMode: generated.generationMode,
         model: generated.requestModel,
         size: generated.requestSize,
@@ -251,6 +271,10 @@ export async function POST(req: NextRequest) {
         referenceCount: generated.referenceCount,
         referenceMimeTypes: generated.referenceMimeTypes,
         referenceByteSizes: generated.referenceByteSizes,
+        layoutMode: generated.layoutMode ?? undefined,
+        userGuidanceIncluded: generated.userGuidanceIncluded,
+        layoutPreservationInstruction: generated.layoutPreservationInstruction,
+        productFactsSource: generated.productFactsSource ?? undefined,
         width: asNonNegativeInteger(generated.width) ?? undefined,
         height: asNonNegativeInteger(generated.height) ?? undefined,
         isSquare: generated.isSquare,
@@ -304,6 +328,10 @@ export async function POST(req: NextRequest) {
           referenceCount: generated.referenceCount,
           referenceMimeTypes: generated.referenceMimeTypes,
           referenceByteSizes: generated.referenceByteSizes,
+          layoutMode: generated.layoutMode,
+          userGuidanceIncluded: generated.userGuidanceIncluded,
+          layoutPreservationInstruction: generated.layoutPreservationInstruction,
+          productFactsSource: generated.productFactsSource,
         });
       });
       const previewPath = buildGeneratedMediaPreviewPath(saved.assetId, saved.seoFilename);
@@ -372,6 +400,17 @@ export async function POST(req: NextRequest) {
               model: error.requestModel ?? requestModel,
               size: error.requestSize ?? requestSize,
               generationMode: error.generationMode ?? requestGenerationMode,
+              layoutMode: error.layoutMode ?? requestLayoutMode,
+              userGuidanceIncluded:
+                typeof error.userGuidanceIncluded === "boolean"
+                  ? error.userGuidanceIncluded
+                  : requestUserGuidanceIncluded,
+              layoutPreservationInstruction:
+                typeof error.layoutPreservationInstruction === "boolean"
+                  ? error.layoutPreservationInstruction
+                  : requestLayoutPreservationInstruction,
+              productFactsSource:
+                error.productFactsSource ?? requestProductFactsSource,
               routePhase: error.routePhase ?? requestRoutePhase,
             },
           },
@@ -401,6 +440,10 @@ export async function POST(req: NextRequest) {
             model: requestModel,
             size: requestSize,
             generationMode: requestGenerationMode,
+            layoutMode: requestLayoutMode,
+            userGuidanceIncluded: requestUserGuidanceIncluded,
+            layoutPreservationInstruction: requestLayoutPreservationInstruction,
+            productFactsSource: requestProductFactsSource,
             routePhase: requestRoutePhase,
           },
         },
