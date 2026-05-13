@@ -142,6 +142,62 @@ describe("Walmart product editor public listing image flow", () => {
     );
   });
 
+  it("loads with malformed legacy staged drafts and keeps Generate Product Images panel visible", async () => {
+    const malformedDraft = {
+      id: "legacy_draft_1",
+      productId: "walmart_roc808",
+      marketplace: "walmart",
+      sku: "roc808",
+      productTitle: "Legacy Draft",
+      draftPayload: {
+        generatedMediaAssets: [
+          null,
+          { id: "bad_asset", url: null, imageType: null },
+          {
+            id: "good_asset",
+            url: "https://app.ibrains.ai/api/ecomviper/walmart/generated-media/ev_wm_img_good",
+            previewUrl: "/api/ecomviper/walmart/generated-media/ev_wm_img_good",
+            source: "openai_generated",
+            imageType: "lifestyle",
+            createdAt: "2026-05-10T00:00:00.000Z",
+            approved: true,
+          },
+        ],
+        openAiGeneratedImages: null,
+      },
+      changeSummary: "",
+      createdBy: "",
+      status: "invalid_status",
+      validationResult: null,
+      publishStatus: "invalid_publish_status",
+      createdAt: null,
+      updatedAt: null,
+    } as unknown as WalmartDraftRecord;
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[malformedDraft]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const mediaTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Media"
+    ) as HTMLButtonElement | undefined;
+    await act(async () => {
+      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Generate Product Images");
+    expect(container.textContent).toContain("Legacy draft rows were normalized while loading this editor.");
+    expect(container.textContent).toContain("malformed generated-media entries were skipped");
+  });
+
   it("allows attaching and removing reference images before generation", async () => {
     class MockFileReader {
       result: string | null = null;
