@@ -5,7 +5,13 @@ import { buildGeneratedMediaResponse } from "@/app/api/ecomviper/walmart/generat
 
 export async function GET(
   req: NextRequest,
-  { params }: { params: Promise<{ assetId: string }> | { assetId: string } }
+  {
+    params,
+  }: {
+    params:
+      | Promise<{ assetId: string; seoFilename: string }>
+      | { assetId: string; seoFilename: string };
+  }
 ) {
   void req;
   const { assetId } = await Promise.resolve(params);

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { POST as saveOpenAiRoute } from "@/app/api/ecomviper/walmart/connect/openai/route";
 import { POST as generateImageRoute } from "@/app/api/ecomviper/walmart/ai/images/generate/route";
 import { GET as getGeneratedMediaRoute } from "@/app/api/ecomviper/walmart/generated-media/[assetId]/route";
+import { GET as getGeneratedMediaSeoRoute } from "@/app/api/ecomviper/walmart/generated-media/[assetId]/[seoFilename]/route";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { replaceProducts } from "@/lib/ecomviper/walmart/walmart-store";
 
@@ -127,8 +128,16 @@ describe("EcomViper Walmart generated product images", () => {
     expect(payload.generated?.[0]?.source).toBe("openai_generated");
     expect(payload.generated?.[0]?.imageType).toBe("lifestyle");
     expect(payload.generated?.[0]?.approved).toBe(false);
+    expect(payload.generated?.[0]?.approvedForWalmart).toBe(false);
+    expect(String(payload.generated?.[0]?.seoFilename ?? "")).toContain("roc949-lifestyle");
+    expect(String(payload.generated?.[0]?.altText ?? "")).toContain(
+      "lifestyle product image for Walmart listing"
+    );
     expect(String(payload.generated?.[0]?.url)).toContain(
       "/api/ecomviper/walmart/generated-media/"
+    );
+    expect(String(payload.generated?.[0]?.previewUrl)).toContain(
+      `/api/ecomviper/walmart/generated-media/${payload.generated?.[0]?.id}/`
     );
     expect(payload.generated?.[0]?.previewUrl).toContain(
       "/api/ecomviper/walmart/generated-media/"
@@ -157,10 +166,13 @@ describe("EcomViper Walmart generated product images", () => {
     expect(body.prompt).toContain("Title: OPA Nutrition Magnesium Glycinate Gummies 60 Ct");
     expect(body.prompt).toContain("Brand: OPA Nutrition");
     expect(body.prompt).toContain("User style guidance: bedside table evening scene");
+    expect(body.prompt).toContain("exactly 1024x1024 output");
+    expect(body.prompt).toContain("fully visible");
 
-    const assetUrl = String(payload.generated?.[0]?.url);
-    const assetId = assetUrl.split("/").pop() ?? "";
+    const assetId = String(payload.generated?.[0]?.id ?? "");
+    const seoFilename = String(payload.generated?.[0]?.seoFilename ?? "");
     expect(assetId).toBeTruthy();
+    expect(seoFilename).toBeTruthy();
 
     const mediaResp = await getGeneratedMediaRoute(
       new NextRequest(`http://localhost/api/ecomviper/walmart/generated-media/${assetId}`, {
@@ -170,8 +182,21 @@ describe("EcomViper Walmart generated product images", () => {
     );
     expect(mediaResp.status).toBe(200);
     expect(mediaResp.headers.get("content-type")).toContain("image/");
+    expect(mediaResp.headers.get("content-disposition")).toContain("inline; filename=");
     const bytes = new Uint8Array(await mediaResp.arrayBuffer());
     expect(bytes.length).toBeGreaterThan(0);
+
+    const mediaSeoResp = await getGeneratedMediaSeoRoute(
+      new NextRequest(
+        `http://localhost/api/ecomviper/walmart/generated-media/${assetId}/${seoFilename}`,
+        {
+          method: "GET",
+        }
+      ),
+      { params: Promise.resolve({ assetId, seoFilename }) }
+    );
+    expect(mediaSeoResp.status).toBe(200);
+    expect(mediaSeoResp.headers.get("content-type")).toContain("image/");
   });
 
   it("builds deployment-safe generated media URL from forwarded host and keeps relative preview URL", async () => {
@@ -368,6 +393,8 @@ describe("EcomViper Walmart generated product images", () => {
     expect(formData.get("size")).toBe("1024x1024");
     expect(formData.get("n")).toBe("1");
     expect(String(formData.get("prompt") ?? "")).toContain("Supplement Facts");
+    expect(String(formData.get("prompt") ?? "")).toContain("Center the facts panel");
+    expect(String(formData.get("prompt") ?? "")).toContain("exactly 1024x1024 output");
   });
 
   it("returns actionable error when uploaded reference data URL is malformed", async () => {

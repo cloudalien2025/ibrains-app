@@ -205,6 +205,15 @@ export interface WalmartGeneratedMediaAsset {
   createdAt: string;
   promptSummary?: string;
   guidance?: string;
+  seoFilename?: string;
+  altText?: string;
+  productSku?: string;
+  brand?: string;
+  approvedForWalmart?: boolean;
+  width?: number;
+  height?: number;
+  isSquare?: boolean;
+  squareNormalized?: boolean;
   approved?: boolean;
 }
 

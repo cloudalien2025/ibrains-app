@@ -13,6 +13,11 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-generated-image-generator";
 import { resolveEcomViperPublicAppOrigin } from "@/lib/ecomviper/walmart/walmart-public-app-origin";
 import { saveGeneratedWalmartMediaForUser } from "@/lib/ecomviper/walmart/walmart-generated-media-store";
+import {
+  buildGeneratedMediaAltText,
+  buildGeneratedMediaPreviewPath,
+  buildGeneratedMediaSeoFilename,
+} from "@/lib/ecomviper/walmart/walmart-generated-media-seo";
 import type {
   WalmartGeneratedImageReferenceInput,
   WalmartGeneratedImageType,
@@ -37,6 +42,19 @@ function asNumber(value: unknown): number | null {
   if (typeof value === "string" && value.trim()) {
     const parsed = Number(value);
     if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function asNonNegativeInteger(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+    return Math.floor(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      return Math.floor(parsed);
+    }
   }
   return null;
 }
@@ -182,6 +200,15 @@ export async function POST(req: NextRequest) {
       createdAt: string;
       promptSummary?: string;
       guidance?: string;
+      seoFilename?: string;
+      altText?: string;
+      productSku?: string;
+      brand?: string;
+      approvedForWalmart?: boolean;
+      width?: number;
+      height?: number;
+      isSquare?: boolean;
+      squareNormalized?: boolean;
       approved: boolean;
     }> = [];
     let generationDiagnostics: {
@@ -192,8 +219,15 @@ export async function POST(req: NextRequest) {
       referenceCount: number;
       referenceMimeTypes: string[];
       referenceByteSizes: number[];
+      width?: number;
+      height?: number;
+      isSquare?: boolean;
+      squareNormalized?: boolean;
     } | null = null;
     const publicOrigin = resolveEcomViperPublicAppOrigin(req);
+    const productTitle = asText(mergedProduct.title);
+    const productBrand = asText(mergedProduct.brand);
+    const productSku = asText(mergedProduct.sku) || sku;
 
     for (let index = 0; index < quantity; index += 1) {
       const generated = await generateWalmartProductImage({
@@ -217,8 +251,25 @@ export async function POST(req: NextRequest) {
         referenceCount: generated.referenceCount,
         referenceMimeTypes: generated.referenceMimeTypes,
         referenceByteSizes: generated.referenceByteSizes,
+        width: asNonNegativeInteger(generated.width) ?? undefined,
+        height: asNonNegativeInteger(generated.height) ?? undefined,
+        isSquare: generated.isSquare,
+        squareNormalized: generated.squareNormalized,
       };
       requestRoutePhase = "storage_persist";
+      const seoFilename = buildGeneratedMediaSeoFilename({
+        brand: productBrand || undefined,
+        productTitle: productTitle || undefined,
+        sku: productSku,
+        imageType: generated.imageType,
+        mimeType: generated.mimeType,
+      });
+      const altText = buildGeneratedMediaAltText({
+        brand: productBrand || undefined,
+        productTitle: productTitle || undefined,
+        sku: productSku,
+        imageType: generated.imageType,
+      });
       const saved = await saveGeneratedWalmartMediaForUser({
         userId,
         sku,
@@ -227,6 +278,15 @@ export async function POST(req: NextRequest) {
         imageType: generated.imageType,
         promptSummary: generated.promptSummary,
         guidance: styleGuidance || undefined,
+        seoFilename,
+        altText,
+        productSku,
+        brand: productBrand || undefined,
+        approvedForWalmart: false,
+        width: asNonNegativeInteger(generated.width) ?? undefined,
+        height: asNonNegativeInteger(generated.height) ?? undefined,
+        isSquare: generated.isSquare,
+        squareNormalized: generated.squareNormalized,
       }).catch(() => {
         throw new WalmartImageGenerationError({
           code: "GENERATED_MEDIA_STORAGE_FAILED",
@@ -246,7 +306,7 @@ export async function POST(req: NextRequest) {
           referenceByteSizes: generated.referenceByteSizes,
         });
       });
-      const previewPath = `/api/ecomviper/walmart/generated-media/${saved.assetId}`;
+      const previewPath = buildGeneratedMediaPreviewPath(saved.assetId, saved.seoFilename);
       generatedAssets.push({
         id: saved.assetId,
         url: `${publicOrigin}${previewPath}`,
@@ -256,6 +316,15 @@ export async function POST(req: NextRequest) {
         createdAt: saved.createdAt,
         promptSummary: saved.promptSummary,
         guidance: saved.guidance,
+        seoFilename: saved.seoFilename,
+        altText: saved.altText,
+        productSku: saved.productSku,
+        brand: saved.brand,
+        approvedForWalmart: saved.approvedForWalmart,
+        width: saved.width,
+        height: saved.height,
+        isSquare: saved.isSquare,
+        squareNormalized: saved.squareNormalized,
         approved: false,
       });
     }
