@@ -4,6 +4,11 @@ import crypto from "crypto";
 import { normalizeWalmartProduct } from "@/lib/ecomviper/core/product-normalizer";
 import { appendActivityLog, listActivityLogs } from "@/lib/ecomviper/core/activity-log";
 import {
+  getShopifyImportStateForUser,
+  importShopifyProductsForUser,
+  listShopifyProductsForUser,
+} from "@/lib/ecomviper/shopify/shopify-import";
+import {
   reconcileWalmartProductsWithShopifyForUser,
 } from "@/lib/ecomviper/shopify/walmart-shopify-reconciliation";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
@@ -62,6 +67,7 @@ const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS = 45;
 const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED = 4;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED = 0;
+const SHOPIFY_IMPORT_STALE_AFTER_MS = 1000 * 60 * 60 * 12;
 
 type WalmartImportPartialProgress = {
   importedCount: number;
@@ -1830,6 +1836,100 @@ function createEmptyShopifyReconcileResult(): WalmartShopifyReconcileResult {
   };
 }
 
+interface ShopifyCatalogRefreshResult {
+  triggered: boolean;
+  success: boolean;
+  status: "success" | "failed" | "skipped";
+  reason: string;
+  errorMessage: string | null;
+}
+
+function isShopifyImportStale(lastImportAt: string | null): boolean {
+  if (!lastImportAt) return true;
+  const timestamp = Date.parse(lastImportAt);
+  if (!Number.isFinite(timestamp)) return true;
+  return Date.now() - timestamp >= SHOPIFY_IMPORT_STALE_AFTER_MS;
+}
+
+function appendShopifyReconcileError(
+  existingError: string | null,
+  nextMessage: string
+): string {
+  const normalizedNext = nextMessage.trim();
+  if (!normalizedNext) return existingError ?? "";
+  if (!existingError) return normalizedNext;
+  return `${existingError} | ${normalizedNext}`;
+}
+
+async function ensureFreshShopifyCatalogForWalmartImport(input: {
+  userId: string;
+}): Promise<ShopifyCatalogRefreshResult> {
+  let importedProducts = 0;
+  let importState:
+    | Awaited<ReturnType<typeof getShopifyImportStateForUser>>
+    | null = null;
+
+  try {
+    const [products, state] = await Promise.all([
+      listShopifyProductsForUser(input.userId),
+      getShopifyImportStateForUser(input.userId),
+    ]);
+    importedProducts = products.length;
+    importState = state;
+  } catch (error) {
+    return {
+      triggered: false,
+      success: false,
+      status: "failed",
+      reason: "Shopify catalog pre-check failed before reconciliation.",
+      errorMessage: normalizeUnknownErrorMessage(error, "shopify_catalog_precheck_failed"),
+    };
+  }
+
+  const hasImportedProducts = importedProducts > 0;
+  const lastImportFailed = importState?.lastImportStatus === "failed";
+  const importIsStale = isShopifyImportStale(importState?.lastImportAt ?? null);
+  const shouldRefresh = !hasImportedProducts || lastImportFailed || importIsStale;
+
+  if (!shouldRefresh) {
+    return {
+      triggered: false,
+      success: true,
+      status: "skipped",
+      reason: "Shopify catalog refresh skipped; recent successful sync is available.",
+      errorMessage: null,
+    };
+  }
+
+  const refreshReason = !hasImportedProducts
+    ? "Shopify catalog refresh triggered because no products are currently imported."
+    : lastImportFailed
+    ? "Shopify catalog refresh triggered because the previous Shopify import failed."
+    : "Shopify catalog refresh triggered because the previous Shopify import is stale.";
+
+  try {
+    await importShopifyProductsForUser(input.userId, {
+      boundedRuntime: false,
+    });
+
+    return {
+      triggered: true,
+      success: true,
+      status: "success",
+      reason: refreshReason,
+      errorMessage: null,
+    };
+  } catch (error) {
+    return {
+      triggered: true,
+      success: false,
+      status: "failed",
+      reason: refreshReason,
+      errorMessage: normalizeUnknownErrorMessage(error, "shopify_catalog_refresh_failed"),
+    };
+  }
+}
+
 export async function importWalmartProducts(
   userId: string,
   options?: WalmartImportOptions
@@ -2041,6 +2141,29 @@ export async function importWalmartProducts(
         : [];
     let products = [...enrichedProducts, ...deferredEnrichmentProducts];
     let shopifyReconcileResult = createEmptyShopifyReconcileResult();
+    const shopifyCatalogRefresh = await ensureFreshShopifyCatalogForWalmartImport({
+      userId,
+    });
+    let shopifyReconcileError: string | null = null;
+
+    if (!shopifyCatalogRefresh.success && shopifyCatalogRefresh.errorMessage) {
+      shopifyReconcileError = appendShopifyReconcileError(
+        shopifyReconcileError,
+        `Shopify catalog refresh failed: ${shopifyCatalogRefresh.errorMessage}`
+      );
+
+      appendActivityLog({
+        marketplace: "walmart",
+        actionType: "product_import",
+        result: "warning",
+        message:
+          "Shopify catalog refresh failed before reconciliation. Using existing Shopify snapshot where available.",
+        afterPayload: {
+          reason: shopifyCatalogRefresh.errorMessage,
+        },
+      });
+    }
+
     try {
       const shopifyReconcile = await reconcileWalmartProductsWithShopifyForUser({
         userId,
@@ -2060,6 +2183,10 @@ export async function importWalmartProducts(
           reason: normalizeUnknownErrorMessage(error, "shopify_reconcile_failed"),
         },
       });
+      shopifyReconcileError = appendShopifyReconcileError(
+        shopifyReconcileError,
+        `Shopify reconciliation failed: ${normalizeUnknownErrorMessage(error, "shopify_reconcile_failed")}`
+      );
     }
 
     const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
@@ -2212,6 +2339,10 @@ export async function importWalmartProducts(
         shopifyNoMatch: shopifyReconcileResult.diagnosticsEvents.shopifyNoMatch,
         shopifyImageApplied: shopifyReconcileResult.diagnosticsEvents.shopifyImageApplied,
         shopifyNoImageAvailable: shopifyReconcileResult.diagnosticsEvents.shopifyNoImageAvailable,
+        shopifyCatalogRefreshTriggered: shopifyCatalogRefresh.triggered,
+        shopifyCatalogRefreshStatus: shopifyCatalogRefresh.status,
+        shopifyCatalogRefreshReason: shopifyCatalogRefresh.reason,
+        shopifyReconcileError,
         shopifyMatchDiagnostics: shopifyReconcileResult.diagnostics.map((entry) => ({
           ...entry,
         })),
