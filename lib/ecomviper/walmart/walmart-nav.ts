@@ -4,13 +4,13 @@ export interface WalmartNavItem {
 }
 
 export const walmartNavItems: WalmartNavItem[] = [
-  { label: "Dashboard", href: "/apps/ecomviper/walmart" },
-  { label: "Connect", href: "/apps/ecomviper/walmart/connect" },
-  { label: "Products", href: "/apps/ecomviper/walmart/products" },
-  { label: "Drafts", href: "/apps/ecomviper/walmart/drafts" },
-  { label: "Inventory", href: "/apps/ecomviper/walmart/inventory" },
-  { label: "Pricing", href: "/apps/ecomviper/walmart/pricing" },
-  { label: "Feeds", href: "/apps/ecomviper/walmart/feeds" },
-  { label: "Activity Log", href: "/apps/ecomviper/walmart/activity" },
+  { label: "Command Center", href: "/apps/ecomviper/walmart" },
+  { label: "AI Visibility", href: "/apps/ecomviper/walmart/products" },
+  { label: "Listing Intelligence", href: "/apps/ecomviper/walmart/drafts" },
+  { label: "Prompt Match", href: "/apps/ecomviper/walmart/activity" },
+  { label: "Trust Signals", href: "/apps/ecomviper/walmart/feeds" },
+  { label: "Semantic Gaps", href: "/apps/ecomviper/walmart/inventory" },
+  { label: "Product Opportunities", href: "/apps/ecomviper/walmart/pricing" },
+  { label: "Marketplace Health", href: "/apps/ecomviper/walmart/connect" },
   { label: "Settings", href: "/apps/ecomviper/walmart/settings" },
 ];

@@ -12,7 +12,7 @@ export default function WalmartLayout({ children }: { children: ReactNode }) {
           ← Back to EcomViper
         </Link>
         <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-white/90 px-3 py-1 text-xs text-[#475569]">
-          Walmart operations workspace
+          Agentic Commerce Command Center
         </div>
       </div>
       <div className="grid gap-4 lg:grid-cols-[236px_minmax(0,1fr)]">

@@ -13,7 +13,7 @@ export default function WalmartPageHeader({ title, subtitle, actions }: PageHead
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="inline-flex items-center rounded-full border border-[#D9E4F0] bg-[#EFF4F9] px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-[#475569]">
-            Walmart Marketplace
+            Agentic Commerce
           </div>
           <h1 className="mt-3 text-2xl font-semibold tracking-tight text-[#0F172A]">{title}</h1>
           <p className="mt-1 text-sm text-[#475569]">{subtitle}</p>
