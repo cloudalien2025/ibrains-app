@@ -1204,17 +1204,6 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </label>
           </div>
 
-          <label className="mt-3 flex items-center gap-2 text-sm text-[#334155]">
-            <input
-              type="checkbox"
-              checked={shopifyFullSync}
-              onChange={(event) => setShopifyFullSync(event.target.checked)}
-              disabled={shopifyLoading}
-              className="h-4 w-4 rounded border border-[#D9E4F0]"
-            />
-            Full Shopify sync (unbounded pages, slower)
-          </label>
-
           <div className="mt-4 flex flex-wrap gap-2">
             <button
               type="button"
@@ -1613,6 +1602,17 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </label>
 
           </div>
+
+          <label className="mt-3 flex items-center gap-2 text-sm text-[#334155]">
+            <input
+              type="checkbox"
+              checked={shopifyFullSync}
+              onChange={(event) => setShopifyFullSync(event.target.checked)}
+              disabled={shopifyLoading}
+              className="h-4 w-4 rounded border border-[#D9E4F0]"
+            />
+            Full Shopify sync (unbounded pages, slower)
+          </label>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <button
