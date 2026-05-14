@@ -108,6 +108,10 @@ interface ImportProgressPayload {
   importErrorEndpointFamily: string | null;
   importErrorCorrelationId: string | null;
   importErrorResponseShape: string | null;
+  shopifyCatalogRefreshTriggered: boolean;
+  shopifyCatalogRefreshStatus: "success" | "failed" | "skipped";
+  shopifyCatalogRefreshReason: string | null;
+  shopifyReconcileError: string | null;
   enrichmentErrorCategories: {
     invalidKeyCount: number;
     forbiddenCount: number;
@@ -493,11 +497,19 @@ function buildSuccessProgress(input: {
   const shopifyNoMatch = result.importDiagnostics?.shopifyNoMatch ?? 0;
   const shopifyImageApplied = result.importDiagnostics?.shopifyImageApplied ?? 0;
   const shopifyNoImageAvailable = result.importDiagnostics?.shopifyNoImageAvailable ?? 0;
+  const shopifyCatalogRefreshTriggered =
+    result.importDiagnostics?.shopifyCatalogRefreshTriggered ?? false;
+  const shopifyCatalogRefreshStatus =
+    result.importDiagnostics?.shopifyCatalogRefreshStatus ?? "skipped";
+  const shopifyCatalogRefreshReason =
+    result.importDiagnostics?.shopifyCatalogRefreshReason ?? null;
+  const shopifyReconcileError = result.importDiagnostics?.shopifyReconcileError ?? null;
   const enrichmentErrorCategories = {
     ...EMPTY_ERROR_CATEGORIES,
     ...(result.importDiagnostics?.enrichmentErrorCategories ?? {}),
   };
-  const warningCount = imageStillMissingCount + imageAmbiguousCount + imageFailedCount;
+  const warningCount =
+    imageStillMissingCount + imageAmbiguousCount + imageFailedCount + (shopifyReconcileError ? 1 : 0);
   const stage = warningCount > 0 ? "completed_with_warnings" : "complete";
   const rawPerProductDiagnostics = Array.isArray(
     result.importDiagnostics?.perProductAttemptDiagnostics
@@ -616,6 +628,10 @@ function buildSuccessProgress(input: {
     importErrorEndpointFamily: null,
     importErrorCorrelationId: null,
     importErrorResponseShape: null,
+    shopifyCatalogRefreshTriggered,
+    shopifyCatalogRefreshStatus,
+    shopifyCatalogRefreshReason,
+    shopifyReconcileError,
     enrichmentErrorCategories,
     startedAt: input.startedAt,
     finishedAt: new Date().toISOString(),
@@ -714,6 +730,10 @@ export async function POST(req: NextRequest) {
         importErrorEndpointFamily: null,
         importErrorCorrelationId: null,
         importErrorResponseShape: null,
+        shopifyCatalogRefreshTriggered: false,
+        shopifyCatalogRefreshStatus: "skipped",
+        shopifyCatalogRefreshReason: null,
+        shopifyReconcileError: null,
         enrichmentErrorCategories: {
           ...EMPTY_ERROR_CATEGORIES,
         },
@@ -751,16 +771,19 @@ export async function POST(req: NextRequest) {
     });
 
     const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${progress.totals.perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${progress.totals.perProductSerpApiMatches}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${progress.totals.shopifyProductsImported}. Shopify images imported: ${progress.totals.shopifyImagesImported}. Walmart products matched to Shopify: ${progress.totals.walmartProductsMatchedToShopify}. Shopify images applied: ${progress.totals.imagesAppliedFromShopify}. Shopify ambiguous matches: ${progress.totals.ambiguousShopifyMatches}. Shopify no match: ${progress.totals.shopifyNoMatchCount}. Processed this run: ${progress.totals.processedCount}. Total still missing: ${progress.totals.imageStillMissingCount}. Queued for remaining retry: ${Math.max(0, progress.totals.queuedCount - progress.totals.processedCount)}. Provider failed: ${progress.totals.imageFailedCount}.`;
+    const shopifyReconcileErrorSuffix = progress.shopifyReconcileError
+      ? ` Shopify reconcile warning: ${progress.shopifyReconcileError}.`
+      : "";
     const message =
       progress.totals.importedCount > 0
         ? isRetryMode
-          ? `Image enrichment retry completed. ${summary}`
-          : summary
+          ? `Image enrichment retry completed. ${summary}${shopifyReconcileErrorSuffix}`
+          : `${summary}${shopifyReconcileErrorSuffix}`
         : isRetryMode
         ? "Image enrichment retry completed with zero products."
         : `Walmart import completed with zero products. fetchedCount=${progress.totals.fetchedCount}, payloadShape=${
             result.importDiagnostics?.payloadShape ?? "unknown"
-          }.`;
+          }.${shopifyReconcileErrorSuffix}`;
 
     return ok({
       ok: true,
@@ -876,6 +899,10 @@ export async function POST(req: NextRequest) {
       importErrorEndpointFamily: classified.endpointFamily,
       importErrorCorrelationId: classified.correlationId,
       importErrorResponseShape: classified.responseShape,
+      shopifyCatalogRefreshTriggered: false,
+      shopifyCatalogRefreshStatus: "skipped",
+      shopifyCatalogRefreshReason: null,
+      shopifyReconcileError: null,
       enrichmentErrorCategories: {
         ...EMPTY_ERROR_CATEGORIES,
       },

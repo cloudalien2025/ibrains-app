@@ -285,6 +285,10 @@ interface ImportPanelState {
   shopifyNoMatch?: number;
   shopifyImageApplied?: number;
   shopifyNoImageAvailable?: number;
+  shopifyCatalogRefreshTriggered?: boolean;
+  shopifyCatalogRefreshStatus?: "success" | "failed" | "skipped";
+  shopifyCatalogRefreshReason?: string | null;
+  shopifyReconcileError?: string | null;
   notFoundCount: number;
   ambiguousCount: number;
   failedCount: number;
@@ -401,6 +405,10 @@ function createDefaultImportPanelState(partial?: Partial<ImportPanelState>): Imp
     importErrorEndpointFamily: null,
     importErrorCorrelationId: null,
     importErrorResponseShape: null,
+    shopifyCatalogRefreshTriggered: false,
+    shopifyCatalogRefreshStatus: "skipped",
+    shopifyCatalogRefreshReason: null,
+    shopifyReconcileError: null,
     existingProductsShownCount: 0,
     perProductAttemptDiagnostics: [],
     summary: "",
@@ -624,6 +632,9 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const [message, setMessage] = useState<string | null>(loadError);
   const [isImporting, setIsImporting] = useState(false);
   const [isSyncingShopify, setIsSyncingShopify] = useState(false);
+  const [shopifySyncMode, setShopifySyncMode] = useState<"prefer_shopify" | "missing_first">(
+    "prefer_shopify"
+  );
   const [importPanel, setImportPanel] = useState<ImportPanelState | null>(null);
   const [lastImportDiagnostics, setLastImportDiagnostics] = useState<{
     imageFromImportPayloadCount: number;
@@ -900,6 +911,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           importErrorEndpointFamily?: string | null;
           importErrorCorrelationId?: string | null;
           importErrorResponseShape?: string | null;
+          shopifyCatalogRefreshTriggered?: boolean;
+          shopifyCatalogRefreshStatus?: "success" | "failed" | "skipped";
+          shopifyCatalogRefreshReason?: string | null;
+          shopifyReconcileError?: string | null;
           existingProductsShownCount?: number;
           perProductAttemptDiagnostics?: unknown[];
           totals?: {
@@ -1007,6 +1022,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           imageEnrichmentBounded?: boolean;
           imageEnrichmentImportLimit?: number | null;
           imageEnrichmentDeferredCount?: number;
+          shopifyCatalogRefreshTriggered?: boolean;
+          shopifyCatalogRefreshStatus?: "success" | "failed" | "skipped";
+          shopifyCatalogRefreshReason?: string | null;
+          shopifyReconcileError?: string | null;
           serpApiBrandSearchDiagnostics?: {
             serpapi_brand_search_checked?: number;
             serpapi_brand_search_results_harvested?: number;
@@ -1391,14 +1410,34 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       const shopifyNoMatch = totals?.shopifyNoMatch ?? 0;
       const shopifyImageApplied = totals?.shopifyImageApplied ?? 0;
       const shopifyNoImageAvailable = totals?.shopifyNoImageAvailable ?? 0;
+      const shopifyCatalogRefreshTriggered =
+        payload.importProgress?.shopifyCatalogRefreshTriggered ??
+        payload.importDiagnostics?.shopifyCatalogRefreshTriggered ??
+        false;
+      const shopifyCatalogRefreshStatus =
+        payload.importProgress?.shopifyCatalogRefreshStatus ??
+        payload.importDiagnostics?.shopifyCatalogRefreshStatus ??
+        "skipped";
+      const shopifyCatalogRefreshReason =
+        payload.importProgress?.shopifyCatalogRefreshReason ??
+        payload.importDiagnostics?.shopifyCatalogRefreshReason ??
+        null;
+      const shopifyReconcileError =
+        payload.importProgress?.shopifyReconcileError ??
+        payload.importDiagnostics?.shopifyReconcileError ??
+        null;
       const finalStage: ImportPanelStage =
         payload.importProgress?.stage === "completed_with_warnings" ||
         imageStillMissingCount > 0 ||
         imageAmbiguousCount > 0 ||
-        imageFailedCount > 0
+        imageFailedCount > 0 ||
+        Boolean(shopifyReconcileError)
           ? "completed_with_warnings"
           : "complete";
-      const finalSummary = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${perProductSerpApiMatches}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${shopifyProductsImported}. Shopify images imported: ${shopifyImagesImported}. Walmart products matched to Shopify: ${walmartProductsMatchedToShopify}. Shopify images applied: ${imagesAppliedFromShopify}. Shopify ambiguous matches: ${ambiguousShopifyMatches}. Shopify no match: ${shopifyNoMatchCount}. Processed this run: ${enrichmentCompletedCount}. Total still missing: ${imageStillMissingCount}. Queued for remaining retry: ${queuedForRemainingRetryCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummaryBase = `Imported ${importedCount} products. Images from import payload: ${imageFromImportPayloadCount}. Walmart Item Search images: ${imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${perProductSerpApiMatches}. SerpApi product gallery images: ${imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${shopifyProductsImported}. Shopify images imported: ${shopifyImagesImported}. Walmart products matched to Shopify: ${walmartProductsMatchedToShopify}. Shopify images applied: ${imagesAppliedFromShopify}. Shopify ambiguous matches: ${ambiguousShopifyMatches}. Shopify no match: ${shopifyNoMatchCount}. Processed this run: ${enrichmentCompletedCount}. Total still missing: ${imageStillMissingCount}. Queued for remaining retry: ${queuedForRemainingRetryCount}. Provider failures: ${imageFailedCount}.`;
+      const finalSummary = shopifyReconcileError
+        ? `${finalSummaryBase} Shopify reconcile warning: ${shopifyReconcileError}.`
+        : finalSummaryBase;
 
       setLastImportDiagnostics({
         imageFromImportPayloadCount,
@@ -1484,6 +1523,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         shopifyNoMatch,
         shopifyImageApplied,
         shopifyNoImageAvailable,
+        shopifyCatalogRefreshTriggered,
+        shopifyCatalogRefreshStatus,
+        shopifyCatalogRefreshReason,
+        shopifyReconcileError,
         notFoundCount: totals?.imageNotFoundCount ?? imageNotFoundCount,
         ambiguousCount: totals?.imageAmbiguousCount ?? imageAmbiguousCount,
         failedCount: totals?.imageFailedCount ?? imageFailedCount,
@@ -1616,7 +1659,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       createDefaultImportPanelState({
         stage: "enriching_images",
         percent: 35,
-        summary: "Syncing Walmart images from Shopify...",
+        summary:
+          shopifySyncMode === "prefer_shopify"
+            ? "Syncing Walmart images from Shopify (prefer Shopify)..."
+            : "Syncing Walmart images from Shopify (missing-first)...",
         running: true,
       })
     );
@@ -1625,12 +1671,13 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
       const response = await fetch("/api/ecomviper/shopify/reconcile", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ mode: "missing_first" }),
+        body: JSON.stringify({ mode: shopifySyncMode }),
       });
 
       const payload = (await response.json().catch(() => ({}))) as {
         ok?: boolean;
         message?: string;
+        applyMode?: "missing_first" | "prefer_shopify";
         shopifyProductsImported?: number;
         shopifyImagesImported?: number;
         walmartProductsProcessed?: number;
@@ -1691,7 +1738,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           shopifyNoImageAvailable: payload.diagnosticsEvents?.shopifyNoImageAvailable ?? 0,
           summary:
             payload.message ??
-            `Shopify sync complete. Matched ${payload.walmartProductsMatchedToShopify ?? 0} Walmart products.`,
+            `Shopify sync complete (${payload.applyMode ?? shopifySyncMode}). Matched ${payload.walmartProductsMatchedToShopify ?? 0} Walmart products.`,
           running: false,
         })
       );
@@ -1783,6 +1830,20 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         subtitle="Search and manage Walmart catalog products with safe staging and sync workflows."
         actions={
           <>
+            <select
+              value={shopifySyncMode}
+              onChange={(event) =>
+                setShopifySyncMode(
+                  event.target.value === "missing_first" ? "missing_first" : "prefer_shopify"
+                )
+              }
+              disabled={isImporting || isSyncingShopify}
+              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
+              aria-label="Shopify sync mode"
+            >
+              <option value="prefer_shopify">Shopify mode: Prefer Shopify</option>
+              <option value="missing_first">Shopify mode: Missing only</option>
+            </select>
             <button
               type="button"
               onClick={() => void handleImport("import")}
@@ -1913,6 +1974,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
               <p>Shopify no match: {importPanel.shopifyNoMatchCount ?? 0}</p>
               <p>Shopify no image available: {importPanel.shopifyNoImageAvailableCount ?? 0}</p>
               <p>Still missing after Shopify: {importPanel.stillMissingAfterShopify ?? importPanel.stillMissingCount}</p>
+              <p>Shopify auto-refresh: {importPanel.shopifyCatalogRefreshStatus ?? "skipped"}</p>
+              <p>Shopify auto-refresh triggered: {importPanel.shopifyCatalogRefreshTriggered ? "Yes" : "No"}</p>
+              <p>Shopify auto-refresh reason: {importPanel.shopifyCatalogRefreshReason ?? "—"}</p>
+              <p>Shopify reconcile warning: {importPanel.shopifyReconcileError ?? "None"}</p>
               <p>Provider failed: {importPanel.failedCount}</p>
               <p>Missing/not found: {importPanel.missingCount}</p>
               <p>Not found: {importPanel.notFoundCount}</p>

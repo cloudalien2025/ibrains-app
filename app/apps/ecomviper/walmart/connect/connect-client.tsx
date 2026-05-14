@@ -649,6 +649,7 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
   const [openAiLoading, setOpenAiLoading] = useState(false);
   const [serpApiLoading, setSerpApiLoading] = useState(false);
   const [shopifyLoading, setShopifyLoading] = useState(false);
+  const [shopifyFullSync, setShopifyFullSync] = useState(false);
   const [walmartDraftDirty, setWalmartDraftDirty] = useState(false);
   const [shopifyDraftDirty, setShopifyDraftDirty] = useState(false);
   const [instructionsProvider, setInstructionsProvider] = useState<ConnectionInstructionsProvider | null>(null);
@@ -1076,11 +1077,14 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
       const response = await postJson<ShopifyImportApiPayload>(
         "/api/ecomviper/shopify/import",
         {
-          boundedRuntime: true,
+          boundedRuntime: !shopifyFullSync,
         }
       );
       setShopifyImportState(normalizeShopifyImportState(response.importState));
-      setMessage(response.message ?? `Imported ${response.importedCount} Shopify products.`);
+      setMessage(
+        response.message ??
+          `Imported ${response.importedCount} Shopify products (${shopifyFullSync ? "full sync" : "quick sync"}).`
+      );
     } catch (error) {
       if (error instanceof ApiRequestError) {
         setMessage(error.message);
@@ -1598,6 +1602,17 @@ export default function WalmartConnectClient({ initialHealth }: ConnectClientPro
             </label>
 
           </div>
+
+          <label className="mt-3 flex items-center gap-2 text-sm text-[#334155]">
+            <input
+              type="checkbox"
+              checked={shopifyFullSync}
+              onChange={(event) => setShopifyFullSync(event.target.checked)}
+              disabled={shopifyLoading}
+              className="h-4 w-4 rounded border border-[#D9E4F0]"
+            />
+            Full Shopify sync (unbounded pages, slower)
+          </label>
 
           <div className="mt-4 flex flex-wrap gap-2">
             <button

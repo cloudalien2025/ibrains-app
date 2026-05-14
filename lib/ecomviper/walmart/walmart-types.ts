@@ -401,6 +401,10 @@ export interface WalmartImportResult {
     shopifyNoMatch?: number;
     shopifyImageApplied?: number;
     shopifyNoImageAvailable?: number;
+    shopifyCatalogRefreshTriggered?: boolean;
+    shopifyCatalogRefreshStatus?: "success" | "failed" | "skipped";
+    shopifyCatalogRefreshReason?: string | null;
+    shopifyReconcileError?: string | null;
     shopifyMatchDiagnostics?: Array<{
       walmartSku: string;
       walmartUpcOrGtin: string;

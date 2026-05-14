@@ -23,7 +23,7 @@ export async function POST(req: NextRequest) {
     };
 
     const requestedMode = typeof body.mode === "string" ? body.mode.trim().toLowerCase() : "";
-    const applyMode = requestedMode === "prefer_shopify" ? "prefer_shopify" : "missing_first";
+    const applyMode = requestedMode === "missing_first" ? "missing_first" : "prefer_shopify";
 
     const result = await reconcileWalmartImagesFromShopifyForUser({
       userId,
