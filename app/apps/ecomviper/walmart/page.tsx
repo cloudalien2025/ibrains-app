@@ -123,8 +123,8 @@ export default async function WalmartDashboardPage() {
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-dashboard">
       <WalmartPageHeader
-        title="Walmart Marketplace Manager"
-        subtitle="Edit, optimize, and sync your Walmart catalog from iBrains."
+        title="Walmart Agentic Commerce Command Center"
+        subtitle="Monitor AI visibility, listing intelligence, trust signals, and action queues for Walmart catalog growth."
         actions={
           <div className="flex flex-wrap gap-2">
             <Link
@@ -137,13 +137,13 @@ export default async function WalmartDashboardPage() {
               href="/apps/ecomviper/walmart/products"
               className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
             >
-              Import Products
+              Review AI Visibility
             </Link>
             <Link
               href="/apps/ecomviper/walmart/feeds"
               className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] transition hover:bg-[#F8FBFF]"
             >
-              View Feed History
+              Review Trust Signals
             </Link>
           </div>
         }
@@ -151,33 +151,33 @@ export default async function WalmartDashboardPage() {
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5" data-testid="ecomviper-walmart-metric-cards">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Connection Health</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Command Center Health</p>
           <div className="mt-2"><StatusBadge status={connectionUi.badgeLabel} /></div>
-          <p className="mt-2 text-sm text-[#334155]">Production</p>
+          <p className="mt-2 text-sm text-[#334155]">Control Plane: Production</p>
           <p className="mt-1 text-xs text-[#64748B]">Last auth: {connectionUi.lastAuth}</p>
           <p className="mt-1 text-xs text-[#64748B]">Last sync: {connectionUi.lastSync}</p>
           <p className="mt-1 text-xs text-[#64748B]">Last import: {connectionUi.lastImport}</p>
           <p className="mt-1 text-xs text-[#64748B]">Last error: {connectionUi.lastError}</p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Products Imported</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Catalog Coverage</p>
           <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{snapshot.productsImported}</p>
           <p className="mt-1 text-xs text-[#64748B]">
             Last import: {formatTimestamp(snapshot.lastImportAt, "Not imported yet")}
           </p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Draft Changes</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Action Queue</p>
           <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{snapshot.draftChanges}</p>
-          <p className="mt-1 text-xs text-[#64748B]">Staged edits waiting for submit</p>
+          <p className="mt-1 text-xs text-[#64748B]">Pending listing changes awaiting publish</p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Feed Errors</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Trust Signal Alerts</p>
           <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{snapshot.feedErrors}</p>
-          <p className="mt-1 text-xs text-[#64748B]">Recent maintenance feed errors</p>
+          <p className="mt-1 text-xs text-[#64748B]">Recent feed events impacting discoverability</p>
         </article>
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_14px_34px_rgba(15,23,42,0.08)]">
-          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Listings Needing Attention</p>
+          <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Priority Opportunities</p>
           <p className="mt-2 text-3xl font-semibold text-[#0F172A]">{snapshot.listingsNeedingAttention.count}</p>
           <p className="mt-1 text-xs text-[#64748B]">{snapshot.listingsNeedingAttention.categories.join(", ") || "No categories"}</p>
         </article>
@@ -185,7 +185,7 @@ export default async function WalmartDashboardPage() {
 
       <section className="grid gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-          <h2 className="text-lg font-semibold text-[#0F172A]">Recent Products</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">AI Visibility Queue</h2>
           <div className="mt-3 overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
@@ -218,7 +218,7 @@ export default async function WalmartDashboardPage() {
         </article>
 
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-          <h2 className="text-lg font-semibold text-[#0F172A]">Recent Sync Activity</h2>
+          <h2 className="text-lg font-semibold text-[#0F172A]">Signal Timeline</h2>
           <ul className="mt-3 space-y-2">
             {snapshot.recentActivity.length ? (
               snapshot.recentActivity.map((entry) => {
@@ -242,7 +242,7 @@ export default async function WalmartDashboardPage() {
       </section>
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
-        <h2 className="text-lg font-semibold text-[#0F172A]">Products Needing Attention</h2>
+        <h2 className="text-lg font-semibold text-[#0F172A]">Listings Needing Intervention</h2>
         <div className="mt-3 grid gap-2 sm:grid-cols-2">
           {snapshot.attentionProducts.length ? (
             snapshot.attentionProducts.map((product) => (
@@ -262,9 +262,9 @@ export default async function WalmartDashboardPage() {
       </section>
 
       <section className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]" data-testid="ecomviper-walmart-capability-map">
-        <h2 className="text-lg font-semibold text-[#0F172A]">Available Modules</h2>
+        <h2 className="text-lg font-semibold text-[#0F172A]">Command Center Lanes</h2>
         <p className="mt-1 text-sm text-[#64748B]">
-          Marketplace modules and roadmap lanes are tracked separately from Walmart Connect Ads integrations.
+          Agentic commerce lanes stay focused on Walmart Marketplace readiness while ad-channel tooling remains separate.
         </p>
         <div className="mt-3 grid gap-2">
           {walmartCapabilityModules.map((module) => (

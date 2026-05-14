@@ -159,7 +159,7 @@ describe("EcomViper Walmart route contracts", () => {
 
     expect(html).toContain("ecomviper-walmart-sidebar");
     expect(html).toContain("ecomviper-walmart-metric-cards");
-    expect(html).toContain("Walmart Marketplace Manager");
+    expect(html).toContain("Walmart Agentic Commerce Command Center");
     expect(html).not.toContain(">AI Optimizer<");
     expect(html).toContain("No Walmart products imported yet");
     expect(html).toContain("ecomviper-walmart-capability-map");

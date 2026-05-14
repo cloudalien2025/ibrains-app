@@ -11,7 +11,8 @@ export default function WalmartSidebar() {
     <aside className="rounded-2xl border border-[#D9E4F0] bg-white/90 p-3 shadow-[0_12px_30px_rgba(15,23,42,0.06)]">
       <div className="mb-3 border-b border-[#E2E8F0] pb-3">
         <p className="text-[11px] uppercase tracking-[0.16em] text-[#64748B]">ECOMVIPER</p>
-        <h2 className="mt-1 text-base font-semibold text-[#0F172A]">Walmart Marketplace</h2>
+        <h2 className="mt-1 text-base font-semibold text-[#0F172A]">Walmart Agentic Workspace</h2>
+        <p className="mt-1 text-xs text-[#64748B]">AI discovery and referral readiness lanes</p>
       </div>
       <nav className="grid gap-1" data-testid="ecomviper-walmart-sidebar">
         {walmartNavItems.map((item) => {
@@ -34,6 +35,13 @@ export default function WalmartSidebar() {
           );
         })}
       </nav>
+
+      <div className="mt-3 rounded-lg border border-dashed border-[#D9E4F0] bg-[#F8FBFF] p-3">
+        <p className="text-[11px] uppercase tracking-[0.14em] text-[#64748B]">Automation</p>
+        <p className="mt-1 text-xs text-[#475569]">
+          Queue high-impact fixes after scoring visibility, semantic gaps, and trust signals.
+        </p>
+      </div>
     </aside>
   );
 }
