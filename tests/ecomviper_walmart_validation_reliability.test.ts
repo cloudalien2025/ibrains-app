@@ -84,6 +84,7 @@ describe("Walmart validation reliability", () => {
         target_audience: "Adults",
         dosage_strength: "Magnesium (as Magnesium Glycinate) 30mg",
       },
+      manufacturer_source: "label_image",
       faqSnippets: [
         "Q: What is this product? A: Magnesium glycinate gummies.",
         "Q: Who is it for? A: Adults.",

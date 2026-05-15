@@ -3,6 +3,8 @@ import "server-only";
 import crypto from "crypto";
 import type { WalmartDraftRecord, WalmartDraftStatus, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
+import { normalizeSearchBrowseAttributes } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import { sanitizeCustomerFacingText } from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 export interface DraftDiffItem {
   field: string;
@@ -36,29 +38,43 @@ export function validateDraftPayload(draftPayload: Record<string, unknown>): {
   warnings: string[];
   suggestions: string[];
 } {
+  const normalizedPayload: Record<string, unknown> = {
+    ...draftPayload,
+    title: sanitizeCustomerFacingText(draftPayload.title),
+    shortDescription: sanitizeCustomerFacingText(draftPayload.shortDescription),
+    longDescription: sanitizeCustomerFacingText(draftPayload.longDescription),
+    searchBrowseAttributes: normalizeSearchBrowseAttributes(draftPayload.searchBrowseAttributes),
+    attributes: normalizeSearchBrowseAttributes(draftPayload.attributes),
+    faqSnippets: Array.isArray(draftPayload.faqSnippets)
+      ? (draftPayload.faqSnippets as unknown[])
+          .map((entry) => sanitizeCustomerFacingText(entry))
+          .filter(Boolean)
+      : draftPayload.faqSnippets,
+  };
+
   const violations: string[] = [];
   const warnings: string[] = [];
-  const title = typeof draftPayload.title === "string" ? draftPayload.title.trim() : "";
-  const price = typeof draftPayload.price === "number" ? draftPayload.price : Number.NaN;
+  const title = typeof normalizedPayload.title === "string" ? normalizedPayload.title.trim() : "";
+  const price = typeof normalizedPayload.price === "number" ? normalizedPayload.price : Number.NaN;
   const inventory =
-    typeof draftPayload.inventoryQuantity === "number"
-      ? draftPayload.inventoryQuantity
-      : typeof draftPayload.inventory === "number"
-        ? draftPayload.inventory
+    typeof normalizedPayload.inventoryQuantity === "number"
+      ? normalizedPayload.inventoryQuantity
+      : typeof normalizedPayload.inventory === "number"
+        ? normalizedPayload.inventory
         : Number.NaN;
 
   if (!title) violations.push("Title cannot be empty.");
   if (!Number.isFinite(price) || price <= 0) violations.push("Price must be greater than zero.");
   if (!Number.isFinite(inventory) || inventory < 0) violations.push("Inventory must be zero or greater.");
 
-  const imageUrl = typeof draftPayload.imageUrl === "string" ? draftPayload.imageUrl.trim() : null;
+  const imageUrl = typeof normalizedPayload.imageUrl === "string" ? normalizedPayload.imageUrl.trim() : null;
   if (imageUrl !== null && !imageUrl) {
     warnings.push("Primary image URL is currently empty.");
   } else if (imageUrl && !/^https?:\/\//i.test(imageUrl)) {
     warnings.push("Primary image URL should use an http/https URL.");
   }
 
-  const compliance = evaluateWalmartListingCompliance(draftPayload);
+  const compliance = evaluateWalmartListingCompliance(normalizedPayload);
   const mergedViolations = Array.from(new Set([...violations, ...compliance.violations]));
   const mergedWarnings = Array.from(new Set([...warnings, ...compliance.warnings]));
 

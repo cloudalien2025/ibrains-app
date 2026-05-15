@@ -204,7 +204,7 @@ function sanitizePersistedWalmartProduct(payload: unknown): WalmartProductRecord
     itemId: asString(row.itemId) || undefined,
     publishedStatus: asString(row.publishedStatus) || undefined,
     title: asString(row.title) || sku,
-    brand: asString(row.brand) || "Unknown",
+    brand: asString(row.brand) || "",
     category: asString(row.category) || "Supplements",
     price: Number.isFinite(normalizedPrice) ? normalizedPrice : 0,
     inventoryQuantity: normalizedInventory,

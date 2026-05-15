@@ -21,6 +21,12 @@ import {
 } from "@/lib/ecomviper/walmart/product-facts-agent";
 import { mapCanonicalFactsToSearchBrowse } from "@/lib/ecomviper/walmart/walmart-search-browse-mapper";
 import { reviewWalmartSupplementCopy } from "@/lib/ecomviper/walmart/walmart-compliance-agent";
+import {
+  faqThresholdMet,
+  sanitizeCustomerFacingList,
+  sanitizeCustomerFacingText,
+  shouldBlockGenericFaqAnswer,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 const OPENAI_MODEL = process.env.WALMART_OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
@@ -77,6 +83,7 @@ interface LayeredSuggestionInput {
   customerFitDescriptors?: string[];
   compliantBenefitClusters?: string[];
   faqSnippets?: string[];
+  draftPayload?: Record<string, unknown> | null;
 }
 
 function unique(items: string[]): string[] {
@@ -176,9 +183,43 @@ function buildLayeredSuggestion(
   input: LayeredSuggestionInput
 ): WalmartAiSuggestion {
   const sourceSearchBrowse = buildSearchBrowseAttributesFromSources({ product });
-  const factsResult = extractCanonicalProductFacts({ product });
+  const factsResult = extractCanonicalProductFacts({
+    product,
+    draftPayload: input.draftPayload ?? null,
+  });
   const facts = factsResult.facts;
   const baseCopy = buildAgenticReferralCopy({ facts, product });
+
+  const faqThresholdSatisfied = faqThresholdMet({
+    productName: sanitizeCustomerFacingText(facts.productName),
+    productType: sanitizeCustomerFacingText(facts.productType || facts.category),
+    brand: sanitizeCustomerFacingText(facts.brand),
+    form: sanitizeCustomerFacingText(facts.form),
+    mainIngredients: sanitizeCustomerFacingList(facts.activeIngredients),
+    servingSize: sanitizeCustomerFacingText(facts.servingSize),
+    servingsPerContainer: sanitizeCustomerFacingText(facts.servingsPerContainer),
+    suggestedUse: sanitizeCustomerFacingText(facts.suggestedUse),
+    supportAreas: sanitizeCustomerFacingList(baseCopy.compliantBenefitClusters),
+  });
+  const hasGroundedFaqEvidence =
+    ((facts.activeIngredients.length > 0 || Object.keys(facts.supplementFacts).length > 0) &&
+      (facts.sourceConfidence.activeIngredients === "high" ||
+        facts.sourceConfidence.activeIngredients === "medium")) ||
+    (Boolean(facts.servingSize) &&
+      (facts.sourceConfidence.servingSize === "high" ||
+        facts.sourceConfidence.servingSize === "medium")) ||
+    (Boolean(facts.servingsPerContainer) &&
+      (facts.sourceConfidence.servingsPerContainer === "high" ||
+        facts.sourceConfidence.servingsPerContainer === "medium")) ||
+    (Boolean(facts.suggestedUse) &&
+      (facts.sourceConfidence.suggestedUse === "high" ||
+        facts.sourceConfidence.suggestedUse === "medium")) ||
+    (facts.claimsFromLabel.length > 0 &&
+      (facts.sourceConfidence.claimsFromLabel === "high" ||
+        facts.sourceConfidence.claimsFromLabel === "medium"));
+  const faqShouldBePending =
+    factsResult.imageFactsStatus === "needs_vision_extraction" &&
+    (!faqThresholdSatisfied || !hasGroundedFaqEvidence);
 
   const candidateCopy = {
     ...baseCopy,
@@ -229,10 +270,14 @@ function buildLayeredSuggestion(
         ? unique(
             (input.faqSnippets ?? [])
               .map((entry) => pickMeaningfulAiText(entry) ?? "")
-              .filter(Boolean)
+              .filter((entry) => Boolean(entry) && !shouldBlockGenericFaqAnswer(entry))
           ).slice(0, 8)
         : baseCopy.faqSnippets,
   };
+
+  if (faqShouldBePending) {
+    candidateCopy.faqSnippets = [];
+  }
 
   const compliance = reviewWalmartSupplementCopy(candidateCopy);
   const fallbackCompliance =
@@ -285,6 +330,12 @@ function buildLayeredSuggestion(
       ? [
           "Policy blocker removed: unsafe medical/drug claims were replaced with compliant support language.",
         ]
+      : []),
+    ...(faqShouldBePending
+      ? ["FAQ generation pending label extraction or product facts review."]
+      : []),
+    ...(factsResult.manufacturerNeedsReview
+      ? ["Manufacturer appears copied from brand without source evidence."]
       : []),
   ]);
 
@@ -349,7 +400,7 @@ function buildLayeredSuggestion(
     structuredProductFactsSummary: compliantCopy.structuredProductFactsSummary,
     customerFitDescriptors: compliantCopy.customerFitDescriptors,
     compliantBenefitClusters: compliantCopy.compliantBenefitClusters,
-    faqSnippets: compliantCopy.faqSnippets,
+    faqSnippets: faqShouldBePending ? [] : compliantCopy.faqSnippets,
     complianceNotes: unique([
       `Facts sources used: ${factsResult.usedSources.join(", ") || "none"}`,
       staleFieldsReplaced.length > 0
@@ -362,6 +413,10 @@ function buildLayeredSuggestion(
         ? `Cleared Search & Browse fields: ${staleFieldsCleared.join(", ")}`
         : "No fields required clearing.",
       `Image-derived facts status: ${factsResult.imageFactsStatus}. ${factsResult.imageFactsMessage}`,
+      `Manufacturer source: ${factsResult.manufacturerSource}. confidence=${factsResult.manufacturerConfidence}. needs_review=${factsResult.manufacturerNeedsReview}`,
+      faqShouldBePending
+        ? "FAQ generation pending label extraction or product facts review."
+        : "FAQ generation passed fact-threshold checks.",
       complianceChanges.length > 0
         ? `Compliance changes: ${complianceChanges.join(", ")}`
         : "Compliance review accepted generated copy with no changes.",
@@ -381,6 +436,10 @@ function buildLayeredSuggestion(
       rejectedClaims: rejectedRiskyClaims,
       imageFactsStatus: factsResult.imageFactsStatus,
       imageFactsMessage: factsResult.imageFactsMessage,
+      manufacturerSource: factsResult.manufacturerSource,
+      manufacturerConfidence: factsResult.manufacturerConfidence,
+      manufacturerNeedsReview: factsResult.manufacturerNeedsReview,
+      faqGenerationState: faqShouldBePending ? "pending" : "final",
       disclaimerStatus: fallbackCompliance.disclaimerStatus,
       finalDecision: complianceDecision,
     },
@@ -523,7 +582,8 @@ async function requestOpenAiSuggestion(params: {
 
 function toSuggestionFromGenerated(
   product: WalmartProductRecord,
-  generated: Record<string, unknown>
+  generated: Record<string, unknown>,
+  draftPayload?: Record<string, unknown> | null
 ): WalmartAiSuggestion {
   const payload = generated as GeneratedSuggestionPayload;
 
@@ -576,6 +636,7 @@ function toSuggestionFromGenerated(
     customerFitDescriptors: toStringArray(payload.customerFitDescriptors),
     compliantBenefitClusters: toStringArray(payload.compliantBenefitClusters),
     faqSnippets: toStringArray(payload.faqSnippets),
+    draftPayload: draftPayload ?? null,
   });
 }
 
@@ -594,12 +655,15 @@ function alignSuggestionQualityScore(
 export async function generateWalmartAiSuggestion(params: {
   product: WalmartProductRecord;
   openAiApiKey: string;
+  draftPayload?: Record<string, unknown> | null;
 }): Promise<WalmartAiSuggestion> {
   const useDeterministicMock = process.env.WALMART_AI_DETERMINISTIC_MOCK === "1";
   if (useDeterministicMock) {
     return alignSuggestionQualityScore(
       params.product,
-      buildDeterministicAiSuggestion(params.product)
+      buildLayeredSuggestion(params.product, {
+        draftPayload: params.draftPayload ?? null,
+      })
     );
   }
 
@@ -608,6 +672,10 @@ export async function generateWalmartAiSuggestion(params: {
     product: params.product,
   });
 
-  const suggestion = toSuggestionFromGenerated(params.product, generated);
+  const suggestion = toSuggestionFromGenerated(
+    params.product,
+    generated,
+    params.draftPayload ?? null
+  );
   return alignSuggestionQualityScore(params.product, suggestion);
 }

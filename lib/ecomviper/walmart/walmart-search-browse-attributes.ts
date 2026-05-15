@@ -1,4 +1,8 @@
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import {
+  isCustomerFacingSentinelValue,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
+import { syncAliasGroups } from "@/lib/ecomviper/walmart/walmart-field-aliases";
 
 export type WalmartSearchBrowseFieldType =
   | "text"
@@ -196,42 +200,42 @@ const SUPPLEMENT_FIELDS: WalmartSearchBrowseFieldDefinition[] = [
     label: "Flavor",
     type: "text",
     group: "ingredients_form",
-    placeholder: "Mixed berry",
+    placeholder: "e.g., Citrus",
   },
   {
     key: "main_ingredients",
     label: "Main Ingredients",
     type: "multi-select",
     group: "ingredients_form",
-    placeholder: "Turmeric, glucosamine, chondroitin",
+    placeholder: "e.g., Wheatgrass, spirulina",
   },
   {
     key: "ingredients_list",
     label: "Ingredients List",
     type: "textarea",
     group: "ingredients_form",
-    placeholder: "Complete ingredients from label",
+    placeholder: "Ingredient list from label",
   },
   {
     key: "serving_size",
     label: "Serving Size",
     type: "text",
     group: "ingredients_form",
-    placeholder: "2 capsules",
+    placeholder: "e.g., 1 scoop (8 g)",
   },
   {
     key: "servings_per_container",
     label: "Servings",
     type: "text",
     group: "ingredients_form",
-    placeholder: "30",
+    placeholder: "e.g., 35",
   },
   {
     key: "servings",
     label: "Servings (Legacy)",
     type: "text",
     group: "ingredients_form",
-    placeholder: "30",
+    placeholder: "e.g., 35",
     helperText: "Legacy alias for servings per container.",
   },
   {
@@ -239,7 +243,7 @@ const SUPPLEMENT_FIELDS: WalmartSearchBrowseFieldDefinition[] = [
     label: "Dosage Strength",
     type: "text",
     group: "ingredients_form",
-    placeholder: "Magnesium 30mg",
+    placeholder: "e.g., Vitamin C 500 mg",
   },
 ];
 
@@ -461,13 +465,16 @@ export function normalizeSearchBrowseAttributes(input: unknown): Record<string, 
   if (!objectValue) return {};
 
   const normalized = normalizeRecord(objectValue);
+  const synced = { ...normalized };
+  syncAliasGroups({ attributes: synced });
 
   return Object.fromEntries(
-    Object.entries(normalized).filter(([, value]) => {
+    Object.entries(synced).filter(([, value]) => {
       const trimmed = value.trim();
       if (!trimmed) return false;
       if (/needs\s+(product\s+label|confirmation)/i.test(trimmed)) return false;
       if (/^(unknown|n\/a|na|null|undefined)$/i.test(trimmed)) return false;
+      if (isCustomerFacingSentinelValue(trimmed)) return false;
       return true;
     })
   );

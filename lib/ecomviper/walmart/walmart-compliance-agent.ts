@@ -9,6 +9,10 @@ import {
   removeSupplementDisclaimerVariants,
   type SupplementDisclaimerStatus,
 } from "@/lib/ecomviper/walmart/walmart-supplement-disclaimer";
+import {
+  sanitizeCustomerFacingText,
+  shouldBlockGenericFaqAnswer,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 export type WalmartComplianceDecision = "accepted" | "accepted_with_changes" | "rejected";
 export type WalmartDisclaimerStatus = SupplementDisclaimerStatus;
@@ -107,9 +111,10 @@ function sanitizeTextField(value: string): {
 } {
   const riskySanitized = sanitizeRiskyClaims(value);
   const fillerSanitized = sanitizeFiller(riskySanitized.sanitized);
+  const customerFacingSafe = sanitizeCustomerFacingText(fillerSanitized.sanitized);
 
   return {
-    value: fillerSanitized.sanitized,
+    value: customerFacingSafe,
     rejectedClaims: riskySanitized.rejectedRiskyClaims,
     repetitionWarnings: fillerSanitized.warnings,
   };
@@ -239,7 +244,7 @@ export function reviewWalmartSupplementCopy(
     structuredProductFactsSummary: structuredFacts.value,
     customerFitDescriptors: customerFit.values.slice(0, 8),
     compliantBenefitClusters: benefitClusters.values.slice(0, 8),
-    faqSnippets: faqSnippets.values.slice(0, 8),
+    faqSnippets: faqSnippets.values.filter((entry) => !shouldBlockGenericFaqAnswer(entry)).slice(0, 8),
   };
 
   const rejectedClaims = unique([

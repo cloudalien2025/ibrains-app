@@ -214,6 +214,20 @@ export function mergeWalmartDraftPayloadIntoProduct(
       inventoryCandidate !== null && Number.isFinite(inventoryCandidate) && inventoryCandidate >= 0
         ? inventoryCandidate
         : product.inventoryQuantity,
+    rawPayload: {
+      ...(asObject(product.rawPayload) ?? {}),
+      ...(asObject(draft.visionFactPayload) ? { visionFactPayload: draft.visionFactPayload } : {}),
+      ...(asObject(draft.imageVisionExtraction)
+        ? { imageVisionExtraction: draft.imageVisionExtraction }
+        : {}),
+    },
+    normalizedPayload: {
+      ...(asObject(product.normalizedPayload) ?? {}),
+      ...(asObject(draft.visionFactPayload) ? { visionFactPayload: draft.visionFactPayload } : {}),
+      ...(asObject(draft.imageVisionExtraction)
+        ? { imageVisionExtraction: draft.imageVisionExtraction }
+        : {}),
+    },
   };
 
   return applyDraftImageFieldsToProduct({

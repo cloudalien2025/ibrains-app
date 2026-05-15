@@ -53,6 +53,10 @@ export async function POST(req: NextRequest) {
     const suggestion = await generateWalmartAiSuggestion({
       product: mergeWalmartDraftPayloadIntoProduct(product, body.draftPayload),
       openAiApiKey,
+      draftPayload:
+        body.draftPayload && typeof body.draftPayload === "object"
+          ? (body.draftPayload as Record<string, unknown>)
+          : null,
     });
 
     return ok({

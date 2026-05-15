@@ -1,4 +1,8 @@
 import { normalizeSearchBrowseAttributes } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
+  containsInternalPdpLanguage,
+  findCustomerFacingSentinelTokens,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 export type WalmartAiAttributeSkipReason =
   | "protected_field"
@@ -85,6 +89,8 @@ export function isLowConfidenceAiFieldValue(value: string): boolean {
   if (/^(unknown|n\/a|na|none|null|undefined|tbd)$/i.test(trimmed)) return true;
   if (/^(not provided|not available|unsure)$/i.test(trimmed)) return true;
   if (/needs\s+(product\s+label|confirmation|review)/i.test(trimmed)) return true;
+  if (findCustomerFacingSentinelTokens(trimmed).length > 0) return true;
+  if (containsInternalPdpLanguage(trimmed)) return true;
 
   return false;
 }
