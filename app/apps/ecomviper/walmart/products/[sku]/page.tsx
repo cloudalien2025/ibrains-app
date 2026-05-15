@@ -4,7 +4,7 @@ import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts
 import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { getWalmartSerpApiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-serpapi-connection";
 import { normalizeWalmartDraftsForEditor } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
-import { hydrateLiveWalmartItemStateForUser } from "@/lib/ecomviper/walmart/walmart-live-item-hydrator";
+import { hydrateCurrentWalmartState } from "@/lib/ecomviper/walmart/walmart-native-state";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import type { WalmartNativeState } from "@/lib/ecomviper/walmart/walmart-native-state";
@@ -51,11 +51,9 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       const serpApiStatus = await getWalmartSerpApiConnectionStatusForUser(userId);
       serpApiProviderConnected = serpApiStatus.connected;
       if (product) {
-        const hydration = await hydrateLiveWalmartItemStateForUser({
-          userId,
+        hydratedCurrentWalmartState = hydrateCurrentWalmartState({
           product,
         });
-        hydratedCurrentWalmartState = hydration.currentWalmartState;
       }
     }
   } catch {

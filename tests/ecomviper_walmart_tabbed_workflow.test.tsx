@@ -107,6 +107,13 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-current-listing-search-browse"]')
     ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-source-confidence-panel"]')
+    ).not.toBeNull();
+    expect(container.textContent).toContain("Refresh catalog details");
+    expect(container.textContent).toContain(
+      "Refreshes EcomViper's local catalog understanding. This does not publish changes to Walmart."
+    );
 
     const improveTab = container.querySelector(
       '[data-testid="ecomviper-walmart-tab-improve-with-ai"]'
@@ -251,5 +258,76 @@ describe("Walmart product editor tabbed workflow", () => {
 
     expect(mediaPanel.textContent).toContain("https://www.walmart.com/ip/2791205430");
     expect(mediaPanel.textContent).toContain("Public Walmart item ID: 2791205430");
+  });
+
+  it("shows skipped_no_credentials state after manual catalog refresh", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          ok: true,
+          catalogBackfill: {
+            status: "skipped_no_credentials",
+            canonicalItemId: "2791205430",
+            canonicalPublicUrl: "https://www.walmart.com/ip/2791205430",
+            matchConfidence: "none",
+            fieldPatches: [],
+            warnings: [],
+            sourceSummary: {
+              winningSource: "unavailable",
+              sourceLabel: "Unavailable",
+              retrievedAt: "2026-05-15T00:00:00.000Z",
+              credentialMode: "unavailable",
+            },
+            sourceConfidence: {
+              overallConfidence: "none",
+              totalFields: 0,
+              actionableFields: 0,
+              byAction: {
+                kept_seller_native: 0,
+                filled_missing: 0,
+                replaced_placeholder: 0,
+                skipped_lower_confidence: 0,
+                skipped_conflict: 0,
+                skipped_user_edited: 0,
+              },
+              byConfidence: {
+                exact: 0,
+                strong: 0,
+                moderate: 0,
+                weak: 0,
+                none: 0,
+              },
+            },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            publicWalmartProductId: "2791205430",
+            publicWalmartUrl: "https://www.walmart.com/ip/2791205430",
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const button = container.querySelector(
+      '[data-testid="ecomviper-walmart-refresh-catalog-details"]'
+    ) as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.textContent).toContain("skipped because live Walmart/SerpApi credentials");
   });
 });

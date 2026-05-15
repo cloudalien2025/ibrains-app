@@ -213,6 +213,73 @@ function resolveVerifiedWalmartListingUrl(product: WalmartEffectiveProductRecord
   return resolved.url ?? "";
 }
 
+function isMeaningfulProductText(value: unknown): boolean {
+  const normalized = safeString(value).trim().toLowerCase();
+  if (!normalized) return false;
+  return !new Set(["unknown", "not available", "n/a", "na", "none", "null", "undefined"]).has(normalized);
+}
+
+function resolveCatalogConfidenceBadge(input: {
+  product: WalmartEffectiveProductRecord;
+  walmartListingUrl: string;
+}): {
+  label: "high" | "medium" | "low" | "needs refresh";
+  className: string;
+} {
+  const normalizedPayload = asObject(input.product.normalizedPayload);
+  const catalogBackfill = asObject(normalizedPayload?.catalogBackfill);
+  const explicitConfidence = safeString(catalogBackfill?.matchConfidence).toLowerCase();
+  if (explicitConfidence === "exact" || explicitConfidence === "strong") {
+    return {
+      label: "high",
+      className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    };
+  }
+  if (explicitConfidence === "moderate") {
+    return {
+      label: "medium",
+      className: "border-sky-300 bg-sky-50 text-sky-700",
+    };
+  }
+  if (explicitConfidence === "weak") {
+    return {
+      label: "needs refresh",
+      className: "border-amber-300 bg-amber-50 text-amber-700",
+    };
+  }
+
+  const qualityChecks = [
+    isMeaningfulProductText(input.product.shortDescription),
+    isMeaningfulProductText(input.product.longDescription),
+    (input.product.bulletPoints ?? []).some((entry) => isMeaningfulProductText(entry)),
+    isMeaningfulProductText(input.product.brand),
+  ];
+  const populatedCount = qualityChecks.filter(Boolean).length;
+
+  if (input.walmartListingUrl && populatedCount >= 3) {
+    return {
+      label: "high",
+      className: "border-emerald-300 bg-emerald-50 text-emerald-700",
+    };
+  }
+  if (input.walmartListingUrl && populatedCount >= 2) {
+    return {
+      label: "medium",
+      className: "border-sky-300 bg-sky-50 text-sky-700",
+    };
+  }
+  if (input.walmartListingUrl) {
+    return {
+      label: "needs refresh",
+      className: "border-amber-300 bg-amber-50 text-amber-700",
+    };
+  }
+  return {
+    label: "low",
+    className: "border-slate-300 bg-slate-100 text-slate-700",
+  };
+}
+
 type SkuSortDirection = "none" | "asc" | "desc";
 type ImportPanelStage =
   | "idle"
@@ -2198,6 +2265,10 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             <tbody>
               {visibleProducts.map((product) => {
                 const walmartListingUrl = resolveVerifiedWalmartListingUrl(product);
+                const catalogConfidenceBadge = resolveCatalogConfidenceBadge({
+                  product,
+                  walmartListingUrl,
+                });
                 const isShopifyImageSource =
                   product.imageSource === "shopify_product" ||
                   product.imageSource === "shopify_variant";
@@ -2258,6 +2329,12 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                       >
                         {product.title}
                       </Link>
+                      <span
+                        className={`mt-1 inline-flex w-fit items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] ${catalogConfidenceBadge.className}`}
+                        data-testid={`ecomviper-walmart-confidence-${safeSkuRouteSegment(product.sku)}`}
+                      >
+                        source confidence: {catalogConfidenceBadge.label}
+                      </span>
                       {walmartListingUrl ? (
                         <a
                           href={walmartListingUrl}

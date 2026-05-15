@@ -272,6 +272,39 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     ]);
   });
 
+  it("renders source confidence indicators without breaking listing links", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-CONF-HIGH", {
+              publicWalmartUrl: "https://www.walmart.com/ip/2791205430",
+              shortDescription: "Seller short description",
+              longDescription: "Seller long description",
+              bulletPoints: ["Bullet 1"],
+              brand: "OPA Nutrition",
+            }),
+            createProduct("WMT-CONF-REFRESH", {
+              publicWalmartUrl: "https://www.walmart.com/ip/2791205430",
+              shortDescription: "",
+              longDescription: "",
+              bulletPoints: [],
+              brand: "",
+            }),
+          ]}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain("source confidence: high");
+    expect(container.textContent).toContain("source confidence: needs refresh");
+    expect(
+      Array.from(container.querySelectorAll("a")).filter(
+        (entry) => entry.textContent?.trim() === "View Walmart Listing"
+      )
+    ).toHaveLength(2);
+  });
+
   it("renders strict View Walmart Listing link from verified public item ID when URL is missing", async () => {
     await act(async () => {
       root.render(
