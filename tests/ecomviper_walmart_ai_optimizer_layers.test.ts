@@ -65,4 +65,51 @@ describe("Walmart AI optimizer layered enrichment", () => {
       "supports wellness, supports wellness"
     );
   });
+
+  it("clears stale demo defaults for greens powder products and infers servings from title", () => {
+    const suggestion = buildDeterministicAiSuggestion(
+      createProduct({
+        title:
+          "OPA Immunity Greens & Reds Daily Wellness Blend with Prebiotics, Enzymes & Mushrooms, 35 servings",
+        attributes: {
+          product_form: "Capsule",
+          form: "Capsule",
+          main_ingredients: "Turmeric, glucosamine, chondroitin",
+          serving_size: "2 capsules",
+          servings_per_container: "30",
+          servings: "30",
+          dosage_strength: "Magnesium 30mg",
+          flavor: "Mixed berry",
+        },
+        searchBrowseAttributes: {
+          product_form: "Capsule",
+          form: "Capsule",
+          main_ingredients: "Turmeric, glucosamine, chondroitin",
+          serving_size: "2 capsules",
+          servings_per_container: "30",
+          servings: "30",
+          dosage_strength: "Magnesium 30mg",
+          flavor: "Mixed berry",
+        },
+        normalizedPayload: {},
+      })
+    );
+
+    expect(suggestion.searchBrowseAttributes?.product_form).toBe("Powder");
+    expect(suggestion.searchBrowseAttributes?.form).toBe("Powder");
+    expect(suggestion.searchBrowseAttributes?.servings_per_container).toBe("35");
+    expect(suggestion.searchBrowseAttributes?.servings).toBe("35");
+    expect(suggestion.searchBrowseAttributes?.target_audience).toBe("Adults");
+    expect(suggestion.searchBrowseAttributes?.supplement_type).toBeTruthy();
+    expect(suggestion.searchBrowseAttributes?.product_type).toBeTruthy();
+
+    expect(suggestion.searchBrowseAttributes?.serving_size).toBeUndefined();
+    expect(suggestion.searchBrowseAttributes?.dosage_strength).toBeUndefined();
+    expect(suggestion.searchBrowseAttributes?.flavor).toBeUndefined();
+    expect(suggestion.searchBrowseAttributes?.main_ingredients).toBeUndefined();
+
+    expect(suggestion.applyDiagnostics?.staleFieldsCleared).toEqual(
+      expect.arrayContaining(["serving_size", "dosage_strength", "flavor", "main_ingredients"])
+    );
+  });
 });

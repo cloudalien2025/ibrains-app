@@ -123,6 +123,8 @@ describe("Walmart image-derived Search & Browse autofill", () => {
     const factsResult = extractCanonicalProductFacts({ product });
 
     expect(factsResult.usedSources).toContain("image_text");
+    expect(factsResult.imageFactsStatus).toBe("extracted");
+    expect(factsResult.imageFactsMessage).toContain("Image-derived label facts were extracted.");
     expect(factsResult.facts.form).toBe("Gummies");
     expect(factsResult.facts.dosageStrength).toContain("Magnesium");
     expect(factsResult.facts.suggestedUse.toLowerCase()).toContain("gummy daily");
@@ -166,5 +168,52 @@ describe("Walmart image-derived Search & Browse autofill", () => {
     );
     expect(mapped.mappedAttributes).not.toHaveProperty("sku");
     expect(mapped.mappedAttributes).not.toHaveProperty("price");
+  });
+
+  it("reports needs_vision_extraction when image URLs exist but no image text was extracted", () => {
+    vi.spyOn(imageIntelligence, "extractImageDerivedFactsFromProduct").mockReturnValue({
+      facts: {},
+      factsList: [],
+      usedSources: [],
+    });
+
+    const product = createProduct({
+      imageUrl: "https://cdn.example.com/product-primary.jpg",
+      galleryImageUrls: ["https://cdn.example.com/product-secondary.jpg"],
+    });
+
+    const factsResult = extractCanonicalProductFacts({ product });
+
+    expect(factsResult.imageFactsStatus).toBe("needs_vision_extraction");
+    expect(factsResult.imageFactsMessage).toBe(
+      "Images are available, but label text extraction has not run yet."
+    );
+  });
+
+  it("reports low_confidence when only low-confidence image facts are present", () => {
+    vi.spyOn(imageIntelligence, "extractImageDerivedFactsFromProduct").mockReturnValue({
+      facts: {
+        activeIngredients: ["Unknown ingredient"],
+      },
+      factsList: [
+        {
+          field: "activeIngredient",
+          value: "Unknown ingredient",
+          confidence: "low",
+          source: "image_metadata",
+        },
+      ],
+      usedSources: ["image_metadata"],
+    });
+
+    const product = createProduct({
+      imageUrl: "https://cdn.example.com/product-primary.jpg",
+    });
+
+    const factsResult = extractCanonicalProductFacts({ product });
+
+    expect(factsResult.imageFactsStatus).toBe("low_confidence");
+    expect(factsResult.imageFactsMessage).toContain("low confidence");
+    expect(factsResult.facts.activeIngredients).toEqual([]);
   });
 });

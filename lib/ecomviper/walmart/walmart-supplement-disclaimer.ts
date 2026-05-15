@@ -24,6 +24,10 @@ const MALFORMED_DISCLAIMER_PATTERNS = [
 ] as const;
 
 const REPEATED_SUPPORT_FRAGMENT_REGEX = /\bsupport\b(?:\s*,\s*support\b)+/gi;
+const DISCLAIMER_INLINE_LABEL_PREFIX_PATTERN =
+  /\b(?:fda\s+)?disclaimer\s*[:\-]\s*(?=(?:\*\*)?\s*(?:these\s+statements|this\s+product)\b)/gi;
+const DISCLAIMER_HEADING_ARTIFACT_PATTERN =
+  /(?:^|\n)\s*(?:[*_`>#-]+\s*)?(?:fda\s+)?disclaimer\s*[:\-]?\s*(?:[*_`]+)?\s*(?=\n|$)/gi;
 
 export type SupplementDisclaimerStatus =
   | "inserted"
@@ -55,6 +59,14 @@ function normalizeSupportArtifacts(value: string): string {
     value
       .replace(REPEATED_SUPPORT_FRAGMENT_REGEX, "support")
       .replace(/\b(\w+)(?:\s+\1){2,}\b/gi, "$1")
+  );
+}
+
+function stripDisclaimerHeadingArtifacts(value: string): string {
+  return normalizeWhitespace(
+    value
+      .replace(DISCLAIMER_INLINE_LABEL_PREFIX_PATTERN, "")
+      .replace(DISCLAIMER_HEADING_ARTIFACT_PATTERN, "\n")
   );
 }
 
@@ -114,7 +126,7 @@ export function normalizeSupplementDisclaimerText(
     stripped = stripped.replace(pattern, " ");
   }
 
-  stripped = normalizeSupportArtifacts(stripped);
+  stripped = stripDisclaimerHeadingArtifacts(normalizeSupportArtifacts(stripped));
 
   const normalizedText = appendWhenMissing
     ? stripped
@@ -152,5 +164,5 @@ export function removeSupplementDisclaimerVariants(value: string): string {
   for (const pattern of DISCLAIMER_SENTENCE_VARIANTS) {
     stripped = stripped.replace(pattern, " ");
   }
-  return normalizeWhitespace(stripped);
+  return stripDisclaimerHeadingArtifacts(stripped);
 }

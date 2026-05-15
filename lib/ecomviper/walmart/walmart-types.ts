@@ -579,6 +579,13 @@ export interface WalmartAiSuggestion {
     skippedProtectedFields: string[];
     skippedLowConfidenceFields: string[];
     rejectedClaims: string[];
+    imageFactsStatus?:
+      | "available"
+      | "extracted"
+      | "unavailable"
+      | "needs_vision_extraction"
+      | "low_confidence";
+    imageFactsMessage?: string;
     disclaimerStatus: "inserted" | "preserved" | "deduped" | "repaired" | "missing";
     finalDecision: "accepted" | "accepted_with_changes" | "rejected";
   };

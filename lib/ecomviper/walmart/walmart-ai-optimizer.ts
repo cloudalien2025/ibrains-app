@@ -306,10 +306,21 @@ function buildLayeredSuggestion(
     .map(([key]) => key)
     .slice(0, 32);
 
+  const factReplacementEntries = factsResult.staleFieldReplacements.filter((entry) =>
+    Boolean(entry.nextValue.trim())
+  );
+  const factClearedEntries = factsResult.staleFieldReplacements.filter(
+    (entry) => !entry.nextValue.trim()
+  );
   const staleFieldsReplaced = unique([
-    ...factsResult.staleFieldReplacements.map((entry) => entry.field),
+    ...factReplacementEntries.map((entry) => entry.field),
     ...searchBrowseMap.replacedFields,
   ]);
+  const staleFactFieldsCleared = unique([
+    ...factsResult.staleFieldsCleared,
+    ...factClearedEntries.map((entry) => entry.field),
+  ]);
+  const staleFieldsCleared = unique([...searchBrowseMap.clearedFields]);
 
   const missingAttributes =
     (input.missingAttributes ?? []).length > 0
@@ -344,9 +355,13 @@ function buildLayeredSuggestion(
       staleFieldsReplaced.length > 0
         ? `Stale fields replaced: ${staleFieldsReplaced.join(", ")}`
         : "No stale field replacements were required.",
-      searchBrowseMap.clearedFields.length > 0
-        ? `Cleared fields with low confidence or contradictions: ${searchBrowseMap.clearedFields.join(", ")}`
+      staleFactFieldsCleared.length > 0
+        ? `Cleared canonical fact fields: ${staleFactFieldsCleared.join(", ")}`
+        : "No canonical fact fields required clearing.",
+      staleFieldsCleared.length > 0
+        ? `Cleared Search & Browse fields: ${staleFieldsCleared.join(", ")}`
         : "No fields required clearing.",
+      `Image-derived facts status: ${factsResult.imageFactsStatus}. ${factsResult.imageFactsMessage}`,
       complianceChanges.length > 0
         ? `Compliance changes: ${complianceChanges.join(", ")}`
         : "Compliance review accepted generated copy with no changes.",
@@ -356,7 +371,7 @@ function buildLayeredSuggestion(
       factsUpdated,
       factsSources: factsResult.usedSources,
       staleFieldsReplaced,
-      staleFieldsCleared: searchBrowseMap.clearedFields,
+      staleFieldsCleared,
       copyFieldsUpdated: fallbackCompliance.changedFields,
       searchBrowseFieldsUpdated: searchBrowseMap.updatedFields,
       searchBrowseFieldsReplaced: searchBrowseMap.replacedFields,
@@ -364,6 +379,8 @@ function buildLayeredSuggestion(
       skippedProtectedFields: searchBrowseMap.skippedProtectedFields,
       skippedLowConfidenceFields: searchBrowseMap.skippedLowConfidenceFields,
       rejectedClaims: rejectedRiskyClaims,
+      imageFactsStatus: factsResult.imageFactsStatus,
+      imageFactsMessage: factsResult.imageFactsMessage,
       disclaimerStatus: fallbackCompliance.disclaimerStatus,
       finalDecision: complianceDecision,
     },

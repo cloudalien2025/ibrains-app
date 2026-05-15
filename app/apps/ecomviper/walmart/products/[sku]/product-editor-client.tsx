@@ -249,6 +249,8 @@ const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
   skippedProtectedFields: [] as string[],
   skippedLowConfidenceFields: [] as string[],
   rejectedClaims: [] as string[],
+  imageFactsStatus: "unknown",
+  imageFactsMessage: "",
   disclaimerStatus: "unknown",
   finalDecision: "accepted",
 };
@@ -584,6 +586,8 @@ function normalizeInlineAiApplyDiagnostics(
 
   const disclaimerStatusRaw = asText(diagnostics.disclaimerStatus)?.trim().toLowerCase() ?? "";
   const finalDecisionRaw = asText(diagnostics.finalDecision)?.trim().toLowerCase() ?? "";
+  const imageFactsStatusRaw = asText(diagnostics.imageFactsStatus)?.trim().toLowerCase() ?? "";
+  const imageFactsMessage = asText(diagnostics.imageFactsMessage)?.trim() ?? "";
 
   const disclaimerStatus =
     disclaimerStatusRaw === "inserted" ||
@@ -600,6 +604,14 @@ function normalizeInlineAiApplyDiagnostics(
     finalDecisionRaw === "rejected"
       ? finalDecisionRaw
       : "accepted";
+  const imageFactsStatus =
+    imageFactsStatusRaw === "available" ||
+    imageFactsStatusRaw === "extracted" ||
+    imageFactsStatusRaw === "unavailable" ||
+    imageFactsStatusRaw === "needs_vision_extraction" ||
+    imageFactsStatusRaw === "low_confidence"
+      ? imageFactsStatusRaw
+      : "unknown";
 
   return {
     factsUpdated: toSafeStringArray(diagnostics.factsUpdated),
@@ -613,6 +625,8 @@ function normalizeInlineAiApplyDiagnostics(
     skippedProtectedFields: toSafeStringArray(diagnostics.skippedProtectedFields),
     skippedLowConfidenceFields: toSafeStringArray(diagnostics.skippedLowConfidenceFields),
     rejectedClaims: toSafeStringArray(diagnostics.rejectedClaims),
+    imageFactsStatus,
+    imageFactsMessage,
     disclaimerStatus,
     finalDecision,
   };
@@ -2461,6 +2475,9 @@ export default function ProductEditorClient({
     if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.safety_warnings)) {
       inferredSearchBrowseCandidates.safety_warnings = DEFAULT_SUPPLEMENT_WARNINGS;
     }
+    const diagnostics = normalizeInlineAiApplyDiagnostics(
+      inlineAiSuggestion.applyDiagnostics
+    );
 
     const aiAttributeMap: Record<string, unknown> = {
       ...inferredSearchBrowseCandidates,
@@ -2481,6 +2498,14 @@ export default function ProductEditorClient({
       if (currentValue === value.trim()) continue;
       mergedSearchBrowseAttributes[key] = value;
       attributeMap[key] = value;
+      appliedSearchBrowseFields.push(key);
+    }
+    for (const key of diagnostics.staleFieldsCleared) {
+      if (!hasOwn(mergedSearchBrowseAttributes, key)) continue;
+      const existingValue = (mergedSearchBrowseAttributes[key] ?? "").trim();
+      if (!existingValue) continue;
+      delete mergedSearchBrowseAttributes[key];
+      delete attributeMap[key];
       appliedSearchBrowseFields.push(key);
     }
 
@@ -2533,9 +2558,6 @@ export default function ProductEditorClient({
     }
     if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
 
-    const diagnostics = normalizeInlineAiApplyDiagnostics(
-      inlineAiSuggestion.applyDiagnostics
-    );
     const skippedProtectedFields = unique([
       ...sanitizedAiSearchBrowse.skipped
         .filter((entry) => entry.reason === "protected_field")
@@ -2607,8 +2629,10 @@ export default function ProductEditorClient({
         ? diagnostics.complianceChanges.join(", ")
         : "none";
     const disclaimerSummaryText = diagnostics.disclaimerStatus;
+    const imageFactsStatusText = diagnostics.imageFactsStatus;
+    const imageFactsMessageText = diagnostics.imageFactsMessage || "none";
     setInlineAiMessage(
-      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
+      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
   }
 
@@ -3260,6 +3284,13 @@ export default function ProductEditorClient({
                       {inlineAiDiagnostics.skippedLowConfidenceFields.length
                         ? inlineAiDiagnostics.skippedLowConfidenceFields.join(", ")
                         : "none"}
+                    </li>
+                    <li>
+                      Image-derived facts status: {inlineAiDiagnostics.imageFactsStatus}
+                    </li>
+                    <li>
+                      Image-derived facts detail:{" "}
+                      {inlineAiDiagnostics.imageFactsMessage || "none"}
                     </li>
                     <li>
                       FDA disclaimer status: {inlineAiDiagnostics.disclaimerStatus}
@@ -4095,6 +4126,11 @@ export default function ProductEditorClient({
                   <p className="md:col-span-2 text-xs text-[#475569]">
                     These structured attributes help Walmart understand where your product belongs in search and browse.
                     Blank fields are omitted from submit payloads.
+                  </p>
+                  <p className="md:col-span-2 text-xs text-[#475569]">
+                    Image-derived facts status: {inlineAiDiagnostics.imageFactsStatus}.{" "}
+                    {inlineAiDiagnostics.imageFactsMessage ||
+                      "Run Optimize with AI to evaluate image-derived fact availability."}
                   </p>
                   {(
                     [
