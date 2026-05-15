@@ -14,6 +14,7 @@ import {
   type WalmartStructuredAttributeRegistry,
   type WalmartStructuredAttributeValue,
 } from "@/lib/ecomviper/walmart/walmart-structured-attributes";
+import { resolveCanonicalWalmartPublicListingUrl } from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 export type WalmartHydrationStatus = "liveHydrated" | "snapshotFallback" | "partialHydration";
@@ -70,6 +71,17 @@ export interface WalmartNativeMediaState {
   primaryImageUrl: string;
   galleryImageUrls: string[];
   publicWalmartUrl: string;
+  publicWalmartItemId: string;
+  publicWalmartListingSource:
+    | "explicit_url"
+    | "item_id"
+    | "serpapi_result"
+    | "walmart_search_result"
+    | "hydration_diagnostic"
+    | "media_source"
+    | "unavailable";
+  publicWalmartListingConfidence: "exact" | "derived" | "unavailable";
+  publicWalmartListingWarnings: string[];
   sourceImageLane: string;
   imageFactsStatus: string;
   imageFactsMessage: string;
@@ -161,6 +173,22 @@ export interface WalmartEditableDraftState {
   changedFromProposalFields: string[];
 }
 
+interface NativeStateSourceRecord {
+  record: Record<string, unknown> | null;
+  source: string;
+}
+
+const NON_MEANINGFUL_TEXT = new Set([
+  "unknown",
+  "not available",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+  "not provided",
+]);
+
 function asObject(value: unknown): Record<string, unknown> | null {
   if (value && typeof value === "object" && !Array.isArray(value)) {
     return value as Record<string, unknown>;
@@ -172,6 +200,12 @@ function asText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "";
+}
+
+function isMeaningfulText(value: unknown): boolean {
+  const normalized = asText(value).trim().toLowerCase();
+  if (!normalized) return false;
+  return !NON_MEANINGFUL_TEXT.has(normalized);
 }
 
 function asNumber(value: unknown): number | null {
@@ -188,7 +222,20 @@ function listFromUnknown(value: unknown): string[] {
     return value
       .map((entry) => asText(entry))
       .map((entry) => entry.trim())
-      .filter(Boolean);
+      .filter((entry) => isMeaningfulText(entry));
+  }
+
+  const asNode = asObject(value);
+  if (asNode) {
+    const nestedList = [
+      ...listFromUnknown(asNode.value),
+      ...listFromUnknown(asNode.text),
+      ...listFromUnknown(asNode.description),
+      ...listFromUnknown(asNode.label),
+      ...listFromUnknown(asNode.name),
+      ...listFromUnknown(asNode.title),
+    ];
+    return unique(nestedList);
   }
 
   const asString = asText(value);
@@ -196,7 +243,7 @@ function listFromUnknown(value: unknown): string[] {
   return asString
     .split(/\r?\n|[;|]+/)
     .map((entry) => entry.trim())
-    .filter(Boolean);
+    .filter((entry) => isMeaningfulText(entry));
 }
 
 function unique(values: string[]): string[] {
@@ -211,12 +258,48 @@ function firstNonEmptyString(
     if (!record) continue;
     for (const key of keys) {
       const value = asText(record[key]);
-      if (value) {
+      if (isMeaningfulText(value)) {
         return value;
       }
     }
   }
   return "";
+}
+
+function firstSourcedString(
+  source: NativeStateSourceRecord[],
+  keys: string[]
+): { value: string; source: string } {
+  for (const entry of source) {
+    if (!entry.record) continue;
+    for (const key of keys) {
+      const value = asText(entry.record[key]);
+      if (!isMeaningfulText(value)) continue;
+      return {
+        value,
+        source: entry.source,
+      };
+    }
+  }
+  return { value: "", source: "fallback" };
+}
+
+function firstSourcedList(
+  source: NativeStateSourceRecord[],
+  keys: string[]
+): { value: string[]; source: string } {
+  for (const entry of source) {
+    if (!entry.record) continue;
+    for (const key of keys) {
+      const values = unique(listFromUnknown(entry.record[key]));
+      if (values.length === 0) continue;
+      return {
+        value: values,
+        source: entry.source,
+      };
+    }
+  }
+  return { value: [], source: "fallback" };
 }
 
 function firstNonEmptyNumber(
@@ -453,6 +536,34 @@ function patchNativeStateWithDraftPayload(state: WalmartNativeState, draftPayloa
     state.content.imageUrls = galleryImageUrls;
   }
 
+  const publicListingResolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
+      draftPayload.publicWalmartUrl,
+      draftPayload.publicWalmartListingUrl,
+      draftPayload.itemPageUrl,
+      draftPayload.walmartItemPageUrl,
+    ],
+    itemIdCandidates: [
+      draftPayload.publicWalmartProductId,
+      draftPayload.publicWalmartItemId,
+      draftPayload.itemId,
+      draftPayload.usItemId,
+    ],
+    hydrationDiagnostic: [draftPayload.hydrationDiagnostic],
+    mediaSource: [draftPayload.media],
+  });
+  if (publicListingResolution.url) {
+    state.media.publicWalmartUrl = publicListingResolution.url;
+  }
+  if (publicListingResolution.itemId) {
+    state.media.publicWalmartItemId = publicListingResolution.itemId;
+  }
+  if (publicListingResolution.source !== "unavailable") {
+    state.media.publicWalmartListingSource = publicListingResolution.source;
+    state.media.publicWalmartListingConfidence = publicListingResolution.confidence;
+    state.media.publicWalmartListingWarnings = [...publicListingResolution.warnings];
+  }
+
   state.searchBrowse.productType =
     state.searchBrowse.attributes.product_type || state.searchBrowse.productType;
   state.searchBrowse.supplementType =
@@ -502,6 +613,12 @@ function changedFieldsBetweenStates(left: WalmartNativeState, right: WalmartNati
   if (left.media.primaryImageUrl !== right.media.primaryImageUrl) fields.push("media.primaryImageUrl");
   if (JSON.stringify(left.media.galleryImageUrls) !== JSON.stringify(right.media.galleryImageUrls)) {
     fields.push("media.galleryImageUrls");
+  }
+  if (left.media.publicWalmartUrl !== right.media.publicWalmartUrl) {
+    fields.push("media.publicWalmartUrl");
+  }
+  if (left.media.publicWalmartItemId !== right.media.publicWalmartItemId) {
+    fields.push("media.publicWalmartItemId");
   }
   if (left.pricingInventory.currentPrice !== right.pricingInventory.currentPrice) {
     fields.push("pricingInventory.currentPrice");
@@ -557,7 +674,62 @@ export function hydrateCurrentWalmartState(input: {
   const normalizedPayload = asObject(input.product.normalizedPayload);
   const rawPayload = asObject(input.product.rawPayload);
   const rawProductPayload = asObject(rawPayload?.product);
-  const records = [normalizedPayload, rawPayload, rawProductPayload];
+  const rawContentPayload = asObject(rawPayload?.content);
+  const rawMediaPayload = asObject(rawPayload?.media);
+  const liveItemPayload = asObject(input.liveItemPayload);
+  const liveItemNode = asObject(rawPayload?.liveItemNode);
+  const liveItemPayloadFromRaw = asObject(rawPayload?.liveItemPayload);
+  const normalizedLiveHydration = asObject(normalizedPayload?.liveHydration);
+  const rawLiveHydration = asObject(rawPayload?.liveHydration);
+  const normalizedWalmartSearchCandidate = asObject(normalizedPayload?.walmartItemSearchCandidate);
+  const rawWalmartSearchCandidate = asObject(rawPayload?.walmartItemSearchCandidate);
+  const rawWalmartSearchResult = asObject(rawPayload?.walmartSearchResult);
+  const normalizedPublicListingSnapshot = asObject(normalizedPayload?.publicListingSnapshot);
+  const rawPublicListingSnapshot = asObject(rawPayload?.publicListingSnapshot);
+  const normalizedSerpApiListing = asObject(normalizedPayload?.serpApiListing);
+  const rawSerpApiListing = asObject(rawPayload?.serpApiListing);
+  const normalizedShopifySnapshot = asObject(normalizedPayload?.shopifySnapshot);
+  const rawShopifySnapshot = asObject(rawPayload?.shopifySnapshot);
+  const productRecord = input.product as unknown as Record<string, unknown>;
+
+  const sellerNativeSources: NativeStateSourceRecord[] = [
+    { record: productRecord, source: "seller_catalog" },
+    { record: normalizedPayload, source: "seller_catalog" },
+    { record: rawPayload, source: "seller_catalog" },
+    { record: rawProductPayload, source: "seller_catalog" },
+  ];
+  const itemApiSources: NativeStateSourceRecord[] = [
+    { record: liveItemPayload, source: "walmart_item_api_detail" },
+    { record: liveItemNode, source: "walmart_item_api_detail" },
+    { record: liveItemPayloadFromRaw, source: "walmart_item_api_detail" },
+    { record: normalizedLiveHydration, source: "walmart_item_api_detail" },
+    { record: rawLiveHydration, source: "walmart_item_api_detail" },
+  ];
+  const walmartSearchSources: NativeStateSourceRecord[] = [
+    { record: normalizedWalmartSearchCandidate, source: "walmart_search_result" },
+    { record: rawWalmartSearchCandidate, source: "walmart_search_result" },
+    { record: rawWalmartSearchResult, source: "walmart_search_result" },
+  ];
+  const publicListingSources: NativeStateSourceRecord[] = [
+    { record: rawContentPayload, source: "public_walmart_catalog" },
+    { record: normalizedPublicListingSnapshot, source: "public_walmart_listing" },
+    { record: rawPublicListingSnapshot, source: "public_walmart_listing" },
+    { record: normalizedSerpApiListing, source: "serpapi_public_listing" },
+    { record: rawSerpApiListing, source: "serpapi_public_listing" },
+    { record: rawMediaPayload, source: "public_walmart_listing" },
+  ];
+  const shopifySources: NativeStateSourceRecord[] = [
+    { record: normalizedShopifySnapshot, source: "shopify_import_snapshot" },
+    { record: rawShopifySnapshot, source: "shopify_import_snapshot" },
+  ];
+  const contentSources = [
+    ...sellerNativeSources,
+    ...itemApiSources,
+    ...walmartSearchSources,
+    ...publicListingSources,
+    ...shopifySources,
+  ];
+  const records = contentSources.map((entry) => entry.record);
 
   const searchBrowseAttributes = buildSearchBrowseAttributesFromSources({
     product: input.product,
@@ -575,14 +747,18 @@ export function hydrateCurrentWalmartState(input: {
 
   const primaryImageUrl =
     input.product.imageUrl ||
-    firstNonEmptyString(records, ["primaryImageUrl", "imageUrl", "mainImage"]);
+    firstNonEmptyString(records, ["primaryImageUrl", "imageUrl", "mainImage", "mainImageUrl"]);
   const galleryImageUrls = normalizeWalmartImageUrlList([
     primaryImageUrl,
     input.product.galleryImageUrls ?? [],
     firstNonEmptyString(records, ["imageUrl", "mainImage"]),
+    listFromUnknown(rawPayload?.galleryImageUrls),
+    listFromUnknown(rawPayload?.additionalImageUrls),
     listFromUnknown(normalizedPayload?.galleryImageUrls),
     listFromUnknown(rawPayload?.images),
     listFromUnknown(rawProductPayload?.images),
+    listFromUnknown(rawContentPayload?.images),
+    listFromUnknown(rawMediaPayload?.images),
   ]);
 
   const resolvedSearchBrowse = toSearchBrowseState({
@@ -607,8 +783,154 @@ export function hydrateCurrentWalmartState(input: {
     })
   );
 
+  const provenance = new Set<string>(input.hydrationMetadata?.sourceProvenance ?? []);
+  const addProvenance = (value: string) => {
+    if (value && value !== "fallback" && value !== "unavailable") {
+      provenance.add(value);
+    }
+  };
+
+  const contentNameFromSources = firstSourcedString(contentSources, [
+    "productName",
+    "title",
+    "name",
+    "product_title",
+  ]);
+  const productName = isMeaningfulText(input.product.title)
+    ? input.product.title.trim()
+    : contentNameFromSources.value;
+  addProvenance(isMeaningfulText(input.product.title) ? "seller_catalog" : contentNameFromSources.source);
+
+  const contentShortFromSources = firstSourcedString(contentSources, [
+    "shortDescription",
+    "siteDescription",
+    "short_desc",
+    "synopsis",
+    "description",
+  ]);
+  const siteDescription = isMeaningfulText(input.product.shortDescription)
+    ? input.product.shortDescription.trim()
+    : contentShortFromSources.value;
+  addProvenance(
+    isMeaningfulText(input.product.shortDescription) ? "seller_catalog" : contentShortFromSources.source
+  );
+
+  const contentLongFromSources = firstSourcedString(contentSources, [
+    "longDescription",
+    "fullDescription",
+    "description",
+    "productDescription",
+    "long_desc",
+  ]);
+  const longDescription = isMeaningfulText(input.product.longDescription)
+    ? input.product.longDescription.trim()
+    : contentLongFromSources.value;
+  addProvenance(
+    isMeaningfulText(input.product.longDescription) ? "seller_catalog" : contentLongFromSources.source
+  );
+
+  const sellerBullets = unique(
+    (input.product.bulletPoints ?? []).map((entry) => asText(entry)).filter((entry) => isMeaningfulText(entry))
+  );
+  const bulletFallback = firstSourcedList(contentSources, [
+    "bulletPoints",
+    "keyFeatures",
+    "features",
+    "highlights",
+    "aboutThisItem",
+    "bullets",
+  ]);
+  const keyFeatures = sellerBullets.length > 0 ? sellerBullets : bulletFallback.value;
+  addProvenance(sellerBullets.length > 0 ? "seller_catalog" : bulletFallback.source);
+
+  const brandFallback = firstSourcedString(contentSources, ["brand", "brandName"]);
+  const brand = isMeaningfulText(input.product.brand) ? input.product.brand.trim() : brandFallback.value;
+  addProvenance(isMeaningfulText(input.product.brand) ? "seller_catalog" : brandFallback.source);
+
+  const manufacturerFallback = firstSourcedString(contentSources, [
+    "manufacturer",
+    "manufacturerName",
+    "manufacturer_name",
+  ]);
+  const manufacturer = isMeaningfulText(searchBrowseAttributes.manufacturer)
+    ? searchBrowseAttributes.manufacturer.trim()
+    : manufacturerFallback.value;
+  addProvenance(
+    isMeaningfulText(searchBrowseAttributes.manufacturer)
+      ? "seller_catalog"
+      : manufacturerFallback.source
+  );
+
+  const publicListingResolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
+      input.product.publicWalmartUrl,
+      normalizedPayload?.publicWalmartUrl,
+      normalizedPayload?.itemPageUrl,
+      normalizedPayload?.walmartItemPageUrl,
+      normalizedPayload?.productPageUrl,
+      normalizedPayload?.productUrl,
+      normalizedPayload?.canonicalUrl,
+      rawPayload?.publicWalmartUrl,
+      rawPayload?.itemPageUrl,
+      rawPayload?.walmartItemPageUrl,
+      rawPayload?.productPageUrl,
+      rawPayload?.productUrl,
+      rawPayload?.canonicalUrl,
+      rawPayload?.url,
+      rawPayload?.itemUrl,
+      rawPayload?.shareUrl,
+      rawPayload?.buyUrl,
+      rawProductPayload?.publicWalmartUrl,
+      rawProductPayload?.itemPageUrl,
+      rawProductPayload?.walmartItemPageUrl,
+      rawProductPayload?.productPageUrl,
+      rawProductPayload?.productUrl,
+      rawContentPayload?.publicWalmartUrl,
+      rawContentPayload?.itemPageUrl,
+      rawContentPayload?.walmartItemPageUrl,
+      rawContentPayload?.productPageUrl,
+      rawContentPayload?.productUrl,
+    ],
+    itemIdCandidates: [
+      input.product.publicWalmartProductId,
+      input.product.itemId,
+      normalizedPayload?.publicWalmartProductId,
+      normalizedPayload?.itemId,
+      normalizedPayload?.usItemId,
+      rawPayload?.publicWalmartProductId,
+      rawPayload?.itemId,
+      rawPayload?.usItemId,
+      rawPayload?.productId,
+      rawPayload?.product_id,
+      rawProductPayload?.itemId,
+      rawProductPayload?.usItemId,
+      rawProductPayload?.productId,
+    ],
+    serpapiResult: [normalizedSerpApiListing, rawSerpApiListing, normalizedPayload?.publicImageEnrichmentAttempt],
+    walmartSearchResult: [normalizedWalmartSearchCandidate, rawWalmartSearchCandidate, rawWalmartSearchResult],
+    hydrationDiagnostic: [liveItemPayload, liveItemNode, liveItemPayloadFromRaw, normalizedLiveHydration],
+    mediaSource: [rawMediaPayload, rawPayload?.media],
+  });
+  const listingProvenanceBySource: Record<string, string> = {
+    explicit_url: "public_walmart_listing",
+    item_id: "public_walmart_listing",
+    serpapi_result: "serpapi_public_listing",
+    walmart_search_result: "walmart_search_result",
+    hydration_diagnostic: "public_walmart_listing",
+    media_source: "public_walmart_listing",
+    unavailable: "fallback",
+  };
+  addProvenance(listingProvenanceBySource[publicListingResolution.source] ?? "fallback");
+
+  const mergedHydrationMetadata: Partial<WalmartNativeHydrationDiagnostics> = {
+    ...input.hydrationMetadata,
+    sourceProvenance: unique([
+      ...(input.hydrationMetadata?.sourceProvenance ?? []),
+      ...Array.from(provenance),
+    ]),
+  };
   const hydration = buildHydrationDiagnostics({
-    metadata: input.hydrationMetadata,
+    metadata: mergedHydrationMetadata,
     schemaCoverage,
     rawPayloadAvailable: Boolean(input.liveItemPayload || rawPayload || normalizedPayload),
   });
@@ -638,30 +960,23 @@ export function hydrateCurrentWalmartState(input: {
     },
     schemaCoverage,
     content: {
-      productName: input.product.title,
-      siteDescription:
-        input.product.shortDescription ||
-        firstNonEmptyString(records, ["shortDescription", "siteDescription", "description"]),
-      longDescription:
-        input.product.longDescription ||
-        firstNonEmptyString(records, ["longDescription", "fullDescription", "description"]),
-      keyFeatures:
-        input.product.bulletPoints.length > 0
-          ? unique(input.product.bulletPoints)
-          : unique(listFromUnknown(normalizedPayload?.bulletPoints || rawPayload?.keyFeatures)),
-      brand: input.product.brand,
-      manufacturer:
-        searchBrowseAttributes.manufacturer ||
-        firstNonEmptyString(records, ["manufacturer", "manufacturerName"]),
+      productName,
+      siteDescription,
+      longDescription,
+      keyFeatures,
+      brand,
+      manufacturer,
       richMediaStatus: firstNonEmptyString(records, ["richMediaStatus", "rich_media_status"]) || "unknown",
       imageUrls: galleryImageUrls,
     },
     media: {
       primaryImageUrl,
       galleryImageUrls,
-      publicWalmartUrl:
-        input.product.publicWalmartUrl ||
-        firstNonEmptyString(records, ["publicWalmartUrl", "walmartItemPageUrl", "itemPageUrl"]),
+      publicWalmartUrl: publicListingResolution.url ?? "",
+      publicWalmartItemId: publicListingResolution.itemId ?? "",
+      publicWalmartListingSource: publicListingResolution.source,
+      publicWalmartListingConfidence: publicListingResolution.confidence,
+      publicWalmartListingWarnings: [...publicListingResolution.warnings],
       sourceImageLane: input.product.imageSource || "unknown",
       imageFactsStatus: firstNonEmptyString(records, ["imageFactsStatus", "image_facts_status"]) || "unknown",
       imageFactsMessage:
@@ -846,6 +1161,11 @@ export function toNativeStateDraftPayload(state: WalmartNativeState): Record<str
     brand: state.content.brand,
     imageUrl: state.media.primaryImageUrl,
     galleryImageUrls: deepClone(state.media.galleryImageUrls),
+    publicWalmartUrl: state.media.publicWalmartUrl,
+    publicWalmartProductId: state.media.publicWalmartItemId,
+    publicWalmartItemId: state.media.publicWalmartItemId,
+    publicWalmartListingSource: state.media.publicWalmartListingSource,
+    publicWalmartListingConfidence: state.media.publicWalmartListingConfidence,
     price: state.pricingInventory.currentPrice,
     salePrice: state.pricingInventory.salePrice,
     inventoryQuantity: state.pricingInventory.inventory,

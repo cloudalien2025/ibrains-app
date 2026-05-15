@@ -359,9 +359,7 @@ describe("Walmart SerpApi public listing images", () => {
     expect(result.ok).toBe(true);
     expect(result.primaryImageUrl).toContain("https://");
     expect(result.productId).toBe("18410702298");
-    expect(result.productPageUrl).toBe(
-      "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Gummies/18410702298"
-    );
+    expect(result.productPageUrl).toBe("https://www.walmart.com/ip/18410702298");
     expect(result.galleryImageUrls.length).toBeGreaterThanOrEqual(4);
     expect(new Set(result.galleryImageUrls).size).toBe(result.galleryImageUrls.length);
 

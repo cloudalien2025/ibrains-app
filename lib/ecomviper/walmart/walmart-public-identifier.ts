@@ -1,6 +1,9 @@
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
-
-const WALMART_HOST_SUFFIX = ".walmart.com";
+import {
+  buildWalmartPublicListingUrlFromItemId,
+  extractWalmartItemIdFromUrl,
+  normalizeWalmartPublicListingUrl,
+} from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 
 export type WalmartPublicIdentifierType =
   | "url_product_id"
@@ -117,62 +120,11 @@ function collectUrlCandidates(
 }
 
 export function normalizeWalmartPublicUrl(value: unknown): string {
-  const raw = asString(value);
-  if (!raw) return "";
-
-  const candidate =
-    /^https?:\/\//i.test(raw)
-      ? raw
-      : /^\/ip\//i.test(raw)
-      ? `https://www.walmart.com${raw.startsWith("/") ? raw : `/${raw}`}`
-      : /^(?:www\.)?walmart\.com\//i.test(raw)
-      ? `https://${raw.replace(/^https?:\/\//i, "")}`
-      : "";
-
-  if (!candidate) return "";
-
-  try {
-    const parsed = new URL(candidate);
-    const host = parsed.hostname.toLowerCase();
-    if (!(host === "walmart.com" || host.endsWith(WALMART_HOST_SUFFIX))) {
-      return "";
-    }
-    parsed.protocol = "https:";
-    return parsed.toString();
-  } catch {
-    return "";
-  }
+  return normalizeWalmartPublicListingUrl(value) ?? "";
 }
 
 export function extractWalmartPublicProductIdFromUrl(url: string): string | null {
-  const sanitized = normalizeWalmartPublicUrl(url);
-  if (!sanitized) return null;
-
-  try {
-    const parsed = new URL(sanitized);
-    const segments = parsed.pathname
-      .split("/")
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-
-    const ipIndex = segments.findIndex((segment) => segment.toLowerCase() === "ip");
-    if (ipIndex >= 0) {
-      const trailing = segments.slice(ipIndex + 1);
-      for (let index = trailing.length - 1; index >= 0; index -= 1) {
-        const candidate = normalizeWalmartPublicProductId(trailing[index]);
-        if (candidate) return candidate;
-      }
-    }
-
-    for (let index = segments.length - 1; index >= 0; index -= 1) {
-      const candidate = normalizeWalmartPublicProductId(segments[index]);
-      if (candidate) return candidate;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
+  return extractWalmartItemIdFromUrl(url);
 }
 
 function firstWalmartProductIdExcludingBarcode(input: {
@@ -208,8 +160,7 @@ export function resolveCanonicalWalmartPublicIdentifier(input: {
     collectUrlCandidates(node, urlCandidates);
   }
 
-  const normalizedPublicWalmartUrl =
-    urlCandidates.map((value) => normalizeWalmartPublicUrl(value)).find(Boolean) ?? "";
+  const normalizedPublicWalmartUrl = urlCandidates.map((value) => normalizeWalmartPublicUrl(value)).find(Boolean) ?? "";
   const walmartProductIdFromUrl = normalizedPublicWalmartUrl
     ? extractWalmartPublicProductIdFromUrl(normalizedPublicWalmartUrl) ?? ""
     : "";
@@ -234,8 +185,10 @@ export function resolveCanonicalWalmartPublicIdentifier(input: {
     gtin,
   });
   if (explicitProductId) {
+    const canonicalFromExplicitId =
+      buildWalmartPublicListingUrlFromItemId(explicitProductId) ?? normalizedPublicWalmartUrl;
     return {
-      normalizedPublicWalmartUrl,
+      normalizedPublicWalmartUrl: canonicalFromExplicitId,
       walmartProductIdFromUrl,
       preferredWalmartProductId: explicitProductId,
       preferredIdentifierType: "explicit_product_id",
@@ -250,8 +203,10 @@ export function resolveCanonicalWalmartPublicIdentifier(input: {
     gtin,
   });
   if (itemId) {
+    const canonicalFromItemId =
+      buildWalmartPublicListingUrlFromItemId(itemId) ?? normalizedPublicWalmartUrl;
     return {
-      normalizedPublicWalmartUrl,
+      normalizedPublicWalmartUrl: canonicalFromItemId,
       walmartProductIdFromUrl,
       preferredWalmartProductId: itemId,
       preferredIdentifierType: "walmart_item_id",
@@ -266,8 +221,10 @@ export function resolveCanonicalWalmartPublicIdentifier(input: {
     gtin,
   });
   if (payloadProductId) {
+    const canonicalFromPayloadId =
+      buildWalmartPublicListingUrlFromItemId(payloadProductId) ?? normalizedPublicWalmartUrl;
     return {
-      normalizedPublicWalmartUrl,
+      normalizedPublicWalmartUrl: canonicalFromPayloadId,
       walmartProductIdFromUrl,
       preferredWalmartProductId: payloadProductId,
       preferredIdentifierType: "walmart_payload_product_id",
@@ -328,6 +285,10 @@ export function resolveCanonicalWalmartIdentifierFromProductRecord(input: {
       product.publicWalmartUrl,
       normalizedPayload?.publicWalmartUrl,
       rawPayload?.publicWalmartUrl,
+      normalizedPayload?.itemPageUrl,
+      normalizedPayload?.walmartItemPageUrl,
+      rawPayload?.itemPageUrl,
+      rawPayload?.walmartItemPageUrl,
       rawPayload?.productPageUrl,
       rawPayload?.productUrl,
       rawPayload?.canonicalUrl,
@@ -338,10 +299,15 @@ export function resolveCanonicalWalmartIdentifierFromProductRecord(input: {
     ],
     explicitWalmartProductIdCandidates: [
       input.explicitProductId,
+      product.publicWalmartProductId,
+      normalizedPayload?.publicWalmartProductId,
+      rawPayload?.publicWalmartProductId,
     ],
     walmartItemIdCandidates: [
       product.itemId,
+      product.publicWalmartProductId,
       normalizedPayload?.itemId,
+      normalizedPayload?.usItemId,
       rawPayload?.itemId,
       rawPayload?.usItemId,
       rawPayload?.usItemID,

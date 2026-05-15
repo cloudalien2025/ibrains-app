@@ -908,7 +908,7 @@ describe("walmart product import", () => {
     await importWalmartProducts("user_clerk_1");
     const product = listWalmartProducts().find((entry) => entry.sku === "SERPAPI-URL-ID-1");
 
-    expect(product?.publicWalmartUrl).toBe("https://www.walmart.com/ip/seort/17812552813");
+    expect(product?.publicWalmartUrl).toBe("https://www.walmart.com/ip/17812552813");
     expect(product?.publicWalmartProductId).toBe("17812552813");
     expect(serpApiMocks.enrichProductImagesFromPublicWalmartListing).toHaveBeenCalledWith(
       expect.objectContaining({
