@@ -4,11 +4,56 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import { normalizeWalmartImageUrlList } from "@/lib/ecomviper/walmart/walmart-image-fields";
 import {
+  analyzeWalmartProductTypeFieldCoverage,
+  resolveWalmartProductTypeIntelligence,
+  type WalmartProductTypeCoverageAnalysis,
+  type WalmartTaxonomyConfidence,
+} from "@/lib/ecomviper/walmart/walmart-product-type-intelligence";
+import {
   resolveWalmartStructuredAttributeRegistry,
   type WalmartStructuredAttributeRegistry,
   type WalmartStructuredAttributeValue,
 } from "@/lib/ecomviper/walmart/walmart-structured-attributes";
 import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+
+export type WalmartHydrationStatus = "liveHydrated" | "snapshotFallback" | "partialHydration";
+
+export interface WalmartNativeHydrationDiagnostics {
+  status: WalmartHydrationStatus;
+  source: "live_walmart_api" | "imported_snapshot" | "stale_live_cache";
+  liveHydrated: boolean;
+  snapshotFallback: boolean;
+  partialHydration: boolean;
+  stale: boolean;
+  hydratedAt: string;
+  fallbackReason: string;
+  cacheState: "hit" | "miss" | "stale";
+  cacheTtlMs: number;
+  missingLiveFields: string[];
+  sourceProvenance: string[];
+  rawPayloadAvailable: boolean;
+}
+
+export interface WalmartNativeSchemaCoverage {
+  missingRequiredFields: string[];
+  missingSearchableFields: string[];
+  missingComplianceFields: string[];
+  missingDiscoverabilityFields: string[];
+  nonWritableFieldsPresent: string[];
+}
+
+export interface WalmartNativeProductTypeIntelligence {
+  productTypeGroup: string;
+  productType: string;
+  taxonomyPlacement: string;
+  taxonomyConfidence: WalmartTaxonomyConfidence;
+  requiredFields: string[];
+  searchableFields: string[];
+  complianceFields: string[];
+  discoverabilityFields: string[];
+  writableFields: string[];
+  supplementSchema: boolean;
+}
 
 export interface WalmartNativeContentState {
   productName: string;
@@ -80,12 +125,16 @@ export interface WalmartNativeState {
   sku: string;
   sourceOfTruth: Array<"Walmart Item APIs" | "Walmart catalog payload" | "MP_ITEM" | "MP_MAINTENANCE">;
   taxonomyPlacement: string;
+  hydration: WalmartNativeHydrationDiagnostics;
+  productTypeIntelligence: WalmartNativeProductTypeIntelligence;
+  schemaCoverage: WalmartNativeSchemaCoverage;
   content: WalmartNativeContentState;
   media: WalmartNativeMediaState;
   pricingInventory: WalmartNativePricingInventoryState;
   compliance: WalmartNativeComplianceState;
   searchBrowse: WalmartNativeSearchBrowseState;
   structuredAttributes: WalmartStructuredAttributeValue[];
+  rawLivePayload: Record<string, unknown> | null;
 }
 
 export interface WalmartOptimizationAnalysis {
@@ -95,6 +144,8 @@ export interface WalmartOptimizationAnalysis {
   scoreDelta: number | null;
   changedFields: string[];
   optimizationNotes: string[];
+  currentGapAnalysis: WalmartNativeSchemaCoverage;
+  proposalGapAnalysis: WalmartNativeSchemaCoverage;
 }
 
 export interface WalmartOptimizedProposalState {
@@ -263,6 +314,16 @@ function toSearchBrowseState(input: {
         source: entry.source,
       })),
     })),
+  };
+}
+
+function toSchemaCoverage(gaps: WalmartProductTypeCoverageAnalysis): WalmartNativeSchemaCoverage {
+  return {
+    missingRequiredFields: [...gaps.missingRequiredFields],
+    missingSearchableFields: [...gaps.missingSearchableFields],
+    missingComplianceFields: [...gaps.missingComplianceFields],
+    missingDiscoverabilityFields: [...gaps.missingDiscoverabilityFields],
+    nonWritableFieldsPresent: [...gaps.nonWritableFieldsPresent],
   };
 }
 
@@ -459,8 +520,39 @@ function changedFieldsBetweenStates(left: WalmartNativeState, right: WalmartNati
   return fields;
 }
 
+function buildHydrationDiagnostics(input: {
+  metadata?: Partial<WalmartNativeHydrationDiagnostics>;
+  schemaCoverage: WalmartNativeSchemaCoverage;
+  rawPayloadAvailable: boolean;
+}): WalmartNativeHydrationDiagnostics {
+  const status = input.metadata?.status ?? "snapshotFallback";
+  const source = input.metadata?.source ?? "imported_snapshot";
+
+  return {
+    status,
+    source,
+    liveHydrated: input.metadata?.liveHydrated ?? status === "liveHydrated",
+    snapshotFallback: input.metadata?.snapshotFallback ?? status === "snapshotFallback",
+    partialHydration: input.metadata?.partialHydration ?? status === "partialHydration",
+    stale: input.metadata?.stale ?? false,
+    hydratedAt: input.metadata?.hydratedAt ?? new Date().toISOString(),
+    fallbackReason: input.metadata?.fallbackReason ?? "",
+    cacheState: input.metadata?.cacheState ?? "miss",
+    cacheTtlMs: input.metadata?.cacheTtlMs ?? 0,
+    missingLiveFields: input.metadata?.missingLiveFields ?? [],
+    sourceProvenance:
+      input.metadata?.sourceProvenance ??
+      (source === "live_walmart_api"
+        ? ["walmart_item_api", "walmart_catalog_api"]
+        : ["imported_snapshot_payload"]),
+    rawPayloadAvailable: input.metadata?.rawPayloadAvailable ?? input.rawPayloadAvailable,
+  };
+}
+
 export function hydrateCurrentWalmartState(input: {
   product: WalmartProductRecord;
+  hydrationMetadata?: Partial<WalmartNativeHydrationDiagnostics>;
+  liveItemPayload?: Record<string, unknown> | null;
 }): WalmartNativeState {
   const normalizedPayload = asObject(input.product.normalizedPayload);
   const rawPayload = asObject(input.product.rawPayload);
@@ -493,6 +585,34 @@ export function hydrateCurrentWalmartState(input: {
     listFromUnknown(rawProductPayload?.images),
   ]);
 
+  const resolvedSearchBrowse = toSearchBrowseState({
+    attributes: searchBrowseAttributes,
+    registry,
+    productTypeHint,
+    supplementTypeHint,
+  });
+
+  const intelligence = resolveWalmartProductTypeIntelligence({
+    productType: resolvedSearchBrowse.productType,
+    supplementType: resolvedSearchBrowse.supplementType,
+    category: input.product.category,
+    taxonomyPlacement: registry.taxonomyPlacement,
+    title: input.product.title,
+  });
+
+  const schemaCoverage = toSchemaCoverage(
+    analyzeWalmartProductTypeFieldCoverage({
+      intelligence,
+      attributes: resolvedSearchBrowse.attributes,
+    })
+  );
+
+  const hydration = buildHydrationDiagnostics({
+    metadata: input.hydrationMetadata,
+    schemaCoverage,
+    rawPayloadAvailable: Boolean(input.liveItemPayload || rawPayload || normalizedPayload),
+  });
+
   const current: WalmartNativeState = {
     stateType: "current",
     sku: input.product.sku,
@@ -503,6 +623,20 @@ export function hydrateCurrentWalmartState(input: {
       "MP_MAINTENANCE",
     ],
     taxonomyPlacement: registry.taxonomyPlacement,
+    hydration,
+    productTypeIntelligence: {
+      productTypeGroup: intelligence.productTypeGroup,
+      productType: intelligence.productType,
+      taxonomyPlacement: intelligence.taxonomyPlacement,
+      taxonomyConfidence: intelligence.taxonomyConfidence,
+      requiredFields: intelligence.requiredFields,
+      searchableFields: intelligence.searchableFields,
+      complianceFields: intelligence.complianceFields,
+      discoverabilityFields: intelligence.discoverabilityFields,
+      writableFields: intelligence.writableFields,
+      supplementSchema: intelligence.supplementSchema,
+    },
+    schemaCoverage,
     content: {
       productName: input.product.title,
       siteDescription:
@@ -573,16 +707,28 @@ export function hydrateCurrentWalmartState(input: {
         searchBrowseAttributes.regulatory_fields ||
         firstNonEmptyString(records, ["regulatoryFields", "regulatory_fields"]),
     },
-    searchBrowse: toSearchBrowseState({
-      attributes: searchBrowseAttributes,
-      registry,
-      productTypeHint,
-      supplementTypeHint,
-    }),
+    searchBrowse: resolvedSearchBrowse,
     structuredAttributes: registry.values,
+    rawLivePayload: input.liveItemPayload ?? asObject(rawPayload?.liveItemPayload) ?? null,
   };
 
   return deepFreeze(current);
+}
+
+function buildCoverageForState(state: WalmartNativeState): WalmartNativeSchemaCoverage {
+  const intelligence = resolveWalmartProductTypeIntelligence({
+    productType: state.searchBrowse.productType,
+    supplementType: state.searchBrowse.supplementType,
+    taxonomyPlacement: state.searchBrowse.taxonomyPlacement,
+    title: state.content.productName,
+  });
+
+  return toSchemaCoverage(
+    analyzeWalmartProductTypeFieldCoverage({
+      intelligence,
+      attributes: state.searchBrowse.attributes,
+    })
+  );
 }
 
 export function generateOptimizedProposalState(input: {
@@ -604,7 +750,28 @@ export function generateOptimizedProposalState(input: {
     });
   }
 
+  const currentGapAnalysis = buildCoverageForState(currentWalmartState);
+  const proposalGapAnalysis = buildCoverageForState(optimizedProposalState);
+  optimizedProposalState.schemaCoverage = proposalGapAnalysis;
+
   const changedFields = changedFieldsBetweenStates(currentWalmartState, optimizedProposalState);
+
+  const optimizationNotes: string[] = input.suggestion
+    ? [
+        "Proposal generated from current Walmart-native state.",
+        "Proposal fields are draft-only until approved and saved.",
+      ]
+    : ["No AI proposal generated yet."];
+
+  if (proposalGapAnalysis.missingRequiredFields.length < currentGapAnalysis.missingRequiredFields.length) {
+    optimizationNotes.push("Required-field coverage improved in proposal state.");
+  }
+  if (proposalGapAnalysis.missingDiscoverabilityFields.length < currentGapAnalysis.missingDiscoverabilityFields.length) {
+    optimizationNotes.push("Discoverability-field coverage improved in proposal state.");
+  }
+  if (proposalGapAnalysis.missingComplianceFields.length < currentGapAnalysis.missingComplianceFields.length) {
+    optimizationNotes.push("Compliance-field coverage improved in proposal state.");
+  }
 
   const optimizationAnalysis: WalmartOptimizationAnalysis = {
     generated: Boolean(input.suggestion),
@@ -624,12 +791,9 @@ export function generateOptimizedProposalState(input: {
         ? input.projectedScore - input.currentScore
         : null,
     changedFields,
-    optimizationNotes: input.suggestion
-      ? [
-          "Proposal generated from current Walmart-native state.",
-          "Proposal fields are draft-only until approved and saved.",
-        ]
-      : ["No AI proposal generated yet."],
+    optimizationNotes,
+    currentGapAnalysis,
+    proposalGapAnalysis,
   };
 
   return deepFreeze({
@@ -650,6 +814,7 @@ export function generateEditableDraftState(input: {
   const editableDraftState = deepClone(optimizedProposalState);
   editableDraftState.stateType = "draft";
   patchNativeStateWithDraftPayload(editableDraftState, input.draftPayload);
+  editableDraftState.schemaCoverage = buildCoverageForState(editableDraftState);
 
   const changedFromProposalFields = changedFieldsBetweenStates(
     optimizedProposalState,

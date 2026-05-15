@@ -47,6 +47,7 @@ import {
   generateOptimizedProposalState,
   hydrateCurrentWalmartState,
   toNativeStateDraftPayload,
+  type WalmartNativeState,
 } from "@/lib/ecomviper/walmart/walmart-native-state";
 import type {
   WalmartAiSuggestion,
@@ -64,6 +65,7 @@ interface ProductEditorClientProps {
   stagedDrafts: WalmartDraftRecord[];
   aiProviderConnected: boolean;
   serpApiProviderConnected: boolean;
+  hydratedCurrentWalmartState?: WalmartNativeState;
 }
 
 const tabs = [
@@ -1231,6 +1233,7 @@ export default function ProductEditorClient({
   stagedDrafts,
   aiProviderConnected,
   serpApiProviderConnected,
+  hydratedCurrentWalmartState,
 }: ProductEditorClientProps) {
   const draftHardening = useMemo(
     () => normalizeWalmartDraftsForEditor(stagedDrafts),
@@ -1543,9 +1546,13 @@ export default function ProductEditorClient({
         ? "worse"
         : "unchanged"
     : null;
-  const currentWalmartState = useMemo(
+  const fallbackCurrentWalmartState = useMemo(
     () => hydrateCurrentWalmartState({ product }),
     [product]
+  );
+  const currentWalmartState = useMemo(
+    () => hydratedCurrentWalmartState ?? fallbackCurrentWalmartState,
+    [hydratedCurrentWalmartState, fallbackCurrentWalmartState]
   );
   const projectedScoreFromSuggestion =
     projectedQuality?.score ?? inlineAiSuggestion?.qualityScore;
@@ -2961,7 +2968,29 @@ export default function ProductEditorClient({
     revealInlineAiPanel();
   }
 
-  const topIssues = product.issues.filter((issue) => issue.trim().length > 0).slice(0, 3);
+  const schemaGapHighlights = unique([
+    ...currentWalmartState.schemaCoverage.missingRequiredFields.map(
+      (field) => `Missing required field: ${field}`
+    ),
+    ...currentWalmartState.schemaCoverage.missingComplianceFields.map(
+      (field) => `Missing compliance field: ${field}`
+    ),
+    ...currentWalmartState.schemaCoverage.missingDiscoverabilityFields.map(
+      (field) => `Missing discoverability field: ${field}`
+    ),
+  ]).slice(0, 4);
+  const currentSchemaGapAnalysis = optimizedProposalLayer.optimizationAnalysis.currentGapAnalysis;
+  const proposalSchemaGapAnalysis = optimizedProposalLayer.optimizationAnalysis.proposalGapAnalysis;
+  const currentSchemaGapCount =
+    currentSchemaGapAnalysis.missingRequiredFields.length +
+    currentSchemaGapAnalysis.missingComplianceFields.length +
+    currentSchemaGapAnalysis.missingSearchableFields.length +
+    currentSchemaGapAnalysis.missingDiscoverabilityFields.length;
+  const proposalSchemaGapCount =
+    proposalSchemaGapAnalysis.missingRequiredFields.length +
+    proposalSchemaGapAnalysis.missingComplianceFields.length +
+    proposalSchemaGapAnalysis.missingSearchableFields.length +
+    proposalSchemaGapAnalysis.missingDiscoverabilityFields.length;
   const currentListingShortDescription =
     currentWalmartState.content.siteDescription || "Not available";
   const currentListingLongDescription =
@@ -3037,6 +3066,29 @@ export default function ProductEditorClient({
         <p className="mt-1 text-xs text-[#64748B]">
           Source of truth: {currentWalmartState.sourceOfTruth.join(", ")}
         </p>
+        <div
+          className="mt-2 grid gap-1 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-xs text-[#334155]"
+          data-testid="ecomviper-walmart-live-hydration-status"
+        >
+          <p>
+            <span className="text-[#64748B]">Hydration source:</span>{" "}
+            {currentWalmartState.hydration.source}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Hydration status:</span>{" "}
+            {currentWalmartState.hydration.status}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Hydrated at:</span>{" "}
+            {currentWalmartState.hydration.hydratedAt}
+          </p>
+          {currentWalmartState.hydration.fallbackReason ? (
+            <p>
+              <span className="text-[#64748B]">Fallback reason:</span>{" "}
+              {currentWalmartState.hydration.fallbackReason}
+            </p>
+          ) : null}
+        </div>
       </div>
       <div className="grid gap-3 xl:grid-cols-2">
         <article
@@ -3318,13 +3370,13 @@ export default function ProductEditorClient({
             <li>Warnings: {validationWarnings.length}</li>
             <li>Info notes: {validationInfos.length}</li>
           </ul>
-          {topIssues.length > 0 ? (
+          {schemaGapHighlights.length > 0 ? (
             <div className="mt-2">
               <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
-                Top issues
+                Schema diagnostics
               </p>
               <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                {topIssues.map((issue) => (
+                {schemaGapHighlights.map((issue) => (
                   <li key={issue}>{issue}</li>
                 ))}
               </ul>
@@ -3454,24 +3506,33 @@ export default function ProductEditorClient({
 
           <article className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:max-w-[320px]">
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Top issues</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Hydration + spec diagnostics</p>
               <button
                 type="button"
                 onClick={handleViewAllIssues}
                 className="text-xs font-medium text-[#2563EB] hover:text-[#1D4ED8]"
               >
-                View all issues
+                View validation
               </button>
             </div>
             <ul className="mt-2 space-y-1 text-sm text-[#334155]">
-              {topIssues.length ? (
-                topIssues.map((issue) => (
+              <li className="rounded-md bg-white px-2 py-1">
+                Hydration source: {currentWalmartState.hydration.source}
+              </li>
+              <li className="rounded-md bg-white px-2 py-1">
+                Hydration status: {currentWalmartState.hydration.status}
+              </li>
+              <li className="rounded-md bg-white px-2 py-1">
+                Hydrated at: {currentWalmartState.hydration.hydratedAt}
+              </li>
+              {schemaGapHighlights.length > 0 ? (
+                schemaGapHighlights.slice(0, 2).map((issue) => (
                   <li key={issue} className="rounded-md bg-white px-2 py-1">
                     {issue}
                   </li>
                 ))
               ) : (
-                <li className="rounded-md bg-white px-2 py-1">No major issues detected.</li>
+                <li className="rounded-md bg-white px-2 py-1">No major schema gaps detected.</li>
               )}
             </ul>
           </article>
@@ -3530,6 +3591,66 @@ export default function ProductEditorClient({
           {inlineAiState === "idle"
             ? "Optimize title, descriptions, bullets, and search & browse attributes without leaving this page."
             : null}
+        </div>
+
+        <div
+          className="mt-3 grid gap-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 lg:grid-cols-2"
+          data-testid="ecomviper-walmart-schema-gap-analysis"
+        >
+          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
+            <h3 className="text-sm font-semibold text-[#0F172A]">Current schema gap analysis</h3>
+            <p className="mt-1 text-sm text-[#334155]">Total gaps: {currentSchemaGapCount}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+              {currentSchemaGapAnalysis.missingRequiredFields
+                .slice(0, 3)
+                .map((field) => (
+                  <li key={`current-required-${field}`}>Missing required: {field}</li>
+                ))}
+              {currentSchemaGapAnalysis.missingComplianceFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`current-compliance-${field}`}>Missing compliance: {field}</li>
+                ))}
+              {currentSchemaGapAnalysis.missingSearchableFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`current-searchable-${field}`}>Missing searchable: {field}</li>
+                ))}
+              {currentSchemaGapAnalysis.missingDiscoverabilityFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`current-discovery-${field}`}>Missing discoverability: {field}</li>
+                ))}
+              {currentSchemaGapCount === 0 ? <li>No current schema gaps detected.</li> : null}
+            </ul>
+          </article>
+          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
+            <h3 className="text-sm font-semibold text-[#0F172A]">AI proposal schema gap analysis</h3>
+            <p className="mt-1 text-sm text-[#334155]">Projected gaps: {proposalSchemaGapCount}</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+              {proposalSchemaGapAnalysis.missingRequiredFields
+                .slice(0, 3)
+                .map((field) => (
+                  <li key={`proposal-required-${field}`}>Missing required: {field}</li>
+                ))}
+              {proposalSchemaGapAnalysis.missingComplianceFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`proposal-compliance-${field}`}>Missing compliance: {field}</li>
+                ))}
+              {proposalSchemaGapAnalysis.missingSearchableFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`proposal-searchable-${field}`}>Missing searchable: {field}</li>
+                ))}
+              {proposalSchemaGapAnalysis.missingDiscoverabilityFields
+                .slice(0, 2)
+                .map((field) => (
+                  <li key={`proposal-discovery-${field}`}>Missing discoverability: {field}</li>
+                ))}
+              {proposalSchemaGapCount === 0 ? <li>No projected schema gaps.</li> : null}
+            </ul>
+          </article>
         </div>
 
         {!inlineAiSuggestion ? (
