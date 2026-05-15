@@ -900,7 +900,7 @@ function normalizeImportedItem(
   const normalized = normalizeWalmartProduct({
     sku,
     title: title || `Walmart item ${sku}`,
-    brand: brand || "Unknown",
+    brand: brand || "",
     upc: identifiers.upc,
     gtin: identifiers.gtin,
     wpid: identifiers.wpid,

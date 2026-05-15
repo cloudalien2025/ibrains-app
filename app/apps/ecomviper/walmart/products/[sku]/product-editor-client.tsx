@@ -30,6 +30,11 @@ import {
   type WalmartSearchBrowseFieldDefinition,
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import {
+  clearAliasGroupValues,
+  expandAliasKeys,
+  syncAliasGroups,
+} from "@/lib/ecomviper/walmart/walmart-field-aliases";
+import {
   readOptimizerProposalFromDraft,
   toOptimizerDraftPayload,
 } from "@/lib/ecomviper/walmart/walmart-optimizer-staging";
@@ -93,6 +98,7 @@ interface ProductEditorFormState {
   altText: string;
   complianceNotes: string;
   generatedMediaAssets: WalmartGeneratedMediaAsset[];
+  imageVisionExtraction: Record<string, unknown> | null;
 }
 
 type GenerateSuggestionResponse = {
@@ -184,6 +190,22 @@ type GenerateProductImagesResponse = {
   };
 };
 
+type ExtractLabelFactsResponse = {
+  ok: boolean;
+  sku?: string;
+  extraction?: {
+    status?: string;
+    message?: string;
+    extractedAt?: string;
+  };
+  visionFactPayload?: Record<string, unknown>;
+  mappedSearchBrowseAttributes?: Record<string, string>;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 interface WalmartGeneratedReferenceImage {
   id: string;
   name: string;
@@ -251,6 +273,10 @@ const DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS = {
   rejectedClaims: [] as string[],
   imageFactsStatus: "unknown",
   imageFactsMessage: "",
+  manufacturerSource: "unknown",
+  manufacturerConfidence: "unknown",
+  manufacturerNeedsReview: false,
+  faqGenerationState: "final",
   disclaimerStatus: "unknown",
   finalDecision: "accepted",
 };
@@ -588,6 +614,11 @@ function normalizeInlineAiApplyDiagnostics(
   const finalDecisionRaw = asText(diagnostics.finalDecision)?.trim().toLowerCase() ?? "";
   const imageFactsStatusRaw = asText(diagnostics.imageFactsStatus)?.trim().toLowerCase() ?? "";
   const imageFactsMessage = asText(diagnostics.imageFactsMessage)?.trim() ?? "";
+  const manufacturerSource = asText(diagnostics.manufacturerSource)?.trim().toLowerCase() || "unknown";
+  const manufacturerConfidence =
+    asText(diagnostics.manufacturerConfidence)?.trim().toLowerCase() || "unknown";
+  const manufacturerNeedsReview = diagnostics.manufacturerNeedsReview === true;
+  const faqGenerationStateRaw = asText(diagnostics.faqGenerationState)?.trim().toLowerCase() ?? "";
 
   const disclaimerStatus =
     disclaimerStatusRaw === "inserted" ||
@@ -612,6 +643,10 @@ function normalizeInlineAiApplyDiagnostics(
     imageFactsStatusRaw === "low_confidence"
       ? imageFactsStatusRaw
       : "unknown";
+  const faqGenerationState =
+    faqGenerationStateRaw === "pending" || faqGenerationStateRaw === "final"
+      ? faqGenerationStateRaw
+      : "final";
 
   return {
     factsUpdated: toSafeStringArray(diagnostics.factsUpdated),
@@ -627,6 +662,10 @@ function normalizeInlineAiApplyDiagnostics(
     rejectedClaims: toSafeStringArray(diagnostics.rejectedClaims),
     imageFactsStatus,
     imageFactsMessage,
+    manufacturerSource,
+    manufacturerConfidence,
+    manufacturerNeedsReview,
+    faqGenerationState,
     disclaimerStatus,
     finalDecision,
   };
@@ -681,6 +720,19 @@ function readDraftList(
       ? imageListFromUnknown(draft[key])
       : listFromUnknown(draft[key]);
     return parsed;
+  }
+  return null;
+}
+
+function readDraftObject(
+  draft: Record<string, unknown> | null,
+  keys: string[]
+): Record<string, unknown> | null {
+  if (!draft) return null;
+  for (const key of keys) {
+    if (!hasOwn(draft, key)) continue;
+    const value = asObject(draft[key]);
+    if (value) return value;
   }
   return null;
 }
@@ -974,6 +1026,12 @@ function hydrateEditorForm(
     readDraftList(draft, ["complianceNotes"])?.join("\n") ??
     readDraftList(draft, ["compliance_notes"])?.join("\n") ??
     "";
+  const imageVisionExtraction =
+    readDraftObject(draft, [
+      "imageVisionExtraction",
+      "image_vision_extraction",
+      "visionFactPayload",
+    ]) ?? null;
 
   return {
     title,
@@ -999,6 +1057,7 @@ function hydrateEditorForm(
     altText,
     complianceNotes,
     generatedMediaAssets,
+    imageVisionExtraction,
   };
 }
 
@@ -1243,6 +1302,8 @@ export default function ProductEditorClient({
   >(null);
   const [productImageGenerationError, setProductImageGenerationError] =
     useState<GenerateProductImagesResponse["error"] | null>(null);
+  const [extractingLabelFacts, setExtractingLabelFacts] = useState(false);
+  const [labelFactsMessage, setLabelFactsMessage] = useState<string | null>(null);
   const [focusedGeneratedAssetId, setFocusedGeneratedAssetId] = useState<string | null>(() => {
     const firstPending = initialForm.generatedMediaAssets.find((asset) => !asset.approved);
     return firstPending?.id ?? initialForm.generatedMediaAssets[0]?.id ?? null;
@@ -1401,6 +1462,8 @@ export default function ProductEditorClient({
         .filter(Boolean),
       generatedMediaAssets:
         form.generatedMediaAssets.length > 0 ? form.generatedMediaAssets : undefined,
+      imageVisionExtraction: form.imageVisionExtraction ?? undefined,
+      visionFactPayload: form.imageVisionExtraction ?? undefined,
     };
   }, [form, product.galleryImageUrls, product.variantImageUrls]);
 
@@ -1505,7 +1568,7 @@ export default function ProductEditorClient({
     : "Resolve validation blockers before Submit Update.";
 
   const displayTitle = form.title.trim() || product.title;
-  const displayBrand = form.brand.trim() || product.brand.trim() || "Unknown";
+  const displayBrand = form.brand.trim() || product.brand.trim() || "";
   const displayPrimaryImageUrl = scoringProduct.imageUrl?.trim() || "";
   const fallbackShopifyVariantPreviewUrls = useMemo(
     () =>
@@ -1609,6 +1672,17 @@ export default function ProductEditorClient({
   const inlineAiDiagnostics = inlineAiSuggestion
     ? normalizeInlineAiApplyDiagnostics(inlineAiSuggestion.applyDiagnostics)
     : DEFAULT_INLINE_AI_APPLY_DIAGNOSTICS;
+  const draftImageFactsStatus =
+    asText(asObject(form.imageVisionExtraction)?.status)?.trim().toLowerCase() ?? "";
+  const draftImageFactsMessage = asText(asObject(form.imageVisionExtraction)?.message) ?? "";
+  const resolvedImageFactsStatus =
+    draftImageFactsStatus ||
+    inlineAiDiagnostics.imageFactsStatus ||
+    "needs_vision_extraction";
+  const resolvedImageFactsMessage =
+    draftImageFactsMessage ||
+    inlineAiDiagnostics.imageFactsMessage ||
+    "Images are available, but label text has not been extracted yet.";
 
   function patchForm(patch: Partial<ProductEditorFormState>) {
     setForm((current) => ({ ...current, ...patch }));
@@ -1618,21 +1692,29 @@ export default function ProductEditorClient({
   function patchSearchBrowseField(key: string, value: string) {
     setForm((current) => ({
       ...current,
-      searchBrowseAttributes: {
-        ...current.searchBrowseAttributes,
-        [key]: value,
-      },
-      attributesJson: JSON.stringify(
-        mergeAttributesWithSearchBrowse({
-          baseAttributes: readAttributesFromForm(current.attributesJson),
-          searchBrowseAttributes: {
-            ...current.searchBrowseAttributes,
-            [key]: value,
-          },
-        }),
-        null,
-        2
-      ),
+      searchBrowseAttributes: (() => {
+        const next = {
+          ...current.searchBrowseAttributes,
+          [key]: value,
+        };
+        syncAliasGroups({ attributes: next });
+        return next;
+      })(),
+      attributesJson: (() => {
+        const nextSearchBrowse = {
+          ...current.searchBrowseAttributes,
+          [key]: value,
+        };
+        syncAliasGroups({ attributes: nextSearchBrowse });
+        return JSON.stringify(
+          mergeAttributesWithSearchBrowse({
+            baseAttributes: readAttributesFromForm(current.attributesJson),
+            searchBrowseAttributes: nextSearchBrowse,
+          }),
+          null,
+          2
+        );
+      })(),
     }));
     setFormDirty(true);
   }
@@ -2334,6 +2416,66 @@ export default function ProductEditorClient({
     }
   }
 
+  async function handleExtractLabelFacts() {
+    try {
+      setExtractingLabelFacts(true);
+      setLabelFactsMessage("Extracting label facts from images...");
+
+      const response = await fetch("/api/ecomviper/walmart/ai/images/extract-facts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          draftPayload: preview,
+        }),
+      });
+
+      const payload = (await response.json().catch(() => null)) as ExtractLabelFactsResponse | null;
+      if (!response.ok || !payload?.ok) {
+        setLabelFactsMessage(
+          payload?.error?.message?.trim() || "Label extraction failed. Try again."
+        );
+        return;
+      }
+
+      const mappedCandidates = payload.mappedSearchBrowseAttributes ?? {};
+      const sanitized = sanitizeWalmartAiSearchBrowseAttributes({
+        candidates: mappedCandidates,
+        existingKeys: Object.keys(form.searchBrowseAttributes),
+      });
+      const mergedSearchBrowse = {
+        ...form.searchBrowseAttributes,
+        ...sanitized.accepted,
+      };
+      syncAliasGroups({ attributes: mergedSearchBrowse });
+
+      const nextAttributesJson = JSON.stringify(
+        mergeAttributesWithSearchBrowse({
+          baseAttributes: readAttributesFromForm(form.attributesJson),
+          searchBrowseAttributes: mergedSearchBrowse,
+        }),
+        null,
+        2
+      );
+
+      patchForm({
+        searchBrowseAttributes: mergedSearchBrowse,
+        attributesJson: nextAttributesJson,
+        imageVisionExtraction: payload.visionFactPayload ?? form.imageVisionExtraction,
+      });
+
+      const status = payload.extraction?.status?.trim() || "unknown";
+      const detail =
+        payload.extraction?.message?.trim() ||
+        "Label extraction completed.";
+      setLabelFactsMessage(`Label extraction status: ${status}. ${detail}`);
+    } catch {
+      setLabelFactsMessage("Label extraction failed. Try again.");
+    } finally {
+      setExtractingLabelFacts(false);
+    }
+  }
+
   async function runInlineOptimization() {
     revealInlineAiPanel();
     setShowAiDetails(false);
@@ -2404,9 +2546,7 @@ export default function ProductEditorClient({
       pickMeaningfulAiText(
         (inlineAiSuggestion.searchBrowseAttributes ?? {}).manufacturer ??
           (inlineAiSuggestion.suggestedAttributes ?? {}).manufacturer
-      ) ??
-      pickMeaningfulAiText(safeBrand) ??
-      "";
+      ) ?? "";
     const inferredSearchKeywords = unique([
       safeBrand,
       pickMeaningfulAiText(entitySet?.productName) ?? "",
@@ -2426,7 +2566,8 @@ export default function ProductEditorClient({
     }
     if (
       shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.manufacturer) &&
-      inferredManufacturer.trim()
+      inferredManufacturer.trim() &&
+      inferredManufacturer.trim().toLowerCase() !== safeBrand.trim().toLowerCase()
     ) {
       inferredSearchBrowseCandidates.manufacturer = inferredManufacturer.trim();
     }
@@ -2492,6 +2633,7 @@ export default function ProductEditorClient({
       ],
     });
     const mergedSearchBrowseAttributes = { ...form.searchBrowseAttributes };
+    syncAliasGroups({ attributes: mergedSearchBrowseAttributes });
     const appliedSearchBrowseFields: string[] = [];
     for (const [key, value] of Object.entries(sanitizedAiSearchBrowse.accepted)) {
       const currentValue = (mergedSearchBrowseAttributes[key] ?? "").trim();
@@ -2501,13 +2643,24 @@ export default function ProductEditorClient({
       appliedSearchBrowseFields.push(key);
     }
     for (const key of diagnostics.staleFieldsCleared) {
-      if (!hasOwn(mergedSearchBrowseAttributes, key)) continue;
-      const existingValue = (mergedSearchBrowseAttributes[key] ?? "").trim();
-      if (!existingValue) continue;
-      delete mergedSearchBrowseAttributes[key];
-      delete attributeMap[key];
-      appliedSearchBrowseFields.push(key);
+      const keysToClear = expandAliasKeys([key]);
+      for (const clearKey of keysToClear) {
+        if (!hasOwn(mergedSearchBrowseAttributes, clearKey)) continue;
+        const existingValue = (mergedSearchBrowseAttributes[clearKey] ?? "").trim();
+        if (!existingValue) continue;
+        clearAliasGroupValues({
+          attributes: mergedSearchBrowseAttributes,
+          key: clearKey,
+        });
+        clearAliasGroupValues({
+          attributes: attributeMap,
+          key: clearKey,
+        });
+        appliedSearchBrowseFields.push(clearKey);
+      }
     }
+    syncAliasGroups({ attributes: mergedSearchBrowseAttributes });
+    syncAliasGroups({ attributes: attributeMap });
 
     const meaningfulTitle = pickMeaningfulAiText(inlineAiSuggestion.suggestedTitle);
     const meaningfulLongDescription = pickMeaningfulAiText(inlineAiSuggestion.suggestedDescription);
@@ -2580,7 +2733,9 @@ export default function ProductEditorClient({
       attributesJson: JSON.stringify(attributeMap, null, 2),
       searchBrowseAttributes: mergedSearchBrowseAttributes,
       faqSnippets:
-        nextFaqSnippets.length > 0
+        diagnostics.faqGenerationState === "pending"
+          ? form.faqSnippets
+          : nextFaqSnippets.length > 0
           ? nextFaqSnippets.join("\n")
           : form.faqSnippets,
       mediaRecommendations:
@@ -2631,8 +2786,9 @@ export default function ProductEditorClient({
     const disclaimerSummaryText = diagnostics.disclaimerStatus;
     const imageFactsStatusText = diagnostics.imageFactsStatus;
     const imageFactsMessageText = diagnostics.imageFactsMessage || "none";
+    const manufacturerSummary = `Manufacturer provenance: source=${diagnostics.manufacturerSource}, confidence=${diagnostics.manufacturerConfidence}, needs_review=${diagnostics.manufacturerNeedsReview}.`;
     setInlineAiMessage(
-      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
+      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. ${manufacturerSummary} Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
   }
 
@@ -4128,10 +4284,35 @@ export default function ProductEditorClient({
                     Blank fields are omitted from submit payloads.
                   </p>
                   <p className="md:col-span-2 text-xs text-[#475569]">
-                    Image-derived facts status: {inlineAiDiagnostics.imageFactsStatus}.{" "}
-                    {inlineAiDiagnostics.imageFactsMessage ||
-                      "Run Optimize with AI to evaluate image-derived fact availability."}
+                    Image-derived facts status: {resolvedImageFactsStatus}. {resolvedImageFactsMessage}
                   </p>
+                  <div className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+                    <p className="font-medium text-[#0F172A]">
+                      {resolvedImageFactsStatus === "needs_vision_extraction"
+                        ? "Images are available, but label text has not been extracted yet."
+                        : resolvedImageFactsStatus === "extracted"
+                        ? "Image label facts extracted. Review confidence before final submit."
+                        : resolvedImageFactsStatus === "unavailable"
+                        ? "Image fact extraction is unavailable."
+                        : "Image fact extraction is pending review."}
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleExtractLabelFacts}
+                        disabled={extractingLabelFacts}
+                        className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+                        data-testid="ecomviper-walmart-extract-label-facts-button"
+                      >
+                        {extractingLabelFacts
+                          ? "Extracting label facts..."
+                          : "Extract label facts from images"}
+                      </button>
+                      {labelFactsMessage ? (
+                        <p className="text-xs text-[#475569]">{labelFactsMessage}</p>
+                      ) : null}
+                    </div>
+                  </div>
                   {(
                     [
                       "product_identity",
@@ -4276,11 +4457,12 @@ export default function ProductEditorClient({
                   </h3>
                   <div className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
                     <p className="text-xs uppercase tracking-[0.08em] text-[#64748B]">
-                      Recommendation-only output
+                      FAQ status
                     </p>
                     <p className="mt-1 text-sm text-[#334155]">
-                      FAQ suggestions are generated for search-answer visibility and referral readiness.
-                      They are stored in draft state and are not pushed as a direct Walmart API field.
+                      {inlineAiDiagnostics.faqGenerationState === "pending"
+                        ? "FAQ generation pending label extraction or product facts review."
+                        : "FAQ suggestions are draft enrichment notes. Keep answers product-specific and fact-grounded before submit."}
                     </p>
                   </div>
                   <label className="text-sm text-[#334155] md:col-span-2">

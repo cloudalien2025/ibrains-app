@@ -7,6 +7,16 @@ import {
   SUPPLEMENT_FDA_DISCLAIMER,
 } from "@/lib/ecomviper/walmart/walmart-supplement-disclaimer";
 import { normalizeSearchBrowseAttributes } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
+  detectKnownStaleDemoValue,
+  findCustomerFacingSentinelTokens,
+  findInternalPdpPhrases,
+  shouldBlockGenericFaqAnswer,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
+import {
+  findAliasInconsistencies,
+  syncAliasGroups,
+} from "@/lib/ecomviper/walmart/walmart-field-aliases";
 
 const PROMOTIONAL_PHRASES = [
   "best seller",
@@ -115,10 +125,12 @@ function asSearchBrowseAttributes(payload: Record<string, unknown>): Record<stri
     parseAttributeRecord(payload.searchBrowseAttributes)
   );
   const fromAttributes = normalizeSearchBrowseAttributes(parseAttributeRecord(payload.attributes));
-  return {
+  const merged = {
     ...fromAttributes,
     ...fromSearchBrowse,
   };
+  syncAliasGroups({ attributes: merged });
+  return merged;
 }
 
 function hasAnyValue(record: Record<string, string>, keys: string[]): boolean {
@@ -201,6 +213,16 @@ function hasLikelyTagMarkup(text: string): boolean {
   return /<[^>]+>/.test(text);
 }
 
+function hasUnknownOrPlaceholderLeakage(text: string): boolean {
+  if (!text.trim()) return false;
+  return findCustomerFacingSentinelTokens(text).length > 0;
+}
+
+function hasInternalPdpLeakage(text: string): boolean {
+  if (!text.trim()) return false;
+  return findInternalPdpPhrases(text).length > 0;
+}
+
 export function evaluateWalmartListingCompliance(payload: Record<string, unknown>): WalmartComplianceResult {
   const violations: string[] = [];
   const warnings: string[] = [];
@@ -237,6 +259,37 @@ export function evaluateWalmartListingCompliance(payload: Record<string, unknown
       "safety_warnings",
       "support_areas",
     ]);
+  const imageFactsStatus = asText(
+    payload.imageFactsStatus ??
+      asObject(payload.imageVisionExtraction)?.status ??
+      asObject(payload.visionFactPayload)?.status
+  ).toLowerCase();
+  const manufacturerSource = asText(
+    payload.manufacturer_source ??
+      payload.manufacturerSource ??
+      asObject(payload.visionFactPayload)?.manufacturer_source
+  ).toLowerCase();
+  const manufacturerNeedsReviewValue =
+    payload.manufacturer_needs_review ?? payload.manufacturerNeedsReview;
+  const manufacturerNeedsReview = manufacturerNeedsReviewValue === true;
+
+  const customerFacingFields: Array<[string, string]> = [
+    ["title", title],
+    ["shortDescription", shortDescription],
+    ["longDescription", longDescription],
+    ...bullets.map((entry, index) => [`bulletPoints[${index}]`, entry] as [string, string]),
+    ...faqSnippets.map((entry, index) => [`faqSnippets[${index}]`, entry] as [string, string]),
+  ];
+
+  for (const [field, value] of customerFacingFields) {
+    if (!value.trim()) continue;
+    if (hasUnknownOrPlaceholderLeakage(value)) {
+      violations.push(`${field} contains unknown/placeholder text and cannot be customer-facing.`);
+    }
+    if (hasInternalPdpLeakage(value)) {
+      violations.push(`${field} contains internal Agentic/EcomViper language and must be removed.`);
+    }
+  }
 
   if (title) {
     if (title.length > 200) {
@@ -416,6 +469,30 @@ export function evaluateWalmartListingCompliance(payload: Record<string, unknown
     label: "Search keywords",
   });
 
+  for (const [key, value] of Object.entries(searchBrowse)) {
+    const staleDemo = detectKnownStaleDemoValue({
+      key,
+      value,
+      titleHint: title,
+      formHint: searchBrowse.product_form || searchBrowse.form || inferableForm,
+      servingsHint: searchBrowse.servings_per_container || searchBrowse.servings,
+    });
+    if (staleDemo) {
+      violations.push(`Search & Browse field ${key} contains stale/demo value (${staleDemo.reason}).`);
+    }
+
+    if (findCustomerFacingSentinelTokens(value).length > 0) {
+      violations.push(`Search & Browse field ${key} contains placeholder text.`);
+    }
+  }
+
+  const aliasIssues = findAliasInconsistencies(searchBrowse);
+  if (aliasIssues.length > 0) {
+    violations.push(
+      `Alias inconsistency detected across canonical/legacy keys: ${aliasIssues.join("; ")}`
+    );
+  }
+
   if (extractionSucceeded && !hasAnyValue(searchBrowse, ["brand"])) {
     warnings.push("Brand should be present in Search & Browse attributes after extraction.");
   }
@@ -426,8 +503,53 @@ export function evaluateWalmartListingCompliance(payload: Record<string, unknown
     warnings.push("Product name should be present in Search & Browse attributes after extraction.");
   }
 
-  if (faqSnippets.length === 0 && extractionSucceeded) {
+  const brandValue = asText(searchBrowse.brand);
+  const manufacturerValue = asText(searchBrowse.manufacturer);
+  if (
+    brandValue &&
+    manufacturerValue &&
+    brandValue.toLowerCase() === manufacturerValue.toLowerCase() &&
+    (manufacturerNeedsReview || !manufacturerSource || manufacturerSource === "unknown")
+  ) {
+    violations.push("Manufacturer appears copied from brand without source evidence.");
+  }
+
+  const formForCompatibility = (searchBrowse.product_form || searchBrowse.form || inferableForm).toLowerCase();
+  if (/powder/.test(formForCompatibility) && /capsules?/i.test(searchBrowse.serving_size ?? "")) {
+    violations.push("Powder product cannot retain capsule serving-size defaults.");
+  }
+
+  if (
+    imageFactsStatus === "needs_vision_extraction" &&
+    !hasAnyValue(searchBrowse, ["main_ingredients", "serving_size", "servings_per_container", "suggested_use"])
+  ) {
+    warnings.push(
+      "Images are available, but label text has not been extracted yet. Ingredient and dosage fields should remain blank until extraction."
+    );
+  }
+  if (
+    imageFactsStatus === "needs_vision_extraction" &&
+    hasAnyValue(searchBrowse, ["main_ingredients", "ingredients_list", "dosage_strength"])
+  ) {
+    violations.push(
+      "Ingredient/dosage fields are present while image facts remain unextracted and ungrounded."
+    );
+  }
+
+  const faqPendingGate =
+    imageFactsStatus === "needs_vision_extraction" &&
+    !hasAnyValue(searchBrowse, [
+      "main_ingredients",
+      "serving_size",
+      "servings_per_container",
+      "suggested_use",
+      "support_areas",
+    ]);
+
+  if (faqSnippets.length === 0 && extractionSucceeded && !faqPendingGate) {
     violations.push("FAQ snippets are missing after AI/facts extraction improvements.");
+  } else if (faqSnippets.length === 0 && faqPendingGate) {
+    warnings.push("FAQ generation pending label extraction or product facts review.");
   } else if (faqSnippets.length > 0 && faqSnippets.length < 5) {
     warnings.push("FAQ coverage is light. Target 5 to 8 product-specific FAQ snippets.");
   } else if (faqSnippets.length > 8) {
@@ -435,6 +557,17 @@ export function evaluateWalmartListingCompliance(payload: Record<string, unknown
   }
 
   if (faqSnippets.length > 0) {
+    if (faqPendingGate) {
+      violations.push("FAQ generation must remain pending until label extraction or grounded product facts are available.");
+    }
+
+    for (const faq of faqSnippets) {
+      if (shouldBlockGenericFaqAnswer(faq)) {
+        violations.push("FAQ contains generic fallback content and cannot be marked final.");
+        break;
+      }
+    }
+
     suggestions.push(
       "Info: FAQ snippets are recommendation-only enrichment and are not a direct Walmart API push field."
     );

@@ -586,6 +586,10 @@ export interface WalmartAiSuggestion {
       | "needs_vision_extraction"
       | "low_confidence";
     imageFactsMessage?: string;
+    manufacturerSource?: string;
+    manufacturerConfidence?: "high" | "medium" | "low" | "unknown" | "none";
+    manufacturerNeedsReview?: boolean;
+    faqGenerationState?: "final" | "pending";
     disclaimerStatus: "inserted" | "preserved" | "deduped" | "repaired" | "missing";
     finalDecision: "accepted" | "accepted_with_changes" | "rejected";
   };

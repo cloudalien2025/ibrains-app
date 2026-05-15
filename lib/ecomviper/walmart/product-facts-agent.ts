@@ -4,10 +4,15 @@ import {
   type ImageFactConfidence,
   type ImageDerivedFact,
 } from "@/lib/ecomviper/walmart/walmart-image-intelligence";
+import {
+  detectKnownStaleDemoValue,
+  sanitizeCustomerFacingText,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 export type ProductFactSource =
   | "label_image"
   | "image_text"
+  | "vision_extraction"
   | "shopify"
   | "walmart_draft"
   | "manual"
@@ -66,6 +71,9 @@ export interface ProductFactsAgentResult {
   imageDerivedFacts: ImageDerivedFact[];
   imageFactsStatus: ImageFactsStatus;
   imageFactsMessage: string;
+  manufacturerSource: ProductFactSource | "unknown";
+  manufacturerConfidence: ProductFactConfidence;
+  manufacturerNeedsReview: boolean;
 }
 
 interface SourceRecord {
@@ -83,6 +91,7 @@ interface FieldCandidate<T> {
 const SOURCE_PRIORITY: Record<ProductFactSource, number> = {
   manual: 6,
   label_image: 5,
+  vision_extraction: 5,
   image_text: 4,
   shopify: 3,
   walmart_draft: 2,
@@ -144,21 +153,21 @@ function normalizeList(value: unknown): string[] {
     return unique(
       value
         .map((entry) => {
-          if (typeof entry === "string") return entry.trim();
+          if (typeof entry === "string") return sanitizeCustomerFacingText(entry);
           const node = asObject(entry);
           if (!node) return "";
           return (
-            asString(node.value) ||
-            asString(node.name) ||
-            asString(node.label) ||
-            asString(node.text)
+            sanitizeCustomerFacingText(asString(node.value)) ||
+            sanitizeCustomerFacingText(asString(node.name)) ||
+            sanitizeCustomerFacingText(asString(node.label)) ||
+            sanitizeCustomerFacingText(asString(node.text))
           );
         })
         .filter(Boolean)
     );
   }
 
-  const text = asString(value);
+  const text = sanitizeCustomerFacingText(asString(value));
   if (!text) return [];
   return unique(
     text
@@ -175,7 +184,7 @@ function normalizeFactObject(value: unknown): Record<string, string> {
 
   for (const [key, raw] of Object.entries(row)) {
     const normalizedKey = key.trim();
-    const normalizedValue = asString(raw);
+    const normalizedValue = sanitizeCustomerFacingText(asString(raw));
     if (!normalizedKey || !normalizedValue) continue;
     mapped[normalizedKey] = normalizedValue;
   }
@@ -215,18 +224,18 @@ function normalizeCount(value: string): string {
 
 function findFirstValue(record: Record<string, unknown>, keys: string[]): string {
   for (const key of keys) {
-    const direct = asString(record[key]);
+    const direct = sanitizeCustomerFacingText(asString(record[key]));
     if (direct) return direct;
 
     const attributes = asObject(record.attributes);
     if (attributes) {
-      const nested = asString(attributes[key]);
+      const nested = sanitizeCustomerFacingText(asString(attributes[key]));
       if (nested) return nested;
     }
 
     const searchBrowse = asObject(record.searchBrowseAttributes);
     if (searchBrowse) {
-      const nested = asString(searchBrowse[key]);
+      const nested = sanitizeCustomerFacingText(asString(searchBrowse[key]));
       if (nested) return nested;
     }
   }
@@ -389,11 +398,47 @@ function hasImageUrls(product: WalmartProductRecord): boolean {
   return urls.length > 0;
 }
 
+function parseVisionExtractionStatus(
+  payload: Record<string, unknown> | null
+): { status: ImageFactsStatus; message: string } | null {
+  if (!payload) return null;
+  const status = asString(payload.status).toLowerCase();
+  const message = asString(payload.message);
+  if (
+    status === "extracted" ||
+    status === "available" ||
+    status === "unavailable" ||
+    status === "needs_vision_extraction" ||
+    status === "low_confidence"
+  ) {
+    return {
+      status,
+      message:
+        message ||
+        (status === "extracted"
+          ? "Image-derived label facts were extracted."
+          : status === "low_confidence"
+          ? "Image-derived facts were low confidence and skipped."
+          : status === "needs_vision_extraction"
+          ? "Images are available, but label text extraction has not run yet."
+          : status === "available"
+          ? "Image text is available, but no reliable label facts were extracted."
+          : "Image extraction is unavailable."),
+    };
+  }
+  return null;
+}
+
 function deriveImageFactsStatus(input: {
   product: WalmartProductRecord;
   factsList: ImageDerivedFact[];
   usedSources: string[];
+  visionExtractionStatus?: { status: ImageFactsStatus; message: string } | null;
 }): { status: ImageFactsStatus; message: string } {
+  if (input.visionExtractionStatus) {
+    return input.visionExtractionStatus;
+  }
+
   if (input.factsList.length > 0) {
     const hasMediumOrHigh = input.factsList.some(
       (entry) => entry.confidence === "high" || entry.confidence === "medium"
@@ -492,6 +537,34 @@ function extractShopifyPayload(product: WalmartProductRecord): Record<string, un
   return candidates.find((entry) => entry !== null) ?? null;
 }
 
+function readVisionExtractionEnvelopeFromRecord(
+  record: Record<string, unknown> | null
+): Record<string, unknown> | null {
+  if (!record) return null;
+  const candidates: Array<Record<string, unknown> | null> = [
+    asObject(record.visionFactPayload),
+    asObject(record.imageVisionExtraction),
+    asObject(record.image_vision_extraction),
+    asObject(asObject(record.normalizedPayload)?.visionFactPayload),
+    asObject(asObject(record.normalizedPayload)?.imageVisionExtraction),
+    asObject(asObject(record.rawPayload)?.visionFactPayload),
+    asObject(asObject(record.rawPayload)?.imageVisionExtraction),
+  ];
+
+  return candidates.find((entry) => entry !== null) ?? null;
+}
+
+function extractVisionPayloadFromRecord(record: Record<string, unknown> | null): Record<string, unknown> | null {
+  const payload = readVisionExtractionEnvelopeFromRecord(record);
+  if (!payload) return null;
+  const status = asString(payload.status).toLowerCase();
+  if (status && status !== "extracted") {
+    return null;
+  }
+
+  return payload;
+}
+
 function buildSourceRecords(input: {
   product: WalmartProductRecord;
   draftPayload?: Record<string, unknown> | null;
@@ -520,6 +593,18 @@ function buildSourceRecords(input: {
     payload: input.imageDerivedPayload,
   });
   if (imageText) records.push(imageText);
+
+  const visionExtraction = createSourceRecord({
+    source: "vision_extraction",
+    confidence: "high",
+    payload:
+      extractVisionPayloadFromRecord(input.draftPayload ?? null) ??
+      extractVisionPayloadFromRecord({
+        normalizedPayload: input.product.normalizedPayload,
+        rawPayload: input.product.rawPayload,
+      }),
+  });
+  if (visionExtraction) records.push(visionExtraction);
 
   const shopify = createSourceRecord({
     source: "shopify",
@@ -783,6 +868,13 @@ export function extractCanonicalProductFacts(input: {
     imageDerivedPayload,
   });
   const sourceSet = new Set<ProductFactSource>(records.map((entry) => entry.source));
+  const visionExtractionEnvelope =
+    readVisionExtractionEnvelopeFromRecord(input.draftPayload ?? null) ??
+    readVisionExtractionEnvelopeFromRecord({
+      normalizedPayload: input.product.normalizedPayload,
+      rawPayload: input.product.rawPayload,
+    });
+  const explicitVisionStatus = parseVisionExtractionStatus(visionExtractionEnvelope);
   const labelPayload = extractLabelPayload(input.product);
 
   const titleFallback = [
@@ -989,6 +1081,52 @@ export function extractCanonicalProductFacts(input: {
     });
     servingSize = null;
   }
+  if (
+    servingSize &&
+    detectKnownStaleDemoValue({
+      key: "serving_size",
+      value: servingSize.value,
+      titleHint: titleInferenceText,
+      formHint: resolvedForm,
+      servingsHint: servingsPerContainer?.value ?? "",
+    })
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "servingSize",
+      previousValue: servingSize.value,
+      nextValue: "",
+      reason: "stale serving size quarantined",
+    });
+    servingSize = null;
+  }
+
+  if (
+    servingsPerContainer &&
+    isWeakFactCandidate(servingsPerContainer) &&
+    detectKnownStaleDemoValue({
+      key: "servings_per_container",
+      value: servingsPerContainer.value,
+      titleHint: titleInferenceText,
+      formHint: resolvedForm,
+      servingsHint: servingsPerContainer.value,
+    })
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "servingsPerContainer",
+      previousValue: servingsPerContainer.value,
+      nextValue: inferredServingsFromTitle || "",
+      reason: "stale servings value quarantined",
+    });
+    if (inferredServingsFromTitle) {
+      servingsPerContainer = {
+        value: normalizeServingsNumber(inferredServingsFromTitle) || inferredServingsFromTitle,
+        source: "walmart_product",
+        confidence: "low",
+      };
+    } else {
+      servingsPerContainer = null;
+    }
+  }
 
   if (
     dosageStrength &&
@@ -1001,6 +1139,23 @@ export function extractCanonicalProductFacts(input: {
       previousValue: dosageStrength.value,
       nextValue: "",
       reason: "cleared known demo dosage strength without title support",
+    });
+    dosageStrength = null;
+  }
+  if (
+    dosageStrength &&
+    detectKnownStaleDemoValue({
+      key: "dosage_strength",
+      value: dosageStrength.value,
+      titleHint: titleInferenceText,
+      formHint: resolvedForm,
+    })
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "dosageStrength",
+      previousValue: dosageStrength.value,
+      nextValue: "",
+      reason: "stale dosage strength quarantined",
     });
     dosageStrength = null;
   }
@@ -1031,6 +1186,23 @@ export function extractCanonicalProductFacts(input: {
       previousValue: flavor.value,
       nextValue: "",
       reason: "cleared weak-source demo flavor",
+    });
+    flavor = null;
+  }
+  if (
+    flavor &&
+    detectKnownStaleDemoValue({
+      key: "flavor",
+      value: flavor.value,
+      titleHint: titleInferenceText,
+      formHint: resolvedForm,
+    })
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "flavor",
+      previousValue: flavor.value,
+      nextValue: "",
+      reason: "stale flavor quarantined",
     });
     flavor = null;
   }
@@ -1104,16 +1276,20 @@ export function extractCanonicalProductFacts(input: {
     .map(([key, value]) => `${key}: ${value}`);
 
   const fields = {
-    brand: buildFieldMetadata({ key: "brand", selected: selectedBrand, fallbackValue: asString(input.product.brand) }),
+    brand: buildFieldMetadata({
+      key: "brand",
+      selected: selectedBrand,
+      fallbackValue: sanitizeCustomerFacingText(asString(input.product.brand)),
+    }),
     manufacturer: buildFieldMetadata({
       key: "manufacturer",
       selected: selectedManufacturer,
-      fallbackValue: asString(input.product.brand),
+      fallbackValue: "",
     }),
     productName: buildFieldMetadata({
       key: "productName",
       selected: productName,
-      fallbackValue: asString(input.product.title),
+      fallbackValue: sanitizeCustomerFacingText(asString(input.product.title)),
     }),
     series: buildFieldMetadata({ key: "series", selected: series, fallbackValue: "" }),
     sku: buildFieldMetadata({ key: "sku", selected: sku, fallbackValue: asString(input.product.sku) }),
@@ -1207,8 +1383,89 @@ export function extractCanonicalProductFacts(input: {
     });
   });
 
-  const allStaleAdjustments = unique([
+  const baseStaleAdjustments = unique([
     ...staleReplacements.map((entry) => JSON.stringify(entry)),
+    ...heuristicStaleAdjustments.map((entry) => JSON.stringify(entry)),
+  ]).map((entry) => JSON.parse(entry) as ProductFactReplacement);
+
+  const imageFactsStatus = deriveImageFactsStatus({
+    product: input.product,
+    factsList: imageIntelligence.factsList,
+    usedSources: imageIntelligence.usedSources,
+    visionExtractionStatus: explicitVisionStatus,
+  });
+
+  const hasGroundedSupplementFact = (
+    field: keyof typeof fields,
+    requireStrongEvidence = false
+  ): boolean => {
+    const confidence = fields[field].confidence;
+    const evidence = fields[field].evidence ?? [];
+    const confidenceOkay = confidence === "high" || confidence === "medium";
+    if (!confidenceOkay) return false;
+    if (!requireStrongEvidence) return true;
+    return evidence.some((source) => source === "label_image" || source === "vision_extraction");
+  };
+
+  const hasGroundedSupplementEvidence =
+    hasGroundedSupplementFact("activeIngredients", true) ||
+    hasGroundedSupplementFact("supplementFacts", true) ||
+    hasGroundedSupplementFact("servingSize") ||
+    hasGroundedSupplementFact("servingsPerContainer") ||
+    hasGroundedSupplementFact("suggestedUse");
+
+  if (imageFactsStatus.status === "needs_vision_extraction" && !hasGroundedSupplementEvidence) {
+    if (fields.activeIngredients.value.length > 0) {
+      heuristicStaleAdjustments.push({
+        field: "activeIngredients",
+        previousValue: fields.activeIngredients.value.join(", "),
+        nextValue: "",
+        reason: "ingredient claims blocked until label extraction runs",
+      });
+    }
+    if (fields.dosageStrength.value) {
+      heuristicStaleAdjustments.push({
+        field: "dosageStrength",
+        previousValue: fields.dosageStrength.value,
+        nextValue: "",
+        reason: "dosage claims blocked until label extraction runs",
+      });
+    }
+    if (Object.keys(fields.supplementFacts.value).length > 0) {
+      heuristicStaleAdjustments.push({
+        field: "supplementFacts",
+        previousValue: Object.entries(fields.supplementFacts.value)
+          .map(([key, value]) => `${key}:${value}`)
+          .join(", "),
+        nextValue: "",
+        reason: "supplement facts blocked until label extraction runs",
+      });
+    }
+    fields.activeIngredients.value = [];
+    fields.activeIngredients.confidence = "unknown";
+    fields.activeIngredients.evidence = [];
+    fields.dosageStrength.value = "";
+    fields.dosageStrength.confidence = "unknown";
+    fields.dosageStrength.evidence = [];
+    fields.supplementFacts.value = {};
+    fields.supplementFacts.confidence = "unknown";
+    fields.supplementFacts.evidence = [];
+    fields.otherIngredients.value = [];
+    fields.otherIngredients.confidence = "unknown";
+    fields.otherIngredients.evidence = [];
+  }
+
+  const manufacturerSource = fields.manufacturer.evidence[0] ?? "unknown";
+  const manufacturerConfidence = fields.manufacturer.confidence;
+  const manufacturerNeedsReview = Boolean(
+    !fields.manufacturer.value ||
+      (!fields.manufacturer.evidence.length &&
+        fields.brand.value &&
+        fields.manufacturer.value.toLowerCase() === fields.brand.value.toLowerCase())
+  );
+
+  const allStaleAdjustments = unique([
+    ...baseStaleAdjustments.map((entry) => JSON.stringify(entry)),
     ...heuristicStaleAdjustments.map((entry) => JSON.stringify(entry)),
   ]).map((entry) => JSON.parse(entry) as ProductFactReplacement);
 
@@ -1217,12 +1474,6 @@ export function extractCanonicalProductFacts(input: {
       .filter((entry) => !entry.nextValue.trim())
       .map((entry) => entry.field)
   );
-
-  const imageFactsStatus = deriveImageFactsStatus({
-    product: input.product,
-    factsList: imageIntelligence.factsList,
-    usedSources: imageIntelligence.usedSources,
-  });
 
   const facts: CanonicalProductFacts = {
     brand: fields.brand.value,
@@ -1266,6 +1517,9 @@ export function extractCanonicalProductFacts(input: {
     imageDerivedFacts: imageIntelligence.factsList,
     imageFactsStatus: imageFactsStatus.status,
     imageFactsMessage: imageFactsStatus.message,
+    manufacturerSource,
+    manufacturerConfidence,
+    manufacturerNeedsReview,
   };
 }
 

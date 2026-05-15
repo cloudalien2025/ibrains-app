@@ -3,12 +3,21 @@ import {
   sanitizeWalmartAiSearchBrowseAttributes,
 } from "@/lib/ecomviper/walmart/walmart-ai-field-sanitization";
 import { normalizeSearchBrowseAttributes } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
+  clearAliasGroupValues,
+  expandAliasKeys,
+  syncAliasGroups,
+} from "@/lib/ecomviper/walmart/walmart-field-aliases";
 import type {
   CanonicalProductFacts,
   ProductFactReplacement,
   ProductFactSource,
 } from "@/lib/ecomviper/walmart/product-facts-agent";
 import type { AgenticReferralCopyOutput } from "@/lib/ecomviper/walmart/agentic-referral-copy-agent";
+import {
+  detectKnownStaleDemoValue,
+  sanitizeCustomerFacingText,
+} from "@/lib/ecomviper/walmart/walmart-truth-guard";
 
 export interface SearchBrowseMapperResult {
   mappedAttributes: Record<string, string>;
@@ -82,7 +91,7 @@ function normalizeIngredientList(values: string[]): string[] {
 }
 
 function shouldSetValue(value: unknown): boolean {
-  const trimmed = asString(value);
+  const trimmed = sanitizeCustomerFacingText(asString(value));
   if (!trimmed) return false;
   if (isLowConfidenceAiFieldValue(trimmed)) return false;
   return true;
@@ -96,7 +105,7 @@ function setValue(
   source: string
 ) {
   if (!shouldSetValue(value)) return;
-  target[key] = normalizeWhitespace(asString(value));
+  target[key] = normalizeWhitespace(sanitizeCustomerFacingText(asString(value)));
   sourceByField[key] = source;
 }
 
@@ -106,47 +115,59 @@ function mapStaleFieldToSearchBrowseKeys(field: string): string[] {
   if (field === "form") return ["product_form", "form"];
   if (field === "flavor") return ["flavor"];
   if (field === "count") return ["count", "count_per_pack", "count_per_package"];
-  if (field === "productName") return ["supplement_type", "product_type"];
+  if (field === "productName") return ["supplement_type", "product_type", "product_name"];
   if (field === "servingSize") return ["serving_size"];
   if (field === "servingsPerContainer") return ["servings_per_container", "servings"];
   if (field === "dosageStrength") return ["dosage_strength"];
   if (field === "suggestedUse") return ["suggested_use", "directions_suggested_use"];
-  if (field === "warnings") return ["safety_warnings"];
+  if (field === "warnings") return ["safety_warnings", "warnings"];
   if (field === "activeIngredients") return ["main_ingredients", "ingredients_list"];
   return [];
 }
 
-function syncAliasPair(input: {
+function quarantineKnownStaleValues(input: {
   attributes: Record<string, string>;
   sourceByField: Record<string, string>;
-  canonicalKey: string;
-  aliasKey: string;
+  titleHint: string;
+  formHint: string;
+}): string[] {
+  const cleared: string[] = [];
+
+  for (const [key, value] of Object.entries(input.attributes)) {
+    const staleMatch = detectKnownStaleDemoValue({
+      key,
+      value,
+      titleHint: input.titleHint,
+      formHint: input.formHint,
+      servingsHint: input.attributes.servings_per_container ?? input.attributes.servings ?? "",
+    });
+    if (!staleMatch) continue;
+
+    const removed = clearAliasGroupValues({
+      attributes: input.attributes,
+      sourceByField: input.sourceByField,
+      key,
+    });
+    for (const removedKey of removed) {
+      cleared.push(removedKey);
+    }
+  }
+
+  return unique(cleared);
+}
+
+function syncAliasSourceByCanonical(input: {
+  attributes: Record<string, string>;
+  sourceByField: Record<string, string>;
 }) {
-  const canonicalValue = asString(input.attributes[input.canonicalKey]);
-  const aliasValue = asString(input.attributes[input.aliasKey]);
-  const canonicalSource = input.sourceByField[input.canonicalKey] ?? "alias_sync";
-  const aliasSource = input.sourceByField[input.aliasKey] ?? "alias_sync";
-
-  if (canonicalValue && !aliasValue) {
-    input.attributes[input.aliasKey] = canonicalValue;
-    input.sourceByField[input.aliasKey] = canonicalSource;
-    return;
-  }
-
-  if (!canonicalValue && aliasValue) {
-    input.attributes[input.canonicalKey] = aliasValue;
-    input.sourceByField[input.canonicalKey] = aliasSource;
-    return;
-  }
-
-  if (
-    canonicalValue &&
-    aliasValue &&
-    normalizeWhitespace(canonicalValue).toLowerCase() !==
-      normalizeWhitespace(aliasValue).toLowerCase()
-  ) {
-    input.attributes[input.aliasKey] = canonicalValue;
-    input.sourceByField[input.aliasKey] = canonicalSource;
+  syncAliasGroups({
+    attributes: input.attributes,
+    sourceByField: input.sourceByField,
+  });
+  for (const [key] of Object.entries(input.attributes)) {
+    const source = input.sourceByField[key];
+    if (source) continue;
+    input.sourceByField[key] = "alias_sync";
   }
 }
 
@@ -167,8 +188,8 @@ function buildCanonicalSearchBrowseFromFacts(input: {
     attributes,
     sourceByField,
     "manufacturer",
-    facts.manufacturer || facts.brand,
-    facts.manufacturer ? "product_facts" : "product_facts_inferred"
+    facts.manufacturer,
+    "product_facts"
   );
   setValue(
     attributes,
@@ -354,40 +375,13 @@ export function mapCanonicalFactsToSearchBrowse(
   });
 
   const merged = normalizeSearchBrowseAttributes({
-    ...canonical.attributes,
     ...aiSanitized.accepted,
+    ...canonical.attributes,
   });
   const sourceByField = { ...canonical.sourceByField };
-
-  syncAliasPair({
+  syncAliasSourceByCanonical({
     attributes: merged,
     sourceByField,
-    canonicalKey: "product_form",
-    aliasKey: "form",
-  });
-  syncAliasPair({
-    attributes: merged,
-    sourceByField,
-    canonicalKey: "servings_per_container",
-    aliasKey: "servings",
-  });
-  syncAliasPair({
-    attributes: merged,
-    sourceByField,
-    canonicalKey: "suggested_use",
-    aliasKey: "directions_suggested_use",
-  });
-  syncAliasPair({
-    attributes: merged,
-    sourceByField,
-    canonicalKey: "count_per_pack",
-    aliasKey: "count_per_package",
-  });
-  syncAliasPair({
-    attributes: merged,
-    sourceByField,
-    canonicalKey: "supplement_type",
-    aliasKey: "product_type",
   });
 
   const updatedFields: string[] = [];
@@ -406,8 +400,17 @@ export function mapCanonicalFactsToSearchBrowse(
   }
 
   const clearedFields = new Set<string>();
+  for (const key of quarantineKnownStaleValues({
+    attributes: merged,
+    sourceByField,
+    titleHint: input.facts.productName || input.copy.title,
+    formHint: input.facts.form,
+  })) {
+    clearedFields.add(key);
+  }
+
   for (const replacement of staleReplacements) {
-    for (const key of mapStaleFieldToSearchBrowseKeys(replacement.field)) {
+    for (const key of expandAliasKeys(mapStaleFieldToSearchBrowseKeys(replacement.field))) {
       if (merged[key]) continue;
       if (!existing[key]) continue;
       clearedFields.add(key);
@@ -415,7 +418,9 @@ export function mapCanonicalFactsToSearchBrowse(
   }
 
   if (!merged.flavor && existing.flavor && usedSources.includes("label_image")) {
-    clearedFields.add("flavor");
+    for (const key of expandAliasKeys(["flavor"])) {
+      clearedFields.add(key);
+    }
   }
 
   return {
