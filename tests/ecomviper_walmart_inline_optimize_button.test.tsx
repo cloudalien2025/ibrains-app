@@ -83,6 +83,13 @@ describe("Walmart inline optimize button workflow", () => {
       );
     });
 
+    const improveTab = container.querySelector(
+      '[data-testid="ecomviper-walmart-tab-improve-with-ai"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      improveTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
     const optimizeButton = container.querySelector(
       '[data-testid="ecomviper-walmart-optimize-button"]'
     ) as HTMLButtonElement | null;
@@ -151,6 +158,13 @@ describe("Walmart inline optimize button workflow", () => {
           serpApiProviderConnected={true}
         />
       );
+    });
+
+    const improveTab = container.querySelector(
+      '[data-testid="ecomviper-walmart-tab-improve-with-ai"]'
+    ) as HTMLButtonElement | null;
+    await act(async () => {
+      improveTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const optimizeButton = container.querySelector(

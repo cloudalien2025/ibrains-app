@@ -106,19 +106,19 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-product-form");
     expect(html).toContain("ecomviper-walmart-readiness");
     expect(html).toContain("Product Editor");
-    expect(html).toContain("Step 1 Review Listing");
-    expect(html).toContain("Step 2 Improve with AI");
-    expect(html).toContain("Step 3 Edit &amp; Submit");
+    expect(html).toContain("Current Walmart State");
+    expect(html).toContain("AI Optimized State");
+    expect(html).toContain("Editable Draft State");
     expect(html).toContain("SKU: 30066-841");
     expect(html).toContain("Top issues");
     expect(html).toContain("View all issues");
     expect(html).toContain("30066-841");
-    expect(html).toContain("Known (9)");
+    expect(html).toContain("Inventory:</span> 9");
     expect(html).toContain("Generate AI Improvements");
     expect(html).toContain(
       "Optimize title, descriptions, bullets, and search &amp; browse attributes without leaving this page."
     );
-    expect(html).toContain("Improve this listing with AI");
+    expect(html).toContain("Generate AI optimized Walmart-native proposal");
     expect(html).toContain("Rule-based suggestions");
     expect(html).toContain("No auto-submit. Changes remain in draft until approved.");
     expect(html).toContain("Stage rule-based suggestions");
@@ -197,7 +197,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain('>Normalized short description</textarea>');
     expect(html).toContain("Normalized bullet one");
     expect(html).toContain('value="Payload Brand"');
-    expect(html).toContain("Improve this listing with AI");
+    expect(html).toContain("Generate AI optimized Walmart-native proposal");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });

@@ -75,7 +75,7 @@ describe("Walmart product editor tabbed workflow", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders Review, Improve, and Edit/Submit tabs with expected panel content", async () => {
+  it("renders Current/Optimized/Draft tabs with expected panel content", async () => {
     await act(async () => {
       root.render(
         <ProductEditorClient
@@ -96,6 +96,9 @@ describe("Walmart product editor tabbed workflow", () => {
       '[data-testid="ecomviper-walmart-review-panel"]'
     ) as HTMLElement;
     expect(reviewPanel.className.includes("hidden")).toBe(false);
+    expect(reviewPanel.textContent).toContain("Current Walmart State");
+    expect(reviewPanel.textContent).not.toContain("FAQ & Readiness Content");
+    expect(reviewPanel.textContent).not.toContain("AI Visibility");
     expect(container.querySelector('[data-testid="ecomviper-walmart-current-listing-content"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-walmart-current-listing-media"]')).not.toBeNull();
     expect(
@@ -117,7 +120,8 @@ describe("Walmart product editor tabbed workflow", () => {
     ) as HTMLElement;
     expect(improvePanel.className.includes("hidden")).toBe(false);
     expect(container.textContent).toContain("Generate AI Improvements");
-    expect(container.textContent).toContain("Current listing reference");
+    expect(container.textContent).toContain("Current Walmart State");
+    expect(container.textContent).toContain("AI Optimized State");
 
     const editTab = container.querySelector(
       '[data-testid="ecomviper-walmart-tab-edit-submit"]'
@@ -133,6 +137,7 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(container.querySelector('[data-testid="ecomviper-walmart-final-draft-editor"]')).not.toBeNull();
     expect(container.textContent).toContain("Save Draft");
     expect(container.textContent).toContain("Submit Update");
+    expect(container.textContent).toContain("Editable Draft State");
     expect(container.textContent).toContain("Readiness & validation");
     expect(container.textContent).toContain("Staged changes");
   });

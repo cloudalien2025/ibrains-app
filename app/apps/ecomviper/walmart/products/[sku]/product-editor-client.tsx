@@ -42,6 +42,12 @@ import {
   compareDraftUpdatedAtDesc,
   normalizeWalmartDraftsForEditor,
 } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
+import {
+  generateEditableDraftState,
+  generateOptimizedProposalState,
+  hydrateCurrentWalmartState,
+  toNativeStateDraftPayload,
+} from "@/lib/ecomviper/walmart/walmart-native-state";
 import type {
   WalmartAiSuggestion,
   WalmartDraftRecord,
@@ -71,26 +77,19 @@ const tabs = [
 const workflowTabs = [
   {
     key: "review",
-    label: "Step 1 Review Listing",
+    label: "Current Walmart State",
     testId: "ecomviper-walmart-tab-review-listing",
   },
   {
     key: "improve",
-    label: "Step 2 Improve with AI",
+    label: "AI Optimized State",
     testId: "ecomviper-walmart-tab-improve-with-ai",
   },
   {
     key: "edit-submit",
-    label: "Step 3 Edit & Submit",
+    label: "Editable Draft State",
     testId: "ecomviper-walmart-tab-edit-submit",
   },
-] as const;
-const searchBrowseGroupOrder = [
-  "product_identity",
-  "audience_usage",
-  "ingredients_form",
-  "dimensions_packaging",
-  "search_browse_metadata",
 ] as const;
 type WorkflowTabKey = (typeof workflowTabs)[number]["key"];
 
@@ -1086,12 +1085,6 @@ function hydrateEditorForm(
   };
 }
 
-function formatInventory(product: WalmartProductRecord): string {
-  if (product.inventoryStatus === "unknown") return "Unknown (Not synced)";
-  if (product.inventoryStatus === "out_of_stock") return "Out of stock (0)";
-  return `Known (${product.inventoryQuantity})`;
-}
-
 function formatImageStatus(product: WalmartProductRecord): string {
   if (product.imageStatusMessage?.trim()) return product.imageStatusMessage;
   if (product.imageSyncStatus === "not_found") {
@@ -1550,6 +1543,46 @@ export default function ProductEditorClient({
         ? "worse"
         : "unchanged"
     : null;
+  const currentWalmartState = useMemo(
+    () => hydrateCurrentWalmartState({ product }),
+    [product]
+  );
+  const projectedScoreFromSuggestion =
+    projectedQuality?.score ?? inlineAiSuggestion?.qualityScore;
+  const optimizedProposalLayer = useMemo(
+    () =>
+      generateOptimizedProposalState({
+        currentWalmartState,
+        suggestion: inlineAiSuggestion,
+        currentScore: listingQuality.score,
+        projectedScore: projectedScoreFromSuggestion,
+      }),
+    [
+      currentWalmartState,
+      inlineAiSuggestion,
+      listingQuality.score,
+      projectedScoreFromSuggestion,
+    ]
+  );
+  const editableDraftLayer = useMemo(
+    () =>
+      generateEditableDraftState({
+        currentWalmartState,
+        optimizedProposalState: optimizedProposalLayer.optimizedProposalState,
+        draftPayload: preview as Record<string, unknown>,
+      }),
+    [
+      currentWalmartState,
+      optimizedProposalLayer.optimizedProposalState,
+      preview,
+    ]
+  );
+  const currentWalmartStateDraftPayload = useMemo(
+    () => toNativeStateDraftPayload(currentWalmartState),
+    [currentWalmartState]
+  );
+  const optimizedProposalState = optimizedProposalLayer.optimizedProposalState;
+  const editableDraftState = editableDraftLayer.editableDraftState;
 
   const complianceValidation = useMemo(
     () => evaluateWalmartListingCompliance(preview),
@@ -2523,7 +2556,7 @@ export default function ProductEditorClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sku: product.sku,
-          draftPayload: preview,
+          draftPayload: currentWalmartStateDraftPayload,
         }),
       });
 
@@ -2930,86 +2963,79 @@ export default function ProductEditorClient({
 
   const topIssues = product.issues.filter((issue) => issue.trim().length > 0).slice(0, 3);
   const currentListingShortDescription =
-    preview.shortDescription?.trim() || product.shortDescription.trim() || "Not available";
+    currentWalmartState.content.siteDescription || "Not available";
   const currentListingLongDescription =
-    preview.longDescription?.trim() || product.longDescription.trim() || "Not available";
-  const currentListingBullets = preview.bulletPoints.filter((entry) => entry.trim().length > 0);
-  const currentListingFaq = preview.faqSnippets.filter((entry) => entry.trim().length > 0);
-  const currentListingMediaRecommendations = preview.mediaRecommendations.filter(
-    (entry) => entry.trim().length > 0
-  );
-  const listingSnapshotRecords = useMemo(() => {
-    const normalizedPayload = asObject(product.normalizedPayload);
-    const rawPayload = asObject(product.rawPayload);
-    const rawProductPayload = asObject(rawPayload?.product);
-    return [asObject(preview as unknown), normalizedPayload, rawPayload, rawProductPayload];
-  }, [preview, product.normalizedPayload, product.rawPayload]);
-  const currentSalePrice = firstNonEmptyNumber(listingSnapshotRecords, [
-    "salePrice",
-    "sale_price",
-    "specialPrice",
-    "promoPrice",
-  ]);
+    currentWalmartState.content.longDescription || "Not available";
+  const currentListingBullets = currentWalmartState.content.keyFeatures;
+  const currentSalePrice = currentWalmartState.pricingInventory.salePrice;
   const currentFulfillmentSignals = [
     {
       label: "Fulfillment model",
-      value: firstNonEmptyString(listingSnapshotRecords, [
-        "fulfillmentType",
-        "fulfillment_type",
-        "fulfillment",
-      ]),
+      value: currentWalmartState.pricingInventory.fulfillmentType,
     },
     {
       label: "WFS status",
-      value: firstNonEmptyString(listingSnapshotRecords, ["wfsStatus", "wfs_status", "wfs"]),
+      value: currentWalmartState.pricingInventory.wfsStatus,
     },
     {
       label: "Shipping template",
-      value: firstNonEmptyString(listingSnapshotRecords, [
-        "shippingTemplate",
-        "shipping_template",
-      ]),
+      value: currentWalmartState.pricingInventory.shippingTemplate,
     },
     {
-      label: "Shipping speed",
-      value: firstNonEmptyString(listingSnapshotRecords, [
-        "shippingSpeed",
-        "shipping_speed",
-        "deliverySpeed",
-      ]),
+      label: "Lag time",
+      value: currentWalmartState.pricingInventory.lagTime,
+    },
+  ].filter((entry) => entry.value.trim().length > 0);
+  const currentComplianceSignals = [
+    {
+      label: "Warning text",
+      value: currentWalmartState.compliance.warningText,
+    },
+    {
+      label: "Stop use indications",
+      value: currentWalmartState.compliance.stopUseIndications,
+    },
+    {
+      label: "Prop 65",
+      value: currentWalmartState.compliance.prop65,
+    },
+    {
+      label: "Country of origin",
+      value: currentWalmartState.compliance.countryOfOrigin,
+    },
+    {
+      label: "Regulatory fields",
+      value: currentWalmartState.compliance.regulatoryFields,
     },
   ].filter((entry) => entry.value.trim().length > 0);
   const listingSearchBrowseGroups = useMemo(
     () =>
-      searchBrowseGroupOrder
-        .map((group) => {
-          const fields = searchBrowseFieldsByGroup.get(group) ?? [];
-          const values = fields
-            .map((field) => ({
-              key: field.key,
-              label: field.label,
-              value: (form.searchBrowseAttributes[field.key] ?? "").trim(),
-            }))
-            .filter((field) => field.value.length > 0);
-          return {
-            group,
-            label: searchBrowseGroupLabel(group),
-            values,
-          };
-        })
-        .filter((group) => group.values.length > 0),
-    [form.searchBrowseAttributes, searchBrowseFieldsByGroup]
+      currentWalmartState.searchBrowse.groupedAttributes.filter(
+        (group) => group.group !== "compliance" && group.group !== "fulfillment"
+      ),
+    [currentWalmartState.searchBrowse.groupedAttributes]
   );
+  const currentImageFactsStatus =
+    currentWalmartState.media.imageFactsStatus || resolvedImageFactsStatus;
+  const currentImageFactsMessage =
+    currentWalmartState.media.imageFactsMessage || resolvedImageFactsMessage;
+  const currentTaxonomyPlacement =
+    currentWalmartState.searchBrowse.taxonomyPlacement ||
+    currentWalmartState.taxonomyPlacement ||
+    "Not available";
   const currentListingReferenceSections = (panel: "review" | "improve") => (
     <section
       className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
     >
       <div className="mb-3">
-        <h2 className="text-lg font-semibold text-[#0F172A]">Current listing reference</h2>
+        <h2 className="text-lg font-semibold text-[#0F172A]">Current Walmart State</h2>
         <p className="mt-1 text-sm text-[#475569]">
           {panel === "review"
-            ? "This is the current listing before new AI improvements."
-            : "Reference view of the current listing while AI improvements are generated."}
+            ? "This is the current Walmart-native listing state before optimization."
+            : "Reference source-of-truth while AI optimized proposals are generated."}
+        </p>
+        <p className="mt-1 text-xs text-[#64748B]">
+          Source of truth: {currentWalmartState.sourceOfTruth.join(", ")}
         </p>
       </div>
       <div className="grid gap-3 xl:grid-cols-2">
@@ -3020,10 +3046,11 @@ export default function ProductEditorClient({
           <h3 className="text-sm font-semibold text-[#0F172A]">Content</h3>
           <div className="mt-2 space-y-2 text-sm text-[#334155]">
             <p>
-              <span className="text-[#64748B]">Title:</span> {preview.title || "Not available"}
+              <span className="text-[#64748B]">Product name:</span>{" "}
+              {currentWalmartState.content.productName || "Not available"}
             </p>
             <p>
-              <span className="text-[#64748B]">Short description:</span>{" "}
+              <span className="text-[#64748B]">Site description:</span>{" "}
               {currentListingShortDescription}
             </p>
             <p>
@@ -3042,7 +3069,16 @@ export default function ProductEditorClient({
               )}
             </div>
             <p>
-              <span className="text-[#64748B]">Brand:</span> {displayBrand || "Not available"}
+              <span className="text-[#64748B]">Brand:</span>{" "}
+              {currentWalmartState.content.brand || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Manufacturer:</span>{" "}
+              {currentWalmartState.content.manufacturer || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Rich media status:</span>{" "}
+              {currentWalmartState.content.richMediaStatus || "Not available"}
             </p>
           </div>
         </article>
@@ -3055,22 +3091,23 @@ export default function ProductEditorClient({
           <div className="mt-2 space-y-2 text-sm text-[#334155]">
             <p>
               <span className="text-[#64748B]">Primary image:</span>{" "}
-              {displayPrimaryImageUrl ? "Available" : "Not available"}
+              {currentWalmartState.media.primaryImageUrl ? "Available" : "Not available"}
             </p>
-            {displayPrimaryImageUrl ? (
+            {currentWalmartState.media.primaryImageUrl ? (
               <img
-                src={displayPrimaryImageUrl}
+                src={currentWalmartState.media.primaryImageUrl}
                 alt={`${product.sku} current primary`}
                 className="h-20 w-20 rounded-lg border border-[#D9E4F0] bg-white object-cover"
                 loading="lazy"
               />
             ) : null}
             <p>
-              <span className="text-[#64748B]">Gallery images:</span> {displayGalleryPreviewUrls.length}
+              <span className="text-[#64748B]">Gallery images:</span>{" "}
+              {currentWalmartState.media.galleryImageUrls.length}
             </p>
-            {displayGalleryPreviewUrls.length > 0 ? (
+            {currentWalmartState.media.galleryImageUrls.length > 0 ? (
               <div className="flex flex-wrap gap-2">
-                {displayGalleryPreviewUrls.slice(0, 6).map((url) => (
+                {currentWalmartState.media.galleryImageUrls.slice(0, 6).map((url) => (
                   <img
                     key={url}
                     src={url}
@@ -3083,27 +3120,21 @@ export default function ProductEditorClient({
             ) : null}
             <p>
               <span className="text-[#64748B]">Public Walmart listing source:</span>{" "}
-              {form.publicWalmartUrl.trim() || "Not linked"}
+              {currentWalmartState.media.publicWalmartUrl || "Not linked"}
             </p>
             <p>
               <span className="text-[#64748B]">Source image lane:</span>{" "}
-              {formatImageSource(scoringProduct)}
+              {currentWalmartState.media.sourceImageLane || "unknown"}
             </p>
-            {isShopifyMediaSource ? (
-              <p>
-                <span className="text-[#64748B]">Shopify/source images:</span>{" "}
-                {importedShopifyMediaImageCount}
-              </p>
-            ) : null}
             <p>
               <span className="text-[#64748B]">Image-derived facts status:</span>{" "}
-              {resolvedImageFactsStatus}
+              {currentImageFactsStatus}
             </p>
-            <p className="text-xs text-[#475569]">{resolvedImageFactsMessage}</p>
+            <p className="text-xs text-[#475569]">{currentImageFactsMessage}</p>
             {panel === "improve" ? (
               <div className="mt-1 rounded-md border border-[#E2E8F0] bg-white p-2 text-xs text-[#334155]">
                 <p className="font-medium text-[#0F172A]">
-                  {resolvedImageFactsStatus === "needs_vision_extraction"
+                  {currentImageFactsStatus === "needs_vision_extraction"
                     ? "Label fact extraction is needed before stronger AI attribute updates."
                     : "Image fact extraction can be rerun if you need updated label details."}
                 </p>
@@ -3132,14 +3163,19 @@ export default function ProductEditorClient({
           <div className="mt-2 space-y-1 text-sm text-[#334155]">
             <p>
               <span className="text-[#64748B]">Price:</span>{" "}
-              {Number.isFinite(preview.price) ? `$${preview.price.toFixed(2)}` : "Not available"}
+              {currentWalmartState.pricingInventory.currentPrice !== null
+                ? `$${currentWalmartState.pricingInventory.currentPrice.toFixed(2)}`
+                : "Not available"}
             </p>
             <p>
               <span className="text-[#64748B]">Sale price:</span>{" "}
               {currentSalePrice !== null ? `$${currentSalePrice.toFixed(2)}` : "Not available"}
             </p>
             <p>
-              <span className="text-[#64748B]">Inventory:</span> {formatInventory(scoringProduct)}
+              <span className="text-[#64748B]">Inventory:</span>{" "}
+              {currentWalmartState.pricingInventory.inventory === null
+                ? "Unknown"
+                : currentWalmartState.pricingInventory.inventory}
             </p>
             {currentFulfillmentSignals.length > 0 ? (
               currentFulfillmentSignals.map((entry) => (
@@ -3161,11 +3197,73 @@ export default function ProductEditorClient({
         >
           <h3 className="text-sm font-semibold text-[#0F172A]">Search &amp; Browse</h3>
           <p className="mt-1 text-xs text-[#475569]">
-            Product identity, audience/usage, ingredients/form, dimensions/packaging, and search metadata currently mapped in this listing.
+            Product identity, audience/usage, ingredients/form, dimensions/packaging, and search metadata in the Walmart-native state.
           </p>
-          <p className="mt-1 text-xs text-[#475569]">
-            Canonical and legacy aliases are synchronized in this workspace when relevant.
-          </p>
+          <div className="mt-2 grid gap-2 text-sm text-[#334155] md:grid-cols-2">
+            <p>
+              <span className="text-[#64748B]">Product type:</span>{" "}
+              {currentWalmartState.searchBrowse.productType || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Supplement type:</span>{" "}
+              {currentWalmartState.searchBrowse.supplementType || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Primary ingredient:</span>{" "}
+              {currentWalmartState.searchBrowse.primaryIngredient || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Serving size:</span>{" "}
+              {currentWalmartState.searchBrowse.servingSize || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Servings per container:</span>{" "}
+              {currentWalmartState.searchBrowse.servingsPerContainer || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Count per pack:</span>{" "}
+              {currentWalmartState.searchBrowse.countPerPack || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Form:</span>{" "}
+              {currentWalmartState.searchBrowse.form || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Flavor:</span>{" "}
+              {currentWalmartState.searchBrowse.flavor || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Dietary need:</span>{" "}
+              {currentWalmartState.searchBrowse.dietaryNeed || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Health concerns:</span>{" "}
+              {currentWalmartState.searchBrowse.healthConcerns || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Ingredient preferences:</span>{" "}
+              {currentWalmartState.searchBrowse.ingredientPreferences || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Nutrients:</span>{" "}
+              {currentWalmartState.searchBrowse.nutrients || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Gender:</span>{" "}
+              {currentWalmartState.searchBrowse.gender || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Age group:</span>{" "}
+              {currentWalmartState.searchBrowse.ageGroup || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Product line:</span>{" "}
+              {currentWalmartState.searchBrowse.productLine || "Not available"}
+            </p>
+            <p className="md:col-span-2">
+              <span className="text-[#64748B]">Taxonomy placement:</span> {currentTaxonomyPlacement}
+            </p>
+          </div>
           {listingSearchBrowseGroups.length > 0 ? (
             <div className="mt-2 grid gap-3 md:grid-cols-2">
               {listingSearchBrowseGroups.map((group) => (
@@ -3189,34 +3287,22 @@ export default function ProductEditorClient({
         </article>
 
         <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
-          <h3 className="text-sm font-semibold text-[#0F172A]">FAQ &amp; Readiness Content</h3>
-          <p className="mt-1 text-sm text-[#334155]">
-            FAQ status:{" "}
-            {inlineAiDiagnostics.faqGenerationState === "pending"
-              ? "Pending product fact review"
-              : "Ready for review"}
-          </p>
-          {currentListingFaq.length > 0 ? (
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-              {currentListingFaq.map((entry) => (
-                <li key={entry}>{entry}</li>
+          <h3 className="text-sm font-semibold text-[#0F172A]">Compliance</h3>
+          {currentComplianceSignals.length > 0 ? (
+            <ul className="mt-2 space-y-1 text-sm text-[#334155]">
+              {currentComplianceSignals.map((entry) => (
+                <li key={entry.label}>
+                  <span className="text-[#64748B]">{entry.label}:</span> {entry.value}
+                </li>
               ))}
             </ul>
           ) : (
-            <p className="mt-2 text-sm text-[#334155]">No FAQ snippets currently available.</p>
+            <p className="mt-2 text-sm text-[#334155]">No compliance fields currently populated.</p>
           )}
-          {currentListingMediaRecommendations.length > 0 ? (
-            <p className="mt-2 text-xs text-[#475569]">
-              Media guidance notes: {currentListingMediaRecommendations.join(" | ")}
-            </p>
-          ) : null}
         </article>
 
         <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
           <h3 className="text-sm font-semibold text-[#0F172A]">Validation / readiness summary</h3>
-          <p className="mt-1 text-sm text-[#334155]">
-            Listing quality / AI Visibility score: {listingQuality.score}/100
-          </p>
           <p className="mt-1 text-sm text-[#334155]">
             Readiness status:{" "}
             <span
@@ -3271,7 +3357,7 @@ export default function ProductEditorClient({
     <div className="space-y-4" data-testid="ecomviper-walmart-product-editor-page">
       <WalmartPageHeader
         title="Product Editor"
-        subtitle="Review, improve, and submit approved Walmart listing updates."
+        subtitle="Current Walmart state, AI optimized proposal, and editable MP_MAINTENANCE draft."
         actions={
           <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
             SKU: {product.sku}
@@ -3332,33 +3418,35 @@ export default function ProductEditorClient({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 1 · Current listing</p>
-              <h2 className="mt-1 truncate text-lg font-semibold text-[#0F172A]">{displayTitle}</h2>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Current Walmart State</p>
+              <h2 className="mt-1 truncate text-lg font-semibold text-[#0F172A]">
+                {currentWalmartState.content.productName || displayTitle}
+              </h2>
               <p className="mt-1 text-sm text-[#475569]">SKU: {product.sku}</p>
               <div className="mt-3 grid gap-2 text-sm text-[#334155] sm:grid-cols-2 lg:grid-cols-3">
                 <p>
-                  <span className="text-[#64748B]">Brand:</span> {displayBrand}
+                  <span className="text-[#64748B]">Brand:</span>{" "}
+                  {currentWalmartState.content.brand || displayBrand}
                 </p>
                 <p>
-                  <span className="text-[#64748B]">Price:</span> ${product.price.toFixed(2)}
+                  <span className="text-[#64748B]">Price:</span>{" "}
+                  {currentWalmartState.pricingInventory.currentPrice !== null
+                    ? `$${currentWalmartState.pricingInventory.currentPrice.toFixed(2)}`
+                    : "Not available"}
                 </p>
                 <p>
-                  <span className="text-[#64748B]">Inventory:</span> {formatInventory(product)}
+                  <span className="text-[#64748B]">Inventory:</span>{" "}
+                  {currentWalmartState.pricingInventory.inventory === null
+                    ? "Unknown"
+                    : currentWalmartState.pricingInventory.inventory}
                 </p>
                 <p>
-                  <span className="text-[#64748B]">Listing quality:</span> {listingQuality.score}/100
+                  <span className="text-[#64748B]">Product type:</span>{" "}
+                  {currentWalmartState.searchBrowse.productType || "Not available"}
                 </p>
                 <p className="sm:col-span-2 lg:col-span-1">
-                  <span className="text-[#64748B]">Status:</span>{" "}
-                  <span
-                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                      canSubmit
-                        ? "bg-emerald-100 text-emerald-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}
-                  >
-                    {readinessLabel}
-                  </span>
+                  <span className="text-[#64748B]">Taxonomy placement:</span>{" "}
+                  {currentTaxonomyPlacement}
                 </p>
               </div>
             </div>
@@ -3409,12 +3497,15 @@ export default function ProductEditorClient({
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 2 · Improve listing with AI</p>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">AI Optimized State</p>
             <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">
-              {inlineAiSuggestion ? aiResultHeaderCopy : "Improve this listing with AI"}
+              {inlineAiSuggestion ? aiResultHeaderCopy : "Generate AI optimized Walmart-native proposal"}
             </h2>
             <p className="mt-1 text-sm text-[#475569]">
-              EcomViper can rewrite title, short and long descriptions, bullets, Search &amp; Browse attributes, FAQ snippets, and media guidance. Nothing is submitted to Walmart until you approve it.
+              EcomViper will generate proposal updates for product name/title, site description, long description, key features, Search &amp; Browse attributes, supplement fields, FAQ snippets, and media guidance. This tab does not submit to Walmart.
+            </p>
+            <p className="mt-1 text-xs text-[#64748B]">
+              Proposed product name: {optimizedProposalState.content.productName || "Not generated"}
             </p>
           </div>
           <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
@@ -3618,6 +3709,12 @@ export default function ProductEditorClient({
                 <li>
                   Search &amp; Browse attributes: {Object.keys(form.searchBrowseAttributes).length} →{" "}
                   {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length}
+                </li>
+                <li>
+                  Walmart-native proposal fields changed:{" "}
+                  {optimizedProposalLayer.optimizationAnalysis.changedFields.length > 0
+                    ? optimizedProposalLayer.optimizationAnalysis.changedFields.join(", ")
+                    : "none"}
                 </li>
                 <li>
                   FAQ snippets:{" "}
@@ -3843,8 +3940,8 @@ export default function ProductEditorClient({
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
-            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 3 · Edit & submit draft</p>
-            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Current editable draft</h2>
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Editable Draft State</p>
+            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Current editable MP_MAINTENANCE draft</h2>
             <p className="mt-1 text-sm text-[#475569]">
               Review AI improvements, fine-tune fields, then save draft before submission approval.
             </p>
@@ -3879,6 +3976,16 @@ export default function ProductEditorClient({
             {draftHardening.diagnostics.droppedCount}.
           </p>
         ) : null}
+        <div className="mt-3 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-xs text-[#334155]">
+          <p className="font-medium text-[#0F172A]">Draft layer status</p>
+          <p className="mt-1">Editable draft product name: {editableDraftState.content.productName || "Not set"}</p>
+          <p className="mt-1">
+            Fields changed from AI optimized proposal:{" "}
+            {editableDraftLayer.changedFromProposalFields.length > 0
+              ? editableDraftLayer.changedFromProposalFields.join(", ")
+              : "none"}
+          </p>
+        </div>
 
         <details open={draftEditorIsActive || hasExistingDraft} className="mt-3">
           <summary className="cursor-pointer text-sm font-medium text-[#334155]">

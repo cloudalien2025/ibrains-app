@@ -1,0 +1,705 @@
+import {
+  buildSearchBrowseAttributesFromSources,
+  searchBrowseGroupLabel,
+} from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import { normalizeWalmartImageUrlList } from "@/lib/ecomviper/walmart/walmart-image-fields";
+import {
+  resolveWalmartStructuredAttributeRegistry,
+  type WalmartStructuredAttributeRegistry,
+  type WalmartStructuredAttributeValue,
+} from "@/lib/ecomviper/walmart/walmart-structured-attributes";
+import type { WalmartAiSuggestion, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+
+export interface WalmartNativeContentState {
+  productName: string;
+  siteDescription: string;
+  longDescription: string;
+  keyFeatures: string[];
+  brand: string;
+  manufacturer: string;
+  richMediaStatus: string;
+  imageUrls: string[];
+}
+
+export interface WalmartNativeMediaState {
+  primaryImageUrl: string;
+  galleryImageUrls: string[];
+  publicWalmartUrl: string;
+  sourceImageLane: string;
+  imageFactsStatus: string;
+  imageFactsMessage: string;
+}
+
+export interface WalmartNativePricingInventoryState {
+  currentPrice: number | null;
+  salePrice: number | null;
+  inventory: number | null;
+  fulfillmentType: string;
+  lagTime: string;
+  wfsStatus: string;
+  shippingTemplate: string;
+  dimensions: string;
+  weight: string;
+}
+
+export interface WalmartNativeComplianceState {
+  warningText: string;
+  stopUseIndications: string;
+  prop65: string;
+  countryOfOrigin: string;
+  regulatoryFields: string;
+}
+
+export interface WalmartNativeSearchBrowseState {
+  taxonomyPlacement: string;
+  productType: string;
+  supplementType: string;
+  primaryIngredient: string;
+  servingSize: string;
+  servingsPerContainer: string;
+  countPerPack: string;
+  form: string;
+  flavor: string;
+  dietaryNeed: string;
+  healthConcerns: string;
+  ingredientPreferences: string;
+  nutrients: string;
+  gender: string;
+  ageGroup: string;
+  productLine: string;
+  attributes: Record<string, string>;
+  groupedAttributes: Array<{
+    group: string;
+    label: string;
+    values: Array<{ key: string; label: string; value: string; source: string }>;
+  }>;
+}
+
+export interface WalmartNativeState {
+  stateType: "current" | "proposal" | "draft";
+  sku: string;
+  sourceOfTruth: Array<"Walmart Item APIs" | "Walmart catalog payload" | "MP_ITEM" | "MP_MAINTENANCE">;
+  taxonomyPlacement: string;
+  content: WalmartNativeContentState;
+  media: WalmartNativeMediaState;
+  pricingInventory: WalmartNativePricingInventoryState;
+  compliance: WalmartNativeComplianceState;
+  searchBrowse: WalmartNativeSearchBrowseState;
+  structuredAttributes: WalmartStructuredAttributeValue[];
+}
+
+export interface WalmartOptimizationAnalysis {
+  generated: boolean;
+  currentScore: number | null;
+  projectedScore: number | null;
+  scoreDelta: number | null;
+  changedFields: string[];
+  optimizationNotes: string[];
+}
+
+export interface WalmartOptimizedProposalState {
+  currentWalmartState: WalmartNativeState;
+  optimizedProposalState: WalmartNativeState;
+  optimizationAnalysis: WalmartOptimizationAnalysis;
+}
+
+export interface WalmartEditableDraftState {
+  currentWalmartState: WalmartNativeState;
+  optimizedProposalState: WalmartNativeState;
+  editableDraftState: WalmartNativeState;
+  changedFromProposalFields: string[];
+}
+
+function asObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return null;
+}
+
+function asText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
+}
+
+function asNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
+function listFromUnknown(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => asText(entry))
+      .map((entry) => entry.trim())
+      .filter(Boolean);
+  }
+
+  const asString = asText(value);
+  if (!asString) return [];
+  return asString
+    .split(/\r?\n|[;|]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function unique(values: string[]): string[] {
+  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+}
+
+function firstNonEmptyString(
+  source: Array<Record<string, unknown> | null>,
+  keys: string[]
+): string {
+  for (const record of source) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asText(record[key]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return "";
+}
+
+function firstNonEmptyNumber(
+  source: Array<Record<string, unknown> | null>,
+  keys: string[]
+): number | null {
+  for (const record of source) {
+    if (!record) continue;
+    for (const key of keys) {
+      const value = asNumber(record[key]);
+      if (value !== null) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function deepClone<T>(value: T): T {
+  if (typeof globalThis.structuredClone === "function") {
+    return globalThis.structuredClone(value);
+  }
+  return JSON.parse(JSON.stringify(value)) as T;
+}
+
+function deepFreeze<T>(value: T): T {
+  if (!value || typeof value !== "object") return value;
+
+  const stack: unknown[] = [value];
+  while (stack.length > 0) {
+    const node = stack.pop();
+    if (!node || typeof node !== "object" || Object.isFrozen(node)) continue;
+    Object.freeze(node);
+    if (Array.isArray(node)) {
+      for (const entry of node) {
+        stack.push(entry);
+      }
+      continue;
+    }
+
+    for (const entry of Object.values(node as Record<string, unknown>)) {
+      stack.push(entry);
+    }
+  }
+
+  return value;
+}
+
+function toSearchBrowseState(input: {
+  attributes: Record<string, string>;
+  registry: WalmartStructuredAttributeRegistry;
+  productTypeHint: string;
+  supplementTypeHint: string;
+}): WalmartNativeSearchBrowseState {
+  const attributes = input.attributes;
+
+  return {
+    taxonomyPlacement: input.registry.taxonomyPlacement,
+    productType:
+      input.productTypeHint ||
+      attributes.product_type ||
+      input.registry.productType,
+    supplementType:
+      input.supplementTypeHint ||
+      attributes.supplement_type ||
+      attributes.product_type,
+    primaryIngredient:
+      attributes.primary_ingredient ||
+      attributes.main_ingredients ||
+      attributes.ingredients_list,
+    servingSize: attributes.serving_size,
+    servingsPerContainer: attributes.servings_per_container || attributes.servings,
+    countPerPack: attributes.count_per_pack || attributes.count_per_package,
+    form: attributes.product_form || attributes.form,
+    flavor: attributes.flavor,
+    dietaryNeed: attributes.dietary_need || attributes.allergen_free_statements,
+    healthConcerns: attributes.health_concerns || attributes.support_areas,
+    ingredientPreferences:
+      attributes.ingredient_preferences || attributes.allergen_free_statements,
+    nutrients: attributes.nutrients,
+    gender: attributes.gender,
+    ageGroup: attributes.age_group,
+    productLine: attributes.product_line,
+    attributes: deepClone(attributes),
+    groupedAttributes: input.registry.groupedValues.map((group) => ({
+      group: group.group,
+      label:
+        group.group === "compliance" || group.group === "fulfillment"
+          ? group.label
+          : searchBrowseGroupLabel(group.group),
+      values: group.values.map((entry) => ({
+        key: entry.key,
+        label: entry.label,
+        value: entry.value,
+        source: entry.source,
+      })),
+    })),
+  };
+}
+
+function patchContentWithSuggestion(content: WalmartNativeContentState, suggestion: WalmartAiSuggestion) {
+  if (asText(suggestion.suggestedTitle)) {
+    content.productName = suggestion.suggestedTitle.trim();
+  }
+  if (asText(suggestion.suggestedShortDescription)) {
+    content.siteDescription = suggestion.suggestedShortDescription!.trim();
+  }
+  if (asText(suggestion.suggestedDescription)) {
+    content.longDescription = suggestion.suggestedDescription.trim();
+  }
+  if (Array.isArray(suggestion.suggestedBullets) && suggestion.suggestedBullets.length > 0) {
+    content.keyFeatures = unique(suggestion.suggestedBullets.map((entry) => asText(entry)));
+  }
+  if (asText(suggestion.suggestedBrand)) {
+    content.brand = suggestion.suggestedBrand!.trim();
+  }
+}
+
+function patchSearchBrowseWithSuggestion(input: {
+  searchBrowse: WalmartNativeSearchBrowseState;
+  structuredAttributes: WalmartStructuredAttributeValue[];
+  suggestion: WalmartAiSuggestion;
+}) {
+  const suggestionAttributes = {
+    ...(input.suggestion.suggestedAttributes ?? {}),
+    ...(input.suggestion.searchBrowseAttributes ?? {}),
+  };
+
+  for (const [key, rawValue] of Object.entries(suggestionAttributes)) {
+    const value = asText(rawValue);
+    if (!value) continue;
+    input.searchBrowse.attributes[key] = value;
+
+    const structuredEntry = input.structuredAttributes.find((entry) => entry.key === key);
+    if (structuredEntry) {
+      structuredEntry.value = value;
+    }
+  }
+
+  input.searchBrowse.productType =
+    input.searchBrowse.attributes.product_type || input.searchBrowse.productType;
+  input.searchBrowse.supplementType =
+    input.searchBrowse.attributes.supplement_type || input.searchBrowse.supplementType;
+  input.searchBrowse.primaryIngredient =
+    input.searchBrowse.attributes.primary_ingredient ||
+    input.searchBrowse.attributes.main_ingredients ||
+    input.searchBrowse.primaryIngredient;
+  input.searchBrowse.servingSize =
+    input.searchBrowse.attributes.serving_size || input.searchBrowse.servingSize;
+  input.searchBrowse.servingsPerContainer =
+    input.searchBrowse.attributes.servings_per_container || input.searchBrowse.servingsPerContainer;
+  input.searchBrowse.countPerPack =
+    input.searchBrowse.attributes.count_per_pack || input.searchBrowse.countPerPack;
+  input.searchBrowse.form =
+    input.searchBrowse.attributes.product_form || input.searchBrowse.attributes.form || input.searchBrowse.form;
+  input.searchBrowse.flavor = input.searchBrowse.attributes.flavor || input.searchBrowse.flavor;
+  input.searchBrowse.dietaryNeed =
+    input.searchBrowse.attributes.dietary_need ||
+    input.searchBrowse.attributes.allergen_free_statements ||
+    input.searchBrowse.dietaryNeed;
+  input.searchBrowse.healthConcerns =
+    input.searchBrowse.attributes.health_concerns ||
+    input.searchBrowse.attributes.support_areas ||
+    input.searchBrowse.healthConcerns;
+  input.searchBrowse.ingredientPreferences =
+    input.searchBrowse.attributes.ingredient_preferences ||
+    input.searchBrowse.attributes.allergen_free_statements ||
+    input.searchBrowse.ingredientPreferences;
+  input.searchBrowse.nutrients =
+    input.searchBrowse.attributes.nutrients || input.searchBrowse.nutrients;
+  input.searchBrowse.gender = input.searchBrowse.attributes.gender || input.searchBrowse.gender;
+  input.searchBrowse.ageGroup = input.searchBrowse.attributes.age_group || input.searchBrowse.ageGroup;
+  input.searchBrowse.productLine =
+    input.searchBrowse.attributes.product_line || input.searchBrowse.productLine;
+}
+
+function patchNativeStateWithDraftPayload(state: WalmartNativeState, draftPayload: Record<string, unknown>) {
+  const attributesPayload = asObject(draftPayload.searchBrowseAttributes) ?? asObject(draftPayload.attributes) ?? {};
+  for (const [key, rawValue] of Object.entries(attributesPayload)) {
+    const value = asText(rawValue);
+    if (!value) continue;
+    state.searchBrowse.attributes[key] = value;
+    const match = state.structuredAttributes.find((entry) => entry.key === key);
+    if (match) {
+      match.value = value;
+    }
+  }
+
+  const title = asText(draftPayload.title);
+  if (title) state.content.productName = title;
+  const shortDescription = asText(draftPayload.shortDescription);
+  if (shortDescription) state.content.siteDescription = shortDescription;
+  const longDescription = asText(draftPayload.longDescription);
+  if (longDescription) state.content.longDescription = longDescription;
+
+  const bullets = listFromUnknown(draftPayload.bulletPoints);
+  if (bullets.length > 0) state.content.keyFeatures = bullets;
+
+  const brand = asText(draftPayload.brand);
+  if (brand) {
+    state.content.brand = brand;
+    state.searchBrowse.attributes.brand = brand;
+  }
+
+  const price = asNumber(draftPayload.price);
+  if (price !== null) state.pricingInventory.currentPrice = price;
+  const salePrice = asNumber(draftPayload.salePrice);
+  if (salePrice !== null) state.pricingInventory.salePrice = salePrice;
+  const inventoryQuantity = asNumber(draftPayload.inventoryQuantity);
+  if (inventoryQuantity !== null) state.pricingInventory.inventory = inventoryQuantity;
+
+  const primaryImageUrl = asText(draftPayload.imageUrl) || asText(draftPayload.primaryImageUrl);
+  if (primaryImageUrl) {
+    state.media.primaryImageUrl = primaryImageUrl;
+  }
+
+  const galleryImageUrls = normalizeWalmartImageUrlList([
+    listFromUnknown(draftPayload.galleryImageUrls),
+    listFromUnknown(draftPayload.additionalImageUrls),
+    state.media.primaryImageUrl,
+  ]);
+  if (galleryImageUrls.length > 0) {
+    state.media.galleryImageUrls = galleryImageUrls;
+    state.content.imageUrls = galleryImageUrls;
+  }
+
+  state.searchBrowse.productType =
+    state.searchBrowse.attributes.product_type || state.searchBrowse.productType;
+  state.searchBrowse.supplementType =
+    state.searchBrowse.attributes.supplement_type || state.searchBrowse.supplementType;
+  state.searchBrowse.primaryIngredient =
+    state.searchBrowse.attributes.primary_ingredient ||
+    state.searchBrowse.attributes.main_ingredients ||
+    state.searchBrowse.primaryIngredient;
+  state.searchBrowse.servingSize =
+    state.searchBrowse.attributes.serving_size || state.searchBrowse.servingSize;
+  state.searchBrowse.servingsPerContainer =
+    state.searchBrowse.attributes.servings_per_container || state.searchBrowse.servingsPerContainer;
+  state.searchBrowse.countPerPack =
+    state.searchBrowse.attributes.count_per_pack || state.searchBrowse.countPerPack;
+  state.searchBrowse.form =
+    state.searchBrowse.attributes.product_form || state.searchBrowse.attributes.form || state.searchBrowse.form;
+  state.searchBrowse.flavor = state.searchBrowse.attributes.flavor || state.searchBrowse.flavor;
+  state.searchBrowse.dietaryNeed =
+    state.searchBrowse.attributes.dietary_need ||
+    state.searchBrowse.attributes.allergen_free_statements ||
+    state.searchBrowse.dietaryNeed;
+  state.searchBrowse.healthConcerns =
+    state.searchBrowse.attributes.health_concerns ||
+    state.searchBrowse.attributes.support_areas ||
+    state.searchBrowse.healthConcerns;
+  state.searchBrowse.ingredientPreferences =
+    state.searchBrowse.attributes.ingredient_preferences ||
+    state.searchBrowse.attributes.allergen_free_statements ||
+    state.searchBrowse.ingredientPreferences;
+  state.searchBrowse.nutrients = state.searchBrowse.attributes.nutrients || state.searchBrowse.nutrients;
+  state.searchBrowse.gender = state.searchBrowse.attributes.gender || state.searchBrowse.gender;
+  state.searchBrowse.ageGroup = state.searchBrowse.attributes.age_group || state.searchBrowse.ageGroup;
+  state.searchBrowse.productLine =
+    state.searchBrowse.attributes.product_line || state.searchBrowse.productLine;
+}
+
+function changedFieldsBetweenStates(left: WalmartNativeState, right: WalmartNativeState): string[] {
+  const fields: string[] = [];
+
+  if (left.content.productName !== right.content.productName) fields.push("content.productName");
+  if (left.content.siteDescription !== right.content.siteDescription) fields.push("content.siteDescription");
+  if (left.content.longDescription !== right.content.longDescription) fields.push("content.longDescription");
+  if (JSON.stringify(left.content.keyFeatures) !== JSON.stringify(right.content.keyFeatures)) {
+    fields.push("content.keyFeatures");
+  }
+  if (left.content.brand !== right.content.brand) fields.push("content.brand");
+  if (left.media.primaryImageUrl !== right.media.primaryImageUrl) fields.push("media.primaryImageUrl");
+  if (JSON.stringify(left.media.galleryImageUrls) !== JSON.stringify(right.media.galleryImageUrls)) {
+    fields.push("media.galleryImageUrls");
+  }
+  if (left.pricingInventory.currentPrice !== right.pricingInventory.currentPrice) {
+    fields.push("pricingInventory.currentPrice");
+  }
+  if (left.pricingInventory.salePrice !== right.pricingInventory.salePrice) {
+    fields.push("pricingInventory.salePrice");
+  }
+  if (left.pricingInventory.inventory !== right.pricingInventory.inventory) {
+    fields.push("pricingInventory.inventory");
+  }
+
+  if (JSON.stringify(left.searchBrowse.attributes) !== JSON.stringify(right.searchBrowse.attributes)) {
+    fields.push("searchBrowse.attributes");
+  }
+
+  return fields;
+}
+
+export function hydrateCurrentWalmartState(input: {
+  product: WalmartProductRecord;
+}): WalmartNativeState {
+  const normalizedPayload = asObject(input.product.normalizedPayload);
+  const rawPayload = asObject(input.product.rawPayload);
+  const rawProductPayload = asObject(rawPayload?.product);
+  const records = [normalizedPayload, rawPayload, rawProductPayload];
+
+  const searchBrowseAttributes = buildSearchBrowseAttributesFromSources({
+    product: input.product,
+  });
+  const productTypeHint =
+    asText(input.product.searchBrowseAttributes?.product_type) ||
+    asText(input.product.attributes?.product_type);
+  const supplementTypeHint =
+    asText(input.product.searchBrowseAttributes?.supplement_type) ||
+    asText(input.product.attributes?.supplement_type);
+  const registry = resolveWalmartStructuredAttributeRegistry({
+    product: input.product,
+    sourceAttributes: searchBrowseAttributes,
+  });
+
+  const primaryImageUrl =
+    input.product.imageUrl ||
+    firstNonEmptyString(records, ["primaryImageUrl", "imageUrl", "mainImage"]);
+  const galleryImageUrls = normalizeWalmartImageUrlList([
+    primaryImageUrl,
+    input.product.galleryImageUrls ?? [],
+    firstNonEmptyString(records, ["imageUrl", "mainImage"]),
+    listFromUnknown(normalizedPayload?.galleryImageUrls),
+    listFromUnknown(rawPayload?.images),
+    listFromUnknown(rawProductPayload?.images),
+  ]);
+
+  const current: WalmartNativeState = {
+    stateType: "current",
+    sku: input.product.sku,
+    sourceOfTruth: [
+      "Walmart Item APIs",
+      "Walmart catalog payload",
+      "MP_ITEM",
+      "MP_MAINTENANCE",
+    ],
+    taxonomyPlacement: registry.taxonomyPlacement,
+    content: {
+      productName: input.product.title,
+      siteDescription:
+        input.product.shortDescription ||
+        firstNonEmptyString(records, ["shortDescription", "siteDescription", "description"]),
+      longDescription:
+        input.product.longDescription ||
+        firstNonEmptyString(records, ["longDescription", "fullDescription", "description"]),
+      keyFeatures:
+        input.product.bulletPoints.length > 0
+          ? unique(input.product.bulletPoints)
+          : unique(listFromUnknown(normalizedPayload?.bulletPoints || rawPayload?.keyFeatures)),
+      brand: input.product.brand,
+      manufacturer:
+        searchBrowseAttributes.manufacturer ||
+        firstNonEmptyString(records, ["manufacturer", "manufacturerName"]),
+      richMediaStatus: firstNonEmptyString(records, ["richMediaStatus", "rich_media_status"]) || "unknown",
+      imageUrls: galleryImageUrls,
+    },
+    media: {
+      primaryImageUrl,
+      galleryImageUrls,
+      publicWalmartUrl:
+        input.product.publicWalmartUrl ||
+        firstNonEmptyString(records, ["publicWalmartUrl", "walmartItemPageUrl", "itemPageUrl"]),
+      sourceImageLane: input.product.imageSource || "unknown",
+      imageFactsStatus: firstNonEmptyString(records, ["imageFactsStatus", "image_facts_status"]) || "unknown",
+      imageFactsMessage:
+        firstNonEmptyString(records, ["imageFactsMessage", "image_facts_message"]) ||
+        "No image-derived fact detail provided.",
+    },
+    pricingInventory: {
+      currentPrice: asNumber(input.product.price),
+      salePrice: firstNonEmptyNumber(records, ["salePrice", "sale_price", "specialPrice", "promoPrice"]),
+      inventory:
+        input.product.inventoryStatus === "unknown"
+          ? null
+          : asNumber(input.product.inventoryQuantity),
+      fulfillmentType: firstNonEmptyString(records, ["fulfillmentType", "fulfillment_type", "fulfillment"]),
+      lagTime: firstNonEmptyString(records, ["lagTime", "lag_time", "fulfillmentLagTime"]),
+      wfsStatus: firstNonEmptyString(records, ["wfsStatus", "wfs_status", "wfs"]),
+      shippingTemplate: firstNonEmptyString(records, ["shippingTemplate", "shipping_template"]),
+      dimensions:
+        firstNonEmptyString(records, ["dimensions", "packageDimensions", "assembledDimensions"]) ||
+        [
+          searchBrowseAttributes.assembled_product_depth,
+          searchBrowseAttributes.assembled_product_width,
+          searchBrowseAttributes.assembled_product_height,
+        ]
+          .filter(Boolean)
+          .join(" x "),
+      weight: firstNonEmptyString(records, ["weight", "packageWeight", "shippingWeight"]),
+    },
+    compliance: {
+      warningText:
+        searchBrowseAttributes.warning_text ||
+        searchBrowseAttributes.safety_warnings ||
+        firstNonEmptyString(records, ["warningText", "warning_text", "warnings"]),
+      stopUseIndications:
+        searchBrowseAttributes.stop_use_indications ||
+        firstNonEmptyString(records, ["stopUseIndications", "stop_use_indications"]),
+      prop65:
+        searchBrowseAttributes.prop_65 || firstNonEmptyString(records, ["prop65", "prop_65"]),
+      countryOfOrigin:
+        searchBrowseAttributes.country_of_origin ||
+        firstNonEmptyString(records, ["countryOfOrigin", "country_of_origin"]),
+      regulatoryFields:
+        searchBrowseAttributes.regulatory_fields ||
+        firstNonEmptyString(records, ["regulatoryFields", "regulatory_fields"]),
+    },
+    searchBrowse: toSearchBrowseState({
+      attributes: searchBrowseAttributes,
+      registry,
+      productTypeHint,
+      supplementTypeHint,
+    }),
+    structuredAttributes: registry.values,
+  };
+
+  return deepFreeze(current);
+}
+
+export function generateOptimizedProposalState(input: {
+  currentWalmartState: WalmartNativeState;
+  suggestion: WalmartAiSuggestion | null;
+  currentScore?: number;
+  projectedScore?: number;
+}): WalmartOptimizedProposalState {
+  const currentWalmartState = deepFreeze(deepClone(input.currentWalmartState));
+  const optimizedProposalState = deepClone(currentWalmartState);
+  optimizedProposalState.stateType = "proposal";
+
+  if (input.suggestion) {
+    patchContentWithSuggestion(optimizedProposalState.content, input.suggestion);
+    patchSearchBrowseWithSuggestion({
+      searchBrowse: optimizedProposalState.searchBrowse,
+      structuredAttributes: optimizedProposalState.structuredAttributes,
+      suggestion: input.suggestion,
+    });
+  }
+
+  const changedFields = changedFieldsBetweenStates(currentWalmartState, optimizedProposalState);
+
+  const optimizationAnalysis: WalmartOptimizationAnalysis = {
+    generated: Boolean(input.suggestion),
+    currentScore:
+      typeof input.currentScore === "number" && Number.isFinite(input.currentScore)
+        ? input.currentScore
+        : null,
+    projectedScore:
+      typeof input.projectedScore === "number" && Number.isFinite(input.projectedScore)
+        ? input.projectedScore
+        : null,
+    scoreDelta:
+      typeof input.currentScore === "number" &&
+      Number.isFinite(input.currentScore) &&
+      typeof input.projectedScore === "number" &&
+      Number.isFinite(input.projectedScore)
+        ? input.projectedScore - input.currentScore
+        : null,
+    changedFields,
+    optimizationNotes: input.suggestion
+      ? [
+          "Proposal generated from current Walmart-native state.",
+          "Proposal fields are draft-only until approved and saved.",
+        ]
+      : ["No AI proposal generated yet."],
+  };
+
+  return deepFreeze({
+    currentWalmartState,
+    optimizedProposalState,
+    optimizationAnalysis,
+  });
+}
+
+export function generateEditableDraftState(input: {
+  currentWalmartState: WalmartNativeState;
+  optimizedProposalState: WalmartNativeState;
+  draftPayload: Record<string, unknown>;
+}): WalmartEditableDraftState {
+  const currentWalmartState = deepFreeze(deepClone(input.currentWalmartState));
+  const optimizedProposalState = deepFreeze(deepClone(input.optimizedProposalState));
+
+  const editableDraftState = deepClone(optimizedProposalState);
+  editableDraftState.stateType = "draft";
+  patchNativeStateWithDraftPayload(editableDraftState, input.draftPayload);
+
+  const changedFromProposalFields = changedFieldsBetweenStates(
+    optimizedProposalState,
+    editableDraftState
+  );
+
+  return deepFreeze({
+    currentWalmartState,
+    optimizedProposalState,
+    editableDraftState,
+    changedFromProposalFields,
+  });
+}
+
+export function toNativeStateDraftPayload(state: WalmartNativeState): Record<string, unknown> {
+  const searchBrowseAttributes = deepClone(state.searchBrowse.attributes);
+  if (state.searchBrowse.productType) {
+    searchBrowseAttributes.product_type = state.searchBrowse.productType;
+  }
+  if (state.searchBrowse.supplementType) {
+    searchBrowseAttributes.supplement_type = state.searchBrowse.supplementType;
+  }
+
+  return {
+    title: state.content.productName,
+    shortDescription: state.content.siteDescription,
+    longDescription: state.content.longDescription,
+    bulletPoints: deepClone(state.content.keyFeatures),
+    brand: state.content.brand,
+    imageUrl: state.media.primaryImageUrl,
+    galleryImageUrls: deepClone(state.media.galleryImageUrls),
+    price: state.pricingInventory.currentPrice,
+    salePrice: state.pricingInventory.salePrice,
+    inventoryQuantity: state.pricingInventory.inventory,
+    searchBrowseAttributes,
+    attributes: deepClone(searchBrowseAttributes),
+    compliance: {
+      warningText: state.compliance.warningText,
+      stopUseIndications: state.compliance.stopUseIndications,
+      prop65: state.compliance.prop65,
+      countryOfOrigin: state.compliance.countryOfOrigin,
+      regulatoryFields: state.compliance.regulatoryFields,
+    },
+    fulfillment: {
+      fulfillmentType: state.pricingInventory.fulfillmentType,
+      lagTime: state.pricingInventory.lagTime,
+      wfsStatus: state.pricingInventory.wfsStatus,
+      shippingTemplate: state.pricingInventory.shippingTemplate,
+      dimensions: state.pricingInventory.dimensions,
+      weight: state.pricingInventory.weight,
+    },
+  };
+}
