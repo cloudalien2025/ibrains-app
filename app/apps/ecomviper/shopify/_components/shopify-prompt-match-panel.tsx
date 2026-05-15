@@ -18,6 +18,7 @@ export default function ShopifyPromptMatchPanel({ state }: ShopifyPromptMatchPan
         <p className="mt-1 text-sm text-[#475569]">
           Buyer/AI-agent query matching with confidence, gap warnings, and suggested Knowledge Base answers.
         </p>
+        <p className="mt-2 text-xs text-[#64748B]">Data source: {state.workspaceSourceLabel}</p>
       </article>
 
       <div className="grid gap-3">

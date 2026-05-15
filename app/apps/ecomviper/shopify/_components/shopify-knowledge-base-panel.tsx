@@ -10,8 +10,9 @@ export default function ShopifyKnowledgeBasePanel({ state }: ShopifyKnowledgeBas
       <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
         <h2 className="text-lg font-semibold text-[#0F172A]">Knowledge Base</h2>
         <p className="mt-1 text-sm text-[#475569]">
-          FAQ question list, current answers, generated answers, gap status, and copy-ready output for Shopify Knowledge Base.
+          FAQ question list, current answers, generated answers, gap status, and copy-ready output.
         </p>
+        <p className="mt-2 text-xs text-[#64748B]">Data source: {state.workspaceSourceLabel}</p>
       </article>
 
       <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

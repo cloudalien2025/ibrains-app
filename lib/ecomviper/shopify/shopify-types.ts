@@ -66,6 +66,15 @@ export interface ShopifySelectedOption {
   value: string;
 }
 
+export interface ShopifyMetafieldRecord {
+  id: string;
+  namespace: string;
+  key: string;
+  type: string;
+  value: string;
+  description: string | null;
+}
+
 export interface ShopifyImageRecord {
   id: string;
   url: string;
@@ -102,6 +111,9 @@ export interface ShopifyProductRecord {
   tags: string[];
   description: string;
   descriptionHtml: string;
+  seoTitle: string;
+  seoDescription: string;
+  metafields: ShopifyMetafieldRecord[];
   onlineStoreUrl: string;
   primaryImageUrl: string;
   galleryImageUrls: string[];
@@ -128,6 +140,48 @@ export interface ShopifyImportState {
   productCount: number;
   imageCount: number;
   updatedAt: string | null;
+}
+
+export interface ShopifyOpenAiConnectionStatus {
+  connected: boolean;
+  status: "connected" | "disconnected";
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+  lastTestedAt: string | null;
+  lastError: string | null;
+}
+
+export type ShopifySerpApiProviderStatus =
+  | "connected"
+  | "not_connected"
+  | "invalid_key"
+  | "forbidden"
+  | "rate_limited"
+  | "bad_request"
+  | "network_error"
+  | "provider_error"
+  | "unknown_error";
+
+export interface ShopifySerpApiConnectionStatus {
+  connected: boolean;
+  status: "connected" | "disconnected";
+  maskedApiKey: string;
+  updatedAt: string | null;
+  saveSupported: boolean;
+  lastTestedAt: string | null;
+  lastScanAt: string | null;
+  lastError: string | null;
+}
+
+export interface ShopifySerpApiVisibilityScanResult {
+  providerStatus: ShopifySerpApiProviderStatus;
+  statusReason: string;
+  statusCode: number | null;
+  searchQuery: string;
+  totalResults: number | null;
+  resultUrls: string[];
+  scannedAt: string;
 }
 
 export interface ShopifyImportResult {

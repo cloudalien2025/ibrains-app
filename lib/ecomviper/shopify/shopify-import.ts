@@ -14,6 +14,7 @@ import {
 import type {
   ShopifyImageRecord,
   ShopifyImportResult,
+  ShopifyMetafieldRecord,
   ShopifyProductRecord,
   ShopifyVariantRecord,
   ShopifyImportState,
@@ -132,6 +133,22 @@ function normalizeSelectedOptions(value: unknown): ShopifyVariantRecord["selecte
       value: asString(entry.value),
     }))
     .filter((entry) => entry.name.length > 0 || entry.value.length > 0);
+}
+
+function normalizeMetafields(value: unknown): ShopifyMetafieldRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asRecord(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .map((entry) => ({
+      id: asString(entry.id),
+      namespace: asString(entry.namespace),
+      key: asString(entry.key),
+      type: asString(entry.type),
+      value: asString(entry.value),
+      description: asString(entry.description) || null,
+    }))
+    .filter((entry) => entry.namespace.length > 0 && entry.key.length > 0);
 }
 
 function normalizeGalleryImages(params: {
@@ -288,6 +305,11 @@ function normalizeProductNode(node: Record<string, unknown>, storeDomain: string
     buildShopifyOnlineStoreProductUrl(storeDomain, handle);
 
   const descriptionHtml = asString(node.descriptionHtml);
+  const seoRecord = asRecord(node.seo);
+  const metafieldsConnection = asRecord(node.metafields);
+  const metafields = normalizeMetafields(
+    Array.isArray(metafieldsConnection?.nodes) ? metafieldsConnection?.nodes : []
+  );
 
   return {
     id,
@@ -302,6 +324,9 @@ function normalizeProductNode(node: Record<string, unknown>, storeDomain: string
       : [],
     description: asString(node.description),
     descriptionHtml,
+    seoTitle: asString(seoRecord?.title),
+    seoDescription: asString(seoRecord?.description),
+    metafields,
     onlineStoreUrl,
     primaryImageUrl: normalizedImages.primaryImageUrl,
     galleryImageUrls: normalizedImages.galleryImageUrls,
@@ -340,6 +365,10 @@ const SHOPIFY_PRODUCTS_QUERY = `#graphql
         tags
         description
         descriptionHtml
+        seo {
+          title
+          description
+        }
         onlineStoreUrl
         createdAt
         updatedAt
@@ -393,6 +422,16 @@ const SHOPIFY_PRODUCTS_QUERY = `#graphql
               width
               height
             }
+          }
+        }
+        metafields(first: 25) {
+          nodes {
+            id
+            namespace
+            key
+            type
+            value
+            description
           }
         }
       }

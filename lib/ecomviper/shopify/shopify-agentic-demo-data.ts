@@ -229,6 +229,7 @@ function demoSemanticGaps(): ShopifySemanticGap[] {
 
 export function buildShopifyAgenticDemoWorkspaceState(): ShopifyAgenticWorkspaceState {
   const storeDomain = "opanutrition.myshopify.com";
+  const nowIso = new Date().toISOString();
   const storefrontMcpEndpoints = buildShopifyStorefrontMcpEndpoints(storeDomain);
   const mcpDiagnostics = buildMockShopifyMcpDiagnostics({
     storeDomain,
@@ -284,9 +285,66 @@ export function buildShopifyAgenticDemoWorkspaceState(): ShopifyAgenticWorkspace
   return {
     storeName: "OPA Nutrition",
     storeDomain,
-    environmentLabel: "Demo / Production-safe",
+    environmentLabel: "Demo mode",
     storeLabel: "opanutrition.myshopify.com",
-    modeLabel: "Mock-first / BYO credentials",
+    modeLabel: "Demo data (explicit mode)",
+    workspaceSource: "demo",
+    workspaceSourceLabel: "Demo data",
+    hydrationMode: "demo",
+    mockModeEnabled: true,
+    mockFallbackActive: false,
+    sourceWarnings: [],
+    sourceErrors: [],
+    lastSyncedAt: null,
+    lastVisibilityScanAt: null,
+    connectionStatus: {
+      shopify: {
+        connected: false,
+        mode: "demo",
+        credentialSource: "demo",
+        maskedCredential: "Demo",
+        lastTestedAt: null,
+        lastSyncAt: null,
+        lastError: null,
+        statusLabel: "Demo",
+      },
+      openai: {
+        connected: false,
+        mode: "unavailable",
+        credentialSource: "none",
+        maskedCredential: "Not configured",
+        lastTestedAt: null,
+        lastError: null,
+        statusLabel: "Not connected",
+      },
+      serpapi: {
+        connected: false,
+        mode: "unavailable",
+        credentialSource: "none",
+        maskedCredential: "Not configured",
+        lastTestedAt: null,
+        lastScanAt: null,
+        lastError: null,
+        statusLabel: "Not connected",
+      },
+    },
+    entitySourceProvenance: [
+      {
+        entityType: "shop",
+        source: "demo",
+        fetchedAt: nowIso,
+        storeDomain,
+        rawId: "demo_shop",
+        connectionId: null,
+      },
+    ],
+    catalogCounts: {
+      products: products.length,
+      collections: 0,
+      pages: 0,
+      blogArticles: 0,
+      policies: policyCoverage.length,
+    },
     storefrontMcpEndpoints,
     mcpDiagnostics,
     products,
