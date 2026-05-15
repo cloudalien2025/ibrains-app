@@ -123,7 +123,11 @@ function scoreFromRatio(numerator: number, denominator: number): number {
 }
 
 function toProductFacts(products: ShopifyProductRecord[]): ShopifyProductAgenticFact[] {
-  return products.slice(0, 250).map((product) => {
+  return products.slice(0, 250).map((product, index) => {
+    const productId = safeText(product.id);
+    const handle = safeText(product.handle);
+    const editorIdentifier = handle || productId || null;
+
     const nonEmptyAltCount = product.galleryImages.filter((image) => safeText(image.altText || "").length > 0).length;
     const imageAltTextReadiness = scoreFromRatio(nonEmptyAltCount, Math.max(1, product.galleryImages.length));
 
@@ -171,8 +175,12 @@ function toProductFacts(products: ShopifyProductRecord[]): ShopifyProductAgentic
     if (!product.metafields.length) notes.push("No metafields detected");
 
     return {
-      id: product.id,
+      id: productId || handle || `shopify_product_unavailable_${index + 1}`,
       title: product.title || product.handle || "Untitled product",
+      handle: handle || undefined,
+      editorIdentifier,
+      editorLinkEnabled: Boolean(editorIdentifier),
+      editorLinkDisabledReason: editorIdentifier ? null : "No stable Shopify product id/handle available.",
       category: product.productType || product.vendor || "Uncategorized",
       sourceLabel: "Live Shopify API",
       productFactsReadiness,

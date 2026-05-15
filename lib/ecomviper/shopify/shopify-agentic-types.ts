@@ -121,6 +121,10 @@ export interface ShopifyTrustSignal {
 export interface ShopifyProductAgenticFact {
   id: string;
   title: string;
+  handle?: string;
+  editorIdentifier?: string | null;
+  editorLinkEnabled?: boolean;
+  editorLinkDisabledReason?: string | null;
   category: string;
   sourceLabel?: ShopifyWorkspaceSourceLabel;
   productFactsReadiness: number;

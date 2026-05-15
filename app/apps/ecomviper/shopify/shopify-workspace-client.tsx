@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import ShopifyCommandCenter from "@/app/apps/ecomviper/shopify/_components/shopify-command-center";
 import ShopifyKnowledgeBasePanel from "@/app/apps/ecomviper/shopify/_components/shopify-knowledge-base-panel";
 import ShopifyPromptMatchPanel from "@/app/apps/ecomviper/shopify/_components/shopify-prompt-match-panel";
@@ -77,6 +78,10 @@ async function requestJson<T>(url: string, init?: RequestInit): Promise<T> {
 }
 
 function ProductsPanel({ state }: { state: ShopifyAgenticWorkspaceState }) {
+  function productEditorHref(identifier: string): string {
+    return `/apps/ecomviper/shopify/products/${encodeURIComponent(identifier)}`;
+  }
+
   return (
     <section className="space-y-4" data-testid="ecomviper-shopify-products-panel">
       <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
@@ -89,7 +94,7 @@ function ProductsPanel({ state }: { state: ShopifyAgenticWorkspaceState }) {
 
       <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
+          <table className="min-w-full text-sm" data-testid="ecomviper-shopify-products-table">
             <thead className="text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
               <tr>
                 <th className="py-2 pr-3">Product</th>
@@ -106,7 +111,22 @@ function ProductsPanel({ state }: { state: ShopifyAgenticWorkspaceState }) {
               {state.products.map((product) => (
                 <tr key={product.id} className="border-t border-[#E2E8F0] text-[#334155] align-top">
                   <td className="py-3 pr-3">
-                    <p className="font-medium text-[#0F172A]">{product.title}</p>
+                    {product.editorIdentifier ? (
+                      <Link
+                        href={productEditorHref(product.editorIdentifier)}
+                        className="font-medium text-[#1D4ED8] hover:text-[#1E40AF] hover:underline"
+                        data-testid="ecomviper-shopify-product-link"
+                      >
+                        {product.title}
+                      </Link>
+                    ) : (
+                      <p className="font-medium text-[#0F172A]">{product.title}</p>
+                    )}
+                    {!product.editorIdentifier ? (
+                      <p className="mt-1 text-xs text-amber-700">
+                        {product.editorLinkDisabledReason || "Product editor unavailable: no stable Shopify id/handle."}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs text-[#64748B]">{product.category}</p>
                   </td>
                   <td className="py-3 pr-3">{product.productFactsReadiness}</td>
