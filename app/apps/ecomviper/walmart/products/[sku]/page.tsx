@@ -4,8 +4,10 @@ import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts
 import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { getWalmartSerpApiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-serpapi-connection";
 import { normalizeWalmartDraftsForEditor } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
+import { hydrateLiveWalmartItemStateForUser } from "@/lib/ecomviper/walmart/walmart-live-item-hydrator";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import type { WalmartDraftRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import type { WalmartNativeState } from "@/lib/ecomviper/walmart/walmart-native-state";
 
 export const dynamic = "force-dynamic";
 
@@ -16,6 +18,7 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
   let stagedDrafts: WalmartDraftRecord[] = [];
   let aiProviderConnected = false;
   let serpApiProviderConnected = false;
+  let hydratedCurrentWalmartState: WalmartNativeState | null = null;
   let wasRemovedLocally = false;
 
   try {
@@ -47,10 +50,18 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       aiProviderConnected = openAiStatus.connected;
       const serpApiStatus = await getWalmartSerpApiConnectionStatusForUser(userId);
       serpApiProviderConnected = serpApiStatus.connected;
+      if (product) {
+        const hydration = await hydrateLiveWalmartItemStateForUser({
+          userId,
+          product,
+        });
+        hydratedCurrentWalmartState = hydration.currentWalmartState;
+      }
     }
   } catch {
     aiProviderConnected = false;
     serpApiProviderConnected = false;
+    hydratedCurrentWalmartState = null;
   }
 
   if (!product) {
@@ -72,6 +83,7 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       stagedDrafts={stagedDrafts}
       aiProviderConnected={aiProviderConnected}
       serpApiProviderConnected={serpApiProviderConnected}
+      hydratedCurrentWalmartState={hydratedCurrentWalmartState ?? undefined}
     />
   );
 }

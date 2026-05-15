@@ -5,6 +5,13 @@ import {
   searchBrowseGroupLabel,
   type WalmartSearchBrowseFieldDefinition,
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
+  analyzeWalmartProductTypeFieldCoverage,
+  resolveWalmartProductTypeIntelligence,
+  type WalmartProductTypeCoverageAnalysis,
+  type WalmartProductTypeIntelligence,
+  type WalmartTaxonomyConfidence,
+} from "@/lib/ecomviper/walmart/walmart-product-type-intelligence";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 export type WalmartStructuredAttributeGroup =
@@ -20,11 +27,17 @@ export interface WalmartStructuredAttributeDefinition {
   key: string;
   label: string;
   group: WalmartStructuredAttributeGroup;
+  productTypeGroup: string;
+  productType: string;
   required: boolean;
-  writable: boolean;
+  optional: boolean;
   searchable: boolean;
+  filterable: boolean;
   complianceCritical: boolean;
+  writable: boolean;
+  discoverabilityImpact: "high" | "medium" | "low";
   supplementRelevant: boolean;
+  taxonomyRelevant: boolean;
   walmartSchema: "Item Setup" | "Item Maintenance" | "MP_ITEM" | "MP_MAINTENANCE";
   helperText?: string;
 }
@@ -36,6 +49,8 @@ export interface WalmartStructuredAttributeValue extends WalmartStructuredAttrib
 
 export interface WalmartStructuredAttributeRegistry {
   taxonomyPlacement: string;
+  taxonomyConfidence: WalmartTaxonomyConfidence;
+  productTypeGroup: string;
   productType: string;
   supplementRelevant: boolean;
   definitions: WalmartStructuredAttributeDefinition[];
@@ -45,151 +60,101 @@ export interface WalmartStructuredAttributeRegistry {
     label: string;
     values: WalmartStructuredAttributeValue[];
   }>;
+  intelligence: WalmartProductTypeIntelligence;
+  gapAnalysis: WalmartProductTypeCoverageAnalysis;
 }
 
-const SUPPLEMENT_KEY_HINTS = [
-  "supplement_type",
-  "product_type",
-  "primary_ingredient",
-  "serving_size",
-  "servings_per_container",
-  "count_per_pack",
-  "form",
-  "product_form",
-  "flavor",
-  "dietary_need",
-  "health_concerns",
-  "ingredient_preferences",
-  "nutrients",
-  "gender",
-  "age_group",
-  "product_line",
+const SUPPLEMENT_SPEC_FIELDS: Array<Pick<WalmartStructuredAttributeDefinition, "key" | "label" | "group">> = [
+  { key: "primary_ingredient", label: "Primary Ingredient", group: "ingredients_form" },
+  { key: "ingredients_statement", label: "Ingredients Statement", group: "ingredients_form" },
+  { key: "dosage", label: "Dosage", group: "ingredients_form" },
+  { key: "vitamin_type", label: "Vitamin Type", group: "ingredients_form" },
+  { key: "nutrients", label: "Nutrients", group: "search_browse_metadata" },
+  { key: "dietary_need", label: "Dietary Need", group: "search_browse_metadata" },
+  { key: "ingredient_preferences", label: "Ingredient Preferences", group: "search_browse_metadata" },
+  { key: "health_concerns", label: "Health Concerns", group: "search_browse_metadata" },
+  { key: "product_line", label: "Product Line", group: "search_browse_metadata" },
+  { key: "allergens", label: "Allergens", group: "search_browse_metadata" },
+  { key: "allergen_free_statements", label: "Allergen-Free Statements", group: "search_browse_metadata" },
+  { key: "serving_size", label: "Serving Size", group: "ingredients_form" },
+  { key: "servings_per_container", label: "Servings Per Container", group: "ingredients_form" },
+  { key: "count_per_pack", label: "Count Per Pack", group: "dimensions_packaging" },
+  { key: "supplement_type", label: "Supplement Type", group: "product_identity" },
+  { key: "product_form", label: "Product Form", group: "ingredients_form" },
+  { key: "form", label: "Form", group: "ingredients_form" },
+  { key: "flavor", label: "Flavor", group: "ingredients_form" },
+  { key: "gender", label: "Gender", group: "audience_usage" },
+  { key: "age_group", label: "Age Group", group: "audience_usage" },
 ];
 
-const COMPLIANCE_FIELDS: WalmartStructuredAttributeDefinition[] = [
+const COMPLIANCE_FIELDS: Array<Pick<WalmartStructuredAttributeDefinition, "key" | "label" | "group" | "walmartSchema">> = [
   {
     key: "warning_text",
     label: "Warning Text",
     group: "compliance",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: true,
-    supplementRelevant: true,
     walmartSchema: "Item Maintenance",
   },
   {
     key: "stop_use_indications",
     label: "Stop Use Indications",
     group: "compliance",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: true,
-    supplementRelevant: true,
     walmartSchema: "Item Maintenance",
   },
   {
     key: "prop_65",
     label: "Prop 65",
     group: "compliance",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: true,
-    supplementRelevant: false,
     walmartSchema: "Item Maintenance",
   },
   {
     key: "country_of_origin",
     label: "Country of Origin",
     group: "compliance",
-    required: false,
-    writable: true,
-    searchable: true,
-    complianceCritical: true,
-    supplementRelevant: false,
     walmartSchema: "Item Maintenance",
   },
   {
     key: "regulatory_fields",
     label: "Regulatory Fields",
     group: "compliance",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: true,
-    supplementRelevant: false,
     walmartSchema: "Item Maintenance",
-    helperText: "Regulatory attributes grouped from Walmart maintenance payloads.",
   },
 ];
 
-const FULFILLMENT_FIELDS: WalmartStructuredAttributeDefinition[] = [
+const FULFILLMENT_FIELDS: Array<Pick<WalmartStructuredAttributeDefinition, "key" | "label" | "group" | "walmartSchema">> = [
   {
     key: "fulfillment_type",
     label: "Fulfillment Type",
     group: "fulfillment",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_MAINTENANCE",
   },
   {
     key: "lag_time",
     label: "Lag Time",
     group: "fulfillment",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_MAINTENANCE",
   },
   {
     key: "wfs_status",
     label: "WFS Status",
     group: "fulfillment",
-    required: false,
-    writable: false,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_ITEM",
   },
   {
     key: "shipping_template",
     label: "Shipping Template",
     group: "fulfillment",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_MAINTENANCE",
   },
   {
     key: "dimensions",
     label: "Dimensions",
     group: "fulfillment",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_MAINTENANCE",
   },
   {
     key: "weight",
     label: "Weight",
     group: "fulfillment",
-    required: false,
-    writable: true,
-    searchable: false,
-    complianceCritical: false,
-    supplementRelevant: false,
     walmartSchema: "MP_MAINTENANCE",
   },
 ];
@@ -205,6 +170,10 @@ function asText(value: unknown): string {
   if (typeof value === "string") return value.trim();
   if (typeof value === "number" && Number.isFinite(value)) return String(value);
   return "";
+}
+
+function normalizeKey(key: string): string {
+  return key.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "");
 }
 
 function firstNonEmptyString(
@@ -227,91 +196,51 @@ function normalizeGroup(
   return group;
 }
 
-function isSupplementRelevantProduct(input: {
-  product: WalmartProductRecord;
-  searchBrowseAttributes: Record<string, string>;
-}): boolean {
-  const attributeKeys = Object.keys(input.searchBrowseAttributes).map((key) => key.toLowerCase());
-  const attributeSignal = SUPPLEMENT_KEY_HINTS.some((hint) => attributeKeys.includes(hint));
-  if (attributeSignal) return true;
-
-  const haystack = [
-    input.product.category,
-    input.product.title,
-    input.product.shortDescription,
-    input.product.longDescription,
-  ]
-    .map((value) => value.trim().toLowerCase())
-    .join(" ");
-
-  return /(supplement|vitamin|gummy|capsule|softgel|nutrition|wellness)/i.test(haystack);
-}
-
-function toStructuredDefinition(input: {
-  field: WalmartSearchBrowseFieldDefinition;
-  supplementRelevant: boolean;
-}): WalmartStructuredAttributeDefinition {
-  const key = input.field.key;
-  const requiredSupplementKeys = new Set([
-    "product_type",
-    "supplement_type",
-    "product_form",
-    "serving_size",
-    "servings_per_container",
-  ]);
-  const searchableKeys = new Set([
-    "product_type",
-    "supplement_type",
-    "product_name",
-    "brand",
-    "main_ingredients",
-    "support_areas",
-    "search_keywords",
-    "search_terms",
-    "dietary_need",
-    "health_concerns",
-    "ingredient_preferences",
-    "nutrients",
-    "age_group",
-    "gender",
-    "product_line",
-  ]);
-  const complianceKeys = new Set([
-    "warning_text",
-    "stop_use_indications",
-    "safety_warnings",
-    "prop_65",
-    "country_of_origin",
-    "regulatory_fields",
-  ]);
-
-  return {
-    key,
-    label: input.field.label,
-    group: normalizeGroup(input.field.group),
-    required: input.supplementRelevant && requiredSupplementKeys.has(key),
-    writable: true,
-    searchable: searchableKeys.has(key),
-    complianceCritical: complianceKeys.has(key),
-    supplementRelevant: input.supplementRelevant,
-    walmartSchema:
-      input.field.group === "search_browse_metadata" ? "Item Setup" : "Item Maintenance",
-    helperText: input.field.helperText,
-  };
-}
-
 function toUniqueDefinitions(
   definitions: WalmartStructuredAttributeDefinition[]
 ): WalmartStructuredAttributeDefinition[] {
   const seen = new Set<string>();
   const output: WalmartStructuredAttributeDefinition[] = [];
   for (const definition of definitions) {
-    const key = definition.key.trim().toLowerCase();
+    const key = normalizeKey(definition.key);
     if (!key || seen.has(key)) continue;
     seen.add(key);
-    output.push(definition);
+    output.push({ ...definition, key });
   }
   return output;
+}
+
+function toStructuredDefinition(input: {
+  key: string;
+  label: string;
+  group: WalmartStructuredAttributeGroup;
+  helperText?: string;
+  walmartSchema?: WalmartStructuredAttributeDefinition["walmartSchema"];
+  intelligence: WalmartProductTypeIntelligence;
+}): WalmartStructuredAttributeDefinition {
+  const normalizedKey = normalizeKey(input.key);
+  const metadata = input.intelligence.fieldMetadata[normalizedKey];
+
+  return {
+    key: normalizedKey,
+    label: input.label,
+    group: input.group,
+    productTypeGroup: input.intelligence.productTypeGroup,
+    productType: input.intelligence.productType,
+    required: metadata?.required ?? false,
+    optional: metadata?.optional ?? true,
+    searchable: metadata?.searchable ?? false,
+    filterable: metadata?.filterable ?? false,
+    complianceCritical: metadata?.complianceCritical ?? false,
+    writable: metadata?.writable ?? true,
+    discoverabilityImpact: metadata?.discoverabilityImpact ?? "low",
+    supplementRelevant: metadata?.supplementRelevant ?? input.intelligence.supplementSchema,
+    taxonomyRelevant: metadata?.taxonomyRelevant ?? false,
+    walmartSchema:
+      input.walmartSchema ??
+      (input.group === "search_browse_metadata" ? "Item Setup" : "Item Maintenance"),
+    helperText: input.helperText,
+  };
 }
 
 export function resolveWalmartStructuredAttributeRegistry(input: {
@@ -326,9 +255,28 @@ export function resolveWalmartStructuredAttributeRegistry(input: {
       draftPayload: input.draftPayload,
     });
 
-  const supplementRelevant = isSupplementRelevantProduct({
-    product: input.product,
-    searchBrowseAttributes: sourceAttributes,
+  const normalizedPayload = asObject(input.product.normalizedPayload);
+  const rawPayload = asObject(input.product.rawPayload);
+  const rawProductPayload = asObject(rawPayload?.product);
+  const records = [normalizedPayload, rawPayload, rawProductPayload];
+
+  const taxonomyPlacement =
+    sourceAttributes.taxonomy_placement ||
+    input.product.category ||
+    firstNonEmptyString(records, ["taxonomy", "taxonomyPlacement", "taxonomyNode", "categoryPath"]) ||
+    "";
+  const productType =
+    sourceAttributes.product_type ||
+    sourceAttributes.supplement_type ||
+    firstNonEmptyString(records, ["productType", "product_type", "itemType"]) ||
+    input.product.category;
+
+  const intelligence = resolveWalmartProductTypeIntelligence({
+    productType,
+    supplementType: sourceAttributes.supplement_type,
+    category: input.product.category,
+    taxonomyPlacement,
+    title: input.product.title,
   });
 
   const knownFieldDefinitions = getSearchBrowseFieldDefinitions(input.product);
@@ -337,31 +285,56 @@ export function resolveWalmartStructuredAttributeRegistry(input: {
     attributes: sourceAttributes,
   });
 
+  const schemaFieldDefinitions = intelligence.supplementSchema
+    ? SUPPLEMENT_SPEC_FIELDS
+    : [];
+
   const structuredDefinitions = toUniqueDefinitions([
     ...knownFieldDefinitions.map((field) =>
-      toStructuredDefinition({ field, supplementRelevant })
+      toStructuredDefinition({
+        key: field.key,
+        label: field.label,
+        group: normalizeGroup(field.group),
+        helperText: field.helperText,
+        intelligence,
+      })
     ),
     ...unknownFieldDefinitions.map((field) =>
-      toStructuredDefinition({ field, supplementRelevant })
+      toStructuredDefinition({
+        key: field.key,
+        label: field.label,
+        group: normalizeGroup(field.group),
+        helperText: field.helperText,
+        intelligence,
+      })
     ),
-    ...COMPLIANCE_FIELDS,
-    ...FULFILLMENT_FIELDS,
+    ...schemaFieldDefinitions.map((field) =>
+      toStructuredDefinition({
+        key: field.key,
+        label: field.label,
+        group: field.group,
+        intelligence,
+      })
+    ),
+    ...COMPLIANCE_FIELDS.map((field) =>
+      toStructuredDefinition({
+        key: field.key,
+        label: field.label,
+        group: field.group,
+        walmartSchema: field.walmartSchema,
+        intelligence,
+      })
+    ),
+    ...FULFILLMENT_FIELDS.map((field) =>
+      toStructuredDefinition({
+        key: field.key,
+        label: field.label,
+        group: field.group,
+        walmartSchema: field.walmartSchema,
+        intelligence,
+      })
+    ),
   ]);
-
-  const normalizedPayload = asObject(input.product.normalizedPayload);
-  const rawPayload = asObject(input.product.rawPayload);
-  const rawProductPayload = asObject(rawPayload?.product);
-  const records = [normalizedPayload, rawPayload, rawProductPayload];
-
-  const taxonomyPlacement =
-    sourceAttributes.taxonomy_placement ||
-    firstNonEmptyString(records, ["taxonomy", "taxonomyPlacement", "taxonomyNode", "categoryPath"]) ||
-    input.product.category;
-  const productType =
-    sourceAttributes.product_type ||
-    sourceAttributes.supplement_type ||
-    firstNonEmptyString(records, ["productType", "product_type", "itemType"]) ||
-    input.product.category;
 
   const values: WalmartStructuredAttributeValue[] = structuredDefinitions.map((definition) => {
     const fromAttributes = sourceAttributes[definition.key] ?? "";
@@ -400,12 +373,21 @@ export function resolveWalmartStructuredAttributeRegistry(input: {
     }))
     .filter((entry) => entry.values.length > 0);
 
+  const gapAnalysis = analyzeWalmartProductTypeFieldCoverage({
+    intelligence,
+    attributes: sourceAttributes,
+  });
+
   return {
     taxonomyPlacement,
-    productType,
-    supplementRelevant,
+    taxonomyConfidence: intelligence.taxonomyConfidence,
+    productTypeGroup: intelligence.productTypeGroup,
+    productType: intelligence.productType,
+    supplementRelevant: intelligence.supplementSchema,
     definitions: structuredDefinitions,
     values,
     groupedValues,
+    intelligence,
+    gapAnalysis,
   };
 }
