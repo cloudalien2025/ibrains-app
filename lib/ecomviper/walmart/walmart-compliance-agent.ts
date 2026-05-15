@@ -1,12 +1,17 @@
 import {
   detectRiskyClaims,
-  ensureSingleSupplementDisclaimer,
   sanitizeRiskyClaims,
-  SUPPLEMENT_FDA_DISCLAIMER,
 } from "@/lib/ecomviper/walmart/walmart-ai-visibility-content-policy";
+import {
+  containsRepeatedSupportArtifact,
+  countCanonicalSupplementDisclaimer,
+  normalizeSupplementDisclaimerText,
+  removeSupplementDisclaimerVariants,
+  type SupplementDisclaimerStatus,
+} from "@/lib/ecomviper/walmart/walmart-supplement-disclaimer";
 
 export type WalmartComplianceDecision = "accepted" | "accepted_with_changes" | "rejected";
-export type WalmartDisclaimerStatus = "inserted" | "preserved" | "deduped" | "missing";
+export type WalmartDisclaimerStatus = SupplementDisclaimerStatus;
 
 export interface WalmartComplianceContent {
   title: string;
@@ -63,18 +68,6 @@ function normalizeWhitespace(value: string): string {
   return value.replace(/\s{2,}/g, " ").replace(/\s+([,.!?;:])/g, "$1").trim();
 }
 
-function countDisclaimerOccurrences(value: string): number {
-  if (!value) return 0;
-  const escaped = SUPPLEMENT_FDA_DISCLAIMER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const matches = value.match(new RegExp(escaped, "g"));
-  return matches?.length ?? 0;
-}
-
-function stripDisclaimer(value: string): string {
-  const escaped = SUPPLEMENT_FDA_DISCLAIMER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return value.replace(new RegExp(escaped, "g"), " ");
-}
-
 function sanitizeFiller(value: string): { sanitized: string; warnings: string[] } {
   let working = normalizeWhitespace(value);
   const warnings: string[] = [];
@@ -93,7 +86,7 @@ function sanitizeFiller(value: string): { sanitized: string; warnings: string[] 
 }
 
 function collectForbiddenClaimsOutsideDisclaimer(value: string): string[] {
-  const outsideDisclaimer = stripDisclaimer(value);
+  const outsideDisclaimer = removeSupplementDisclaimerVariants(value);
   const hits: string[] = [];
 
   for (const pattern of FORBIDDEN_PHRASES_OUTSIDE_DISCLAIMER) {
@@ -221,7 +214,11 @@ export function reviewWalmartSupplementCopy(
   const title = sanitizeTextField(base.title);
   const shortDescription = sanitizeTextField(base.shortDescription);
   const longDescriptionSanitized = sanitizeTextField(base.longDescription);
-  const longDescriptionWithDisclaimer = ensureSingleSupplementDisclaimer(longDescriptionSanitized.value);
+  const disclaimerNormalization = normalizeSupplementDisclaimerText(
+    longDescriptionSanitized.value,
+    { appendWhenMissing: true }
+  );
+  const longDescriptionWithDisclaimer = disclaimerNormalization.normalizedText;
   const bullets = sanitizeList(base.bullets);
   const searchKeywords = sanitizeKeywordList(base.searchKeywords);
   const aiVisibilitySummary = sanitizeTextField(base.aiVisibilitySummary);
@@ -230,16 +227,7 @@ export function reviewWalmartSupplementCopy(
   const benefitClusters = sanitizeList(base.compliantBenefitClusters);
   const faqSnippets = sanitizeList(base.faqSnippets);
 
-  const disclaimerBefore = countDisclaimerOccurrences(base.longDescription);
-  const disclaimerAfter = countDisclaimerOccurrences(longDescriptionWithDisclaimer);
-  const disclaimerStatus: WalmartDisclaimerStatus =
-    disclaimerAfter === 0
-      ? "missing"
-      : disclaimerBefore === 0
-      ? "inserted"
-      : disclaimerBefore > 1
-      ? "deduped"
-      : "preserved";
+  const disclaimerStatus: WalmartDisclaimerStatus = disclaimerNormalization.status;
 
   const compliantContent: WalmartComplianceContent = {
     title: title.value,
@@ -290,13 +278,19 @@ export function reviewWalmartSupplementCopy(
     ...customerFit.repetitionWarnings,
     ...benefitClusters.repetitionWarnings,
     ...faqSnippets.repetitionWarnings,
+    ...(containsRepeatedSupportArtifact(compliantContent.longDescription)
+      ? ["Repeated support phrase artifacts detected in long description."]
+      : []),
   ]);
 
   const rejectionReasons: string[] = [];
   if (!compliantContent.title) rejectionReasons.push("title_empty_after_compliance");
   if (!compliantContent.longDescription) rejectionReasons.push("long_description_empty_after_compliance");
-  if (countDisclaimerOccurrences(compliantContent.longDescription) !== 1) {
+  if (countCanonicalSupplementDisclaimer(compliantContent.longDescription) !== 1) {
     rejectionReasons.push("fda_disclaimer_not_exactly_once");
+  }
+  if (disclaimerNormalization.malformedFragments.length > 0) {
+    rejectionReasons.push("malformed_fda_disclaimer_detected");
   }
   if (unresolvedRiskyClaims.length > 0) {
     rejectionReasons.push("risky_claims_detected_after_compliance");

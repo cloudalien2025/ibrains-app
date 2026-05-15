@@ -121,6 +121,7 @@ describe("Search & Browse mapper", () => {
         sku: "DO-NOT-OVERWRITE",
         upc: "123456789012",
         price: "19.99",
+        support_areas: "unknown",
         search_terms: "magnesium glycinate gummies",
       },
     });
@@ -130,6 +131,7 @@ describe("Search & Browse mapper", () => {
     expect(result.mappedAttributes).not.toHaveProperty("price");
     expect(result.mappedAttributes.search_terms).toContain("magnesium glycinate");
     expect(result.skippedProtectedFields).toEqual(expect.arrayContaining(["sku", "upc", "price"]));
+    expect(result.skippedLowConfidenceFields).toContain("support_areas");
   });
 
   it("clears stale flavor when label source is present but flavor is unknown", () => {

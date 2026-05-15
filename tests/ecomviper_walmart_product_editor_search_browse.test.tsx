@@ -54,6 +54,10 @@ function createDraft(): WalmartDraftRecord {
         product_form: "Capsule",
         support_areas: "Joint comfort, mobility",
       },
+      faqSnippets: [
+        "Q: What is this product? A: A supplement for daily wellness support.",
+        "Q: How do I take it? A: Use as directed on label.",
+      ],
     },
     changeSummary: "search browse staged",
     createdBy: "tester",
@@ -132,6 +136,23 @@ describe("Walmart Search & Browse editor hydration", () => {
 
     expect(container.textContent).toContain("Search & Browse");
     expect(container.innerHTML).toContain("Joint comfort, mobility");
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-search-browse-section"]')
+    ).not.toBeNull();
+
+    const faqTab = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "FAQ"
+    ) as HTMLButtonElement;
+    await act(async () => {
+      faqTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.querySelector('[data-testid="ecomviper-walmart-faq-section"]')).not.toBeNull();
+    const faqTextarea = container.querySelector(
+      '[data-testid="ecomviper-walmart-faq-textarea"]'
+    ) as HTMLTextAreaElement;
+    expect(faqTextarea).not.toBeNull();
+    expect(faqTextarea.value).toContain("Q: What is this product?");
 
     const saveButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"
@@ -153,5 +174,9 @@ describe("Walmart Search & Browse editor hydration", () => {
       product_form: "Capsule",
       support_areas: "Joint comfort, mobility",
     });
+    expect(body.draftPayload.faqSnippets).toEqual([
+      "Q: What is this product? A: A supplement for daily wellness support.",
+      "Q: How do I take it? A: Use as directed on label.",
+    ]);
   });
 });

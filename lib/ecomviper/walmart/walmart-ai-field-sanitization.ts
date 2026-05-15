@@ -33,6 +33,13 @@ const DEFAULT_SEARCH_BROWSE_ALLOWLIST = new Set([
   "servings_per_container",
   "search_keywords",
   "search_terms",
+  "suggested_use",
+  "product_name",
+  "dosage_strength",
+  "count_per_package",
+  "servings",
+  "form",
+  "category",
   "keywords",
   "browse_path",
   "category_path",
@@ -93,6 +100,28 @@ function isGenericSearchBrowseKey(key: string): boolean {
   return /^[a-z][a-z0-9_]{1,63}$/.test(key);
 }
 
+function toCandidateText(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => toCandidateText(entry))
+      .filter(Boolean)
+      .join(", ")
+      .trim();
+  }
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    return (
+      toCandidateText(row.value) ||
+      toCandidateText(row.label) ||
+      toCandidateText(row.name) ||
+      toCandidateText(row.text)
+    );
+  }
+  return "";
+}
+
 export function sanitizeWalmartAiSearchBrowseAttributes(input: {
   candidates: Record<string, unknown>;
   existingKeys?: Iterable<string>;
@@ -115,6 +144,17 @@ export function sanitizeWalmartAiSearchBrowseAttributes(input: {
 
   const accepted: Record<string, string> = {};
   const skipped: WalmartAiAttributeSkip[] = [];
+  const lowConfidenceFromRaw: WalmartAiAttributeSkip[] = [];
+
+  for (const [rawKey, rawValue] of Object.entries(input.candidates ?? {})) {
+    const key = normalizeWalmartAiFieldKey(rawKey);
+    if (!key) continue;
+    const value = toCandidateText(rawValue);
+    if (!value) continue;
+    if (isLowConfidenceAiFieldValue(value)) {
+      lowConfidenceFromRaw.push({ key, reason: "low_confidence" });
+    }
+  }
 
   for (const [rawKey, rawValue] of Object.entries(normalizedCandidates)) {
     const key = normalizeWalmartAiFieldKey(rawKey);
@@ -137,6 +177,12 @@ export function sanitizeWalmartAiSearchBrowseAttributes(input: {
     }
 
     accepted[key] = value;
+  }
+
+  for (const entry of lowConfidenceFromRaw) {
+    if (accepted[entry.key]) continue;
+    if (skipped.some((existing) => existing.key === entry.key)) continue;
+    skipped.push(entry);
   }
 
   return { accepted, skipped };
