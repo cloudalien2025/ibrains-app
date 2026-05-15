@@ -106,12 +106,12 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-product-form");
     expect(html).toContain("ecomviper-walmart-readiness");
     expect(html).toContain("Product Editor");
-    expect(html).toContain("Current Walmart State");
-    expect(html).toContain("AI Optimized State");
-    expect(html).toContain("Editable Draft State");
+    expect(html).toContain("Step 1 - Current Walmart Listing");
+    expect(html).toContain("Step 2 - Optimize Listing with AI");
+    expect(html).toContain("Step 3 - Review and Publish");
     expect(html).toContain("SKU: 30066-841");
-    expect(html).toContain("Top issues");
-    expect(html).toContain("View all issues");
+    expect(html).toContain("Hydration + spec diagnostics");
+    expect(html).toContain("View validation");
     expect(html).toContain("30066-841");
     expect(html).toContain("Inventory:</span> 9");
     expect(html).toContain("Generate AI Improvements");
@@ -127,7 +127,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
-    expect(html).toContain("Validation is checked continuously and before Submit Update.");
+    expect(html).toContain("Validation is checked continuously and before marking a draft publish-ready.");
   });
 
   it("renders staged changes section with proposal data", () => {
@@ -157,7 +157,8 @@ describe("Walmart product optimizer client", () => {
       />
     );
 
-    expect(html).toContain("No matching row found in Walmart Item Report.");
+    expect(html).toContain("Source image lane");
+    expect(html).toContain("walmart_item_report");
   });
 
   it("hydrates editable fields from normalized/raw payload and routes optimize action to current SKU", () => {

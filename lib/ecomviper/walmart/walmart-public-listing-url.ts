@@ -45,6 +45,10 @@ const PLACEHOLDER_VALUES = new Set([
   "no listing",
   "unavailable",
 ]);
+const LOOKUP_ONLY_IDENTIFIER_TYPES = new Set(["GTIN", "UPC", "EAN", "ISBN", "BARCODE", "SKU"]);
+const LOOKUP_IDENTIFIER_HINT_REGEX = /\b(gtin|upc|ean|isbn|barcode|sku)\b/i;
+const TRUSTED_ITEM_ID_HINT_REGEX =
+  /\b(item[_\s-]?id|us[_\s-]?item[_\s-]?id|walmart[_\s-]?item[_\s-]?id|public[_\s-]?walmart[_\s-]?(item|product)[_\s-]?id)\b/i;
 
 function asString(value: unknown): string {
   if (typeof value === "string") return value.trim();
@@ -62,6 +66,128 @@ function normalizeWalmartItemId(value: unknown): string | null {
   const raw = asString(value);
   if (!raw || isPlaceholder(raw)) return null;
   return /^\d{6,20}$/.test(raw) ? raw : null;
+}
+
+function normalizeIdentifierType(value: unknown): string {
+  const raw = asString(value);
+  if (!raw) return "";
+  return raw.replace(/[^a-z0-9_]/gi, "").toUpperCase();
+}
+
+interface ItemIdCandidateDescriptor {
+  rawValue: string;
+  provenance: string;
+  productIdType: string;
+  hadInput: boolean;
+}
+
+function describeItemIdCandidate(value: unknown): ItemIdCandidateDescriptor {
+  if (value && typeof value === "object" && !Array.isArray(value)) {
+    const node = value as Record<string, unknown>;
+    const valueKeys = [
+      "value",
+      "itemId",
+      "usItemId",
+      "walmartItemId",
+      "publicWalmartProductId",
+      "publicWalmartItemId",
+      "productId",
+      "id",
+    ];
+    let selectedKey = "";
+    let selectedValue = "";
+    for (const key of valueKeys) {
+      const candidate = asString(node[key]);
+      if (!candidate) continue;
+      selectedKey = key;
+      selectedValue = candidate;
+      break;
+    }
+
+    const explicitProvenance = asString(node.provenance ?? node.source ?? node.field ?? node.key);
+    const provenance = explicitProvenance || selectedKey;
+    const productIdType = normalizeIdentifierType(
+      node.productIdType ?? node.product_id_type ?? (selectedKey === "productId" ? node.type : undefined)
+    );
+    const hadInput = Boolean(selectedValue) && !isPlaceholder(selectedValue);
+
+    return {
+      rawValue: selectedValue,
+      provenance,
+      productIdType,
+      hadInput,
+    };
+  }
+
+  const rawValue = asString(value);
+  return {
+    rawValue,
+    provenance: "",
+    productIdType: "",
+    hadInput: Boolean(rawValue) && !isPlaceholder(rawValue),
+  };
+}
+
+function resolveConfirmedItemIdCandidate(value: unknown): {
+  itemId: string | null;
+  hadInput: boolean;
+  warning: string | null;
+} {
+  const descriptor = describeItemIdCandidate(value);
+  if (!descriptor.hadInput) {
+    return {
+      itemId: null,
+      hadInput: false,
+      warning: null,
+    };
+  }
+
+  if (descriptor.productIdType && LOOKUP_ONLY_IDENTIFIER_TYPES.has(descriptor.productIdType)) {
+    return {
+      itemId: null,
+      hadInput: true,
+      warning: "GTIN/UPC is a lookup identifier, not a Walmart public item ID.",
+    };
+  }
+
+  if (descriptor.provenance && LOOKUP_IDENTIFIER_HINT_REGEX.test(descriptor.provenance)) {
+    return {
+      itemId: null,
+      hadInput: true,
+      warning: "GTIN/UPC is a lookup identifier, not a Walmart public item ID.",
+    };
+  }
+
+  const itemId = normalizeWalmartItemId(descriptor.rawValue);
+  if (!itemId) {
+    return {
+      itemId: null,
+      hadInput: true,
+      warning: "Item ID candidates were present but invalid.",
+    };
+  }
+
+  if (descriptor.productIdType === "ITEM_ID") {
+    return {
+      itemId,
+      hadInput: true,
+      warning: null,
+    };
+  }
+
+  if (!descriptor.provenance || !TRUSTED_ITEM_ID_HINT_REGEX.test(descriptor.provenance)) {
+    return {
+      itemId: null,
+      hadInput: true,
+      warning: "Item ID candidate lacked trusted Walmart ITEM_ID provenance.",
+    };
+  }
+
+  return {
+    itemId,
+    hadInput: true,
+    warning: null,
+  };
 }
 
 function isWalmartHost(hostname: string): boolean {
@@ -130,9 +256,6 @@ export function buildWalmartPublicListingUrlFromItemId(
 }
 
 export function normalizeWalmartPublicListingUrl(input: unknown): string | null {
-  const asItemId = buildWalmartPublicListingUrlFromItemId(input as string | number | null | undefined);
-  if (asItemId) return asItemId;
-
   const raw = asString(input);
   if (!raw || isPlaceholder(raw)) return null;
 
@@ -190,17 +313,6 @@ function tryResolveFromUnknown(
     }
   }
 
-  for (const candidate of candidates) {
-    const itemId = normalizeWalmartItemId(candidate);
-    if (itemId) {
-      return {
-        url: buildWalmartPublicListingUrlFromItemId(itemId),
-        itemId,
-        hadCandidates: true,
-      };
-    }
-  }
-
   return {
     url: null,
     itemId: null,
@@ -239,8 +351,15 @@ export function resolveCanonicalWalmartPublicListingUrl(
     source.itemId,
     ...(source.itemIdCandidates ?? []),
   ];
+  let sawItemIdCandidate = false;
   for (const candidate of explicitItemIdCandidates) {
-    const itemId = normalizeWalmartItemId(candidate);
+    const resolvedCandidate = resolveConfirmedItemIdCandidate(candidate);
+    if (!resolvedCandidate.hadInput) continue;
+    sawItemIdCandidate = true;
+    if (resolvedCandidate.warning) {
+      mergeWarnings(warnings, "item_id", resolvedCandidate.warning);
+    }
+    const itemId = resolvedCandidate.itemId;
     if (!itemId) continue;
     return {
       url: buildWalmartPublicListingUrlFromItemId(itemId),
@@ -250,7 +369,7 @@ export function resolveCanonicalWalmartPublicListingUrl(
       warnings,
     };
   }
-  if (explicitItemIdCandidates.some((entry) => asString(entry).trim().length > 0)) {
+  if (sawItemIdCandidate && !warnings.some((warning) => warning.startsWith("[item_id]"))) {
     mergeWarnings(warnings, "item_id", "Item ID candidates were present but invalid.");
   }
 

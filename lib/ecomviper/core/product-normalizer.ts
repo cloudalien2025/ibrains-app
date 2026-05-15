@@ -112,7 +112,10 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
 
   const listingResolution = resolveCanonicalWalmartPublicListingUrl({
     explicitUrlCandidates: [input.publicWalmartUrl],
-    itemIdCandidates: [input.publicWalmartProductId, input.itemId],
+    itemIdCandidates: [
+      { value: input.publicWalmartProductId, provenance: "publicWalmartProductId" },
+      { value: input.itemId, provenance: "itemId" },
+    ],
   });
   const normalizedPublicWalmartUrl = listingResolution.url ?? "";
   const normalizedPublicWalmartProductId = listingResolution.itemId ?? "";

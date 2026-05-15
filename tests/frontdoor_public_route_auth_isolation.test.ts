@@ -22,6 +22,9 @@ describe("frontdoor public route auth isolation", () => {
     expect(source.includes("useAuth(")).toBe(false);
     expect(source.includes("UserButton")).toBe(false);
     expect(source.includes("ClerkProvider")).toBe(false);
+    expect(source.includes("apps-launcher-shell")).toBe(true);
+    expect(source.includes("ibrains-shell min-h-screen")).toBe(true);
+    expect(source.includes("fontFamily")).toBe(true);
   });
 
   it("forces the protected shell to render at runtime so production builds do not require clerk secrets", () => {

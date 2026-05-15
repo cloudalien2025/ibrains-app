@@ -353,6 +353,37 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     expect(link).toBeUndefined();
   });
 
+  it("does not render View Walmart Listing when only GTIN/UPC productId payload identifiers exist", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-GTIN-PRODUCTID", {
+              publicWalmartUrl: undefined,
+              publicWalmartProductId: undefined,
+              itemId: undefined,
+              upc: "850054016119",
+              gtin: "0850054016119",
+              rawPayload: {
+                productId: "0850054016119",
+                productIdType: "GTIN",
+              },
+              normalizedPayload: {
+                productId: "850054016119",
+                productIdType: "UPC",
+              },
+            }),
+          ]}
+        />
+      );
+    });
+
+    const link = Array.from(container.querySelectorAll("a")).find(
+      (entry) => entry.textContent?.trim() === "View Walmart Listing"
+    );
+    expect(link).toBeUndefined();
+  });
+
   it("sorts SKU ascending and descending with natural ordering and accessible sort state", async () => {
     await act(async () => {
       root.render(
