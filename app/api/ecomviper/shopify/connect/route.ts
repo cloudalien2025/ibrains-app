@@ -89,8 +89,16 @@ export async function POST(req: NextRequest) {
     const apiVersion = typeof body.apiVersion === "string" ? body.apiVersion.trim() : null;
     const adminApiToken = typeof body.adminApiToken === "string" ? body.adminApiToken.trim() : "";
 
-    if (!storeDomain || !clientId || !clientSecret) {
-      return fail(400, "Shopify store domain, Client ID, and Client Secret are required.", "VALIDATION_ERROR");
+    const usingLegacyToken = Boolean(adminApiToken) && !clientSecret;
+
+    if (!storeDomain || (!usingLegacyToken && (!clientId || !clientSecret))) {
+      return fail(
+        400,
+        usingLegacyToken
+          ? "Shopify store domain and Admin API token are required."
+          : "Shopify store domain, Client ID, and Client Secret are required.",
+        "VALIDATION_ERROR"
+      );
     }
 
     const test = await testShopifyConnectionForUser({
@@ -115,6 +123,7 @@ export async function POST(req: NextRequest) {
       storeDomain,
       clientId,
       clientSecret,
+      adminApiToken: adminApiToken || null,
       apiVersion,
       connectionTest: test,
     });

@@ -2,7 +2,11 @@ import "server-only";
 
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
-import type { ShopifyImportState, ShopifyProductRecord } from "@/lib/ecomviper/shopify/shopify-types";
+import type {
+  ShopifyImportState,
+  ShopifyMetafieldRecord,
+  ShopifyProductRecord,
+} from "@/lib/ecomviper/shopify/shopify-types";
 
 interface ShopifyProductRow {
   user_id: string;
@@ -84,6 +88,22 @@ function asStringArray(value: unknown): string[] {
     .filter((entry) => entry.length > 0);
 }
 
+function asMetafieldArray(value: unknown): ShopifyMetafieldRecord[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => asObject(entry))
+    .filter((entry): entry is Record<string, unknown> => entry !== null)
+    .map((entry) => ({
+      id: asString(entry.id),
+      namespace: asString(entry.namespace),
+      key: asString(entry.key),
+      type: asString(entry.type),
+      value: asString(entry.value),
+      description: asString(entry.description) || null,
+    }))
+    .filter((entry) => entry.namespace.length > 0 && entry.key.length > 0);
+}
+
 function toIsoTimestamp(value: string | Date | null | undefined): string | null {
   if (value instanceof Date) return value.toISOString();
   if (typeof value === "string") {
@@ -158,6 +178,9 @@ function sanitizeShopifyProduct(payload: unknown): ShopifyProductRecord | null {
     tags: asStringArray(row.tags),
     description: asString(row.description),
     descriptionHtml: asString(row.descriptionHtml),
+    seoTitle: asString(row.seoTitle),
+    seoDescription: asString(row.seoDescription),
+    metafields: asMetafieldArray(row.metafields),
     onlineStoreUrl: asString(row.onlineStoreUrl),
     primaryImageUrl: asString(row.primaryImageUrl),
     galleryImageUrls: asStringArray(row.galleryImageUrls),

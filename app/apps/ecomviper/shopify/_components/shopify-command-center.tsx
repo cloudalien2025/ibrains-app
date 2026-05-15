@@ -23,6 +23,7 @@ export default function ShopifyCommandCenter({ state }: ShopifyCommandCenterProp
         <p className="mt-1 text-sm text-[#475569]">
           Overall readiness score with MCP, Knowledge Base, catalog facts, policy coverage, supplement guardrails, and AI referral diagnostics.
         </p>
+        <p className="mt-2 text-xs text-[#64748B]">Data source: {state.workspaceSourceLabel}</p>
 
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="ecomviper-shopify-readiness-cards">
           <ShopifyReadinessCard dimension={readinessDimensions.storefrontMcpReadiness} />
@@ -38,7 +39,7 @@ export default function ShopifyCommandCenter({ state }: ShopifyCommandCenterProp
         <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">
           <h2 className="text-lg font-semibold text-[#0F172A]">Storefront MCP Connection</h2>
           <p className="mt-1 text-sm text-[#475569]">
-            Endpoint candidates and diagnostics for safe MCP readiness validation.
+            Endpoint candidates and diagnostics for storefront MCP readiness validation.
           </p>
 
           <ul className="mt-3 space-y-2 text-sm text-[#334155]" data-testid="ecomviper-shopify-mcp-endpoints">

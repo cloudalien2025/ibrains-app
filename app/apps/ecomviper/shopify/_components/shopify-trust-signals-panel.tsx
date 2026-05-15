@@ -12,6 +12,7 @@ export default function ShopifyTrustSignalsPanel({ state }: ShopifyTrustSignalsP
         <p className="mt-1 text-sm text-[#475569]">
           Brand facts, support paths, marketplace availability, checkout trust, and policy signals.
         </p>
+        <p className="mt-2 text-xs text-[#64748B]">Data source: {state.workspaceSourceLabel}</p>
       </article>
 
       <article className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]">

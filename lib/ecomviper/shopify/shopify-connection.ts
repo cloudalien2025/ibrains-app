@@ -75,8 +75,9 @@ export interface ShopifyAdminCredentials {
 
 export interface ShopifyConnectionInput {
   storeDomain: string;
-  clientId: string;
-  clientSecret: string;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  adminApiToken?: string | null;
   apiVersion?: string | null;
 }
 
@@ -466,8 +467,9 @@ export async function getShopifyConnectionStatusForUser(userId: string): Promise
 export async function saveShopifyConnectionForUser(input: {
   userId: string;
   storeDomain: string;
-  clientId: string;
-  clientSecret: string;
+  clientId?: string | null;
+  clientSecret?: string | null;
+  adminApiToken?: string | null;
   apiVersion?: string | null;
   connectionTest?: ShopifyConnectionTestResult;
 }): Promise<ShopifyConnectionStatus> {
@@ -477,14 +479,19 @@ export async function saveShopifyConnectionForUser(input: {
     throw new Error("Shopify store domain must be a valid myshopify.com domain.");
   }
 
-  const clientId = input.clientId.trim();
-  if (!clientId) {
+  const clientId = input.clientId?.trim() ?? "";
+  const clientSecret = input.clientSecret?.trim() ?? "";
+  const adminApiToken = input.adminApiToken?.trim() ?? "";
+
+  const useLegacyToken = Boolean(adminApiToken) && !clientSecret;
+
+  if (!useLegacyToken && !clientId) {
     throw new Error("Shopify Client ID is required.");
   }
 
-  const secret = input.clientSecret.trim();
+  const secret = useLegacyToken ? adminApiToken : clientSecret;
   if (!secret) {
-    throw new Error("Shopify Client Secret is required.");
+    throw new Error(useLegacyToken ? "Shopify Admin API token is required." : "Shopify Client Secret is required.");
   }
 
   const apiVersion = normalizeApiVersion(input.apiVersion);
@@ -494,8 +501,8 @@ export async function saveShopifyConnectionForUser(input: {
 
   const config: CredentialConfig = {
     scope: "ecomviper_shopify",
-    provider: "shopify_dev_dashboard_client_credentials",
-    authMode: "dev_dashboard_client_credentials",
+    provider: useLegacyToken ? "shopify_admin_graphql_legacy" : "shopify_dev_dashboard_client_credentials",
+    authMode: useLegacyToken ? "legacy_admin_token" : "dev_dashboard_client_credentials",
     storeDomain: normalizedStoreDomain,
     apiVersion,
     clientId,
@@ -785,8 +792,11 @@ export async function testShopifyConnectionForUser(input: {
   const submittedClientSecret = input.clientSecret?.trim() ?? "";
   const submittedLegacyToken = input.adminApiToken?.trim() ?? "";
 
+  const hasSubmittedDevCredentials = Boolean(submittedClientId || submittedClientSecret);
+  const hasSubmittedLegacyToken = Boolean(submittedLegacyToken);
   const shouldUseDevDashboardCredentials =
-    Boolean(submittedClientId || submittedClientSecret) || stored.authMode === "dev_dashboard_client_credentials";
+    hasSubmittedDevCredentials ||
+    (!hasSubmittedLegacyToken && stored.authMode === "dev_dashboard_client_credentials");
 
   let accessToken = "";
   let grantedScopes: string[] = [];
@@ -838,7 +848,7 @@ export async function testShopifyConnectionForUser(input: {
   } else {
     const legacyToken = submittedLegacyToken || stored.adminApiToken;
     if (!legacyToken) {
-      throw new Error("Shopify Client ID and Client Secret are required.");
+      throw new Error("Shopify Admin API token is required.");
     }
 
     accessToken = legacyToken;

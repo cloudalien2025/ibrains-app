@@ -1,3 +1,10 @@
+import type {
+  ShopifyEntitySourceProvenance,
+  ShopifyWorkspaceHydrationMode,
+  ShopifyWorkspaceSource,
+  ShopifyWorkspaceSourceLabel,
+} from "@/lib/ecomviper/shopify/shopify-source-provenance";
+
 export type ShopifyWorkspaceLaneId =
   | "command-center"
   | "products"
@@ -115,6 +122,7 @@ export interface ShopifyProductAgenticFact {
   id: string;
   title: string;
   category: string;
+  sourceLabel?: ShopifyWorkspaceSourceLabel;
   productFactsReadiness: number;
   titleDescriptionReadiness: number;
   imageAltTextReadiness: number;
@@ -188,6 +196,54 @@ export interface ShopifyAgenticWorkspaceState {
   environmentLabel: string;
   storeLabel: string;
   modeLabel: string;
+  workspaceSource: ShopifyWorkspaceSource;
+  workspaceSourceLabel: ShopifyWorkspaceSourceLabel;
+  hydrationMode: ShopifyWorkspaceHydrationMode;
+  mockModeEnabled: boolean;
+  mockFallbackActive: boolean;
+  sourceWarnings: string[];
+  sourceErrors: string[];
+  lastSyncedAt: string | null;
+  lastVisibilityScanAt: string | null;
+  connectionStatus: {
+    shopify: {
+      connected: boolean;
+      mode: "live" | "demo" | "unavailable";
+      credentialSource: "secure_store" | "demo" | "none";
+      maskedCredential: string;
+      lastTestedAt: string | null;
+      lastSyncAt: string | null;
+      lastError: string | null;
+      statusLabel: string;
+    };
+    openai: {
+      connected: boolean;
+      mode: "live" | "unavailable";
+      credentialSource: "secure_store" | "none";
+      maskedCredential: string;
+      lastTestedAt: string | null;
+      lastError: string | null;
+      statusLabel: string;
+    };
+    serpapi: {
+      connected: boolean;
+      mode: "live" | "unavailable";
+      credentialSource: "secure_store" | "none";
+      maskedCredential: string;
+      lastTestedAt: string | null;
+      lastScanAt: string | null;
+      lastError: string | null;
+      statusLabel: string;
+    };
+  };
+  entitySourceProvenance: ShopifyEntitySourceProvenance[];
+  catalogCounts: {
+    products: number;
+    collections: number;
+    pages: number;
+    blogArticles: number;
+    policies: number;
+  };
   storefrontMcpEndpoints: ShopifyStorefrontMcpEndpoint[];
   mcpDiagnostics: ShopifyMcpDiagnosticResult[];
   products: ShopifyProductAgenticFact[];

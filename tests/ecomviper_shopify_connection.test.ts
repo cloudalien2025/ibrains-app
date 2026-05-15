@@ -358,6 +358,37 @@ describe("Shopify connection config", () => {
     expect(statusPayload.clientSecretStored).toBe(true);
   });
 
+  it("supports legacy admin token mode via adminApiToken", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          data: {
+            shop: { id: "gid://shopify/Shop/1", name: "OPA Nutrition", myshopifyDomain: "opanutrition.myshopify.com" },
+            products: { nodes: [{ id: "gid://shopify/Product/1", title: "Omega" }] },
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      )
+    );
+
+    const saveReq = new NextRequest("http://localhost/api/ecomviper/shopify/connect", {
+      method: "POST",
+      body: JSON.stringify({
+        storeDomain: "opanutrition.myshopify.com",
+        adminApiToken: "shpat_live_token_1234",
+      }),
+    });
+
+    const saveResponse = await shopifySaveRoute(saveReq);
+    const payload = await saveResponse.json();
+
+    expect(saveResponse.status).toBe(200);
+    expect(payload.ok).toBe(true);
+    expect(payload.authMode).toBe("legacy_admin_token");
+    expect(payload.connected).toBe(true);
+    expect(JSON.stringify(payload)).not.toContain("shpat_live_token_1234");
+  });
+
   it("rejects unauthenticated Shopify test requests", async () => {
     authMocks.requireSignedInUser.mockResolvedValueOnce({
       userId: null,
