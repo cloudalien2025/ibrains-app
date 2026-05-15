@@ -14,6 +14,12 @@ export type ProductFactSource =
   | "walmart_product";
 
 export type ProductFactConfidence = "high" | "medium" | "low" | "unknown";
+export type ImageFactsStatus =
+  | "available"
+  | "extracted"
+  | "unavailable"
+  | "needs_vision_extraction"
+  | "low_confidence";
 
 export interface CanonicalProductFacts {
   brand: string;
@@ -58,6 +64,8 @@ export interface ProductFactsAgentResult {
   staleFieldReplacements: ProductFactReplacement[];
   staleFieldsCleared: string[];
   imageDerivedFacts: ImageDerivedFact[];
+  imageFactsStatus: ImageFactsStatus;
+  imageFactsMessage: string;
 }
 
 interface SourceRecord {
@@ -93,6 +101,16 @@ const FORM_ALIASES: Record<string, string> = {
   powder: "Powder",
   liquid: "Liquid",
 };
+
+const WEAK_FACT_SOURCES = new Set<ProductFactSource>([
+  "walmart_product",
+  "walmart_draft",
+  "shopify",
+]);
+const DEMO_FLAVOR_PATTERN = /^mixed\s+berry$/i;
+const DEMO_DOSAGE_PATTERN = /\bmagnesium(?:\s*\(as\s+magnesium\s+glycinate\))?\s*30\s*mg\b/i;
+const SERVING_SIZE_CAPSULE_PATTERN = /\b(capsules?|tablets?|softgels?|gummies?)\b/i;
+const TITLE_SERVINGS_PATTERN = /\b(\d{1,4})\s*servings?\b/i;
 
 function asObject(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -271,6 +289,12 @@ function inferFlavorFromText(text: string): string {
 
 function inferFormFromText(text: string): string {
   const normalized = text.toLowerCase();
+  if (/\b(greens?\s*&?\s*reds?|superfood|drink\s*mix)\b/.test(normalized)) {
+    return "Powder";
+  }
+  if (/\bblend\b/.test(normalized) && /\b(servings?|scoop|mix)\b/.test(normalized)) {
+    return "Powder";
+  }
   for (const [alias, canonical] of Object.entries(FORM_ALIASES)) {
     if (new RegExp(`\\b${alias}\\b`, "i").test(normalized)) {
       return canonical;
@@ -292,7 +316,9 @@ function inferServingSizeFromText(text: string): string {
 
 function inferServingsPerContainerFromText(text: string): string {
   const match = text.match(/servings\s*per\s*container\s*[:\-]?\s*([^\n.;]+)/i);
-  return match?.[1]?.trim() ?? "";
+  if (match?.[1]) return match[1].trim();
+  const titleMatch = text.match(TITLE_SERVINGS_PATTERN);
+  return titleMatch?.[1]?.trim() ?? "";
 }
 
 function inferSupplyFromText(text: string): string {
@@ -317,6 +343,99 @@ function normalizeAudience(value: string): string {
   if (!normalized) return "";
   if (/adults?/i.test(normalized)) return "Adults";
   return titleCase(normalized);
+}
+
+function isWeakFactCandidate<T>(candidate: FieldCandidate<T> | null): boolean {
+  if (!candidate) return false;
+  if (candidate.confidence === "unknown" || candidate.confidence === "low") return true;
+  return WEAK_FACT_SOURCES.has(candidate.source);
+}
+
+function normalizeAlphaWords(value: string): string {
+  return value.toLowerCase().replace(/[^a-z]+/g, " ").replace(/\s{2,}/g, " ").trim();
+}
+
+function titleMentionsAny(titleText: string, tokens: string[]): boolean {
+  const normalizedTitle = normalizeAlphaWords(titleText);
+  return tokens.some((token) => normalizedTitle.includes(normalizeAlphaWords(token)));
+}
+
+function ingredientAppearsInList(values: string[], token: string): boolean {
+  return values.some((entry) =>
+    normalizeAlphaWords(entry).includes(normalizeAlphaWords(token))
+  );
+}
+
+function looksLikeDemoJointIngredientList(values: string[]): boolean {
+  if (values.length === 0) return false;
+  return (
+    ingredientAppearsInList(values, "turmeric") &&
+    ingredientAppearsInList(values, "glucosamine") &&
+    ingredientAppearsInList(values, "chondroitin")
+  );
+}
+
+function normalizeServingsNumber(value: string): string {
+  const match = value.match(/\b(\d{1,4})\b/);
+  return match?.[1] ?? "";
+}
+
+function hasImageUrls(product: WalmartProductRecord): boolean {
+  const urls = unique([
+    asString(product.imageUrl),
+    ...(product.galleryImageUrls ?? []).map((entry) => asString(entry)),
+    ...(product.variantImageUrls ?? []).map((entry) => asString(entry)),
+  ]).filter(Boolean);
+  return urls.length > 0;
+}
+
+function deriveImageFactsStatus(input: {
+  product: WalmartProductRecord;
+  factsList: ImageDerivedFact[];
+  usedSources: string[];
+}): { status: ImageFactsStatus; message: string } {
+  if (input.factsList.length > 0) {
+    const hasMediumOrHigh = input.factsList.some(
+      (entry) => entry.confidence === "high" || entry.confidence === "medium"
+    );
+    if (hasMediumOrHigh) {
+      return {
+        status: "extracted",
+        message: "Image-derived label facts were extracted.",
+      };
+    }
+    return {
+      status: "low_confidence",
+      message: "Image-derived facts were low confidence and skipped.",
+    };
+  }
+
+  const imageAvailable = hasImageUrls(input.product);
+  if (!imageAvailable) {
+    return {
+      status: "unavailable",
+      message: "No product images are available for label fact extraction.",
+    };
+  }
+
+  if (input.usedSources.length === 0) {
+    return {
+      status: "needs_vision_extraction",
+      message: "Images are available, but label text extraction has not run yet.",
+    };
+  }
+
+  if (input.usedSources.length > 0) {
+    return {
+      status: "available",
+      message: "Image text is available, but no reliable label facts were extracted.",
+    };
+  }
+
+  return {
+    status: "unavailable",
+    message: "No product images are available for label fact extraction.",
+  };
 }
 
 function hasMeaningfulPayloadValue(value: unknown): boolean {
@@ -674,6 +793,10 @@ export function extractCanonicalProductFacts(input: {
   ]
     .filter(Boolean)
     .join("\n");
+  const titleInferenceText = [asString(input.product.title), titleFallback]
+    .filter(Boolean)
+    .join("\n");
+  const heuristicStaleAdjustments: ProductFactReplacement[] = [];
 
   const brandCandidates = records
     .map((record) => {
@@ -727,7 +850,7 @@ export function extractCanonicalProductFacts(input: {
     infer: (text) => asString(text),
   });
 
-  const form = pickStringCandidate({
+  let form = pickStringCandidate({
     records,
     keys: ["form", "product_form", "productForm"],
     normalize: normalizeForm,
@@ -773,26 +896,26 @@ export function extractCanonicalProductFacts(input: {
     }
   }
 
-  const servingSize = pickStringCandidate({
+  let servingSize = pickStringCandidate({
     records,
     keys: ["servingSize", "serving_size"],
     fallbackTextForInference: titleFallback,
     infer: inferServingSizeFromText,
   });
 
-  const servingsPerContainer = pickStringCandidate({
+  let servingsPerContainer = pickStringCandidate({
     records,
     keys: ["servingsPerContainer", "servings_per_container", "servings"],
     fallbackTextForInference: titleFallback,
     infer: inferServingsPerContainerFromText,
   });
 
-  const dosageStrength = pickStringCandidate({
+  let dosageStrength = pickStringCandidate({
     records,
     keys: ["dosageStrength", "dosage_strength", "strength"],
   });
 
-  const activeIngredients = pickListCandidate({
+  let activeIngredients = pickListCandidate({
     records,
     keys: [
       "activeIngredients",
@@ -803,6 +926,114 @@ export function extractCanonicalProductFacts(input: {
       "ingredients_highlights",
     ],
   });
+
+  const inferredFormFromTitle = inferFormFromText(titleInferenceText);
+  if (
+    inferredFormFromTitle &&
+    (!form || isWeakFactCandidate(form)) &&
+    normalizeFieldKey(form?.value ?? "") !== normalizeFieldKey(inferredFormFromTitle)
+  ) {
+    if (form?.value) {
+      heuristicStaleAdjustments.push({
+        field: "form",
+        previousValue: form.value,
+        nextValue: inferredFormFromTitle,
+        reason: "title inference overrode weak-source form value",
+      });
+    }
+    form = {
+      value: inferredFormFromTitle,
+      source: "walmart_product",
+      confidence: "low",
+    };
+  }
+
+  const resolvedForm = form?.value ?? inferredFormFromTitle ?? "";
+
+  const inferredServingsFromTitle = inferServingsPerContainerFromText(titleInferenceText);
+  if (inferredServingsFromTitle) {
+    const inferredServingsNumber = normalizeServingsNumber(inferredServingsFromTitle);
+    const selectedServingsNumber = normalizeServingsNumber(servingsPerContainer?.value ?? "");
+    const shouldPreferTitleServings =
+      (!servingsPerContainer || isWeakFactCandidate(servingsPerContainer)) &&
+      inferredServingsNumber.length > 0 &&
+      inferredServingsNumber !== selectedServingsNumber;
+    if (shouldPreferTitleServings) {
+      if (servingsPerContainer?.value) {
+        heuristicStaleAdjustments.push({
+          field: "servingsPerContainer",
+          previousValue: servingsPerContainer.value,
+          nextValue: inferredServingsNumber,
+          reason: "title-derived servings replaced stale weak-source value",
+        });
+      }
+      servingsPerContainer = {
+        value: inferredServingsNumber,
+        source: "walmart_product",
+        confidence: "low",
+      };
+    }
+  }
+
+  if (
+    servingSize &&
+    isWeakFactCandidate(servingSize) &&
+    /powder|liquid/i.test(resolvedForm) &&
+    SERVING_SIZE_CAPSULE_PATTERN.test(servingSize.value)
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "servingSize",
+      previousValue: servingSize.value,
+      nextValue: "",
+      reason: "cleared weak-source serving size inconsistent with inferred form",
+    });
+    servingSize = null;
+  }
+
+  if (
+    dosageStrength &&
+    isWeakFactCandidate(dosageStrength) &&
+    DEMO_DOSAGE_PATTERN.test(dosageStrength.value) &&
+    !titleMentionsAny(titleInferenceText, ["magnesium", "glycinate"])
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "dosageStrength",
+      previousValue: dosageStrength.value,
+      nextValue: "",
+      reason: "cleared known demo dosage strength without title support",
+    });
+    dosageStrength = null;
+  }
+
+  if (
+    activeIngredients &&
+    isWeakFactCandidate(activeIngredients) &&
+    looksLikeDemoJointIngredientList(activeIngredients.value) &&
+    !titleMentionsAny(titleInferenceText, ["turmeric", "glucosamine", "chondroitin"])
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "activeIngredients",
+      previousValue: activeIngredients.value.join(", "),
+      nextValue: "",
+      reason: "cleared known demo ingredient trio without title support",
+    });
+    activeIngredients = null;
+  }
+
+  if (
+    flavor &&
+    isWeakFactCandidate(flavor) &&
+    DEMO_FLAVOR_PATTERN.test(flavor.value) &&
+    !titleMentionsAny(titleInferenceText, ["mixed berry", "berry"])
+  ) {
+    heuristicStaleAdjustments.push({
+      field: "flavor",
+      previousValue: flavor.value,
+      nextValue: "",
+      reason: "cleared weak-source demo flavor",
+    });
+    flavor = null;
+  }
 
   const supplementFacts = pickObjectCandidate({
     records,
@@ -976,7 +1207,22 @@ export function extractCanonicalProductFacts(input: {
     });
   });
 
-  const staleFieldsCleared = unique(staleReplacements.map((entry) => entry.field));
+  const allStaleAdjustments = unique([
+    ...staleReplacements.map((entry) => JSON.stringify(entry)),
+    ...heuristicStaleAdjustments.map((entry) => JSON.stringify(entry)),
+  ]).map((entry) => JSON.parse(entry) as ProductFactReplacement);
+
+  const staleFieldsCleared = unique(
+    allStaleAdjustments
+      .filter((entry) => !entry.nextValue.trim())
+      .map((entry) => entry.field)
+  );
+
+  const imageFactsStatus = deriveImageFactsStatus({
+    product: input.product,
+    factsList: imageIntelligence.factsList,
+    usedSources: imageIntelligence.usedSources,
+  });
 
   const facts: CanonicalProductFacts = {
     brand: fields.brand.value,
@@ -1015,9 +1261,11 @@ export function extractCanonicalProductFacts(input: {
   return {
     facts,
     usedSources: Array.from(sourceSet),
-    staleFieldReplacements: staleReplacements,
+    staleFieldReplacements: allStaleAdjustments,
     staleFieldsCleared,
     imageDerivedFacts: imageIntelligence.factsList,
+    imageFactsStatus: imageFactsStatus.status,
+    imageFactsMessage: imageFactsStatus.message,
   };
 }
 

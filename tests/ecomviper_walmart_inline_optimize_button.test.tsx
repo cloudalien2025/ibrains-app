@@ -601,6 +601,9 @@ describe("Walmart inline optimize button workflow", () => {
                   skippedProtectedFields: ["sku"],
                   skippedLowConfidenceFields: ["age_group"],
                   rejectedClaims: [],
+                  imageFactsStatus: "needs_vision_extraction",
+                  imageFactsMessage:
+                    "Images are available, but label text extraction has not run yet.",
                   disclaimerStatus: "preserved",
                   finalDecision: "accepted_with_changes",
                 },
@@ -668,6 +671,10 @@ describe("Walmart inline optimize button workflow", () => {
     expect(container.textContent).toContain("Sources used:");
     expect(container.textContent).toContain("Stale fields cleared/replaced:");
     expect(container.textContent).toContain("Compliance changes:");
+    expect(container.textContent).toContain("Image-derived facts status:");
+    expect(container.textContent).toContain(
+      "Images are available, but label text extraction has not run yet."
+    );
     expect(container.textContent).toContain("FDA disclaimer status:");
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-ai-apply-diagnostics"]')
@@ -723,6 +730,8 @@ describe("Walmart inline optimize button workflow", () => {
                   skippedProtectedFields: null,
                   skippedLowConfidenceFields: null,
                   rejectedClaims: null,
+                  imageFactsStatus: null,
+                  imageFactsMessage: null,
                   disclaimerStatus: null,
                   finalDecision: null,
                 },
@@ -790,6 +799,7 @@ describe("Walmart inline optimize button workflow", () => {
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-ai-apply-diagnostics"]')
     ).not.toBeNull();
+    expect(container.textContent).toContain("Image-derived facts status: unknown");
     expect(container.textContent).toContain("FDA disclaimer status: unknown");
     expect(container.textContent).toContain("AI improvements applied to draft fields.");
   });

@@ -83,4 +83,31 @@ describe("Product Facts Agent", () => {
     expect(result.facts.flavor).toBe("");
     expect(result.facts.sourceConfidence.flavor).toBe("unknown");
   });
+
+  it("infers powder form and servings from title while clearing capsule-style stale defaults", () => {
+    const result = extractCanonicalProductFacts({
+      product: createProduct({
+        title:
+          "OPA Immunity Greens & Reds Daily Wellness Blend with Prebiotics, Enzymes & Mushrooms, 35 servings",
+        attributes: {
+          product_form: "Capsule",
+          serving_size: "2 capsules",
+          servings_per_container: "30",
+          dosage_strength: "Magnesium 30mg",
+          main_ingredients: "Turmeric, glucosamine, chondroitin",
+          flavor: "Mixed berry",
+        },
+      }),
+    });
+
+    expect(result.facts.form).toBe("Powder");
+    expect(result.facts.servingsPerContainer).toBe("35");
+    expect(result.facts.servingSize).toBe("");
+    expect(result.facts.dosageStrength).toBe("");
+    expect(result.facts.activeIngredients).toEqual([]);
+    expect(result.facts.flavor).toBe("");
+    expect(result.staleFieldReplacements.some((entry) => entry.field === "servingSize")).toBe(
+      true
+    );
+  });
 });

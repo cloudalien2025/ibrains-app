@@ -107,8 +107,47 @@ function mapStaleFieldToSearchBrowseKeys(field: string): string[] {
   if (field === "flavor") return ["flavor"];
   if (field === "count") return ["count", "count_per_pack", "count_per_package"];
   if (field === "productName") return ["supplement_type", "product_type"];
+  if (field === "servingSize") return ["serving_size"];
+  if (field === "servingsPerContainer") return ["servings_per_container", "servings"];
+  if (field === "dosageStrength") return ["dosage_strength"];
+  if (field === "suggestedUse") return ["suggested_use", "directions_suggested_use"];
+  if (field === "warnings") return ["safety_warnings"];
   if (field === "activeIngredients") return ["main_ingredients", "ingredients_list"];
   return [];
+}
+
+function syncAliasPair(input: {
+  attributes: Record<string, string>;
+  sourceByField: Record<string, string>;
+  canonicalKey: string;
+  aliasKey: string;
+}) {
+  const canonicalValue = asString(input.attributes[input.canonicalKey]);
+  const aliasValue = asString(input.attributes[input.aliasKey]);
+  const canonicalSource = input.sourceByField[input.canonicalKey] ?? "alias_sync";
+  const aliasSource = input.sourceByField[input.aliasKey] ?? "alias_sync";
+
+  if (canonicalValue && !aliasValue) {
+    input.attributes[input.aliasKey] = canonicalValue;
+    input.sourceByField[input.aliasKey] = canonicalSource;
+    return;
+  }
+
+  if (!canonicalValue && aliasValue) {
+    input.attributes[input.canonicalKey] = aliasValue;
+    input.sourceByField[input.canonicalKey] = aliasSource;
+    return;
+  }
+
+  if (
+    canonicalValue &&
+    aliasValue &&
+    normalizeWhitespace(canonicalValue).toLowerCase() !==
+      normalizeWhitespace(aliasValue).toLowerCase()
+  ) {
+    input.attributes[input.aliasKey] = canonicalValue;
+    input.sourceByField[input.aliasKey] = canonicalSource;
+  }
 }
 
 function buildCanonicalSearchBrowseFromFacts(input: {
@@ -318,6 +357,38 @@ export function mapCanonicalFactsToSearchBrowse(
     ...canonical.attributes,
     ...aiSanitized.accepted,
   });
+  const sourceByField = { ...canonical.sourceByField };
+
+  syncAliasPair({
+    attributes: merged,
+    sourceByField,
+    canonicalKey: "product_form",
+    aliasKey: "form",
+  });
+  syncAliasPair({
+    attributes: merged,
+    sourceByField,
+    canonicalKey: "servings_per_container",
+    aliasKey: "servings",
+  });
+  syncAliasPair({
+    attributes: merged,
+    sourceByField,
+    canonicalKey: "suggested_use",
+    aliasKey: "directions_suggested_use",
+  });
+  syncAliasPair({
+    attributes: merged,
+    sourceByField,
+    canonicalKey: "count_per_pack",
+    aliasKey: "count_per_package",
+  });
+  syncAliasPair({
+    attributes: merged,
+    sourceByField,
+    canonicalKey: "supplement_type",
+    aliasKey: "product_type",
+  });
 
   const updatedFields: string[] = [];
   const replacedFields: string[] = [];
@@ -367,7 +438,7 @@ export function mapCanonicalFactsToSearchBrowse(
         .filter((entry) => entry.reason === "not_allowlisted")
         .map((entry) => entry.key)
     ),
-    sourceByField: canonical.sourceByField,
+    sourceByField,
   };
 }
 

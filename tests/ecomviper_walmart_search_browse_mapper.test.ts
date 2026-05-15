@@ -147,4 +147,31 @@ describe("Search & Browse mapper", () => {
     expect(result.mappedAttributes.flavor).toBeUndefined();
     expect(result.clearedFields).toContain("flavor");
   });
+
+  it("keeps canonical and legacy alias keys synchronized", () => {
+    const result = mapCanonicalFactsToSearchBrowse({
+      facts: createFacts({
+        form: "Powder",
+        servingsPerContainer: "35",
+        suggestedUse: "Mix one scoop in 10 oz water daily.",
+      }),
+      copy: createCopy(),
+      aiCandidates: {
+        form: "Capsule",
+        servings: "30",
+        directions_suggested_use: "Take 2 capsules daily.",
+      },
+    });
+
+    expect(result.mappedAttributes.product_form).toBe("Powder");
+    expect(result.mappedAttributes.form).toBe("Powder");
+    expect(result.mappedAttributes.servings_per_container).toBe("35");
+    expect(result.mappedAttributes.servings).toBe("35");
+    expect(result.mappedAttributes.suggested_use).toBe(
+      "Mix one scoop in 10 oz water daily."
+    );
+    expect(result.mappedAttributes.directions_suggested_use).toBe(
+      "Mix one scoop in 10 oz water daily."
+    );
+  });
 });

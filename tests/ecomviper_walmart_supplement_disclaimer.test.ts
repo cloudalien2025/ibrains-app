@@ -36,6 +36,18 @@ describe("Walmart supplement disclaimer normalization", () => {
     expect(countCanonicalSupplementDisclaimer(result.normalizedText)).toBe(1);
   });
 
+  it("removes FDA disclaimer heading labels before appending canonical disclaimer", () => {
+    const result = normalizeSupplementDisclaimerText(
+      "**FDA Disclaimer:** These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease."
+    );
+
+    expect(result.normalizedText).not.toContain("FDA Disclaimer");
+    expect(result.normalizedText).not.toContain("**");
+    expect(result.normalizedText).toContain(SUPPLEMENT_FDA_DISCLAIMER);
+    expect(result.normalizedText.trim().endsWith(SUPPLEMENT_FDA_DISCLAIMER)).toBe(true);
+    expect(countCanonicalSupplementDisclaimer(result.normalizedText)).toBe(1);
+  });
+
   it("flags malformed disclaimer text in validation", () => {
     const malformed =
       "Supports daily wellness. This product is not intended to diagnose, support, support, or support any disease.";
