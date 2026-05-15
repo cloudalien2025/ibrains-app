@@ -233,6 +233,68 @@ type ExtractLabelFactsResponse = {
   };
 };
 
+type CatalogBackfillStatus =
+  | "skipped_no_identifier"
+  | "skipped_no_credentials"
+  | "matched"
+  | "no_match"
+  | "ambiguous"
+  | "provider_error"
+  | "validation_blocked";
+
+type CatalogBackfillConfidence = "exact" | "strong" | "moderate" | "weak" | "none";
+
+type CatalogBackfillFieldAction =
+  | "kept_seller_native"
+  | "filled_missing"
+  | "replaced_placeholder"
+  | "skipped_lower_confidence"
+  | "skipped_conflict"
+  | "skipped_user_edited";
+
+type CatalogBackfillFieldPatch = {
+  field: string;
+  currentValue: string | number | string[] | null;
+  proposedValue: string | number | string[] | null;
+  currentSource: string;
+  proposedSource: string;
+  confidence: CatalogBackfillConfidence;
+  action: CatalogBackfillFieldAction;
+  explanation: string;
+};
+
+type CatalogBackfillResult = {
+  status: CatalogBackfillStatus;
+  canonicalItemId: string | null;
+  canonicalPublicUrl: string | null;
+  matchConfidence: CatalogBackfillConfidence;
+  fieldPatches: CatalogBackfillFieldPatch[];
+  warnings: string[];
+  sourceSummary: {
+    winningSource: string;
+    sourceLabel: string;
+    retrievedAt: string;
+    credentialMode: "mock" | "byo_live" | "unavailable";
+  };
+  sourceConfidence: {
+    overallConfidence: CatalogBackfillConfidence;
+    totalFields: number;
+    actionableFields: number;
+    byAction: Record<CatalogBackfillFieldAction, number>;
+    byConfidence: Record<CatalogBackfillConfidence, number>;
+  };
+};
+
+type CatalogBackfillResponse = {
+  ok: boolean;
+  sku?: string;
+  catalogBackfill?: CatalogBackfillResult;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 interface WalmartGeneratedReferenceImage {
   id: string;
   name: string;
@@ -1269,6 +1331,33 @@ function shouldBackfillSearchBrowseValue(value: string | undefined): boolean {
   return isLowConfidenceAiFieldValue(trimmed);
 }
 
+function toCatalogBackfillStatusMessage(status: CatalogBackfillStatus): string {
+  if (status === "matched") return "Catalog detail refresh completed with a confident match.";
+  if (status === "ambiguous") {
+    return "Catalog refresh found multiple close candidates. No auto-apply action was taken.";
+  }
+  if (status === "no_match") return "Catalog refresh completed but no confident candidate matched.";
+  if (status === "skipped_no_credentials") {
+    return "Catalog refresh skipped because live Walmart/SerpApi credentials are not configured.";
+  }
+  if (status === "skipped_no_identifier") {
+    return "Catalog refresh skipped because item ID/UPC/GTIN/URL identifiers are missing.";
+  }
+  if (status === "validation_blocked") {
+    return "Catalog refresh blocked by invalid identifier input.";
+  }
+  return "Catalog refresh failed due to provider error.";
+}
+
+function formatCatalogFieldAction(action: CatalogBackfillFieldAction): string {
+  if (action === "kept_seller_native") return "Kept seller-native";
+  if (action === "filled_missing") return "Filled missing";
+  if (action === "replaced_placeholder") return "Replaced placeholder";
+  if (action === "skipped_lower_confidence") return "Skipped lower confidence";
+  if (action === "skipped_conflict") return "Skipped conflict";
+  return "Skipped user edited";
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -1350,6 +1439,9 @@ export default function ProductEditorClient({
       return null;
     });
   const [publicImageMessage, setPublicImageMessage] = useState<string | null>(null);
+  const [refreshingCatalogDetails, setRefreshingCatalogDetails] = useState(false);
+  const [catalogBackfillResult, setCatalogBackfillResult] = useState<CatalogBackfillResult | null>(null);
+  const [catalogBackfillMessage, setCatalogBackfillMessage] = useState<string | null>(null);
   const [generatedImageType, setGeneratedImageType] =
     useState<WalmartGeneratedImageType>(DEFAULT_GENERATED_IMAGE_TYPE);
   const [generatedImageGuidance, setGeneratedImageGuidance] = useState("");
@@ -1976,6 +2068,52 @@ export default function ProductEditorClient({
       lastImageSyncedAt: resolvedPublicImages.lastImageSyncedAt || new Date().toISOString(),
     });
     setPublicImageMessage("Images added to draft. Save Draft before submitting.");
+  }
+
+  async function handleRefreshCatalogDetails() {
+    setRefreshingCatalogDetails(true);
+    setCatalogBackfillMessage(null);
+
+    try {
+      const response = await fetch(
+        `/api/ecomviper/walmart/products/${encodeURIComponent(product.sku)}/catalog-backfill`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userDraftPayload: {
+              title: preview.title,
+              shortDescription: preview.shortDescription,
+              longDescription: preview.longDescription,
+              bulletPoints: preview.bulletPoints,
+              brand: preview.brand,
+              price: preview.price,
+              imageUrl: preview.imageUrl,
+              galleryImageUrls: preview.galleryImageUrls,
+              publicWalmartUrl: preview.publicWalmartUrl,
+              publicWalmartProductId: preview.publicWalmartProductId,
+              upc: product.upc ?? "",
+              gtin: product.gtin ?? "",
+            },
+          }),
+        }
+      );
+
+      const payload = (await response.json().catch(() => null)) as CatalogBackfillResponse | null;
+      if (!response.ok || !payload?.catalogBackfill) {
+        const fallback =
+          payload?.error?.message?.trim() || "Could not refresh Walmart catalog details.";
+        setCatalogBackfillMessage(fallback);
+        return;
+      }
+
+      setCatalogBackfillResult(payload.catalogBackfill);
+      setCatalogBackfillMessage(toCatalogBackfillStatusMessage(payload.catalogBackfill.status));
+    } catch {
+      setCatalogBackfillMessage("Provider request failed. Could not refresh Walmart catalog details.");
+    } finally {
+      setRefreshingCatalogDetails(false);
+    }
   }
 
   function toGeneratedImageErrorMessage(
@@ -3093,6 +3231,40 @@ export default function ProductEditorClient({
     currentWalmartState.searchBrowse.taxonomyPlacement ||
     currentWalmartState.taxonomyPlacement ||
     "Not available";
+  const hasCatalogIdentifier = Boolean(
+    currentWalmartState.media.publicWalmartItemId.trim() ||
+      currentWalmartState.media.publicWalmartUrl.trim() ||
+      form.publicWalmartProductId.trim() ||
+      form.publicWalmartUrl.trim() ||
+      (product.upc ?? "").trim() ||
+      (product.gtin ?? "").trim()
+  );
+  const sourceConfidenceRows = catalogBackfillResult?.fieldPatches ?? [];
+  const sourceConfidenceSummary = catalogBackfillResult?.sourceConfidence ?? {
+    overallConfidence: currentWalmartState.media.publicWalmartListingConfidence as CatalogBackfillConfidence,
+    totalFields: 0,
+    actionableFields: 0,
+    byAction: {
+      kept_seller_native: 0,
+      filled_missing: 0,
+      replaced_placeholder: 0,
+      skipped_lower_confidence: 0,
+      skipped_conflict: 0,
+      skipped_user_edited: 0,
+    },
+    byConfidence: {
+      exact: 0,
+      strong: 0,
+      moderate: 0,
+      weak: 0,
+      none: 0,
+    },
+  };
+  const fieldsFilledFromCatalog =
+    sourceConfidenceSummary.byAction.filled_missing +
+    sourceConfidenceSummary.byAction.replaced_placeholder;
+  const latestCatalogBackfillStatus: CatalogBackfillStatus | null = catalogBackfillResult?.status ?? null;
+
   const currentListingReferenceSections = (panel: "review" | "improve") => (
     <section
       className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -3270,6 +3442,105 @@ export default function ProductEditorClient({
               </div>
             ) : null}
           </div>
+        </article>
+
+        <article
+          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:col-span-2"
+          data-testid="ecomviper-walmart-source-confidence-panel"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-semibold text-[#0F172A]">Source Confidence</h3>
+              <p className="mt-1 text-xs text-[#475569]">
+                Refreshes EcomViper&apos;s local catalog understanding. This does not publish changes
+                to Walmart.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleRefreshCatalogDetails()}
+              disabled={refreshingCatalogDetails || !hasCatalogIdentifier}
+              className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+              data-testid="ecomviper-walmart-refresh-catalog-details"
+            >
+              {refreshingCatalogDetails ? "Refreshing catalog details..." : "Refresh catalog details"}
+            </button>
+          </div>
+          {!hasCatalogIdentifier ? (
+            <p className="mt-2 text-xs text-amber-700">
+              Add a Walmart item ID, UPC, GTIN, or canonical public listing URL to enable catalog refresh.
+            </p>
+          ) : null}
+          {catalogBackfillMessage ? (
+            <p className="mt-2 text-xs text-[#334155]">{catalogBackfillMessage}</p>
+          ) : null}
+
+          <div className="mt-3 grid gap-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-xs text-[#334155] md:grid-cols-2">
+            <p>
+              <span className="text-[#64748B]">Overall confidence:</span>{" "}
+              {sourceConfidenceSummary.overallConfidence}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Winning source:</span>{" "}
+              {catalogBackfillResult?.sourceSummary.sourceLabel || "Not run"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Last status:</span>{" "}
+              {latestCatalogBackfillStatus ?? "Not run"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Fields filled from catalog:</span>{" "}
+              {fieldsFilledFromCatalog}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Canonical listing:</span>{" "}
+              {catalogBackfillResult?.canonicalPublicUrl || currentWalmartState.media.publicWalmartUrl || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Canonical item ID:</span>{" "}
+              {catalogBackfillResult?.canonicalItemId || currentWalmartState.media.publicWalmartItemId || "Not available"}
+            </p>
+          </div>
+
+          {catalogBackfillResult?.warnings?.length ? (
+            <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+              <p className="font-medium">Warnings</p>
+              <p className="mt-1">{catalogBackfillResult.warnings.join(" | ")}</p>
+            </div>
+          ) : null}
+
+          {sourceConfidenceRows.length > 0 ? (
+            <div className="mt-3 overflow-x-auto">
+              <table className="min-w-[720px] w-full text-xs">
+                <thead className="text-left uppercase tracking-[0.08em] text-[#64748B]">
+                  <tr>
+                    <th className="py-1 pr-2">Field</th>
+                    <th className="py-1 pr-2">Action</th>
+                    <th className="py-1 pr-2">Confidence</th>
+                    <th className="py-1 pr-2">Source</th>
+                    <th className="py-1">Explanation</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {sourceConfidenceRows.map((row) => (
+                    <tr key={row.field} className="border-t border-[#E2E8F0] align-top">
+                      <td className="py-1 pr-2 font-medium text-[#0F172A]">{row.field}</td>
+                      <td className="py-1 pr-2">{formatCatalogFieldAction(row.action)}</td>
+                      <td className="py-1 pr-2">{row.confidence}</td>
+                      <td className="py-1 pr-2">
+                        {row.currentSource} {" -> "} {row.proposedSource}
+                      </td>
+                      <td className="py-1">{row.explanation}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-3 text-xs text-[#64748B]">
+              Run Refresh catalog details to generate field-level source confidence rows.
+            </p>
+          )}
         </article>
 
         <article
