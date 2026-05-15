@@ -120,11 +120,11 @@ describe("Walmart Search & Browse editor hydration", () => {
       );
     });
 
-    const openEditorButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Open Draft Editor"
+    const editWorkflowTab = container.querySelector(
+      '[data-testid="ecomviper-walmart-tab-edit-submit"]'
     ) as HTMLButtonElement;
     await act(async () => {
-      openEditorButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      editWorkflowTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const searchBrowseTab = Array.from(container.querySelectorAll("button")).find(
