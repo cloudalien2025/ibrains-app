@@ -75,7 +75,7 @@ describe("Walmart product editor tabbed workflow", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders Current/Optimized/Draft tabs with expected panel content", async () => {
+  it("renders 3-step Walmart docket workflow tabs with expected panel content", async () => {
     await act(async () => {
       root.render(
         <ProductEditorClient
@@ -91,12 +91,18 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(container.querySelector('[data-testid="ecomviper-walmart-tab-review-listing"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-walmart-tab-improve-with-ai"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-walmart-tab-edit-submit"]')).not.toBeNull();
+    expect(container.textContent).toContain("Step 1 - Current Walmart Listing");
+    expect(container.textContent).toContain("Step 2 - Optimize Listing with AI");
+    expect(container.textContent).toContain("Step 3 - Review and Publish");
 
     const reviewPanel = container.querySelector(
       '[data-testid="ecomviper-walmart-review-panel"]'
     ) as HTMLElement;
     expect(reviewPanel.className.includes("hidden")).toBe(false);
-    expect(reviewPanel.textContent).toContain("Current Walmart State");
+    expect(reviewPanel.textContent).toContain("Step 1 - Current Walmart Listing");
+    expect(reviewPanel.textContent).toContain(
+      "Current listing data hydrated from Walmart, public catalog, Shopify import fallback, and source diagnostics."
+    );
     expect(reviewPanel.textContent).not.toContain("FAQ & Readiness Content");
     expect(reviewPanel.textContent).not.toContain("AI Visibility");
     expect(container.querySelector('[data-testid="ecomviper-walmart-current-listing-content"]')).not.toBeNull();
@@ -114,6 +120,10 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(container.textContent).toContain(
       "Refreshes EcomViper's local catalog understanding. This does not publish changes to Walmart."
     );
+    expect(reviewPanel.textContent).toContain("Lookup identifiers (SKU / GTIN / UPC):");
+    expect(reviewPanel.textContent).toContain(
+      "GTIN/UPC are lookup identifiers only and never used as Walmart public PDP item IDs."
+    );
 
     const improveTab = container.querySelector(
       '[data-testid="ecomviper-walmart-tab-improve-with-ai"]'
@@ -127,8 +137,18 @@ describe("Walmart product editor tabbed workflow", () => {
     ) as HTMLElement;
     expect(improvePanel.className.includes("hidden")).toBe(false);
     expect(container.textContent).toContain("Generate AI Improvements");
-    expect(container.textContent).toContain("Current Walmart State");
-    expect(container.textContent).toContain("AI Optimized State");
+    expect(container.textContent).toContain("Step 2 - Optimize Listing with AI");
+    expect(container.textContent).toContain(
+      "AI-optimized listing proposal using the same Walmart docket structure, with compliance-safe copy and marketplace readiness improvements."
+    );
+    expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-content"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-media"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-improve-docket-pricing-inventory"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-improve-docket-search-browse"]')
+    ).not.toBeNull();
 
     const editTab = container.querySelector(
       '[data-testid="ecomviper-walmart-tab-edit-submit"]'
@@ -143,8 +163,19 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(editPanel.className.includes("hidden")).toBe(false);
     expect(container.querySelector('[data-testid="ecomviper-walmart-final-draft-editor"]')).not.toBeNull();
     expect(container.textContent).toContain("Save Draft");
-    expect(container.textContent).toContain("Submit Update");
-    expect(container.textContent).toContain("Editable Draft State");
+    expect(container.textContent).toContain("Mark Publish-Ready");
+    expect(container.textContent).toContain("Step 3 - Review and Publish");
+    expect(container.textContent).toContain(
+      "Review, edit, and publish-ready Walmart maintenance draft. Nothing is submitted until the user approves/publishes."
+    );
+    expect(container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-content"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-media"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-pricing-inventory"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-search-browse"]')
+    ).not.toBeNull();
     expect(container.textContent).toContain("Readiness & validation");
     expect(container.textContent).toContain("Staged changes");
   });
@@ -201,7 +232,7 @@ describe("Walmart product editor tabbed workflow", () => {
     expect(persistedTitleInput).not.toBeNull();
   });
 
-  it("renders ROC303-style public listing fallback content and canonical listing URL in Current Walmart State", async () => {
+  it("renders ROC303-style public listing fallback content and canonical listing URL in Step 1", async () => {
     await act(async () => {
       root.render(
         <ProductEditorClient

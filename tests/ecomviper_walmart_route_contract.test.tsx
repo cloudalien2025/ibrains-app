@@ -138,6 +138,9 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).toContain(">EcomViper<");
     expect(html).toContain('href="/apps/ecomviper"');
     expect(html).toContain(">Open EcomViper<");
+    expect(html).toContain("apps-launcher-shell");
+    expect(html).toContain("ibrains-shell");
+    expect(html).toContain("rounded-3xl");
   });
 
   it("renders /apps/ecomviper marketplace cards", async () => {

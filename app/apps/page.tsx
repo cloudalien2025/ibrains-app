@@ -37,7 +37,11 @@ const apps = [
 
 export default function AppsIndexPage() {
   return (
-    <div className="ibrains-shell min-h-screen text-[#0F172A]">
+    <div
+      className="ibrains-shell min-h-screen text-[#0F172A]"
+      data-testid="apps-launcher-shell"
+      style={{ fontFamily: "\"IBM Plex Sans\", \"Segoe UI\", system-ui, sans-serif" }}
+    >
       <div className="mx-auto max-w-6xl px-6 py-14">
         <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>

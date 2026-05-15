@@ -193,11 +193,15 @@ export function normalizeDraftImageFields(input: unknown): WalmartNormalizedDraf
       record.canonicalUrl,
     ],
     itemIdCandidates: [
-      record.publicWalmartProductId,
-      record.publicWalmartItemId,
-      record.itemId,
-      record.usItemId,
-      record.productId,
+      { value: record.publicWalmartProductId, provenance: "publicWalmartProductId" },
+      { value: record.publicWalmartItemId, provenance: "publicWalmartItemId" },
+      { value: record.itemId, provenance: "itemId" },
+      { value: record.usItemId, provenance: "usItemId" },
+      {
+        value: record.productId,
+        provenance: "productId",
+        productIdType: record.productIdType ?? record.product_id_type,
+      },
     ],
     mediaSource: [record.media],
   });

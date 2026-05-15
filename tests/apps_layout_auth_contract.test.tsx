@@ -38,6 +38,7 @@ describe("apps layout auth contract", () => {
     const tree = AppsLayout({ children: createElement("span", null, "launcher-ready") });
     const html = renderToString(tree);
 
+    expect(html).toContain("apps-shell-layout");
     expect(html).toContain("launcher-ready");
     expect(mocks.providerProps.at(0)?.publishableKey).toBe("pk_test_apps_layout");
     expect(mocks.auth).not.toHaveBeenCalled();
