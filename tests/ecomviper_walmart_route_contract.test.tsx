@@ -158,6 +158,10 @@ describe("EcomViper Walmart route contracts", () => {
     );
 
     expect(html).toContain("ecomviper-walmart-sidebar");
+    expect(html).toContain(">Products<");
+    expect(html).toContain(">Drafts<");
+    expect(html).not.toContain(">AI Visibility<");
+    expect(html).not.toContain(">Listing Intelligence<");
     expect(html).toContain("ecomviper-walmart-metric-cards");
     expect(html).toContain("Walmart Agentic Commerce Command Center");
     expect(html).not.toContain(">AI Optimizer<");

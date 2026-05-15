@@ -5,8 +5,8 @@ export interface WalmartNavItem {
 
 export const walmartNavItems: WalmartNavItem[] = [
   { label: "Command Center", href: "/apps/ecomviper/walmart" },
-  { label: "AI Visibility", href: "/apps/ecomviper/walmart/products" },
-  { label: "Listing Intelligence", href: "/apps/ecomviper/walmart/drafts" },
+  { label: "Products", href: "/apps/ecomviper/walmart/products" },
+  { label: "Drafts", href: "/apps/ecomviper/walmart/drafts" },
   { label: "Prompt Match", href: "/apps/ecomviper/walmart/activity" },
   { label: "Trust Signals", href: "/apps/ecomviper/walmart/feeds" },
   { label: "Semantic Gaps", href: "/apps/ecomviper/walmart/inventory" },

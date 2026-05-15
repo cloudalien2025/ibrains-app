@@ -92,7 +92,13 @@ describe("Walmart product optimizer client", () => {
       <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} serpApiProviderConnected={false} />
     );
 
-    expect(html).toContain("ecomviper-walmart-workflow-steps");
+    expect(html).toContain("ecomviper-walmart-product-editor-tabs");
+    expect(html).toContain("ecomviper-walmart-tab-review-listing");
+    expect(html).toContain("ecomviper-walmart-tab-improve-with-ai");
+    expect(html).toContain("ecomviper-walmart-tab-edit-submit");
+    expect(html).toContain("ecomviper-walmart-review-panel");
+    expect(html).toContain("ecomviper-walmart-improve-panel");
+    expect(html).toContain("ecomviper-walmart-edit-submit-panel");
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
     expect(html).toContain("ecomviper-walmart-primary-actions");
     expect(html).toContain("ecomviper-walmart-inline-ai-panel");
@@ -100,9 +106,9 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("ecomviper-walmart-product-form");
     expect(html).toContain("ecomviper-walmart-readiness");
     expect(html).toContain("Product Editor");
-    expect(html).toContain("1 Review");
-    expect(html).toContain("2 Improve");
-    expect(html).toContain("3 Submit");
+    expect(html).toContain("Step 1 Review Listing");
+    expect(html).toContain("Step 2 Improve with AI");
+    expect(html).toContain("Step 3 Edit &amp; Submit");
     expect(html).toContain("SKU: 30066-841");
     expect(html).toContain("Top issues");
     expect(html).toContain("View all issues");

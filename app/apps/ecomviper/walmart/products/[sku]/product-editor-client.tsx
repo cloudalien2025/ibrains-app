@@ -68,6 +68,31 @@ const tabs = [
   "FAQ",
   "Sync History",
 ] as const;
+const workflowTabs = [
+  {
+    key: "review",
+    label: "Step 1 Review Listing",
+    testId: "ecomviper-walmart-tab-review-listing",
+  },
+  {
+    key: "improve",
+    label: "Step 2 Improve with AI",
+    testId: "ecomviper-walmart-tab-improve-with-ai",
+  },
+  {
+    key: "edit-submit",
+    label: "Step 3 Edit & Submit",
+    testId: "ecomviper-walmart-tab-edit-submit",
+  },
+] as const;
+const searchBrowseGroupOrder = [
+  "product_identity",
+  "audience_usage",
+  "ingredients_form",
+  "dimensions_packaging",
+  "search_browse_metadata",
+] as const;
+type WorkflowTabKey = (typeof workflowTabs)[number]["key"];
 
 const OPENAI_OPTIMIZE_REQUIRED_MESSAGE =
   "Connect your OpenAI API key first to optimize this product.";
@@ -1219,6 +1244,7 @@ export default function ProductEditorClient({
     [stagedDrafts]
   );
   const safeStagedDrafts = draftHardening.drafts;
+  const [workflowTab, setWorkflowTab] = useState<WorkflowTabKey>("review");
   const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Content");
   const initialForm = useMemo(
     () => hydrateEditorForm(product, safeStagedDrafts),
@@ -2478,6 +2504,7 @@ export default function ProductEditorClient({
 
   async function runInlineOptimization() {
     revealInlineAiPanel();
+    setWorkflowTab("improve");
     setShowAiDetails(false);
     setAiSuggestionApplied(false);
 
@@ -2749,6 +2776,7 @@ export default function ProductEditorClient({
           : form.complianceNotes,
     });
     setAiSuggestionApplied(true);
+    setWorkflowTab("edit-submit");
     setDraftEditorOpen(true);
     setActiveTab("Content");
     setShowAiDetails(false);
@@ -2888,17 +2916,338 @@ export default function ProductEditorClient({
   }
 
   function handleViewAllIssues() {
+    setWorkflowTab("edit-submit");
     const readiness = document.getElementById("walmart-product-readiness");
     if (!readiness) return;
     readiness.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   function handleReviewAiChanges() {
+    setWorkflowTab("improve");
     setShowAiDetails(true);
     revealInlineAiPanel();
   }
 
   const topIssues = product.issues.filter((issue) => issue.trim().length > 0).slice(0, 3);
+  const currentListingShortDescription =
+    preview.shortDescription?.trim() || product.shortDescription.trim() || "Not available";
+  const currentListingLongDescription =
+    preview.longDescription?.trim() || product.longDescription.trim() || "Not available";
+  const currentListingBullets = preview.bulletPoints.filter((entry) => entry.trim().length > 0);
+  const currentListingFaq = preview.faqSnippets.filter((entry) => entry.trim().length > 0);
+  const currentListingMediaRecommendations = preview.mediaRecommendations.filter(
+    (entry) => entry.trim().length > 0
+  );
+  const listingSnapshotRecords = useMemo(() => {
+    const normalizedPayload = asObject(product.normalizedPayload);
+    const rawPayload = asObject(product.rawPayload);
+    const rawProductPayload = asObject(rawPayload?.product);
+    return [asObject(preview as unknown), normalizedPayload, rawPayload, rawProductPayload];
+  }, [preview, product.normalizedPayload, product.rawPayload]);
+  const currentSalePrice = firstNonEmptyNumber(listingSnapshotRecords, [
+    "salePrice",
+    "sale_price",
+    "specialPrice",
+    "promoPrice",
+  ]);
+  const currentFulfillmentSignals = [
+    {
+      label: "Fulfillment model",
+      value: firstNonEmptyString(listingSnapshotRecords, [
+        "fulfillmentType",
+        "fulfillment_type",
+        "fulfillment",
+      ]),
+    },
+    {
+      label: "WFS status",
+      value: firstNonEmptyString(listingSnapshotRecords, ["wfsStatus", "wfs_status", "wfs"]),
+    },
+    {
+      label: "Shipping template",
+      value: firstNonEmptyString(listingSnapshotRecords, [
+        "shippingTemplate",
+        "shipping_template",
+      ]),
+    },
+    {
+      label: "Shipping speed",
+      value: firstNonEmptyString(listingSnapshotRecords, [
+        "shippingSpeed",
+        "shipping_speed",
+        "deliverySpeed",
+      ]),
+    },
+  ].filter((entry) => entry.value.trim().length > 0);
+  const listingSearchBrowseGroups = useMemo(
+    () =>
+      searchBrowseGroupOrder
+        .map((group) => {
+          const fields = searchBrowseFieldsByGroup.get(group) ?? [];
+          const values = fields
+            .map((field) => ({
+              key: field.key,
+              label: field.label,
+              value: (form.searchBrowseAttributes[field.key] ?? "").trim(),
+            }))
+            .filter((field) => field.value.length > 0);
+          return {
+            group,
+            label: searchBrowseGroupLabel(group),
+            values,
+          };
+        })
+        .filter((group) => group.values.length > 0),
+    [form.searchBrowseAttributes, searchBrowseFieldsByGroup]
+  );
+  const currentListingReferenceSections = (panel: "review" | "improve") => (
+    <section
+      className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+    >
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold text-[#0F172A]">Current listing reference</h2>
+        <p className="mt-1 text-sm text-[#475569]">
+          {panel === "review"
+            ? "This is the current listing before new AI improvements."
+            : "Reference view of the current listing while AI improvements are generated."}
+        </p>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-2">
+        <article
+          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3"
+          data-testid="ecomviper-walmart-current-listing-content"
+        >
+          <h3 className="text-sm font-semibold text-[#0F172A]">Content</h3>
+          <div className="mt-2 space-y-2 text-sm text-[#334155]">
+            <p>
+              <span className="text-[#64748B]">Title:</span> {preview.title || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Short description:</span>{" "}
+              {currentListingShortDescription}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Long description:</span> {currentListingLongDescription}
+            </p>
+            <div>
+              <p className="text-[#64748B]">Key features / bullets:</p>
+              {currentListingBullets.length > 0 ? (
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                  {currentListingBullets.map((entry) => (
+                    <li key={entry}>{entry}</li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-sm text-[#334155]">No bullet points currently available.</p>
+              )}
+            </div>
+            <p>
+              <span className="text-[#64748B]">Brand:</span> {displayBrand || "Not available"}
+            </p>
+          </div>
+        </article>
+
+        <article
+          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3"
+          data-testid="ecomviper-walmart-current-listing-media"
+        >
+          <h3 className="text-sm font-semibold text-[#0F172A]">Media</h3>
+          <div className="mt-2 space-y-2 text-sm text-[#334155]">
+            <p>
+              <span className="text-[#64748B]">Primary image:</span>{" "}
+              {displayPrimaryImageUrl ? "Available" : "Not available"}
+            </p>
+            {displayPrimaryImageUrl ? (
+              <img
+                src={displayPrimaryImageUrl}
+                alt={`${product.sku} current primary`}
+                className="h-20 w-20 rounded-lg border border-[#D9E4F0] bg-white object-cover"
+                loading="lazy"
+              />
+            ) : null}
+            <p>
+              <span className="text-[#64748B]">Gallery images:</span> {displayGalleryPreviewUrls.length}
+            </p>
+            {displayGalleryPreviewUrls.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {displayGalleryPreviewUrls.slice(0, 6).map((url) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt="Current listing media preview"
+                    className="h-14 w-14 rounded border border-[#D9E4F0] bg-white object-cover"
+                    loading="lazy"
+                  />
+                ))}
+              </div>
+            ) : null}
+            <p>
+              <span className="text-[#64748B]">Public Walmart listing source:</span>{" "}
+              {form.publicWalmartUrl.trim() || "Not linked"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Source image lane:</span>{" "}
+              {formatImageSource(scoringProduct)}
+            </p>
+            {isShopifyMediaSource ? (
+              <p>
+                <span className="text-[#64748B]">Shopify/source images:</span>{" "}
+                {importedShopifyMediaImageCount}
+              </p>
+            ) : null}
+            <p>
+              <span className="text-[#64748B]">Image-derived facts status:</span>{" "}
+              {resolvedImageFactsStatus}
+            </p>
+            <p className="text-xs text-[#475569]">{resolvedImageFactsMessage}</p>
+            {panel === "improve" ? (
+              <div className="mt-1 rounded-md border border-[#E2E8F0] bg-white p-2 text-xs text-[#334155]">
+                <p className="font-medium text-[#0F172A]">
+                  {resolvedImageFactsStatus === "needs_vision_extraction"
+                    ? "Label fact extraction is needed before stronger AI attribute updates."
+                    : "Image fact extraction can be rerun if you need updated label details."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleExtractLabelFacts}
+                  disabled={extractingLabelFacts}
+                  className="mt-2 rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+                  data-testid="ecomviper-walmart-extract-label-facts-button"
+                >
+                  {extractingLabelFacts
+                    ? "Extracting label facts..."
+                    : "Extract label facts from images"}
+                </button>
+                {labelFactsMessage ? <p className="mt-1 text-xs text-[#475569]">{labelFactsMessage}</p> : null}
+              </div>
+            ) : null}
+          </div>
+        </article>
+
+        <article
+          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3"
+          data-testid="ecomviper-walmart-current-listing-pricing-inventory"
+        >
+          <h3 className="text-sm font-semibold text-[#0F172A]">Pricing &amp; Inventory</h3>
+          <div className="mt-2 space-y-1 text-sm text-[#334155]">
+            <p>
+              <span className="text-[#64748B]">Price:</span>{" "}
+              {Number.isFinite(preview.price) ? `$${preview.price.toFixed(2)}` : "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Sale price:</span>{" "}
+              {currentSalePrice !== null ? `$${currentSalePrice.toFixed(2)}` : "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Inventory:</span> {formatInventory(scoringProduct)}
+            </p>
+            {currentFulfillmentSignals.length > 0 ? (
+              currentFulfillmentSignals.map((entry) => (
+                <p key={entry.label}>
+                  <span className="text-[#64748B]">{entry.label}:</span> {entry.value}
+                </p>
+              ))
+            ) : (
+              <p>
+                <span className="text-[#64748B]">Fulfillment/shipping fields:</span> Not available
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article
+          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:col-span-2"
+          data-testid="ecomviper-walmart-current-listing-search-browse"
+        >
+          <h3 className="text-sm font-semibold text-[#0F172A]">Search &amp; Browse</h3>
+          <p className="mt-1 text-xs text-[#475569]">
+            Product identity, audience/usage, ingredients/form, dimensions/packaging, and search metadata currently mapped in this listing.
+          </p>
+          <p className="mt-1 text-xs text-[#475569]">
+            Canonical and legacy aliases are synchronized in this workspace when relevant.
+          </p>
+          {listingSearchBrowseGroups.length > 0 ? (
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              {listingSearchBrowseGroups.map((group) => (
+                <div key={group.group} className="rounded-md border border-[#D9E4F0] bg-white p-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                    {group.label}
+                  </p>
+                  <ul className="mt-1 space-y-1 text-sm text-[#334155]">
+                    {group.values.map((entry) => (
+                      <li key={entry.key}>
+                        <span className="text-[#64748B]">{entry.label}:</span> {entry.value}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-[#334155]">No Search &amp; Browse values currently set.</p>
+          )}
+        </article>
+
+        <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+          <h3 className="text-sm font-semibold text-[#0F172A]">FAQ &amp; Readiness Content</h3>
+          <p className="mt-1 text-sm text-[#334155]">
+            FAQ status:{" "}
+            {inlineAiDiagnostics.faqGenerationState === "pending"
+              ? "Pending product fact review"
+              : "Ready for review"}
+          </p>
+          {currentListingFaq.length > 0 ? (
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+              {currentListingFaq.map((entry) => (
+                <li key={entry}>{entry}</li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-2 text-sm text-[#334155]">No FAQ snippets currently available.</p>
+          )}
+          {currentListingMediaRecommendations.length > 0 ? (
+            <p className="mt-2 text-xs text-[#475569]">
+              Media guidance notes: {currentListingMediaRecommendations.join(" | ")}
+            </p>
+          ) : null}
+        </article>
+
+        <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+          <h3 className="text-sm font-semibold text-[#0F172A]">Validation / readiness summary</h3>
+          <p className="mt-1 text-sm text-[#334155]">
+            Listing quality / AI Visibility score: {listingQuality.score}/100
+          </p>
+          <p className="mt-1 text-sm text-[#334155]">
+            Readiness status:{" "}
+            <span
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                canSubmit ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"
+              }`}
+            >
+              {readinessLabel}
+            </span>
+          </p>
+          <ul className="mt-2 space-y-1 text-sm text-[#334155]">
+            <li>Blockers: {validationViolations.length}</li>
+            <li>Warnings: {validationWarnings.length}</li>
+            <li>Info notes: {validationInfos.length}</li>
+          </ul>
+          {topIssues.length > 0 ? (
+            <div className="mt-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                Top issues
+              </p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                {topIssues.map((issue) => (
+                  <li key={issue}>{issue}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+        </article>
+      </div>
+    </section>
+  );
   const aiResultHeaderCopy =
     inlineAiOutcome === "improved"
       ? "Optimization improved listing"
@@ -2915,7 +3264,6 @@ export default function ProductEditorClient({
   const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
   const scoreDelta = projectedScore - listingQuality.score;
   const scoreDeltaLabel = scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta);
-  const workflowStep = aiSuggestionApplied || draftEditorOpen ? 3 : inlineAiSuggestion || inlineAiState !== "idle" ? 2 : 1;
   const draftEditorIsActive = aiSuggestionApplied || draftEditorOpen;
   const hasExistingDraft = Boolean(lastDraftSavedAt);
 
@@ -2932,30 +3280,35 @@ export default function ProductEditorClient({
       />
 
       <section
-        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-3 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
-        data-testid="ecomviper-walmart-workflow-steps"
+        className="sticky top-2 z-20 rounded-2xl border border-[#D9E4F0] bg-white/95 p-3 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-product-editor-tabs"
       >
-        <ol className="flex flex-wrap items-center gap-2 text-sm">
-          {["1 Review", "2 Improve", "3 Submit"].map((label, index) => {
-            const stepNumber = index + 1;
-            const active = workflowStep === stepNumber;
-            const completed = workflowStep > stepNumber;
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          {workflowTabs.map((tab) => {
+            const active = workflowTab === tab.key;
             return (
-              <li
-                key={label}
-                className={`inline-flex items-center rounded-full border px-3 py-1 ${
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => {
+                  setWorkflowTab(tab.key);
+                  if (tab.key === "edit-submit") {
+                    setDraftEditorOpen(true);
+                  }
+                }}
+                data-testid={tab.testId}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex items-center rounded-full border px-3 py-1.5 transition ${
                   active
                     ? "border-[#0F172A] bg-[#0F172A] text-white"
-                    : completed
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                      : "border-[#D9E4F0] bg-[#F8FBFF] text-[#475569]"
+                    : "border-[#D9E4F0] bg-[#F8FBFF] text-[#475569] hover:border-[#94A3B8] hover:text-[#0F172A]"
                 }`}
               >
-                {label}
-              </li>
+                {tab.label}
+              </button>
             );
           })}
-        </ol>
+        </div>
       </section>
 
       <section
@@ -3038,6 +3391,17 @@ export default function ProductEditorClient({
       </section>
 
       <section
+        className={workflowTab === "review" ? "block" : "hidden"}
+        data-testid="ecomviper-walmart-review-panel"
+      >
+        {currentListingReferenceSections("review")}
+      </section>
+
+      <section
+        className={workflowTab === "improve" ? "space-y-4" : "hidden space-y-4"}
+        data-testid="ecomviper-walmart-improve-panel"
+      >
+      <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-primary-actions"
         ref={inlineAiPanelRef}
@@ -3050,7 +3414,7 @@ export default function ProductEditorClient({
               {inlineAiSuggestion ? aiResultHeaderCopy : "Improve this listing with AI"}
             </h2>
             <p className="mt-1 text-sm text-[#475569]">
-              EcomViper will improve title, descriptions, bullets, and attributes. Nothing is submitted to Walmart until you approve it.
+              EcomViper can rewrite title, short and long descriptions, bullets, Search &amp; Browse attributes, FAQ snippets, and media guidance. Nothing is submitted to Walmart until you approve it.
             </p>
           </div>
           <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
@@ -3465,7 +3829,14 @@ export default function ProductEditorClient({
           No auto-submit. Changes remain in draft until approved.
         </p>
       </section>
+      {currentListingReferenceSections("improve")}
+      </section>
 
+      <section
+        className={workflowTab === "edit-submit" ? "space-y-4" : "hidden space-y-4"}
+        data-testid="ecomviper-walmart-edit-submit-panel"
+      >
+      <div data-testid="ecomviper-walmart-final-draft-editor">
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-draft-editor-card"
@@ -3481,7 +3852,10 @@ export default function ProductEditorClient({
           {!draftEditorIsActive ? (
             <button
               type="button"
-              onClick={() => setDraftEditorOpen(true)}
+              onClick={() => {
+                setWorkflowTab("edit-submit");
+                setDraftEditorOpen(true);
+              }}
               className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
             >
               Open Draft Editor
@@ -4504,6 +4878,7 @@ export default function ProductEditorClient({
 
         {message ? <p className="mt-3 text-sm text-[#334155]">{message}</p> : null}
       </section>
+      </div>
 
       <section
         id="walmart-product-readiness"
@@ -4625,6 +5000,7 @@ export default function ProductEditorClient({
             <p className="mt-2 text-sm text-[#64748B]">No staged optimization proposals yet.</p>
           )}
         </details>
+      </section>
       </section>
 
       {SHOW_DEVELOPER_DIAGNOSTICS ? (
