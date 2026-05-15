@@ -5,6 +5,10 @@ import { getWalmartDashboardSnapshot, getWalmartDashboardSnapshotForUser } from 
 import { getWalmartConnectionHealth, getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { requireSignedInUser } from "@/lib/auth/requireSignedInUser";
 import { walmartCapabilityModules } from "@/lib/ecomviper/walmart/walmart-capability-map";
+import {
+  buildWalmartOptimizationCoverageAudit,
+  type WalmartOptimizationStatus,
+} from "@/lib/ecomviper/walmart/walmart-agentic-optimization-coverage";
 import type {
   WalmartConnectionHealth,
   WalmartDashboardSnapshot,
@@ -101,6 +105,31 @@ function formatInventory(product: WalmartProductRecord): string {
   return String(product.inventoryQuantity);
 }
 
+function optimizationStatusLabel(status: WalmartOptimizationStatus): string {
+  if (status === "supported") return "Supported by current API path";
+  if (status === "partial") return "Partially supported";
+  if (status === "missing") return "Missing from code";
+  if (status === "recommendation_only") return "Recommendation only";
+  if (status === "requires_credentials") return "Requires credentials";
+  return "Requires Walmart approval/access";
+}
+
+function optimizationStatusBadgeClass(status: WalmartOptimizationStatus): string {
+  if (status === "supported") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (status === "partial") return "border-sky-200 bg-sky-50 text-sky-700";
+  if (status === "missing") return "border-rose-200 bg-rose-50 text-rose-700";
+  if (status === "recommendation_only") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (status === "requires_credentials") return "border-violet-200 bg-violet-50 text-violet-700";
+  return "border-orange-200 bg-orange-50 text-orange-700";
+}
+
+function pushabilityLabel(value: string): string {
+  if (value === "api_supported") return "API pushable";
+  if (value === "feed_supported") return "Feed-ready";
+  if (value === "recommendation_only") return "Recommendation only";
+  return "Pushability unknown";
+}
+
 async function resolveDashboardConnectionHealth(userId: string | null): Promise<WalmartConnectionHealth> {
   try {
     if (!userId) {
@@ -119,6 +148,9 @@ export default async function WalmartDashboardPage() {
     : getWalmartDashboardSnapshot();
   const connection = await resolveDashboardConnectionHealth(!unauthorizedResponse ? userId : null);
   const connectionUi = buildWalmartDashboardConnectionUi(snapshot, connection);
+  const coverageAudit = buildWalmartOptimizationCoverageAudit({
+    product: snapshot.attentionProducts[0] ?? snapshot.recentProducts[0] ?? null,
+  });
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-dashboard">
@@ -287,6 +319,125 @@ export default async function WalmartDashboardPage() {
               </p>
             </article>
           ))}
+        </div>
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-5 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-agentic-coverage-panel"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-[#0F172A]">Walmart Agentic Optimization Coverage</h2>
+            <p className="mt-1 text-sm text-[#64748B]">
+              Coverage matrix for current Walmart API/feed support, recommendation-only lanes, and gated capabilities.
+            </p>
+          </div>
+          <div className="rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-4 py-2">
+            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">AI Recommendation Readiness</p>
+            <p className="text-2xl font-semibold text-[#0F172A]">
+              {coverageAudit.readiness.overallAiRecommendationReadinessScore}/100
+            </p>
+            <p className="text-xs text-[#64748B]">
+              Confidence: {coverageAudit.readiness.aiConfidenceScore}/100 ({coverageAudit.readiness.recommendationProbability})
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+          {(Object.entries(coverageAudit.statusCounts) as Array<[WalmartOptimizationStatus, number]>).map(([status, count]) => (
+            <article key={status} className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+              <p className="text-xs uppercase tracking-[0.1em] text-[#64748B]">{optimizationStatusLabel(status)}</p>
+              <p className="mt-1 text-xl font-semibold text-[#0F172A]">{count}</p>
+            </article>
+          ))}
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[#64748B]">Readiness Subscores</h3>
+            <ul className="mt-2 space-y-2">
+              {Object.entries(coverageAudit.readiness.subscores).map(([group, score]) => (
+                <li key={group} className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#334155]">
+                  <div className="flex items-center justify-between gap-2">
+                    <span>{group}</span>
+                    <span className="font-semibold text-[#0F172A]">{score}/100</span>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </article>
+
+          <article
+            className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4"
+            data-testid="ecomviper-walmart-next-best-actions"
+          >
+            <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[#64748B]">Next Best Actions</h3>
+            <ul className="mt-2 space-y-2">
+              {coverageAudit.nextBestActions.slice(0, 10).map((action) => (
+                <li key={action.id} className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#334155]">
+                  <p className="font-medium text-[#0F172A]">{action.label}</p>
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    {action.group} • {action.priority} priority • {action.agenticImpact} impact
+                  </p>
+                  <p className="mt-1 text-xs text-[#475569]">{action.nextAction}</p>
+                </li>
+              ))}
+            </ul>
+          </article>
+        </div>
+
+        <div className="mt-4 grid gap-4 xl:grid-cols-2">
+          <article
+            className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4"
+            data-testid="ecomviper-walmart-missing-from-code"
+          >
+            <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[#64748B]">Missing From Code</h3>
+            <ul className="mt-2 space-y-2">
+              {coverageAudit.missingFromCode.slice(0, 14).map((row) => (
+                <li key={row.id} className="rounded-lg border border-[#E2E8F0] bg-white px-3 py-2 text-sm text-[#334155]">
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="font-medium text-[#0F172A]">{row.label}</p>
+                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${optimizationStatusBadgeClass(row.status)}`}>
+                      {optimizationStatusLabel(row.status)}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs text-[#64748B]">{row.group.replaceAll("_", " ")} • {row.priority} priority</p>
+                </li>
+              ))}
+            </ul>
+          </article>
+
+          <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-4">
+            <h3 className="text-sm font-semibold uppercase tracking-[0.1em] text-[#64748B]">Coverage Matrix (Sample)</h3>
+            <div className="mt-2 max-h-[420px] overflow-auto rounded-lg border border-[#E2E8F0] bg-white">
+              <table className="min-w-full text-sm">
+                <thead className="sticky top-0 bg-[#F8FBFF] text-left text-xs uppercase tracking-[0.1em] text-[#64748B]">
+                  <tr>
+                    <th className="px-3 py-2">Optimization Item</th>
+                    <th className="px-3 py-2">Status</th>
+                    <th className="px-3 py-2">Pushability</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {coverageAudit.matrix.slice(0, 40).map((row) => (
+                    <tr key={row.id} className="border-t border-[#E2E8F0] text-[#334155]">
+                      <td className="px-3 py-2">
+                        <p className="font-medium text-[#0F172A]">{row.label}</p>
+                        <p className="text-xs text-[#64748B]">{row.group.replaceAll("_", " ")}</p>
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] ${optimizationStatusBadgeClass(row.status)}`}>
+                          {optimizationStatusLabel(row.status)}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-[#475569]">{pushabilityLabel(row.apiPushability)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </article>
         </div>
       </section>
     </div>

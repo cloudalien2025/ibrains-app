@@ -163,6 +163,11 @@ describe("EcomViper Walmart route contracts", () => {
     expect(html).not.toContain(">AI Optimizer<");
     expect(html).toContain("No Walmart products imported yet");
     expect(html).toContain("ecomviper-walmart-capability-map");
+    expect(html).toContain("ecomviper-walmart-agentic-coverage-panel");
+    expect(html).toContain("Walmart Agentic Optimization Coverage");
+    expect(html).toContain("ecomviper-walmart-missing-from-code");
+    expect(html).toContain("ecomviper-walmart-next-best-actions");
+    expect(html).toContain("Supported by current API path");
     expect(html).toContain("Catalog Optimizer");
     expect(html).toContain("Walmart Connect Ads Optimizer");
     expect(html).toContain("Separate integration required");
