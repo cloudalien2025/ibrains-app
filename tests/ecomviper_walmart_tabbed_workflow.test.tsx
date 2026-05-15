@@ -193,4 +193,63 @@ describe("Walmart product editor tabbed workflow", () => {
     const persistedTitleInput = container.querySelector('input[value="Edited Draft Title"]');
     expect(persistedTitleInput).not.toBeNull();
   });
+
+  it("renders ROC303-style public listing fallback content and canonical listing URL in Current Walmart State", async () => {
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            sku: "ROC303",
+            title: "OPA Enzymes Prebiotic Probiotics For Men And Women - 60 Ct",
+            shortDescription: "",
+            longDescription: "",
+            bulletPoints: [],
+            brand: "",
+            itemId: "2791205430",
+            publicWalmartUrl:
+              "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-For-Men-And-Women-60-Ct/2791205430?athbdg=L1600",
+            rawPayload: {
+              content: {
+                shortDescription:
+                  "OPA Gut Enzyme & Probiotic Digestive Balance support for women and men.",
+                longDescription:
+                  "Digestive Enzymes, Probiotic Support, Plant-Based Enzymes, Gut Balance, and Vegetable Capsules in a clean formula.",
+                keyFeatures: [
+                  "Digestive Enzymes",
+                  "Probiotic Support",
+                  "Plant-Based Enzymes",
+                  "Gut Balance",
+                  "Vegetable Capsules",
+                  "Clean Formula",
+                ],
+                brand: "OPA Nutrition",
+                manufacturer: "OPA Nutrition",
+                itemPageUrl:
+                  "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-For-Men-And-Women-60-Ct/2791205430?athbdg=L1600",
+              },
+            },
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const contentPanel = container.querySelector(
+      '[data-testid="ecomviper-walmart-current-listing-content"]'
+    ) as HTMLElement;
+    const mediaPanel = container.querySelector(
+      '[data-testid="ecomviper-walmart-current-listing-media"]'
+    ) as HTMLElement;
+
+    expect(contentPanel.textContent).toContain("OPA Gut Enzyme & Probiotic Digestive Balance");
+    expect(contentPanel.textContent).toContain("Digestive Enzymes");
+    expect(contentPanel.textContent).toContain("Probiotic Support");
+    expect(contentPanel.textContent).toContain("OPA Nutrition");
+    expect(contentPanel.textContent).not.toContain("No bullet points currently available.");
+
+    expect(mediaPanel.textContent).toContain("https://www.walmart.com/ip/2791205430");
+    expect(mediaPanel.textContent).toContain("Public Walmart item ID: 2791205430");
+  });
 });

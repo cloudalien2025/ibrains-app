@@ -4,6 +4,7 @@ import type {
   WalmartImageSyncStatus,
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
+import { resolveCanonicalWalmartPublicListingUrl } from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 
 export interface WalmartNormalizedDraftImageFields {
   imageUrl?: string;
@@ -181,8 +182,27 @@ export function normalizeDraftImageFields(input: unknown): WalmartNormalizedDraf
     : undefined;
 
   const imageSyncReason = asString(record.imageSyncReason) || undefined;
-  const publicWalmartUrl = asString(record.publicWalmartUrl) || undefined;
-  const publicWalmartProductId = asString(record.publicWalmartProductId) || undefined;
+  const listingResolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
+      record.publicWalmartUrl,
+      record.publicWalmartListingUrl,
+      record.itemPageUrl,
+      record.walmartItemPageUrl,
+      record.productPageUrl,
+      record.productUrl,
+      record.canonicalUrl,
+    ],
+    itemIdCandidates: [
+      record.publicWalmartProductId,
+      record.publicWalmartItemId,
+      record.itemId,
+      record.usItemId,
+      record.productId,
+    ],
+    mediaSource: [record.media],
+  });
+  const publicWalmartUrl = listingResolution.url ?? undefined;
+  const publicWalmartProductId = listingResolution.itemId ?? undefined;
   const lastImageSyncedAt = asString(record.lastImageSyncedAt) || undefined;
 
   return {

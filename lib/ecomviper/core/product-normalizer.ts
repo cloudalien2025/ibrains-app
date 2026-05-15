@@ -8,6 +8,7 @@ import type {
   WalmartInventoryStatus,
   WalmartProductRecord,
 } from "@/lib/ecomviper/walmart/walmart-types";
+import { resolveCanonicalWalmartPublicListingUrl } from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 
 export interface NormalizeProductInput {
   sku: string;
@@ -109,6 +110,13 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
   }
   const dedupedIssues = Array.from(new Set(issues));
 
+  const listingResolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [input.publicWalmartUrl],
+    itemIdCandidates: [input.publicWalmartProductId, input.itemId],
+  });
+  const normalizedPublicWalmartUrl = listingResolution.url ?? "";
+  const normalizedPublicWalmartProductId = listingResolution.itemId ?? "";
+
   return {
     id: `walmart_${input.sku.toLowerCase()}`,
     marketplace: "walmart",
@@ -117,7 +125,7 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
     upc: input.upc?.trim() || undefined,
     gtin: input.gtin?.trim() || undefined,
     wpid: input.wpid?.trim() || undefined,
-    itemId: input.itemId?.trim() || undefined,
+    itemId: input.itemId?.trim() || normalizedPublicWalmartProductId || undefined,
     publishedStatus: input.publishedStatus?.trim() || undefined,
     title: input.title,
     brand: input.brand,
@@ -134,8 +142,8 @@ export function normalizeWalmartProduct(input: NormalizeProductInput): WalmartPr
     imageSyncStatus,
     imageMatchMethod: input.imageMatchMethod,
     matchedItemId: input.matchedItemId?.trim() || undefined,
-    publicWalmartUrl: input.publicWalmartUrl?.trim() || undefined,
-    publicWalmartProductId: input.publicWalmartProductId?.trim() || undefined,
+    publicWalmartUrl: normalizedPublicWalmartUrl || undefined,
+    publicWalmartProductId: normalizedPublicWalmartProductId || undefined,
     primaryImageUrl: (input.primaryImageUrl ?? input.imageUrl ?? "").trim() || undefined,
     lastImageSyncedAt: input.lastImageSyncedAt ?? null,
     imageSyncReason: input.imageSyncReason ?? null,

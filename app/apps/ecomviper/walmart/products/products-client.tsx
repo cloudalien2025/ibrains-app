@@ -7,9 +7,8 @@ import WalmartPageHeader from "@/app/apps/ecomviper/walmart/_components/page-hea
 import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { filterWalmartProductsWithType } from "@/lib/ecomviper/walmart/walmart-product-filters";
 import {
-  extractWalmartPublicProductIdFromUrl,
-  resolveCanonicalWalmartPublicIdentifier,
-} from "@/lib/ecomviper/walmart/walmart-public-identifier";
+  resolveCanonicalWalmartPublicListingUrl,
+} from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 import type { WalmartEffectiveProductRecord } from "@/lib/ecomviper/walmart/walmart-product-display";
 
 interface ProductsClientProps {
@@ -132,71 +131,86 @@ function normalizePerProductAttemptDiagnostics(
   return output;
 }
 
-function deriveWalmartListingUrlFromId(productId: string): string {
-  const normalized = safeString(productId);
-  if (!/^\d{6,20}$/.test(normalized)) return "";
-  return `https://www.walmart.com/ip/${normalized}`;
-}
-
 function resolveVerifiedWalmartListingUrl(product: WalmartEffectiveProductRecord): string {
   const normalizedPayload = asObject(product.normalizedPayload);
   const rawPayload = asObject(product.rawPayload);
+  const rawProductPayload = asObject(rawPayload?.product);
+  const rawContentPayload = asObject(rawPayload?.content);
 
-  const resolved = resolveCanonicalWalmartPublicIdentifier({
-    publicWalmartUrlCandidates: [
+  const resolved = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
       product.publicWalmartUrl,
       normalizedPayload?.publicWalmartUrl,
+      normalizedPayload?.walmartItemPageUrl,
+      normalizedPayload?.itemPageUrl,
       normalizedPayload?.walmartProductUrl,
       normalizedPayload?.product_page_url,
       normalizedPayload?.productPageUrl,
+      normalizedPayload?.productUrl,
       normalizedPayload?.canonicalUrl,
+      normalizedPayload?.url,
+      normalizedPayload?.itemUrl,
       rawPayload?.publicWalmartUrl,
+      rawPayload?.walmartItemPageUrl,
+      rawPayload?.itemPageUrl,
       rawPayload?.walmartProductUrl,
       rawPayload?.product_page_url,
       rawPayload?.productPageUrl,
       rawPayload?.productUrl,
       rawPayload?.canonicalUrl,
       rawPayload?.url,
+      rawPayload?.itemUrl,
+      rawPayload?.shareUrl,
+      rawPayload?.buyUrl,
+      rawProductPayload?.publicWalmartUrl,
+      rawProductPayload?.itemPageUrl,
+      rawProductPayload?.walmartItemPageUrl,
+      rawProductPayload?.productPageUrl,
+      rawProductPayload?.productUrl,
+      rawProductPayload?.canonicalUrl,
+      rawContentPayload?.publicWalmartUrl,
+      rawContentPayload?.itemPageUrl,
+      rawContentPayload?.walmartItemPageUrl,
+      rawContentPayload?.productPageUrl,
+      rawContentPayload?.productUrl,
+      rawContentPayload?.canonicalUrl,
     ],
-    explicitWalmartProductIdCandidates: [
+    itemIdCandidates: [
       product.publicWalmartProductId,
-      normalizedPayload?.publicWalmartProductId,
-      rawPayload?.publicWalmartProductId,
-    ],
-    walmartItemIdCandidates: [
       product.itemId,
+      normalizedPayload?.publicWalmartProductId,
       normalizedPayload?.itemId,
       normalizedPayload?.usItemId,
+      rawPayload?.publicWalmartProductId,
       rawPayload?.itemId,
       rawPayload?.usItemId,
       rawPayload?.us_item_id,
-    ],
-    walmartPayloadProductIdCandidates: [
-      normalizedPayload?.productId,
-      normalizedPayload?.product_id,
       rawPayload?.productId,
       rawPayload?.product_id,
+      rawProductPayload?.itemId,
+      rawProductPayload?.usItemId,
+      rawProductPayload?.productId,
     ],
-    upcCandidates: [product.upc, normalizedPayload?.upc, rawPayload?.upc],
-    gtinCandidates: [product.gtin, normalizedPayload?.gtin, rawPayload?.gtin],
-    nestedPayloadCandidates: [normalizedPayload, rawPayload],
+    serpapiResult: [
+      normalizedPayload?.publicImageEnrichmentAttempt,
+      rawPayload?.publicImageEnrichmentAttempt,
+      rawPayload?.serpapi,
+    ],
+    walmartSearchResult: [
+      normalizedPayload?.walmartItemSearchCandidate,
+      rawPayload?.walmartItemSearchCandidate,
+      rawPayload?.walmartSearchResult,
+    ],
+    hydrationDiagnostic: [
+      normalizedPayload?.liveHydration,
+      rawPayload?.liveHydration,
+      rawPayload?.liveItemPayload,
+      rawPayload?.liveItemNode,
+    ],
+    mediaSource: [rawPayload?.media, normalizedPayload?.media, rawPayload, normalizedPayload],
   });
 
-  const canUseIdentifier =
-    resolved.preferredIdentifierType !== "missing_product_identifier" &&
-    resolved.preferredIdentifierType !== "search_title_brand" &&
-    resolved.preferredIdentifierType !== "gtin_skipped_for_product_lookup" &&
-    resolved.preferredIdentifierType !== "upc_skipped_for_product_lookup";
-
-  if (resolved.normalizedPublicWalmartUrl) {
-    const productIdFromUrl = extractWalmartPublicProductIdFromUrl(resolved.normalizedPublicWalmartUrl);
-    if (productIdFromUrl) {
-      return resolved.normalizedPublicWalmartUrl;
-    }
-  }
-
-  if (!canUseIdentifier) return "";
-  return deriveWalmartListingUrlFromId(resolved.preferredWalmartProductId);
+  return resolved.url ?? "";
 }
 
 type SkuSortDirection = "none" | "asc" | "desc";
@@ -2299,7 +2313,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
                         >
                           Optimize with AI
                         </Link>
-                        {!product.imageUrl && (product.publicWalmartUrl || product.publicWalmartProductId) ? (
+                        {!product.imageUrl && walmartListingUrl ? (
                           <Link
                             href={`/apps/ecomviper/walmart/products/${safeSkuRouteSegment(product.sku)}`}
                             className="block rounded-md px-2 py-1.5 text-left text-xs text-[#0F172A] hover:bg-[#F1F5F9]"

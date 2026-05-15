@@ -221,4 +221,117 @@ describe("Walmart native state workflow architecture", () => {
     });
     expect(payload).not.toHaveProperty("faqSnippets");
   });
+
+  it("hydrates current state from public Walmart listing fallback when seller-native content is missing", () => {
+    const current = hydrateCurrentWalmartState({
+      product: createProduct({
+        sku: "ROC303",
+        title: "OPA Enzymes Prebiotic Probiotics For Men And Women - 60 Ct",
+        shortDescription: "",
+        longDescription: "",
+        bulletPoints: [],
+        brand: "",
+        itemId: "2791205430",
+        publicWalmartUrl: "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics/2791205430",
+        rawPayload: {
+          content: {
+            shortDescription:
+              "OPA Gut Enzyme & Probiotic Digestive Balance supplement supports everyday digestive wellness.",
+            longDescription:
+              "Digestive Enzymes and Probiotic Support blend crafted for daily gut balance and comfort.",
+            keyFeatures: [
+              "Digestive Enzymes for nutrient breakdown support",
+              "Probiotic Support for microbiome balance",
+              "Plant-Based Enzymes with clean formula",
+              "Vegetable Capsules for daily use",
+            ],
+            brand: "OPA Nutrition",
+            manufacturer: "OPA Nutrition",
+            itemPageUrl:
+              "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-For-Men-And-Women-60-Ct/2791205430?athbdg=L1600",
+          },
+        },
+      }),
+    });
+
+    expect(current.content.siteDescription).toContain("OPA Gut Enzyme & Probiotic Digestive Balance");
+    expect(current.content.longDescription).toContain("Digestive Enzymes and Probiotic Support");
+    expect(current.content.keyFeatures.length).toBeGreaterThan(0);
+    expect(current.content.brand).toBe("OPA Nutrition");
+    expect(current.content.manufacturer).toBe("OPA Nutrition");
+    expect(current.media.publicWalmartUrl).toBe("https://www.walmart.com/ip/2791205430");
+    expect(current.media.publicWalmartItemId).toBe("2791205430");
+    expect(current.hydration.sourceProvenance).toContain("public_walmart_catalog");
+  });
+
+  it("keeps seller-native values when seller-native content is present", () => {
+    const current = hydrateCurrentWalmartState({
+      product: createProduct({
+        shortDescription: "Seller short description",
+        longDescription: "Seller long description",
+        bulletPoints: ["Seller bullet one"],
+        brand: "Seller Brand",
+        rawPayload: {
+          content: {
+            shortDescription: "Public listing short description",
+            longDescription: "Public listing long description",
+            keyFeatures: ["Public bullet one"],
+            brand: "Public Brand",
+          },
+        },
+      }),
+    });
+
+    expect(current.content.siteDescription).toBe("Seller short description");
+    expect(current.content.longDescription).toBe("Seller long description");
+    expect(current.content.keyFeatures).toEqual(["Seller bullet one"]);
+    expect(current.content.brand).toBe("Seller Brand");
+  });
+
+  it("falls back to Shopify snapshot content when no seller/public listing content exists", () => {
+    const current = hydrateCurrentWalmartState({
+      product: createProduct({
+        shortDescription: "",
+        longDescription: "",
+        bulletPoints: [],
+        brand: "",
+        rawPayload: {
+          shopifySnapshot: {
+            shortDescription: "Shopify fallback short description",
+            longDescription: "Shopify fallback long description",
+            bulletPoints: ["Shopify fallback bullet"],
+            brand: "Shopify Brand",
+          },
+        },
+      }),
+    });
+
+    expect(current.content.siteDescription).toBe("Shopify fallback short description");
+    expect(current.content.longDescription).toBe("Shopify fallback long description");
+    expect(current.content.keyFeatures).toEqual(["Shopify fallback bullet"]);
+    expect(current.content.brand).toBe("Shopify Brand");
+    expect(current.hydration.sourceProvenance).toContain("shopify_import_snapshot");
+  });
+
+  it("keeps content empty when no source layer provides values", () => {
+    const current = hydrateCurrentWalmartState({
+      product: createProduct({
+        title: "",
+        brand: "",
+        shortDescription: "",
+        longDescription: "",
+        bulletPoints: [],
+        rawPayload: {},
+        normalizedPayload: {},
+      }),
+    });
+
+    expect(current.content.siteDescription).toBe("");
+    expect(current.content.longDescription).toBe("");
+    expect(current.content.keyFeatures).toEqual([]);
+    expect(current.content.brand).toBe("");
+    expect(current.content.manufacturer).toBe("");
+    expect(current.media.publicWalmartUrl).toBe("");
+    expect(current.media.publicWalmartItemId).toBe("");
+  });
 });

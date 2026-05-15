@@ -82,6 +82,11 @@ function getVisibleSkus(container: HTMLElement): string[] {
     .filter((value) => value.length > 0);
 }
 
+function getFilterSelect(container: HTMLElement): HTMLSelectElement {
+  const selects = Array.from(container.querySelectorAll("select"));
+  return (selects[1] ?? selects[0]) as HTMLSelectElement;
+}
+
 describe("Walmart products client filters, sorting, and local removal", () => {
   let container: HTMLDivElement;
   let root: Root;
@@ -116,7 +121,7 @@ describe("Walmart products client filters, sorting, and local removal", () => {
       );
     });
 
-    const filterSelect = container.querySelector("select") as HTMLSelectElement;
+    const filterSelect = getFilterSelect(container);
     await act(async () => {
       setSelectValue(filterSelect, "draft_pending");
     });
@@ -137,7 +142,7 @@ describe("Walmart products client filters, sorting, and local removal", () => {
       );
     });
 
-    const filterSelect = container.querySelector("select") as HTMLSelectElement;
+    const filterSelect = getFilterSelect(container);
     await act(async () => {
       setSelectValue(filterSelect, "draft_pending");
     });
@@ -157,7 +162,7 @@ describe("Walmart products client filters, sorting, and local removal", () => {
       );
     });
 
-    const filterSelect = container.querySelector("select") as HTMLSelectElement;
+    const filterSelect = getFilterSelect(container);
     await act(async () => {
       setSelectValue(filterSelect, "missing_attributes");
     });
@@ -222,12 +227,49 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     ) as HTMLAnchorElement | undefined;
 
     expect(link).toBeTruthy();
-    expect(link?.getAttribute("href")).toBe(
-      "https://www.walmart.com/ip/OPA-Sleep-Magnesium-Glycinate/17812552813?classType=REGULAR"
-    );
+    expect(link?.getAttribute("href")).toBe("https://www.walmart.com/ip/17812552813");
     expect(link?.getAttribute("target")).toBe("_blank");
     expect(link?.getAttribute("rel")).toContain("noopener");
     expect(link?.getAttribute("rel")).toContain("noreferrer");
+  });
+
+  it("renders View Walmart Listing for explicit URL, diagnostics-only URL, and itemId-only rows", async () => {
+    await act(async () => {
+      root.render(
+        <WalmartProductsClient
+          products={[
+            createProduct("WMT-EXPLICIT-URL", {
+              publicWalmartUrl: "https://www.walmart.com/ip/2791205430?athbdg=L1600",
+            }),
+            createProduct("WMT-DIAGNOSTIC-URL", {
+              publicWalmartUrl: undefined,
+              normalizedPayload: {
+                publicImageEnrichmentAttempt: {
+                  publicListingSource:
+                    "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-60-Ct/2791205430?classType=REGULAR",
+                },
+              },
+            }),
+            createProduct("WMT-ITEM-ID", {
+              publicWalmartUrl: undefined,
+              publicWalmartProductId: undefined,
+              itemId: "2791205430",
+            }),
+          ]}
+        />
+      );
+    });
+
+    const listingLinks = Array.from(container.querySelectorAll("a")).filter(
+      (entry) => entry.textContent?.trim() === "View Walmart Listing"
+    ) as HTMLAnchorElement[];
+
+    expect(listingLinks).toHaveLength(3);
+    expect(listingLinks.map((entry) => entry.getAttribute("href"))).toEqual([
+      "https://www.walmart.com/ip/2791205430",
+      "https://www.walmart.com/ip/2791205430",
+      "https://www.walmart.com/ip/2791205430",
+    ]);
   });
 
   it("renders strict View Walmart Listing link from verified public item ID when URL is missing", async () => {
@@ -323,7 +365,7 @@ describe("Walmart products client filters, sorting, and local removal", () => {
     });
 
     const searchInput = container.querySelector('input[placeholder="Search SKU, title, brand, status"]') as HTMLInputElement;
-    const filterSelect = container.querySelector("select") as HTMLSelectElement;
+    const filterSelect = getFilterSelect(container);
     const sortButton = container.querySelector('button[aria-label="Sort by SKU"]') as HTMLButtonElement;
 
     await act(async () => {

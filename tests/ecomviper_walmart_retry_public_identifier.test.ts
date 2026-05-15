@@ -186,7 +186,7 @@ describe("Walmart retry enrichment identifier repair", () => {
         products: [
           expect.objectContaining({
             sku: "WMT-URL-REPAIR-1",
-            publicWalmartUrl: "https://www.walmart.com/ip/seort/17812552813",
+            publicWalmartUrl: "https://www.walmart.com/ip/17812552813",
             publicWalmartProductId: "17812552813",
           }),
         ],

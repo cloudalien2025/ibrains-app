@@ -34,6 +34,7 @@ import {
   expandAliasKeys,
   syncAliasGroups,
 } from "@/lib/ecomviper/walmart/walmart-field-aliases";
+import { resolveCanonicalWalmartPublicListingUrl } from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 import {
   readOptimizerProposalFromDraft,
   toOptimizerDraftPayload,
@@ -951,22 +952,62 @@ function hydrateEditorForm(
     additionalImageUrls,
     approvedGeneratedUrls,
   ]).filter((entry) => entry !== imageUrl);
-  const publicWalmartUrl =
-    normalizedDraftImages.publicWalmartUrl ??
-    draftPublicWalmartUrl ??
-    firstNonEmptyStringValue(
+  const listingResolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
+      normalizedDraftImages.publicWalmartUrl,
+      draftPublicWalmartUrl,
       product.publicWalmartUrl,
       normalized?.publicWalmartUrl,
-      raw?.publicWalmartUrl
-    );
-  const publicWalmartProductId =
-    normalizedDraftImages.publicWalmartProductId ??
-    draftPublicWalmartProductId ??
-    firstNonEmptyStringValue(
+      normalized?.itemPageUrl,
+      normalized?.walmartItemPageUrl,
+      normalized?.productPageUrl,
+      normalized?.productUrl,
+      normalized?.canonicalUrl,
+      raw?.publicWalmartUrl,
+      raw?.itemPageUrl,
+      raw?.walmartItemPageUrl,
+      raw?.productPageUrl,
+      raw?.productUrl,
+      raw?.canonicalUrl,
+      raw?.url,
+      raw?.itemUrl,
+      rawProduct?.publicWalmartUrl,
+      rawProduct?.itemPageUrl,
+      rawProduct?.walmartItemPageUrl,
+      rawProduct?.productPageUrl,
+      rawProduct?.productUrl,
+      rawProduct?.canonicalUrl,
+      rawContent?.publicWalmartUrl,
+      rawContent?.itemPageUrl,
+      rawContent?.walmartItemPageUrl,
+      rawContent?.productPageUrl,
+      rawContent?.productUrl,
+      rawContent?.canonicalUrl,
+    ],
+    itemIdCandidates: [
+      normalizedDraftImages.publicWalmartProductId,
+      draftPublicWalmartProductId,
       product.publicWalmartProductId,
+      product.itemId,
       normalized?.publicWalmartProductId,
-      raw?.publicWalmartProductId
-    );
+      normalized?.itemId,
+      normalized?.usItemId,
+      raw?.publicWalmartProductId,
+      raw?.itemId,
+      raw?.usItemId,
+      raw?.productId,
+      rawProduct?.publicWalmartProductId,
+      rawProduct?.itemId,
+      rawProduct?.usItemId,
+      rawProduct?.productId,
+    ],
+    serpapiResult: [normalized?.publicImageEnrichmentAttempt, raw?.publicImageEnrichmentAttempt],
+    walmartSearchResult: [normalized?.walmartItemSearchCandidate, raw?.walmartItemSearchCandidate],
+    hydrationDiagnostic: [normalized?.liveHydration, raw?.liveHydration, raw?.liveItemNode],
+    mediaSource: [normalized?.media, raw?.media],
+  });
+  const publicWalmartUrl = listingResolution.url ?? "";
+  const publicWalmartProductId = listingResolution.itemId ?? "";
   const imageMatchMethod =
     normalizedDraftImages.imageMatchMethod ??
     draftImageMatchMethod ??
@@ -3172,8 +3213,32 @@ export default function ProductEditorClient({
             ) : null}
             <p>
               <span className="text-[#64748B]">Public Walmart listing source:</span>{" "}
-              {currentWalmartState.media.publicWalmartUrl || "Not linked"}
+              {currentWalmartState.media.publicWalmartUrl ? (
+                <a
+                  href={currentWalmartState.media.publicWalmartUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#2563EB] hover:text-[#1D4ED8]"
+                >
+                  {currentWalmartState.media.publicWalmartUrl}
+                </a>
+              ) : (
+                "Not linked"
+              )}
             </p>
+            <p>
+              <span className="text-[#64748B]">Public Walmart item ID:</span>{" "}
+              {currentWalmartState.media.publicWalmartItemId || "Not available"}
+            </p>
+            <p>
+              <span className="text-[#64748B]">Listing source/confidence:</span>{" "}
+              {`${currentWalmartState.media.publicWalmartListingSource} / ${currentWalmartState.media.publicWalmartListingConfidence}`}
+            </p>
+            {currentWalmartState.media.publicWalmartListingWarnings.length > 0 ? (
+              <p className="text-xs text-[#64748B]">
+                Listing warnings: {currentWalmartState.media.publicWalmartListingWarnings.join(" | ")}
+              </p>
+            ) : null}
             <p>
               <span className="text-[#64748B]">Source image lane:</span>{" "}
               {currentWalmartState.media.sourceImageLane || "unknown"}

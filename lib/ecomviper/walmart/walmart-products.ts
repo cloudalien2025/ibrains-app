@@ -21,6 +21,7 @@ import {
   resolveCanonicalWalmartIdentifierFromProductRecord,
   resolveCanonicalWalmartPublicIdentifier,
 } from "@/lib/ecomviper/walmart/walmart-public-identifier";
+import { resolveCanonicalWalmartPublicListingUrl } from "@/lib/ecomviper/walmart/walmart-public-listing-url";
 import { discardWalmartDraftsForSkuForUser, listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import {
   getLastImportAt,
@@ -164,14 +165,16 @@ export function getWalmartProductBySku(sku: string): WalmartProductRecord | null
 }
 
 export async function listWalmartProductsForUser(userId: string): Promise<WalmartProductRecord[]> {
-  return listPersistedWalmartProducts(userId);
+  const products = await listPersistedWalmartProducts(userId);
+  return products.map((product) => withCanonicalPublicListingMetadata(product));
 }
 
 export async function getWalmartProductBySkuForUser(
   userId: string,
   sku: string
 ): Promise<WalmartProductRecord | null> {
-  return getPersistedWalmartProductBySku(userId, sku);
+  const product = await getPersistedWalmartProductBySku(userId, sku);
+  return product ? withCanonicalPublicListingMetadata(product) : null;
 }
 
 export async function isWalmartProductArchivedForUser(userId: string, sku: string): Promise<boolean> {
@@ -184,8 +187,12 @@ export async function replaceWalmartProductsForUser(input: {
   products: WalmartProductRecord[];
   importedAt: string | null;
 }): Promise<void> {
-  await replacePersistedWalmartProducts(input);
-  replaceProducts(input.products, input.importedAt);
+  const canonicalProducts = input.products.map((product) => withCanonicalPublicListingMetadata(product));
+  await replacePersistedWalmartProducts({
+    ...input,
+    products: canonicalProducts,
+  });
+  replaceProducts(canonicalProducts, input.importedAt);
 }
 
 export async function clearWalmartProductsForUser(userId: string): Promise<{
@@ -276,6 +283,99 @@ function asObject(value: unknown): Record<string, unknown> | null {
     return value as Record<string, unknown>;
   }
   return null;
+}
+
+function withCanonicalPublicListingMetadata(product: WalmartProductRecord): WalmartProductRecord {
+  const normalizedPayload = asObject(product.normalizedPayload);
+  const rawPayload = asObject(product.rawPayload);
+  const rawProductPayload = asObject(rawPayload?.product);
+  const rawContentPayload = asObject(rawPayload?.content);
+
+  const resolution = resolveCanonicalWalmartPublicListingUrl({
+    explicitUrlCandidates: [
+      product.publicWalmartUrl,
+      normalizedPayload?.publicWalmartUrl,
+      normalizedPayload?.itemPageUrl,
+      normalizedPayload?.walmartItemPageUrl,
+      normalizedPayload?.productPageUrl,
+      normalizedPayload?.productUrl,
+      normalizedPayload?.canonicalUrl,
+      rawPayload?.publicWalmartUrl,
+      rawPayload?.itemPageUrl,
+      rawPayload?.walmartItemPageUrl,
+      rawPayload?.productPageUrl,
+      rawPayload?.productUrl,
+      rawPayload?.canonicalUrl,
+      rawPayload?.url,
+      rawPayload?.itemUrl,
+      rawPayload?.shareUrl,
+      rawPayload?.buyUrl,
+      rawProductPayload?.publicWalmartUrl,
+      rawProductPayload?.itemPageUrl,
+      rawProductPayload?.walmartItemPageUrl,
+      rawProductPayload?.productPageUrl,
+      rawProductPayload?.productUrl,
+      rawContentPayload?.publicWalmartUrl,
+      rawContentPayload?.itemPageUrl,
+      rawContentPayload?.walmartItemPageUrl,
+      rawContentPayload?.productPageUrl,
+      rawContentPayload?.productUrl,
+    ],
+    itemIdCandidates: [
+      product.publicWalmartProductId,
+      product.itemId,
+      normalizedPayload?.publicWalmartProductId,
+      normalizedPayload?.itemId,
+      normalizedPayload?.usItemId,
+      rawPayload?.publicWalmartProductId,
+      rawPayload?.itemId,
+      rawPayload?.usItemId,
+      rawPayload?.productId,
+      rawPayload?.product_id,
+      rawProductPayload?.itemId,
+      rawProductPayload?.usItemId,
+      rawProductPayload?.productId,
+    ],
+    serpapiResult: [normalizedPayload?.publicImageEnrichmentAttempt, rawPayload?.publicImageEnrichmentAttempt],
+    walmartSearchResult: [normalizedPayload?.walmartItemSearchCandidate, rawPayload?.walmartItemSearchCandidate],
+    hydrationDiagnostic: [normalizedPayload?.liveHydration, rawPayload?.liveHydration, rawPayload?.liveItemNode],
+    mediaSource: [normalizedPayload?.media, rawPayload?.media],
+  });
+
+  const nextPublicWalmartUrl = resolution.url ?? "";
+  const nextPublicWalmartProductId = resolution.itemId ?? "";
+  const nextItemId = asString(product.itemId) || nextPublicWalmartProductId;
+
+  const normalizedPayloadBase = normalizedPayload ?? {};
+  const nextNormalizedPayload: Record<string, unknown> = {
+    ...normalizedPayloadBase,
+    publicWalmartUrl: nextPublicWalmartUrl || null,
+    publicWalmartProductId: nextPublicWalmartProductId || null,
+    publicWalmartItemId: nextPublicWalmartProductId || null,
+    publicWalmartListingSource: resolution.source,
+    publicWalmartListingConfidence: resolution.confidence,
+    publicWalmartListingWarnings: [...resolution.warnings],
+  };
+
+  const unchanged =
+    (product.publicWalmartUrl ?? "") === nextPublicWalmartUrl &&
+    (product.publicWalmartProductId ?? "") === nextPublicWalmartProductId &&
+    (product.itemId ?? "") === nextItemId;
+
+  if (unchanged) {
+    return {
+      ...product,
+      normalizedPayload: nextNormalizedPayload,
+    };
+  }
+
+  return {
+    ...product,
+    publicWalmartUrl: nextPublicWalmartUrl || undefined,
+    publicWalmartProductId: nextPublicWalmartProductId || undefined,
+    itemId: nextItemId || undefined,
+    normalizedPayload: nextNormalizedPayload,
+  };
 }
 
 function asObjectArray(value: unknown): Record<string, unknown>[] {
