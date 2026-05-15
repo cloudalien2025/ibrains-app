@@ -1,7 +1,13 @@
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
+import {
+  extractImageDerivedFactsFromProduct,
+  type ImageFactConfidence,
+  type ImageDerivedFact,
+} from "@/lib/ecomviper/walmart/walmart-image-intelligence";
 
 export type ProductFactSource =
   | "label_image"
+  | "image_text"
   | "shopify"
   | "walmart_draft"
   | "manual"
@@ -21,6 +27,7 @@ export interface CanonicalProductFacts {
   flavor: string;
   servingSize: string;
   servingsPerContainer: string;
+  dosageStrength: string;
   activeIngredients: string[];
   supplementFacts: Record<string, string>;
   otherIngredients: string[];
@@ -50,6 +57,7 @@ export interface ProductFactsAgentResult {
   usedSources: ProductFactSource[];
   staleFieldReplacements: ProductFactReplacement[];
   staleFieldsCleared: string[];
+  imageDerivedFacts: ImageDerivedFact[];
 }
 
 interface SourceRecord {
@@ -65,8 +73,9 @@ interface FieldCandidate<T> {
 }
 
 const SOURCE_PRIORITY: Record<ProductFactSource, number> = {
-  manual: 5,
-  label_image: 4,
+  manual: 6,
+  label_image: 5,
+  image_text: 4,
   shopify: 3,
   walmart_draft: 2,
   walmart_product: 1,
@@ -310,6 +319,15 @@ function normalizeAudience(value: string): string {
   return titleCase(normalized);
 }
 
+function hasMeaningfulPayloadValue(value: unknown): boolean {
+  if (typeof value === "string") return value.trim().length > 0;
+  if (typeof value === "number") return Number.isFinite(value);
+  if (Array.isArray(value)) return value.some((entry) => hasMeaningfulPayloadValue(entry));
+  const row = asObject(value);
+  if (row) return Object.values(row).some((entry) => hasMeaningfulPayloadValue(entry));
+  return false;
+}
+
 function createSourceRecord(input: {
   source: ProductFactSource;
   confidence: ProductFactConfidence;
@@ -317,6 +335,7 @@ function createSourceRecord(input: {
 }): SourceRecord | null {
   const row = asObject(input.payload);
   if (!row) return null;
+  if (!Object.values(row).some((entry) => hasMeaningfulPayloadValue(entry))) return null;
   return {
     source: input.source,
     confidence: input.confidence,
@@ -358,6 +377,7 @@ function buildSourceRecords(input: {
   product: WalmartProductRecord;
   draftPayload?: Record<string, unknown> | null;
   manualOverrides?: Record<string, unknown> | null;
+  imageDerivedPayload?: Record<string, unknown> | null;
 }): SourceRecord[] {
   const records: SourceRecord[] = [];
 
@@ -374,6 +394,13 @@ function buildSourceRecords(input: {
     payload: extractLabelPayload(input.product),
   });
   if (label) records.push(label);
+
+  const imageText = createSourceRecord({
+    source: "image_text",
+    confidence: "high",
+    payload: input.imageDerivedPayload,
+  });
+  if (imageText) records.push(imageText);
 
   const shopify = createSourceRecord({
     source: "shopify",
@@ -427,7 +454,10 @@ function pickStringCandidate(input: {
     }
 
     if (input.infer) {
-      const inferred = input.infer(input.fallbackTextForInference ?? JSON.stringify(record.payload));
+      let inferred = input.infer(JSON.stringify(record.payload));
+      if (!inferred && input.fallbackTextForInference && record.source === "walmart_product") {
+        inferred = input.infer(input.fallbackTextForInference);
+      }
       if (inferred) {
         candidates.push({
           value: inferred,
@@ -487,6 +517,50 @@ function normalizeFieldKey(value: string): string {
   return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_");
 }
 
+function rankImageFactConfidence(confidence: ImageFactConfidence): number {
+  if (confidence === "high") return 3;
+  if (confidence === "medium") return 2;
+  return 1;
+}
+
+function pickImageFactValue(
+  facts: ImageDerivedFact[],
+  fields: string[],
+  minConfidence: ImageFactConfidence = "medium"
+): string {
+  const minRank = rankImageFactConfidence(minConfidence);
+  const best = facts
+    .filter(
+      (entry) =>
+        fields.includes(entry.field) &&
+        rankImageFactConfidence(entry.confidence) >= minRank &&
+        entry.value.trim().length > 0
+    )
+    .sort(
+      (left, right) =>
+        rankImageFactConfidence(right.confidence) - rankImageFactConfidence(left.confidence)
+    )[0];
+  return best?.value.trim() ?? "";
+}
+
+function collectImageFactValues(
+  facts: ImageDerivedFact[],
+  fields: string[],
+  minConfidence: ImageFactConfidence = "medium"
+): string[] {
+  const minRank = rankImageFactConfidence(minConfidence);
+  return unique(
+    facts
+      .filter(
+        (entry) =>
+          fields.includes(entry.field) &&
+          rankImageFactConfidence(entry.confidence) >= minRank &&
+          entry.value.trim().length > 0
+      )
+      .map((entry) => entry.value)
+  );
+}
+
 function buildFieldMetadata<T>(input: {
   key: string;
   selected: FieldCandidate<T> | null;
@@ -519,6 +593,7 @@ function collectContradictions<T>(input: {
 }): ProductFactReplacement[] {
   const selected = input.selected;
   if (!selected) return [];
+  if (selected.confidence !== "high") return [];
 
   const selectedValue = input.normalizeComparison(selected.value);
   if (!selectedValue) return [];
@@ -544,7 +619,50 @@ export function extractCanonicalProductFacts(input: {
   draftPayload?: Record<string, unknown> | null;
   manualOverrides?: Record<string, unknown> | null;
 }): ProductFactsAgentResult {
-  const records = buildSourceRecords(input);
+  const imageIntelligence = extractImageDerivedFactsFromProduct(input.product);
+  const imageForm = pickImageFactValue(imageIntelligence.factsList, ["form"]);
+  const imageCount = pickImageFactValue(imageIntelligence.factsList, ["count"]);
+  const imageServingSize = pickImageFactValue(imageIntelligence.factsList, ["servingSize"]);
+  const imageServings = pickImageFactValue(imageIntelligence.factsList, ["servingsPerContainer"]);
+  const imageDosageStrength = pickImageFactValue(imageIntelligence.factsList, ["dosageStrength"]);
+  const imageSuggestedUse = pickImageFactValue(imageIntelligence.factsList, ["suggestedUse"]);
+  const imageWarnings = pickImageFactValue(
+    imageIntelligence.factsList,
+    ["warnings", "safety_warnings"]
+  );
+  const imageSupportAreas = collectImageFactValues(imageIntelligence.factsList, [
+    "supportArea",
+    "supportAreas",
+  ]);
+  const imageIngredients = collectImageFactValues(imageIntelligence.factsList, [
+    "activeIngredient",
+    "activeIngredients",
+    "main_ingredients",
+  ]);
+
+  const imageDerivedPayload: Record<string, unknown> = {
+    form: imageForm,
+    product_form: imageForm,
+    count: imageCount,
+    servingSize: imageServingSize,
+    serving_size: imageServingSize,
+    servingsPerContainer: imageServings,
+    servings_per_container: imageServings,
+    dosageStrength: imageDosageStrength,
+    dosage_strength: imageDosageStrength,
+    suggestedUse: imageSuggestedUse,
+    suggested_use: imageSuggestedUse,
+    warnings: imageWarnings,
+    safety_warnings: imageWarnings,
+    support_areas: imageSupportAreas.join(", "),
+    activeIngredients: imageIngredients,
+    main_ingredients: imageIngredients.join(", "),
+  };
+
+  const records = buildSourceRecords({
+    ...input,
+    imageDerivedPayload,
+  });
   const sourceSet = new Set<ProductFactSource>(records.map((entry) => entry.source));
   const labelPayload = extractLabelPayload(input.product);
 
@@ -669,6 +787,11 @@ export function extractCanonicalProductFacts(input: {
     infer: inferServingsPerContainerFromText,
   });
 
+  const dosageStrength = pickStringCandidate({
+    records,
+    keys: ["dosageStrength", "dosage_strength", "strength"],
+  });
+
   const activeIngredients = pickListCandidate({
     records,
     keys: [
@@ -769,6 +892,7 @@ export function extractCanonicalProductFacts(input: {
     flavor: buildFieldMetadata({ key: "flavor", selected: flavor, fallbackValue: "" }),
     servingSize: buildFieldMetadata({ key: "servingSize", selected: servingSize, fallbackValue: "" }),
     servingsPerContainer: buildFieldMetadata({ key: "servingsPerContainer", selected: servingsPerContainer, fallbackValue: "" }),
+    dosageStrength: buildFieldMetadata({ key: "dosageStrength", selected: dosageStrength, fallbackValue: "" }),
     activeIngredients: buildFieldMetadata({
       key: "activeIngredients",
       selected: activeIngredients,
@@ -866,6 +990,7 @@ export function extractCanonicalProductFacts(input: {
     flavor: fields.flavor.value,
     servingSize: fields.servingSize.value,
     servingsPerContainer: fields.servingsPerContainer.value,
+    dosageStrength: fields.dosageStrength.value,
     activeIngredients: fields.activeIngredients.value,
     supplementFacts: fields.supplementFacts.value,
     otherIngredients: fields.otherIngredients.value,
@@ -892,6 +1017,7 @@ export function extractCanonicalProductFacts(input: {
     usedSources: Array.from(sourceSet),
     staleFieldReplacements: staleReplacements,
     staleFieldsCleared,
+    imageDerivedFacts: imageIntelligence.factsList,
   };
 }
 
@@ -909,6 +1035,7 @@ export function buildLabelFactsFixtureForRoc949(): Record<string, unknown> {
     supply: "60 day supply",
     servingSize: "1 gummy",
     servingsPerContainer: "60",
+    dosageStrength: "Magnesium (as Magnesium Glycinate) 30mg",
     activeIngredients: ["Magnesium (as Magnesium Glycinate) 30mg"],
     supplementFacts: {
       Calories: "10",

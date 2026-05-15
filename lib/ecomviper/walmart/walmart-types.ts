@@ -579,7 +579,7 @@ export interface WalmartAiSuggestion {
     skippedProtectedFields: string[];
     skippedLowConfidenceFields: string[];
     rejectedClaims: string[];
-    disclaimerStatus: "inserted" | "preserved" | "deduped" | "missing";
+    disclaimerStatus: "inserted" | "preserved" | "deduped" | "repaired" | "missing";
     finalDecision: "accepted" | "accepted_with_changes" | "rejected";
   };
   entitySet?: {

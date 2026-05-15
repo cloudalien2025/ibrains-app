@@ -111,6 +111,45 @@ function buildSearchKeywords(input: {
     .slice(0, 12);
 }
 
+function formatBenefitLine(benefits: string[]): string {
+  if (benefits.length === 0) return "daily wellness support";
+  if (benefits.length === 1) return benefits[0];
+  if (benefits.length === 2) return `${benefits[0]} and ${benefits[1]}`;
+  return `${benefits.slice(0, 2).join(", ")}, and ${benefits[2]}`;
+}
+
+function buildFaqSnippets(input: {
+  facts: CanonicalProductFacts;
+  product: WalmartProductRecord;
+  benefits: string[];
+  suggestedUse: string;
+  warnings: string;
+  keyIngredientLine: string;
+  formLabel: string;
+  countLabel: string;
+}): string[] {
+  const facts = input.facts;
+  const brand = facts.brand || input.product.brand || "This brand";
+  const productName = facts.productName || input.product.title || "this supplement";
+  const targetAudience = facts.targetAudience || "Adults";
+  const benefits = formatBenefitLine(input.benefits);
+  const ingredientLine = input.keyIngredientLine || "See product label for ingredient details";
+  const formCount = [input.formLabel, input.countLabel].filter(Boolean).join(", ");
+
+  return unique([
+    `Q: What is this product? A: ${brand} ${productName} is a ${input.formLabel.toLowerCase()} supplement built for ${benefits}.`,
+    `Q: Who is it for? A: ${targetAudience}.`,
+    `Q: What are the main ingredients? A: ${ingredientLine}.`,
+    `Q: How do I take it? A: ${input.suggestedUse}`,
+    `Q: What wellness areas does it support? A: ${benefits}.`,
+    `Q: Is it for adults? A: ${/adult/i.test(targetAudience) ? "Yes, the label positions this for adults." : "Review the label audience guidance before use."}`,
+    `Q: Does it include the form and count shown on the label? A: ${formCount || "See product label for count and form details."}.`,
+    `Q: What should I know before use? A: ${input.warnings}`,
+  ])
+    .map((entry) => trimText(entry, 260))
+    .slice(0, 8);
+}
+
 export function buildAgenticReferralCopy(input: {
   facts: CanonicalProductFacts;
   product: WalmartProductRecord;
@@ -119,23 +158,29 @@ export function buildAgenticReferralCopy(input: {
   const benefits = extractBenefitClusters(facts);
   const countLabel = normalizeCountLabel(facts.count);
   const formLabel = facts.form || "Supplement";
-  const flavorLabel = facts.flavor ? `${facts.flavor}, ` : "";
+  const flavorLabel = facts.flavor ? facts.flavor : "";
+  const doseLabel = facts.dosageStrength ? ` ${facts.dosageStrength}` : "";
+  const audienceLabel = facts.targetAudience || "Adults";
 
   const title = trimText(
     normalizeWhitespace(
-      `${facts.brand || input.product.brand} ${
-        facts.productName || input.product.title
-      }, ${benefits.slice(0, 2).join(" & ")}, ${flavorLabel}${countLabel || formLabel}`
+      [
+        facts.brand || input.product.brand,
+        mergeProductNameAndForm(facts.productName || input.product.title, formLabel),
+        flavorLabel ? `${flavorLabel} flavor` : "",
+        countLabel,
+        benefits[0] || "",
+      ]
+        .filter(Boolean)
+        .join(" | ")
     ),
     200
   );
 
   const shortDescription = trimText(
-    `${facts.brand || input.product.brand} ${
-      facts.productName || "supplement"
-    } in ${flavorLabel ? `${flavorLabel.toLowerCase()}` : ""}${formLabel.toLowerCase()} format supports ${
-      benefits.slice(0, 2).join(" and ")
-    } with label-backed serving details for daily routines.`,
+    `${facts.brand || input.product.brand} ${facts.productName || "supplement"} delivers ${formatBenefitLine(
+      benefits.slice(0, 2)
+    )} in a ${formLabel.toLowerCase()} format with label-backed ingredient and serving details.`,
     320
   );
 
@@ -157,6 +202,7 @@ export function buildAgenticReferralCopy(input: {
     facts.form ? `Form: ${facts.form}` : "",
     facts.flavor ? `Flavor: ${facts.flavor}` : "",
     facts.count ? `Count: ${facts.count}` : "",
+    facts.dosageStrength ? `Dosage strength: ${facts.dosageStrength}` : "",
     facts.servingSize ? `Serving size: ${facts.servingSize}` : "",
     facts.servingsPerContainer ? `Servings per container: ${facts.servingsPerContainer}` : "",
     `Active ingredients: ${keyIngredientLine}`,
@@ -169,10 +215,8 @@ export function buildAgenticReferralCopy(input: {
       [
         `${facts.brand || input.product.brand} ${
           facts.productName || "supplement"
-        } is designed for customers seeking ${benefits
-          .slice(0, 3)
-          .join(", ")} in a convenient ${formLabel.toLowerCase()} format.`,
-        `Key ingredient profile: ${keyIngredientLine}.`,
+        } is positioned for ${formatBenefitLine(benefits.slice(0, 3))} in a premium ${formLabel.toLowerCase()} format for ${audienceLabel.toLowerCase()}.`,
+        `Key ingredient profile: ${keyIngredientLine}.${doseLabel ? ` Signature strength: ${facts.dosageStrength}.` : ""}`,
         `${facts.count ? `Package count: ${facts.count}.` : ""} ${
           facts.supply ? `Supply: ${facts.supply}.` : ""
         } ${
@@ -184,6 +228,7 @@ export function buildAgenticReferralCopy(input: {
         }`,
         `Suggested use: ${suggestedUse}`,
         `Safety guidance: ${warnings}`,
+        "This listing uses compliant structure/function language for AI Recommendation Readiness and machine-readable confidence.",
       ]
         .join(" ")
         .replace(/\s{2,}/g, " "),
@@ -192,11 +237,12 @@ export function buildAgenticReferralCopy(input: {
   );
 
   const bullets = unique([
-    `${benefits[0] || "daily wellness support"} with label-backed supplement facts`,
+    `Designed for ${benefits[0] || "daily wellness support"} with label-backed supplement facts`,
     facts.activeIngredients.length
       ? `Active ingredients: ${facts.activeIngredients.slice(0, 2).join(", ")}`
       : "Ingredient transparency from label-backed data",
     facts.flavor ? `${facts.flavor} ${formLabel.toLowerCase()} format` : `${formLabel} format for daily use`,
+    facts.dosageStrength ? `Dosage strength: ${facts.dosageStrength}` : "",
     facts.servingSize ? `Serving size: ${facts.servingSize}` : "Serving details: use as directed on label",
     facts.count ? `Count: ${facts.count}` : "Count details available on product label",
     facts.allergenOrDoesNotContainStatements.length
@@ -211,9 +257,9 @@ export function buildAgenticReferralCopy(input: {
   const aiVisibilitySummary = trimText(
     `${facts.brand || input.product.brand} ${
       facts.productName || "supplement"
-    } is a ${formLabel.toLowerCase()} product with clearly stated ingredients, serving guidance, and compliant ${benefits
-      .slice(0, 2)
-      .join("/")} positioning for answer-engine and marketplace discovery.`,
+    } is a ${formLabel.toLowerCase()} product with clearly stated ingredients, serving guidance, and compliant ${formatBenefitLine(
+      benefits.slice(0, 2)
+    )} positioning for answer-engine discovery and Agentic referral readiness.`,
     500
   );
 
@@ -223,11 +269,16 @@ export function buildAgenticReferralCopy(input: {
     facts.flavor ? `Customers who prefer ${facts.flavor.toLowerCase()} flavor profiles` : "Customers preferring label-transparent formulas",
   ]).slice(0, 5);
 
-  const faqSnippets = [
-    `What is it? ${facts.brand || input.product.brand} ${facts.productName || "supplement"} in ${formLabel.toLowerCase()} format.`,
-    `How do I use it? ${suggestedUse}`,
-    `Who is it for? ${facts.targetAudience || "Adults seeking daily wellness support."}`,
-  ].slice(0, 4);
+  const faqSnippets = buildFaqSnippets({
+    facts,
+    product: input.product,
+    benefits,
+    suggestedUse,
+    warnings,
+    keyIngredientLine,
+    formLabel,
+    countLabel,
+  });
 
   return {
     title,

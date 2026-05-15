@@ -60,6 +60,7 @@ const tabs = [
   "Media",
   "Pricing & Inventory",
   "Search & Browse",
+  "FAQ",
   "Sync History",
 ] as const;
 
@@ -87,6 +88,7 @@ interface ProductEditorFormState {
   brand: string;
   attributesJson: string;
   searchBrowseAttributes: Record<string, string>;
+  faqSnippets: string;
   mediaRecommendations: string;
   altText: string;
   complianceNotes: string;
@@ -587,6 +589,7 @@ function normalizeInlineAiApplyDiagnostics(
     disclaimerStatusRaw === "inserted" ||
     disclaimerStatusRaw === "preserved" ||
     disclaimerStatusRaw === "deduped" ||
+    disclaimerStatusRaw === "repaired" ||
     disclaimerStatusRaw === "missing"
       ? disclaimerStatusRaw
       : "unknown";
@@ -949,6 +952,8 @@ function hydrateEditorForm(
     readDraftList(draft, ["mediaRecommendations"])?.join("\n") ??
     readDraftList(draft, ["media_recommendations"])?.join("\n") ??
     "";
+  const faqSnippets =
+    readDraftList(draft, ["faqSnippets", "faq_snippets", "faqs", "faq"])?.join("\n") ?? "";
   const altText =
     readDraftString(draft, ["altText", "imageAltText", "image_alt_text"]) ?? "";
   const complianceNotes =
@@ -975,6 +980,7 @@ function hydrateEditorForm(
     brand,
     attributesJson: JSON.stringify(attributes, null, 2),
     searchBrowseAttributes,
+    faqSnippets,
     mediaRecommendations,
     altText,
     complianceNotes,
@@ -1366,6 +1372,10 @@ export default function ProductEditorClient({
       brand: form.brand.trim(),
       attributes: mergedSearchBrowseAttributes,
       searchBrowseAttributes: form.searchBrowseAttributes,
+      faqSnippets: form.faqSnippets
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean),
       mediaRecommendations: form.mediaRecommendations
         .split("\n")
         .map((line) => line.trim())
@@ -1466,6 +1476,10 @@ export default function ProductEditorClient({
       ),
     ],
     [complianceValidation, searchBrowseNumberWarnings]
+  );
+  const validationInfos = useMemo(
+    () => complianceValidation.suggestions ?? [],
+    [complianceValidation]
   );
 
   const canSubmit = validationViolations.length === 0 && !formDirty;
@@ -2491,6 +2505,10 @@ export default function ProductEditorClient({
     const nextMediaRecommendations = (inlineAiSuggestion.mediaRecommendations ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
+    const nextFaqSnippets = (inlineAiSuggestion.faqSnippets ?? [])
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry))
+      .slice(0, 8);
     const nextComplianceNotes = (inlineAiSuggestion.complianceNotes ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
@@ -2506,6 +2524,12 @@ export default function ProductEditorClient({
     }
     if (nextBulletPoints.trim() !== form.bulletPoints.trim()) {
       appliedContentFields.push("bullet points");
+    }
+    if (
+      nextFaqSnippets.join("\n").trim() &&
+      nextFaqSnippets.join("\n").trim() !== form.faqSnippets.trim()
+    ) {
+      appliedContentFields.push("FAQ snippets");
     }
     if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
 
@@ -2533,6 +2557,10 @@ export default function ProductEditorClient({
       brand: safeBrand,
       attributesJson: JSON.stringify(attributeMap, null, 2),
       searchBrowseAttributes: mergedSearchBrowseAttributes,
+      faqSnippets:
+        nextFaqSnippets.length > 0
+          ? nextFaqSnippets.join("\n")
+          : form.faqSnippets,
       mediaRecommendations:
         nextMediaRecommendations.length > 0
           ? nextMediaRecommendations.join("\n")
@@ -2554,6 +2582,7 @@ export default function ProductEditorClient({
     const searchBrowseSummary = appliedSearchBrowseFields.length
       ? appliedSearchBrowseFields.join(", ")
       : "none";
+    const faqSummary = nextFaqSnippets.length > 0 ? String(nextFaqSnippets.length) : "none";
     const protectedSummary = skippedProtectedFields.length
       ? skippedProtectedFields.join(", ")
       : "none";
@@ -2579,7 +2608,7 @@ export default function ProductEditorClient({
         : "none";
     const disclaimerSummaryText = diagnostics.disclaimerStatus;
     setInlineAiMessage(
-      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
+      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
   }
 
@@ -3046,6 +3075,14 @@ export default function ProductEditorClient({
                   Search &amp; Browse attributes: {Object.keys(form.searchBrowseAttributes).length} →{" "}
                   {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length}
                 </li>
+                <li>
+                  FAQ snippets:{" "}
+                  {form.faqSnippets
+                    .split("\n")
+                    .map((entry) => entry.trim())
+                    .filter(Boolean).length}{" "}
+                  → {inlineAiSuggestion.faqSnippets?.length ?? 0}
+                </li>
                 {!displayPrimaryImageUrl ? <li>Image still missing from catalog data.</li> : null}
               </ul>
 
@@ -3122,6 +3159,21 @@ export default function ProductEditorClient({
                       </ul>
                     ) : (
                       <p className="mt-1 text-sm text-[#334155]">No Search &amp; Browse updates suggested.</p>
+                    )}
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested FAQ snippets</h4>
+                    {inlineAiSuggestion.faqSnippets?.length ? (
+                      <ul
+                        className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]"
+                        data-testid="ecomviper-walmart-ai-faq-suggestions"
+                      >
+                        {inlineAiSuggestion.faqSnippets.map((entry) => (
+                          <li key={entry}>{entry}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-1 text-sm text-[#334155]">No FAQ suggestions provided.</p>
                     )}
                   </div>
                   <div>
@@ -4034,7 +4086,10 @@ export default function ProductEditorClient({
 
               {activeTab === "Search & Browse" ? (
                 <>
-                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                  <h3
+                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                    data-testid="ecomviper-walmart-search-browse-section"
+                  >
                     Search &amp; Browse
                   </h3>
                   <p className="md:col-span-2 text-xs text-[#475569]">
@@ -4175,6 +4230,39 @@ export default function ProductEditorClient({
                 </>
               ) : null}
 
+              {activeTab === "FAQ" ? (
+                <>
+                  <h3
+                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                    data-testid="ecomviper-walmart-faq-section"
+                  >
+                    FAQ
+                  </h3>
+                  <div className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
+                    <p className="text-xs uppercase tracking-[0.08em] text-[#64748B]">
+                      Recommendation-only output
+                    </p>
+                    <p className="mt-1 text-sm text-[#334155]">
+                      FAQ suggestions are generated for search-answer visibility and referral readiness.
+                      They are stored in draft state and are not pushed as a direct Walmart API field.
+                    </p>
+                  </div>
+                  <label className="text-sm text-[#334155] md:col-span-2">
+                    FAQ snippets (5 to 8 product-specific entries)
+                    <textarea
+                      value={form.faqSnippets}
+                      onChange={(event) => patchForm({ faqSnippets: event.target.value })}
+                      className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                      placeholder={`Q: What is this product? A: ...\nQ: How do I take it? A: ...`}
+                      data-testid="ecomviper-walmart-faq-textarea"
+                    />
+                    <p className="mt-1 text-xs text-[#64748B]">
+                      Keep FAQ entries product-specific, compliant, and grounded in label-backed facts.
+                    </p>
+                  </label>
+                </>
+              ) : null}
+
               {activeTab === "Sync History" ? (
                 <>
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
@@ -4209,7 +4297,7 @@ export default function ProductEditorClient({
           Validation is checked continuously and before Submit Update.
         </p>
 
-        <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        <div className="mt-3 grid gap-3 lg:grid-cols-3">
           <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
             <h3 className="text-sm font-semibold text-[#0F172A]">Validation warnings</h3>
             <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
@@ -4228,6 +4316,17 @@ export default function ProductEditorClient({
                 validationViolations.map((violation) => <li key={violation}>{violation}</li>)
               ) : (
                 <li>No blocking policy issues.</li>
+              )}
+            </ul>
+          </article>
+
+          <article className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+            <h3 className="text-sm font-semibold text-[#0F172A]">Validation info</h3>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+              {validationInfos.length ? (
+                validationInfos.map((entry) => <li key={entry}>{entry}</li>)
+              ) : (
+                <li>No additional guidance.</li>
               )}
             </ul>
           </article>

@@ -3,9 +3,12 @@ import {
   buildSearchBrowseAttributesFromSources,
   normalizeSearchBrowseAttributes,
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
+import {
+  normalizeSupplementDisclaimerText,
+  SUPPLEMENT_FDA_DISCLAIMER,
+} from "@/lib/ecomviper/walmart/walmart-supplement-disclaimer";
 
-export const SUPPLEMENT_FDA_DISCLAIMER =
-  "These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.";
+export { SUPPLEMENT_FDA_DISCLAIMER } from "@/lib/ecomviper/walmart/walmart-supplement-disclaimer";
 
 const RISKY_CLAIM_PATTERNS = [
   /\barthritis\b/i,
@@ -301,13 +304,9 @@ export function buildAiAnswerShortDescription(entitySet: WalmartVisibilityEntity
 }
 
 export function ensureSingleSupplementDisclaimer(description: string): string {
-  const trimmed = description.trim();
-  const withoutDisclaimer = normalizeWhitespace(
-    trimmed.replace(DISCLAIMER_REGEX, " ").replace(/\n{3,}/g, "\n\n")
-  );
-
-  if (!withoutDisclaimer) return SUPPLEMENT_FDA_DISCLAIMER;
-  return `${withoutDisclaimer}\n\n${SUPPLEMENT_FDA_DISCLAIMER}`;
+  return normalizeSupplementDisclaimerText(description, {
+    appendWhenMissing: true,
+  }).normalizedText;
 }
 
 function isSupplementLikeEntity(entitySet: WalmartVisibilityEntitySet): boolean {

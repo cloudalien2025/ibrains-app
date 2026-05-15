@@ -81,8 +81,8 @@ function normalizeIngredientList(values: string[]): string[] {
   return unique(values.map((entry) => normalizeIngredientName(entry)).filter(Boolean));
 }
 
-function shouldSetValue(value: string): boolean {
-  const trimmed = value.trim();
+function shouldSetValue(value: unknown): boolean {
+  const trimmed = asString(value);
   if (!trimmed) return false;
   if (isLowConfidenceAiFieldValue(trimmed)) return false;
   return true;
@@ -92,20 +92,20 @@ function setValue(
   target: Record<string, string>,
   sourceByField: Record<string, string>,
   key: string,
-  value: string,
+  value: unknown,
   source: string
 ) {
   if (!shouldSetValue(value)) return;
-  target[key] = normalizeWhitespace(value);
+  target[key] = normalizeWhitespace(asString(value));
   sourceByField[key] = source;
 }
 
 function mapStaleFieldToSearchBrowseKeys(field: string): string[] {
   if (field === "brand") return ["brand"];
   if (field === "manufacturer") return ["manufacturer"];
-  if (field === "form") return ["product_form"];
+  if (field === "form") return ["product_form", "form"];
   if (field === "flavor") return ["flavor"];
-  if (field === "count") return ["count"];
+  if (field === "count") return ["count", "count_per_pack", "count_per_package"];
   if (field === "productName") return ["supplement_type", "product_type"];
   if (field === "activeIngredients") return ["main_ingredients", "ingredients_list"];
   return [];
@@ -148,18 +148,55 @@ function buildCanonicalSearchBrowseFromFacts(input: {
   setValue(
     attributes,
     sourceByField,
+    "category",
+    facts.category || facts.productType,
+    "product_facts"
+  );
+  setValue(
+    attributes,
+    sourceByField,
+    "product_name",
+    facts.productName,
+    "product_facts"
+  );
+  setValue(
+    attributes,
+    sourceByField,
     "product_form",
+    normalizeFormForSearchBrowse(facts.form),
+    "product_facts"
+  );
+  setValue(
+    attributes,
+    sourceByField,
+    "form",
     normalizeFormForSearchBrowse(facts.form),
     "product_facts"
   );
   setValue(attributes, sourceByField, "flavor", facts.flavor, "product_facts");
   setValue(attributes, sourceByField, "count", facts.count, "product_facts");
+  setValue(attributes, sourceByField, "count_per_package", facts.count, "product_facts");
+  setValue(attributes, sourceByField, "count_per_pack", facts.count, "product_facts");
   setValue(attributes, sourceByField, "serving_size", facts.servingSize, "product_facts");
   setValue(
     attributes,
     sourceByField,
     "servings_per_container",
     facts.servingsPerContainer,
+    "product_facts"
+  );
+  setValue(
+    attributes,
+    sourceByField,
+    "servings",
+    facts.servingsPerContainer,
+    "product_facts"
+  );
+  setValue(
+    attributes,
+    sourceByField,
+    "dosage_strength",
+    facts.dosageStrength,
     "product_facts"
   );
 
@@ -184,6 +221,14 @@ function buildCanonicalSearchBrowseFromFacts(input: {
       "ingredients_list",
       facts.otherIngredients.join(", "),
       "product_facts"
+    );
+  } else if (mainIngredients.length > 0) {
+    setValue(
+      attributes,
+      sourceByField,
+      "ingredients_list",
+      mainIngredients.join(", "),
+      "product_facts_inferred"
     );
   }
 
@@ -210,6 +255,13 @@ function buildCanonicalSearchBrowseFromFacts(input: {
     attributes,
     sourceByField,
     "directions_suggested_use",
+    inferredDirections,
+    facts.suggestedUse ? "product_facts" : "product_facts_fallback"
+  );
+  setValue(
+    attributes,
+    sourceByField,
+    "suggested_use",
     inferredDirections,
     facts.suggestedUse ? "product_facts" : "product_facts_fallback"
   );
