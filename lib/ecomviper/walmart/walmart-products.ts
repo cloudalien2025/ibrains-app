@@ -61,7 +61,7 @@ import type {
 } from "@/lib/ecomviper/walmart/walmart-types";
 
 const WALMART_IMPORT_PAGE_LIMIT = 100;
-const WALMART_IMPORT_MAX_PAGES = 5;
+const WALMART_IMPORT_MAX_PAGES = 250;
 const WALMART_IMPORT_MAX_PAGES_BOUNDED = 1;
 const WALMART_IMAGE_ENRICHMENT_CONCURRENCY = 4;
 const WALMART_IMPORT_FAILURE_NAME = "WalmartImportFailureError";
@@ -217,6 +217,7 @@ export async function replaceWalmartProductsForUser(input: {
   userId: string;
   products: WalmartProductRecord[];
   importedAt: string | null;
+  pruneMissingActiveSkus?: boolean;
 }): Promise<void> {
   const canonicalProducts = input.products.map((product) => withCanonicalPublicListingMetadata(product));
   await replacePersistedWalmartProducts({
@@ -2256,7 +2257,7 @@ export async function importWalmartProducts(
     let nextCursor: string | null = null;
     const catalogPageCap = options?.boundedRuntime
       ? Math.max(1, Math.min(WALMART_IMPORT_MAX_PAGES, options.maxCatalogPages ?? WALMART_IMPORT_MAX_PAGES_BOUNDED))
-      : WALMART_IMPORT_MAX_PAGES;
+      : Math.max(1, options?.maxCatalogPages ?? WALMART_IMPORT_MAX_PAGES);
 
     for (let pageIndex = 0; pageIndex < catalogPageCap; pageIndex += 1) {
       let page: Awaited<ReturnType<typeof fetchCatalogPage>>;
@@ -2490,6 +2491,7 @@ export async function importWalmartProducts(
         userId,
         products,
         importedAt: now,
+        pruneMissingActiveSkus: false,
       });
     } catch (error) {
       throw createWalmartImportFailure({

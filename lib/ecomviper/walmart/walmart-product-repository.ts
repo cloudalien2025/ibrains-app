@@ -415,18 +415,32 @@ export async function replacePersistedWalmartProducts(input: {
   userId: string;
   products: WalmartProductRecord[];
   importedAt: string | null;
+  pruneMissingActiveSkus?: boolean;
 }): Promise<void> {
   const importedAt = input.importedAt ?? new Date().toISOString();
+  const pruneMissingActiveSkus = input.pruneMissingActiveSkus ?? true;
 
   if (allowFallbackStore()) {
     const state = getFallbackUserState(input.userId);
-    const nextProductsBySku = new Map<string, WalmartProductRecord>();
+    const upsertProductsBySku = new Map<string, WalmartProductRecord>();
     for (const product of input.products) {
       const normalizedSku = normalizeSku(product.sku);
       if (state.archivedSkus.has(normalizedSku)) continue;
-      nextProductsBySku.set(normalizedSku, product);
+      upsertProductsBySku.set(normalizedSku, product);
     }
-    state.productsBySku = nextProductsBySku;
+
+    if (pruneMissingActiveSkus) {
+      state.productsBySku = upsertProductsBySku;
+    } else {
+      const mergedProductsBySku = new Map<string, WalmartProductRecord>(state.productsBySku);
+      for (const [sku, product] of upsertProductsBySku.entries()) {
+        mergedProductsBySku.set(sku, product);
+      }
+      for (const archivedSku of state.archivedSkus) {
+        mergedProductsBySku.delete(archivedSku);
+      }
+      state.productsBySku = mergedProductsBySku;
+    }
     state.lastImportAt = importedAt;
     return;
   }
@@ -445,9 +459,9 @@ export async function replacePersistedWalmartProducts(input: {
 
     const skus = Array.from(normalizedProductsBySku.keys());
 
-    if (skus.length === 0) {
+    if (pruneMissingActiveSkus && skus.length === 0) {
       await query(`DELETE FROM ${PRODUCTS_TABLE} WHERE user_id = $1 AND archived_at IS NULL`, [input.userId]);
-    } else {
+    } else if (skus.length > 0) {
       for (const [normalizedSku, product] of normalizedProductsBySku.entries()) {
         await query(
           `
@@ -466,11 +480,13 @@ export async function replacePersistedWalmartProducts(input: {
         );
       }
 
-      await query(
-        `DELETE FROM ${PRODUCTS_TABLE}
-         WHERE user_id = $1 AND archived_at IS NULL AND NOT (sku = ANY($2::text[]))`,
-        [input.userId, skus]
-      );
+      if (pruneMissingActiveSkus) {
+        await query(
+          `DELETE FROM ${PRODUCTS_TABLE}
+           WHERE user_id = $1 AND archived_at IS NULL AND NOT (sku = ANY($2::text[]))`,
+          [input.userId, skus]
+        );
+      }
     }
 
     await query(
