@@ -1414,6 +1414,274 @@ function scoreLabel(score: number): "high" | "medium" | "low" {
   return "low";
 }
 
+type FieldProvenanceRow = {
+  field: string;
+  currentValue: string;
+  source: string;
+  detail: string;
+};
+
+function isMeaningfulProvenanceText(value: string): boolean {
+  const normalized = value.trim().toLowerCase();
+  if (!normalized) return false;
+  return !new Set(["unknown", "not available", "n/a", "na", "none", "null", "undefined"]).has(normalized);
+}
+
+function formatProvenanceSourceLabel(source: string): string {
+  if (source === "draft_edit") return "Draft edit";
+  if (source === "item_report_hydration") return "Item Report hydration";
+  if (source === "live_item_hydration") return "Live Item API hydration";
+  if (source === "walmart_native_state") return "Walmart native state";
+  if (source === "import_snapshot") return "Import snapshot";
+  return "Missing";
+}
+
+function previewFieldValue(value: string, maxLength = 84): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Not set";
+  if (trimmed.length <= maxLength) return trimmed;
+  return `${trimmed.slice(0, maxLength - 3)}...`;
+}
+
+function normalizeAttributeSignature(attributes: Record<string, string>): string {
+  const pairs = Object.entries(attributes)
+    .map(([key, value]) => [key.trim(), value.trim()] as const)
+    .filter(([key, value]) => key.length > 0 && value.length > 0)
+    .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey));
+  return JSON.stringify(pairs);
+}
+
+function countLineItems(value: string): number {
+  return value
+    .split(/\r?\n/)
+    .map((entry) => entry.trim())
+    .filter(Boolean).length;
+}
+
+function resolveFieldProvenanceRows(input: {
+  product: WalmartProductRecord;
+  form: ProductEditorFormState;
+  initialForm: ProductEditorFormState;
+  hydratedCurrentWalmartState?: WalmartNativeState;
+}): FieldProvenanceRow[] {
+  const normalized = asObject(input.product.normalizedPayload);
+  const raw = asObject(input.product.rawPayload);
+  const itemReportHydration = asObject(normalized?.itemReportHydration);
+  const itemReportValues = asObject(itemReportHydration?.values);
+  const itemReportHydratedAt =
+    asText(itemReportHydration?.hydratedAt)?.trim() ||
+    asText(raw?.itemReportContentHydratedAt)?.trim() ||
+    "";
+  const liveHydration = asObject(normalized?.liveHydration) ?? asObject(raw?.liveHydration);
+  const liveHydratedAt =
+    asText(liveHydration?.hydratedAt)?.trim() || asText(raw?.liveHydrationFetchedAt)?.trim() || "";
+
+  const hasItemReportShort = isMeaningfulProvenanceText(
+    asText(itemReportValues?.shortDescription)?.trim() ?? ""
+  );
+  const hasItemReportLong = isMeaningfulProvenanceText(
+    asText(itemReportValues?.longDescription)?.trim() ?? ""
+  );
+  const hasItemReportBullets = listFromUnknown(itemReportValues?.bulletPoints).length > 0;
+
+  const hasLiveShort = isMeaningfulProvenanceText(
+    firstNonEmptyString([liveHydration], ["shortDescription", "siteDescription"])
+  );
+  const hasLiveLong = isMeaningfulProvenanceText(
+    firstNonEmptyString([liveHydration], ["longDescription", "fullDescription"])
+  );
+  const hasLiveBullets = listFromUnknown(liveHydration?.bulletPoints ?? liveHydration?.keyFeatures).length > 0;
+
+  const hasNativeTitle = isMeaningfulProvenanceText(
+    input.hydratedCurrentWalmartState?.content.productName ?? ""
+  );
+  const hasNativeShort = isMeaningfulProvenanceText(
+    input.hydratedCurrentWalmartState?.content.siteDescription ?? ""
+  );
+  const hasNativeLong = isMeaningfulProvenanceText(
+    input.hydratedCurrentWalmartState?.content.longDescription ?? ""
+  );
+  const hasNativeBullets =
+    (input.hydratedCurrentWalmartState?.content.keyFeatures ?? []).filter((entry) =>
+      isMeaningfulProvenanceText(entry)
+    ).length > 0;
+
+  function resolveSource(inputRow: {
+    edited: boolean;
+    hasItemReport: boolean;
+    hasLiveHydration: boolean;
+    hasNativeState: boolean;
+    hasImportSnapshot: boolean;
+  }): { source: string; detail: string } {
+    if (inputRow.edited) {
+      return {
+        source: "draft_edit",
+        detail: "Value was edited in this draft session.",
+      };
+    }
+    if (inputRow.hasItemReport) {
+      return {
+        source: "item_report_hydration",
+        detail: itemReportHydratedAt
+          ? `Hydrated from Walmart Item Report at ${itemReportHydratedAt}.`
+          : "Hydrated from Walmart Item Report.",
+      };
+    }
+    if (inputRow.hasLiveHydration) {
+      return {
+        source: "live_item_hydration",
+        detail: liveHydratedAt
+          ? `Hydrated from Walmart Item API at ${liveHydratedAt}.`
+          : "Hydrated from Walmart Item API.",
+      };
+    }
+    if (inputRow.hasNativeState) {
+      return {
+        source: "walmart_native_state",
+        detail: "Loaded from current Walmart native state snapshot.",
+      };
+    }
+    if (inputRow.hasImportSnapshot) {
+      return {
+        source: "import_snapshot",
+        detail: "Loaded from persisted import/catalog snapshot.",
+      };
+    }
+    return {
+      source: "missing",
+      detail: "No trusted source value is available yet.",
+    };
+  }
+
+  const titleSource = resolveSource({
+    edited: input.form.title.trim() !== input.initialForm.title.trim(),
+    hasItemReport: false,
+    hasLiveHydration: isMeaningfulProvenanceText(firstNonEmptyString([liveHydration], ["title", "productName"])),
+    hasNativeState: hasNativeTitle,
+    hasImportSnapshot: isMeaningfulProvenanceText(input.product.title),
+  });
+
+  const shortSource = resolveSource({
+    edited: input.form.shortDescription.trim() !== input.initialForm.shortDescription.trim(),
+    hasItemReport: hasItemReportShort,
+    hasLiveHydration: hasLiveShort,
+    hasNativeState: hasNativeShort,
+    hasImportSnapshot: isMeaningfulProvenanceText(input.product.shortDescription),
+  });
+
+  const longSource = resolveSource({
+    edited: input.form.longDescription.trim() !== input.initialForm.longDescription.trim(),
+    hasItemReport: hasItemReportLong,
+    hasLiveHydration: hasLiveLong,
+    hasNativeState: hasNativeLong,
+    hasImportSnapshot: isMeaningfulProvenanceText(input.product.longDescription),
+  });
+
+  const currentBulletCount = countLineItems(input.form.bulletPoints);
+  const initialBulletCount = countLineItems(input.initialForm.bulletPoints);
+  const bulletSource = resolveSource({
+    edited: input.form.bulletPoints.trim() !== input.initialForm.bulletPoints.trim(),
+    hasItemReport: hasItemReportBullets,
+    hasLiveHydration: hasLiveBullets,
+    hasNativeState: hasNativeBullets,
+    hasImportSnapshot: (input.product.bulletPoints ?? []).filter((entry) => isMeaningfulProvenanceText(entry)).length > 0,
+  });
+
+  const brandSource = resolveSource({
+    edited: input.form.brand.trim() !== input.initialForm.brand.trim(),
+    hasItemReport: false,
+    hasLiveHydration: isMeaningfulProvenanceText(firstNonEmptyString([liveHydration], ["brand", "brandName"])),
+    hasNativeState: isMeaningfulProvenanceText(input.hydratedCurrentWalmartState?.content.brand ?? ""),
+    hasImportSnapshot: isMeaningfulProvenanceText(input.product.brand),
+  });
+
+  const priceSource = resolveSource({
+    edited: input.form.price.trim() !== input.initialForm.price.trim(),
+    hasItemReport: false,
+    hasLiveHydration: firstNonEmptyNumber([liveHydration], ["price", "amount"]) !== null,
+    hasNativeState: input.hydratedCurrentWalmartState?.pricingInventory.currentPrice !== null,
+    hasImportSnapshot: Number.isFinite(input.product.price),
+  });
+
+  const inventorySource = resolveSource({
+    edited: input.form.inventoryQuantity.trim() !== input.initialForm.inventoryQuantity.trim(),
+    hasItemReport: false,
+    hasLiveHydration: firstNonEmptyNumber([liveHydration], ["inventory", "quantity"]) !== null,
+    hasNativeState: input.hydratedCurrentWalmartState?.pricingInventory.inventory !== null,
+    hasImportSnapshot: input.product.inventoryStatus === "known",
+  });
+
+  const currentSearchAttributeCount = Object.values(input.form.searchBrowseAttributes).filter((value) =>
+    isMeaningfulProvenanceText(value)
+  ).length;
+  const initialSearchSignature = normalizeAttributeSignature(input.initialForm.searchBrowseAttributes);
+  const currentSearchSignature = normalizeAttributeSignature(input.form.searchBrowseAttributes);
+  const searchSource = resolveSource({
+    edited: currentSearchSignature !== initialSearchSignature,
+    hasItemReport: false,
+    hasLiveHydration: false,
+    hasNativeState: (input.hydratedCurrentWalmartState?.searchBrowse.groupedAttributes ?? []).length > 0,
+    hasImportSnapshot: currentSearchAttributeCount > 0,
+  });
+
+  return [
+    {
+      field: "Title",
+      currentValue: previewFieldValue(input.form.title),
+      source: formatProvenanceSourceLabel(titleSource.source),
+      detail: titleSource.detail,
+    },
+    {
+      field: "Short description",
+      currentValue: previewFieldValue(input.form.shortDescription),
+      source: formatProvenanceSourceLabel(shortSource.source),
+      detail: shortSource.detail,
+    },
+    {
+      field: "Long description",
+      currentValue: previewFieldValue(input.form.longDescription),
+      source: formatProvenanceSourceLabel(longSource.source),
+      detail: longSource.detail,
+    },
+    {
+      field: "Bullets",
+      currentValue:
+        currentBulletCount > 0
+          ? `${currentBulletCount} bullet${currentBulletCount === 1 ? "" : "s"}`
+          : "Not set",
+      source: formatProvenanceSourceLabel(bulletSource.source),
+      detail:
+        bulletSource.source === "draft_edit"
+          ? `Was ${initialBulletCount} bullet${initialBulletCount === 1 ? "" : "s"} at load.`
+          : bulletSource.detail,
+    },
+    {
+      field: "Brand",
+      currentValue: previewFieldValue(input.form.brand),
+      source: formatProvenanceSourceLabel(brandSource.source),
+      detail: brandSource.detail,
+    },
+    {
+      field: "Price",
+      currentValue: previewFieldValue(input.form.price),
+      source: formatProvenanceSourceLabel(priceSource.source),
+      detail: priceSource.detail,
+    },
+    {
+      field: "Inventory quantity",
+      currentValue: previewFieldValue(input.form.inventoryQuantity),
+      source: formatProvenanceSourceLabel(inventorySource.source),
+      detail: inventorySource.detail,
+    },
+    {
+      field: "Search & Browse attributes",
+      currentValue: `${currentSearchAttributeCount} populated`,
+      source: formatProvenanceSourceLabel(searchSource.source),
+      detail: searchSource.detail,
+    },
+  ];
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -3227,6 +3495,16 @@ export default function ProductEditorClient({
     sourceConfidenceSummary.byAction.filled_missing +
     sourceConfidenceSummary.byAction.replaced_placeholder;
   const latestCatalogBackfillStatus: CatalogBackfillStatus | null = catalogBackfillResult?.status ?? null;
+  const fieldProvenanceRows = useMemo(
+    () =>
+      resolveFieldProvenanceRows({
+        product,
+        form,
+        initialForm,
+        hydratedCurrentWalmartState,
+      }),
+    [form, hydratedCurrentWalmartState, initialForm, product]
+  );
 
   const currentListingReferenceSections = (panel: "review" | "improve") => (
     <section
@@ -5260,6 +5538,37 @@ export default function ProductEditorClient({
                   currentWalmartState.media.publicWalmartItemId ||
                   "Not available"}
               </p>
+            </div>
+            <div
+              className="mt-3 overflow-x-auto rounded-lg border border-[#E2E8F0] bg-white p-3"
+              data-testid="ecomviper-walmart-field-provenance-table"
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                Field provenance
+              </p>
+              <p className="mt-1 text-xs text-[#64748B]">
+                Shows where the current docket values came from before publish review.
+              </p>
+              <table className="mt-2 w-full min-w-[760px] text-xs text-[#334155]">
+                <thead className="text-left uppercase tracking-[0.08em] text-[#64748B]">
+                  <tr>
+                    <th className="py-1 pr-2">Field</th>
+                    <th className="py-1 pr-2">Current value</th>
+                    <th className="py-1 pr-2">Source</th>
+                    <th className="py-1">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fieldProvenanceRows.map((row) => (
+                    <tr key={row.field} className="border-t border-[#E2E8F0] align-top">
+                      <td className="py-1 pr-2 font-medium text-[#0F172A]">{row.field}</td>
+                      <td className="py-1 pr-2">{row.currentValue}</td>
+                      <td className="py-1 pr-2">{row.source}</td>
+                      <td className="py-1">{row.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
         </details>

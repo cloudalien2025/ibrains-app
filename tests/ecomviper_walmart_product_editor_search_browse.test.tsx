@@ -122,9 +122,13 @@ describe("Walmart Search & Browse editor hydration", () => {
 
     expect(container.textContent).toContain("Search & Browse");
     expect(container.textContent).toContain("Image-derived facts status: unknown");
+    expect(container.textContent).toContain("Field provenance");
     expect(container.innerHTML).toContain("Joint comfort, mobility");
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-search-browse-section"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-field-provenance-table"]')
     ).not.toBeNull();
 
     expect(container.querySelector('[data-testid="ecomviper-walmart-faq-section"]')).not.toBeNull();
