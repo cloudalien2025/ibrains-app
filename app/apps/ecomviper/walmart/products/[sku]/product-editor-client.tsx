@@ -26,6 +26,11 @@ import {
   normalizeWalmartTextValue,
   pickFirstNonPlaceholder,
 } from "@/lib/ecomviper/walmart/walmart-docket-hydration";
+import {
+  buildWalmartDocketFreshnessSummary,
+  type WalmartDocketFreshnessSummary,
+  type WalmartItemReportBackfillStatus,
+} from "@/lib/ecomviper/walmart/walmart-docket-freshness";
 import { buildWalmartPublishLanePreview } from "@/lib/ecomviper/walmart/walmart-publish-lanes";
 import { sanitizeSeoFilename } from "@/lib/ecomviper/walmart/walmart-generated-media-seo";
 import {
@@ -301,6 +306,45 @@ type WalmartPublishResultStatus =
   | "submitted"
   | "provider_error";
 
+interface WalmartItemReportBackfillClientState {
+  status: WalmartItemReportBackfillStatus;
+  requestId: string | null;
+  reportType: "ITEM";
+  reportVersion: string | null;
+  requestedAt: string | null;
+  lastCheckedAt: string | null;
+  readyAt: string | null;
+  downloadedAt: string | null;
+  appliedAt: string | null;
+  expiresAt: string | null;
+  source: "live" | "fixture" | "unavailable";
+  credentialMode: "byo_live" | "mock" | "unavailable";
+  cooldownUntil: string | null;
+  rowCount: number;
+  appliedSkuCount: number;
+  warningCount: number;
+  errorCount: number;
+  diagnostics: Array<{
+    code: string;
+    message: string;
+    source: "walmart_item_report" | "fixture" | "backfill";
+    level?: "info" | "warning" | "error";
+  }>;
+}
+
+type WalmartItemReportRouteResponse = {
+  ok: boolean;
+  sku?: string | null;
+  reportBackfill?: WalmartItemReportBackfillClientState;
+  freshness?: WalmartDocketFreshnessSummary;
+  product?: WalmartProductRecord | null;
+  message?: string;
+  error?: {
+    code?: string;
+    message?: string;
+  };
+};
+
 const INLINE_AI_LOADING_MESSAGE = "Optimizing listing with AI...";
 const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
@@ -398,6 +442,143 @@ function asBoolean(value: unknown): boolean | null {
     if (normalized === "false") return false;
   }
   return null;
+}
+
+function createEmptyItemReportBackfillState(): WalmartItemReportBackfillClientState {
+  return {
+    status: "not_requested",
+    requestId: null,
+    reportType: "ITEM",
+    reportVersion: null,
+    requestedAt: null,
+    lastCheckedAt: null,
+    readyAt: null,
+    downloadedAt: null,
+    appliedAt: null,
+    expiresAt: null,
+    source: "unavailable",
+    credentialMode: "unavailable",
+    cooldownUntil: null,
+    rowCount: 0,
+    appliedSkuCount: 0,
+    warningCount: 0,
+    errorCount: 0,
+    diagnostics: [],
+  };
+}
+
+function normalizeItemReportBackfillState(value: unknown): WalmartItemReportBackfillClientState {
+  const base = createEmptyItemReportBackfillState();
+  const row = asObject(value);
+  if (!row) return base;
+
+  const status = asText(row.status)?.trim() ?? "";
+  const allowedStatuses: WalmartItemReportBackfillStatus[] = [
+    "not_requested",
+    "request_blocked_no_credentials",
+    "request_blocked_cooldown",
+    "request_failed",
+    "requested",
+    "submitted",
+    "in_progress",
+    "ready",
+    "download_failed",
+    "downloaded",
+    "parse_failed",
+    "applied",
+    "applied_with_warnings",
+    "no_matching_rows",
+    "expired",
+    "unavailable",
+  ];
+  const source = asText(row.source)?.trim() ?? "";
+  const credentialMode = asText(row.credentialMode)?.trim() ?? "";
+
+  return {
+    ...base,
+    status: allowedStatuses.includes(status as WalmartItemReportBackfillStatus)
+      ? (status as WalmartItemReportBackfillStatus)
+      : base.status,
+    requestId: asText(row.requestId)?.trim() || null,
+    reportVersion: asText(row.reportVersion)?.trim() || null,
+    requestedAt: asText(row.requestedAt)?.trim() || null,
+    lastCheckedAt: asText(row.lastCheckedAt)?.trim() || null,
+    readyAt: asText(row.readyAt)?.trim() || null,
+    downloadedAt: asText(row.downloadedAt)?.trim() || null,
+    appliedAt: asText(row.appliedAt)?.trim() || null,
+    expiresAt: asText(row.expiresAt)?.trim() || null,
+    source:
+      source === "live" || source === "fixture" || source === "unavailable"
+        ? (source as WalmartItemReportBackfillClientState["source"])
+        : base.source,
+    credentialMode:
+      credentialMode === "byo_live" || credentialMode === "mock" || credentialMode === "unavailable"
+        ? (credentialMode as WalmartItemReportBackfillClientState["credentialMode"])
+        : base.credentialMode,
+    cooldownUntil: asText(row.cooldownUntil)?.trim() || null,
+    rowCount: asNumber(row.rowCount) ?? 0,
+    appliedSkuCount: asNumber(row.appliedSkuCount) ?? 0,
+    warningCount: asNumber(row.warningCount) ?? 0,
+    errorCount: asNumber(row.errorCount) ?? 0,
+    diagnostics: Array.isArray(row.diagnostics)
+      ? row.diagnostics.reduce<WalmartItemReportBackfillClientState["diagnostics"]>((acc, entry) => {
+          const record = asObject(entry);
+          if (!record) return acc;
+          const code = asText(record.code)?.trim() ?? "";
+          const message = asText(record.message)?.trim() ?? "";
+          const sourceValue = asText(record.source)?.trim() ?? "";
+          if (!code || !message) return acc;
+          if (sourceValue !== "walmart_item_report" && sourceValue !== "fixture" && sourceValue !== "backfill") {
+            return acc;
+          }
+          const level = asText(record.level)?.trim() ?? "";
+          acc.push({
+            code,
+            message,
+            source: sourceValue as "walmart_item_report" | "fixture" | "backfill",
+            level:
+              level === "info" || level === "warning" || level === "error"
+                ? (level as "info" | "warning" | "error")
+                : undefined,
+          });
+          return acc;
+        }, [])
+      : [],
+  };
+}
+
+function backfillStateFromProduct(product: WalmartProductRecord): WalmartItemReportBackfillClientState {
+  const normalizedPayload = asObject(product.normalizedPayload);
+  return normalizeItemReportBackfillState(normalizedPayload?.itemReportBackfill);
+}
+
+function formatBackfillStatusLabel(status: WalmartItemReportBackfillStatus): string {
+  if (status === "not_requested") return "Not requested";
+  if (status === "request_blocked_no_credentials") return "Blocked: no credentials";
+  if (status === "request_blocked_cooldown") return "Blocked: cooldown active";
+  if (status === "request_failed") return "Request failed";
+  if (status === "requested") return "Requested";
+  if (status === "submitted") return "Submitted";
+  if (status === "in_progress") return "In progress";
+  if (status === "ready") return "Ready to download";
+  if (status === "download_failed") return "Download failed";
+  if (status === "downloaded") return "Downloaded";
+  if (status === "parse_failed") return "Parse failed";
+  if (status === "applied") return "Applied";
+  if (status === "applied_with_warnings") return "Applied with warnings";
+  if (status === "no_matching_rows") return "No matching rows";
+  if (status === "expired") return "Expired";
+  return "Unavailable";
+}
+
+function formatFreshnessStatusLabel(status: WalmartDocketFreshnessSummary["overallStatus"]): string {
+  if (status === "fresh") return "Fresh";
+  if (status === "stale") return "Stale";
+  if (status === "missing") return "Missing";
+  if (status === "pending_report") return "Pending report";
+  if (status === "report_ready") return "Report ready";
+  if (status === "report_failed") return "Report failed";
+  return "Unknown";
 }
 
 function firstNonEmptyString(
@@ -1872,6 +2053,15 @@ export default function ProductEditorClient({
   const [refreshingCatalogDetails, setRefreshingCatalogDetails] = useState(false);
   const [catalogBackfillResult, setCatalogBackfillResult] = useState<CatalogBackfillResult | null>(null);
   const [catalogBackfillMessage, setCatalogBackfillMessage] = useState<string | null>(null);
+  const [itemReportBackfillState, setItemReportBackfillState] = useState<WalmartItemReportBackfillClientState>(
+    () => backfillStateFromProduct(product)
+  );
+  const [itemReportBackfillMessage, setItemReportBackfillMessage] = useState<string | null>(null);
+  const [requestingItemReport, setRequestingItemReport] = useState(false);
+  const [checkingItemReportStatus, setCheckingItemReportStatus] = useState(false);
+  const [downloadingItemReport, setDownloadingItemReport] = useState(false);
+  const [applyingItemReport, setApplyingItemReport] = useState(false);
+  const [reportAppliedProduct, setReportAppliedProduct] = useState<WalmartProductRecord | null>(null);
   const [generatedImageType, setGeneratedImageType] =
     useState<WalmartGeneratedImageType>(DEFAULT_GENERATED_IMAGE_TYPE);
   const [generatedImageGuidance, setGeneratedImageGuidance] = useState("");
@@ -2116,6 +2306,41 @@ export default function ProductEditorClient({
     const fromDocket = product.docket?.statuses ?? [];
     return unique([...(hydrationStatuses ?? []), ...fromPayload, ...fromDocket]);
   }, [hydrationStatuses, normalizedProductPayload, product.docket?.statuses]);
+  const freshnessSeedProduct = useMemo(() => {
+    const base = reportAppliedProduct ?? product;
+    const baseNormalized = asObject(base.normalizedPayload) ?? {};
+    return {
+      ...base,
+      normalizedPayload: {
+        ...baseNormalized,
+        itemReportBackfill: itemReportBackfillState,
+      },
+    } as WalmartProductRecord;
+  }, [itemReportBackfillState, product, reportAppliedProduct]);
+  const docketFreshnessSummary = useMemo(
+    () => buildWalmartDocketFreshnessSummary({ product: freshnessSeedProduct }),
+    [freshnessSeedProduct]
+  );
+  const reportCooldownActive = useMemo(() => {
+    const cooldownAt = itemReportBackfillState.cooldownUntil;
+    if (!cooldownAt) return false;
+    const parsed = Date.parse(cooldownAt);
+    if (!Number.isFinite(parsed)) return false;
+    return Date.now() < parsed;
+  }, [itemReportBackfillState.cooldownUntil]);
+  const canRequestItemReport =
+    !reportCooldownActive &&
+    itemReportBackfillState.status !== "request_blocked_no_credentials" &&
+    !requestingItemReport;
+  const canCheckItemReportStatus =
+    Boolean(itemReportBackfillState.requestId) && !checkingItemReportStatus;
+  const canDownloadItemReport =
+    Boolean(itemReportBackfillState.requestId) &&
+    (itemReportBackfillState.status === "ready" || itemReportBackfillState.status === "download_failed") &&
+    !downloadingItemReport;
+  const canApplyItemReport =
+    (itemReportBackfillState.status === "downloaded" || itemReportBackfillState.status === "ready") &&
+    !applyingItemReport;
   const projectedScoreFromSuggestion =
     projectedQuality?.score ?? inlineAiSuggestion?.qualityScore;
   const optimizedProposalLayer = useMemo(
@@ -2548,6 +2773,153 @@ export default function ProductEditorClient({
       setCatalogBackfillMessage("Provider request failed. Could not refresh Walmart catalog details.");
     } finally {
       setRefreshingCatalogDetails(false);
+    }
+  }
+
+  function mergeAppliedReportFieldsIntoDraft(nextProduct: WalmartProductRecord) {
+    const hydrated = hydrateEditorForm(nextProduct, safeStagedDrafts, hydratedCurrentWalmartState);
+    setForm((current) => {
+      const nextSearchBrowseAttributes = { ...current.searchBrowseAttributes };
+      for (const [key, value] of Object.entries(hydrated.searchBrowseAttributes)) {
+        if (!(nextSearchBrowseAttributes[key] ?? "").trim() && value.trim()) {
+          nextSearchBrowseAttributes[key] = value;
+        }
+      }
+
+      return {
+        ...current,
+        shortDescription: current.shortDescription.trim() || hydrated.shortDescription,
+        longDescription: current.longDescription.trim() || hydrated.longDescription,
+        bulletPoints: current.bulletPoints.trim() || hydrated.bulletPoints,
+        imageUrl: current.imageUrl.trim() || hydrated.imageUrl,
+        additionalImageUrls: current.additionalImageUrls.trim() || hydrated.additionalImageUrls,
+        price: current.price.trim() || hydrated.price,
+        inventoryQuantity: current.inventoryQuantity.trim() || hydrated.inventoryQuantity,
+        brand: current.brand.trim() || hydrated.brand,
+        searchBrowseAttributes: nextSearchBrowseAttributes,
+      };
+    });
+  }
+
+  function applyItemReportRoutePayload(payload: WalmartItemReportRouteResponse) {
+    if (payload.reportBackfill) {
+      setItemReportBackfillState(normalizeItemReportBackfillState(payload.reportBackfill));
+    }
+    if (payload.product) {
+      setReportAppliedProduct(payload.product);
+      mergeAppliedReportFieldsIntoDraft(payload.product);
+    }
+    if (payload.message?.trim()) {
+      setItemReportBackfillMessage(payload.message.trim());
+    }
+  }
+
+  async function handleRequestItemReportBackfill() {
+    setRequestingItemReport(true);
+    setItemReportBackfillMessage(null);
+
+    try {
+      const response = await fetch("/api/ecomviper/walmart/reports/item/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sku: product.sku }),
+      });
+      const payload = (await response.json().catch(() => null)) as WalmartItemReportRouteResponse | null;
+      if (!response.ok || !payload) {
+        setItemReportBackfillMessage(
+          payload?.error?.message?.trim() || "Could not request Walmart ITEM report."
+        );
+        return;
+      }
+      applyItemReportRoutePayload(payload);
+    } catch {
+      setItemReportBackfillMessage("Provider request failed. Could not request Walmart ITEM report.");
+    } finally {
+      setRequestingItemReport(false);
+    }
+  }
+
+  async function handleCheckItemReportStatus() {
+    setCheckingItemReportStatus(true);
+    setItemReportBackfillMessage(null);
+
+    try {
+      const response = await fetch("/api/ecomviper/walmart/reports/item/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          requestId: itemReportBackfillState.requestId,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WalmartItemReportRouteResponse | null;
+      if (!response.ok || !payload) {
+        setItemReportBackfillMessage(
+          payload?.error?.message?.trim() || "Could not check Walmart ITEM report status."
+        );
+        return;
+      }
+      applyItemReportRoutePayload(payload);
+    } catch {
+      setItemReportBackfillMessage("Provider request failed. Could not check Walmart ITEM report status.");
+    } finally {
+      setCheckingItemReportStatus(false);
+    }
+  }
+
+  async function handleDownloadItemReport() {
+    setDownloadingItemReport(true);
+    setItemReportBackfillMessage(null);
+
+    try {
+      const response = await fetch("/api/ecomviper/walmart/reports/item/download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          requestId: itemReportBackfillState.requestId,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WalmartItemReportRouteResponse | null;
+      if (!response.ok || !payload) {
+        setItemReportBackfillMessage(
+          payload?.error?.message?.trim() || "Could not download Walmart ITEM report."
+        );
+        return;
+      }
+      applyItemReportRoutePayload(payload);
+    } catch {
+      setItemReportBackfillMessage("Provider request failed. Could not download Walmart ITEM report.");
+    } finally {
+      setDownloadingItemReport(false);
+    }
+  }
+
+  async function handleApplyReadyItemReport() {
+    setApplyingItemReport(true);
+    setItemReportBackfillMessage(null);
+
+    try {
+      const response = await fetch("/api/ecomviper/walmart/reports/item/apply", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          sku: product.sku,
+          applyToCatalog: false,
+        }),
+      });
+      const payload = (await response.json().catch(() => null)) as WalmartItemReportRouteResponse | null;
+      if (!response.ok || !payload) {
+        setItemReportBackfillMessage(
+          payload?.error?.message?.trim() || "Could not apply Walmart ITEM report."
+        );
+        return;
+      }
+      applyItemReportRoutePayload(payload);
+    } catch {
+      setItemReportBackfillMessage("Provider request failed. Could not apply Walmart ITEM report.");
+    } finally {
+      setApplyingItemReport(false);
     }
   }
 
@@ -4423,6 +4795,127 @@ export default function ProductEditorClient({
             </span>
           ))}
         </div>
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+        data-testid="ecomviper-walmart-docket-freshness-panel"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs uppercase tracking-[0.1em] text-[#64748B]">
+            Docket Freshness / Report Backfill
+          </p>
+          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]">
+            {formatFreshnessStatusLabel(docketFreshnessSummary.overallStatus)}
+          </span>
+        </div>
+        <div className="mt-2 grid gap-2 text-xs text-[#334155] sm:grid-cols-2 lg:grid-cols-4">
+          <p>
+            <span className="text-[#64748B]">Import list:</span>{" "}
+            {formatFreshnessStatusLabel(docketFreshnessSummary.importListFreshness)}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Item detail:</span>{" "}
+            {formatFreshnessStatusLabel(docketFreshnessSummary.itemDetailFreshness)}
+          </p>
+          <p>
+            <span className="text-[#64748B]">ITEM report:</span>{" "}
+            {formatBackfillStatusLabel(itemReportBackfillState.status)}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Provider mode:</span>{" "}
+            {itemReportBackfillState.credentialMode}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Requested:</span>{" "}
+            {itemReportBackfillState.requestedAt || "Not requested"}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Downloaded:</span>{" "}
+            {itemReportBackfillState.downloadedAt || "Not downloaded"}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Applied:</span>{" "}
+            {itemReportBackfillState.appliedAt || "Not applied"}
+          </p>
+          <p>
+            <span className="text-[#64748B]">Rows parsed:</span> {itemReportBackfillState.rowCount}
+          </p>
+        </div>
+
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void handleRequestItemReportBackfill()}
+            disabled={!canRequestItemReport}
+            className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+            data-testid="ecomviper-walmart-request-item-report"
+          >
+            {requestingItemReport ? "Requesting ITEM Report..." : "Request ITEM Report"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleCheckItemReportStatus()}
+            disabled={!canCheckItemReportStatus}
+            className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+            data-testid="ecomviper-walmart-check-item-report-status"
+          >
+            {checkingItemReportStatus ? "Checking status..." : "Check Report Status"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleDownloadItemReport()}
+            disabled={!canDownloadItemReport}
+            className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+            data-testid="ecomviper-walmart-download-item-report"
+          >
+            {downloadingItemReport ? "Downloading..." : "Download Ready Report"}
+          </button>
+          <button
+            type="button"
+            onClick={() => void handleApplyReadyItemReport()}
+            disabled={!canApplyItemReport}
+            className="rounded border border-[#0F172A] bg-[#0F172A] px-3 py-1.5 text-xs text-white disabled:opacity-60"
+            data-testid="ecomviper-walmart-apply-item-report"
+          >
+            {applyingItemReport ? "Applying..." : "Apply Ready Report"}
+          </button>
+        </div>
+        {itemReportBackfillState.status === "request_blocked_no_credentials" ? (
+          <p className="mt-2 text-xs text-amber-700">No Walmart credentials configured for ITEM report backfill.</p>
+        ) : null}
+        {reportCooldownActive ? (
+          <p className="mt-2 text-xs text-amber-700">
+            ITEM report request cooldown active until {itemReportBackfillState.cooldownUntil}.
+          </p>
+        ) : null}
+        {itemReportBackfillState.status === "in_progress" ||
+        itemReportBackfillState.status === "submitted" ||
+        itemReportBackfillState.status === "requested" ? (
+          <p className="mt-2 text-xs text-[#334155]">ITEM report is still generating. Check status later.</p>
+        ) : null}
+        {itemReportBackfillMessage ? (
+          <p className="mt-2 text-xs text-[#334155]">{itemReportBackfillMessage}</p>
+        ) : null}
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs font-medium text-[#334155]">
+            Field coverage details
+          </summary>
+          <div className="mt-2 grid gap-2 text-xs text-[#334155] sm:grid-cols-2">
+            {docketFreshnessSummary.sections.map((section) => (
+              <div key={section.section} className="rounded border border-[#E2E8F0] bg-[#F8FBFF] px-2 py-1.5">
+                <p className="font-medium text-[#0F172A]">{section.section.replace(/_/g, " ")}</p>
+                <p>
+                  <span className="text-[#64748B]">Status:</span> {formatFreshnessStatusLabel(section.status)}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Coverage:</span> {section.coveragePercent}% (
+                  {section.populatedCount}/{section.totalCount})
+                </p>
+              </div>
+            ))}
+          </div>
+        </details>
       </section>
 
       <section

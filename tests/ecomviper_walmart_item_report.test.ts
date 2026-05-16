@@ -145,6 +145,25 @@ describe("Walmart Item Report image enrichment", () => {
     expect(parsed[0]?.keyFeatures).toEqual(["Feature one", "Feature two", "Feature three"]);
   });
 
+  it("parses ITEM report taxonomy/status/manufacturer/search fields with TSV-delimited headers", () => {
+    const tsv = [
+      "SKU\tProductCategory\tProductType\tPublishedStatus\tSiteDescription\tManufacturer\tSearchKeywords\tComplianceNotes",
+      "SKU-TSV-1\tSupplements\tJoint Support\tPUBLISHED\tSite short desc\tOPA Labs\tjoint support|mobility\tFDA disclaimer present;No disease claims",
+    ].join("\n");
+
+    const parsed = parseItemReportCsv(tsv);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      productCategory: "Supplements",
+      productType: "Joint Support",
+      publishedStatus: "PUBLISHED",
+      siteDescription: "Site short desc",
+      manufacturer: "OPA Labs",
+      searchKeywords: "joint support|mobility",
+      complianceNotes: ["FDA disclaimer present", "No disease claims"],
+    });
+  });
+
   it("parses price, sale price, inventory, status, and fulfillment fields when present", () => {
     const csv = [
       "SKU,Price,SalePrice,Currency,InventoryQuantity,InventoryStatus,FulfillmentType,ShipNode",
@@ -194,6 +213,8 @@ describe("Walmart Item Report image enrichment", () => {
       siteDescription: "Mapped shelf",
       fullDescription: "Mapped long",
       keyFeatures: ["Feature one", "Feature two"],
+      category: "",
+      productType: "",
       price: 31.25,
       salePrice: 27.99,
       currency: "USD",
@@ -208,6 +229,27 @@ describe("Walmart Item Report image enrichment", () => {
         ship_node: "NODE-1",
       },
     });
+  });
+
+  it("does not treat GTIN/UPC product identifiers as confirmed Walmart item IDs", () => {
+    const payload = itemReportRowToDocketSourcePayload({
+      sku: "SKU-LOOKUP-1",
+      productId: "00011122233344",
+      productIdType: "GTIN",
+      itemId: "",
+      wpid: "",
+      title: "Lookup product",
+      brand: "Lookup Brand",
+      primaryImageUrl: "",
+      galleryImageUrls: [],
+      variantImageUrls: [],
+      rowIndex: 0,
+    });
+
+    expect(payload.itemId).toBe("");
+    expect(payload.usItemId).toBe("");
+    expect(payload.productId).toBe("00011122233344");
+    expect(payload.productIdType).toBe("GTIN");
   });
 
   it("hydrates missing content fields from matched item report rows without overwriting meaningful values", () => {
