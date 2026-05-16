@@ -525,6 +525,7 @@ export interface WalmartImportResult {
       rejectionReason: string | null;
       finalStatus: "found" | "not_found" | "ambiguous" | "failed" | "not_synced";
     }>;
+    importRunSkus?: string[];
   };
 }
 

@@ -17,6 +17,7 @@ import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-it
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
+import { hydrateLiveWalmartItemStateForUser } from "@/lib/ecomviper/walmart/walmart-live-item-hydrator";
 import {
   resolveCanonicalWalmartIdentifierFromProductRecord,
   resolveCanonicalWalmartPublicIdentifier,
@@ -68,7 +69,25 @@ const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS = 45;
 const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED = 4;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED = 0;
+const WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS = 120;
+const WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY = 3;
 const SHOPIFY_IMPORT_STALE_AFTER_MS = 1000 * 60 * 60 * 12;
+const NON_MEANINGFUL_TEXT = new Set([
+  "unknown",
+  "not available",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+  "not provided",
+]);
+
+declare global {
+  var __ecomviper_walmart_post_import_live_hydration_jobs__:
+    | Map<string, Promise<void>>
+    | undefined;
+}
 
 type WalmartImportPartialProgress = {
   importedCount: number;
@@ -457,6 +476,32 @@ function firstNonEmptyList(candidates: string[][]): string[] {
     if (candidate.length > 0) return candidate;
   }
   return [];
+}
+
+function isMeaningfulText(value: unknown): boolean {
+  const normalized = asString(value).trim().toLowerCase();
+  if (!normalized) return false;
+  return !NON_MEANINGFUL_TEXT.has(normalized);
+}
+
+function meaningfulList(values: string[] | undefined): string[] {
+  return (values ?? [])
+    .map((entry) => asString(entry))
+    .filter((entry) => isMeaningfulText(entry));
+}
+
+function contentNeedsHydration(product: WalmartProductRecord): boolean {
+  const hasShort = isMeaningfulText(product.shortDescription);
+  const hasLong = isMeaningfulText(product.longDescription);
+  const hasBullets = meaningfulList(product.bulletPoints).length > 0;
+  return !(hasShort && hasLong && hasBullets);
+}
+
+function getPostImportLiveHydrationJobsStore(): Map<string, Promise<void>> {
+  if (!globalThis.__ecomviper_walmart_post_import_live_hydration_jobs__) {
+    globalThis.__ecomviper_walmart_post_import_live_hydration_jobs__ = new Map();
+  }
+  return globalThis.__ecomviper_walmart_post_import_live_hydration_jobs__;
 }
 
 function imageIssueBySyncStatus(
@@ -2440,6 +2485,7 @@ export async function importWalmartProducts(
       mode: getWalmartRuntimeMode(),
       importDiagnostics: {
         fetchedCount: collected.length,
+        importRunSkus: products.map((product) => product.sku),
         payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
         pageCount,
         inventoryKnownCount,
@@ -2595,6 +2641,210 @@ export async function importWalmartProducts(
       partialProgress,
     });
   }
+}
+
+type WalmartPostImportLiveHydrationQueueReason =
+  | "queued"
+  | "no_target_skus"
+  | "already_running"
+  | "test_runtime_disabled";
+
+export interface WalmartPostImportLiveHydrationQueueResult {
+  queued: boolean;
+  reason: WalmartPostImportLiveHydrationQueueReason;
+  requestedSkuCount: number;
+}
+
+function mergeLiveHydrationContentIntoProduct(input: {
+  product: WalmartProductRecord;
+  shortDescription: string;
+  longDescription: string;
+  bulletPoints: string[];
+  rawLivePayload: Record<string, unknown> | null;
+}): WalmartProductRecord | null {
+  const nextShortDescription = asString(input.shortDescription);
+  const nextLongDescription = asString(input.longDescription);
+  const nextBulletPoints = meaningfulList(input.bulletPoints);
+
+  let changed = false;
+  const nextProduct: WalmartProductRecord = {
+    ...input.product,
+  };
+
+  if (!isMeaningfulText(nextProduct.shortDescription) && isMeaningfulText(nextShortDescription)) {
+    nextProduct.shortDescription = nextShortDescription;
+    changed = true;
+  }
+
+  if (!isMeaningfulText(nextProduct.longDescription) && isMeaningfulText(nextLongDescription)) {
+    nextProduct.longDescription = nextLongDescription;
+    changed = true;
+  }
+
+  if (meaningfulList(nextProduct.bulletPoints).length === 0 && nextBulletPoints.length > 0) {
+    nextProduct.bulletPoints = nextBulletPoints;
+    changed = true;
+  }
+
+  if (!changed) return null;
+
+  const now = new Date().toISOString();
+  const rawPayload = asObject(nextProduct.rawPayload) ?? {};
+  const normalizedPayload = asObject(nextProduct.normalizedPayload) ?? {};
+  const normalizedLiveHydration = asObject(normalizedPayload.liveHydration) ?? {};
+
+  nextProduct.rawPayload = {
+    ...rawPayload,
+    liveItemPayload: input.rawLivePayload ?? rawPayload.liveItemPayload ?? null,
+    liveHydrationFetchedAt: now,
+  };
+  nextProduct.normalizedPayload = {
+    ...normalizedPayload,
+    liveHydration: {
+      ...normalizedLiveHydration,
+      shortDescription: nextProduct.shortDescription,
+      longDescription: nextProduct.longDescription,
+      bulletPoints: [...nextProduct.bulletPoints],
+      source: "post_import_live_hydration_queue",
+      hydratedAt: now,
+    },
+  };
+  nextProduct.updatedAt = now;
+
+  return withCanonicalPublicListingMetadata(nextProduct);
+}
+
+export function queueWalmartPostImportLiveHydrationForUser(input: {
+  userId: string;
+  importedSkus: string[];
+  maxSkus?: number;
+}): WalmartPostImportLiveHydrationQueueResult {
+  const maxSkus = Math.max(
+    1,
+    Math.min(WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS, input.maxSkus ?? WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS)
+  );
+  const normalizedSkus = unique(
+    input.importedSkus
+      .map((sku) => normalizeSkuKey(sku))
+      .filter((sku) => sku.length > 0)
+  ).slice(0, maxSkus);
+
+  if (normalizedSkus.length === 0) {
+    return {
+      queued: false,
+      reason: "no_target_skus",
+      requestedSkuCount: 0,
+    };
+  }
+
+  if (process.env.NODE_ENV === "test") {
+    return {
+      queued: false,
+      reason: "test_runtime_disabled",
+      requestedSkuCount: normalizedSkus.length,
+    };
+  }
+
+  const jobKey = input.userId.trim().toLowerCase();
+  const jobsStore = getPostImportLiveHydrationJobsStore();
+  if (jobsStore.has(jobKey)) {
+    return {
+      queued: false,
+      reason: "already_running",
+      requestedSkuCount: normalizedSkus.length,
+    };
+  }
+
+  const job = (async () => {
+    const currentProducts = await listPersistedWalmartProducts(input.userId);
+    const currentBySku = new Map<string, WalmartProductRecord>();
+    for (const product of currentProducts) {
+      currentBySku.set(normalizeSkuKey(product.sku), product);
+    }
+
+    const queueCandidates = normalizedSkus
+      .map((sku) => currentBySku.get(sku))
+      .filter((product): product is WalmartProductRecord => Boolean(product))
+      .filter((product) => contentNeedsHydration(product));
+
+    if (queueCandidates.length === 0) {
+      return;
+    }
+
+    const updatesBySku = new Map<string, WalmartProductRecord>();
+    for (let index = 0; index < queueCandidates.length; index += WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY) {
+      const batch = queueCandidates.slice(index, index + WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY);
+      const batchUpdates = await Promise.all(
+        batch.map(async (candidate) => {
+          try {
+            const liveHydration = await hydrateLiveWalmartItemStateForUser({
+              userId: input.userId,
+              product: candidate,
+              forceRefresh: true,
+            });
+            return mergeLiveHydrationContentIntoProduct({
+              product: candidate,
+              shortDescription: liveHydration.currentWalmartState.content.siteDescription,
+              longDescription: liveHydration.currentWalmartState.content.longDescription,
+              bulletPoints: liveHydration.currentWalmartState.content.keyFeatures,
+              rawLivePayload: liveHydration.rawLivePayload,
+            });
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      for (const updated of batchUpdates) {
+        if (!updated) continue;
+        updatesBySku.set(normalizeSkuKey(updated.sku), updated);
+      }
+    }
+
+    if (updatesBySku.size === 0) {
+      return;
+    }
+
+    const latestProducts = await listPersistedWalmartProducts(input.userId);
+    const mergedProducts = latestProducts.map((product) => {
+      const updated = updatesBySku.get(normalizeSkuKey(product.sku));
+      return updated ?? product;
+    });
+    const importedAt = await getPersistedWalmartLastImportAt(input.userId);
+    await replaceWalmartProductsForUser({
+      userId: input.userId,
+      products: mergedProducts,
+      importedAt,
+    });
+
+    appendActivityLog({
+      marketplace: "walmart",
+      actionType: "product_sync",
+      result: "success",
+      message: `Post-import live content hydration updated ${updatesBySku.size} product(s).`,
+      afterPayload: {
+        requestedSkuCount: normalizedSkus.length,
+        candidateSkuCount: queueCandidates.length,
+        updatedSkuCount: updatesBySku.size,
+      },
+    });
+  })()
+    .catch((error) => {
+      console.warn("[ecomviper:walmart:post-import-live-hydration] queue run failed", {
+        user: jobKey.slice(0, 8),
+        reason: normalizeUnknownErrorMessage(error, "post_import_live_hydration_failed"),
+      });
+    })
+    .finally(() => {
+      jobsStore.delete(jobKey);
+    });
+
+  jobsStore.set(jobKey, job);
+  return {
+    queued: true,
+    reason: "queued",
+    requestedSkuCount: normalizedSkus.length,
+  };
 }
 
 export async function retryWalmartPublicImageEnrichmentForUser(

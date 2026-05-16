@@ -122,6 +122,7 @@ describe("Walmart import alias hydration", () => {
 
     const result = await importWalmartProducts("user_import_alias");
     expect(result.importedCount).toBeGreaterThan(0);
+    expect(result.importDiagnostics?.importRunSkus).toContain("ROC948");
 
     const products = await listWalmartProductsForUser("user_import_alias");
     const imported = products.find((entry) => entry.sku === "ROC948");
