@@ -1059,15 +1059,6 @@ describe("Walmart product editor public listing image flow", () => {
       );
     });
 
-    const openEditorButton = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Open Draft Editor"
-    ) as HTMLButtonElement | undefined;
-    expect(openEditorButton).toBeDefined();
-    await act(async () => {
-      openEditorButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
     expect(container.textContent).toContain("Source: Shopify variant image");
     expect(container.textContent).toContain("Gallery images: 3");
     expect(container.textContent).toContain("Variant images: 1");

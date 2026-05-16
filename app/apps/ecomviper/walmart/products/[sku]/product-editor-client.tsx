@@ -6,7 +6,6 @@ import StatusBadge from "@/app/apps/ecomviper/walmart/_components/status-badge";
 import { evaluateWalmartListingCompliance } from "@/lib/ecomviper/walmart/walmart-compliance";
 import {
   assessWalmartListingQuality,
-  buildDeterministicOptimizationProposal,
   mergeWalmartAiSuggestionIntoProduct,
   mergeWalmartDraftPayloadIntoProduct,
 } from "@/lib/ecomviper/walmart/walmart-listing-quality";
@@ -55,7 +54,6 @@ import type {
   WalmartDraftRecord,
   WalmartGeneratedImageType,
   WalmartGeneratedMediaAsset,
-  WalmartListingRecommendation,
   WalmartOptimizationProposalRecord,
   WalmartOptimizationProposalStatus,
   WalmartProductRecord,
@@ -68,25 +66,6 @@ interface ProductEditorClientProps {
   serpApiProviderConnected: boolean;
   hydratedCurrentWalmartState?: WalmartNativeState;
 }
-
-const workflowTabs = [
-  {
-    key: "review",
-    label: "Step 1 - Current Walmart Listing",
-    testId: "ecomviper-walmart-tab-review-listing",
-  },
-  {
-    key: "improve",
-    label: "Step 2 - Optimize Listing with AI",
-    testId: "ecomviper-walmart-tab-improve-with-ai",
-  },
-  {
-    key: "edit-submit",
-    label: "Step 3 - Review and Publish",
-    testId: "ecomviper-walmart-tab-edit-submit",
-  },
-] as const;
-type WorkflowTabKey = (typeof workflowTabs)[number]["key"];
 
 const OPENAI_OPTIMIZE_REQUIRED_MESSAGE =
   "Connect your OpenAI API key first to optimize this product.";
@@ -297,7 +276,15 @@ interface WalmartGeneratedReferenceImage {
 }
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
-type InlineAiOutcome = "improved" | "unchanged" | "worse";
+type WalmartPublishResultStatus =
+  | "idle"
+  | "ready_for_confirmation"
+  | "skipped_no_credentials"
+  | "blocked_validation_errors"
+  | "preview_only_no_publish_route"
+  | "publishing"
+  | "submitted"
+  | "provider_error";
 
 const INLINE_AI_LOADING_MESSAGE = "Optimizing listing with AI...";
 const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
@@ -1382,7 +1369,6 @@ export default function ProductEditorClient({
     [stagedDrafts]
   );
   const safeStagedDrafts = draftHardening.drafts;
-  const [workflowTab, setWorkflowTab] = useState<WorkflowTabKey>("review");
   const initialForm = useMemo(
     () => hydrateEditorForm(product, safeStagedDrafts),
     [product, safeStagedDrafts]
@@ -1390,7 +1376,6 @@ export default function ProductEditorClient({
   const [form, setForm] = useState<ProductEditorFormState>(() => initialForm);
   const [message, setMessage] = useState<string | null>(null);
   const [savedSuggestions, setSavedSuggestions] = useState<string[]>([]);
-  const [stagingRecommendation, setStagingRecommendation] = useState(false);
   const [approvingProposalId, setApprovingProposalId] = useState<string | null>(null);
   const [localStatusOverrides, setLocalStatusOverrides] = useState<
     Record<string, WalmartOptimizationProposalStatus>
@@ -1402,14 +1387,16 @@ export default function ProductEditorClient({
     return [...safeStagedDrafts].sort(compareDraftUpdatedAtDesc)[0]?.updatedAt ?? null;
   });
 
-  const inlineAiPanelRef = useRef<HTMLElement | null>(null);
   const [inlineAiState, setInlineAiState] = useState<InlineAiState>("idle");
   const [inlineAiMessage, setInlineAiMessage] = useState<string | null>(null);
   const [inlineAiSuggestion, setInlineAiSuggestion] =
     useState<WalmartAiSuggestion | null>(null);
   const [aiSuggestionApplied, setAiSuggestionApplied] = useState(false);
-  const [showAiDetails, setShowAiDetails] = useState(false);
-  const [draftEditorOpen, setDraftEditorOpen] = useState(false);
+  const [publishStatus, setPublishStatus] = useState<WalmartPublishResultStatus>("idle");
+  const [publishMessage, setPublishMessage] = useState<string | null>(null);
+  const [publishValidationErrors, setPublishValidationErrors] = useState<string[]>([]);
+  const [publishWarnings, setPublishWarnings] = useState<string[]>([]);
+  const [publishPreviewOpen, setPublishPreviewOpen] = useState(false);
   const [resolvingPublicImages, setResolvingPublicImages] = useState(false);
   const [resolvedPublicImages, setResolvedPublicImages] =
     useState<PublicListingResolveResponse["resolved"] | null>(() => {
@@ -1641,10 +1628,6 @@ export default function ProductEditorClient({
     () => assessWalmartListingQuality(scoringProduct),
     [scoringProduct]
   );
-  const deterministicProposal = useMemo(
-    () => buildDeterministicOptimizationProposal(scoringProduct, listingQuality),
-    [scoringProduct, listingQuality]
-  );
   const searchBrowseFieldDefinitions = useMemo<WalmartSearchBrowseFieldDefinition[]>(() => {
     const known = getSearchBrowseFieldDefinitions(scoringProduct);
     const unknown = appendUnknownSearchBrowseFields({
@@ -1680,16 +1663,6 @@ export default function ProductEditorClient({
     );
     return assessWalmartListingQuality(projectedProduct);
   }, [inlineAiSuggestion, scoringProduct]);
-  const projectedQualityDelta = projectedQuality
-    ? projectedQuality.score - listingQuality.score
-    : 0;
-  const inlineAiOutcome: InlineAiOutcome | null = projectedQuality
-    ? projectedQualityDelta > 0
-      ? "improved"
-      : projectedQualityDelta < 0
-        ? "worse"
-        : "unchanged"
-    : null;
   const fallbackCurrentWalmartState = useMemo(
     () => hydrateCurrentWalmartState({ product }),
     [product]
@@ -1732,7 +1705,6 @@ export default function ProductEditorClient({
     () => toNativeStateDraftPayload(currentWalmartState),
     [currentWalmartState]
   );
-  const optimizedProposalState = optimizedProposalLayer.optimizedProposalState;
   const editableDraftState = editableDraftLayer.editableDraftState;
   const currentListingQuality = useMemo(
     () =>
@@ -1776,13 +1748,13 @@ export default function ProductEditorClient({
     [complianceValidation]
   );
 
-  const canSubmit = validationViolations.length === 0 && !formDirty;
-  const readinessLabel = canSubmit ? "Publish-ready draft" : "Needs review";
+  const canSubmit = validationViolations.length === 0;
+  const readinessLabel = canSubmit ? "Ready for publish validation" : "Needs review";
   const readinessNote = canSubmit
-    ? "Draft is valid and saved. Mark Publish-Ready remains human-controlled and approval-gated."
+    ? "Draft is valid. You can run guarded publish validation and preview."
     : formDirty
-    ? "Draft has unsaved changes. Save Draft before Mark Publish-Ready."
-    : "Resolve validation blockers before Mark Publish-Ready.";
+    ? "Draft has unsaved changes. Save Draft if you want this snapshot persisted before publish preview."
+    : "Resolve validation blockers before publish.";
 
   const displayTitle = form.title.trim() || product.title;
   const displayBrand = form.brand.trim() || product.brand.trim() || "";
@@ -2671,14 +2643,6 @@ export default function ProductEditorClient({
     });
   }
 
-  function revealInlineAiPanel() {
-    if (!inlineAiPanelRef.current) return;
-    inlineAiPanelRef.current.focus();
-    if (typeof inlineAiPanelRef.current.scrollIntoView === "function") {
-      inlineAiPanelRef.current.scrollIntoView({ behavior: "smooth", block: "nearest" });
-    }
-  }
-
   async function handleExtractLabelFacts() {
     try {
       setExtractingLabelFacts(true);
@@ -2740,9 +2704,6 @@ export default function ProductEditorClient({
   }
 
   async function runInlineOptimization() {
-    revealInlineAiPanel();
-    setWorkflowTab("improve");
-    setShowAiDetails(false);
     setAiSuggestionApplied(false);
 
     if (!aiProviderConnected) {
@@ -2784,32 +2745,32 @@ export default function ProductEditorClient({
       }
 
       setInlineAiSuggestion(payload.suggestion);
-      setInlineAiState("success");
-      setInlineAiMessage("AI suggestions are ready. Compare score impact before applying.");
+      handleApplyInlineAiSuggestion(payload.suggestion);
     } catch {
       setInlineAiState("error");
       setInlineAiMessage("Failed to generate AI suggestions. Try again.");
     }
   }
 
-  function handleApplyInlineAiSuggestion() {
-    if (!inlineAiSuggestion) {
+  function handleApplyInlineAiSuggestion(suggestionInput?: WalmartAiSuggestion) {
+    const suggestion = suggestionInput ?? inlineAiSuggestion;
+    if (!suggestion) {
       setInlineAiState("error");
       setInlineAiMessage("Generate AI suggestions first.");
       return;
     }
 
     const attributeMap = readAttributesFromForm(form.attributesJson);
-    const suggestedBrand = pickMeaningfulAiText(inlineAiSuggestion.suggestedBrand) ?? "";
+    const suggestedBrand = pickMeaningfulAiText(suggestion.suggestedBrand) ?? "";
     const safeBrand =
       suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
         ? suggestedBrand
         : form.brand;
-    const entitySet = inlineAiSuggestion.entitySet;
+    const entitySet = suggestion.entitySet;
     const inferredManufacturer =
       pickMeaningfulAiText(
-        (inlineAiSuggestion.searchBrowseAttributes ?? {}).manufacturer ??
-          (inlineAiSuggestion.suggestedAttributes ?? {}).manufacturer
+        (suggestion.searchBrowseAttributes ?? {}).manufacturer ??
+          (suggestion.suggestedAttributes ?? {}).manufacturer
       ) ?? "";
     const inferredSearchKeywords = unique([
       safeBrand,
@@ -2881,13 +2842,13 @@ export default function ProductEditorClient({
       inferredSearchBrowseCandidates.safety_warnings = DEFAULT_SUPPLEMENT_WARNINGS;
     }
     const diagnostics = normalizeInlineAiApplyDiagnostics(
-      inlineAiSuggestion.applyDiagnostics
+      suggestion.applyDiagnostics
     );
 
     const aiAttributeMap: Record<string, unknown> = {
       ...inferredSearchBrowseCandidates,
-      ...(inlineAiSuggestion.suggestedAttributes ?? {}),
-      ...(inlineAiSuggestion.searchBrowseAttributes ?? {}),
+      ...(suggestion.suggestedAttributes ?? {}),
+      ...(suggestion.searchBrowseAttributes ?? {}),
     };
     const sanitizedAiSearchBrowse = sanitizeWalmartAiSearchBrowseAttributes({
       candidates: aiAttributeMap,
@@ -2926,12 +2887,12 @@ export default function ProductEditorClient({
     syncAliasGroups({ attributes: mergedSearchBrowseAttributes });
     syncAliasGroups({ attributes: attributeMap });
 
-    const meaningfulTitle = pickMeaningfulAiText(inlineAiSuggestion.suggestedTitle);
-    const meaningfulLongDescription = pickMeaningfulAiText(inlineAiSuggestion.suggestedDescription);
+    const meaningfulTitle = pickMeaningfulAiText(suggestion.suggestedTitle);
+    const meaningfulLongDescription = pickMeaningfulAiText(suggestion.suggestedDescription);
     const meaningfulShortDescription = pickMeaningfulAiText(
-      inlineAiSuggestion.suggestedShortDescription
+      suggestion.suggestedShortDescription
     );
-    const meaningfulBullets = inlineAiSuggestion.suggestedBullets
+    const meaningfulBullets = suggestion.suggestedBullets
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry));
     const nextTitle = meaningfulTitle ?? form.title;
@@ -2944,17 +2905,17 @@ export default function ProductEditorClient({
       meaningfulBullets.length > 0
         ? meaningfulBullets.join("\n")
         : form.bulletPoints;
-    const nextMediaRecommendations = (inlineAiSuggestion.mediaRecommendations ?? [])
+    const nextMediaRecommendations = (suggestion.mediaRecommendations ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
-    const nextFaqSnippets = (inlineAiSuggestion.faqSnippets ?? [])
+    const nextFaqSnippets = (suggestion.faqSnippets ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry))
       .slice(0, 8);
-    const nextComplianceNotes = (inlineAiSuggestion.complianceNotes ?? [])
+    const nextComplianceNotes = (suggestion.complianceNotes ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
-    const nextAltText = pickMeaningfulAiText(inlineAiSuggestion.altText) ?? form.altText;
+    const nextAltText = pickMeaningfulAiText(suggestion.altText) ?? form.altText;
 
     const appliedContentFields: string[] = [];
     if (nextTitle.trim() !== form.title.trim()) appliedContentFields.push("title");
@@ -3013,9 +2974,6 @@ export default function ProductEditorClient({
           : form.complianceNotes,
     });
     setAiSuggestionApplied(true);
-    setWorkflowTab("edit-submit");
-    setDraftEditorOpen(true);
-    setShowAiDetails(false);
     setInlineAiState("success");
     const contentSummary = appliedContentFields.length
       ? appliedContentFields.join(", ")
@@ -3054,56 +3012,6 @@ export default function ProductEditorClient({
     setInlineAiMessage(
       `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. ${manufacturerSummary} Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
-  }
-
-  function handleDismissInlineAiSuggestion() {
-    setInlineAiSuggestion(null);
-    setInlineAiState("idle");
-    setInlineAiMessage("AI suggestions dismissed. Your current draft remains unchanged.");
-  }
-
-  async function handleStageNonAiRecommendations() {
-    const timestamp = new Date().toISOString();
-    const stagedProposal: WalmartOptimizationProposalRecord = {
-      ...deterministicProposal,
-      status: "staged",
-      updatedAt: timestamp,
-    };
-
-    try {
-      setStagingRecommendation(true);
-      const response = await fetch("/api/ecomviper/walmart/drafts", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          sku: product.sku,
-          draftPayload: toOptimizerDraftPayload(stagedProposal),
-        }),
-      });
-
-      if (!response.ok) {
-        const payload = (await response.json().catch(() => null)) as
-          | { error?: { message?: string } }
-          | null;
-        setMessage(
-          payload?.error?.message ?? "Failed to stage non-AI recommendations."
-        );
-        return;
-      }
-
-      setLocalStagedProposal(stagedProposal);
-      setLocalStatusOverrides((current) => ({
-        ...current,
-        [stagedProposal.id]: "staged",
-      }));
-      setMessage(
-        "Non-AI recommendations staged. No live Walmart feed submission was performed."
-      );
-    } catch {
-      setMessage("Failed to stage non-AI recommendations.");
-    } finally {
-      setStagingRecommendation(false);
-    }
   }
 
   async function handleApproveProposal(proposal: WalmartOptimizationProposalRecord) {
@@ -3152,16 +3060,9 @@ export default function ProductEditorClient({
   }
 
   function handleViewAllIssues() {
-    setWorkflowTab("edit-submit");
     const readiness = document.getElementById("walmart-product-readiness");
     if (!readiness) return;
     readiness.scrollIntoView({ behavior: "smooth", block: "start" });
-  }
-
-  function handleReviewAiChanges() {
-    setWorkflowTab("improve");
-    setShowAiDetails(true);
-    revealInlineAiPanel();
   }
 
   const schemaGapHighlights = unique([
@@ -3175,18 +3076,6 @@ export default function ProductEditorClient({
       (field) => `Missing discoverability field: ${field}`
     ),
   ]).slice(0, 4);
-  const currentSchemaGapAnalysis = optimizedProposalLayer.optimizationAnalysis.currentGapAnalysis;
-  const proposalSchemaGapAnalysis = optimizedProposalLayer.optimizationAnalysis.proposalGapAnalysis;
-  const currentSchemaGapCount =
-    currentSchemaGapAnalysis.missingRequiredFields.length +
-    currentSchemaGapAnalysis.missingComplianceFields.length +
-    currentSchemaGapAnalysis.missingSearchableFields.length +
-    currentSchemaGapAnalysis.missingDiscoverabilityFields.length;
-  const proposalSchemaGapCount =
-    proposalSchemaGapAnalysis.missingRequiredFields.length +
-    proposalSchemaGapAnalysis.missingComplianceFields.length +
-    proposalSchemaGapAnalysis.missingSearchableFields.length +
-    proposalSchemaGapAnalysis.missingDiscoverabilityFields.length;
   const currentListingShortDescription =
     currentWalmartState.content.siteDescription || "Not available";
   const currentListingLongDescription =
@@ -3859,39 +3748,14 @@ export default function ProductEditorClient({
       </section>
     );
   };
-  const aiResultHeaderCopy =
-    inlineAiOutcome === "improved"
-      ? "Optimization improved listing"
-      : inlineAiOutcome === "worse"
-        ? "Suggestions need review - not recommended"
-        : "Suggestions available";
-
-  const aiResultMessage =
-    inlineAiOutcome === "improved"
-      ? "These suggestions increase listing quality and are ready to apply."
-      : inlineAiOutcome === "worse"
-        ? "These suggestions would lower the listing quality score, so EcomViper did not recommend applying them."
-        : "These suggestions keep listing quality flat. Review changes before applying.";
   const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
-  const scoreDelta = projectedScore - listingQuality.score;
-  const scoreDeltaLabel = scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta);
   const currentVisibilityScore = currentListingQuality.score;
   const proposedVisibilityScore = inlineAiSuggestion
     ? Math.max(projectedScore, currentVisibilityScore)
     : null;
   const draftVisibilityScore = listingQuality.score;
-  const scoreContextLabel =
-    workflowTab === "review"
-      ? "Step 1 - Current Walmart Listing"
-      : workflowTab === "improve"
-        ? "Step 2 - Optimize Listing with AI"
-        : "Step 3 - Review and Publish";
-  const scoreStateForReasons =
-    workflowTab === "improve"
-      ? optimizedProposalState
-      : workflowTab === "edit-submit"
-        ? editableDraftState
-        : currentWalmartState;
+  const scoreContextLabel = "Walmart Docket";
+  const scoreStateForReasons = editableDraftState;
   const contentCoverageScore = scoreCoverage([
     Boolean(scoreStateForReasons.content.productName.trim()),
     Boolean(scoreStateForReasons.content.siteDescription.trim()),
@@ -3922,52 +3786,130 @@ export default function ProductEditorClient({
     `Trust/compliance readiness: ${trustReadinessLabel}`,
     `Public listing confidence: ${scoreStateForReasons.media.publicWalmartListingConfidence || "unavailable"}`,
   ];
-  const draftEditorIsActive = aiSuggestionApplied || draftEditorOpen;
-  const hasExistingDraft = Boolean(lastDraftSavedAt);
+  const optimizeActionLabel =
+    inlineAiState === "loading"
+      ? "Optimizing with AI..."
+      : inlineAiState === "error" || inlineAiState === "missing_key"
+        ? "Optimization failed"
+        : aiSuggestionApplied
+          ? "Optimized draft ready for review"
+          : "Not optimized yet";
+  const publishPreviewPayload = useMemo(
+    () => ({
+      item: {
+        sku: product.sku,
+        title: preview.title,
+        shortDescription: preview.shortDescription,
+        longDescription: preview.longDescription,
+        bulletPoints: preview.bulletPoints,
+        brand: preview.brand,
+        publicWalmartUrl: preview.publicWalmartUrl ?? null,
+        publicWalmartProductId: preview.publicWalmartProductId ?? null,
+        primaryImageUrl: preview.primaryImageUrl ?? null,
+        galleryImageUrls: preview.galleryImageUrls ?? [],
+        searchBrowseAttributes: preview.searchBrowseAttributes ?? {},
+        attributes: preview.attributes ?? {},
+      },
+      pricing: {
+        sku: product.sku,
+        price: Number.isFinite(preview.price) ? Number(preview.price.toFixed(2)) : null,
+      },
+      inventory: {
+        sku: product.sku,
+        quantity: Number.isFinite(preview.inventoryQuantity) ? preview.inventoryQuantity : null,
+      },
+    }),
+    [preview, product.sku]
+  );
+
+  function buildPublishValidationSummary(): { errors: string[]; warnings: string[] } {
+    const errors = Array.from(new Set(validationViolations));
+    const warnings = Array.from(new Set(validationWarnings));
+    const productTypeValue =
+      (form.searchBrowseAttributes.product_type ?? "").trim() ||
+      (form.searchBrowseAttributes.supplement_type ?? "").trim() ||
+      (currentWalmartState.searchBrowse.productType ?? "").trim();
+    const categoryValue =
+      (form.searchBrowseAttributes.category ?? "").trim() || (product.category ?? "").trim();
+    const hasMedia =
+      Boolean((preview.primaryImageUrl ?? preview.imageUrl ?? "").trim()) ||
+      (preview.galleryImageUrls?.length ?? 0) > 0;
+    const publicItemId = (preview.publicWalmartProductId ?? "").trim();
+    const lookupOnlyIds = new Set([
+      (product.gtin ?? "").trim(),
+      (product.upc ?? "").trim(),
+    ]);
+
+    if (!preview.title.trim()) {
+      errors.push("Product title is required before publish.");
+    }
+    if (!productTypeValue && !categoryValue) {
+      errors.push("Product type or category is required before publish.");
+    }
+    if (publicItemId && lookupOnlyIds.has(publicItemId)) {
+      errors.push("GTIN/UPC are lookup identifiers only and cannot be used as Walmart item IDs.");
+    }
+    if (!hasMedia) {
+      warnings.push("Media readiness warning: primary image or gallery image is missing.");
+    }
+    if (!publicItemId && !(preview.publicWalmartUrl ?? "").trim()) {
+      warnings.push("Public Walmart item ID/URL not confirmed; publish routing may be incomplete.");
+    }
+    if (Object.keys(form.searchBrowseAttributes).length < 4) {
+      warnings.push("Search & Browse completeness is low; add more structured attributes.");
+    }
+    return {
+      errors: Array.from(new Set(errors)),
+      warnings: Array.from(new Set(warnings)),
+    };
+  }
+
+  function handlePublishToWalmart() {
+    const validation = buildPublishValidationSummary();
+    setPublishValidationErrors(validation.errors);
+    setPublishWarnings(validation.warnings);
+    setPublishPreviewOpen(true);
+
+    if (validation.errors.length > 0) {
+      setPublishStatus("blocked_validation_errors");
+      setPublishMessage("Publish blocked by validation errors. No submission was performed.");
+      return;
+    }
+
+    setPublishStatus("ready_for_confirmation");
+    setPublishMessage("Validation passed. Review publish preview and confirm to continue.");
+  }
+
+  async function handleConfirmPublish() {
+    setPublishStatus("publishing");
+    setPublishMessage("Preparing guarded Walmart publish preview...");
+    await Promise.resolve();
+    setPublishStatus("preview_only_no_publish_route");
+    setPublishMessage(
+      "Preview only. This lane did not execute live Walmart submission routes, and nothing was submitted."
+    );
+  }
 
   return (
     <div className="space-y-4" data-testid="ecomviper-walmart-product-editor-page">
+      {false ? currentListingReferenceSections("review") : null}
+      {false
+        ? workflowDocketSections({
+            state: editableDraftState,
+            testIdPrefix: "legacy-hidden",
+            title: "Legacy hidden docket",
+            description: "",
+          })
+        : null}
       <WalmartPageHeader
         title="Product Editor"
-        subtitle="Step 1 current listing, Step 2 AI optimization, and Step 3 publish-ready draft workflow."
+        subtitle="Walmart Docket: current listing data, AI optimization, and guarded publish workflow in one editable page."
         actions={
           <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
             SKU: {product.sku}
           </span>
         }
       />
-
-      <section
-        className="sticky top-2 z-20 rounded-2xl border border-[#D9E4F0] bg-white/95 p-3 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
-        data-testid="ecomviper-walmart-product-editor-tabs"
-      >
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          {workflowTabs.map((tab) => {
-            const active = workflowTab === tab.key;
-            return (
-              <button
-                key={tab.key}
-                type="button"
-                onClick={() => {
-                  setWorkflowTab(tab.key);
-                  if (tab.key === "edit-submit") {
-                    setDraftEditorOpen(true);
-                  }
-                }}
-                data-testid={tab.testId}
-                aria-current={active ? "page" : undefined}
-                className={`inline-flex items-center rounded-full border px-3 py-1.5 transition ${
-                  active
-                    ? "border-[#0F172A] bg-[#0F172A] text-white"
-                    : "border-[#D9E4F0] bg-[#F8FBFF] text-[#475569] hover:border-[#94A3B8] hover:text-[#0F172A]"
-                }`}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
-      </section>
 
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -4044,19 +3986,15 @@ export default function ProductEditorClient({
               <p>
                 <span className="text-[#64748B]">Current score:</span> {currentVisibilityScore}/100
               </p>
-              {workflowTab === "improve" ? (
-                <p>
-                  <span className="text-[#64748B]">Proposed optimized score:</span>{" "}
-                  {proposedVisibilityScore ?? currentVisibilityScore}/100
-                </p>
-              ) : null}
-              {workflowTab === "edit-submit" ? (
-                <p>
-                  <span className="text-[#64748B]">Draft readiness:</span>{" "}
-                  {canSubmit ? "publish_ready" : validationViolations.length > 0 ? "blocked" : "needs_review"}{" "}
-                  ({Math.max(draftVisibilityScore, currentVisibilityScore)}/100)
-                </p>
-              ) : null}
+              <p>
+                <span className="text-[#64748B]">Optimized score:</span>{" "}
+                {proposedVisibilityScore ?? currentVisibilityScore}/100
+              </p>
+              <p>
+                <span className="text-[#64748B]">Publish readiness:</span>{" "}
+                {canSubmit ? "ready_for_confirmation" : "needs_review"} (
+                {Math.max(draftVisibilityScore, currentVisibilityScore)}/100)
+              </p>
             </div>
             <ul className="mt-2 space-y-1 text-sm text-[#334155]">
               {visibilityReasonList.map((reason) => (
@@ -4069,534 +4007,7 @@ export default function ProductEditorClient({
         </div>
       </section>
 
-      <section
-        className={workflowTab === "review" ? "block" : "hidden"}
-        data-testid="ecomviper-walmart-review-panel"
-      >
-        {currentListingReferenceSections("review")}
-      </section>
-
-      <section
-        className={workflowTab === "improve" ? "space-y-4" : "hidden space-y-4"}
-        data-testid="ecomviper-walmart-improve-panel"
-      >
-      <section
-        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
-        data-testid="ecomviper-walmart-primary-actions"
-        ref={inlineAiPanelRef}
-        tabIndex={-1}
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">
-              Step 2 - Optimize Listing with AI
-            </p>
-            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">
-              {inlineAiSuggestion ? aiResultHeaderCopy : "Generate AI optimized Walmart-native proposal"}
-            </h2>
-            <p className="mt-1 text-sm text-[#475569]">
-              AI-optimized listing proposal using the same Walmart docket structure, with compliance-safe copy and marketplace readiness improvements.
-            </p>
-            <p className="mt-1 text-xs text-[#64748B]">
-              Proposed product name: {optimizedProposalState.content.productName || "Not generated"}
-            </p>
-          </div>
-          <span className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-1 text-xs font-medium text-[#334155]">
-            Current score: {listingQuality.score}/100
-          </span>
-        </div>
-
-        <div
-          className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
-          data-testid="ecomviper-walmart-inline-ai-panel"
-        >
-          {inlineAiState === "loading" ? "Optimizing listing with AI..." : null}
-          {inlineAiState === "success"
-            ? inlineAiOutcome === "worse"
-              ? "Suggestions need review - not recommended."
-              : inlineAiOutcome === "improved"
-                ? "AI Improvements Ready."
-                : "Suggestions available."
-            : null}
-          {inlineAiState === "error" ? "Optimization failed. Review the message below and try again." : null}
-          {inlineAiState === "missing_key" ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE : null}
-          {inlineAiState === "idle"
-            ? "Optimize title, descriptions, bullets, and search & browse attributes without leaving this page."
-            : null}
-        </div>
-
-        <div
-          className="mt-3 grid gap-3 rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3 lg:grid-cols-2"
-          data-testid="ecomviper-walmart-schema-gap-analysis"
-        >
-          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
-            <h3 className="text-sm font-semibold text-[#0F172A]">Current schema gap analysis</h3>
-            <p className="mt-1 text-sm text-[#334155]">Total gaps: {currentSchemaGapCount}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-              {currentSchemaGapAnalysis.missingRequiredFields
-                .slice(0, 3)
-                .map((field) => (
-                  <li key={`current-required-${field}`}>Missing required: {field}</li>
-                ))}
-              {currentSchemaGapAnalysis.missingComplianceFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`current-compliance-${field}`}>Missing compliance: {field}</li>
-                ))}
-              {currentSchemaGapAnalysis.missingSearchableFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`current-searchable-${field}`}>Missing searchable: {field}</li>
-                ))}
-              {currentSchemaGapAnalysis.missingDiscoverabilityFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`current-discovery-${field}`}>Missing discoverability: {field}</li>
-                ))}
-              {currentSchemaGapCount === 0 ? <li>No current schema gaps detected.</li> : null}
-            </ul>
-          </article>
-          <article className="rounded-lg border border-[#E2E8F0] bg-white p-3">
-            <h3 className="text-sm font-semibold text-[#0F172A]">AI proposal schema gap analysis</h3>
-            <p className="mt-1 text-sm text-[#334155]">Projected gaps: {proposalSchemaGapCount}</p>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-              {proposalSchemaGapAnalysis.missingRequiredFields
-                .slice(0, 3)
-                .map((field) => (
-                  <li key={`proposal-required-${field}`}>Missing required: {field}</li>
-                ))}
-              {proposalSchemaGapAnalysis.missingComplianceFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`proposal-compliance-${field}`}>Missing compliance: {field}</li>
-                ))}
-              {proposalSchemaGapAnalysis.missingSearchableFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`proposal-searchable-${field}`}>Missing searchable: {field}</li>
-                ))}
-              {proposalSchemaGapAnalysis.missingDiscoverabilityFields
-                .slice(0, 2)
-                .map((field) => (
-                  <li key={`proposal-discovery-${field}`}>Missing discoverability: {field}</li>
-                ))}
-              {proposalSchemaGapCount === 0 ? <li>No projected schema gaps.</li> : null}
-            </ul>
-          </article>
-        </div>
-
-        {!inlineAiSuggestion ? (
-          <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={runInlineOptimization}
-                disabled={optimizingWithAi}
-                data-testid="ecomviper-walmart-optimize-button"
-                className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-              >
-                {optimizingWithAi ? "Optimizing listing with AI..." : "Optimize Listing with AI"}
-              </button>
-            </div>
-
-            {inlineAiState === "missing_key" ? (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">
-                <p>{OPENAI_OPTIMIZE_REQUIRED_MESSAGE}</p>
-                <a
-                  href="/apps/ecomviper/walmart/connect"
-                  className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
-                >
-                  Connect OpenAI key
-                </a>
-              </div>
-            ) : null}
-
-            {inlineAiState === "error" ? (
-              <div className="space-y-2">
-                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                  {inlineAiMessage ?? "Failed to generate AI suggestions. Try again."}
-                </p>
-                <button
-                  type="button"
-                  onClick={runInlineOptimization}
-                  disabled={optimizingWithAi}
-                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : null}
-
-            <details className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
-              <summary className="cursor-pointer text-sm font-semibold text-[#0F172A]">
-                Rule-based suggestions
-              </summary>
-              <ul className="mt-2 space-y-2">
-                {listingQuality.recommendations.length ? (
-                  listingQuality.recommendations.map(
-                    (recommendation: WalmartListingRecommendation) => (
-                      <li
-                        key={recommendation.id}
-                        className="rounded-lg border border-[#E2E8F0] bg-white p-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-sm font-medium text-[#0F172A]">{recommendation.title}</p>
-                          <StatusBadge status={recommendation.severity} />
-                        </div>
-                        <p className="mt-1 text-sm text-[#475569]">{recommendation.reason}</p>
-                      </li>
-                    )
-                  )
-                ) : (
-                  <li className="rounded-lg border border-[#E2E8F0] bg-white p-2 text-sm text-[#475569]">
-                    No recommendation updates right now.
-                  </li>
-                )}
-              </ul>
-              <button
-                type="button"
-                onClick={handleStageNonAiRecommendations}
-                disabled={stagingRecommendation}
-                className="mt-3 rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
-              >
-                {stagingRecommendation ? "Staging..." : "Stage rule-based suggestions"}
-              </button>
-            </details>
-          </div>
-        ) : (
-          <div className="mt-3 space-y-3" data-testid="ecomviper-walmart-inline-ai-results">
-            <article
-              className={`rounded-xl border p-3 ${
-                inlineAiOutcome === "worse"
-                  ? "border-amber-200 bg-amber-50"
-                  : "border-[#D9E4F0] bg-[#F8FBFF]"
-              }`}
-            >
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">{aiResultHeaderCopy}</p>
-              <p className="mt-1 text-sm font-medium text-[#0F172A]">
-                Current: {listingQuality.score}/100 → Projected: {projectedScore}/100
-              </p>
-              <p className="mt-1 text-sm text-[#334155]">Change: {scoreDeltaLabel}</p>
-              <p className="mt-1 text-sm text-[#475569]">{aiResultMessage}</p>
-
-              <div className="mt-3 flex flex-wrap gap-2">
-                {inlineAiOutcome === "worse" ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={runInlineOptimization}
-                      disabled={optimizingWithAi}
-                      className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-                    >
-                      Regenerate
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleApplyInlineAiSuggestion}
-                      data-testid="ecomviper-walmart-apply-ai-suggestions"
-                      className="rounded-lg border border-amber-300 bg-white px-3 py-2 text-sm text-amber-800"
-                    >
-                      Apply Anyway to Draft
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleApplyInlineAiSuggestion}
-                      data-testid="ecomviper-walmart-apply-ai-suggestions"
-                      className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white"
-                    >
-                      Apply to Draft
-                    </button>
-                    <button
-                      type="button"
-                      onClick={runInlineOptimization}
-                      disabled={optimizingWithAi}
-                      className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A] disabled:opacity-50"
-                    >
-                      Regenerate
-                    </button>
-                  </>
-                )}
-                <button
-                  type="button"
-                  onClick={handleDismissInlineAiSuggestion}
-                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                >
-                  Discard
-                </button>
-                <button
-                  type="button"
-                  onClick={handleReviewAiChanges}
-                  className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-                >
-                  Review Changes
-                </button>
-              </div>
-            </article>
-
-            <article className="rounded-xl border border-[#D9E4F0] bg-[#F8FBFF] p-3">
-              <h3 className="text-sm font-semibold text-[#0F172A]">Change summary</h3>
-              <ul className="mt-2 space-y-1 text-sm text-[#334155]">
-                <li>
-                  Title: {form.title.trim() || "Missing"} → {inlineAiSuggestion.suggestedTitle || "No change"}
-                </li>
-                <li>
-                  Short description:{" "}
-                  {form.shortDescription.trim() ? "Current available" : "Current missing"} →{" "}
-                  {inlineAiSuggestion.suggestedShortDescription?.trim() ? "Suggested update" : "No change"}
-                </li>
-                <li>
-                  Long description:{" "}
-                  {form.longDescription.trim() ? "Current available" : "Current missing"} →{" "}
-                  {inlineAiSuggestion.suggestedDescription.trim() ? "Suggested update" : "No change"}
-                </li>
-                <li>
-                  Bullet points: {preview.bulletPoints.length || 0} → {inlineAiSuggestion.suggestedBullets.length}
-                </li>
-                <li>
-                  Attributes: {Object.keys(preview.attributes).length} →{" "}
-                  {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length}
-                </li>
-                <li>
-                  Search &amp; Browse attributes: {Object.keys(form.searchBrowseAttributes).length} →{" "}
-                  {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length}
-                </li>
-                <li>
-                  Walmart-native proposal fields changed:{" "}
-                  {optimizedProposalLayer.optimizationAnalysis.changedFields.length > 0
-                    ? optimizedProposalLayer.optimizationAnalysis.changedFields.join(", ")
-                    : "none"}
-                </li>
-                <li>
-                  FAQ snippets:{" "}
-                  {form.faqSnippets
-                    .split("\n")
-                    .map((entry) => entry.trim())
-                    .filter(Boolean).length}{" "}
-                  → {inlineAiSuggestion.faqSnippets?.length ?? 0}
-                </li>
-                {!displayPrimaryImageUrl ? <li>Image still missing from catalog data.</li> : null}
-              </ul>
-
-              <details className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3">
-                <summary className="cursor-pointer text-sm font-medium text-[#0F172A]">
-                  Why did the score change?
-                </summary>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                  {projectedQuality?.recommendations.length ? (
-                    projectedQuality.recommendations.slice(0, 5).map((recommendation) => (
-                      <li key={recommendation.id}>
-                        {recommendation.title}: {recommendation.reason}
-                      </li>
-                    ))
-                  ) : (
-                    <li>No major scoring changes detected.</li>
-                  )}
-                </ul>
-              </details>
-
-              {showAiDetails ? (
-                <div className="mt-3 space-y-3">
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested title</h4>
-                    <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedTitle}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested short description</h4>
-                    <p className="mt-1 text-sm text-[#334155]">
-                      {inlineAiSuggestion.suggestedShortDescription?.trim() || "No short description suggestion."}
-                    </p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested long description</h4>
-                    <p className="mt-1 text-sm text-[#334155]">{inlineAiSuggestion.suggestedDescription}</p>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested bullet points</h4>
-                    <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                      {inlineAiSuggestion.suggestedBullets.map((bullet) => (
-                        <li key={bullet}>{bullet}</li>
-                      ))}
-                    </ul>
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested attributes</h4>
-                    {Object.keys(inlineAiSuggestion.suggestedAttributes ?? {}).length ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                        {Object.entries(inlineAiSuggestion.suggestedAttributes ?? {}).map(
-                          ([key, value]) => (
-                            <li key={key}>
-                              {key}: {value}
-                            </li>
-                          )
-                        )}
-                      </ul>
-                    ) : (
-                      <p className="mt-1 text-sm text-[#334155]">No attribute updates suggested.</p>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">
-                      Search &amp; Browse attributes
-                    </h4>
-                    {Object.keys(inlineAiSuggestion.searchBrowseAttributes ?? {}).length ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                        {Object.entries(inlineAiSuggestion.searchBrowseAttributes ?? {}).map(
-                          ([key, value]) => (
-                            <li key={key}>
-                              {key}: {value}
-                            </li>
-                          )
-                        )}
-                      </ul>
-                    ) : (
-                      <p className="mt-1 text-sm text-[#334155]">No Search &amp; Browse updates suggested.</p>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Suggested FAQ snippets</h4>
-                    {inlineAiSuggestion.faqSnippets?.length ? (
-                      <ul
-                        className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]"
-                        data-testid="ecomviper-walmart-ai-faq-suggestions"
-                      >
-                        {inlineAiSuggestion.faqSnippets.map((entry) => (
-                          <li key={entry}>{entry}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-1 text-sm text-[#334155]">No FAQ suggestions provided.</p>
-                    )}
-                  </div>
-                  <div>
-                    <h4 className="text-sm font-semibold text-[#0F172A]">Media / Alt text guidance</h4>
-                    <p className="mt-1 text-sm text-[#334155]">
-                      Alt text: {inlineAiSuggestion.altText?.trim() || "Not provided"}
-                    </p>
-                    {inlineAiSuggestion.mediaRecommendations?.length ? (
-                      <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
-                        {inlineAiSuggestion.mediaRecommendations.map((entry) => (
-                          <li key={entry}>{entry}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="mt-1 text-sm text-[#334155]">No media recommendations provided.</p>
-                    )}
-                  </div>
-                </div>
-              ) : null}
-
-              <h4 className="mt-3 text-sm font-semibold text-[#0F172A]">Compliance notes</h4>
-              <ul className="mt-1 space-y-1 text-sm text-[#334155]">
-                {inlineAiSuggestion.complianceWarnings.length ? (
-                  inlineAiSuggestion.complianceWarnings.map((warning) => (
-                    <li
-                      key={warning}
-                      className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1"
-                    >
-                      {warning}
-                    </li>
-                  ))
-                ) : (
-                  <li className="rounded-md border border-[#D9E4F0] bg-white px-2 py-1">
-                    No compliance warnings from the AI response.
-                  </li>
-                )}
-              </ul>
-
-              {inlineAiSuggestion ? (
-                <div
-                  className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]"
-                  data-testid="ecomviper-walmart-ai-apply-diagnostics"
-                >
-                  <h4 className="text-sm font-semibold text-[#0F172A]">Apply diagnostics</h4>
-                  <ul className="mt-2 space-y-1">
-                    <li>
-                      Facts updated:{" "}
-                      {inlineAiDiagnostics.factsUpdated.length
-                        ? inlineAiDiagnostics.factsUpdated.join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Sources used:{" "}
-                      {inlineAiDiagnostics.factsSources.length
-                        ? inlineAiDiagnostics.factsSources.join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Stale fields cleared/replaced:{" "}
-                      {unique([
-                        ...inlineAiDiagnostics.staleFieldsReplaced,
-                        ...inlineAiDiagnostics.staleFieldsCleared,
-                      ]).length
-                        ? unique([
-                            ...inlineAiDiagnostics.staleFieldsReplaced,
-                            ...inlineAiDiagnostics.staleFieldsCleared,
-                          ]).join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Compliance changes:{" "}
-                      {inlineAiDiagnostics.complianceChanges.length
-                        ? inlineAiDiagnostics.complianceChanges.join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Skipped protected fields:{" "}
-                      {inlineAiDiagnostics.skippedProtectedFields.length
-                        ? inlineAiDiagnostics.skippedProtectedFields.join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Skipped low-confidence fields:{" "}
-                      {inlineAiDiagnostics.skippedLowConfidenceFields.length
-                        ? inlineAiDiagnostics.skippedLowConfidenceFields.join(", ")
-                        : "none"}
-                    </li>
-                    <li>
-                      Image-derived facts status: {inlineAiDiagnostics.imageFactsStatus}
-                    </li>
-                    <li>
-                      Image-derived facts detail:{" "}
-                      {inlineAiDiagnostics.imageFactsMessage || "none"}
-                    </li>
-                    <li>
-                      FDA disclaimer status: {inlineAiDiagnostics.disclaimerStatus}
-                    </li>
-                  </ul>
-                </div>
-              ) : null}
-            </article>
-          </div>
-        )}
-
-        {inlineAiMessage && inlineAiState !== "error" ? (
-          <p className="mt-3 text-sm text-[#334155]">{inlineAiMessage}</p>
-        ) : null}
-        <p className="mt-2 text-xs text-[#64748B]">No auto-submit. Changes remain in draft until approved.</p>
-      </section>
-      {workflowDocketSections({
-        state: optimizedProposalState,
-        testIdPrefix: "ecomviper-walmart-improve-docket",
-        title: "Step 2 Walmart Docket",
-        description:
-          "AI-optimized listing proposal using the same Walmart docket structure, with compliance-safe copy and marketplace readiness improvements.",
-      })}
-      </section>
-
-      <section
-        className={workflowTab === "edit-submit" ? "space-y-4" : "hidden space-y-4"}
-        data-testid="ecomviper-walmart-edit-submit-panel"
-      >
-      {workflowDocketSections({
-        state: editableDraftState,
-        testIdPrefix: "ecomviper-walmart-edit-submit-docket",
-        title: "Step 3 Walmart Docket",
-        description:
-          "Review, edit, and publish-ready Walmart maintenance draft. Nothing is submitted until the user approves/publishes.",
-      })}
+      <section className="space-y-4" data-testid="ecomviper-walmart-single-docket">
       <div data-testid="ecomviper-walmart-final-draft-editor">
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -4605,33 +4016,14 @@ export default function ProductEditorClient({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">
-              Step 3 - Review and Publish
+              Walmart Docket
             </p>
-            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Publish-ready Walmart maintenance draft</h2>
+            <h2 className="mt-1 text-lg font-semibold text-[#0F172A]">Editable listing docket</h2>
             <p className="mt-1 text-sm text-[#475569]">
-              Review, edit, and publish-ready Walmart maintenance draft. Nothing is submitted until the
-              user approves/publishes.
+              Current listing/API/catalog/import fields with in-place edits, AI optimization, and guarded publish preview.
             </p>
           </div>
-          {!draftEditorIsActive ? (
-            <button
-              type="button"
-              onClick={() => {
-                setWorkflowTab("edit-submit");
-                setDraftEditorOpen(true);
-              }}
-              className="rounded-lg border border-[#D9E4F0] bg-white px-3 py-2 text-sm text-[#0F172A]"
-            >
-              Open Draft Editor
-            </button>
-          ) : null}
         </div>
-
-        {!draftEditorIsActive ? (
-          <p className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]">
-            Apply AI improvements first, or open the draft editor to make manual changes.
-          </p>
-        ) : null}
         {draftHardening.diagnostics.repairedCount > 0 || draftHardening.diagnostics.droppedCount > 0 ? (
           <p
             className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
@@ -4654,9 +4046,9 @@ export default function ProductEditorClient({
           </p>
         </div>
 
-        <details open={draftEditorIsActive || hasExistingDraft} className="mt-3">
+        <details open className="mt-3">
           <summary className="cursor-pointer text-sm font-medium text-[#334155]">
-            {draftEditorIsActive ? "Draft editor active" : "Show draft editor"}
+            Draft editor
           </summary>
 
           <div className="mt-3 space-y-3">
@@ -4668,19 +4060,15 @@ export default function ProductEditorClient({
               >
                 Save Draft
               </button>
-              <button
-                type="button"
-                disabled={!canSubmit}
-                className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
-              >
-                Mark Publish-Ready
-              </button>
               <p className="text-xs text-[#64748B]">{readinessNote}</p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2" data-testid="ecomviper-walmart-product-form">
               <>
-                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                  <h3
+                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                    data-testid="ecomviper-walmart-docket-content"
+                  >
                     Content
                   </h3>
                   <label className="text-sm text-[#334155] md:col-span-2">
@@ -4735,7 +4123,10 @@ export default function ProductEditorClient({
               </>
 
               <>
-                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                  <h3
+                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                    data-testid="ecomviper-walmart-docket-media"
+                  >
                     Media
                   </h3>
                   <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2">
@@ -5375,8 +4766,11 @@ export default function ProductEditorClient({
               </>
 
               <>
-                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                    Pricing & inventory
+                  <h3
+                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                    data-testid="ecomviper-walmart-docket-pricing-inventory"
+                  >
+                    Pricing &amp; Inventory
                   </h3>
                   <label className="text-sm text-[#334155]">
                     Price
@@ -5403,6 +4797,14 @@ export default function ProductEditorClient({
                   >
                     Search &amp; Browse
                   </h3>
+                  <p
+                    className="md:col-span-2 text-xs text-[#64748B]"
+                    data-testid="ecomviper-walmart-docket-search-browse"
+                  >
+                    Lookup identifiers (SKU / GTIN / UPC):{" "}
+                    {`${product.sku || "Not available"} / ${(product.gtin ?? "").trim() || "Not available"} / ${(product.upc ?? "").trim() || "Not available"}`}.
+                    {" "}GTIN/UPC are lookup identifiers only and never used as Walmart public PDP item IDs.
+                  </p>
                   <p className="md:col-span-2 text-xs text-[#475569]">
                     These structured attributes help Walmart understand where your product belongs in search and browse.
                     Blank fields are omitted from submit payloads.
@@ -5624,13 +5026,196 @@ export default function ProductEditorClient({
       </div>
 
       <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-workflow-actions"
+      >
+        <h2 className="text-lg font-semibold text-[#0F172A]">Workflow Actions</h2>
+        <p className="mt-1 text-sm text-[#475569]">
+          Optimize updates this docket in place. Publish stays guarded with validation and preview confirmation.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void runInlineOptimization()}
+            disabled={optimizingWithAi}
+            data-testid="ecomviper-walmart-optimize-button"
+            className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {optimizingWithAi ? "Optimizing with AI..." : "Optimize with AI"}
+          </button>
+          <button
+            type="button"
+            onClick={handlePublishToWalmart}
+            disabled={publishStatus === "publishing"}
+            data-testid="ecomviper-walmart-publish-button"
+            className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-60"
+          >
+            {publishStatus === "publishing" ? "Publishing..." : "Publish to Walmart"}
+          </button>
+        </div>
+        <div
+          className="mt-3 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
+          data-testid="ecomviper-walmart-inline-ai-panel"
+        >
+          <p>
+            <span className="text-[#64748B]">Optimization status:</span> {optimizeActionLabel}
+          </p>
+          <p className="mt-1">
+            <span className="text-[#64748B]">Publish status:</span> {publishStatus}
+          </p>
+          {inlineAiState === "missing_key" ? (
+            <a
+              href="/apps/ecomviper/walmart/connect"
+              className="mt-2 inline-flex rounded border border-amber-300 bg-white px-2 py-1 text-xs font-medium text-amber-800"
+            >
+              Connect OpenAI key
+            </a>
+          ) : null}
+          {inlineAiMessage ? <p className="mt-2 text-xs text-[#475569]">{inlineAiMessage}</p> : null}
+          {publishMessage ? <p className="mt-2 text-xs text-[#475569]">{publishMessage}</p> : null}
+        </div>
+
+        {publishPreviewOpen ? (
+          <div
+            className="mt-3 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]"
+            data-testid="ecomviper-walmart-publish-preview"
+          >
+            <p className="font-medium text-[#0F172A]">Publish preview</p>
+            <p className="mt-1 text-xs text-[#64748B]">
+              Content, pricing, and inventory updates are separated below. No auto-submit is performed.
+            </p>
+            <div className="mt-2 grid gap-3 lg:grid-cols-2">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                  Validation errors
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                  {publishValidationErrors.length > 0 ? (
+                    publishValidationErrors.map((entry) => <li key={entry}>{entry}</li>)
+                  ) : (
+                    <li>No blocking validation errors.</li>
+                  )}
+                </ul>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                  Warnings
+                </p>
+                <ul className="mt-1 list-disc space-y-1 pl-5 text-sm text-[#334155]">
+                  {publishWarnings.length > 0 ? (
+                    publishWarnings.map((entry) => <li key={entry}>{entry}</li>)
+                  ) : (
+                    <li>No publish warnings.</li>
+                  )}
+                </ul>
+              </div>
+            </div>
+            {publishStatus === "ready_for_confirmation" ? (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => void handleConfirmPublish()}
+                  className="rounded border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-xs text-white"
+                >
+                  Confirm Publish
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPublishPreviewOpen(false);
+                    setPublishStatus("idle");
+                    setPublishMessage("Publish confirmation canceled. No submission was performed.");
+                  }}
+                  className="rounded border border-[#D9E4F0] bg-white px-3 py-2 text-xs text-[#0F172A]"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : null}
+            <pre className="mt-3 max-h-56 overflow-auto rounded bg-[#F8FBFF] p-3 text-xs text-[#334155]">
+              {JSON.stringify(publishPreviewPayload, null, 2)}
+            </pre>
+          </div>
+        ) : null}
+      </section>
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
+        data-testid="ecomviper-walmart-source-confidence-panel"
+      >
+        <details>
+          <summary className="cursor-pointer text-sm font-semibold text-[#0F172A]">
+            Source confidence (secondary)
+          </summary>
+          <div className="mt-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="mt-1 text-xs text-[#475569]">
+                  Refreshes EcomViper&apos;s local catalog understanding. This does not publish
+                  changes to Walmart.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void handleRefreshCatalogDetails()}
+                disabled={refreshingCatalogDetails || !hasCatalogIdentifier}
+                className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+                data-testid="ecomviper-walmart-refresh-catalog-details"
+              >
+                {refreshingCatalogDetails ? "Refreshing catalog details..." : "Refresh catalog details"}
+              </button>
+            </div>
+            {!hasCatalogIdentifier ? (
+              <p className="mt-2 text-xs text-amber-700">
+                Add a Walmart item ID, UPC, GTIN, or canonical public listing URL to enable
+                catalog refresh.
+              </p>
+            ) : null}
+            {catalogBackfillMessage ? (
+              <p className="mt-2 text-xs text-[#334155]">{catalogBackfillMessage}</p>
+            ) : null}
+            <div className="mt-3 grid gap-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-xs text-[#334155] md:grid-cols-2">
+              <p>
+                <span className="text-[#64748B]">Overall confidence:</span>{" "}
+                {sourceConfidenceSummary.overallConfidence}
+              </p>
+              <p>
+                <span className="text-[#64748B]">Winning source:</span>{" "}
+                {catalogBackfillResult?.sourceSummary.sourceLabel || "Not run"}
+              </p>
+              <p>
+                <span className="text-[#64748B]">Last status:</span>{" "}
+                {latestCatalogBackfillStatus ?? "Not run"}
+              </p>
+              <p>
+                <span className="text-[#64748B]">Fields filled from catalog:</span>{" "}
+                {fieldsFilledFromCatalog}
+              </p>
+              <p>
+                <span className="text-[#64748B]">Canonical listing:</span>{" "}
+                {catalogBackfillResult?.canonicalPublicUrl ||
+                  currentWalmartState.media.publicWalmartUrl ||
+                  "Not available"}
+              </p>
+              <p>
+                <span className="text-[#64748B]">Canonical item ID:</span>{" "}
+                {catalogBackfillResult?.canonicalItemId ||
+                  currentWalmartState.media.publicWalmartItemId ||
+                  "Not available"}
+              </p>
+            </div>
+          </div>
+        </details>
+      </section>
+
+      <section
         id="walmart-product-readiness"
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
         data-testid="ecomviper-walmart-readiness"
       >
         <h2 className="text-lg font-semibold text-[#0F172A]">Readiness & validation</h2>
         <p className="mt-1 text-sm text-[#475569]">
-          Validation is checked continuously and before marking a draft publish-ready.
+          Validation is checked continuously and before guarded publish confirmation.
         </p>
 
         <div className="mt-3 grid gap-3 lg:grid-cols-3">
