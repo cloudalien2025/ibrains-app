@@ -92,7 +92,7 @@ describe("walmart products import route", () => {
     expect(payload.importProgress?.stage).toBe("complete");
     expect(mocks.importWalmartProducts).toHaveBeenCalledWith(
       "user_clerk_1",
-      expect.objectContaining({ boundedRuntime: true })
+      expect.objectContaining({ boundedRuntime: false })
     );
     expect(mocks.queueWalmartPostImportLiveHydrationForUser).toHaveBeenCalledWith({
       userId: "user_clerk_1",
