@@ -317,6 +317,191 @@ describe("walmart product import", () => {
     expect(product?.inventoryStatus).toBe("known");
   });
 
+  it("preserves previously imported SKUs when a later import run does not return them", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-preserve-skus",
+    });
+
+    const { importWalmartProducts, listWalmartProductsForUser, replaceWalmartProductsForUser } = await import(
+      "@/lib/ecomviper/walmart/walmart-products"
+    );
+
+    await replaceWalmartProductsForUser({
+      userId: "user_clerk_1",
+      products: [
+        {
+          id: "walmart_ROC948",
+          marketplace: "walmart",
+          sku: "ROC948",
+          externalItemId: "wm_roc948",
+          title: "Legacy ROC948",
+          brand: "OPA",
+          category: "Supplements",
+          price: 29.99,
+          inventoryQuantity: 7,
+          inventoryStatus: "known",
+          status: "active",
+          imageUrl: "https://images.example.com/roc948.jpg",
+          issues: [],
+          attributes: {},
+          shortDescription: "Legacy short",
+          longDescription: "Legacy long",
+          bulletPoints: ["Legacy bullet"],
+          rawPayload: {},
+          normalizedPayload: {},
+          lastSyncedAt: "2026-05-16T00:00:00.000Z",
+          createdAt: "2026-05-16T00:00:00.000Z",
+          updatedAt: "2026-05-16T00:00:00.000Z",
+        },
+      ],
+      importedAt: "2026-05-16T00:00:00.000Z",
+    });
+
+    const fetchMock = createFetchMock({
+      catalogPayload: {
+        ItemResponse: [
+          {
+            sku: "ROC949",
+            productName: "Current ROC949",
+            brand: "OPA",
+            shelf: "Supplements",
+            productType: "supplement",
+            availability: "In_stock",
+            price: { amount: "31.99" },
+            productAssets: [
+              {
+                assetType: "PRIMARY",
+                imageUrl: "https://images.example.com/roc949.jpg",
+              },
+            ],
+          },
+        ],
+      },
+      inventoryBySku: {
+        ROC949: {
+          sku: "ROC949",
+          quantity: { unit: "EACH", amount: 14 },
+        },
+      },
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await importWalmartProducts("user_clerk_1");
+    const skuList = (await listWalmartProductsForUser("user_clerk_1"))
+      .map((product) => product.sku)
+      .sort();
+
+    expect(result.importedCount).toBe(1);
+    expect(skuList).toEqual(expect.arrayContaining(["ROC948", "ROC949"]));
+  });
+
+  it("continues catalog pagination beyond five pages when nextCursor is present", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-pagination",
+    });
+
+    const pageSkus = ["PAG-1", "PAG-2", "PAG-3", "PAG-4", "PAG-5", "PAG-6"];
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/v3/items/walmart/search")) {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (url.includes("/v3/items")) {
+        const parsed = new URL(url);
+        const cursor = parsed.searchParams.get("nextCursor");
+        const pageIndex =
+          cursor && /^cursor-\d+$/.test(cursor) ? Number(cursor.replace("cursor-", "")) : 0;
+        const sku = pageSkus[pageIndex] ?? "PAG-UNKNOWN";
+        const nextCursor = pageIndex < pageSkus.length - 1 ? `cursor-${pageIndex + 1}` : null;
+        return new Response(
+          JSON.stringify({
+            ItemResponse: [
+              {
+                sku,
+                productName: `Paged Product ${pageIndex + 1}`,
+                brand: "Paged Brand",
+                shelf: "Supplements",
+                productType: "supplement",
+                availability: "In_stock",
+                price: { amount: String(20 + pageIndex) },
+                productAssets: [
+                  {
+                    assetType: "PRIMARY",
+                    imageUrl: `https://images.example.com/${sku}.jpg`,
+                  },
+                ],
+              },
+            ],
+            nextCursor,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        );
+      }
+
+      if (url.includes("/v3/inventory")) {
+        const parsed = new URL(url);
+        const sku = parsed.searchParams.get("sku") ?? "";
+        return new Response(
+          JSON.stringify({
+            sku,
+            quantity: { unit: "EACH", amount: 9 },
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        );
+      }
+
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+
+    expect(result.fetchedCount).toBe(6);
+    expect(result.importedCount).toBe(6);
+    const itemCalls = fetchMock.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => {
+        const url =
+          typeof entry === "string" ? entry : entry instanceof URL ? entry.toString() : entry.url;
+        return url.includes("/v3/items?") || /\/v3\/items($|\?)/.test(url);
+      });
+    expect(itemCalls.length).toBeGreaterThanOrEqual(6);
+  });
+
   it("enriches missing catalog images using Item Search with GTIN/UPC priority", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: true,
