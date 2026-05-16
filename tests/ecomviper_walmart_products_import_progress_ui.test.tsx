@@ -238,6 +238,112 @@ describe("Walmart import progress UI", () => {
     expect(routerRefresh).toHaveBeenCalledTimes(1);
   });
 
+  it("continues full import mode across multiple bounded route segments", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            importedCount: 1,
+            fetchedCount: 1,
+            hasMore: true,
+            nextCursor: "cursor-2",
+            importProgress: {
+              stage: "complete",
+              providerConnected: true,
+              providerStatus: "connected",
+              providerCanAttempt: true,
+              totals: {
+                importedCount: 1,
+                fetchedCount: 1,
+                processedCount: 1,
+                queuedCount: 1,
+                imageFoundCount: 1,
+                imageFromImportPayloadCount: 1,
+                imageEnrichedCount: 0,
+                imageStillMissingCount: 0,
+                imageMissingCount: 0,
+                imageNotFoundCount: 0,
+                imageAmbiguousCount: 0,
+                imageFailedCount: 0,
+                imageSkippedNoProviderCount: 0,
+              },
+            },
+            importDiagnostics: {
+              fetchedCount: 1,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            ok: true,
+            importedCount: 1,
+            fetchedCount: 1,
+            hasMore: false,
+            nextCursor: null,
+            importProgress: {
+              stage: "complete",
+              providerConnected: true,
+              providerStatus: "connected",
+              providerCanAttempt: true,
+              totals: {
+                importedCount: 1,
+                fetchedCount: 1,
+                processedCount: 1,
+                queuedCount: 1,
+                imageFoundCount: 1,
+                imageFromImportPayloadCount: 1,
+                imageEnrichedCount: 0,
+                imageStillMissingCount: 0,
+                imageMissingCount: 0,
+                imageNotFoundCount: 0,
+                imageAmbiguousCount: 0,
+                imageFailedCount: 0,
+                imageSkippedNoProviderCount: 0,
+              },
+            },
+            importDiagnostics: {
+              fetchedCount: 1,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        )
+      );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<WalmartProductsClient products={[createProduct()]} />);
+    });
+
+    const importButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Import Products"
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      importButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const firstBody = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
+    const secondBody = JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body ?? "{}")) as Record<
+      string,
+      unknown
+    >;
+    expect(firstBody.mode).toBe("import");
+    expect(firstBody.continuationCursor).toBeUndefined();
+    expect(secondBody.mode).toBe("import");
+    expect(secondBody.continuationCursor).toBe("cursor-2");
+    expect(container.textContent).toContain("Products imported: 2");
+    expect(container.textContent).toContain("Products fetched: 2");
+  });
+
   it("renders per-product image enrichment diagnostics for common rejection outcomes", async () => {
     const diagnostics = [
       {

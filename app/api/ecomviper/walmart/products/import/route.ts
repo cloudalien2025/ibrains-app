@@ -660,8 +660,19 @@ export async function POST(req: NextRequest) {
 
     existingProductsShownCount = (await listWalmartProductsForUser(userId)).length;
 
-    const body = (await req.json().catch(() => ({}))) as { mode?: unknown };
-    if (body.mode !== undefined && typeof body.mode !== "string") {
+    const body = (await req.json().catch(() => ({}))) as {
+      mode?: unknown;
+      continuationCursor?: unknown;
+    };
+    const modeIsInvalid = body.mode !== undefined && typeof body.mode !== "string";
+    const continuationCursorIsInvalid =
+      body.continuationCursor !== undefined &&
+      body.continuationCursor !== null &&
+      typeof body.continuationCursor !== "string";
+    if (modeIsInvalid || continuationCursorIsInvalid) {
+      const invalidReason = modeIsInvalid
+        ? "Import request mode must be a string value."
+        : "Import request continuationCursor must be a string or null.";
       const importProgress: ImportProgressPayload = {
         stage: "failed",
         providerConnected: false,
@@ -725,7 +736,7 @@ export async function POST(req: NextRequest) {
           shopifyNoImageAvailable: 0,
         },
         importErrorCategory: "import_request_invalid",
-        importErrorReason: "Import request mode must be a string value.",
+        importErrorReason: invalidReason,
         importErrorPhase: "request_validation",
         importErrorStatusCode: 400,
         importErrorEndpointFamily: null,
@@ -758,12 +769,24 @@ export async function POST(req: NextRequest) {
     }
     const isRetryMode =
       typeof body.mode === "string" && body.mode.trim().toLowerCase() === "retry_image_enrichment";
+    const continuationCursor =
+      typeof body.continuationCursor === "string" && body.continuationCursor.trim().length > 0
+        ? body.continuationCursor.trim()
+        : null;
 
     const result = isRetryMode
       ? await retryWalmartPublicImageEnrichmentForUser(userId)
       : await importWalmartProducts(userId, {
-          boundedRuntime: false,
+          boundedRuntime: true,
+          maxCatalogPages: 1,
+          startCursor: continuationCursor,
         });
+    const hasMore =
+      !isRetryMode && Boolean(result.importDiagnostics?.hasMoreCatalogPages);
+    const nextCursor =
+      hasMore && typeof result.importDiagnostics?.nextCatalogCursor === "string"
+        ? result.importDiagnostics.nextCatalogCursor
+        : null;
 
     const progress = buildSuccessProgress({
       result,
@@ -771,7 +794,7 @@ export async function POST(req: NextRequest) {
       existingProductsShownCount,
     });
 
-    if (!isRetryMode) {
+    if (!isRetryMode && !hasMore) {
       const importRunSkus = Array.isArray(result.importDiagnostics?.importRunSkus)
         ? result.importDiagnostics?.importRunSkus
         : [];
@@ -799,6 +822,8 @@ export async function POST(req: NextRequest) {
     return ok({
       ok: true,
       ...result,
+      hasMore,
+      nextCursor,
       message,
       importProgress: progress,
     });

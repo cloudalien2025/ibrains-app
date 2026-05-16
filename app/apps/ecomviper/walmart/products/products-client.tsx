@@ -510,6 +510,96 @@ function createDefaultImportPanelState(partial?: Partial<ImportPanelState>): Imp
   };
 }
 
+type ImportSegmentPayload = {
+  importedCount?: number;
+  fetchedCount?: number;
+  message?: string;
+  hasMore?: boolean;
+  nextCursor?: string | null;
+  importProgress?: {
+    totals?: Record<string, unknown>;
+    perProductAttemptDiagnostics?: unknown[];
+  };
+  importDiagnostics?: {
+    fetchedCount?: number;
+    perProductAttemptDiagnostics?: unknown[];
+  };
+};
+
+function asFiniteNumber(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function mergeImportSegmentPayloads(segments: ImportSegmentPayload[]): ImportSegmentPayload {
+  if (segments.length === 0) return {};
+  if (segments.length === 1) return { ...segments[0] };
+
+  const last = segments[segments.length - 1];
+  const mergedTotals: Record<string, number> = {};
+  const mergedProgressDiagnostics: unknown[] = [];
+
+  let importedCountSum = 0;
+  let fetchedCountSum = 0;
+
+  for (const segment of segments) {
+    const importedFromTopLevel = asFiniteNumber(segment.importedCount);
+    const importedFromTotals = asFiniteNumber(segment.importProgress?.totals?.importedCount);
+    importedCountSum += importedFromTopLevel ?? importedFromTotals ?? 0;
+
+    const fetchedFromTopLevel = asFiniteNumber(segment.fetchedCount);
+    const fetchedFromTotals = asFiniteNumber(segment.importProgress?.totals?.fetchedCount);
+    fetchedCountSum += fetchedFromTopLevel ?? fetchedFromTotals ?? 0;
+
+    const totals = segment.importProgress?.totals;
+    if (totals && typeof totals === "object") {
+      for (const [key, value] of Object.entries(totals)) {
+        const numericValue = asFiniteNumber(value);
+        if (numericValue === null) continue;
+        mergedTotals[key] = (mergedTotals[key] ?? 0) + numericValue;
+      }
+    }
+
+    if (Array.isArray(segment.importProgress?.perProductAttemptDiagnostics)) {
+      mergedProgressDiagnostics.push(...segment.importProgress.perProductAttemptDiagnostics);
+    }
+  }
+
+  const merged: ImportSegmentPayload = {
+    ...last,
+    importedCount: importedCountSum > 0 ? importedCountSum : last.importedCount,
+    fetchedCount: fetchedCountSum > 0 ? fetchedCountSum : last.fetchedCount,
+    importProgress: last.importProgress ? { ...last.importProgress } : undefined,
+    importDiagnostics: last.importDiagnostics ? { ...last.importDiagnostics } : undefined,
+  };
+
+  if (merged.importProgress) {
+    merged.importProgress.totals = {
+      ...(merged.importProgress.totals ?? {}),
+      ...mergedTotals,
+      importedCount:
+        importedCountSum > 0
+          ? importedCountSum
+          : asFiniteNumber(merged.importProgress.totals?.importedCount) ?? 0,
+      fetchedCount:
+        fetchedCountSum > 0
+          ? fetchedCountSum
+          : asFiniteNumber(merged.importProgress.totals?.fetchedCount) ?? 0,
+    };
+    if (mergedProgressDiagnostics.length > 0) {
+      merged.importProgress.perProductAttemptDiagnostics = mergedProgressDiagnostics;
+    }
+  }
+
+  if (merged.importDiagnostics) {
+    merged.importDiagnostics.fetchedCount =
+      fetchedCountSum > 0
+        ? fetchedCountSum
+        : asFiniteNumber(merged.importDiagnostics.fetchedCount) ?? 0;
+  }
+
+  return merged;
+}
+
 const ALLOWED_INVENTORY_STATUSES = new Set<WalmartEffectiveProductRecord["inventoryStatus"]>([
   "known",
   "unknown",
@@ -940,17 +1030,13 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     );
 
     try {
-      const response = await fetch("/api/ecomviper/walmart/products/import", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode: mode === "retry_image_enrichment" ? "retry_image_enrichment" : "import",
-        }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
+      let response: Response | null = null;
+      let payload = {} as {
         message?: string;
         importedCount?: number;
         fetchedCount?: number;
+        hasMore?: boolean;
+        nextCursor?: string | null;
         importProgress?: {
           stage?: "complete" | "completed_with_warnings" | "failed";
           providerConnected?: boolean;
@@ -1147,6 +1233,65 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
         };
         error?: { message?: string };
       };
+      const importSegments: ImportSegmentPayload[] = [];
+      let continuationCursor: string | null = null;
+      let continuationSegments = 0;
+
+      while (true) {
+        response = await fetch("/api/ecomviper/walmart/products/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mode: mode === "retry_image_enrichment" ? "retry_image_enrichment" : "import",
+            continuationCursor:
+              mode === "import" && continuationCursor ? continuationCursor : undefined,
+          }),
+        });
+        payload = (await response.json().catch(() => ({}))) as typeof payload;
+        importSegments.push(payload as ImportSegmentPayload);
+
+        if (!response.ok || mode === "retry_image_enrichment") {
+          break;
+        }
+
+        const hasMore =
+          payload.hasMore === true &&
+          typeof payload.nextCursor === "string" &&
+          payload.nextCursor.trim().length > 0;
+        if (!hasMore) {
+          break;
+        }
+
+        const nextCursorValue = payload.nextCursor;
+        continuationCursor =
+          typeof nextCursorValue === "string" ? nextCursorValue.trim() : null;
+        if (!continuationCursor) {
+          break;
+        }
+        continuationSegments += 1;
+        if (continuationSegments >= 150) {
+          throw new Error("Import continuation exceeded safe segment limit.");
+        }
+
+        setImportPanel((current) =>
+          current && current.running
+            ? {
+                ...current,
+                stage: "normalizing_catalog",
+                percent: Math.max(current.percent, 56),
+                summary: `Importing catalog pages (${continuationSegments + 1})...`,
+              }
+            : current
+        );
+      }
+
+      if (!response) {
+        throw new Error("Import request failed before the server returned progress.");
+      }
+
+      if (mode === "import" && response.ok && importSegments.length > 1) {
+        payload = mergeImportSegmentPayloads(importSegments) as typeof payload;
+      }
 
       if (!response.ok) {
         const isGatewayTimeout = response.status === 504;
@@ -1662,7 +1807,11 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
           }`
         );
       } else {
-        setMessage(payload.message ?? finalSummary);
+        setMessage(
+          mode === "import"
+            ? finalSummary
+            : payload.message ?? finalSummary
+        );
       }
       router.refresh();
     } catch {

@@ -90,9 +90,15 @@ describe("walmart products import route", () => {
     expect(payload.fetchedCount).toBe(3);
     expect(payload.message).toContain("Imported 3 products.");
     expect(payload.importProgress?.stage).toBe("complete");
+    expect(payload.hasMore).toBe(false);
+    expect(payload.nextCursor).toBeNull();
     expect(mocks.importWalmartProducts).toHaveBeenCalledWith(
       "user_clerk_1",
-      expect.objectContaining({ boundedRuntime: false })
+      expect.objectContaining({
+        boundedRuntime: true,
+        maxCatalogPages: 1,
+        startCursor: null,
+      })
     );
     expect(mocks.queueWalmartPostImportLiveHydrationForUser).toHaveBeenCalledWith({
       userId: "user_clerk_1",
@@ -174,6 +180,51 @@ describe("walmart products import route", () => {
         finalStatus: "not_synced",
       },
     ]);
+  });
+
+  it("returns continuation metadata and defers post-import hydration queue until final segment", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 1,
+      fetchedCount: 1,
+      skippedCount: 0,
+      lastImportAt: "2026-05-16T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 1,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        hasMoreCatalogPages: true,
+        nextCatalogCursor: "cursor-2",
+        importRunSkus: ["ROC948"],
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "import", continuationCursor: "cursor-1" }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.hasMore).toBe(true);
+    expect(payload.nextCursor).toBe("cursor-2");
+    expect(mocks.importWalmartProducts).toHaveBeenCalledWith(
+      "user_clerk_1",
+      expect.objectContaining({
+        boundedRuntime: true,
+        maxCatalogPages: 1,
+        startCursor: "cursor-1",
+      })
+    );
+    expect(mocks.queueWalmartPostImportLiveHydrationForUser).not.toHaveBeenCalled();
   });
 
   it("queues background post-import live hydration using run SKU diagnostics", async () => {
@@ -459,6 +510,31 @@ describe("walmart products import route", () => {
     expect(payload.importProgress?.stage).toBe("failed");
     expect(payload.importProgress?.importErrorCategory).toBe("import_request_invalid");
     expect(payload.importProgress?.importErrorPhase).toBe("request_validation");
+  });
+
+  it("returns structured request validation failure for malformed continuation cursor body", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "import", continuationCursor: 99 }),
+      })
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(400);
+    expect(payload.ok).toBe(false);
+    expect(payload.error?.code).toBe("IMPORT_REQUEST_INVALID");
+    expect(payload.importProgress?.stage).toBe("failed");
+    expect(payload.importProgress?.importErrorCategory).toBe("import_request_invalid");
+    expect(payload.importProgress?.importErrorPhase).toBe("request_validation");
+    expect(payload.importProgress?.importErrorReason).toContain("continuationCursor");
   });
 
   it("preserves typed importer diagnostics and partial progress on failure", async () => {
