@@ -13,7 +13,10 @@ import {
 } from "@/lib/ecomviper/shopify/walmart-shopify-reconciliation";
 import { getWalmartConnectionHealth, requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
-import { enrichProductsFromItemReport } from "@/lib/ecomviper/walmart/walmart-item-report";
+import {
+  enrichProductsFromItemReport,
+  hydrateMissingContentFromItemReportRows,
+} from "@/lib/ecomviper/walmart/walmart-item-report";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
@@ -71,6 +74,9 @@ const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED = 0;
 const WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS = 120;
 const WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY = 3;
+const WALMART_POST_IMPORT_ITEM_REPORT_POLL_DELAYS_MS = [1500, 2500, 4000, 6000, 9000, 12000, 15000];
+const WALMART_POST_IMPORT_ITEM_REPORT_RETRY_POLL_DELAYS_MS = [5000, 8000, 12000, 18000, 22000, 26000, 30000];
+const WALMART_POST_IMPORT_ITEM_REPORT_RETRY_DELAY_MS = 20_000;
 const SHOPIFY_IMPORT_STALE_AFTER_MS = 1000 * 60 * 60 * 12;
 const NON_MEANINGFUL_TEXT = new Set([
   "unknown",
@@ -469,6 +475,12 @@ function stripImageIssues(issues: string[]): string[] {
 
 function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, Math.max(0, ms));
+  });
 }
 
 function firstNonEmptyList(candidates: string[][]): string[] {
@@ -1775,7 +1787,7 @@ async function enrichProductImages(
     skipOfficialSources?: boolean;
   }
 ): Promise<{ products: WalmartProductRecord[]; stats: ImageEnrichmentStats }> {
-  const enriched = [...products];
+  let enriched = [...products];
   const stats = createInitialImageEnrichmentStats();
   const skipOfficialSources = Boolean(options?.skipOfficialSources);
 
@@ -1784,6 +1796,10 @@ async function enrichProductImages(
       accessToken,
       products: enriched,
     });
+
+    if (reportEnrichment.run.rows.length > 0) {
+      enriched = hydrateMissingContentFromItemReportRows(enriched, reportEnrichment.run.rows);
+    }
 
     stats.itemReport.requested = reportEnrichment.run.itemReportRequested;
     stats.itemReport.downloaded = reportEnrichment.run.itemReportDownloaded;
@@ -2772,6 +2788,7 @@ export function queueWalmartPostImportLiveHydrationForUser(input: {
     }
 
     const updatesBySku = new Map<string, WalmartProductRecord>();
+    let liveHydratedCount = 0;
     for (let index = 0; index < queueCandidates.length; index += WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY) {
       const batch = queueCandidates.slice(index, index + WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY);
       const batchUpdates = await Promise.all(
@@ -2798,8 +2815,77 @@ export function queueWalmartPostImportLiveHydrationForUser(input: {
       for (const updated of batchUpdates) {
         if (!updated) continue;
         updatesBySku.set(normalizeSkuKey(updated.sku), updated);
+        liveHydratedCount += 1;
       }
     }
+
+    let reportHydratedCount = 0;
+    const reportHydratedSkus = new Set<string>();
+    let reportWorkflowStatus: string | null = null;
+    let reportFailureCategory: string | null = null;
+    let reportRowsParsed = 0;
+
+    const queueCandidatesAfterLive = queueCandidates.map(
+      (candidate) => updatesBySku.get(normalizeSkuKey(candidate.sku)) ?? candidate
+    );
+    let reportCandidates = queueCandidatesAfterLive.filter((product) => contentNeedsHydration(product));
+
+    if (reportCandidates.length > 0) {
+      try {
+        const token = await requestWalmartTokenForUser(input.userId);
+        if (token.ok && token.accessToken) {
+          const pollDelayAttempts = [
+            WALMART_POST_IMPORT_ITEM_REPORT_POLL_DELAYS_MS,
+            WALMART_POST_IMPORT_ITEM_REPORT_RETRY_POLL_DELAYS_MS,
+          ];
+
+          for (let attemptIndex = 0; attemptIndex < pollDelayAttempts.length; attemptIndex += 1) {
+            if (reportCandidates.length === 0) break;
+
+            const reportEnrichment = await enrichProductsFromItemReport({
+              accessToken: token.accessToken,
+              products: reportCandidates,
+              statusPollDelaysMs: [...pollDelayAttempts[attemptIndex]],
+            });
+            reportWorkflowStatus = reportEnrichment.run.status;
+            reportFailureCategory = reportEnrichment.run.failureCategory;
+            reportRowsParsed = reportEnrichment.run.itemReportRowsParsed;
+
+            if (reportEnrichment.run.rows.length > 0) {
+              const hydratedFromReport = hydrateMissingContentFromItemReportRows(
+                reportCandidates,
+                reportEnrichment.run.rows
+              );
+
+              for (let index = 0; index < reportCandidates.length; index += 1) {
+                const before = reportCandidates[index];
+                const after = hydratedFromReport[index];
+                if (!before || !after || after === before) continue;
+                const skuKey = normalizeSkuKey(after.sku);
+                updatesBySku.set(skuKey, after);
+                reportHydratedSkus.add(skuKey);
+              }
+
+              reportCandidates = hydratedFromReport
+                .map((product) => updatesBySku.get(normalizeSkuKey(product.sku)) ?? product)
+                .filter((product) => contentNeedsHydration(product));
+            }
+
+            const shouldRetryLater =
+              attemptIndex === 0 &&
+              reportCandidates.length > 0 &&
+              reportEnrichment.run.status !== "ready";
+            if (shouldRetryLater) {
+              await sleep(WALMART_POST_IMPORT_ITEM_REPORT_RETRY_DELAY_MS);
+            }
+          }
+        }
+      } catch {
+        // best-effort background hydration; failures are logged in aggregate payload below
+      }
+    }
+
+    reportHydratedCount = reportHydratedSkus.size;
 
     if (updatesBySku.size === 0) {
       return;
@@ -2826,6 +2912,11 @@ export function queueWalmartPostImportLiveHydrationForUser(input: {
         requestedSkuCount: normalizedSkus.length,
         candidateSkuCount: queueCandidates.length,
         updatedSkuCount: updatesBySku.size,
+        liveHydratedCount,
+        itemReportHydratedCount: reportHydratedCount,
+        itemReportWorkflowStatus: reportWorkflowStatus,
+        itemReportFailureCategory: reportFailureCategory,
+        itemReportRowsParsed: reportRowsParsed,
       },
     });
   })()

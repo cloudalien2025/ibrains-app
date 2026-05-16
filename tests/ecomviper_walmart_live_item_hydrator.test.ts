@@ -271,6 +271,63 @@ describe("Walmart live item hydrator", () => {
     ]);
   });
 
+  it("falls back to explicit ITEM_ID lookup when SKU lookups miss", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      accessToken: "token_live",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      lastError: null,
+    });
+
+    const fetchMock = vi.fn().mockImplementation((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/items/LIVE-1?productIdType=SKU")) {
+        return Promise.resolve(jsonResponse({ error: "not found by sku type" }, 404));
+      }
+      if (url.endsWith("/v3/items/LIVE-1")) {
+        return Promise.resolve(jsonResponse({ error: "not found by plain sku path" }, 404));
+      }
+      if (url.includes("productIdType=ITEM_ID")) {
+        return Promise.resolve(
+          jsonResponse({
+            ItemResponse: [
+              {
+                sku: "LIVE-1",
+                productName: "Hydrated from ITEM_ID",
+                brand: "Live Brand",
+                siteDescription: "ITEM_ID short description",
+                longDescription: "ITEM_ID long description",
+                keyFeatures: ["ITEM_ID bullet one", "ITEM_ID bullet two"],
+                price: { amount: 22.5, currency: "USD" },
+                inventory: { quantity: 4 },
+              },
+            ],
+          })
+        );
+      }
+      return Promise.resolve(jsonResponse({ error: "unexpected endpoint" }, 404));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await hydrateLiveWalmartItemStateForUser({
+      userId: "user_item_id_fallback",
+      product: createProduct({
+        itemId: "123456789012",
+      }),
+      forceRefresh: true,
+    });
+
+    expect(fetchMock).toHaveBeenCalled();
+    expect(result.currentWalmartState.content.productName).toBe("Hydrated from ITEM_ID");
+    expect(result.currentWalmartState.content.siteDescription).toBe("ITEM_ID short description");
+    expect(result.currentWalmartState.content.longDescription).toBe("ITEM_ID long description");
+    expect(result.currentWalmartState.content.keyFeatures).toEqual([
+      "ITEM_ID bullet one",
+      "ITEM_ID bullet two",
+    ]);
+    expect(result.currentWalmartState.pricingInventory.currentPrice).toBe(22.5);
+  });
+
   it("falls back to snapshot hydration when Walmart credentials are unavailable", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: false,

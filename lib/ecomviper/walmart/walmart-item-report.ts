@@ -32,6 +32,9 @@ export interface WalmartItemReportRow {
   wpid: string;
   title: string;
   brand: string;
+  shelfDescription?: string;
+  longDescription?: string;
+  keyFeatures?: string[];
   primaryImageUrl: string;
   galleryImageUrls: string[];
   variantImageUrls: string[];
@@ -96,6 +99,10 @@ export interface WalmartItemReportEnrichmentResult {
   decisionsBySku: Map<string, WalmartItemReportProductDecision>;
 }
 
+interface WalmartItemReportWorkflowOptions {
+  statusPollDelaysMs?: number[];
+}
+
 function asString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -158,6 +165,18 @@ function dedupeUrls(values: unknown[]): string[] {
   const result: string[] = [];
   for (const value of values) {
     const normalized = normalizeImageUrl(value);
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function unique(values: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const value of values) {
+    const normalized = asString(value);
     if (!normalized || seen.has(normalized)) continue;
     seen.add(normalized);
     result.push(normalized);
@@ -539,6 +558,7 @@ async function getReportRequestStatus(params: {
   accessToken: string;
   reportRequestId: string;
   endpointFamily: WalmartItemReportEndpointFamily;
+  pollDelaysMs?: number[];
 }): Promise<{
   ok: boolean;
   timedOut: boolean;
@@ -550,8 +570,12 @@ async function getReportRequestStatus(params: {
 }> {
   const diagnostics: WalmartItemReportApiDiagnostic[] = [];
   const path = statusPath(params.reportRequestId, params.endpointFamily);
+  const pollDelaysMs =
+    params.pollDelaysMs && params.pollDelaysMs.length > 0
+      ? params.pollDelaysMs
+      : [...ITEM_REPORT_STATUS_POLL_DELAYS_MS];
 
-  for (let pollIndex = 0; pollIndex < ITEM_REPORT_STATUS_POLL_DELAYS_MS.length; pollIndex += 1) {
+  for (let pollIndex = 0; pollIndex < pollDelaysMs.length; pollIndex += 1) {
     const correlationId = crypto.randomUUID();
     const endpoint = new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
 
@@ -623,7 +647,7 @@ async function getReportRequestStatus(params: {
       diagnostics.push({ endpoint: path, httpStatus: null, ok: false });
     }
 
-    await sleep(ITEM_REPORT_STATUS_POLL_DELAYS_MS[pollIndex]);
+    await sleep(pollDelaysMs[pollIndex] ?? 0);
   }
 
   return {
@@ -727,6 +751,46 @@ function parseAdditionalImageUrls(raw: string): string[] {
   return dedupeUrls(trimmed.split(/[|;,\n\r\t ]+/g));
 }
 
+function parseDelimitedTextList(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      if (Array.isArray(parsed)) {
+        return unique(
+          parsed
+            .flatMap((entry) => {
+              if (typeof entry === "string") return [entry.trim()];
+              const objectEntry = asObject(entry);
+              if (!objectEntry) return [];
+              const value =
+                asString(objectEntry.value) ||
+                asString(objectEntry.text) ||
+                asString(objectEntry.description) ||
+                asString(objectEntry.label) ||
+                asString(objectEntry.title) ||
+                asString(objectEntry.name);
+              return value ? [value.trim()] : [];
+            })
+            .map((entry) => entry.replace(/^[-*]+\s*/, "").trim())
+            .filter(Boolean)
+        );
+      }
+    } catch {
+      // fall through to delimiter parsing
+    }
+  }
+
+  return unique(
+    trimmed
+      .split(/\r?\n|[|;]+/g)
+      .map((entry) => entry.replace(/^[-*]+\s*/, "").trim())
+      .filter(Boolean)
+  );
+}
+
 export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
   const rows = parseCsvRows(csvText);
   if (rows.length <= 1) return [];
@@ -740,6 +804,29 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
   const wpidIndex = findColumnIndex(header, ["WPID", "wpID", "Wpid"]);
   const titleIndex = findColumnIndex(header, ["ProductName", "Title", "Item Name", "name"]);
   const brandIndex = findColumnIndex(header, ["Brand", "Brand Name", "brandName"]);
+  const shelfDescriptionIndex = findColumnIndex(header, [
+    "ShelfDescription",
+    "Shelf Description",
+    "ShortDescription",
+    "Short Description",
+    "siteDescription",
+  ]);
+  const longDescriptionIndex = findColumnIndex(header, [
+    "LongDescription",
+    "Long Description",
+    "ProductDescription",
+    "Description",
+    "FullDescription",
+  ]);
+  const keyFeaturesIndex = findColumnIndex(header, [
+    "KeyFeatures",
+    "Key Features",
+    "BulletPoints",
+    "Bullet Points",
+    "Highlights",
+    "AboutThisItem",
+    "Features",
+  ]);
   const primaryImageIndex = findColumnIndex(header, ["PrimaryImageUrl", "Primary Image URL", "primaryImageUrl", "Main Image URL"]);
   const additionalImagesIndex = findColumnIndex(header, ["AdditionalImageUrls", "Additional Image URLs", "additionalImageUrls", "GalleryImageUrls"]);
   const variantImagesIndex = findColumnIndex(header, ["VariantImageUrls", "Variant Image URLs", "variantImageUrls"]);
@@ -763,6 +850,9 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
       wpid: wpidIndex >= 0 ? asString(row[wpidIndex]) : "",
       title: titleIndex >= 0 ? asString(row[titleIndex]) : "",
       brand: brandIndex >= 0 ? asString(row[brandIndex]) : "",
+      shelfDescription: shelfDescriptionIndex >= 0 ? asString(row[shelfDescriptionIndex]) : "",
+      longDescription: longDescriptionIndex >= 0 ? asString(row[longDescriptionIndex]) : "",
+      keyFeatures: keyFeaturesIndex >= 0 ? parseDelimitedTextList(asString(row[keyFeaturesIndex])) : [],
       primaryImageUrl,
       galleryImageUrls: dedupeUrls([
         primaryImageUrl,
@@ -1001,7 +1091,10 @@ async function downloadReport(params: {
   };
 }
 
-export async function runItemReportWorkflow(accessToken: string): Promise<WalmartItemReportRunResult> {
+export async function runItemReportWorkflow(
+  accessToken: string,
+  options: WalmartItemReportWorkflowOptions = {}
+): Promise<WalmartItemReportRunResult> {
   const requestResult = await requestItemReport(accessToken);
   if (!requestResult.ok || !requestResult.reportRequestId || !requestResult.endpointFamily) {
     return {
@@ -1032,6 +1125,7 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
     accessToken,
     reportRequestId: requestResult.reportRequestId,
     endpointFamily: requestResult.endpointFamily,
+    pollDelaysMs: options.statusPollDelaysMs,
   });
   if (!statusResult.ok || !statusResult.status) {
     return {
@@ -1149,6 +1243,91 @@ export async function runItemReportWorkflow(accessToken: string): Promise<Walmar
 
 function rowHasUsableImage(row: WalmartItemReportRow): boolean {
   return Boolean(row.primaryImageUrl || row.galleryImageUrls.length > 0 || row.variantImageUrls.length > 0);
+}
+
+const NON_MEANINGFUL_TEXT = new Set([
+  "unknown",
+  "not available",
+  "n/a",
+  "na",
+  "none",
+  "null",
+  "undefined",
+  "not provided",
+]);
+
+function isMeaningfulText(value: unknown): boolean {
+  const normalized = asString(value).trim().toLowerCase();
+  if (!normalized) return false;
+  return !NON_MEANINGFUL_TEXT.has(normalized);
+}
+
+function meaningfulTextList(value: string[] | undefined): string[] {
+  return (value ?? []).map((entry) => asString(entry)).filter((entry) => isMeaningfulText(entry));
+}
+
+function contentNeedsHydration(product: WalmartProductRecord): boolean {
+  const hasShort = isMeaningfulText(product.shortDescription);
+  const hasLong = isMeaningfulText(product.longDescription);
+  const hasBullets = meaningfulTextList(product.bulletPoints).length > 0;
+  return !(hasShort && hasLong && hasBullets);
+}
+
+function mergeMissingContentFromItemReportRow(
+  product: WalmartProductRecord,
+  row: WalmartItemReportRow
+): WalmartProductRecord | null {
+  const nextShortDescription = asString(row.shelfDescription);
+  const nextLongDescription = asString(row.longDescription);
+  const nextBulletPoints = meaningfulTextList(row.keyFeatures);
+
+  let changed = false;
+  const nextProduct: WalmartProductRecord = {
+    ...product,
+  };
+
+  if (!isMeaningfulText(nextProduct.shortDescription) && isMeaningfulText(nextShortDescription)) {
+    nextProduct.shortDescription = nextShortDescription;
+    changed = true;
+  }
+
+  if (!isMeaningfulText(nextProduct.longDescription) && isMeaningfulText(nextLongDescription)) {
+    nextProduct.longDescription = nextLongDescription;
+    changed = true;
+  }
+
+  if (meaningfulTextList(nextProduct.bulletPoints).length === 0 && nextBulletPoints.length > 0) {
+    nextProduct.bulletPoints = nextBulletPoints;
+    changed = true;
+  }
+
+  if (!changed) return null;
+
+  const now = new Date().toISOString();
+  const rawPayload = asObject(nextProduct.rawPayload) ?? {};
+  const normalizedPayload = asObject(nextProduct.normalizedPayload) ?? {};
+  const normalizedItemReportHydration = asObject(normalizedPayload.itemReportHydration) ?? {};
+
+  nextProduct.rawPayload = {
+    ...rawPayload,
+    itemReportContentHydratedAt: now,
+    itemReportRowIndex: row.rowIndex,
+  };
+  nextProduct.normalizedPayload = {
+    ...normalizedPayload,
+    itemReportHydration: {
+      ...normalizedItemReportHydration,
+      shortDescription: nextProduct.shortDescription,
+      longDescription: nextProduct.longDescription,
+      bulletPoints: [...nextProduct.bulletPoints],
+      rowIndex: row.rowIndex,
+      source: "walmart_item_report",
+      hydratedAt: now,
+    },
+  };
+  nextProduct.updatedAt = now;
+
+  return nextProduct;
 }
 
 function rowMatchQuality(row: WalmartItemReportRow): number {
@@ -1290,6 +1469,21 @@ function pickReportRowForProduct(
   return { row: null, method: null, rowMatched: false };
 }
 
+export function hydrateMissingContentFromItemReportRows(
+  products: WalmartProductRecord[],
+  rows: WalmartItemReportRow[]
+): WalmartProductRecord[] {
+  if (products.length === 0 || rows.length === 0) return products;
+
+  const indexes = buildRowIndexes(rows);
+  return products.map((product) => {
+    if (!contentNeedsHydration(product)) return product;
+    const matched = pickReportRowForProduct(product, indexes);
+    if (!matched.row) return product;
+    return mergeMissingContentFromItemReportRow(product, matched.row) ?? product;
+  });
+}
+
 export function enrichProductsFromParsedItemReport(params: {
   products: WalmartProductRecord[];
   rows: WalmartItemReportRow[];
@@ -1368,8 +1562,11 @@ export function enrichProductsFromParsedItemReport(params: {
 export async function enrichProductsFromItemReport(params: {
   accessToken: string;
   products: WalmartProductRecord[];
+  statusPollDelaysMs?: number[];
 }): Promise<WalmartItemReportEnrichmentResult> {
-  const run = await runItemReportWorkflow(params.accessToken);
+  const run = await runItemReportWorkflow(params.accessToken, {
+    statusPollDelaysMs: params.statusPollDelaysMs,
+  });
   const decisionsBySku = new Map<string, WalmartItemReportProductDecision>();
 
   const productsNeedingImage = params.products.filter((product) => !product.imageUrl.trim());
