@@ -87,47 +87,34 @@ function createStagedDraft(): WalmartDraftRecord {
 }
 
 describe("Walmart product optimizer client", () => {
-  it("renders guided workflow cards with one clear AI-first action path", () => {
+  it("renders single-docket workflow cards with inline optimize/publish actions", () => {
     const html = renderToStaticMarkup(
       <ProductEditorClient product={createProduct()} stagedDrafts={[]} aiProviderConnected={false} serpApiProviderConnected={false} />
     );
 
-    expect(html).toContain("ecomviper-walmart-product-editor-tabs");
-    expect(html).toContain("ecomviper-walmart-tab-review-listing");
-    expect(html).toContain("ecomviper-walmart-tab-improve-with-ai");
-    expect(html).toContain("ecomviper-walmart-tab-edit-submit");
-    expect(html).toContain("ecomviper-walmart-review-panel");
-    expect(html).toContain("ecomviper-walmart-improve-panel");
-    expect(html).toContain("ecomviper-walmart-edit-submit-panel");
+    expect(html).toContain("ecomviper-walmart-single-docket");
     expect(html).toContain("ecomviper-walmart-product-optimizer-summary");
-    expect(html).toContain("ecomviper-walmart-primary-actions");
+    expect(html).toContain("ecomviper-walmart-workflow-actions");
     expect(html).toContain("ecomviper-walmart-inline-ai-panel");
     expect(html).toContain("ecomviper-walmart-draft-editor-card");
     expect(html).toContain("ecomviper-walmart-product-form");
     expect(html).toContain("ecomviper-walmart-readiness");
     expect(html).toContain("Product Editor");
-    expect(html).toContain("Step 1 - Current Walmart Listing");
-    expect(html).toContain("Step 2 - Optimize Listing with AI");
-    expect(html).toContain("Step 3 - Review and Publish");
+    expect(html).toContain("Walmart Docket");
     expect(html).toContain("SKU: 30066-841");
     expect(html).toContain("Agentic Visibility Score");
     expect(html).toContain("View validation");
     expect(html).toContain("30066-841");
     expect(html).toContain("Inventory:</span> 9");
-    expect(html).toContain("Optimize Listing with AI");
-    expect(html).toContain(
-      "Optimize title, descriptions, bullets, and search &amp; browse attributes without leaving this page."
-    );
-    expect(html).toContain("Generate AI optimized Walmart-native proposal");
-    expect(html).toContain("Rule-based suggestions");
-    expect(html).toContain("No auto-submit. Changes remain in draft until approved.");
-    expect(html).toContain("Stage rule-based suggestions");
+    expect(html).toContain("Optimize with AI");
+    expect(html).toContain("Publish to Walmart");
+    expect(html).toContain("Optimize updates this docket in place");
     expect(html).not.toContain("Open AI Optimizer");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain("Preview + Validate");
     expect(html).not.toContain("Before / Original payload snapshot");
     expect(html).not.toContain("After / Normalized draft preview");
-    expect(html).toContain("Validation is checked continuously and before marking a draft publish-ready.");
+    expect(html).toContain("Validation is checked continuously and before guarded publish confirmation.");
   });
 
   it("renders staged changes section with proposal data", () => {
@@ -157,8 +144,7 @@ describe("Walmart product optimizer client", () => {
       />
     );
 
-    expect(html).toContain("Source image lane");
-    expect(html).toContain("walmart_item_report");
+    expect(html).toContain("Source: Walmart Item Report");
   });
 
   it("hydrates editable fields from normalized/raw payload and routes optimize action to current SKU", () => {
@@ -198,7 +184,7 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain('>Normalized short description</textarea>');
     expect(html).toContain("Normalized bullet one");
     expect(html).toContain('value="Payload Brand"');
-    expect(html).toContain("Generate AI optimized Walmart-native proposal");
+    expect(html).toContain("Optimize with AI");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });

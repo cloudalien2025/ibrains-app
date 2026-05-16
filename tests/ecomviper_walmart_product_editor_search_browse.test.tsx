@@ -120,13 +120,6 @@ describe("Walmart Search & Browse editor hydration", () => {
       );
     });
 
-    const editWorkflowTab = container.querySelector(
-      '[data-testid="ecomviper-walmart-tab-edit-submit"]'
-    ) as HTMLButtonElement;
-    await act(async () => {
-      editWorkflowTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
     expect(container.textContent).toContain("Search & Browse");
     expect(container.textContent).toContain("Image-derived facts status: unknown");
     expect(container.innerHTML).toContain("Joint comfort, mobility");

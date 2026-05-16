@@ -8,18 +8,18 @@ import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types
 
 function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {
   return {
-    id: "walmart_tabflow_1",
+    id: "walmart_single_docket_1",
     marketplace: "walmart",
-    sku: "TABFLOW-1",
-    externalItemId: "wm_tabflow_1",
-    title: "Tabbed Workflow Product",
+    sku: "SINGLE-DOCKET-1",
+    externalItemId: "wm_single_docket_1",
+    title: "Single Docket Product",
     brand: "Workflow Brand",
     category: "Supplements",
     price: 24.99,
     inventoryQuantity: 14,
     inventoryStatus: "known",
     status: "attention",
-    imageUrl: "https://images.example.com/tabflow-primary.jpg",
+    imageUrl: "https://images.example.com/single-docket-primary.jpg",
     imageStatus: "available",
     imageStatusMessage: "Image available",
     imageSyncStatus: "found",
@@ -27,8 +27,9 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     issues: ["Add more search attributes", "Improve FAQ coverage"],
     attributes: { product_form: "Capsule", target_audience: "Adult" },
     shortDescription: "Current short description",
-    longDescription: "Current long description",
-    bulletPoints: ["Current bullet 1", "Current bullet 2"],
+    longDescription:
+      "Current long description. These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+    bulletPoints: ["Current bullet 1", "Current bullet 2", "Current bullet 3"],
     rawPayload: {
       salePrice: 19.99,
       fulfillmentType: "WFS",
@@ -37,8 +38,8 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     },
     normalizedPayload: {
       galleryImageUrls: [
-        "https://images.example.com/tabflow-primary.jpg",
-        "https://images.example.com/tabflow-gallery-1.jpg",
+        "https://images.example.com/single-docket-primary.jpg",
+        "https://images.example.com/single-docket-gallery-1.jpg",
       ],
       searchBrowseAttributes: {
         product_form: "Capsule",
@@ -52,7 +53,14 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
   };
 }
 
-describe("Walmart product editor tabbed workflow", () => {
+function flush() {
+  return act(async () => {
+    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+describe("Walmart product editor single docket workflow", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -61,7 +69,6 @@ describe("Walmart product editor tabbed workflow", () => {
     document.body.appendChild(container);
     root = createRoot(container);
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
     (globalThis.HTMLElement.prototype as unknown as { scrollIntoView?: () => void }).scrollIntoView = vi.fn();
   });
 
@@ -75,7 +82,7 @@ describe("Walmart product editor tabbed workflow", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders 3-step Walmart docket workflow tabs with expected panel content", async () => {
+  it("renders one visible Walmart docket with required section order and bottom actions", async () => {
     await act(async () => {
       root.render(
         <ProductEditorClient
@@ -87,186 +94,198 @@ describe("Walmart product editor tabbed workflow", () => {
       );
     });
 
-    expect(container.querySelector('[data-testid="ecomviper-walmart-product-editor-tabs"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-tab-review-listing"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-tab-improve-with-ai"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-tab-edit-submit"]')).not.toBeNull();
-    expect(container.textContent).toContain("Step 1 - Current Walmart Listing");
-    expect(container.textContent).toContain("Step 2 - Optimize Listing with AI");
-    expect(container.textContent).toContain("Step 3 - Review and Publish");
+    expect(container.querySelector('[data-testid="ecomviper-walmart-product-editor-tabs"]')).toBeNull();
+    expect(container.textContent).not.toContain("Step 1 - Current Walmart Listing");
+    expect(container.textContent).not.toContain("Step 2 - Optimize Listing with AI");
+    expect(container.textContent).not.toContain("Step 3 - Review and Publish");
 
-    const reviewPanel = container.querySelector(
-      '[data-testid="ecomviper-walmart-review-panel"]'
-    ) as HTMLElement;
-    expect(reviewPanel.className.includes("hidden")).toBe(false);
-    expect(reviewPanel.textContent).toContain("Step 1 - Current Walmart Listing");
-    expect(reviewPanel.textContent).toContain(
-      "Current listing data hydrated from Walmart, public catalog, Shopify import fallback, and source diagnostics."
-    );
-    expect(reviewPanel.textContent).not.toContain("FAQ & Readiness Content");
-    expect(reviewPanel.textContent).not.toContain("AI Visibility");
-    expect(container.querySelector('[data-testid="ecomviper-walmart-current-listing-content"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-current-listing-media"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-current-listing-pricing-inventory"]')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-current-listing-search-browse"]')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-source-confidence-panel"]')
-    ).not.toBeNull();
-    expect(container.textContent).toContain("Refresh catalog details");
-    expect(container.textContent).toContain(
-      "Refreshes EcomViper's local catalog understanding. This does not publish changes to Walmart."
-    );
-    expect(reviewPanel.textContent).toContain("Lookup identifiers (SKU / GTIN / UPC):");
-    expect(reviewPanel.textContent).toContain(
-      "GTIN/UPC are lookup identifiers only and never used as Walmart public PDP item IDs."
-    );
+    const singleDocket = container.querySelector(
+      '[data-testid="ecomviper-walmart-single-docket"]'
+    ) as HTMLElement | null;
+    expect(singleDocket).not.toBeNull();
 
-    const improveTab = container.querySelector(
-      '[data-testid="ecomviper-walmart-tab-improve-with-ai"]'
-    ) as HTMLButtonElement;
-    await act(async () => {
-      improveTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    const contentSection = container.querySelector(
+      '[data-testid="ecomviper-walmart-docket-content"]'
+    ) as HTMLElement | null;
+    const mediaSection = container.querySelector(
+      '[data-testid="ecomviper-walmart-docket-media"]'
+    ) as HTMLElement | null;
+    const pricingSection = container.querySelector(
+      '[data-testid="ecomviper-walmart-docket-pricing-inventory"]'
+    ) as HTMLElement | null;
+    const searchBrowseSection = container.querySelector(
+      '[data-testid="ecomviper-walmart-docket-search-browse"]'
+    ) as HTMLElement | null;
+    expect(contentSection).not.toBeNull();
+    expect(mediaSection).not.toBeNull();
+    expect(pricingSection).not.toBeNull();
+    expect(searchBrowseSection).not.toBeNull();
 
-    const improvePanel = container.querySelector(
-      '[data-testid="ecomviper-walmart-improve-panel"]'
-    ) as HTMLElement;
-    expect(improvePanel.className.includes("hidden")).toBe(false);
-    expect(container.textContent).toContain("Optimize Listing with AI");
-    expect(container.textContent).toContain("Step 2 - Optimize Listing with AI");
-    expect(container.textContent).toContain(
-      "AI-optimized listing proposal using the same Walmart docket structure, with compliance-safe copy and marketplace readiness improvements."
-    );
-    expect(container.querySelector('[data-testid="ecomviper-walmart-agentic-visibility-score"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-content"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-media"]')).not.toBeNull();
     expect(
-      container.querySelector('[data-testid="ecomviper-walmart-improve-docket-pricing-inventory"]')
-    ).not.toBeNull();
+      Boolean(
+        contentSection &&
+          mediaSection &&
+          (contentSection.compareDocumentPosition(mediaSection) & Node.DOCUMENT_POSITION_FOLLOWING)
+      )
+    ).toBe(true);
     expect(
-      container.querySelector('[data-testid="ecomviper-walmart-improve-docket-search-browse"]')
-    ).not.toBeNull();
+      Boolean(
+        mediaSection &&
+          pricingSection &&
+          (mediaSection.compareDocumentPosition(pricingSection) & Node.DOCUMENT_POSITION_FOLLOWING)
+      )
+    ).toBe(true);
+    expect(
+      Boolean(
+        pricingSection &&
+          searchBrowseSection &&
+          (pricingSection.compareDocumentPosition(searchBrowseSection) & Node.DOCUMENT_POSITION_FOLLOWING)
+      )
+    ).toBe(true);
 
-    const editTab = container.querySelector(
-      '[data-testid="ecomviper-walmart-tab-edit-submit"]'
-    ) as HTMLButtonElement;
-    await act(async () => {
-      editTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    const generatePanel = container.querySelector(
+      '[data-testid="ecomviper-walmart-generate-product-images"]'
+    ) as HTMLElement | null;
+    expect(generatePanel).not.toBeNull();
+    expect(Boolean(mediaSection?.parentElement?.contains(generatePanel))).toBe(true);
+    expect(container.querySelectorAll('[data-testid="ecomviper-walmart-generate-product-images"]')).toHaveLength(1);
 
-    const editPanel = container.querySelector(
-      '[data-testid="ecomviper-walmart-edit-submit-panel"]'
-    ) as HTMLElement;
-    expect(editPanel.className.includes("hidden")).toBe(false);
-    expect(container.querySelector('[data-testid="ecomviper-walmart-final-draft-editor"]')).not.toBeNull();
-    expect(container.textContent).toContain("Save Draft");
-    expect(container.textContent).toContain("Mark Publish-Ready");
-    expect(container.textContent).toContain("Step 3 - Review and Publish");
-    expect(container.textContent).toContain(
-      "Review, edit, and publish-ready Walmart maintenance draft. Nothing is submitted until the user approves/publishes."
-    );
-    expect(container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-content"]')).not.toBeNull();
-    expect(container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-media"]')).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-pricing-inventory"]')
-    ).not.toBeNull();
-    expect(
-      container.querySelector('[data-testid="ecomviper-walmart-edit-submit-docket-search-browse"]')
-    ).not.toBeNull();
-    expect(container.textContent).toContain("Readiness & validation");
-    expect(container.textContent).toContain("Staged changes");
+    expect(container.textContent).toContain("Optimize with AI");
+    expect(container.textContent).toContain("Publish to Walmart");
+    expect(container.textContent).not.toContain("Optimize Listing with AI");
+    expect(container.textContent).not.toContain("Mark Publish-Ready");
   });
 
-  it("preserves draft edits when switching workflow tabs", async () => {
-    await act(async () => {
-      root.render(
-        <ProductEditorClient
-          product={createProduct()}
-          stagedDrafts={[]}
-          aiProviderConnected={true}
-          serpApiProviderConnected={true}
-        />
-      );
-    });
-
-    const editTab = container.querySelector(
-      '[data-testid="ecomviper-walmart-tab-edit-submit"]'
-    ) as HTMLButtonElement;
-    await act(async () => {
-      editTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
-    const titleInput = container.querySelector('input[value="Tabbed Workflow Product"]') as
-      | HTMLInputElement
-      | null;
-    expect(titleInput).not.toBeNull();
-
-    await act(async () => {
-      titleInput?.dispatchEvent(new FocusEvent("focus", { bubbles: true }));
-      if (titleInput) {
-        const setter = Object.getOwnPropertyDescriptor(
-          HTMLInputElement.prototype,
-          "value"
-        )?.set;
-        setter?.call(titleInput, "Edited Draft Title");
+  it("optimizes in place without triggering publish submission", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+      if (url.includes("/api/ecomviper/walmart/ai/generate")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              ok: true,
+              suggestion: {
+                sku: "SINGLE-DOCKET-1",
+                qualityScore: 90,
+                suggestedTitle: "Single Docket Product | Optimized",
+                suggestedShortDescription: "Optimized short summary",
+                suggestedDescription: "Optimized long listing description",
+                suggestedBullets: [
+                  "Optimized bullet 1",
+                  "Optimized bullet 2",
+                  "Optimized bullet 3",
+                ],
+                suggestedBrand: "Workflow Brand",
+                suggestedAttributes: { material: "Plant-based" },
+                searchBrowseAttributes: { product_type: "Dietary Supplement" },
+                missingAttributes: [],
+                complianceWarnings: [],
+                disclaimer: "Review claims before publish.",
+              },
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } }
+          )
+        );
       }
-      titleInput?.dispatchEvent(new Event("input", { bubbles: true }));
-      titleInput?.dispatchEvent(new Event("change", { bubbles: true }));
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { message: "not mocked" } }), { status: 500 })
+      );
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
     });
 
-    const reviewTab = container.querySelector(
-      '[data-testid="ecomviper-walmart-tab-review-listing"]'
+    const optimizeButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-optimize-button"]'
     ) as HTMLButtonElement;
     await act(async () => {
-      reviewTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      optimizeButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
+    await flush();
 
-    await act(async () => {
-      editTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    const titleInput = container.querySelector(
+      'input[value="Single Docket Product | Optimized"]'
+    ) as HTMLInputElement | null;
+    expect(titleInput).not.toBeNull();
+    expect(container.textContent).toContain("Optimized draft ready for review");
 
-    const persistedTitleInput = container.querySelector('input[value="Edited Draft Title"]');
-    expect(persistedTitleInput).not.toBeNull();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const [requestUrl] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(requestUrl).toBe("/api/ecomviper/walmart/ai/generate");
+
+    const scoreText = container.textContent ?? "";
+    const scoreMatch = scoreText.match(/Current score:\s*(\d+)\/100[\s\S]*Optimized score:\s*(\d+)\/100/);
+    expect(scoreMatch).not.toBeNull();
+    if (scoreMatch) {
+      expect(Number(scoreMatch[2])).toBeGreaterThanOrEqual(Number(scoreMatch[1]));
+    }
   });
 
-  it("renders ROC303-style public listing fallback content and canonical listing URL in Step 1", async () => {
+  it("runs guarded publish confirmation and returns preview_only_no_publish_route", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct()}
+          stagedDrafts={[]}
+          aiProviderConnected={true}
+          serpApiProviderConnected={true}
+        />
+      );
+    });
+
+    const publishButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-publish-button"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      publishButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("ready_for_confirmation");
+    const confirmButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Confirm Publish"
+    ) as HTMLButtonElement | undefined;
+    expect(confirmButton).toBeDefined();
+
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
+
+    expect(container.textContent).toContain("preview_only_no_publish_route");
+    expect(container.textContent).toContain("nothing was submitted");
+    expect(fetchMock).toHaveBeenCalledTimes(0);
+  });
+
+  it("blocks publish with validation errors", async () => {
     await act(async () => {
       root.render(
         <ProductEditorClient
           product={createProduct({
-            sku: "ROC303",
-            title: "OPA Enzymes Prebiotic Probiotics For Men And Women - 60 Ct",
+            title: "",
+            price: 0,
             shortDescription: "",
             longDescription: "",
             bulletPoints: [],
-            brand: "",
-            itemId: "2791205430",
-            publicWalmartUrl:
-              "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-For-Men-And-Women-60-Ct/2791205430?athbdg=L1600",
-            rawPayload: {
-              content: {
-                shortDescription:
-                  "OPA Gut Enzyme & Probiotic Digestive Balance support for women and men.",
-                longDescription:
-                  "Digestive Enzymes, Probiotic Support, Plant-Based Enzymes, Gut Balance, and Vegetable Capsules in a clean formula.",
-                keyFeatures: [
-                  "Digestive Enzymes",
-                  "Probiotic Support",
-                  "Plant-Based Enzymes",
-                  "Gut Balance",
-                  "Vegetable Capsules",
-                  "Clean Formula",
-                ],
-                brand: "OPA Nutrition",
-                manufacturer: "OPA Nutrition",
-                itemPageUrl:
-                  "https://www.walmart.com/ip/OPA-Enzymes-Prebiotic-Probiotics-For-Men-And-Women-60-Ct/2791205430?athbdg=L1600",
-              },
-            },
+            normalizedPayload: {},
+            rawPayload: {},
           })}
           stagedDrafts={[]}
           aiProviderConnected={false}
@@ -275,21 +294,16 @@ describe("Walmart product editor tabbed workflow", () => {
       );
     });
 
-    const contentPanel = container.querySelector(
-      '[data-testid="ecomviper-walmart-current-listing-content"]'
-    ) as HTMLElement;
-    const mediaPanel = container.querySelector(
-      '[data-testid="ecomviper-walmart-current-listing-media"]'
-    ) as HTMLElement;
+    const publishButton = container.querySelector(
+      '[data-testid="ecomviper-walmart-publish-button"]'
+    ) as HTMLButtonElement;
+    await act(async () => {
+      publishButton.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await flush();
 
-    expect(contentPanel.textContent).toContain("OPA Gut Enzyme & Probiotic Digestive Balance");
-    expect(contentPanel.textContent).toContain("Digestive Enzymes");
-    expect(contentPanel.textContent).toContain("Probiotic Support");
-    expect(contentPanel.textContent).toContain("OPA Nutrition");
-    expect(contentPanel.textContent).not.toContain("No bullet points currently available.");
-
-    expect(mediaPanel.textContent).toContain("https://www.walmart.com/ip/2791205430");
-    expect(mediaPanel.textContent).toContain("Public Walmart item ID: 2791205430");
+    expect(container.textContent).toContain("blocked_validation_errors");
+    expect(container.textContent).toContain("Product title is required before publish.");
   });
 
   it("shows skipped_no_credentials state after manual catalog refresh", async () => {
