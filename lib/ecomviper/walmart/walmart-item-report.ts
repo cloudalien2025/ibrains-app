@@ -33,9 +33,16 @@ export interface WalmartItemReportRow {
   wpid: string;
   title: string;
   brand: string;
+  manufacturer?: string;
+  productCategory?: string;
+  productType?: string;
+  publishedStatus?: string;
+  siteDescription?: string;
   shelfDescription?: string;
   longDescription?: string;
   keyFeatures?: string[];
+  searchKeywords?: string;
+  complianceNotes?: string[];
   price?: number | null;
   salePrice?: number | null;
   currency?: string;
@@ -679,18 +686,25 @@ async function getReportRequestStatus(params: {
   };
 }
 
-function parseCsvRows(csvText: string): string[][] {
+function detectTabularDelimiter(content: string): "," | "\t" {
+  const firstLine = content.split(/\r?\n/, 1)[0] ?? "";
+  const commaCount = (firstLine.match(/,/g) ?? []).length;
+  const tabCount = (firstLine.match(/\t/g) ?? []).length;
+  return tabCount > commaCount ? "\t" : ",";
+}
+
+function parseSeparatedRows(content: string, delimiter: "," | "\t"): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
   let inQuotes = false;
 
-  for (let index = 0; index < csvText.length; index += 1) {
-    const char = csvText[index] ?? "";
+  for (let index = 0; index < content.length; index += 1) {
+    const char = content[index] ?? "";
 
     if (inQuotes) {
       if (char === '"') {
-        const next = csvText[index + 1] ?? "";
+        const next = content[index + 1] ?? "";
         if (next === '"') {
           cell += '"';
           index += 1;
@@ -708,7 +722,7 @@ function parseCsvRows(csvText: string): string[][] {
       continue;
     }
 
-    if (char === ",") {
+    if (char === delimiter) {
       row.push(cell);
       cell = "";
       continue;
@@ -735,6 +749,10 @@ function parseCsvRows(csvText: string): string[][] {
   }
 
   return rows.filter((entry) => entry.some((value) => value.trim().length > 0));
+}
+
+function parseCsvRows(csvText: string): string[][] {
+  return parseSeparatedRows(csvText, ",");
 }
 
 function findColumnIndex(header: string[], aliases: string[]): number {
@@ -817,18 +835,30 @@ export function itemReportRowToDocketSourcePayload(row: WalmartItemReportRow): R
   if (row.fulfillmentType) attributes.fulfillment_type = row.fulfillmentType;
   if (row.shipNode) attributes.ship_node = row.shipNode;
   if (row.brand) attributes.brand = row.brand;
+  if (row.manufacturer) attributes.manufacturer = row.manufacturer;
+  if (row.productCategory) attributes.category = row.productCategory;
+  if (row.productType) attributes.product_type = row.productType;
+  if (row.searchKeywords) attributes.search_keywords = row.searchKeywords;
+  if (row.publishedStatus) attributes.published_status = row.publishedStatus;
 
   return {
     sku: row.sku,
     title: row.title,
     brand: row.brand,
+    manufacturer: row.manufacturer ?? "",
     itemId: row.itemId,
     usItemId: row.itemId,
     productId: row.productId,
     productIdType: row.productIdType,
-    siteDescription: row.shelfDescription ?? "",
+    siteDescription: row.siteDescription ?? row.shelfDescription ?? "",
+    shelfDescription: row.shelfDescription ?? row.siteDescription ?? "",
     fullDescription: row.longDescription ?? "",
     keyFeatures: row.keyFeatures ?? [],
+    productType: row.productType ?? "",
+    category: row.productCategory ?? "",
+    publishedStatus: row.publishedStatus ?? "",
+    searchKeywords: row.searchKeywords ?? "",
+    complianceNotes: row.complianceNotes ?? [],
     primaryImage: row.primaryImageUrl,
     additionalImages: unique(
       [row.primaryImageUrl, ...row.galleryImageUrls, ...row.variantImageUrls].filter(Boolean)
@@ -848,7 +878,8 @@ export function itemReportRowToDocketSourcePayload(row: WalmartItemReportRow): R
 }
 
 export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
-  const rows = parseCsvRows(csvText);
+  const delimiter = detectTabularDelimiter(csvText);
+  const rows = parseSeparatedRows(csvText, delimiter);
   if (rows.length <= 1) return [];
 
   const [header, ...bodyRows] = rows;
@@ -860,6 +891,17 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
   const wpidIndex = findColumnIndex(header, ["WPID", "wpID", "Wpid"]);
   const titleIndex = findColumnIndex(header, ["ProductName", "Title", "Item Name", "name"]);
   const brandIndex = findColumnIndex(header, ["Brand", "Brand Name", "brandName"]);
+  const manufacturerIndex = findColumnIndex(header, ["Manufacturer", "Manufacturer Name", "manufacturerName"]);
+  const categoryIndex = findColumnIndex(header, ["ProductCategory", "Product Category", "Category"]);
+  const productTypeIndex = findColumnIndex(header, ["ProductType", "Product Type", "ItemType", "Type"]);
+  const publishedStatusIndex = findColumnIndex(header, [
+    "PublishedStatus",
+    "Published Status",
+    "LifecycleStatus",
+    "Lifecycle Status",
+    "Status",
+  ]);
+  const siteDescriptionIndex = findColumnIndex(header, ["SiteDescription", "Site Description"]);
   const shelfDescriptionIndex = findColumnIndex(header, [
     "ShelfDescription",
     "Shelf Description",
@@ -882,6 +924,19 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
     "Highlights",
     "AboutThisItem",
     "Features",
+  ]);
+  const searchKeywordsIndex = findColumnIndex(header, [
+    "SearchKeywords",
+    "Search Keywords",
+    "SearchTerms",
+    "Search Terms",
+  ]);
+  const complianceNotesIndex = findColumnIndex(header, [
+    "ComplianceNotes",
+    "Compliance Notes",
+    "RestrictionNotes",
+    "Restriction Notes",
+    "Warnings",
   ]);
   const primaryImageIndex = findColumnIndex(header, ["PrimaryImageUrl", "Primary Image URL", "primaryImageUrl", "Main Image URL"]);
   const additionalImagesIndex = findColumnIndex(header, ["AdditionalImageUrls", "Additional Image URLs", "additionalImageUrls", "GalleryImageUrls"]);
@@ -943,9 +998,19 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
       wpid: wpidIndex >= 0 ? asString(row[wpidIndex]) : "",
       title: titleIndex >= 0 ? asString(row[titleIndex]) : "",
       brand: brandIndex >= 0 ? asString(row[brandIndex]) : "",
+      manufacturer: manufacturerIndex >= 0 ? asString(row[manufacturerIndex]) : "",
+      productCategory: categoryIndex >= 0 ? asString(row[categoryIndex]) : "",
+      productType: productTypeIndex >= 0 ? asString(row[productTypeIndex]) : "",
+      publishedStatus: publishedStatusIndex >= 0 ? asString(row[publishedStatusIndex]) : "",
+      siteDescription: siteDescriptionIndex >= 0 ? asString(row[siteDescriptionIndex]) : "",
       shelfDescription: shelfDescriptionIndex >= 0 ? asString(row[shelfDescriptionIndex]) : "",
       longDescription: longDescriptionIndex >= 0 ? asString(row[longDescriptionIndex]) : "",
       keyFeatures: keyFeaturesIndex >= 0 ? parseDelimitedTextList(asString(row[keyFeaturesIndex])) : [],
+      searchKeywords: searchKeywordsIndex >= 0 ? asString(row[searchKeywordsIndex]) : "",
+      complianceNotes:
+        complianceNotesIndex >= 0
+          ? parseDelimitedTextList(asString(row[complianceNotesIndex]))
+          : [],
       price: priceIndex >= 0 ? parseNumber(row[priceIndex]) : null,
       salePrice: salePriceIndex >= 0 ? parseNumber(row[salePriceIndex]) : null,
       currency: currencyIndex >= 0 ? asString(row[currencyIndex]).toUpperCase() : "",

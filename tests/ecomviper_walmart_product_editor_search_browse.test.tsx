@@ -207,6 +207,52 @@ describe("Walmart Search & Browse editor hydration", () => {
     expect(container.textContent).toContain("Hydration status");
     expect(container.textContent).toContain("Imported docket ready");
     expect(container.textContent).toContain("Report backfill pending");
+    expect(container.textContent).toContain("Docket Freshness / Report Backfill");
+    expect(container.textContent).toContain("Request ITEM Report");
+    expect(container.textContent).toContain("Check Report Status");
+    expect(container.textContent).toContain("Apply Ready Report");
+    expect(
+      container.querySelector('[data-testid="ecomviper-walmart-docket-freshness-panel"]')
+    ).not.toBeNull();
     expect(container.innerHTML).toContain("Joint support");
+  });
+
+  it("shows truthful no-credentials ITEM report blocked state without hiding existing docket fields", async () => {
+    const docket = createEmptyWalmartDocket({
+      sku: "ROC949",
+      statuses: ["imported_docket_ready", "report_unavailable"],
+    });
+    docket.content.shortDescription.value = "Existing short";
+    docket.content.longDescription.value = "Existing long";
+    docket.content.bullets.value = ["Existing bullet"];
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            shortDescription: "Existing short",
+            longDescription: "Existing long",
+            bulletPoints: ["Existing bullet"],
+            docket,
+            normalizedPayload: {
+              docketHydrationStatus: ["imported_docket_ready", "report_unavailable"],
+              itemReportBackfill: {
+                status: "request_blocked_no_credentials",
+                requestId: null,
+                reportType: "ITEM",
+              },
+            },
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    expect(container.textContent).toContain("No Walmart credentials configured for ITEM report backfill.");
+    expect(container.textContent).toContain("Existing short");
+    expect(container.textContent).toContain("Existing long");
+    expect(container.textContent).toContain("Existing bullet");
   });
 });
