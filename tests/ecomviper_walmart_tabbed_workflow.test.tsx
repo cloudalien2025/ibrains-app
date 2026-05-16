@@ -136,11 +136,12 @@ describe("Walmart product editor tabbed workflow", () => {
       '[data-testid="ecomviper-walmart-improve-panel"]'
     ) as HTMLElement;
     expect(improvePanel.className.includes("hidden")).toBe(false);
-    expect(container.textContent).toContain("Generate AI Improvements");
+    expect(container.textContent).toContain("Optimize Listing with AI");
     expect(container.textContent).toContain("Step 2 - Optimize Listing with AI");
     expect(container.textContent).toContain(
       "AI-optimized listing proposal using the same Walmart docket structure, with compliance-safe copy and marketplace readiness improvements."
     );
+    expect(container.querySelector('[data-testid="ecomviper-walmart-agentic-visibility-score"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-content"]')).not.toBeNull();
     expect(container.querySelector('[data-testid="ecomviper-walmart-improve-docket-media"]')).not.toBeNull();
     expect(

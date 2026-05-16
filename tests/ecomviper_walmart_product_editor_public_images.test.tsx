@@ -1068,15 +1068,6 @@ describe("Walmart product editor public listing image flow", () => {
     });
     await flush();
 
-    const mediaTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Media"
-    ) as HTMLButtonElement | undefined;
-    expect(mediaTab).toBeDefined();
-    await act(async () => {
-      mediaTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    await flush();
-
     expect(container.textContent).toContain("Source: Shopify variant image");
     expect(container.textContent).toContain("Gallery images: 3");
     expect(container.textContent).toContain("Variant images: 1");

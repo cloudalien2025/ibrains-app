@@ -127,26 +127,12 @@ describe("Walmart Search & Browse editor hydration", () => {
       editWorkflowTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    const searchBrowseTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "Search & Browse"
-    ) as HTMLButtonElement;
-    await act(async () => {
-      searchBrowseTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-
     expect(container.textContent).toContain("Search & Browse");
     expect(container.textContent).toContain("Image-derived facts status: unknown");
     expect(container.innerHTML).toContain("Joint comfort, mobility");
     expect(
       container.querySelector('[data-testid="ecomviper-walmart-search-browse-section"]')
     ).not.toBeNull();
-
-    const faqTab = Array.from(container.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "FAQ"
-    ) as HTMLButtonElement;
-    await act(async () => {
-      faqTab.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
 
     expect(container.querySelector('[data-testid="ecomviper-walmart-faq-section"]')).not.toBeNull();
     const faqTextarea = container.querySelector(

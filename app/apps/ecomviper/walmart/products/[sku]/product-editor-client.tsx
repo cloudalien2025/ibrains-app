@@ -69,14 +69,6 @@ interface ProductEditorClientProps {
   hydratedCurrentWalmartState?: WalmartNativeState;
 }
 
-const tabs = [
-  "Content",
-  "Media",
-  "Pricing & Inventory",
-  "Search & Browse",
-  "FAQ",
-  "Sync History",
-] as const;
 const workflowTabs = [
   {
     key: "review",
@@ -307,7 +299,7 @@ interface WalmartGeneratedReferenceImage {
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type InlineAiOutcome = "improved" | "unchanged" | "worse";
 
-const INLINE_AI_LOADING_MESSAGE = "Generating AI improvements...";
+const INLINE_AI_LOADING_MESSAGE = "Optimizing listing with AI...";
 const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
@@ -1366,6 +1358,18 @@ function formatCatalogFieldAction(action: CatalogBackfillFieldAction): string {
   return "Skipped user edited";
 }
 
+function scoreCoverage(parts: Array<boolean>): number {
+  if (!parts.length) return 0;
+  const present = parts.filter(Boolean).length;
+  return Math.round((present / parts.length) * 100);
+}
+
+function scoreLabel(score: number): "high" | "medium" | "low" {
+  if (score >= 80) return "high";
+  if (score >= 55) return "medium";
+  return "low";
+}
+
 export default function ProductEditorClient({
   product,
   stagedDrafts,
@@ -1379,7 +1383,6 @@ export default function ProductEditorClient({
   );
   const safeStagedDrafts = draftHardening.drafts;
   const [workflowTab, setWorkflowTab] = useState<WorkflowTabKey>("review");
-  const [activeTab, setActiveTab] = useState<(typeof tabs)[number]>("Content");
   const initialForm = useMemo(
     () => hydrateEditorForm(product, safeStagedDrafts),
     [product, safeStagedDrafts]
@@ -1731,6 +1734,13 @@ export default function ProductEditorClient({
   );
   const optimizedProposalState = optimizedProposalLayer.optimizedProposalState;
   const editableDraftState = editableDraftLayer.editableDraftState;
+  const currentListingQuality = useMemo(
+    () =>
+      assessWalmartListingQuality(
+        mergeWalmartDraftPayloadIntoProduct(product, currentWalmartStateDraftPayload)
+      ),
+    [product, currentWalmartStateDraftPayload]
+  );
 
   const complianceValidation = useMemo(
     () => evaluateWalmartListingCompliance(preview),
@@ -3005,7 +3015,6 @@ export default function ProductEditorClient({
     setAiSuggestionApplied(true);
     setWorkflowTab("edit-submit");
     setDraftEditorOpen(true);
-    setActiveTab("Content");
     setShowAiDetails(false);
     setInlineAiState("success");
     const contentSummary = appliedContentFields.length
@@ -3287,29 +3296,6 @@ export default function ProductEditorClient({
         <p className="mt-1 text-xs text-[#64748B]">
           Source of truth: {currentWalmartState.sourceOfTruth.join(", ")}
         </p>
-        <div
-          className="mt-2 grid gap-1 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] px-3 py-2 text-xs text-[#334155]"
-          data-testid="ecomviper-walmart-live-hydration-status"
-        >
-          <p>
-            <span className="text-[#64748B]">Hydration source:</span>{" "}
-            {currentWalmartState.hydration.source}
-          </p>
-          <p>
-            <span className="text-[#64748B]">Hydration status:</span>{" "}
-            {currentWalmartState.hydration.status}
-          </p>
-          <p>
-            <span className="text-[#64748B]">Hydrated at:</span>{" "}
-            {currentWalmartState.hydration.hydratedAt}
-          </p>
-          {currentWalmartState.hydration.fallbackReason ? (
-            <p>
-              <span className="text-[#64748B]">Fallback reason:</span>{" "}
-              {currentWalmartState.hydration.fallbackReason}
-            </p>
-          ) : null}
-        </div>
       </div>
       <div className="grid gap-3 xl:grid-cols-2">
         <article
@@ -3453,102 +3439,113 @@ export default function ProductEditorClient({
         </article>
 
         <article
-          className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:col-span-2"
+          className="order-last rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:col-span-2"
           data-testid="ecomviper-walmart-source-confidence-panel"
         >
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-semibold text-[#0F172A]">Source Confidence</h3>
-              <p className="mt-1 text-xs text-[#475569]">
-                Refreshes EcomViper&apos;s local catalog understanding. This does not publish changes
-                to Walmart.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => void handleRefreshCatalogDetails()}
-              disabled={refreshingCatalogDetails || !hasCatalogIdentifier}
-              className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
-              data-testid="ecomviper-walmart-refresh-catalog-details"
-            >
-              {refreshingCatalogDetails ? "Refreshing catalog details..." : "Refresh catalog details"}
-            </button>
-          </div>
-          {!hasCatalogIdentifier ? (
-            <p className="mt-2 text-xs text-amber-700">
-              Add a Walmart item ID, UPC, GTIN, or canonical public listing URL to enable catalog refresh.
-            </p>
-          ) : null}
-          {catalogBackfillMessage ? (
-            <p className="mt-2 text-xs text-[#334155]">{catalogBackfillMessage}</p>
-          ) : null}
+          <details>
+            <summary className="cursor-pointer text-sm font-semibold text-[#0F172A]">
+              Source confidence (secondary)
+            </summary>
+            <div className="mt-3">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="mt-1 text-xs text-[#475569]">
+                    Refreshes EcomViper&apos;s local catalog understanding. This does not publish
+                    changes to Walmart.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void handleRefreshCatalogDetails()}
+                  disabled={refreshingCatalogDetails || !hasCatalogIdentifier}
+                  className="rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
+                  data-testid="ecomviper-walmart-refresh-catalog-details"
+                >
+                  {refreshingCatalogDetails ? "Refreshing catalog details..." : "Refresh catalog details"}
+                </button>
+              </div>
+              {!hasCatalogIdentifier ? (
+                <p className="mt-2 text-xs text-amber-700">
+                  Add a Walmart item ID, UPC, GTIN, or canonical public listing URL to enable
+                  catalog refresh.
+                </p>
+              ) : null}
+              {catalogBackfillMessage ? (
+                <p className="mt-2 text-xs text-[#334155]">{catalogBackfillMessage}</p>
+              ) : null}
 
-          <div className="mt-3 grid gap-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-xs text-[#334155] md:grid-cols-2">
-            <p>
-              <span className="text-[#64748B]">Overall confidence:</span>{" "}
-              {sourceConfidenceSummary.overallConfidence}
-            </p>
-            <p>
-              <span className="text-[#64748B]">Winning source:</span>{" "}
-              {catalogBackfillResult?.sourceSummary.sourceLabel || "Not run"}
-            </p>
-            <p>
-              <span className="text-[#64748B]">Last status:</span>{" "}
-              {latestCatalogBackfillStatus ?? "Not run"}
-            </p>
-            <p>
-              <span className="text-[#64748B]">Fields filled from catalog:</span>{" "}
-              {fieldsFilledFromCatalog}
-            </p>
-            <p>
-              <span className="text-[#64748B]">Canonical listing:</span>{" "}
-              {catalogBackfillResult?.canonicalPublicUrl || currentWalmartState.media.publicWalmartUrl || "Not available"}
-            </p>
-            <p>
-              <span className="text-[#64748B]">Canonical item ID:</span>{" "}
-              {catalogBackfillResult?.canonicalItemId || currentWalmartState.media.publicWalmartItemId || "Not available"}
-            </p>
-          </div>
+              <div className="mt-3 grid gap-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-xs text-[#334155] md:grid-cols-2">
+                <p>
+                  <span className="text-[#64748B]">Overall confidence:</span>{" "}
+                  {sourceConfidenceSummary.overallConfidence}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Winning source:</span>{" "}
+                  {catalogBackfillResult?.sourceSummary.sourceLabel || "Not run"}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Last status:</span>{" "}
+                  {latestCatalogBackfillStatus ?? "Not run"}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Fields filled from catalog:</span>{" "}
+                  {fieldsFilledFromCatalog}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Canonical listing:</span>{" "}
+                  {catalogBackfillResult?.canonicalPublicUrl ||
+                    currentWalmartState.media.publicWalmartUrl ||
+                    "Not available"}
+                </p>
+                <p>
+                  <span className="text-[#64748B]">Canonical item ID:</span>{" "}
+                  {catalogBackfillResult?.canonicalItemId ||
+                    currentWalmartState.media.publicWalmartItemId ||
+                    "Not available"}
+                </p>
+              </div>
 
-          {catalogBackfillResult?.warnings?.length ? (
-            <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
-              <p className="font-medium">Warnings</p>
-              <p className="mt-1">{catalogBackfillResult.warnings.join(" | ")}</p>
-            </div>
-          ) : null}
+              {catalogBackfillResult?.warnings?.length ? (
+                <div className="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+                  <p className="font-medium">Warnings</p>
+                  <p className="mt-1">{catalogBackfillResult.warnings.join(" | ")}</p>
+                </div>
+              ) : null}
 
-          {sourceConfidenceRows.length > 0 ? (
-            <div className="mt-3 overflow-x-auto">
-              <table className="min-w-[720px] w-full text-xs">
-                <thead className="text-left uppercase tracking-[0.08em] text-[#64748B]">
-                  <tr>
-                    <th className="py-1 pr-2">Field</th>
-                    <th className="py-1 pr-2">Action</th>
-                    <th className="py-1 pr-2">Confidence</th>
-                    <th className="py-1 pr-2">Source</th>
-                    <th className="py-1">Explanation</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {sourceConfidenceRows.map((row) => (
-                    <tr key={row.field} className="border-t border-[#E2E8F0] align-top">
-                      <td className="py-1 pr-2 font-medium text-[#0F172A]">{row.field}</td>
-                      <td className="py-1 pr-2">{formatCatalogFieldAction(row.action)}</td>
-                      <td className="py-1 pr-2">{row.confidence}</td>
-                      <td className="py-1 pr-2">
-                        {row.currentSource} {" -> "} {row.proposedSource}
-                      </td>
-                      <td className="py-1">{row.explanation}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {sourceConfidenceRows.length > 0 ? (
+                <div className="mt-3 overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-xs">
+                    <thead className="text-left uppercase tracking-[0.08em] text-[#64748B]">
+                      <tr>
+                        <th className="py-1 pr-2">Field</th>
+                        <th className="py-1 pr-2">Action</th>
+                        <th className="py-1 pr-2">Confidence</th>
+                        <th className="py-1 pr-2">Source</th>
+                        <th className="py-1">Explanation</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sourceConfidenceRows.map((row) => (
+                        <tr key={row.field} className="border-t border-[#E2E8F0] align-top">
+                          <td className="py-1 pr-2 font-medium text-[#0F172A]">{row.field}</td>
+                          <td className="py-1 pr-2">{formatCatalogFieldAction(row.action)}</td>
+                          <td className="py-1 pr-2">{row.confidence}</td>
+                          <td className="py-1 pr-2">
+                            {row.currentSource} {" -> "} {row.proposedSource}
+                          </td>
+                          <td className="py-1">{row.explanation}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-[#64748B]">
+                  Run Refresh catalog details to generate field-level source confidence rows.
+                </p>
+              )}
             </div>
-          ) : (
-            <p className="mt-3 text-xs text-[#64748B]">
-              Run Refresh catalog details to generate field-level source confidence rows.
-            </p>
-          )}
+          </details>
         </article>
 
         <article
@@ -3878,6 +3875,53 @@ export default function ProductEditorClient({
   const projectedScore = projectedQuality?.score ?? inlineAiSuggestion?.qualityScore ?? listingQuality.score;
   const scoreDelta = projectedScore - listingQuality.score;
   const scoreDeltaLabel = scoreDelta > 0 ? `+${scoreDelta}` : String(scoreDelta);
+  const currentVisibilityScore = currentListingQuality.score;
+  const proposedVisibilityScore = inlineAiSuggestion
+    ? Math.max(projectedScore, currentVisibilityScore)
+    : null;
+  const draftVisibilityScore = listingQuality.score;
+  const scoreContextLabel =
+    workflowTab === "review"
+      ? "Step 1 - Current Walmart Listing"
+      : workflowTab === "improve"
+        ? "Step 2 - Optimize Listing with AI"
+        : "Step 3 - Review and Publish";
+  const scoreStateForReasons =
+    workflowTab === "improve"
+      ? optimizedProposalState
+      : workflowTab === "edit-submit"
+        ? editableDraftState
+        : currentWalmartState;
+  const contentCoverageScore = scoreCoverage([
+    Boolean(scoreStateForReasons.content.productName.trim()),
+    Boolean(scoreStateForReasons.content.siteDescription.trim()),
+    Boolean(scoreStateForReasons.content.longDescription.trim()),
+    scoreStateForReasons.content.keyFeatures.length > 0,
+    Boolean(scoreStateForReasons.content.brand.trim()),
+    Boolean(scoreStateForReasons.content.manufacturer.trim()),
+  ]);
+  const mediaCoverageScore = scoreCoverage([
+    Boolean(scoreStateForReasons.media.primaryImageUrl.trim()),
+    scoreStateForReasons.media.galleryImageUrls.length > 0,
+    Boolean(scoreStateForReasons.media.publicWalmartUrl.trim()),
+    Boolean(scoreStateForReasons.media.publicWalmartItemId.trim()),
+  ]);
+  const searchBrowseCoverageScore = scoreCoverage([
+    Boolean(scoreStateForReasons.searchBrowse.productType.trim()),
+    Boolean(
+      (scoreStateForReasons.searchBrowse.taxonomyPlacement || scoreStateForReasons.taxonomyPlacement).trim()
+    ),
+    scoreStateForReasons.searchBrowse.groupedAttributes.some((group) => group.values.length > 0),
+  ]);
+  const trustReadinessLabel =
+    validationViolations.length > 0 ? "needs_work" : validationWarnings.length > 0 ? "medium" : "high";
+  const visibilityReasonList = [
+    `Content completeness: ${scoreLabel(contentCoverageScore)} (${contentCoverageScore}%)`,
+    `Media completeness: ${scoreLabel(mediaCoverageScore)} (${mediaCoverageScore}%)`,
+    `Search & browse completeness: ${scoreLabel(searchBrowseCoverageScore)} (${searchBrowseCoverageScore}%)`,
+    `Trust/compliance readiness: ${trustReadinessLabel}`,
+    `Public listing confidence: ${scoreStateForReasons.media.publicWalmartListingConfidence || "unavailable"}`,
+  ];
   const draftEditorIsActive = aiSuggestionApplied || draftEditorOpen;
   const hasExistingDraft = Boolean(lastDraftSavedAt);
 
@@ -3946,7 +3990,7 @@ export default function ProductEditorClient({
               )}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Step 1 - Current Walmart Listing</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">{scoreContextLabel}</p>
               <h2 className="mt-1 truncate text-lg font-semibold text-[#0F172A]">
                 {currentWalmartState.content.productName || displayTitle}
               </h2>
@@ -3980,9 +4024,14 @@ export default function ProductEditorClient({
             </div>
           </div>
 
-          <article className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:max-w-[320px]">
+          <article
+            className="w-full rounded-xl border border-[#E2E8F0] bg-[#F8FBFF] p-3 xl:max-w-[360px]"
+            data-testid="ecomviper-walmart-agentic-visibility-score"
+          >
             <div className="flex items-center justify-between gap-2">
-              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">Hydration + spec diagnostics</p>
+              <p className="text-xs uppercase tracking-[0.12em] text-[#64748B]">
+                Agentic Visibility Score
+              </p>
               <button
                 type="button"
                 onClick={handleViewAllIssues}
@@ -3991,25 +4040,30 @@ export default function ProductEditorClient({
                 View validation
               </button>
             </div>
+            <div className="mt-2 rounded-md bg-white px-2 py-1 text-sm text-[#334155]">
+              <p>
+                <span className="text-[#64748B]">Current score:</span> {currentVisibilityScore}/100
+              </p>
+              {workflowTab === "improve" ? (
+                <p>
+                  <span className="text-[#64748B]">Proposed optimized score:</span>{" "}
+                  {proposedVisibilityScore ?? currentVisibilityScore}/100
+                </p>
+              ) : null}
+              {workflowTab === "edit-submit" ? (
+                <p>
+                  <span className="text-[#64748B]">Draft readiness:</span>{" "}
+                  {canSubmit ? "publish_ready" : validationViolations.length > 0 ? "blocked" : "needs_review"}{" "}
+                  ({Math.max(draftVisibilityScore, currentVisibilityScore)}/100)
+                </p>
+              ) : null}
+            </div>
             <ul className="mt-2 space-y-1 text-sm text-[#334155]">
-              <li className="rounded-md bg-white px-2 py-1">
-                Hydration source: {currentWalmartState.hydration.source}
-              </li>
-              <li className="rounded-md bg-white px-2 py-1">
-                Hydration status: {currentWalmartState.hydration.status}
-              </li>
-              <li className="rounded-md bg-white px-2 py-1">
-                Hydrated at: {currentWalmartState.hydration.hydratedAt}
-              </li>
-              {schemaGapHighlights.length > 0 ? (
-                schemaGapHighlights.slice(0, 2).map((issue) => (
-                  <li key={issue} className="rounded-md bg-white px-2 py-1">
-                    {issue}
-                  </li>
-                ))
-              ) : (
-                <li className="rounded-md bg-white px-2 py-1">No major schema gaps detected.</li>
-              )}
+              {visibilityReasonList.map((reason) => (
+                <li key={reason} className="rounded-md bg-white px-2 py-1">
+                  {reason}
+                </li>
+              ))}
             </ul>
           </article>
         </div>
@@ -4056,7 +4110,7 @@ export default function ProductEditorClient({
           className="mt-3 rounded-lg border border-[#D9E4F0] bg-[#F8FBFF] px-3 py-2 text-sm text-[#334155]"
           data-testid="ecomviper-walmart-inline-ai-panel"
         >
-          {inlineAiState === "loading" ? "Generating AI Improvements..." : null}
+          {inlineAiState === "loading" ? "Optimizing listing with AI..." : null}
           {inlineAiState === "success"
             ? inlineAiOutcome === "worse"
               ? "Suggestions need review - not recommended."
@@ -4141,7 +4195,7 @@ export default function ProductEditorClient({
                 data-testid="ecomviper-walmart-optimize-button"
                 className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
               >
-                {optimizingWithAi ? "Generating AI Improvements..." : "Generate AI Improvements"}
+                {optimizingWithAi ? "Optimizing listing with AI..." : "Optimize Listing with AI"}
               </button>
             </div>
 
@@ -4624,26 +4678,8 @@ export default function ProductEditorClient({
               <p className="text-xs text-[#64748B]">{readinessNote}</p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
-              {tabs.map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setActiveTab(tab)}
-                  className={`rounded-lg border px-3 py-1.5 text-sm ${
-                    activeTab === tab
-                      ? "border-[#93C5FD] bg-[#EAF1F8] text-[#0F172A]"
-                      : "border-[#D9E4F0] bg-white text-[#334155]"
-                  }`}
-                >
-                  {tab}
-                </button>
-              ))}
-            </div>
-
             <div className="grid gap-3 md:grid-cols-2" data-testid="ecomviper-walmart-product-form">
-              {activeTab === "Content" ? (
-                <>
+              <>
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
                     Content
                   </h3>
@@ -4696,11 +4732,9 @@ export default function ProductEditorClient({
                       className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                     />
                   </label>
-                </>
-              ) : null}
+              </>
 
-              {activeTab === "Media" ? (
-                <>
+              <>
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
                     Media
                   </h3>
@@ -5338,11 +5372,9 @@ export default function ProductEditorClient({
                       </>
                     ) : null}
                   </div>
-                </>
-              ) : null}
+              </>
 
-              {activeTab === "Pricing & Inventory" ? (
-                <>
+              <>
                   <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
                     Pricing & inventory
                   </h3>
@@ -5362,11 +5394,9 @@ export default function ProductEditorClient({
                       className="mt-1 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
                     />
                   </label>
-                </>
-              ) : null}
+              </>
 
-              {activeTab === "Search & Browse" ? (
-                <>
+              <>
                   <h3
                     className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
                     data-testid="ecomviper-walmart-search-browse-section"
@@ -5538,60 +5568,53 @@ export default function ProductEditorClient({
                       placeholder="Keep factual claims aligned to product label."
                     />
                   </label>
-                </>
-              ) : null}
+              </>
 
-              {activeTab === "FAQ" ? (
-                <>
-                  <h3
-                    className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
-                    data-testid="ecomviper-walmart-faq-section"
-                  >
-                    FAQ
-                  </h3>
-                  <div className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155]">
-                    <p className="text-xs uppercase tracking-[0.08em] text-[#64748B]">
-                      FAQ status
-                    </p>
-                    <p className="mt-1 text-sm text-[#334155]">
-                      {inlineAiDiagnostics.faqGenerationState === "pending"
-                        ? "FAQ generation pending label extraction or product facts review."
-                        : "FAQ suggestions are draft enrichment notes. Keep answers product-specific and fact-grounded before submit."}
-                    </p>
-                  </div>
-                  <label className="text-sm text-[#334155] md:col-span-2">
-                    FAQ snippets (5 to 8 product-specific entries)
-                    <textarea
-                      value={form.faqSnippets}
-                      onChange={(event) => patchForm({ faqSnippets: event.target.value })}
-                      className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
-                      placeholder={`Q: What is this product? A: ...\nQ: How do I take it? A: ...`}
-                      data-testid="ecomviper-walmart-faq-textarea"
-                    />
-                    <p className="mt-1 text-xs text-[#64748B]">
-                      Keep FAQ entries product-specific, compliant, and grounded in label-backed facts.
-                    </p>
-                  </label>
-                </>
-              ) : null}
+              <details className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                <summary
+                  className="cursor-pointer text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]"
+                  data-testid="ecomviper-walmart-faq-section"
+                >
+                  FAQ (secondary)
+                </summary>
+                <div className="mt-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]">
+                  <p className="text-xs uppercase tracking-[0.08em] text-[#64748B]">FAQ status</p>
+                  <p className="mt-1 text-sm text-[#334155]">
+                    {inlineAiDiagnostics.faqGenerationState === "pending"
+                      ? "FAQ generation pending label extraction or product facts review."
+                      : "FAQ suggestions are draft enrichment notes. Keep answers product-specific and fact-grounded before submit."}
+                  </p>
+                </div>
+                <label className="mt-2 block text-sm text-[#334155]">
+                  FAQ snippets (5 to 8 product-specific entries)
+                  <textarea
+                    value={form.faqSnippets}
+                    onChange={(event) => patchForm({ faqSnippets: event.target.value })}
+                    className="mt-1 min-h-40 w-full rounded-lg border border-[#D9E4F0] px-3 py-2"
+                    placeholder={`Q: What is this product? A: ...\nQ: How do I take it? A: ...`}
+                    data-testid="ecomviper-walmart-faq-textarea"
+                  />
+                  <p className="mt-1 text-xs text-[#64748B]">
+                    Keep FAQ entries product-specific, compliant, and grounded in label-backed facts.
+                  </p>
+                </label>
+              </details>
 
-              {activeTab === "Sync History" ? (
-                <>
-                  <h3 className="md:col-span-2 text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
-                    Sync history
-                  </h3>
-                  <div className="rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3 text-sm text-[#334155] md:col-span-2">
-                    <p>Last product sync: {product.lastSyncedAt}</p>
-                    <p className="mt-1">Image source: {formatImageSource(product)}</p>
-                    <p className="mt-1">Image status: {formatImageStatus(product)}</p>
-                    {lastDraftSavedAt ? (
-                      <p className="mt-1">Last draft save: {lastDraftSavedAt}</p>
-                    ) : (
-                      <p className="mt-1">No saved draft yet.</p>
-                    )}
-                  </div>
-                </>
-              ) : null}
+              <details className="md:col-span-2 rounded-lg border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                <summary className="cursor-pointer text-sm font-semibold uppercase tracking-[0.12em] text-[#64748B]">
+                  Sync history (secondary)
+                </summary>
+                <div className="mt-2 rounded-lg border border-[#E2E8F0] bg-white p-3 text-sm text-[#334155]">
+                  <p>Last product sync: {product.lastSyncedAt}</p>
+                  <p className="mt-1">Image source: {formatImageSource(product)}</p>
+                  <p className="mt-1">Image status: {formatImageStatus(product)}</p>
+                  {lastDraftSavedAt ? (
+                    <p className="mt-1">Last draft save: {lastDraftSavedAt}</p>
+                  ) : (
+                    <p className="mt-1">No saved draft yet.</p>
+                  )}
+                </div>
+              </details>
             </div>
           </div>
         </details>
