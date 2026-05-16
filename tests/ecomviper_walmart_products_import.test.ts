@@ -502,6 +502,107 @@ describe("walmart product import", () => {
     expect(itemCalls.length).toBeGreaterThanOrEqual(6);
   });
 
+  it("starts from a continuation cursor and returns next cursor metadata when bounded page cap is reached", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-continuation",
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url =
+        typeof input === "string"
+          ? input
+          : input instanceof URL
+            ? input.toString()
+            : input.url;
+
+      if (url.includes("/v3/items/walmart/search")) {
+        return new Response(JSON.stringify({ items: [] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      if (url.includes("/v3/items")) {
+        const parsed = new URL(url);
+        const cursor = parsed.searchParams.get("nextCursor");
+        const sku = cursor === "cursor-3" ? "ROC948" : "ROC949";
+        const nextCursor = cursor === "cursor-3" ? "cursor-4" : null;
+        return new Response(
+          JSON.stringify({
+            ItemResponse: [
+              {
+                sku,
+                productName: `Continuation ${sku}`,
+                brand: "OPA",
+                shelf: "Supplements",
+                productType: "supplement",
+                availability: "In_stock",
+                price: { amount: "20.00" },
+                productAssets: [
+                  {
+                    assetType: "PRIMARY",
+                    imageUrl: `https://images.example.com/${sku}.jpg`,
+                  },
+                ],
+              },
+            ],
+            nextCursor,
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          }
+        );
+      }
+
+      if (url.includes("/v3/inventory")) {
+        return new Response(JSON.stringify({ message: "not configured in bounded mode" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1", {
+      boundedRuntime: true,
+      maxCatalogPages: 1,
+      startCursor: "cursor-3",
+    });
+
+    expect(result.fetchedCount).toBe(1);
+    expect(result.importedCount).toBe(1);
+    expect(result.importDiagnostics?.startCatalogCursor).toBe("cursor-3");
+    expect(result.importDiagnostics?.hasMoreCatalogPages).toBe(true);
+    expect(result.importDiagnostics?.nextCatalogCursor).toBe("cursor-4");
+    expect(result.importDiagnostics?.catalogPageCap).toBe(1);
+    const itemCalls = fetchMock.mock.calls
+      .map((call) => call[0])
+      .filter((entry) => {
+        const requestUrl =
+          typeof entry === "string" ? entry : entry instanceof URL ? entry.toString() : entry.url;
+        return requestUrl.includes("/v3/items?") || /\/v3\/items($|\?)/.test(requestUrl);
+      })
+      .map((entry) =>
+        typeof entry === "string" ? entry : entry instanceof URL ? entry.toString() : entry.url
+      );
+    expect(itemCalls).toHaveLength(1);
+    expect(itemCalls[0]).toContain("nextCursor=cursor-3");
+  });
+
   it("enriches missing catalog images using Item Search with GTIN/UPC priority", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: true,

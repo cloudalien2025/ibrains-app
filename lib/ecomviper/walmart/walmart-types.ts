@@ -344,6 +344,10 @@ export interface WalmartImportResult {
     fetchedCount: number;
     payloadShape: string;
     pageCount: number;
+    startCatalogCursor?: string | null;
+    hasMoreCatalogPages?: boolean;
+    nextCatalogCursor?: string | null;
+    catalogPageCap?: number;
     inventoryKnownCount?: number;
     inventoryUnknownCount?: number;
     inventoryOutOfStockCount?: number;

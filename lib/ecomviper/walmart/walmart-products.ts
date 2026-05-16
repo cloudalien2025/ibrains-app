@@ -130,6 +130,7 @@ interface WalmartImportOptions {
   maxImageEnrichmentProducts?: number;
   maxInventoryLookups?: number;
   maxCatalogPages?: number;
+  startCursor?: string | null;
 }
 
 function createWalmartImportFailure(input: {
@@ -2254,7 +2255,9 @@ export async function importWalmartProducts(
     const collected: Record<string, unknown>[] = [];
     const payloadShapes = new Set<string>();
     let pageCount = 0;
-    let nextCursor: string | null = null;
+    const startCursor = asString(options?.startCursor ?? "") || null;
+    let nextCursor: string | null = startCursor;
+    let continuationCursor: string | null = null;
     const catalogPageCap = options?.boundedRuntime
       ? Math.max(1, Math.min(WALMART_IMPORT_MAX_PAGES, options.maxCatalogPages ?? WALMART_IMPORT_MAX_PAGES_BOUNDED))
       : Math.max(1, options?.maxCatalogPages ?? WALMART_IMPORT_MAX_PAGES);
@@ -2304,10 +2307,14 @@ export async function importWalmartProducts(
       partialProgress.fetchedCount = collected.length;
 
       if (!page.nextCursor || page.nextCursor === nextCursor || page.items.length === 0) {
+        continuationCursor = null;
         break;
       }
+      continuationCursor = page.nextCursor;
       nextCursor = page.nextCursor;
     }
+    const hasMoreCatalogPages = Boolean(continuationCursor) && pageCount >= catalogPageCap;
+    const nextCatalogCursor = hasMoreCatalogPages ? continuationCursor : null;
 
     const inventoryLookupCap = options?.boundedRuntime
       ? Math.max(0, options.maxInventoryLookups ?? WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED)
@@ -2526,6 +2533,10 @@ export async function importWalmartProducts(
         importRunSkus: products.map((product) => product.sku),
         payloadShape: payloadShapes.size > 0 ? Array.from(payloadShapes).join(", ") : "unknown",
         pageCount,
+        startCatalogCursor: startCursor,
+        hasMoreCatalogPages,
+        nextCatalogCursor,
+        catalogPageCap,
         inventoryKnownCount,
         inventoryUnknownCount,
         inventoryOutOfStockCount,
