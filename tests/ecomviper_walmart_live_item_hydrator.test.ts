@@ -175,6 +175,102 @@ describe("Walmart live item hydrator", () => {
     ]);
   });
 
+  it("hydrates when live response uses root ItemResponse array payload shape", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      accessToken: "token_live",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      lastError: null,
+    });
+
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          ItemResponse: [
+            {
+              sku: "LIVE-1",
+              productName: "Array Payload Product",
+              brand: "Array Payload Brand",
+              siteDescription: "Array payload short description",
+              longDescription: "Array payload long description",
+              keyFeatures: ["Array payload bullet one", "Array payload bullet two"],
+              priceInfo: { currentPrice: 18.45 },
+              inventory: { quantity: 9 },
+            },
+          ],
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await hydrateLiveWalmartItemStateForUser({
+      userId: "user_live_item_response_array",
+      product: createProduct(),
+    });
+
+    expect(result.diagnostics.status).toBe("liveHydrated");
+    expect(result.currentWalmartState.content.siteDescription).toBe(
+      "Array payload short description"
+    );
+    expect(result.currentWalmartState.content.longDescription).toBe(
+      "Array payload long description"
+    );
+    expect(result.currentWalmartState.content.keyFeatures).toEqual([
+      "Array payload bullet one",
+      "Array payload bullet two",
+    ]);
+  });
+
+  it("selects sku-matching candidate when root ItemResponse array includes multiple rows", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      accessToken: "token_live",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      lastError: null,
+    });
+
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          ItemResponse: [
+            {
+              sku: "OTHER-SKU",
+              productName: "Wrong Candidate",
+              siteDescription: "Wrong short description",
+              longDescription: "Wrong long description",
+              keyFeatures: ["Wrong bullet one"],
+            },
+            {
+              sku: "LIVE-1",
+              productName: "Correct Candidate",
+              siteDescription: "Correct short description",
+              longDescription: "Correct long description",
+              keyFeatures: ["Correct bullet one", "Correct bullet two"],
+            },
+          ],
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await hydrateLiveWalmartItemStateForUser({
+      userId: "user_live_item_response_multi",
+      product: createProduct(),
+    });
+
+    expect(result.currentWalmartState.content.productName).toBe("Correct Candidate");
+    expect(result.currentWalmartState.content.siteDescription).toBe(
+      "Correct short description"
+    );
+    expect(result.currentWalmartState.content.longDescription).toBe(
+      "Correct long description"
+    );
+    expect(result.currentWalmartState.content.keyFeatures).toEqual([
+      "Correct bullet one",
+      "Correct bullet two",
+    ]);
+  });
+
   it("falls back to snapshot hydration when Walmart credentials are unavailable", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: false,

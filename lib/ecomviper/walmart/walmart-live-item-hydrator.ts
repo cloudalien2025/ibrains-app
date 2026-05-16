@@ -248,52 +248,115 @@ function parseLiveAttributes(liveItem: Record<string, unknown>): Record<string, 
   return normalizeSearchBrowseAttributes(mapped);
 }
 
-function extractLiveItemCandidate(payload: unknown): Record<string, unknown> | null {
+function extractLiveItemCandidates(payload: unknown): Record<string, unknown>[] {
+  const candidates: Record<string, unknown>[] = [];
+
+  const pushCandidate = (value: unknown) => {
+    const objectValue = asObject(value);
+    if (objectValue) candidates.push(objectValue);
+  };
+
   const objectPayload = asObject(payload);
   if (!objectPayload) {
     if (Array.isArray(payload)) {
-      const first = payload.map((entry) => asObject(entry)).find((entry) => Boolean(entry));
-      return first ?? null;
+      for (const entry of payload) {
+        pushCandidate(entry);
+      }
     }
-    return null;
+    return candidates;
   }
 
-  const direct = asObject(objectPayload.item) ?? asObject(objectPayload.Item);
-  if (direct) return direct;
+  pushCandidate(objectPayload.item);
+  pushCandidate(objectPayload.Item);
 
   const data = asObject(objectPayload.data);
   if (data) {
-    const nestedDirect = asObject(data.item) ?? asObject(data.Item);
-    if (nestedDirect) return nestedDirect;
+    pushCandidate(data.item);
+    pushCandidate(data.Item);
     if (Array.isArray(data.items)) {
-      const firstItem = data.items.map((entry) => asObject(entry)).find((entry) => Boolean(entry));
-      if (firstItem) return firstItem;
+      for (const entry of data.items) {
+        pushCandidate(entry);
+      }
     }
   }
 
   if (Array.isArray(objectPayload.items)) {
-    const firstItem = objectPayload.items
-      .map((entry) => asObject(entry))
-      .find((entry) => Boolean(entry));
-    if (firstItem) return firstItem;
+    for (const entry of objectPayload.items) {
+      pushCandidate(entry);
+    }
   }
 
-  const itemResponse = asObject(objectPayload.ItemResponse) ?? asObject(objectPayload.itemResponse);
+  const rootItemResponse = objectPayload.ItemResponse ?? objectPayload.itemResponse;
+  if (Array.isArray(rootItemResponse)) {
+    for (const entry of rootItemResponse) {
+      const row = asObject(entry);
+      if (!row) continue;
+      pushCandidate(row.item);
+      pushCandidate(row.Item);
+      if (Array.isArray(row.items)) {
+        for (const item of row.items) {
+          pushCandidate(item);
+        }
+      }
+      if (Object.keys(row).length > 0) {
+        pushCandidate(row);
+      }
+    }
+  }
+
+  const itemResponse = asObject(rootItemResponse);
   if (itemResponse) {
-    const item = asObject(itemResponse.item) ?? asObject(itemResponse.Item);
-    if (item) return item;
+    pushCandidate(itemResponse.item);
+    pushCandidate(itemResponse.Item);
+    if (Array.isArray(itemResponse.items)) {
+      for (const entry of itemResponse.items) {
+        pushCandidate(entry);
+      }
+    }
   }
 
   const allItems = asObject(objectPayload.itemsResponse) ?? asObject(objectPayload.ItemsResponse);
   if (allItems) {
     const rows = allItems.items;
     if (Array.isArray(rows)) {
-      const first = rows.map((entry) => asObject(entry)).find((entry) => Boolean(entry));
-      if (first) return first;
+      for (const entry of rows) {
+        pushCandidate(entry);
+      }
     }
   }
 
-  return null;
+  const dedupedBySignature = new Map<string, Record<string, unknown>>();
+  for (const candidate of candidates) {
+    const signature = [
+      asText(candidate.sku) || asText(candidate.SKU),
+      asText(candidate.itemId) || asText(candidate.usItemId) || asText(candidate.productId),
+      asText(candidate.productName) || asText(candidate.title),
+    ]
+      .join("::")
+      .toLowerCase();
+    const key = signature || JSON.stringify(Object.keys(candidate).sort());
+    if (!dedupedBySignature.has(key)) {
+      dedupedBySignature.set(key, candidate);
+    }
+  }
+
+  return Array.from(dedupedBySignature.values());
+}
+
+function extractLiveItemCandidate(payload: unknown, requestedSku: string): Record<string, unknown> | null {
+  const candidates = extractLiveItemCandidates(payload);
+  if (candidates.length === 0) return null;
+
+  const normalizedRequestedSku = requestedSku.trim().toUpperCase();
+  if (!normalizedRequestedSku) return candidates[0] ?? null;
+
+  const skuMatch = candidates.find((candidate) => {
+    const candidateSku = asText(candidate.sku) || asText(candidate.SKU);
+    return candidateSku.trim().toUpperCase() === normalizedRequestedSku;
+  });
+  if (skuMatch) return skuMatch;
+
+  return candidates[0] ?? null;
 }
 
 async function fetchJsonWithTimeout(input: {
@@ -374,7 +437,7 @@ async function fetchLiveItemBySku(input: {
       continue;
     }
 
-    const candidate = extractLiveItemCandidate(response.payload);
+    const candidate = extractLiveItemCandidate(response.payload, sku);
     if (!candidate) {
       lastPayload = asObject(response.payload);
       lastReason = "Walmart API response did not include a recognizable item node.";
