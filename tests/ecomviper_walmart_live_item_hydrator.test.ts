@@ -129,6 +129,52 @@ describe("Walmart live item hydrator", () => {
     expect(result.rawLivePayload).not.toBeNull();
   });
 
+  it("hydrates description aliases and highlight bullets when keyFeatures are absent", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      accessToken: "token_live",
+      expiresAt: new Date(Date.now() + 60_000).toISOString(),
+      lastError: null,
+    });
+
+    const fetchMock = vi.fn().mockImplementation(() =>
+      Promise.resolve(
+        jsonResponse({
+          item: {
+            sku: "LIVE-1",
+            productName: "Live Alias Product",
+            brand: "Live Alias Brand",
+            synopsis: "Live alias synopsis description",
+            fullDescription: "Live alias full description",
+            highlights: [
+              { text: "Live alias highlight one" },
+              { value: "Live alias highlight two" },
+            ],
+            priceInfo: { currentPrice: 17.25 },
+            inventory: { quantity: 13 },
+          },
+        })
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await hydrateLiveWalmartItemStateForUser({
+      userId: "user_live_aliases",
+      product: createProduct(),
+    });
+
+    expect(result.currentWalmartState.content.siteDescription).toBe(
+      "Live alias synopsis description"
+    );
+    expect(result.currentWalmartState.content.longDescription).toBe(
+      "Live alias full description"
+    );
+    expect(result.currentWalmartState.content.keyFeatures).toEqual([
+      "Live alias highlight one",
+      "Live alias highlight two",
+    ]);
+  });
+
   it("falls back to snapshot hydration when Walmart credentials are unavailable", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: false,

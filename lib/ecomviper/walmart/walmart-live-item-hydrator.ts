@@ -171,9 +171,36 @@ function parseLiveImageUrls(liveItem: Record<string, unknown>): string[] {
 }
 
 function parseLiveBulletPoints(liveItem: Record<string, unknown>): string[] {
-  const direct = liveItem.keyFeatures ?? liveItem.bulletPoints ?? liveItem.features;
+  const content = asObject(liveItem.content);
+  const direct =
+    liveItem.keyFeatures ??
+    liveItem.bulletPoints ??
+    liveItem.features ??
+    liveItem.highlights ??
+    liveItem.aboutThisItem ??
+    content?.keyFeatures ??
+    content?.bulletPoints ??
+    content?.features ??
+    content?.highlights ??
+    content?.aboutThisItem;
   if (Array.isArray(direct)) {
-    return unique(direct.map((entry) => asText(entry)).filter(Boolean));
+    return unique(
+      direct
+        .flatMap((entry) => {
+          if (typeof entry === "string") return [entry.trim()];
+          const objectEntry = asObject(entry);
+          if (!objectEntry) return [];
+          const value =
+            asText(objectEntry.value) ||
+            asText(objectEntry.text) ||
+            asText(objectEntry.description) ||
+            asText(objectEntry.label) ||
+            asText(objectEntry.title) ||
+            asText(objectEntry.name);
+          return value ? [value.trim()] : [];
+        })
+        .filter(Boolean)
+    );
   }
 
   const keyFeatures = asText(direct);
@@ -399,6 +426,7 @@ function mergeLiveItemIntoProduct(input: {
   livePayload: Record<string, unknown> | null;
 }): WalmartProductRecord {
   const liveItem = input.liveItem;
+  const liveContent = asObject(liveItem.content);
   const currentRaw = asObject(input.product.rawPayload) ?? {};
   const currentNormalized = asObject(input.product.normalizedPayload) ?? {};
 
@@ -415,11 +443,20 @@ function mergeLiveItemIntoProduct(input: {
   const shortDescription =
     asText(liveItem.shortDescription) ||
     asText(liveItem.siteDescription) ||
+    asText(liveItem.short_desc) ||
+    asText(liveItem.synopsis) ||
+    asText(liveContent?.shortDescription) ||
+    asText(liveContent?.siteDescription) ||
     input.product.shortDescription;
 
   const longDescription =
     asText(liveItem.longDescription) ||
+    asText(liveItem.fullDescription) ||
     asText(liveItem.description) ||
+    asText(liveItem.productDescription) ||
+    asText(liveContent?.longDescription) ||
+    asText(liveContent?.fullDescription) ||
+    asText(liveContent?.description) ||
     input.product.longDescription;
 
   const bulletPoints = parseLiveBulletPoints(liveItem);

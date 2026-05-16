@@ -425,6 +425,13 @@ function firstNonEmptyNumber(
   return null;
 }
 
+function firstNonEmptyList(candidates: string[][]): string[] {
+  for (const candidate of candidates) {
+    if (candidate.length > 0) return candidate;
+  }
+  return [];
+}
+
 function listFromUnknown(value: unknown): string[] {
   if (Array.isArray(value)) {
     return value
@@ -435,6 +442,10 @@ function listFromUnknown(value: unknown): string[] {
         const direct =
           asText(objectEntry.url) ??
           asText(objectEntry.value) ??
+          asText(objectEntry.text) ??
+          asText(objectEntry.description) ??
+          asText(objectEntry.label) ??
+          asText(objectEntry.title) ??
           asText(objectEntry.name);
         return direct?.trim() ?? "";
       })
@@ -846,7 +857,8 @@ function readDraftAttributes(
 
 function hydrateEditorForm(
   product: WalmartProductRecord,
-  stagedDrafts: WalmartDraftRecord[]
+  stagedDrafts: WalmartDraftRecord[],
+  hydratedCurrentWalmartState?: WalmartNativeState
 ): ProductEditorFormState {
   const draft = readLatestDraftPayload(stagedDrafts);
   const normalizedDraftImages = normalizeDraftImageFields(draft ?? {});
@@ -854,8 +866,24 @@ function hydrateEditorForm(
   const raw = asObject(product.rawPayload);
   const rawProduct = asObject(raw?.product);
   const rawContent = asObject(raw?.content);
+  const hydratedContentSource = hydratedCurrentWalmartState
+    ? {
+        title: hydratedCurrentWalmartState.content.productName,
+        productName: hydratedCurrentWalmartState.content.productName,
+        shortDescription: hydratedCurrentWalmartState.content.siteDescription,
+        siteDescription: hydratedCurrentWalmartState.content.siteDescription,
+        longDescription: hydratedCurrentWalmartState.content.longDescription,
+        fullDescription: hydratedCurrentWalmartState.content.longDescription,
+        bulletPoints: hydratedCurrentWalmartState.content.keyFeatures,
+        keyFeatures: hydratedCurrentWalmartState.content.keyFeatures,
+        brand: hydratedCurrentWalmartState.content.brand,
+        brandName: hydratedCurrentWalmartState.content.brand,
+        manufacturer: hydratedCurrentWalmartState.content.manufacturer,
+      }
+    : null;
 
   const sources = [
+    hydratedContentSource,
     normalized,
     product as unknown as Record<string, unknown>,
     raw,
@@ -920,6 +948,7 @@ function hydrateEditorForm(
     draftShortDescription ??
     firstNonEmptyString(sources, [
       "shortDescription",
+      "siteDescription",
       "short_desc",
       "synopsis",
       "shortDesc",
@@ -928,6 +957,7 @@ function hydrateEditorForm(
     draftLongDescription ??
     firstNonEmptyString(sources, [
       "longDescription",
+      "fullDescription",
       "description",
       "productDescription",
       "long_desc",
@@ -1090,18 +1120,45 @@ function hydrateEditorForm(
       normalized?.lastImageSyncedAt,
       raw?.lastImageSyncedAt
     );
+  const hydratedBullets = listFromUnknown(hydratedContentSource?.bulletPoints);
   const normalizedBullets = listFromUnknown(normalized?.bulletPoints);
   const rawBullets = listFromUnknown(raw?.bulletPoints);
   const rawKeyFeatures = listFromUnknown(raw?.keyFeatures);
+  const rawFeatures = listFromUnknown(raw?.features);
+  const rawHighlights = listFromUnknown(raw?.highlights);
+  const rawAboutThisItem = listFromUnknown(raw?.aboutThisItem);
+  const rawContentBullets = listFromUnknown(rawContent?.bulletPoints);
+  const rawContentKeyFeatures = listFromUnknown(rawContent?.keyFeatures);
+  const rawContentFeatures = listFromUnknown(rawContent?.features);
+  const rawContentHighlights = listFromUnknown(rawContent?.highlights);
+  const rawContentAboutThisItem = listFromUnknown(rawContent?.aboutThisItem);
+  const rawProductBullets = listFromUnknown(rawProduct?.bulletPoints);
+  const rawProductKeyFeatures = listFromUnknown(rawProduct?.keyFeatures);
+  const rawProductFeatures = listFromUnknown(rawProduct?.features);
+  const rawProductHighlights = listFromUnknown(rawProduct?.highlights);
+  const rawProductAboutThisItem = listFromUnknown(rawProduct?.aboutThisItem);
   const bulletPoints =
     draftBullets ??
-    (normalizedBullets.length
-      ? normalizedBullets
-      : rawBullets.length
-      ? rawBullets
-      : rawKeyFeatures.length
-      ? rawKeyFeatures
-      : product.bulletPoints);
+    firstNonEmptyList([
+      hydratedBullets,
+      normalizedBullets,
+      rawBullets,
+      rawKeyFeatures,
+      rawFeatures,
+      rawHighlights,
+      rawAboutThisItem,
+      rawContentBullets,
+      rawContentKeyFeatures,
+      rawContentFeatures,
+      rawContentHighlights,
+      rawContentAboutThisItem,
+      rawProductBullets,
+      rawProductKeyFeatures,
+      rawProductFeatures,
+      rawProductHighlights,
+      rawProductAboutThisItem,
+      listFromUnknown(product.bulletPoints),
+    ]);
   const price =
     draftPrice ?? firstNonEmptyNumber(sources, ["price", "amount"]) ?? product.price;
   const inventoryQuantity =
@@ -1370,8 +1427,8 @@ export default function ProductEditorClient({
   );
   const safeStagedDrafts = draftHardening.drafts;
   const initialForm = useMemo(
-    () => hydrateEditorForm(product, safeStagedDrafts),
-    [product, safeStagedDrafts]
+    () => hydrateEditorForm(product, safeStagedDrafts, hydratedCurrentWalmartState),
+    [product, safeStagedDrafts, hydratedCurrentWalmartState]
   );
   const [form, setForm] = useState<ProductEditorFormState>(() => initialForm);
   const [message, setMessage] = useState<string | null>(null);

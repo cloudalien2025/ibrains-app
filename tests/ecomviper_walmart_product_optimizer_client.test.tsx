@@ -188,4 +188,35 @@ describe("Walmart product optimizer client", () => {
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain(">Unknown<");
   });
+
+  it("hydrates editable descriptions and bullets from Walmart content aliases", () => {
+    const html = renderToStaticMarkup(
+      <ProductEditorClient
+        product={createProduct({
+          shortDescription: "",
+          longDescription: "",
+          bulletPoints: [],
+          normalizedPayload: {},
+          rawPayload: {
+            content: {
+              siteDescription: "Alias site description from Walmart content payload",
+              fullDescription: "Alias full description from Walmart content payload",
+              highlights: [
+                { text: "Alias highlight one" },
+                { value: "Alias highlight two" },
+              ],
+            },
+          },
+        })}
+        stagedDrafts={[]}
+        aiProviderConnected={false}
+        serpApiProviderConnected={false}
+      />
+    );
+
+    expect(html).toContain(">Alias site description from Walmart content payload</textarea>");
+    expect(html).toContain(">Alias full description from Walmart content payload</textarea>");
+    expect(html).toContain("Alias highlight one");
+    expect(html).toContain("Alias highlight two");
+  });
 });
