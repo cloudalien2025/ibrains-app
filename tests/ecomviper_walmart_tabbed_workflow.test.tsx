@@ -225,7 +225,7 @@ describe("Walmart product editor single docket workflow", () => {
       'input[value="Single Docket Product | Optimized"]'
     ) as HTMLInputElement | null;
     expect(titleInput).not.toBeNull();
-    expect(container.textContent).toContain("Optimized draft ready for review");
+    expect(container.textContent).toContain("Optimized for Agentic Visibility and Selection.");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
     const [requestUrl] = fetchMock.mock.calls[0] as [string, RequestInit];

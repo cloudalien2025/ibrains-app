@@ -108,7 +108,9 @@ describe("Walmart product optimizer client", () => {
     expect(html).toContain("Inventory:</span> 9");
     expect(html).toContain("Optimize with AI");
     expect(html).toContain("Publish to Walmart");
-    expect(html).toContain("Optimize updates this docket in place");
+    expect(html).toContain(
+      "Optimize with AI updates this docket for Agentic Visibility and Selection."
+    );
     expect(html).not.toContain("Open AI Optimizer");
     expect(html).not.toContain("/apps/ecomviper/walmart/ai-optimizer");
     expect(html).not.toContain("Preview + Validate");

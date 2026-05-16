@@ -297,14 +297,17 @@ interface WalmartGeneratedReferenceImage {
 
 type InlineAiState = "idle" | "loading" | "success" | "error" | "missing_key";
 type WalmartFieldCopywritingIntent =
-  | "agentic_visibility"
-  | "search_selection"
-  | "marketplace_compliance"
-  | "clarity_conversion"
-  | "concise_title"
-  | "detailed_description"
-  | "bullet_improvement"
-  | "search_keywords";
+  | "optimize_title_for_agentic_selection"
+  | "optimize_short_description_for_agentic_visibility"
+  | "optimize_long_description_for_agentic_visibility_and_selection"
+  | "optimize_bullets_for_agentic_selection"
+  | "optimize_search_keywords_for_agentic_visibility"
+  | "optimize_suggested_use_for_agentic_selection"
+  | "optimize_benefits_for_agentic_visibility"
+  | "optimize_safety_copy_for_compliance_and_agentic_selection"
+  | "optimize_alt_text_guidance_for_agentic_visibility"
+  | "optimize_media_guidance_for_agentic_visibility"
+  | "optimize_search_browse_field_for_agentic_visibility_and_selection";
 type WalmartFieldCopywritingStatus =
   | "idle"
   | "loading"
@@ -317,6 +320,14 @@ type LabelFactsUiStatus =
   | "extracting"
   | "extracted_ready"
   | "no_images_available"
+  | "provider_unavailable"
+  | "failed";
+type TopOptimizeUiStatus =
+  | "idle"
+  | "optimizing"
+  | "extracting"
+  | "filling"
+  | "success"
   | "provider_unavailable"
   | "failed";
 type WalmartPublishResultStatus =
@@ -362,6 +373,7 @@ interface WalmartFieldCopywritingState {
 
 interface WalmartFieldCopywritingAgentActionProps {
   fieldKey: string;
+  actionLabel: string;
   disabled?: boolean;
   state: WalmartFieldCopywritingState;
   onClick: () => void;
@@ -380,7 +392,7 @@ type WalmartItemReportRouteResponse = {
   };
 };
 
-const INLINE_AI_LOADING_MESSAGE = "Optimizing listing with AI...";
+const INLINE_AI_LOADING_MESSAGE = "Optimizing for Agentic Visibility and Selection...";
 const DEFAULT_SUPPLEMENT_DIRECTIONS = "Use as directed on product label.";
 const DEFAULT_SUPPLEMENT_WARNINGS =
   "Consult your healthcare professional before use if you are pregnant, nursing, taking medication, or have a medical condition. Keep out of reach of children.";
@@ -2048,6 +2060,7 @@ function normalizeCopywritingFieldTestId(fieldKey: string): string {
 
 function WalmartFieldCopywritingAgentAction({
   fieldKey,
+  actionLabel,
   disabled = false,
   state,
   onClick,
@@ -2067,10 +2080,29 @@ function WalmartFieldCopywritingAgentAction({
         type="button"
         onClick={onClick}
         disabled={disabled || state.status === "loading"}
-        className="rounded border border-[#2563EB] bg-white px-2 py-1 text-xs font-medium text-[#1D4ED8] disabled:cursor-not-allowed disabled:opacity-50"
-        data-testid={`ecomviper-walmart-copywriting-agent-${normalizeCopywritingFieldTestId(fieldKey)}`}
+        title={actionLabel}
+        aria-label={actionLabel}
+        className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-[#2563EB] bg-[#EFF6FF] text-[#1D4ED8] shadow-sm transition-colors hover:bg-[#DBEAFE] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB] disabled:cursor-not-allowed disabled:opacity-50"
+        data-testid={`ecomviper-walmart-viper-agent-${normalizeCopywritingFieldTestId(fieldKey)}`}
+        data-color-intent="primary-blue"
       >
-        {state.status === "loading" ? "Optimizing..." : "Copywriting Agent"}
+        <svg
+          viewBox="0 0 24 24"
+          className="h-4 w-4"
+          role="presentation"
+          aria-hidden="true"
+          data-testid={`ecomviper-walmart-viper-icon-${normalizeCopywritingFieldTestId(fieldKey)}`}
+        >
+          <path
+            d="M6 4.8c2.5-2 7.2-1.9 9.4.4 1.8 1.8 1.7 4.7-.3 6.2-.9.7-2 .9-2.9 1.3-1.6.7-2 2.8-.8 4.1.8.8 2 1.2 3.1 1.6-2.2 1.9-6.5 1.8-8.8-.1-1.9-1.7-2-4.4-.4-6 1-.9 2.3-1.1 3.5-1.5 1.4-.5 1.9-2.4.8-3.5-.8-.8-2-1.2-3.6-1.7Z"
+            fill="currentColor"
+          />
+          <circle cx="16.4" cy="5.6" r="1" fill="#FFFFFF" />
+          <circle cx="16.4" cy="5.6" r=".45" fill="currentColor" />
+        </svg>
+        <span className="sr-only">
+          {state.status === "loading" ? `Optimizing: ${actionLabel}` : actionLabel}
+        </span>
       </button>
       {state.message ? <p className={`text-xs ${statusToneClass}`}>{state.message}</p> : null}
     </div>
@@ -2188,6 +2220,8 @@ export default function ProductEditorClient({
   const [extractingLabelFacts, setExtractingLabelFacts] = useState(false);
   const [labelFactsUiStatus, setLabelFactsUiStatus] = useState<LabelFactsUiStatus>("idle");
   const [labelFactsMessage, setLabelFactsMessage] = useState<string | null>(null);
+  const [topOptimizeStatus, setTopOptimizeStatus] = useState<TopOptimizeUiStatus>("idle");
+  const [topOptimizeMessage, setTopOptimizeMessage] = useState<string | null>(null);
   const [fieldCopywritingStates, setFieldCopywritingStates] = useState<
     Record<string, WalmartFieldCopywritingState>
   >({});
@@ -2670,6 +2704,20 @@ export default function ProductEditorClient({
             : labelFactsUiStatus === "failed"
               ? "failed"
               : "ready";
+  const topOptimizeStatusText =
+    topOptimizeStatus === "optimizing"
+      ? "Optimizing with AI..."
+      : topOptimizeStatus === "extracting"
+        ? "Extracting image facts..."
+        : topOptimizeStatus === "filling"
+          ? "Filling eligible docket fields..."
+          : topOptimizeStatus === "success"
+            ? "Optimized for Agentic Visibility and Selection."
+            : topOptimizeStatus === "provider_unavailable"
+              ? "Provider unavailable."
+              : topOptimizeStatus === "failed"
+                ? "Could not optimize with AI."
+                : "Ready to optimize for Agentic Visibility and Selection.";
 
   function fieldCopyStateFor(fieldKey: string): WalmartFieldCopywritingState {
     return fieldCopywritingStates[fieldKey] ?? DEFAULT_FIELD_COPYWRITING_STATE;
@@ -2685,29 +2733,56 @@ export default function ProductEditorClient({
     }));
   }
 
-  function formatFieldCopyIntentLabel(intent: WalmartFieldCopywritingIntent): string {
-    if (intent === "agentic_visibility") return "Agentic Visibility";
-    if (intent === "search_selection") return "Search Selection";
-    if (intent === "marketplace_compliance") return "Marketplace Compliance";
-    if (intent === "clarity_conversion") return "Clarity & Conversion";
-    if (intent === "concise_title") return "Title Clarity";
-    if (intent === "detailed_description") return "Description Depth";
-    if (intent === "bullet_improvement") return "Bullet Clarity";
-    return "Search Keywords";
+  function toOptimizingLabel(actionLabel: string): string {
+    return actionLabel.replace(/^Optimize\b/i, "Optimizing");
+  }
+
+  function toOptimizedLabel(actionLabel: string): string {
+    return actionLabel.replace(/^Optimize\b/i, "Optimized");
   }
 
   function copywritingIntentForSearchBrowseField(
     key: string
   ): WalmartFieldCopywritingIntent {
     if (key === "search_keywords" || key === "search_terms" || key === "keywords") {
-      return "search_keywords";
+      return "optimize_search_keywords_for_agentic_visibility";
     }
-    if (key === "safety_warnings") return "marketplace_compliance";
+    if (key === "safety_warnings") {
+      return "optimize_safety_copy_for_compliance_and_agentic_selection";
+    }
     if (key === "suggested_use" || key === "directions_suggested_use") {
-      return "clarity_conversion";
+      return "optimize_suggested_use_for_agentic_selection";
     }
-    if (key === "support_areas") return "agentic_visibility";
-    return "search_selection";
+    if (key === "support_areas") {
+      return "optimize_benefits_for_agentic_visibility";
+    }
+    return "optimize_search_browse_field_for_agentic_visibility_and_selection";
+  }
+
+  function copywritingActionLabelForSearchBrowseField(input: {
+    key: string;
+    label: string;
+  }): string {
+    if (
+      input.key === "search_keywords" ||
+      input.key === "search_terms" ||
+      input.key === "keywords"
+    ) {
+      return "Optimize Search Keywords for Agentic Visibility";
+    }
+    if (input.key === "suggested_use" || input.key === "directions_suggested_use") {
+      return "Optimize Suggested Use for Agentic Selection";
+    }
+    if (input.key === "support_areas") {
+      return "Optimize Benefits for Agentic Visibility";
+    }
+    if (input.key === "safety_warnings") {
+      return "Optimize Safety Copy for Compliance and Agentic Selection";
+    }
+    if (input.key === "product_name") {
+      return "Optimize Product Name for Agentic Selection";
+    }
+    return `Optimize ${input.label} for Agentic Visibility and Selection`;
   }
 
   function isSearchBrowseCopywritingSupported(
@@ -2841,6 +2916,7 @@ export default function ProductEditorClient({
   async function runFieldCopywritingAgent(input: {
     stateKey: string;
     fieldLabel: string;
+    actionLabel: string;
     intent: WalmartFieldCopywritingIntent;
     maxLength?: number;
     currentValue: string;
@@ -2851,15 +2927,14 @@ export default function ProductEditorClient({
     if (!aiProviderConnected) {
       updateFieldCopyState(input.stateKey, {
         status: "missing_key",
-        message:
-          "Provider unavailable. Connect AI provider or use full Optimize with AI when available.",
+        message: "Provider unavailable.",
       });
       return;
     }
 
     updateFieldCopyState(input.stateKey, {
       status: "loading",
-      message: `Optimizing ${input.fieldLabel.toLowerCase()}...`,
+      message: `${toOptimizingLabel(input.actionLabel)}...`,
     });
 
     try {
@@ -2872,11 +2947,27 @@ export default function ProductEditorClient({
           fieldKey: input.stateKey,
           fieldLabel: input.fieldLabel,
           fieldIntent: input.intent,
+          intent: input.intent,
+          target: "agentic_visibility_and_selection",
           maxLength: input.maxLength ?? null,
           complianceMode: "supplement_safe",
+          complianceGuardrails: {
+            avoidUnsupportedFacts: true,
+            avoidUnsafeSupplementClaims: true,
+            avoidDiseaseTreatmentPreventionLanguage: true,
+            protectIdentifiers: ["sku", "gtin", "upc", "itemId", "externalItemId"],
+            protectPricingInventory: ["price", "salePrice", "inventoryQuantity"],
+            neverPublish: true,
+          },
           sourceFacts: {
             imageFactsStatus: resolvedImageFactsStatus,
             imageFactsMessage: resolvedImageFactsMessage,
+            sourceLanes: [
+              "normalized_walmart_docket",
+              "item_report_backfill",
+              "catalog_or_public_enrichment",
+              "image_derived_facts",
+            ],
           },
         }),
       });
@@ -2890,9 +2981,7 @@ export default function ProductEditorClient({
           code === "OPENAI_NOT_CONNECTED" || /openai api key/i.test(errorMessage);
         updateFieldCopyState(input.stateKey, {
           status: missingProvider ? "provider_unavailable" : "error",
-          message: missingProvider
-            ? "Provider unavailable. Connect AI provider or use full Optimize with AI when available."
-            : "Could not optimize this field.",
+          message: missingProvider ? "Provider unavailable." : "Could not optimize this field.",
         });
         return;
       }
@@ -2925,7 +3014,7 @@ export default function ProductEditorClient({
       if (candidate.trim() === input.currentValue.trim()) {
         updateFieldCopyState(input.stateKey, {
           status: "success",
-          message: `${input.fieldLabel} already optimized.`,
+          message: `${input.fieldLabel} already optimized for Agentic Visibility and Selection.`,
         });
         return;
       }
@@ -2933,7 +3022,7 @@ export default function ProductEditorClient({
       input.applyCandidate(candidate);
       updateFieldCopyState(input.stateKey, {
         status: "success",
-        message: `${input.fieldLabel} optimized for ${formatFieldCopyIntentLabel(input.intent)}.`,
+        message: `${toOptimizedLabel(input.actionLabel)}.`,
       });
     } catch {
       updateFieldCopyState(input.stateKey, {
@@ -3860,24 +3949,55 @@ export default function ProductEditorClient({
     });
   }
 
-  async function handleExtractLabelFacts() {
-    if (!hasAnyImagesForLabelExtraction) {
+  async function handleExtractLabelFacts(options?: {
+    draftPayloadOverride?: Record<string, unknown>;
+    formStateOverride?: ProductEditorFormState;
+    fillMissingOnly?: boolean;
+  }): Promise<{
+    ok: boolean;
+    providerUnavailable: boolean;
+    nextDraftPayload: Record<string, unknown>;
+    nextFormState: ProductEditorFormState;
+  }> {
+    const draftPayload = options?.draftPayloadOverride ?? (preview as Record<string, unknown>);
+    const baseForm = options?.formStateOverride ?? form;
+    const fillMissingOnly = options?.fillMissingOnly ?? false;
+
+    const primaryImageCandidate =
+      asText(draftPayload.primaryImageUrl) ??
+      asText(draftPayload.imageUrl) ??
+      "";
+    const galleryImageCandidates = Array.isArray(draftPayload.galleryImageUrls)
+      ? draftPayload.galleryImageUrls
+          .map((entry) => asText(entry)?.trim() ?? "")
+          .filter(Boolean)
+      : [];
+    const hasImagesForExtraction = Boolean(
+      primaryImageCandidate.trim() || galleryImageCandidates.length > 0
+    );
+
+    if (!hasImagesForExtraction) {
       setLabelFactsUiStatus("no_images_available");
       setLabelFactsMessage("No images available for label fact extraction.");
-      return;
+      return {
+        ok: false,
+        providerUnavailable: false,
+        nextDraftPayload: draftPayload,
+        nextFormState: baseForm,
+      };
     }
 
     try {
       setExtractingLabelFacts(true);
       setLabelFactsUiStatus("extracting");
-      setLabelFactsMessage("Extracting label facts from images...");
+      setLabelFactsMessage("Extracting image facts...");
 
       const response = await fetch("/api/ecomviper/walmart/ai/images/extract-facts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sku: product.sku,
-          draftPayload: preview,
+          draftPayload,
         }),
       });
 
@@ -3890,42 +4010,57 @@ export default function ProductEditorClient({
           /openai api key/i.test(errorMessage) ||
           /provider unavailable/i.test(errorMessage);
         setLabelFactsUiStatus(providerUnavailable ? "provider_unavailable" : "failed");
-        setLabelFactsMessage(
-          payload?.error?.message?.trim() || "Label extraction failed. Try again."
-        );
-        return;
+        setLabelFactsMessage(providerUnavailable ? "Provider unavailable." : "Could not optimize with AI.");
+        return {
+          ok: false,
+          providerUnavailable,
+          nextDraftPayload: draftPayload,
+          nextFormState: baseForm,
+        };
       }
 
       const mappedCandidates = payload.mappedSearchBrowseAttributes ?? {};
       const sanitized = sanitizeWalmartAiSearchBrowseAttributes({
         candidates: mappedCandidates,
-        existingKeys: Object.keys(form.searchBrowseAttributes),
+        existingKeys: Object.keys(baseForm.searchBrowseAttributes),
       });
-      const mergedSearchBrowse = {
-        ...form.searchBrowseAttributes,
-        ...sanitized.accepted,
-      };
+      const mergedSearchBrowse = { ...baseForm.searchBrowseAttributes };
+      for (const [key, value] of Object.entries(sanitized.accepted)) {
+        const currentValue = (mergedSearchBrowse[key] ?? "").trim();
+        if (fillMissingOnly && currentValue) continue;
+        if (currentValue === value.trim()) continue;
+        mergedSearchBrowse[key] = value;
+      }
       syncAliasGroups({ attributes: mergedSearchBrowse });
-
-      const nextAttributesJson = JSON.stringify(
-        mergeAttributesWithSearchBrowse({
-          baseAttributes: readAttributesFromForm(form.attributesJson),
-          searchBrowseAttributes: mergedSearchBrowse,
-        }),
-        null,
-        2
-      );
+      const mergedAttributes = mergeAttributesWithSearchBrowse({
+        baseAttributes: readAttributesFromForm(baseForm.attributesJson),
+        searchBrowseAttributes: mergedSearchBrowse,
+      });
+      const nextAttributesJson = JSON.stringify(mergedAttributes, null, 2);
+      const nextImageVisionExtraction = payload.visionFactPayload ?? baseForm.imageVisionExtraction;
+      const nextFormState: ProductEditorFormState = {
+        ...baseForm,
+        searchBrowseAttributes: mergedSearchBrowse,
+        attributesJson: nextAttributesJson,
+        imageVisionExtraction: nextImageVisionExtraction,
+      };
+      const nextDraftPayload: Record<string, unknown> = {
+        ...draftPayload,
+        searchBrowseAttributes: mergedSearchBrowse,
+        attributes: mergedAttributes,
+        imageVisionExtraction: nextImageVisionExtraction,
+      };
 
       patchForm({
         searchBrowseAttributes: mergedSearchBrowse,
         attributesJson: nextAttributesJson,
-        imageVisionExtraction: payload.visionFactPayload ?? form.imageVisionExtraction,
+        imageVisionExtraction: nextImageVisionExtraction,
       });
 
       const status = payload.extraction?.status?.trim() || "unknown";
       const detail =
         payload.extraction?.message?.trim() ||
-        "Label extraction completed.";
+        "Image fact extraction completed.";
       const normalizedStatus = status.toLowerCase();
       if (normalizedStatus.includes("extract") || normalizedStatus === "available") {
         setLabelFactsUiStatus("extracted_ready");
@@ -3934,22 +4069,78 @@ export default function ProductEditorClient({
       } else {
         setLabelFactsUiStatus("failed");
       }
-      setLabelFactsMessage(`Label extraction status: ${status}. ${detail}`);
+      setLabelFactsMessage(`Image facts status: ${status}. ${detail}`);
+      return {
+        ok: true,
+        providerUnavailable: false,
+        nextDraftPayload,
+        nextFormState,
+      };
     } catch {
       setLabelFactsUiStatus("failed");
-      setLabelFactsMessage("Label extraction failed. Try again.");
+      setLabelFactsMessage("Could not optimize with AI.");
+      return {
+        ok: false,
+        providerUnavailable: false,
+        nextDraftPayload: draftPayload,
+        nextFormState: baseForm,
+      };
     } finally {
       setExtractingLabelFacts(false);
     }
   }
 
-  async function runInlineOptimization() {
+  async function handleTopOptimizeWithAi() {
+    setTopOptimizeStatus("optimizing");
+    setTopOptimizeMessage(null);
+    let draftPayload = preview as Record<string, unknown>;
+    let nextFormState = form;
+
+    if (hasAnyImagesForLabelExtraction) {
+      setTopOptimizeStatus("extracting");
+      const extractionResult = await handleExtractLabelFacts({
+        draftPayloadOverride: draftPayload,
+        formStateOverride: nextFormState,
+        fillMissingOnly: true,
+      });
+      draftPayload = extractionResult.nextDraftPayload;
+      nextFormState = extractionResult.nextFormState;
+      if (!extractionResult.ok && extractionResult.providerUnavailable && !aiProviderConnected) {
+        setTopOptimizeStatus("provider_unavailable");
+        setTopOptimizeMessage("Provider unavailable.");
+        return;
+      }
+    }
+
+    setTopOptimizeStatus("filling");
+    const optimizationResult = await runInlineOptimization({
+      draftPayloadOverride: draftPayload,
+      formStateOverride: nextFormState,
+    });
+    if (optimizationResult === "success") {
+      setTopOptimizeStatus("success");
+      setTopOptimizeMessage("Optimized for Agentic Visibility and Selection.");
+      return;
+    }
+    if (optimizationResult === "missing_key") {
+      setTopOptimizeStatus("provider_unavailable");
+      setTopOptimizeMessage("Provider unavailable.");
+      return;
+    }
+    setTopOptimizeStatus("failed");
+    setTopOptimizeMessage("Could not optimize with AI.");
+  }
+
+  async function runInlineOptimization(options?: {
+    draftPayloadOverride?: Record<string, unknown>;
+    formStateOverride?: ProductEditorFormState;
+  }): Promise<"success" | "missing_key" | "error"> {
     setAiSuggestionApplied(false);
 
     if (!aiProviderConnected) {
       setInlineAiState("missing_key");
       setInlineAiMessage(OPENAI_OPTIMIZE_REQUIRED_MESSAGE);
-      return;
+      return "missing_key";
     }
 
     try {
@@ -3961,7 +4152,8 @@ export default function ProductEditorClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           sku: product.sku,
-          draftPayload: currentWalmartStateDraftPayload,
+          draftPayload: options?.draftPayloadOverride ?? (preview as Record<string, unknown>),
+          target: "agentic_visibility_and_selection",
         }),
       });
 
@@ -3979,33 +4171,39 @@ export default function ProductEditorClient({
         setInlineAiMessage(
           missingKey
             ? OPENAI_OPTIMIZE_REQUIRED_MESSAGE
-            : errorMessage || "Failed to generate AI suggestions. Try again."
+            : errorMessage || "Could not optimize with AI."
         );
-        return;
+        return missingKey ? "missing_key" : "error";
       }
 
       setInlineAiSuggestion(payload.suggestion);
-      handleApplyInlineAiSuggestion(payload.suggestion);
+      handleApplyInlineAiSuggestion(payload.suggestion, options?.formStateOverride);
+      return "success";
     } catch {
       setInlineAiState("error");
-      setInlineAiMessage("Failed to generate AI suggestions. Try again.");
+      setInlineAiMessage("Could not optimize with AI.");
+      return "error";
     }
   }
 
-  function handleApplyInlineAiSuggestion(suggestionInput?: WalmartAiSuggestion) {
+  function handleApplyInlineAiSuggestion(
+    suggestionInput?: WalmartAiSuggestion,
+    formStateOverride?: ProductEditorFormState
+  ) {
     const suggestion = suggestionInput ?? inlineAiSuggestion;
+    const baseForm = formStateOverride ?? form;
     if (!suggestion) {
       setInlineAiState("error");
-      setInlineAiMessage("Generate AI suggestions first.");
+      setInlineAiMessage("Could not optimize with AI.");
       return;
     }
 
-    const attributeMap = readAttributesFromForm(form.attributesJson);
+    const attributeMap = readAttributesFromForm(baseForm.attributesJson);
     const suggestedBrand = pickMeaningfulAiText(suggestion.suggestedBrand) ?? "";
     const safeBrand =
       suggestedBrand && suggestedBrand.toLowerCase() !== "unknown"
         ? suggestedBrand
-        : form.brand;
+        : baseForm.brand;
     const entitySet = suggestion.entitySet;
     const inferredManufacturer =
       pickMeaningfulAiText(
@@ -4026,59 +4224,65 @@ export default function ProductEditorClient({
       .join(", ");
 
     const inferredSearchBrowseCandidates: Record<string, string> = {};
-    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.brand) && safeBrand.trim()) {
+    if (shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.brand) && safeBrand.trim()) {
       inferredSearchBrowseCandidates.brand = safeBrand.trim();
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.manufacturer) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.manufacturer) &&
       inferredManufacturer.trim() &&
       inferredManufacturer.trim().toLowerCase() !== safeBrand.trim().toLowerCase()
     ) {
       inferredSearchBrowseCandidates.manufacturer = inferredManufacturer.trim();
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.supplement_type) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.supplement_type) &&
       pickMeaningfulAiText(entitySet?.category)
     ) {
       inferredSearchBrowseCandidates.supplement_type = String(entitySet?.category).trim();
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.product_form) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.product_form) &&
       pickMeaningfulAiText(entitySet?.form)
     ) {
       inferredSearchBrowseCandidates.product_form = String(entitySet?.form).trim();
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.target_audience) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.target_audience) &&
       pickMeaningfulAiText(entitySet?.audience)
     ) {
       inferredSearchBrowseCandidates.target_audience = String(entitySet?.audience).trim();
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.main_ingredients) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.main_ingredients) &&
       (entitySet?.keyIngredients?.length ?? 0) > 0
     ) {
       inferredSearchBrowseCandidates.main_ingredients = entitySet!.keyIngredients.join(", ");
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.support_areas) &&
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.support_areas) &&
       (entitySet?.supportedBenefits?.length ?? 0) > 0
     ) {
       inferredSearchBrowseCandidates.support_areas = entitySet!.supportedBenefits.join(", ");
     }
-    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.search_keywords) && inferredSearchKeywords) {
+    if (
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.search_keywords) &&
+      inferredSearchKeywords
+    ) {
       inferredSearchBrowseCandidates.search_keywords = inferredSearchKeywords;
     }
-    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.search_terms) && inferredSearchKeywords) {
+    if (
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.search_terms) &&
+      inferredSearchKeywords
+    ) {
       inferredSearchBrowseCandidates.search_terms = inferredSearchKeywords;
     }
     if (
-      shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.directions_suggested_use)
+      shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.directions_suggested_use)
     ) {
       inferredSearchBrowseCandidates.directions_suggested_use =
         DEFAULT_SUPPLEMENT_DIRECTIONS;
     }
-    if (shouldBackfillSearchBrowseValue(form.searchBrowseAttributes.safety_warnings)) {
+    if (shouldBackfillSearchBrowseValue(baseForm.searchBrowseAttributes.safety_warnings)) {
       inferredSearchBrowseCandidates.safety_warnings = DEFAULT_SUPPLEMENT_WARNINGS;
     }
     const diagnostics = normalizeInlineAiApplyDiagnostics(
@@ -4093,11 +4297,11 @@ export default function ProductEditorClient({
     const sanitizedAiSearchBrowse = sanitizeWalmartAiSearchBrowseAttributes({
       candidates: aiAttributeMap,
       existingKeys: [
-        ...Object.keys(form.searchBrowseAttributes),
+        ...Object.keys(baseForm.searchBrowseAttributes),
         ...Object.keys(attributeMap),
       ],
     });
-    const mergedSearchBrowseAttributes = { ...form.searchBrowseAttributes };
+    const mergedSearchBrowseAttributes = { ...baseForm.searchBrowseAttributes };
     syncAliasGroups({ attributes: mergedSearchBrowseAttributes });
     const appliedSearchBrowseFields: string[] = [];
     for (const [key, value] of Object.entries(sanitizedAiSearchBrowse.accepted)) {
@@ -4135,16 +4339,16 @@ export default function ProductEditorClient({
     const meaningfulBullets = suggestion.suggestedBullets
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0 && !isLowConfidenceAiFieldValue(entry));
-    const nextTitle = meaningfulTitle ?? form.title;
-    const nextLongDescription = meaningfulLongDescription ?? form.longDescription;
+    const nextTitle = meaningfulTitle ?? baseForm.title;
+    const nextLongDescription = meaningfulLongDescription ?? baseForm.longDescription;
     const nextShortDescription =
       (meaningfulShortDescription ??
-        form.shortDescription.trim()) ||
+        baseForm.shortDescription.trim()) ||
       inferShortDescriptionFromAi(nextLongDescription);
     const nextBulletPoints =
       meaningfulBullets.length > 0
         ? meaningfulBullets.join("\n")
-        : form.bulletPoints;
+        : baseForm.bulletPoints;
     const nextMediaRecommendations = (suggestion.mediaRecommendations ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
@@ -4155,26 +4359,26 @@ export default function ProductEditorClient({
     const nextComplianceNotes = (suggestion.complianceNotes ?? [])
       .map((entry) => entry.trim())
       .filter((entry) => entry.length > 0);
-    const nextAltText = pickMeaningfulAiText(suggestion.altText) ?? form.altText;
+    const nextAltText = pickMeaningfulAiText(suggestion.altText) ?? baseForm.altText;
 
     const appliedContentFields: string[] = [];
-    if (nextTitle.trim() !== form.title.trim()) appliedContentFields.push("title");
-    if (nextShortDescription.trim() !== form.shortDescription.trim()) {
+    if (nextTitle.trim() !== baseForm.title.trim()) appliedContentFields.push("title");
+    if (nextShortDescription.trim() !== baseForm.shortDescription.trim()) {
       appliedContentFields.push("short description");
     }
-    if (nextLongDescription.trim() !== form.longDescription.trim()) {
+    if (nextLongDescription.trim() !== baseForm.longDescription.trim()) {
       appliedContentFields.push("long description");
     }
-    if (nextBulletPoints.trim() !== form.bulletPoints.trim()) {
+    if (nextBulletPoints.trim() !== baseForm.bulletPoints.trim()) {
       appliedContentFields.push("bullet points");
     }
     if (
       nextFaqSnippets.join("\n").trim() &&
-      nextFaqSnippets.join("\n").trim() !== form.faqSnippets.trim()
+      nextFaqSnippets.join("\n").trim() !== baseForm.faqSnippets.trim()
     ) {
       appliedContentFields.push("FAQ snippets");
     }
-    if (safeBrand.trim() !== form.brand.trim()) appliedContentFields.push("brand");
+    if (safeBrand.trim() !== baseForm.brand.trim()) appliedContentFields.push("brand");
 
     const skippedProtectedFields = unique([
       ...sanitizedAiSearchBrowse.skipped
@@ -4199,19 +4403,19 @@ export default function ProductEditorClient({
       searchBrowseAttributes: mergedSearchBrowseAttributes,
       faqSnippets:
         diagnostics.faqGenerationState === "pending"
-          ? form.faqSnippets
+          ? baseForm.faqSnippets
           : nextFaqSnippets.length > 0
           ? nextFaqSnippets.join("\n")
-          : form.faqSnippets,
+          : baseForm.faqSnippets,
       mediaRecommendations:
         nextMediaRecommendations.length > 0
           ? nextMediaRecommendations.join("\n")
-          : form.mediaRecommendations,
+          : baseForm.mediaRecommendations,
       altText: nextAltText,
       complianceNotes:
         nextComplianceNotes.length > 0
           ? nextComplianceNotes.join("\n")
-          : form.complianceNotes,
+          : baseForm.complianceNotes,
     });
     setAiSuggestionApplied(true);
     setInlineAiState("success");
@@ -4250,7 +4454,7 @@ export default function ProductEditorClient({
     const imageFactsMessageText = diagnostics.imageFactsMessage || "none";
     const manufacturerSummary = `Manufacturer provenance: source=${diagnostics.manufacturerSource}, confidence=${diagnostics.manufacturerConfidence}, needs_review=${diagnostics.manufacturerNeedsReview}.`;
     setInlineAiMessage(
-      `AI improvements applied to draft fields. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. ${manufacturerSummary} Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
+      `Optimized for Agentic Visibility and Selection. Save Draft when ready. Updated Content: ${contentSummary}. Updated Search & Browse: ${searchBrowseSummary}. FAQ snippets: ${faqSummary}. Facts updated: ${factsSummaryText}. Sources used: ${sourceSummaryText}. Stale fields cleared/replaced: ${staleSummaryText}. Image-derived facts status: ${imageFactsStatusText}. Image-derived facts detail: ${imageFactsMessageText}. ${manufacturerSummary} Compliance changes: ${complianceSummaryText}. Skipped protected fields: ${protectedSummary}. Skipped low-confidence fields: ${lowConfidenceSummary}. FDA disclaimer status: ${disclaimerSummaryText}.`
     );
   }
 
@@ -4562,14 +4766,14 @@ export default function ProductEditorClient({
                 </p>
                 <button
                   type="button"
-                  onClick={handleExtractLabelFacts}
+                  onClick={() => void handleExtractLabelFacts()}
                   disabled={extractingLabelFacts}
                   className="mt-2 rounded border border-[#D9E4F0] bg-white px-3 py-1.5 text-xs text-[#0F172A] disabled:opacity-60"
                   data-testid="ecomviper-walmart-extract-label-facts-button"
                 >
                   {extractingLabelFacts
-                    ? "Extracting label facts..."
-                    : "Extract label facts from images"}
+                    ? "Extracting image facts..."
+                    : "Extract image facts"}
                 </button>
                 {labelFactsMessage ? <p className="mt-1 text-xs text-[#475569]">{labelFactsMessage}</p> : null}
               </div>
@@ -5038,12 +5242,12 @@ export default function ProductEditorClient({
   ];
   const optimizeActionLabel =
     inlineAiState === "loading"
-      ? "Optimizing with AI..."
+      ? "Optimizing for Agentic Visibility and Selection..."
       : inlineAiState === "error" || inlineAiState === "missing_key"
-        ? "Optimization failed"
+        ? "Could not optimize with AI."
         : aiSuggestionApplied
-          ? "Optimized draft ready for review"
-          : "Not optimized yet";
+          ? "Optimized for Agentic Visibility and Selection."
+          : "Not optimized for Agentic Visibility and Selection yet.";
   const publishLanePreview = useMemo(() => {
     let initialAttributes: Record<string, string> = {};
     try {
@@ -5445,30 +5649,38 @@ export default function ProductEditorClient({
                 Primary Enrichment Action
               </p>
               <p className="mt-1 text-sm text-[#1E293B]">
-                Extract label-backed facts from current product images before copy optimization.
+                Run image fact extraction plus full-docket optimization to increase Agentic Visibility and Selection.
               </p>
             </div>
             <button
               type="button"
-              onClick={handleExtractLabelFacts}
-              disabled={extractingLabelFacts}
+              onClick={() => void handleTopOptimizeWithAi()}
+              disabled={
+                extractingLabelFacts ||
+                topOptimizeStatus === "optimizing" ||
+                topOptimizeStatus === "extracting" ||
+                topOptimizeStatus === "filling"
+              }
               className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              data-testid="ecomviper-walmart-extract-label-facts-top-button"
+              data-testid="ecomviper-walmart-optimize-top-button"
+              aria-label="Optimize with AI for Agentic Visibility and Selection"
               data-color-intent="primary-blue"
             >
-              {extractingLabelFacts
-                ? "Extracting Label Facts From Images..."
-                : "Extract Label Facts From Images"}
+              {topOptimizeStatus === "optimizing" ||
+              topOptimizeStatus === "extracting" ||
+              topOptimizeStatus === "filling"
+                ? "Optimizing with AI..."
+                : "Optimize with AI"}
             </button>
           </div>
           <p
             className="mt-2 text-xs font-medium text-[#1E3A8A]"
-            data-testid="ecomviper-walmart-extract-label-facts-status"
+            data-testid="ecomviper-walmart-optimize-top-status"
           >
-            {topLabelFactsStatusText}
+            {topOptimizeStatusText}
           </p>
-          {labelFactsMessage ? (
-            <p className="mt-1 text-xs text-[#334155]">{labelFactsMessage}</p>
+          {topOptimizeMessage ? (
+            <p className="mt-1 text-xs text-[#334155]">{topOptimizeMessage}</p>
           ) : null}
         </article>
       </section>
@@ -5544,12 +5756,14 @@ export default function ProductEditorClient({
                     </span>
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="title"
+                      actionLabel="Optimize Title for Agentic Selection"
                       state={fieldCopyStateFor("title")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "title",
                           fieldLabel: "Title",
-                          intent: "concise_title",
+                          actionLabel: "Optimize Title for Agentic Selection",
+                          intent: "optimize_title_for_agentic_selection",
                           maxLength: 200,
                           currentValue: form.title,
                           resolveCandidate: (suggestion) =>
@@ -5573,12 +5787,14 @@ export default function ProductEditorClient({
                     </span>
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="short_description"
+                      actionLabel="Optimize Short Description for Agentic Visibility"
                       state={fieldCopyStateFor("short_description")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "short_description",
                           fieldLabel: "Short Description",
-                          intent: "clarity_conversion",
+                          actionLabel: "Optimize Short Description for Agentic Visibility",
+                          intent: "optimize_short_description_for_agentic_visibility",
                           maxLength: 500,
                           currentValue: form.shortDescription,
                           resolveCandidate: (suggestion) =>
@@ -5605,12 +5821,16 @@ export default function ProductEditorClient({
                     </span>
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="long_description"
+                      actionLabel="Optimize Long Description for Agentic Visibility and Selection"
                       state={fieldCopyStateFor("long_description")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "long_description",
                           fieldLabel: "Long Description",
-                          intent: "detailed_description",
+                          actionLabel:
+                            "Optimize Long Description for Agentic Visibility and Selection",
+                          intent:
+                            "optimize_long_description_for_agentic_visibility_and_selection",
                           maxLength: 4000,
                           currentValue: form.longDescription,
                           resolveCandidate: (suggestion) =>
@@ -5632,12 +5852,14 @@ export default function ProductEditorClient({
                     Bullet / key features (one per line)
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="bullet_points"
+                      actionLabel="Optimize Bullets for Agentic Selection"
                       state={fieldCopyStateFor("bullet_points")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "bullet_points",
                           fieldLabel: "Bullet Points",
-                          intent: "bullet_improvement",
+                          actionLabel: "Optimize Bullets for Agentic Selection",
+                          intent: "optimize_bullets_for_agentic_selection",
                           currentValue: form.bulletPoints,
                           resolveCandidate: (suggestion) =>
                             suggestion.suggestedBullets
@@ -6368,7 +6590,7 @@ export default function ProductEditorClient({
                         : "Image fact extraction is pending review."}
                     </p>
                     <p className="mt-2 text-xs text-[#475569]">
-                      Use the top action <span className="font-medium text-[#0F172A]">Extract Label Facts From Images</span> to refresh image-derived facts.
+                      Use the top action <span className="font-medium text-[#0F172A]">Optimize with AI</span> to refresh image-derived facts and optimize eligible fields.
                     </p>
                     <p className="mt-1 text-xs text-[#475569]">
                       Current extraction state: {topLabelFactsStatusText}.
@@ -6396,6 +6618,11 @@ export default function ProductEditorClient({
                             const value = form.searchBrowseAttributes[field.key] ?? "";
                             const searchFieldStateKey = `search_browse_${field.key}`;
                             const copywritingEnabled = isSearchBrowseCopywritingSupported(field);
+                            const copywritingActionLabel =
+                              copywritingActionLabelForSearchBrowseField({
+                                key: field.key,
+                                label: field.label,
+                              });
                             const copyFieldMaxLength =
                               field.key === "search_keywords" || field.key === "search_terms"
                                 ? 500
@@ -6419,11 +6646,13 @@ export default function ProductEditorClient({
                                   {copywritingEnabled ? (
                                     <WalmartFieldCopywritingAgentAction
                                       fieldKey={searchFieldStateKey}
+                                      actionLabel={copywritingActionLabel}
                                       state={fieldCopyStateFor(searchFieldStateKey)}
                                       onClick={() =>
                                         void runFieldCopywritingAgent({
                                           stateKey: searchFieldStateKey,
                                           fieldLabel: field.label,
+                                          actionLabel: copywritingActionLabel,
                                           intent: copywritingIntentForSearchBrowseField(field.key),
                                           maxLength: copyFieldMaxLength,
                                           currentValue: value,
@@ -6494,11 +6723,13 @@ export default function ProductEditorClient({
                                 {copywritingEnabled ? (
                                   <WalmartFieldCopywritingAgentAction
                                     fieldKey={searchFieldStateKey}
+                                    actionLabel={copywritingActionLabel}
                                     state={fieldCopyStateFor(searchFieldStateKey)}
                                     onClick={() =>
                                       void runFieldCopywritingAgent({
                                         stateKey: searchFieldStateKey,
                                         fieldLabel: field.label,
+                                        actionLabel: copywritingActionLabel,
                                         intent: copywritingIntentForSearchBrowseField(field.key),
                                         maxLength: copyFieldMaxLength,
                                         currentValue: value,
@@ -6546,12 +6777,14 @@ export default function ProductEditorClient({
                     Media recommendations (staged notes)
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="media_recommendations"
+                      actionLabel="Optimize Media Guidance for Agentic Visibility"
                       state={fieldCopyStateFor("media_recommendations")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "media_recommendations",
                           fieldLabel: "Media Recommendations",
-                          intent: "clarity_conversion",
+                          actionLabel: "Optimize Media Guidance for Agentic Visibility",
+                          intent: "optimize_media_guidance_for_agentic_visibility",
                           maxLength: 2000,
                           currentValue: form.mediaRecommendations,
                           resolveCandidate: (suggestion) =>
@@ -6578,12 +6811,14 @@ export default function ProductEditorClient({
                     Alt text guidance
                     <WalmartFieldCopywritingAgentAction
                       fieldKey="alt_text"
+                      actionLabel="Optimize Alt Text Guidance for Agentic Visibility"
                       state={fieldCopyStateFor("alt_text")}
                       onClick={() =>
                         void runFieldCopywritingAgent({
                           stateKey: "alt_text",
                           fieldLabel: "Alt Text",
-                          intent: "search_selection",
+                          actionLabel: "Optimize Alt Text Guidance for Agentic Visibility",
+                          intent: "optimize_alt_text_guidance_for_agentic_visibility",
                           maxLength: 500,
                           currentValue: form.altText,
                           resolveCandidate: (suggestion) =>
@@ -6671,7 +6906,7 @@ export default function ProductEditorClient({
       >
         <h2 className="text-lg font-semibold text-[#0F172A]">Workflow Actions</h2>
         <p className="mt-1 text-sm text-[#475569]">
-          Optimize updates this docket in place. Publish stays guarded with validation and preview confirmation.
+          Optimize with AI updates this docket for Agentic Visibility and Selection. Publish stays guarded with validation and preview confirmation.
         </p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <button

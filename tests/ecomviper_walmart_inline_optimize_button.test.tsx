@@ -93,7 +93,7 @@ describe("Walmart inline optimize button workflow", () => {
     const stateText =
       container.querySelector('[data-testid="ecomviper-walmart-inline-ai-panel"]')?.textContent ?? "";
     expect(stateText).toContain("Connect your OpenAI API key first to optimize this product.");
-    expect(stateText).toContain("Optimization failed");
+    expect(stateText).toContain("Could not optimize with AI.");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
@@ -183,8 +183,10 @@ describe("Walmart inline optimize button workflow", () => {
     });
     await flush();
 
-    expect(container.textContent).toContain("Optimized draft ready for review");
-    expect(container.textContent).toContain("AI improvements applied to draft fields. Save Draft when ready.");
+    expect(container.textContent).toContain("Optimized for Agentic Visibility and Selection.");
+    expect(container.textContent).toContain(
+      "Optimized for Agentic Visibility and Selection. Save Draft when ready."
+    );
 
     const titleInput = container.querySelector('input[value="ROC808 Daily Wellness Formula | Optimized"]');
     expect(titleInput).not.toBeNull();
@@ -198,9 +200,11 @@ describe("Walmart inline optimize button workflow", () => {
     const body = JSON.parse(String(requestInit.body)) as {
       sku: string;
       draftPayload: Record<string, unknown>;
+      target?: string;
     };
     expect(body.sku).toBe("ROC808");
     expect(body.draftPayload.title).toBe("ROC808 Daily Wellness Formula");
+    expect(body.target).toBe("agentic_visibility_and_selection");
 
     const saveDraftButton = Array.from(container.querySelectorAll("button")).find(
       (button) => button.textContent?.trim() === "Save Draft"
