@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   importWalmartProducts: vi.fn(),
   isWalmartImportFailureError: vi.fn(),
   retryWalmartPublicImageEnrichmentForUser: vi.fn(),
+  queueWalmartPostImportLiveHydrationForUser: vi.fn(),
   listWalmartProductsForUser: vi.fn(),
   getSerpApiCredentialsForUser: vi.fn(),
 }));
@@ -19,6 +20,7 @@ vi.mock("@/lib/ecomviper/walmart/walmart-products", () => ({
   importWalmartProducts: mocks.importWalmartProducts,
   isWalmartImportFailureError: mocks.isWalmartImportFailureError,
   retryWalmartPublicImageEnrichmentForUser: mocks.retryWalmartPublicImageEnrichmentForUser,
+  queueWalmartPostImportLiveHydrationForUser: mocks.queueWalmartPostImportLiveHydrationForUser,
   listWalmartProductsForUser: mocks.listWalmartProductsForUser,
 }));
 
@@ -33,10 +35,16 @@ describe("walmart products import route", () => {
     mocks.importWalmartProducts.mockReset();
     mocks.isWalmartImportFailureError.mockReset();
     mocks.retryWalmartPublicImageEnrichmentForUser.mockReset();
+    mocks.queueWalmartPostImportLiveHydrationForUser.mockReset();
     mocks.listWalmartProductsForUser.mockReset();
     mocks.getSerpApiCredentialsForUser.mockReset();
     mocks.listWalmartProductsForUser.mockResolvedValue([]);
     mocks.isWalmartImportFailureError.mockReturnValue(false);
+    mocks.queueWalmartPostImportLiveHydrationForUser.mockReturnValue({
+      queued: true,
+      reason: "queued",
+      requestedSkuCount: 0,
+    });
     mocks.getSerpApiCredentialsForUser.mockResolvedValue({
       connected: false,
       apiKey: null,
@@ -86,6 +94,10 @@ describe("walmart products import route", () => {
       "user_clerk_1",
       expect.objectContaining({ boundedRuntime: true })
     );
+    expect(mocks.queueWalmartPostImportLiveHydrationForUser).toHaveBeenCalledWith({
+      userId: "user_clerk_1",
+      importedSkus: [],
+    });
   });
 
   it("serializes per-product image enrichment diagnostics into import progress", async () => {
@@ -162,6 +174,37 @@ describe("walmart products import route", () => {
         finalStatus: "not_synced",
       },
     ]);
+  });
+
+  it("queues background post-import live hydration using run SKU diagnostics", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.importWalmartProducts.mockResolvedValue({
+      importedCount: 2,
+      fetchedCount: 2,
+      skippedCount: 0,
+      lastImportAt: "2026-05-12T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 2,
+        payloadShape: "root.ItemResponse.array",
+        pageCount: 1,
+        importRunSkus: ["ROC948", "ROC949"],
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", { method: "POST" })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.queueWalmartPostImportLiveHydrationForUser).toHaveBeenCalledWith({
+      userId: "user_clerk_1",
+      importedSkus: ["ROC948", "ROC949"],
+    });
   });
 
   it("does not throw when per-product diagnostics are a malformed non-array legacy value", async () => {
@@ -593,5 +636,38 @@ describe("walmart products import route", () => {
     expect(payload.importProgress?.totals?.imageStillMissingCount).toBe(4);
     expect(payload.importProgress?.totals?.imageMissingCount).toBe(4);
     expect(payload.importProgress?.totals?.imageFailedCount).toBe(4);
+  });
+
+  it("does not queue post-import live hydration in retry_image_enrichment mode", async () => {
+    mocks.requireSignedInUser.mockResolvedValue({
+      userId: "user_clerk_1",
+      unauthorizedResponse: null,
+    });
+    mocks.retryWalmartPublicImageEnrichmentForUser.mockResolvedValue({
+      importedCount: 1,
+      fetchedCount: 1,
+      skippedCount: 0,
+      lastImportAt: "2026-05-12T00:00:00.000Z",
+      mode: "live-ready",
+      importDiagnostics: {
+        fetchedCount: 1,
+        payloadShape: "retry_enrichment_only",
+        pageCount: 0,
+      },
+    });
+
+    const { POST } = await import("@/app/api/ecomviper/walmart/products/import/route");
+    const response = await POST(
+      new NextRequest("https://app.ibrains.ai/api/ecomviper/walmart/products/import", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ mode: "retry_image_enrichment" }),
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.retryWalmartPublicImageEnrichmentForUser).toHaveBeenCalledWith("user_clerk_1");
+    expect(mocks.importWalmartProducts).not.toHaveBeenCalled();
+    expect(mocks.queueWalmartPostImportLiveHydrationForUser).not.toHaveBeenCalled();
   });
 });

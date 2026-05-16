@@ -8,6 +8,7 @@ import {
   importWalmartProducts,
   isWalmartImportFailureError,
   listWalmartProductsForUser,
+  queueWalmartPostImportLiveHydrationForUser,
   retryWalmartPublicImageEnrichmentForUser,
 } from "@/lib/ecomviper/walmart/walmart-products";
 import { getSerpApiCredentialsForUser } from "@/lib/ecomviper/walmart/serpapi-walmart-images";
@@ -769,6 +770,16 @@ export async function POST(req: NextRequest) {
       startedAt,
       existingProductsShownCount,
     });
+
+    if (!isRetryMode) {
+      const importRunSkus = Array.isArray(result.importDiagnostics?.importRunSkus)
+        ? result.importDiagnostics?.importRunSkus
+        : [];
+      void queueWalmartPostImportLiveHydrationForUser({
+        userId,
+        importedSkus: importRunSkus,
+      });
+    }
 
     const summary = `Imported ${progress.totals.importedCount} products. Images from import payload: ${progress.totals.imageFromImportPayloadCount}. Walmart Item Search images: ${progress.totals.imageFromWalmartSearchCount}. SerpApi brand-search thumbnails: ${progress.totals.imageFromSerpApiBrandSearchThumbnailCount}. SerpApi per-product searches attempted: ${progress.totals.perProductSerpApiSearchesAttempted}. SerpApi per-product matches: ${progress.totals.perProductSerpApiMatches}. SerpApi product gallery images: ${progress.totals.imageFromSerpApiProductGalleryCount}. SerpApi per-product search images: ${progress.totals.imageFromSerpApiSearchFallbackCount}. Brand-search ambiguous matches: ${progress.totals.serpApiBrandSearchAmbiguousCount}. Brand-search no confident match: ${progress.totals.serpApiBrandSearchNoConfidentMatchCount}. Shopify products imported: ${progress.totals.shopifyProductsImported}. Shopify images imported: ${progress.totals.shopifyImagesImported}. Walmart products matched to Shopify: ${progress.totals.walmartProductsMatchedToShopify}. Shopify images applied: ${progress.totals.imagesAppliedFromShopify}. Shopify ambiguous matches: ${progress.totals.ambiguousShopifyMatches}. Shopify no match: ${progress.totals.shopifyNoMatchCount}. Processed this run: ${progress.totals.processedCount}. Total still missing: ${progress.totals.imageStillMissingCount}. Queued for remaining retry: ${Math.max(0, progress.totals.queuedCount - progress.totals.processedCount)}. Provider failed: ${progress.totals.imageFailedCount}.`;
     const shopifyReconcileErrorSuffix = progress.shopifyReconcileError
