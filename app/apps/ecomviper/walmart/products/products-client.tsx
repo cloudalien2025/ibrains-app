@@ -725,6 +725,7 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
   const [message, setMessage] = useState<string | null>(loadError);
   const [isImporting, setIsImporting] = useState(false);
   const [isSyncingShopify, setIsSyncingShopify] = useState(false);
+  const [isBackfillingHistoricalContent, setIsBackfillingHistoricalContent] = useState(false);
   const [shopifySyncMode, setShopifySyncMode] = useState<"prefer_shopify" | "missing_first">(
     "prefer_shopify"
   );
@@ -1745,6 +1746,32 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
     }
   }
 
+  async function handleHistoricalContentBackfill() {
+    setIsBackfillingHistoricalContent(true);
+    setMessage(null);
+    try {
+      const response = await fetch("/api/ecomviper/walmart/products/content-backfill", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ maxSkus: 600 }),
+      });
+      const payload = (await response.json().catch(() => ({}))) as {
+        message?: string;
+      };
+      if (!response.ok) {
+        setMessage(payload.message ?? "Unable to queue historical content backfill.");
+        return;
+      }
+
+      setMessage(payload.message ?? "Historical Walmart content backfill queued.");
+      router.refresh();
+    } catch {
+      setMessage("Unable to queue historical content backfill.");
+    } finally {
+      setIsBackfillingHistoricalContent(false);
+    }
+  }
+
   async function handleSyncImagesFromShopify() {
     setIsSyncingShopify(true);
     setMessage(null);
@@ -1940,15 +1967,24 @@ export default function WalmartProductsClient({ products, loadError = null }: Pr
             <button
               type="button"
               onClick={() => void handleImport("import")}
-              disabled={isImporting || isSyncingShopify}
+              disabled={isImporting || isSyncingShopify || isBackfillingHistoricalContent}
               className="rounded-lg border border-[#2563EB] bg-[#2563EB] px-3 py-2 text-sm text-white disabled:opacity-50"
             >
               {isImporting ? `${importStageLabel(importPanel?.stage ?? "importing_products")}...` : "Import Products"}
             </button>
             <button
               type="button"
+              onClick={() => void handleHistoricalContentBackfill()}
+              disabled={isImporting || isSyncingShopify || isBackfillingHistoricalContent}
+              className="rounded-lg border border-[#0F766E] bg-[#0F766E] px-3 py-2 text-sm text-white disabled:opacity-50"
+              data-testid="ecomviper-walmart-historical-content-backfill-button"
+            >
+              {isBackfillingHistoricalContent ? "Queuing content backfill..." : "Backfill missing content"}
+            </button>
+            <button
+              type="button"
               onClick={() => void handleSyncImagesFromShopify()}
-              disabled={isImporting || isSyncingShopify}
+              disabled={isImporting || isSyncingShopify || isBackfillingHistoricalContent}
               className="rounded-lg border border-[#0F172A] bg-[#0F172A] px-3 py-2 text-sm text-white disabled:opacity-50"
             >
               {isSyncingShopify ? "Syncing Shopify..." : "Sync images from Shopify"}

@@ -74,6 +74,12 @@ describe("Walmart products client UX", () => {
     expect(html).toContain(">Remove from EcomViper catalog<");
   });
 
+  it("renders historical content backfill action in header controls", () => {
+    const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
+
+    expect(html).toContain(">Backfill missing content<");
+  });
+
   it("renders SKU sort control with accessible sort state", () => {
     const html = renderToStaticMarkup(<WalmartProductsClient products={[createProduct()]} />);
 

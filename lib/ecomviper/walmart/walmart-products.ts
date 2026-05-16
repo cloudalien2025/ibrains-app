@@ -77,6 +77,9 @@ const WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY = 3;
 const WALMART_POST_IMPORT_ITEM_REPORT_POLL_DELAYS_MS = [1500, 2500, 4000, 6000, 9000, 12000, 15000];
 const WALMART_POST_IMPORT_ITEM_REPORT_RETRY_POLL_DELAYS_MS = [5000, 8000, 12000, 18000, 22000, 26000, 30000];
 const WALMART_POST_IMPORT_ITEM_REPORT_RETRY_DELAY_MS = 20_000;
+const WALMART_HISTORICAL_CONTENT_BACKFILL_MAX_SKUS = 600;
+const WALMART_HISTORICAL_CONTENT_BACKFILL_BATCH_DELAY_MS = 2_500;
+const WALMART_HISTORICAL_CONTENT_BACKFILL_MAX_CYCLES = 6;
 const SHOPIFY_IMPORT_STALE_AFTER_MS = 1000 * 60 * 60 * 12;
 const NON_MEANINGFUL_TEXT = new Set([
   "unknown",
@@ -91,6 +94,9 @@ const NON_MEANINGFUL_TEXT = new Set([
 
 declare global {
   var __ecomviper_walmart_post_import_live_hydration_jobs__:
+    | Map<string, Promise<void>>
+    | undefined;
+  var __ecomviper_walmart_historical_content_backfill_jobs__:
     | Map<string, Promise<void>>
     | undefined;
 }
@@ -514,6 +520,20 @@ function getPostImportLiveHydrationJobsStore(): Map<string, Promise<void>> {
     globalThis.__ecomviper_walmart_post_import_live_hydration_jobs__ = new Map();
   }
   return globalThis.__ecomviper_walmart_post_import_live_hydration_jobs__;
+}
+
+function getHistoricalContentBackfillJobsStore(): Map<string, Promise<void>> {
+  if (!globalThis.__ecomviper_walmart_historical_content_backfill_jobs__) {
+    globalThis.__ecomviper_walmart_historical_content_backfill_jobs__ = new Map();
+  }
+  return globalThis.__ecomviper_walmart_historical_content_backfill_jobs__;
+}
+
+function toTimestamp(value: unknown): number {
+  const normalized = asString(value);
+  if (!normalized) return 0;
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function imageIssueBySyncStatus(
@@ -2665,10 +2685,24 @@ type WalmartPostImportLiveHydrationQueueReason =
   | "already_running"
   | "test_runtime_disabled";
 
+type WalmartHistoricalContentBackfillQueueReason =
+  | "queued"
+  | "no_target_skus"
+  | "already_running"
+  | "test_runtime_disabled";
+
 export interface WalmartPostImportLiveHydrationQueueResult {
   queued: boolean;
   reason: WalmartPostImportLiveHydrationQueueReason;
   requestedSkuCount: number;
+}
+
+export interface WalmartHistoricalContentBackfillQueueResult {
+  queued: boolean;
+  reason: WalmartHistoricalContentBackfillQueueReason;
+  requestedSkuCount: number;
+  candidateSkuCount: number;
+  cycleCount: number;
 }
 
 function mergeLiveHydrationContentIntoProduct(input: {
@@ -2935,6 +2969,145 @@ export function queueWalmartPostImportLiveHydrationForUser(input: {
     queued: true,
     reason: "queued",
     requestedSkuCount: normalizedSkus.length,
+  };
+}
+
+export async function queueWalmartHistoricalContentBackfillForUser(input: {
+  userId: string;
+  maxSkus?: number;
+}): Promise<WalmartHistoricalContentBackfillQueueResult> {
+  const maxSkus = Math.max(
+    1,
+    Math.min(
+      WALMART_HISTORICAL_CONTENT_BACKFILL_MAX_SKUS,
+      input.maxSkus ?? WALMART_HISTORICAL_CONTENT_BACKFILL_MAX_SKUS
+    )
+  );
+  const allProducts = await listPersistedWalmartProducts(input.userId);
+  const candidateSkuList = unique(
+    allProducts
+      .filter((product) => contentNeedsHydration(product))
+      .sort((left, right) => toTimestamp(left.updatedAt) - toTimestamp(right.updatedAt))
+      .map((product) => normalizeSkuKey(product.sku))
+      .filter((sku) => sku.length > 0)
+  );
+  const requestedSkus = candidateSkuList.slice(0, maxSkus);
+  const candidateSkuCount = candidateSkuList.length;
+
+  if (requestedSkus.length === 0) {
+    return {
+      queued: false,
+      reason: "no_target_skus",
+      requestedSkuCount: 0,
+      candidateSkuCount,
+      cycleCount: 0,
+    };
+  }
+
+  if (process.env.NODE_ENV === "test") {
+    return {
+      queued: false,
+      reason: "test_runtime_disabled",
+      requestedSkuCount: requestedSkus.length,
+      candidateSkuCount,
+      cycleCount: 0,
+    };
+  }
+
+  const jobKey = input.userId.trim().toLowerCase();
+  const historicalJobsStore = getHistoricalContentBackfillJobsStore();
+  if (historicalJobsStore.has(jobKey)) {
+    return {
+      queued: false,
+      reason: "already_running",
+      requestedSkuCount: requestedSkus.length,
+      candidateSkuCount,
+      cycleCount: 0,
+    };
+  }
+
+  const cycleCount = Math.max(
+    1,
+    Math.min(
+      WALMART_HISTORICAL_CONTENT_BACKFILL_MAX_CYCLES,
+      Math.ceil(requestedSkus.length / WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS)
+    )
+  );
+
+  const job = (async () => {
+    let lastCycleSignature = "";
+    let queuedCycleCount = 0;
+    let latestRequestedSkuCount = requestedSkus.length;
+    let remainingCandidates = [...requestedSkus];
+
+    for (let cycleIndex = 0; cycleIndex < cycleCount; cycleIndex += 1) {
+      if (remainingCandidates.length === 0) break;
+
+      const nextBatch = remainingCandidates.slice(0, WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS);
+      const cycleSignature = nextBatch.join("|");
+      if (!cycleSignature || cycleSignature === lastCycleSignature) break;
+      lastCycleSignature = cycleSignature;
+
+      const queueResult = queueWalmartPostImportLiveHydrationForUser({
+        userId: input.userId,
+        importedSkus: nextBatch,
+        maxSkus: WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS,
+      });
+      if (!queueResult.queued) break;
+
+      queuedCycleCount += 1;
+      const postImportJob = getPostImportLiveHydrationJobsStore().get(jobKey);
+      if (postImportJob) {
+        await postImportJob;
+      }
+
+      await sleep(WALMART_HISTORICAL_CONTENT_BACKFILL_BATCH_DELAY_MS);
+
+      const latestProducts = await listPersistedWalmartProducts(input.userId);
+      const latestCandidates = unique(
+        latestProducts
+          .filter((product) => contentNeedsHydration(product))
+          .sort((left, right) => toTimestamp(left.updatedAt) - toTimestamp(right.updatedAt))
+          .map((product) => normalizeSkuKey(product.sku))
+          .filter((sku) => sku.length > 0)
+      );
+      remainingCandidates = latestCandidates.slice(0, maxSkus);
+      latestRequestedSkuCount = remainingCandidates.length;
+    }
+
+    appendActivityLog({
+      marketplace: "walmart",
+      actionType: "product_sync",
+      result: "success",
+      message:
+        queuedCycleCount > 0
+          ? `Historical content backfill queued ${queuedCycleCount} hydration cycle(s).`
+          : "Historical content backfill found no runnable hydration cycles.",
+      afterPayload: {
+        requestedSkuCount: requestedSkus.length,
+        candidateSkuCount,
+        queuedCycleCount,
+        remainingTargetSkuCount: latestRequestedSkuCount,
+      },
+    });
+  })()
+    .catch((error) => {
+      console.warn("[ecomviper:walmart:historical-content-backfill] queue run failed", {
+        user: jobKey.slice(0, 8),
+        reason: normalizeUnknownErrorMessage(error, "historical_content_backfill_failed"),
+      });
+    })
+    .finally(() => {
+      historicalJobsStore.delete(jobKey);
+    });
+
+  historicalJobsStore.set(jobKey, job);
+  return {
+    queued: true,
+    reason: "queued",
+    requestedSkuCount: requestedSkus.length,
+    candidateSkuCount,
+    cycleCount,
   };
 }
 
