@@ -2,6 +2,7 @@ import "server-only";
 
 import { query } from "@/app/api/ecomviper/_utils/db";
 import { isUndefinedRelationError } from "@/app/api/directoryiq/_utils/sqlErrors";
+import type { WalmartNormalizedDocket } from "@/lib/ecomviper/walmart/walmart-docket";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 interface WalmartProductRow {
@@ -135,6 +136,15 @@ function asString(value: unknown): string {
   return "";
 }
 
+function asWalmartDocket(value: unknown): WalmartNormalizedDocket | undefined {
+  const objectValue = asObject(value);
+  if (!objectValue) return undefined;
+  if (objectValue.version !== 1) return undefined;
+  if (!asString(objectValue.sku)) return undefined;
+  if (!Array.isArray(objectValue.statuses)) return undefined;
+  return objectValue as unknown as WalmartNormalizedDocket;
+}
+
 function asNumber(value: unknown, fallback: number): number {
   if (typeof value === "number" && Number.isFinite(value)) return value;
   if (typeof value === "string" && value.trim()) {
@@ -236,6 +246,10 @@ function sanitizePersistedWalmartProduct(payload: unknown): WalmartProductRecord
     shortDescription: asString(row.shortDescription),
     longDescription: asString(row.longDescription),
     bulletPoints: asStringArray(row.bulletPoints),
+    docket:
+      asWalmartDocket(row.docket) ??
+      asWalmartDocket(asObject(row.normalizedPayload)?.docket) ??
+      undefined,
     rawPayload: row.rawPayload ?? row,
     normalizedPayload: row.normalizedPayload ?? row,
     lastSyncedAt: asString(row.lastSyncedAt) || now,

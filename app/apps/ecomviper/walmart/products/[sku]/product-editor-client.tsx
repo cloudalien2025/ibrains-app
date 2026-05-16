@@ -13,6 +13,20 @@ import {
   normalizeDraftImageFields,
   normalizeWalmartImageUrlList,
 } from "@/lib/ecomviper/walmart/walmart-image-fields";
+import {
+  WALMART_DOCKET_BULLET_ALIASES,
+  WALMART_DOCKET_LONG_DESCRIPTION_ALIASES,
+  WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES,
+} from "@/lib/ecomviper/walmart/walmart-docket-aliases";
+import {
+  collectWalmartDocketCandidateValues,
+  normalizeWalmartBulletList,
+  normalizeWalmartInventoryValue,
+  normalizeWalmartPriceValue,
+  normalizeWalmartTextValue,
+  pickFirstNonPlaceholder,
+} from "@/lib/ecomviper/walmart/walmart-docket-hydration";
+import { buildWalmartPublishLanePreview } from "@/lib/ecomviper/walmart/walmart-publish-lanes";
 import { sanitizeSeoFilename } from "@/lib/ecomviper/walmart/walmart-generated-media-seo";
 import {
   isLowConfidenceAiFieldValue,
@@ -65,6 +79,7 @@ interface ProductEditorClientProps {
   aiProviderConnected: boolean;
   serpApiProviderConnected: boolean;
   hydratedCurrentWalmartState?: WalmartNativeState;
+  hydrationStatuses?: string[];
 }
 
 const OPENAI_OPTIMIZE_REQUIRED_MESSAGE =
@@ -866,6 +881,9 @@ function hydrateEditorForm(
   const raw = asObject(product.rawPayload);
   const rawProduct = asObject(raw?.product);
   const rawContent = asObject(raw?.content);
+  const docket = (product.docket ??
+    (asObject(normalized?.docket) as WalmartProductRecord["docket"] | null) ??
+    null) as WalmartProductRecord["docket"] | null;
   const hydratedContentSource = hydratedCurrentWalmartState
     ? {
         title: hydratedCurrentWalmartState.content.productName,
@@ -881,8 +899,31 @@ function hydrateEditorForm(
         manufacturer: hydratedCurrentWalmartState.content.manufacturer,
       }
     : null;
+  const docketContentSource = docket
+    ? {
+        title: docket.content.title.value,
+        productName: docket.content.title.value,
+        shortDescription: docket.content.shortDescription.value,
+        siteDescription: docket.content.shortDescription.value,
+        longDescription: docket.content.longDescription.value,
+        fullDescription: docket.content.longDescription.value,
+        bulletPoints: docket.content.bullets.value,
+        keyFeatures: docket.content.bullets.value,
+        brand: docket.content.brand.value,
+        brandName: docket.content.brand.value,
+        manufacturer: docket.content.manufacturer.value,
+        imageUrl: docket.media.primaryImage.value,
+        primaryImageUrl: docket.media.primaryImage.value,
+        galleryImageUrls: docket.media.galleryImages.value,
+        price: docket.pricingInventory.price.value,
+        inventoryQuantity: docket.pricingInventory.inventoryQuantity.value,
+        attributes: docket.searchBrowse.attributes.value,
+        searchBrowseAttributes: docket.searchBrowse.attributes.value,
+      }
+    : null;
 
   const sources = [
+    docketContentSource,
     hydratedContentSource,
     normalized,
     product as unknown as Record<string, unknown>,
@@ -890,6 +931,15 @@ function hydrateEditorForm(
     rawProduct,
     rawContent,
   ];
+
+  const aliasSources = sources
+    .filter((source): source is Record<string, unknown> => Boolean(source))
+    .map((source) => ({
+      source: "fallback" as const,
+      sourceLabel: "editor_hydration",
+      payload: source,
+      confidence: "medium" as const,
+    }));
 
   const draftTitle = readDraftString(draft, ["title"]);
   const draftShortDescription = readDraftString(draft, [
@@ -939,6 +989,42 @@ function hydrateEditorForm(
     "suggestedAttributes",
   ]);
 
+  const shortAliasCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: aliasSources,
+      aliases: [...WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES, "short_desc", "synopsis", "shortDesc"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
+  const longAliasCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: aliasSources,
+      aliases: [...WALMART_DOCKET_LONG_DESCRIPTION_ALIASES, "description", "productDescription", "long_desc"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
+  const bulletAliasCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: aliasSources,
+      aliases: [...WALMART_DOCKET_BULLET_ALIASES, "bulletPoints", "bullets"],
+      normalizer: normalizeWalmartBulletList,
+    })
+  );
+  const priceAliasCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: aliasSources,
+      aliases: ["price", "amount", "price.amount", "currentPrice", "currentPrice.amount", "priceInfo.currentPrice"],
+      normalizer: normalizeWalmartPriceValue,
+    })
+  );
+  const inventoryAliasCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: aliasSources,
+      aliases: ["inventoryQuantity", "quantity", "inventory", "inventory.quantity", "availability.quantity"],
+      normalizer: normalizeWalmartInventoryValue,
+    })
+  );
+
   const title =
     draftTitle !== null
       ? draftTitle
@@ -946,22 +1032,24 @@ function hydrateEditorForm(
         product.title;
   const shortDescription =
     draftShortDescription ??
-    firstNonEmptyString(sources, [
-      "shortDescription",
-      "siteDescription",
-      "short_desc",
-      "synopsis",
-      "shortDesc",
-    ]);
+    (shortAliasCandidate?.value ??
+      firstNonEmptyString(sources, [
+        "shortDescription",
+        "siteDescription",
+        "short_desc",
+        "synopsis",
+        "shortDesc",
+      ]));
   const longDescription =
     draftLongDescription ??
-    firstNonEmptyString(sources, [
-      "longDescription",
-      "fullDescription",
-      "description",
-      "productDescription",
-      "long_desc",
-    ]);
+    (longAliasCandidate?.value ??
+      firstNonEmptyString(sources, [
+        "longDescription",
+        "fullDescription",
+        "description",
+        "productDescription",
+        "long_desc",
+      ]));
   const brandCandidate =
     draftBrand !== null
       ? draftBrand
@@ -1139,6 +1227,7 @@ function hydrateEditorForm(
   const rawProductAboutThisItem = listFromUnknown(rawProduct?.aboutThisItem);
   const bulletPoints =
     draftBullets ??
+    bulletAliasCandidate?.value ??
     firstNonEmptyList([
       hydratedBullets,
       normalizedBullets,
@@ -1160,9 +1249,13 @@ function hydrateEditorForm(
       listFromUnknown(product.bulletPoints),
     ]);
   const price =
-    draftPrice ?? firstNonEmptyNumber(sources, ["price", "amount"]) ?? product.price;
+    draftPrice ??
+    priceAliasCandidate?.value ??
+    firstNonEmptyNumber(sources, ["price", "amount"]) ??
+    product.price;
   const inventoryQuantity =
     draftInventory ??
+    inventoryAliasCandidate?.value ??
     firstNonEmptyNumber(sources, ["inventoryQuantity", "quantity", "inventory"]) ??
     (product.inventoryStatus === "unknown" ? null : product.inventoryQuantity);
 
@@ -1184,6 +1277,7 @@ function hydrateEditorForm(
     draftPayload: draft ?? {},
   });
   const searchBrowseAttributes = {
+    ...(docket?.searchBrowse.attributes.value ?? {}),
     ...baseSearchBrowseAttributes,
     ...(draftSearchBrowseAttributes ?? {}),
   };
@@ -1287,6 +1381,18 @@ function formatImageSource(product: WalmartProductRecord): string {
   if (product.imageSource === "openai_generated") return "OpenAI generated image";
   if (product.imageSource === "manual") return "Manual image URL";
   return "Not synced";
+}
+
+function formatHydrationStatusLabel(status: string): string {
+  if (status === "imported_docket_ready") return "Imported docket ready";
+  if (status === "detail_hydrated") return "Detail hydrated";
+  if (status === "report_backfill_pending") return "Report backfill pending";
+  if (status === "report_unavailable") return "Report backfill unavailable";
+  if (status === "live_refresh_unavailable_no_credentials") {
+    return "Live refresh unavailable (no credentials)";
+  }
+  if (status === "live_refresh_failed") return "Live refresh failed";
+  return status.replace(/_/g, " ");
 }
 
 function formatGeneratedImageTypeLabel(imageType: WalmartGeneratedImageType): string {
@@ -1688,6 +1794,7 @@ export default function ProductEditorClient({
   aiProviderConnected,
   serpApiProviderConnected,
   hydratedCurrentWalmartState,
+  hydrationStatuses,
 }: ProductEditorClientProps) {
   const draftHardening = useMemo(
     () => normalizeWalmartDraftsForEditor(stagedDrafts),
@@ -1996,6 +2103,19 @@ export default function ProductEditorClient({
     () => hydratedCurrentWalmartState ?? fallbackCurrentWalmartState,
     [hydratedCurrentWalmartState, fallbackCurrentWalmartState]
   );
+  const normalizedProductPayload = useMemo(
+    () => asObject(product.normalizedPayload),
+    [product.normalizedPayload]
+  );
+  const resolvedHydrationStatuses = useMemo(() => {
+    const fromPayload = Array.isArray(normalizedProductPayload?.docketHydrationStatus)
+      ? normalizedProductPayload.docketHydrationStatus
+          .map((entry) => asText(entry)?.trim() ?? "")
+          .filter(Boolean)
+      : [];
+    const fromDocket = product.docket?.statuses ?? [];
+    return unique([...(hydrationStatuses ?? []), ...fromPayload, ...fromDocket]);
+  }, [hydrationStatuses, normalizedProductPayload, product.docket?.statuses]);
   const projectedScoreFromSuggestion =
     projectedQuality?.score ?? inlineAiSuggestion?.qualityScore;
   const optimizedProposalLayer = useMemo(
@@ -4129,37 +4249,73 @@ export default function ProductEditorClient({
         : aiSuggestionApplied
           ? "Optimized draft ready for review"
           : "Not optimized yet";
-  const publishPreviewPayload = useMemo(
-    () => ({
-      item: {
-        sku: product.sku,
+  const publishLanePreview = useMemo(() => {
+    let initialAttributes: Record<string, string> = {};
+    try {
+      const parsed = JSON.parse(initialForm.attributesJson || "{}") as unknown;
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        initialAttributes = Object.fromEntries(
+          Object.entries(parsed as Record<string, unknown>)
+            .map(([key, value]) => [key, normalizeWalmartTextValue(value)] as const)
+            .filter(([key, value]) => key.trim().length > 0 && value.length > 0)
+        );
+      }
+    } catch {
+      initialAttributes = {};
+    }
+    const currentPrice = normalizeWalmartPriceValue(initialForm.price);
+    const currentInventory = normalizeWalmartInventoryValue(initialForm.inventoryQuantity);
+    const draftPrice = normalizeWalmartPriceValue(preview.price);
+    const draftInventory = normalizeWalmartInventoryValue(preview.inventoryQuantity);
+    return buildWalmartPublishLanePreview({
+      sku: product.sku,
+      current: {
+        title: initialForm.title,
+        shortDescription: initialForm.shortDescription,
+        longDescription: initialForm.longDescription,
+        bulletPoints: initialForm.bulletPoints
+          .split("\n")
+          .map((entry) => entry.trim())
+          .filter(Boolean),
+        brand: initialForm.brand,
+        imageUrl: initialForm.imageUrl,
+        galleryImageUrls: normalizeWalmartImageUrlList([initialForm.additionalImageUrls]),
+        searchBrowseAttributes: initialForm.searchBrowseAttributes ?? {},
+        attributes: initialAttributes,
+        price: currentPrice,
+        inventoryQuantity: currentInventory,
+        publicWalmartUrl: initialForm.publicWalmartUrl,
+        publicWalmartProductId: initialForm.publicWalmartProductId,
+        gtin: product.gtin ?? null,
+        upc: product.upc ?? null,
+      },
+      draft: {
         title: preview.title,
         shortDescription: preview.shortDescription,
         longDescription: preview.longDescription,
-        bulletPoints: preview.bulletPoints,
+        bulletPoints: preview.bulletPoints ?? [],
         brand: preview.brand,
-        publicWalmartUrl: preview.publicWalmartUrl ?? null,
-        publicWalmartProductId: preview.publicWalmartProductId ?? null,
-        primaryImageUrl: preview.primaryImageUrl ?? null,
+        imageUrl: preview.primaryImageUrl ?? preview.imageUrl ?? "",
         galleryImageUrls: preview.galleryImageUrls ?? [],
         searchBrowseAttributes: preview.searchBrowseAttributes ?? {},
         attributes: preview.attributes ?? {},
+        price: draftPrice,
+        inventoryQuantity: draftInventory,
+        publicWalmartUrl: preview.publicWalmartUrl ?? null,
+        publicWalmartProductId: preview.publicWalmartProductId ?? null,
       },
-      pricing: {
-        sku: product.sku,
-        price: Number.isFinite(preview.price) ? Number(preview.price.toFixed(2)) : null,
-      },
-      inventory: {
-        sku: product.sku,
-        quantity: Number.isFinite(preview.inventoryQuantity) ? preview.inventoryQuantity : null,
-      },
-    }),
-    [preview, product.sku]
-  );
+      complianceViolations: validationViolations,
+    });
+  }, [initialForm, preview, product.sku, product.gtin, product.upc, validationViolations]);
+  const publishPreviewPayload = publishLanePreview;
 
   function buildPublishValidationSummary(): { errors: string[]; warnings: string[] } {
-    const errors = Array.from(new Set(validationViolations));
-    const warnings = Array.from(new Set(validationWarnings));
+    const errors = Array.from(
+      new Set([...validationViolations, ...publishLanePreview.validation.errors])
+    );
+    const warnings = Array.from(
+      new Set([...validationWarnings, ...publishLanePreview.validation.warnings])
+    );
     const productTypeValue =
       (form.searchBrowseAttributes.product_type ?? "").trim() ||
       (form.searchBrowseAttributes.supplement_type ?? "").trim() ||
@@ -4192,6 +4348,9 @@ export default function ProductEditorClient({
     }
     if (Object.keys(form.searchBrowseAttributes).length < 4) {
       warnings.push("Search & Browse completeness is low; add more structured attributes.");
+    }
+    if (publishLanePreview.status === "no_changes") {
+      warnings.push("No changed fields detected across content, price, and inventory lanes.");
     }
     return {
       errors: Array.from(new Set(errors)),
@@ -4245,6 +4404,26 @@ export default function ProductEditorClient({
           </span>
         }
       />
+
+      <section
+        className="rounded-2xl border border-[#D9E4F0] bg-white/95 px-4 py-3 shadow-[0_10px_24px_rgba(15,23,42,0.06)]"
+        data-testid="ecomviper-walmart-hydration-status"
+      >
+        <p className="text-xs uppercase tracking-[0.1em] text-[#64748B]">Hydration status</p>
+        <div className="mt-2 flex flex-wrap gap-2">
+          {(resolvedHydrationStatuses.length > 0
+            ? resolvedHydrationStatuses
+            : ["imported_docket_ready"]
+          ).map((status) => (
+            <span
+              key={status}
+              className="rounded-full border border-[#D9E4F0] bg-[#F8FBFF] px-2.5 py-1 text-xs text-[#334155]"
+            >
+              {formatHydrationStatusLabel(status)}
+            </span>
+          ))}
+        </div>
+      </section>
 
       <section
         className="rounded-2xl border border-[#D9E4F0] bg-white/95 p-4 shadow-[0_16px_36px_rgba(15,23,42,0.08)]"
@@ -5417,7 +5596,7 @@ export default function ProductEditorClient({
           >
             <p className="font-medium text-[#0F172A]">Publish preview</p>
             <p className="mt-1 text-xs text-[#64748B]">
-              Content, pricing, and inventory updates are separated below. No auto-submit is performed.
+              Content/media/attributes, price, inventory, and status tracking are separated below. No auto-submit is performed.
             </p>
             <div className="mt-2 grid gap-3 lg:grid-cols-2">
               <div>
@@ -5444,6 +5623,34 @@ export default function ProductEditorClient({
                   )}
                 </ul>
               </div>
+            </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-2">
+              {(
+                [
+                  publishLanePreview.lanes.content_item_lane,
+                  publishLanePreview.lanes.price_lane,
+                  publishLanePreview.lanes.inventory_lane,
+                  publishLanePreview.lanes.status_lane,
+                ] as const
+              ).map((lane) => (
+                <div key={lane.lane} className="rounded border border-[#E2E8F0] bg-[#F8FBFF] p-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-[#64748B]">
+                    {lane.laneLabel}
+                  </p>
+                  <p className="mt-1 text-xs text-[#334155]">
+                    {lane.changed ? `${lane.diff.length} changed field(s)` : "No changed fields."}
+                  </p>
+                  {lane.diff.length > 0 ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-[#334155]">
+                      {lane.diff.map((row) => (
+                        <li key={`${lane.lane}-${row.field}`}>
+                          {row.field}: {String(row.before ?? "null")} → {String(row.after ?? "null")}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ))}
             </div>
             {publishStatus === "ready_for_confirmation" ? (
               <div className="mt-3 flex flex-wrap gap-2">

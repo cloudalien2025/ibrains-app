@@ -3,6 +3,7 @@ import { getWalmartProductBySkuForUser, isWalmartProductArchivedForUser } from "
 import { listWalmartDraftsForUser } from "@/lib/ecomviper/walmart/walmart-drafts";
 import { getWalmartOpenAiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-openai-connection";
 import { getWalmartSerpApiConnectionStatusForUser } from "@/lib/ecomviper/walmart/walmart-serpapi-connection";
+import { getWalmartConnectionHealthForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { normalizeWalmartDraftsForEditor } from "@/lib/ecomviper/walmart/walmart-product-editor-hardening";
 import { hydrateCurrentWalmartState } from "@/lib/ecomviper/walmart/walmart-native-state";
 import { hydrateLiveWalmartItemStateForUser } from "@/lib/ecomviper/walmart/walmart-live-item-hydrator";
@@ -20,6 +21,7 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
   let aiProviderConnected = false;
   let serpApiProviderConnected = false;
   let hydratedCurrentWalmartState: WalmartNativeState | null = null;
+  let hydrationStatuses: string[] = [];
   let wasRemovedLocally = false;
 
   try {
@@ -52,15 +54,53 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       const serpApiStatus = await getWalmartSerpApiConnectionStatusForUser(userId);
       serpApiProviderConnected = serpApiStatus.connected;
       if (product) {
-        const liveHydration = await hydrateLiveWalmartItemStateForUser({
-          userId,
-          product,
-        }).catch(() => null);
-        hydratedCurrentWalmartState =
-          liveHydration?.currentWalmartState ??
-          hydrateCurrentWalmartState({
+        const normalizedPayload =
+          product.normalizedPayload && typeof product.normalizedPayload === "object"
+            ? (product.normalizedPayload as Record<string, unknown>)
+            : {};
+        const statusSet = new Set<string>();
+        for (const status of product.docket?.statuses ?? []) {
+          if (typeof status === "string" && status.trim()) {
+            statusSet.add(status.trim());
+          }
+        }
+        if (Array.isArray(normalizedPayload.docketHydrationStatus)) {
+          for (const status of normalizedPayload.docketHydrationStatus) {
+            if (typeof status === "string" && status.trim()) {
+              statusSet.add(status.trim());
+            }
+          }
+        }
+        if (statusSet.size === 0) {
+          statusSet.add("imported_docket_ready");
+        }
+
+        const connection = await getWalmartConnectionHealthForUser(userId).catch(() => null);
+        const liveRefreshAllowed =
+          connection?.connectionStatus === "connected" ||
+          connection?.summary?.tokenStatus === "valid" ||
+          connection?.summary?.safeReadStatus === "valid";
+
+        if (liveRefreshAllowed) {
+          const liveHydration = await hydrateLiveWalmartItemStateForUser({
+            userId,
+            product,
+          }).catch(() => null);
+          hydratedCurrentWalmartState =
+            liveHydration?.currentWalmartState ??
+            hydrateCurrentWalmartState({
+              product,
+            });
+          if (!liveHydration) {
+            statusSet.add("live_refresh_failed");
+          }
+        } else {
+          hydratedCurrentWalmartState = hydrateCurrentWalmartState({
             product,
           });
+          statusSet.add("live_refresh_unavailable_no_credentials");
+        }
+        hydrationStatuses = Array.from(statusSet);
       }
     }
   } catch {
@@ -89,6 +129,7 @@ export default async function WalmartProductEditorPage({ params }: { params: Pro
       aiProviderConnected={aiProviderConnected}
       serpApiProviderConnected={serpApiProviderConnected}
       hydratedCurrentWalmartState={hydratedCurrentWalmartState ?? undefined}
+      hydrationStatuses={hydrationStatuses}
     />
   );
 }

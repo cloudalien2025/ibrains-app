@@ -1460,6 +1460,209 @@ describe("walmart product import", () => {
     expect(zeroInventory?.issues).toContain("Out of stock");
   });
 
+  it("hydrates a normalized docket from import list data with source metadata", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-docket-list",
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/items?")) {
+        return new Response(
+          JSON.stringify({
+            ItemResponse: [
+              {
+                sku: "ROC948",
+                productName: "List Docket Product",
+                brand: "OPA",
+                shelfDescription: "List short description",
+                fullDescription: "List long description",
+                keyFeatures: ["List bullet one", "List bullet two"],
+                mainImage: "https://images.example.com/list-primary.jpg",
+                additionalImages: ["https://images.example.com/list-gallery.jpg"],
+                price: { amount: "34.99" },
+                itemId: "2791205430",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (url.includes("/v3/items/ROC948")) {
+        return new Response(JSON.stringify({ message: "not found" }), {
+          status: 404,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/inventory")) {
+        return new Response(JSON.stringify({ sku: "ROC948", quantity: { amount: 6 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "ROC948");
+
+    expect(result.importedCount).toBe(1);
+    expect(product?.docket?.content.shortDescription.value).toBe("List short description");
+    expect(product?.docket?.content.longDescription.value).toBe("List long description");
+    expect(product?.docket?.content.bullets.value).toEqual(["List bullet one", "List bullet two"]);
+    expect(product?.docket?.media.primaryImage.value).toBe("https://images.example.com/list-primary.jpg");
+    expect(product?.docket?.pricingInventory.price.value).toBe(34.99);
+    expect(product?.docket?.content.shortDescription.source).toBe("items_list");
+    expect(product?.docket?.content.shortDescription.retrievedAt).toBeTruthy();
+  });
+
+  it("hydrates missing content from item detail by SKU and preserves alias mapping", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-docket-detail",
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/items?")) {
+        return new Response(
+          JSON.stringify({
+            ItemResponse: [
+              {
+                sku: "ROC949",
+                productName: "Detail Docket Product",
+                brand: "OPA",
+                shortDescription: "n/a",
+                longDescription: "unknown",
+                keyFeatures: [],
+                itemId: "2791205431",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (url.includes("/v3/items/ROC949?productIdType=SKU")) {
+        return new Response(
+          JSON.stringify({
+            item: {
+              sku: "ROC949",
+              raw: {
+                content: {
+                  siteDescription: "Detail site description",
+                  fullDescription: "Detail full description",
+                  highlights: ["Highlight one", "Highlight two"],
+                },
+              },
+              primaryImage: "https://images.example.com/detail-primary.jpg",
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (url.includes("/v3/inventory")) {
+        return new Response(JSON.stringify({ sku: "ROC949", quantity: { amount: 3 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "ROC949");
+
+    expect(result.importDiagnostics?.detailHydrationCompletedCount).toBe(1);
+    expect(product?.shortDescription).toBe("Detail site description");
+    expect(product?.longDescription).toBe("Detail full description");
+    expect(product?.bulletPoints).toEqual(["Highlight one", "Highlight two"]);
+    expect(product?.docket?.content.shortDescription.source).toBe("item_detail");
+    expect(product?.docket?.statuses).toContain("detail_hydrated");
+  });
+
+  it("keeps import successful when detail hydration is unauthorized and records unavailable diagnostics", async () => {
+    mocks.requestWalmartTokenForUser.mockResolvedValue({
+      ok: true,
+      tokenStatus: "valid",
+      lastError: null,
+      accessToken: "wm_live_access_token",
+      environment: "production",
+      marketplaceRegion: "US",
+      httpStatus: 200,
+      correlationId: "corr-docket-detail-unavailable",
+    });
+
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      if (url.includes("/v3/items?")) {
+        return new Response(
+          JSON.stringify({
+            ItemResponse: [
+              {
+                sku: "ROC950",
+                productName: "Detail Unavailable Product",
+                brand: "OPA",
+                mainImage: "https://images.example.com/roc950.jpg",
+                itemId: "2791205432",
+              },
+            ],
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      if (url.includes("/v3/items/ROC950")) {
+        return new Response(JSON.stringify({ message: "forbidden" }), {
+          status: 403,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      if (url.includes("/v3/inventory")) {
+        return new Response(JSON.stringify({ sku: "ROC950", quantity: { amount: 2 } }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ message: "not found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+      });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { importWalmartProducts, listWalmartProducts } = await import("@/lib/ecomviper/walmart/walmart-products");
+    const result = await importWalmartProducts("user_clerk_1");
+    const product = listWalmartProducts().find((entry) => entry.sku === "ROC950");
+
+    expect(result.importedCount).toBe(1);
+    expect(result.importDiagnostics?.detailHydrationUnavailableCount).toBe(1);
+    expect(result.importDiagnostics?.detailHydrationCompletedCount).toBe(0);
+    expect(product?.docket?.statuses).toContain("imported_docket_ready");
+    expect(product?.docket?.statuses).not.toContain("detail_hydrated");
+  });
+
   it("throws a clear error when walmart token request fails", async () => {
     mocks.requestWalmartTokenForUser.mockResolvedValue({
       ok: false,

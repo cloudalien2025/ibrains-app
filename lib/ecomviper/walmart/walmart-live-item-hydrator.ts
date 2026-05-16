@@ -4,6 +4,16 @@ import crypto from "crypto";
 import { requestWalmartTokenForUser } from "@/lib/ecomviper/walmart/walmart-auth";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
 import { hydrateCurrentWalmartState, type WalmartHydrationStatus } from "@/lib/ecomviper/walmart/walmart-native-state";
+import {
+  WALMART_DOCKET_LONG_DESCRIPTION_ALIASES,
+  WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES,
+} from "@/lib/ecomviper/walmart/walmart-docket-aliases";
+import {
+  collectWalmartDocketCandidateValues,
+  normalizeWalmartBulletList,
+  normalizeWalmartTextValue,
+  pickFirstNonPlaceholder,
+} from "@/lib/ecomviper/walmart/walmart-docket-hydration";
 import { normalizeSearchBrowseAttributes } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import type { WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 import type { WalmartNativeState } from "@/lib/ecomviper/walmart/walmart-native-state";
@@ -183,32 +193,7 @@ function parseLiveBulletPoints(liveItem: Record<string, unknown>): string[] {
     content?.features ??
     content?.highlights ??
     content?.aboutThisItem;
-  if (Array.isArray(direct)) {
-    return unique(
-      direct
-        .flatMap((entry) => {
-          if (typeof entry === "string") return [entry.trim()];
-          const objectEntry = asObject(entry);
-          if (!objectEntry) return [];
-          const value =
-            asText(objectEntry.value) ||
-            asText(objectEntry.text) ||
-            asText(objectEntry.description) ||
-            asText(objectEntry.label) ||
-            asText(objectEntry.title) ||
-            asText(objectEntry.name);
-          return value ? [value.trim()] : [];
-        })
-        .filter(Boolean)
-    );
-  }
-
-  const keyFeatures = asText(direct);
-  if (!keyFeatures) return [];
-  return keyFeatures
-    .split(/\r?\n|[;|]+/)
-    .map((entry) => entry.trim())
-    .filter(Boolean);
+  return unique(normalizeWalmartBulletList(direct));
 }
 
 function parseLiveAttributes(liveItem: Record<string, unknown>): Record<string, string> {
@@ -551,24 +536,38 @@ function mergeLiveItemIntoProduct(input: {
     asText(liveItem.brandName) ||
     input.product.brand;
 
-  const shortDescription =
-    asText(liveItem.shortDescription) ||
-    asText(liveItem.siteDescription) ||
-    asText(liveItem.short_desc) ||
-    asText(liveItem.synopsis) ||
-    asText(liveContent?.shortDescription) ||
-    asText(liveContent?.siteDescription) ||
-    input.product.shortDescription;
-
-  const longDescription =
-    asText(liveItem.longDescription) ||
-    asText(liveItem.fullDescription) ||
-    asText(liveItem.description) ||
-    asText(liveItem.productDescription) ||
-    asText(liveContent?.longDescription) ||
-    asText(liveContent?.fullDescription) ||
-    asText(liveContent?.description) ||
-    input.product.longDescription;
+  const liveAliasPayload = {
+    ...liveItem,
+    raw: {
+      ...liveItem,
+      content: liveContent,
+      product: asObject(liveItem.product),
+    },
+  };
+  const liveAliasSources = [
+    {
+      source: "page_live_refresh" as const,
+      sourceLabel: "live_item_payload",
+      payload: liveAliasPayload,
+      confidence: "high" as const,
+    },
+  ];
+  const shortDescriptionCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: liveAliasSources,
+      aliases: [...WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES, "short_desc", "synopsis"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
+  const longDescriptionCandidate = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: liveAliasSources,
+      aliases: [...WALMART_DOCKET_LONG_DESCRIPTION_ALIASES, "description", "productDescription"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
+  const shortDescription = shortDescriptionCandidate?.value || input.product.shortDescription;
+  const longDescription = longDescriptionCandidate?.value || input.product.longDescription;
 
   const bulletPoints = parseLiveBulletPoints(liveItem);
   const price =
