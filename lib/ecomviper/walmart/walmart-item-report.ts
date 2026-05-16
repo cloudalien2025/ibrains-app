@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "crypto";
 import { inflateRawSync, gunzipSync } from "node:zlib";
 import { WALMART_PRODUCTION_BASE_URL } from "@/lib/ecomviper/walmart/walmart-client";
+import { hydrateWalmartDocketFromSources } from "@/lib/ecomviper/walmart/walmart-docket-hydration";
 import type { WalmartImageMatchMethod, WalmartImageSyncStatus, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 const ITEM_REPORT_STATUS_POLL_DELAYS_MS = [700, 1200, 1800, 2600, 3500] as const;
@@ -35,6 +36,13 @@ export interface WalmartItemReportRow {
   shelfDescription?: string;
   longDescription?: string;
   keyFeatures?: string[];
+  price?: number | null;
+  salePrice?: number | null;
+  currency?: string;
+  inventoryQuantity?: number | null;
+  inventoryStatus?: string;
+  fulfillmentType?: string;
+  shipNode?: string;
   primaryImageUrl: string;
   galleryImageUrls: string[];
   variantImageUrls: string[];
@@ -182,6 +190,16 @@ function unique(values: string[]): string[] {
     result.push(normalized);
   }
   return result;
+}
+
+function parseNumber(value: unknown): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const text = asString(value);
+  if (!text) return null;
+  const cleaned = text.replace(/[^0-9.-]/g, "");
+  if (!cleaned) return null;
+  const parsed = Number(cleaned);
+  return Number.isFinite(parsed) ? parsed : null;
 }
 
 function tokenize(value: string): string[] {
@@ -791,6 +809,44 @@ function parseDelimitedTextList(raw: string): string[] {
   );
 }
 
+export function itemReportRowToDocketSourcePayload(row: WalmartItemReportRow): Record<string, unknown> {
+  const attributes: Record<string, string> = {};
+  if (row.productId) attributes.product_id = row.productId;
+  if (row.productIdType) attributes.product_id_type = row.productIdType;
+  if (row.wpid) attributes.wpid = row.wpid;
+  if (row.fulfillmentType) attributes.fulfillment_type = row.fulfillmentType;
+  if (row.shipNode) attributes.ship_node = row.shipNode;
+  if (row.brand) attributes.brand = row.brand;
+
+  return {
+    sku: row.sku,
+    title: row.title,
+    brand: row.brand,
+    itemId: row.itemId,
+    usItemId: row.itemId,
+    productId: row.productId,
+    productIdType: row.productIdType,
+    siteDescription: row.shelfDescription ?? "",
+    fullDescription: row.longDescription ?? "",
+    keyFeatures: row.keyFeatures ?? [],
+    primaryImage: row.primaryImageUrl,
+    additionalImages: unique(
+      [row.primaryImageUrl, ...row.galleryImageUrls, ...row.variantImageUrls].filter(Boolean)
+    ),
+    price: row.price ?? null,
+    salePrice: row.salePrice ?? null,
+    currency: row.currency ?? "",
+    inventoryQuantity: row.inventoryQuantity ?? null,
+    inventoryStatus: row.inventoryStatus ?? "",
+    attributes,
+    raw: {
+      itemReport: {
+        rowIndex: row.rowIndex,
+      },
+    },
+  };
+}
+
 export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
   const rows = parseCsvRows(csvText);
   if (rows.length <= 1) return [];
@@ -830,6 +886,43 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
   const primaryImageIndex = findColumnIndex(header, ["PrimaryImageUrl", "Primary Image URL", "primaryImageUrl", "Main Image URL"]);
   const additionalImagesIndex = findColumnIndex(header, ["AdditionalImageUrls", "Additional Image URLs", "additionalImageUrls", "GalleryImageUrls"]);
   const variantImagesIndex = findColumnIndex(header, ["VariantImageUrls", "Variant Image URLs", "variantImageUrls"]);
+  const priceIndex = findColumnIndex(header, [
+    "Price",
+    "CurrentPrice",
+    "Current Price",
+    "PriceAmount",
+    "Price Amount",
+    "itemPrice",
+  ]);
+  const salePriceIndex = findColumnIndex(header, [
+    "SalePrice",
+    "Sale Price",
+    "SpecialPrice",
+    "OfferPrice",
+    "PromoPrice",
+  ]);
+  const currencyIndex = findColumnIndex(header, ["Currency", "CurrencyCode", "PriceCurrency"]);
+  const inventoryQuantityIndex = findColumnIndex(header, [
+    "InventoryQuantity",
+    "Inventory Quantity",
+    "Quantity",
+    "Qty",
+    "AvailableToSellQty",
+    "OnHandQuantity",
+  ]);
+  const inventoryStatusIndex = findColumnIndex(header, [
+    "InventoryStatus",
+    "Inventory Status",
+    "Availability",
+    "AvailabilityStatus",
+    "StockStatus",
+  ]);
+  const fulfillmentTypeIndex = findColumnIndex(header, [
+    "FulfillmentType",
+    "Fulfillment Type",
+    "Fulfillment",
+  ]);
+  const shipNodeIndex = findColumnIndex(header, ["ShipNode", "Ship Node", "FulfillmentNode", "Node"]);
 
   const parsed: WalmartItemReportRow[] = [];
 
@@ -853,6 +946,13 @@ export function parseItemReportCsv(csvText: string): WalmartItemReportRow[] {
       shelfDescription: shelfDescriptionIndex >= 0 ? asString(row[shelfDescriptionIndex]) : "",
       longDescription: longDescriptionIndex >= 0 ? asString(row[longDescriptionIndex]) : "",
       keyFeatures: keyFeaturesIndex >= 0 ? parseDelimitedTextList(asString(row[keyFeaturesIndex])) : [],
+      price: priceIndex >= 0 ? parseNumber(row[priceIndex]) : null,
+      salePrice: salePriceIndex >= 0 ? parseNumber(row[salePriceIndex]) : null,
+      currency: currencyIndex >= 0 ? asString(row[currencyIndex]).toUpperCase() : "",
+      inventoryQuantity: inventoryQuantityIndex >= 0 ? parseNumber(row[inventoryQuantityIndex]) : null,
+      inventoryStatus: inventoryStatusIndex >= 0 ? asString(row[inventoryStatusIndex]) : "",
+      fulfillmentType: fulfillmentTypeIndex >= 0 ? asString(row[fulfillmentTypeIndex]) : "",
+      shipNode: shipNodeIndex >= 0 ? asString(row[shipNodeIndex]) : "",
       primaryImageUrl,
       galleryImageUrls: dedupeUrls([
         primaryImageUrl,
@@ -1301,25 +1401,67 @@ function mergeMissingContentFromItemReportRow(
     changed = true;
   }
 
+  if (typeof row.price === "number" && Number.isFinite(row.price) && (nextProduct.price ?? 0) <= 0) {
+    nextProduct.price = row.price;
+    changed = true;
+  }
+
+  if (
+    typeof row.inventoryQuantity === "number" &&
+    Number.isFinite(row.inventoryQuantity) &&
+    (nextProduct.inventoryStatus !== "known" || nextProduct.inventoryQuantity <= 0)
+  ) {
+    nextProduct.inventoryQuantity = Math.max(0, Math.floor(row.inventoryQuantity));
+    nextProduct.inventoryStatus = "known";
+    changed = true;
+  }
+
   if (!changed) return null;
 
   const now = new Date().toISOString();
   const rawPayload = asObject(nextProduct.rawPayload) ?? {};
   const normalizedPayload = asObject(nextProduct.normalizedPayload) ?? {};
   const normalizedItemReportHydration = asObject(normalizedPayload.itemReportHydration) ?? {};
+  const nextDocket = hydrateWalmartDocketFromSources({
+    sku: nextProduct.sku,
+    existingDocket: nextProduct.docket ?? null,
+    hydratedAt: now,
+    statuses: [...(nextProduct.docket?.statuses ?? []), "imported_docket_ready"],
+    sources: [
+      {
+        source: "item_report",
+        payload: itemReportRowToDocketSourcePayload(row),
+        retrievedAt: now,
+        updatedAt: now,
+        confidence: "medium",
+      },
+    ],
+  });
 
   nextProduct.rawPayload = {
     ...rawPayload,
     itemReportContentHydratedAt: now,
     itemReportRowIndex: row.rowIndex,
   };
+  nextProduct.docket = nextDocket;
   nextProduct.normalizedPayload = {
     ...normalizedPayload,
+    shortDescription: nextProduct.shortDescription,
+    longDescription: nextProduct.longDescription,
+    bulletPoints: [...nextProduct.bulletPoints],
+    price: nextProduct.price,
+    inventoryQuantity: nextProduct.inventoryQuantity,
+    inventoryStatus: nextProduct.inventoryStatus,
+    docket: nextDocket,
+    docketHydrationStatus: [...(nextDocket.statuses ?? [])],
     itemReportHydration: {
       ...normalizedItemReportHydration,
       shortDescription: nextProduct.shortDescription,
       longDescription: nextProduct.longDescription,
       bulletPoints: [...nextProduct.bulletPoints],
+      price: nextProduct.price,
+      inventoryQuantity: nextProduct.inventoryQuantity,
+      inventoryStatus: nextProduct.inventoryStatus,
       rowIndex: row.rowIndex,
       source: "walmart_item_report",
       hydratedAt: now,

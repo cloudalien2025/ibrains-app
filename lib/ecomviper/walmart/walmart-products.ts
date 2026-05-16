@@ -17,6 +17,10 @@ import {
   enrichProductsFromItemReport,
   hydrateMissingContentFromItemReportRows,
 } from "@/lib/ecomviper/walmart/walmart-item-report";
+import {
+  hydrateWalmartDocketFromSources,
+  type WalmartDocketHydrationSource,
+} from "@/lib/ecomviper/walmart/walmart-docket-hydration";
 import { enrichWalmartImageFromItemSearch } from "@/lib/ecomviper/walmart/walmart-item-search";
 import { resolveWalmartCatalogImage } from "@/lib/ecomviper/walmart/walmart-image-providers";
 import { runPublicListingImageEnrichmentQueue } from "@/lib/ecomviper/walmart/walmart-import-enrichment";
@@ -72,6 +76,10 @@ const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS = 45;
 const WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED = 4;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS = 250;
 const WALMART_IMPORT_MAX_INVENTORY_LOOKUPS_BOUNDED = 0;
+const WALMART_IMPORT_DETAIL_HYDRATION_MAX_SKUS = 120;
+const WALMART_IMPORT_DETAIL_HYDRATION_MAX_SKUS_BOUNDED = 18;
+const WALMART_ITEM_DETAIL_REQUEST_TIMEOUT_MS = 9_000;
+const WALMART_ITEM_DETAIL_HYDRATION_CONCURRENCY = 4;
 const WALMART_POST_IMPORT_LIVE_HYDRATION_MAX_SKUS = 120;
 const WALMART_POST_IMPORT_LIVE_HYDRATION_CONCURRENCY = 3;
 const WALMART_POST_IMPORT_ITEM_REPORT_POLL_DELAYS_MS = [1500, 2500, 4000, 6000, 9000, 12000, 15000];
@@ -946,6 +954,312 @@ function mergeInventorySnapshots(
   return inventoryApiSnapshot;
 }
 
+function buildDocketPayloadShape(value: Record<string, unknown>): Record<string, unknown> {
+  const existingRaw = asObject(value.raw);
+  const valueWithoutRaw: Record<string, unknown> = { ...value };
+  delete valueWithoutRaw.raw;
+  const rawProduct = asObject(valueWithoutRaw.product) ?? asObject(existingRaw?.product);
+  const rawContent = asObject(valueWithoutRaw.content) ?? asObject(existingRaw?.content);
+  const rawMedia = asObject(valueWithoutRaw.media) ?? asObject(existingRaw?.media);
+
+  return {
+    ...valueWithoutRaw,
+    raw: {
+      ...(existingRaw ?? {}),
+      ...valueWithoutRaw,
+      product: rawProduct,
+      content: rawContent,
+      media: rawMedia,
+    },
+  };
+}
+
+function applyDocketToProduct(input: {
+  product: WalmartProductRecord;
+  source: WalmartDocketHydrationSource["source"];
+  payload: Record<string, unknown>;
+  retrievedAt: string;
+  statuses?: Array<
+    | "imported_docket_ready"
+    | "detail_hydrated"
+    | "report_backfill_pending"
+    | "report_unavailable"
+    | "report_applied"
+  >;
+}): WalmartProductRecord {
+  const docket = hydrateWalmartDocketFromSources({
+    sku: input.product.sku,
+    existingDocket: input.product.docket ?? null,
+    hydratedAt: input.retrievedAt,
+    statuses: (input.statuses ?? ["imported_docket_ready"]).filter(
+      (entry): entry is
+        | "imported_docket_ready"
+        | "detail_hydrated"
+        | "report_backfill_pending"
+        | "report_unavailable" =>
+        entry === "imported_docket_ready" ||
+        entry === "detail_hydrated" ||
+        entry === "report_backfill_pending" ||
+        entry === "report_unavailable"
+    ),
+    sources: [
+      {
+        source: input.source,
+        payload: buildDocketPayloadShape(input.payload),
+        retrievedAt: input.retrievedAt,
+        updatedAt: input.retrievedAt,
+        confidence: input.source === "item_detail" ? "high" : "medium",
+      },
+    ],
+  });
+
+  const nextShortDescription = isMeaningfulText(docket.content.shortDescription.value)
+    ? docket.content.shortDescription.value
+    : input.product.shortDescription;
+  const nextLongDescription = isMeaningfulText(docket.content.longDescription.value)
+    ? docket.content.longDescription.value
+    : input.product.longDescription;
+  const nextBullets = meaningfulList(docket.content.bullets.value).length
+    ? docket.content.bullets.value
+    : input.product.bulletPoints;
+  const nextBrand = isMeaningfulText(docket.content.brand.value)
+    ? docket.content.brand.value
+    : input.product.brand;
+
+  const imageFromDocket = docket.media.primaryImage.value.trim();
+  const nextImageUrl = imageFromDocket || input.product.imageUrl;
+  const nextGallery = nextImageUrl
+    ? unique([nextImageUrl, ...(docket.media.galleryImages.value ?? []), ...(input.product.galleryImageUrls ?? [])])
+    : input.product.galleryImageUrls ?? [];
+  const nextAttributes = {
+    ...(input.product.attributes ?? {}),
+    ...(docket.searchBrowse.attributes.value ?? {}),
+  };
+  const nextSearchBrowseAttributes = {
+    ...(input.product.searchBrowseAttributes ?? {}),
+    ...(docket.searchBrowse.attributes.value ?? {}),
+  };
+  const nextPrice =
+    docket.pricingInventory.price.value !== null ? docket.pricingInventory.price.value : input.product.price;
+  const nextInventoryQuantity =
+    docket.pricingInventory.inventoryQuantity.value !== null
+      ? docket.pricingInventory.inventoryQuantity.value
+      : input.product.inventoryQuantity;
+  const nextInventoryStatus =
+    docket.pricingInventory.inventoryQuantity.value !== null
+      ? "known"
+      : input.product.inventoryStatus;
+
+  const normalizedPayload = asObject(input.product.normalizedPayload) ?? {};
+  const rawPayload = asObject(input.product.rawPayload) ?? {};
+
+  return withCanonicalPublicListingMetadata({
+    ...input.product,
+    title: docket.content.title.value || input.product.title,
+    shortDescription: nextShortDescription,
+    longDescription: nextLongDescription,
+    bulletPoints: nextBullets,
+    brand: nextBrand,
+    price: typeof nextPrice === "number" && Number.isFinite(nextPrice) ? nextPrice : input.product.price,
+    inventoryQuantity:
+      typeof nextInventoryQuantity === "number" && Number.isFinite(nextInventoryQuantity)
+        ? Math.max(0, nextInventoryQuantity)
+        : input.product.inventoryQuantity,
+    inventoryStatus: nextInventoryStatus,
+    imageUrl: nextImageUrl,
+    primaryImageUrl: nextImageUrl || undefined,
+    galleryImageUrls: nextGallery,
+    publicWalmartUrl: docket.media.publicListingUrl.value || input.product.publicWalmartUrl,
+    publicWalmartProductId: docket.media.confirmedItemId.value || input.product.publicWalmartProductId,
+    itemId: docket.media.confirmedItemId.value || input.product.itemId,
+    attributes: nextAttributes,
+    searchBrowseAttributes: nextSearchBrowseAttributes,
+    docket,
+    rawPayload: {
+      ...rawPayload,
+      docketHydratedAt: input.retrievedAt,
+    },
+    normalizedPayload: {
+      ...normalizedPayload,
+      shortDescription: nextShortDescription,
+      longDescription: nextLongDescription,
+      bulletPoints: [...nextBullets],
+      imageUrl: nextImageUrl,
+      galleryImageUrls: [...nextGallery],
+      publicWalmartUrl: docket.media.publicListingUrl.value || input.product.publicWalmartUrl || null,
+      publicWalmartProductId: docket.media.confirmedItemId.value || input.product.publicWalmartProductId || null,
+      attributes: nextAttributes,
+      searchBrowseAttributes: nextSearchBrowseAttributes,
+      docket,
+      docketHydratedAt: input.retrievedAt,
+      docketHydrationStatus: [...docket.statuses],
+    },
+  });
+}
+
+function extractDetailItemFromPayload(
+  payload: unknown,
+  sku: string
+): Record<string, unknown> | null {
+  const candidates: Record<string, unknown>[] = [];
+  const pushCandidate = (value: unknown) => {
+    const objectValue = asObject(value);
+    if (!objectValue) return;
+    candidates.push(objectValue);
+  };
+
+  const root = asObject(payload);
+  if (root) {
+    pushCandidate(root.item);
+    pushCandidate(root.Item);
+    const data = asObject(root.data);
+    pushCandidate(data?.item);
+    pushCandidate(data?.Item);
+    if (Array.isArray(root.ItemResponse)) {
+      for (const entry of root.ItemResponse) pushCandidate(entry);
+    }
+    if (Array.isArray(root.items)) {
+      for (const entry of root.items) pushCandidate(entry);
+    }
+  }
+  if (Array.isArray(payload)) {
+    for (const entry of payload) pushCandidate(entry);
+  }
+  const normalizedSku = normalizeSkuKey(sku);
+  const exact = candidates.find((entry) => normalizeSkuKey(asString(entry.sku)) === normalizedSku);
+  return exact ?? candidates[0] ?? null;
+}
+
+async function fetchItemDetailBySku(input: {
+  accessToken: string;
+  sku: string;
+}): Promise<{
+  item: Record<string, unknown> | null;
+  statusCode: number | null;
+  unavailable: boolean;
+}> {
+  const paths = [
+    `/v3/items/${encodeURIComponent(input.sku)}?productIdType=SKU`,
+    `/v3/items/${encodeURIComponent(input.sku)}`,
+  ];
+
+  for (const path of paths) {
+    const url = new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString();
+    const correlationId = crypto.randomUUID();
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), WALMART_ITEM_DETAIL_REQUEST_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        method: "GET",
+        headers: buildWalmartApiHeaders(input.accessToken, correlationId),
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        if (response.status === 401 || response.status === 403) {
+          return { item: null, statusCode: response.status, unavailable: true };
+        }
+        continue;
+      }
+      const body = await response.text();
+      let payload: unknown = {};
+      if (body.trim()) {
+        try {
+          payload = JSON.parse(body) as unknown;
+        } catch {
+          continue;
+        }
+      }
+      const item = extractDetailItemFromPayload(payload, input.sku);
+      if (item) return { item, statusCode: response.status, unavailable: false };
+    } catch {
+      // Continue to fallback path.
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  return { item: null, statusCode: null, unavailable: false };
+}
+
+async function hydrateImportedProductsWithItemDetails(input: {
+  accessToken: string;
+  products: WalmartProductRecord[];
+  boundedRuntime?: boolean;
+}): Promise<{
+  products: WalmartProductRecord[];
+  requestedCount: number;
+  completedCount: number;
+  failedCount: number;
+  unavailableCount: number;
+}> {
+  const maxSkuCount = input.boundedRuntime
+    ? WALMART_IMPORT_DETAIL_HYDRATION_MAX_SKUS_BOUNDED
+    : WALMART_IMPORT_DETAIL_HYDRATION_MAX_SKUS;
+  const candidates = input.products.slice(0, maxSkuCount);
+  if (candidates.length === 0) {
+    return {
+      products: input.products,
+      requestedCount: 0,
+      completedCount: 0,
+      failedCount: 0,
+      unavailableCount: 0,
+    };
+  }
+
+  const bySku = new Map<string, WalmartProductRecord>(
+    input.products.map((product) => [normalizeSkuKey(product.sku), product])
+  );
+  let completedCount = 0;
+  let failedCount = 0;
+  let unavailableCount = 0;
+
+  for (let index = 0; index < candidates.length; index += WALMART_ITEM_DETAIL_HYDRATION_CONCURRENCY) {
+    const batch = candidates.slice(index, index + WALMART_ITEM_DETAIL_HYDRATION_CONCURRENCY);
+    const results = await Promise.all(
+      batch.map(async (product) => {
+        const detail = await fetchItemDetailBySku({
+          accessToken: input.accessToken,
+          sku: product.sku,
+        });
+        return { product, detail } as const;
+      })
+    );
+
+    for (const result of results) {
+      const skuKey = normalizeSkuKey(result.product.sku);
+      if (!result.detail.item) {
+        if (result.detail.unavailable) unavailableCount += 1;
+        else failedCount += 1;
+        continue;
+      }
+      completedCount += 1;
+      bySku.set(
+        skuKey,
+        applyDocketToProduct({
+          product: bySku.get(skuKey) ?? result.product,
+          source: "item_detail",
+          payload: result.detail.item,
+          retrievedAt: new Date().toISOString(),
+          statuses: ["imported_docket_ready", "detail_hydrated", "report_backfill_pending"],
+        })
+      );
+    }
+  }
+
+  const hydratedProducts = input.products.map(
+    (product) => bySku.get(normalizeSkuKey(product.sku)) ?? product
+  );
+
+  return {
+    products: hydratedProducts,
+    requestedCount: candidates.length,
+    completedCount,
+    failedCount,
+    unavailableCount,
+  };
+}
+
 function extractInventoryQuantity(payload: unknown): number | null {
   const root = asObject(payload);
   if (!root) return null;
@@ -1207,7 +1521,7 @@ function normalizeImportedItem(
     publicListingReference.publicWalmartProductId
   );
 
-  return {
+  const importedProduct: WalmartProductRecord = {
     ...normalized,
     externalItemId: externalItemId || normalized.externalItemId,
     upc: identifiers.upc || normalized.upc,
@@ -1255,6 +1569,14 @@ function normalizeImportedItem(
       bulletPoints: normalized.bulletPoints,
     },
   };
+
+  return applyDocketToProduct({
+    product: importedProduct,
+    source: "items_list",
+    payload: item,
+    retrievedAt: new Date().toISOString(),
+    statuses: ["imported_docket_ready", "report_backfill_pending"],
+  });
 }
 
 function summarizeWalmartResponseShape(payload: unknown): string {
@@ -2353,20 +2675,26 @@ export async function importWalmartProducts(
     }
 
     const baseProducts = Array.from(bySku.values());
+    const detailHydration = await hydrateImportedProductsWithItemDetails({
+      accessToken: token.accessToken,
+      products: baseProducts,
+      boundedRuntime: options?.boundedRuntime,
+    });
+    const baseProductsWithDetail = detailHydration.products;
     const imageFromImportPayloadSkuKeys = new Set(
-      baseProducts
+      baseProductsWithDetail
         .filter((product) => product.imageUrl.trim().length > 0)
         .map((product) => normalizeSkuKey(product.sku))
     );
-    partialProgress.importedCount = baseProducts.length;
+    partialProgress.importedCount = baseProductsWithDetail.length;
     const enrichmentCap = options?.boundedRuntime
       ? Math.max(
           0,
           options.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS_BOUNDED
         )
       : Math.max(1, options?.maxImageEnrichmentProducts ?? WALMART_IMPORT_MAX_IMAGE_ENRICHMENT_PRODUCTS);
-    const productsForImageEnrichment = baseProducts.slice(0, enrichmentCap);
-    const deferredProducts = baseProducts.slice(productsForImageEnrichment.length);
+    const productsForImageEnrichment = baseProductsWithDetail.slice(0, enrichmentCap);
+    const deferredProducts = baseProductsWithDetail.slice(productsForImageEnrichment.length);
     let enrichedProducts = productsForImageEnrichment;
     let imageStats = createInitialImageEnrichmentStats();
     if (productsForImageEnrichment.length > 0) {
@@ -2464,6 +2792,56 @@ export async function importWalmartProducts(
         `Shopify reconciliation failed: ${normalizeUnknownErrorMessage(error, "shopify_reconcile_failed")}`
       );
     }
+
+    const itemReportBackfillStatus: "report_backfill_pending" | "report_unavailable" | "report_applied" =
+      imageStats.itemReport.downloaded
+        ? "report_applied"
+        : options?.boundedRuntime
+        ? "report_backfill_pending"
+        : imageStats.itemReport.failureCategory === "unavailable" ||
+          imageStats.itemReport.failureCategory === "auth_or_permission" ||
+          imageStats.itemReport.failureCategory === "not_found_endpoint"
+        ? "report_unavailable"
+        : "report_backfill_pending";
+    const itemReportBackfillReason =
+      itemReportBackfillStatus === "report_applied"
+        ? "Item report rows were applied during import."
+        : itemReportBackfillStatus === "report_unavailable"
+        ? "Item report backfill is unavailable in this credential/runtime context."
+        : "Item report backfill is deferred and can be applied asynchronously.";
+
+    products = products.map((product) => {
+      const normalizedPayload = asObject(product.normalizedPayload) ?? {};
+      const docketStatuses = new Set(product.docket?.statuses ?? []);
+      if (itemReportBackfillStatus === "report_backfill_pending") {
+        docketStatuses.add("report_backfill_pending");
+        docketStatuses.delete("report_unavailable");
+      } else if (itemReportBackfillStatus === "report_unavailable") {
+        docketStatuses.add("report_unavailable");
+        docketStatuses.delete("report_backfill_pending");
+      } else {
+        docketStatuses.delete("report_backfill_pending");
+        docketStatuses.delete("report_unavailable");
+      }
+      const docket = product.docket
+        ? {
+            ...product.docket,
+            statuses: Array.from(docketStatuses),
+          }
+        : product.docket;
+
+      return {
+        ...product,
+        docket,
+        normalizedPayload: {
+          ...normalizedPayload,
+          docket: docket ?? normalizedPayload.docket ?? null,
+          docketHydrationStatus: docket?.statuses ?? normalizedPayload.docketHydrationStatus ?? [],
+          itemReportBackfillStatus,
+          itemReportBackfillReason,
+        },
+      };
+    });
 
     const inventoryKnownCount = products.filter((product) => product.inventoryStatus === "known").length;
     const inventoryOutOfStockCount = products.filter(
@@ -2633,6 +3011,12 @@ export async function importWalmartProducts(
         imageEnrichmentDeferredCount: deferredProducts.length,
         imageEnrichmentImportLimit: options?.boundedRuntime ? enrichmentCap : null,
         imageEnrichmentBounded: Boolean(options?.boundedRuntime),
+        detailHydrationRequestedCount: detailHydration.requestedCount,
+        detailHydrationCompletedCount: detailHydration.completedCount,
+        detailHydrationFailedCount: detailHydration.failedCount,
+        detailHydrationUnavailableCount: detailHydration.unavailableCount,
+        itemReportBackfillStatus,
+        itemReportBackfillReason,
         imageSource: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi",
         itemReportRequested: imageStats.itemReport.requested,
         itemReportDownloaded: imageStats.itemReport.downloaded,

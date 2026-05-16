@@ -24,6 +24,8 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
     imageStatusMessage: "Image available",
     imageSyncStatus: "found",
     imageSource: "shopify_product",
+    publicWalmartUrl: "https://www.walmart.com/ip/2791205430",
+    publicWalmartProductId: "2791205430",
     issues: ["Add more search attributes", "Improve FAQ coverage"],
     attributes: { product_form: "Capsule", target_audience: "Adult" },
     shortDescription: "Current short description",
@@ -41,6 +43,8 @@ function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProduc
         "https://images.example.com/single-docket-primary.jpg",
         "https://images.example.com/single-docket-gallery-1.jpg",
       ],
+      publicWalmartUrl: "https://www.walmart.com/ip/2791205430",
+      publicWalmartProductId: "2791205430",
       searchBrowseAttributes: {
         product_form: "Capsule",
         target_audience: "Adult",

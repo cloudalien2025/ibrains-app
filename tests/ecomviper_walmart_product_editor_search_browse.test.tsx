@@ -4,6 +4,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import ProductEditorClient from "@/app/apps/ecomviper/walmart/products/[sku]/product-editor-client";
+import { createEmptyWalmartDocket } from "@/lib/ecomviper/walmart/walmart-docket";
 import type { WalmartDraftRecord, WalmartProductRecord } from "@/lib/ecomviper/walmart/walmart-types";
 
 function createProduct(overrides?: Partial<WalmartProductRecord>): WalmartProductRecord {
@@ -162,5 +163,50 @@ describe("Walmart Search & Browse editor hydration", () => {
       "Q: What is this product? A: A supplement for daily wellness support.",
       "Q: How do I take it? A: Use as directed on label.",
     ]);
+  });
+
+  it("renders imported normalized docket values without requiring live refresh", async () => {
+    const docket = createEmptyWalmartDocket({
+      sku: "ROC949",
+      statuses: ["imported_docket_ready", "report_backfill_pending"],
+    });
+    docket.content.shortDescription.value = "Docket short description";
+    docket.content.longDescription.value = "Docket long description";
+    docket.content.bullets.value = ["Docket bullet one", "Docket bullet two"];
+    docket.content.brand.value = "Docket Brand";
+    docket.searchBrowse.attributes.value = {
+      product_form: "Capsule",
+      support_areas: "Joint support",
+      search_keywords: "joint supplement",
+    };
+
+    await act(async () => {
+      root.render(
+        <ProductEditorClient
+          product={createProduct({
+            shortDescription: "",
+            longDescription: "",
+            bulletPoints: [],
+            brand: "",
+            docket,
+            normalizedPayload: {
+              docketHydrationStatus: ["imported_docket_ready", "report_backfill_pending"],
+            },
+          })}
+          stagedDrafts={[]}
+          aiProviderConnected={false}
+          serpApiProviderConnected={false}
+        />
+      );
+    });
+
+    const textareaValues = Array.from(container.querySelectorAll("textarea")).map((entry) => entry.value);
+    expect(textareaValues).toContain("Docket short description");
+    expect(textareaValues).toContain("Docket long description");
+    expect(textareaValues).toContain("Docket bullet one\nDocket bullet two");
+    expect(container.textContent).toContain("Hydration status");
+    expect(container.textContent).toContain("Imported docket ready");
+    expect(container.textContent).toContain("Report backfill pending");
+    expect(container.innerHTML).toContain("Joint support");
   });
 });

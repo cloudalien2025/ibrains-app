@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   normalizeWalmartDraftsForEditor: vi.fn(),
   getWalmartOpenAiConnectionStatusForUser: vi.fn(),
   getWalmartSerpApiConnectionStatusForUser: vi.fn(),
+  getWalmartConnectionHealthForUser: vi.fn(),
   hydrateLiveWalmartItemStateForUser: vi.fn(),
   hydrateCurrentWalmartState: vi.fn(),
 }));
@@ -36,6 +37,10 @@ vi.mock("@/lib/ecomviper/walmart/walmart-openai-connection", () => ({
 
 vi.mock("@/lib/ecomviper/walmart/walmart-serpapi-connection", () => ({
   getWalmartSerpApiConnectionStatusForUser: mocks.getWalmartSerpApiConnectionStatusForUser,
+}));
+
+vi.mock("@/lib/ecomviper/walmart/walmart-auth", () => ({
+  getWalmartConnectionHealthForUser: mocks.getWalmartConnectionHealthForUser,
 }));
 
 vi.mock("@/lib/ecomviper/walmart/walmart-live-item-hydrator", () => ({
@@ -94,6 +99,13 @@ describe("Walmart product editor page live hydration", () => {
     });
     mocks.getWalmartOpenAiConnectionStatusForUser.mockResolvedValue({ connected: false });
     mocks.getWalmartSerpApiConnectionStatusForUser.mockResolvedValue({ connected: false });
+    mocks.getWalmartConnectionHealthForUser.mockResolvedValue({
+      connectionStatus: "connected",
+      summary: {
+        tokenStatus: "valid",
+        safeReadStatus: "valid",
+      },
+    });
   });
 
   it("uses live hydration state on page load when live hydration succeeds", async () => {
@@ -144,6 +156,42 @@ describe("Walmart product editor page live hydration", () => {
     });
     expect((result as { props: Record<string, unknown> }).props.hydratedCurrentWalmartState).toEqual(
       snapshotState
+    );
+  });
+
+  it("uses snapshot fallback when credentials are unavailable and reports truthful hydration status", async () => {
+    const snapshotState = {
+      stateType: "current",
+      sku: "ROC948",
+      hydration: { status: "snapshotFallback" },
+    };
+    mocks.getWalmartConnectionHealthForUser.mockResolvedValue({
+      connectionStatus: "not_connected",
+      summary: {
+        tokenStatus: "unknown",
+        safeReadStatus: "unknown",
+      },
+    });
+    mocks.getWalmartProductBySkuForUser.mockResolvedValue(
+      createProduct({
+        normalizedPayload: {
+          docketHydrationStatus: ["imported_docket_ready"],
+        },
+      })
+    );
+    mocks.hydrateCurrentWalmartState.mockReturnValue(snapshotState);
+
+    const WalmartProductEditorPage = (await import("@/app/apps/ecomviper/walmart/products/[sku]/page")).default;
+    const result = await WalmartProductEditorPage({
+      params: Promise.resolve({ sku: "ROC948" }),
+    });
+
+    expect(mocks.hydrateLiveWalmartItemStateForUser).not.toHaveBeenCalled();
+    expect(mocks.hydrateCurrentWalmartState).toHaveBeenCalled();
+    const props = (result as { props: Record<string, unknown> }).props;
+    expect(props.hydratedCurrentWalmartState).toEqual(snapshotState);
+    expect(props.hydrationStatuses).toEqual(
+      expect.arrayContaining(["imported_docket_ready", "live_refresh_unavailable_no_credentials"])
     );
   });
 });

@@ -3,6 +3,7 @@ import {
   enrichProductsFromItemReport,
   enrichProductsFromParsedItemReport,
   hydrateMissingContentFromItemReportRows,
+  itemReportRowToDocketSourcePayload,
   parseItemReportCsv,
   runItemReportWorkflow,
   walmartItemReportInternals,
@@ -142,6 +143,71 @@ describe("Walmart Item Report image enrichment", () => {
     expect(parsed[0]?.shelfDescription).toBe("Shelf summary text");
     expect(parsed[0]?.longDescription).toBe("Detailed long description");
     expect(parsed[0]?.keyFeatures).toEqual(["Feature one", "Feature two", "Feature three"]);
+  });
+
+  it("parses price, sale price, inventory, status, and fulfillment fields when present", () => {
+    const csv = [
+      "SKU,Price,SalePrice,Currency,InventoryQuantity,InventoryStatus,FulfillmentType,ShipNode",
+      "SKU-RICH-1,$29.99,24.50,usd,17,IN_STOCK,Seller Fulfilled,SN01",
+    ].join("\n");
+
+    const parsed = parseItemReportCsv(csv);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]).toMatchObject({
+      price: 29.99,
+      salePrice: 24.5,
+      currency: "USD",
+      inventoryQuantity: 17,
+      inventoryStatus: "IN_STOCK",
+      fulfillmentType: "Seller Fulfilled",
+      shipNode: "SN01",
+    });
+  });
+
+  it("maps parsed item report rows into docket source payload shape", () => {
+    const payload = itemReportRowToDocketSourcePayload({
+      sku: "SKU-DOCKET-1",
+      productId: "000111222333",
+      productIdType: "GTIN",
+      itemId: "2791205430",
+      wpid: "WP-123",
+      title: "Mapped Title",
+      brand: "Mapped Brand",
+      shelfDescription: "Mapped shelf",
+      longDescription: "Mapped long",
+      keyFeatures: ["Feature one", "Feature two"],
+      price: 31.25,
+      salePrice: 27.99,
+      currency: "USD",
+      inventoryQuantity: 8,
+      inventoryStatus: "IN_STOCK",
+      fulfillmentType: "WFS",
+      shipNode: "NODE-1",
+      primaryImageUrl: "https://images.example.com/primary.jpg",
+      galleryImageUrls: ["https://images.example.com/gallery.jpg"],
+      variantImageUrls: [],
+      rowIndex: 2,
+    });
+
+    expect(payload).toMatchObject({
+      sku: "SKU-DOCKET-1",
+      siteDescription: "Mapped shelf",
+      fullDescription: "Mapped long",
+      keyFeatures: ["Feature one", "Feature two"],
+      price: 31.25,
+      salePrice: 27.99,
+      currency: "USD",
+      inventoryQuantity: 8,
+      inventoryStatus: "IN_STOCK",
+      itemId: "2791205430",
+      usItemId: "2791205430",
+      attributes: {
+        product_id: "000111222333",
+        product_id_type: "GTIN",
+        fulfillment_type: "WFS",
+        ship_node: "NODE-1",
+      },
+    });
   });
 
   it("hydrates missing content fields from matched item report rows without overwriting meaningful values", () => {

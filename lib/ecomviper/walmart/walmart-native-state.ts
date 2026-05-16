@@ -4,6 +4,17 @@ import {
 } from "@/lib/ecomviper/walmart/walmart-search-browse-attributes";
 import { normalizeWalmartImageUrlList } from "@/lib/ecomviper/walmart/walmart-image-fields";
 import {
+  WALMART_DOCKET_BULLET_ALIASES,
+  WALMART_DOCKET_LONG_DESCRIPTION_ALIASES,
+  WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES,
+} from "@/lib/ecomviper/walmart/walmart-docket-aliases";
+import {
+  collectWalmartDocketCandidateValues,
+  normalizeWalmartBulletList,
+  normalizeWalmartTextValue,
+  pickFirstNonPlaceholder,
+} from "@/lib/ecomviper/walmart/walmart-docket-hydration";
+import {
   analyzeWalmartProductTypeFieldCoverage,
   resolveWalmartProductTypeIntelligence,
   type WalmartProductTypeCoverageAnalysis,
@@ -282,24 +293,6 @@ function firstSourcedString(
     }
   }
   return { value: "", source: "fallback" };
-}
-
-function firstSourcedList(
-  source: NativeStateSourceRecord[],
-  keys: string[]
-): { value: string[]; source: string } {
-  for (const entry of source) {
-    if (!entry.record) continue;
-    for (const key of keys) {
-      const values = unique(listFromUnknown(entry.record[key]));
-      if (values.length === 0) continue;
-      return {
-        value: values,
-        source: entry.source,
-      };
-    }
-  }
-  return { value: [], source: "fallback" };
 }
 
 function firstNonEmptyNumber(
@@ -801,47 +794,60 @@ export function hydrateCurrentWalmartState(input: {
     : contentNameFromSources.value;
   addProvenance(isMeaningfulText(input.product.title) ? "seller_catalog" : contentNameFromSources.source);
 
-  const contentShortFromSources = firstSourcedString(contentSources, [
-    "shortDescription",
-    "siteDescription",
-    "short_desc",
-    "synopsis",
-    "description",
-  ]);
+  const docketAliasSources = contentSources
+    .filter((entry) => Boolean(entry.record))
+    .map((entry) => ({
+      source: "fallback" as const,
+      sourceLabel: entry.source,
+      payload: entry.record,
+      confidence: "medium" as const,
+    }));
+  const contentShortFromSources = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: docketAliasSources,
+      aliases: [...WALMART_DOCKET_SHORT_DESCRIPTION_ALIASES, "short_desc", "synopsis"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
   const siteDescription = isMeaningfulText(input.product.shortDescription)
     ? input.product.shortDescription.trim()
-    : contentShortFromSources.value;
+    : contentShortFromSources?.value ?? "";
   addProvenance(
-    isMeaningfulText(input.product.shortDescription) ? "seller_catalog" : contentShortFromSources.source
+    isMeaningfulText(input.product.shortDescription)
+      ? "seller_catalog"
+      : contentShortFromSources?.metadata.sourceLabel ?? "fallback"
   );
 
-  const contentLongFromSources = firstSourcedString(contentSources, [
-    "longDescription",
-    "fullDescription",
-    "description",
-    "productDescription",
-    "long_desc",
-  ]);
+  const contentLongFromSources = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: docketAliasSources,
+      aliases: [...WALMART_DOCKET_LONG_DESCRIPTION_ALIASES, "description", "productDescription", "long_desc"],
+      normalizer: normalizeWalmartTextValue,
+    })
+  );
   const longDescription = isMeaningfulText(input.product.longDescription)
     ? input.product.longDescription.trim()
-    : contentLongFromSources.value;
+    : contentLongFromSources?.value ?? "";
   addProvenance(
-    isMeaningfulText(input.product.longDescription) ? "seller_catalog" : contentLongFromSources.source
+    isMeaningfulText(input.product.longDescription)
+      ? "seller_catalog"
+      : contentLongFromSources?.metadata.sourceLabel ?? "fallback"
   );
 
   const sellerBullets = unique(
     (input.product.bulletPoints ?? []).map((entry) => asText(entry)).filter((entry) => isMeaningfulText(entry))
   );
-  const bulletFallback = firstSourcedList(contentSources, [
-    "bulletPoints",
-    "keyFeatures",
-    "features",
-    "highlights",
-    "aboutThisItem",
-    "bullets",
-  ]);
-  const keyFeatures = sellerBullets.length > 0 ? sellerBullets : bulletFallback.value;
-  addProvenance(sellerBullets.length > 0 ? "seller_catalog" : bulletFallback.source);
+  const bulletFallback = pickFirstNonPlaceholder(
+    collectWalmartDocketCandidateValues({
+      sources: docketAliasSources,
+      aliases: [...WALMART_DOCKET_BULLET_ALIASES, "bulletPoints", "bullets"],
+      normalizer: normalizeWalmartBulletList,
+    })
+  );
+  const keyFeatures = sellerBullets.length > 0 ? sellerBullets : bulletFallback?.value ?? [];
+  addProvenance(
+    sellerBullets.length > 0 ? "seller_catalog" : bulletFallback?.metadata.sourceLabel ?? "fallback"
+  );
 
   const brandFallback = firstSourcedString(contentSources, ["brand", "brandName"]);
   const brand = isMeaningfulText(input.product.brand) ? input.product.brand.trim() : brandFallback.value;

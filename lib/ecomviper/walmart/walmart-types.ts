@@ -1,4 +1,5 @@
 import type { RuntimeMode } from "@/lib/ecomviper/core/marketplace-types";
+import type { WalmartNormalizedDocket } from "@/lib/ecomviper/walmart/walmart-docket";
 
 export type WalmartEnvironment = "production";
 export type WalmartRegion = "US";
@@ -267,6 +268,7 @@ export interface WalmartProductRecord {
   shortDescription: string;
   longDescription: string;
   bulletPoints: string[];
+  docket?: WalmartNormalizedDocket;
   rawPayload: unknown;
   normalizedPayload: unknown;
   lastSyncedAt: string;
@@ -441,6 +443,12 @@ export interface WalmartImportResult {
     importErrorCategory?: WalmartImportErrorCategory;
     importErrorReason?: string | null;
     imageSource?: "Walmart Item Report + Walmart Item Search + Public Walmart Listing via SerpApi";
+    detailHydrationRequestedCount?: number;
+    detailHydrationCompletedCount?: number;
+    detailHydrationFailedCount?: number;
+    detailHydrationUnavailableCount?: number;
+    itemReportBackfillStatus?: "report_backfill_pending" | "report_unavailable" | "report_applied";
+    itemReportBackfillReason?: string | null;
     itemReportRequested?: boolean;
     itemReportDownloaded?: boolean;
     itemReportRowsParsed?: number;
