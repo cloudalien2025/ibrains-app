@@ -452,6 +452,13 @@ function unique(values: string[]): string[] {
   return Array.from(new Set(values.filter((value) => value.trim().length > 0)));
 }
 
+function firstNonEmptyList(candidates: string[][]): string[] {
+  for (const candidate of candidates) {
+    if (candidate.length > 0) return candidate;
+  }
+  return [];
+}
+
 function imageIssueBySyncStatus(
   status: WalmartImageSyncStatus,
   source: WalmartProductRecord["imageSource"]
@@ -675,10 +682,39 @@ function toAttributeMap(value: unknown): Record<string, string> {
 }
 
 function toStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value
-    .map((entry) => firstNonEmptyString(entry, asObject(entry)?.value, asObject(entry)?.text))
-    .filter((entry) => entry.length > 0);
+  if (Array.isArray(value)) {
+    return unique(
+      value
+        .map((entry) =>
+          firstNonEmptyString(
+            entry,
+            asObject(entry)?.value,
+            asObject(entry)?.text,
+            asObject(entry)?.description,
+            asObject(entry)?.label,
+            asObject(entry)?.title,
+            asObject(entry)?.name
+          )
+        )
+        .filter((entry) => entry.length > 0)
+    );
+  }
+
+  const asNode = asObject(value);
+  if (asNode) {
+    return toStringArray(
+      asNode.value ?? asNode.values ?? asNode.text ?? asNode.description ?? asNode.list ?? ""
+    );
+  }
+
+  const asString = firstNonEmptyString(value);
+  if (!asString) return [];
+  return unique(
+    asString
+      .split(/\r?\n|[;|]+/)
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0)
+  );
 }
 
 function findImageUrlInNode(value: unknown, inImageContext = false, depth = 0): string {
@@ -978,6 +1014,8 @@ function normalizeImportedItem(
     asObject(item.product)?.name
   );
   const brand = firstNonEmptyString(item.brand, item.brandName, asObject(item.product)?.brand);
+  const product = asObject(item.product);
+  const content = asObject(item.content);
   const category = firstNonEmptyString(
     item.category,
     item.productType,
@@ -1003,11 +1041,48 @@ function normalizeImportedItem(
     inventorySnapshotsBySku.get(normalizeSkuKey(sku)) ?? null
   );
 
-  const shortDescription = firstNonEmptyString(item.shortDescription, item.short_desc, item.synopsis);
-  const longDescription = firstNonEmptyString(item.longDescription, item.description, item.productDescription);
-  const bulletPoints = toStringArray(item.bulletPoints).length
-    ? toStringArray(item.bulletPoints)
-    : toStringArray(item.keyFeatures);
+  const shortDescription = firstNonEmptyString(
+    item.shortDescription,
+    item.siteDescription,
+    item.short_desc,
+    item.synopsis,
+    product?.shortDescription,
+    product?.siteDescription,
+    content?.shortDescription,
+    content?.siteDescription,
+    content?.synopsis
+  );
+  const longDescription = firstNonEmptyString(
+    item.longDescription,
+    item.fullDescription,
+    item.description,
+    item.productDescription,
+    item.long_desc,
+    product?.longDescription,
+    product?.fullDescription,
+    product?.description,
+    content?.longDescription,
+    content?.fullDescription,
+    content?.description,
+    content?.productDescription
+  );
+  const bulletPoints = firstNonEmptyList([
+    toStringArray(item.bulletPoints),
+    toStringArray(item.keyFeatures),
+    toStringArray(item.features),
+    toStringArray(item.highlights),
+    toStringArray(item.aboutThisItem),
+    toStringArray(product?.bulletPoints),
+    toStringArray(product?.keyFeatures),
+    toStringArray(product?.features),
+    toStringArray(product?.highlights),
+    toStringArray(product?.aboutThisItem),
+    toStringArray(content?.bulletPoints),
+    toStringArray(content?.keyFeatures),
+    toStringArray(content?.features),
+    toStringArray(content?.highlights),
+    toStringArray(content?.aboutThisItem),
+  ]);
 
   const normalized = normalizeWalmartProduct({
     sku,
