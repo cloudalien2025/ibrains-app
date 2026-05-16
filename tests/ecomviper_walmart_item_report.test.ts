@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   enrichProductsFromItemReport,
   enrichProductsFromParsedItemReport,
+  hydrateMissingContentFromItemReportRows,
   parseItemReportCsv,
   runItemReportWorkflow,
   walmartItemReportInternals,
@@ -128,6 +129,78 @@ describe("Walmart Item Report image enrichment", () => {
     expect(parsed[0]?.variantImageUrls).toEqual(["https://images.example.com/variant.jpg"]);
     expect(parsed[1]?.galleryImageUrls).toEqual(["https://images.example.com/json-1.jpg"]);
     expect(parsed[1]?.variantImageUrls).toEqual([]);
+  });
+
+  it("parses item report content columns for shelf, long description, and key features", () => {
+    const csv = [
+      "SKU,ShelfDescription,LongDescription,KeyFeatures",
+      'SKU-CONTENT-1,"Shelf summary text","Detailed long description","Feature one|Feature two;Feature three"',
+    ].join("\n");
+
+    const parsed = parseItemReportCsv(csv);
+    expect(parsed).toHaveLength(1);
+    expect(parsed[0]?.shelfDescription).toBe("Shelf summary text");
+    expect(parsed[0]?.longDescription).toBe("Detailed long description");
+    expect(parsed[0]?.keyFeatures).toEqual(["Feature one", "Feature two", "Feature three"]);
+  });
+
+  it("hydrates missing content fields from matched item report rows without overwriting meaningful values", () => {
+    const products = [
+      createProduct({
+        sku: "SKU-HYDRATE-1",
+        shortDescription: "",
+        longDescription: "",
+        bulletPoints: [],
+      }),
+      createProduct({
+        sku: "SKU-HYDRATE-2",
+        shortDescription: "Existing short",
+        longDescription: "Existing long",
+        bulletPoints: ["Existing bullet"],
+      }),
+    ];
+
+    const hydrated = hydrateMissingContentFromItemReportRows(products, [
+      {
+        sku: "SKU-HYDRATE-1",
+        productId: "",
+        productIdType: "",
+        itemId: "ITEM-HYDRATE-1",
+        wpid: "",
+        title: "Hydrated Title",
+        brand: "Hydrated Brand",
+        shelfDescription: "Hydrated short description",
+        longDescription: "Hydrated long description",
+        keyFeatures: ["Hydrated bullet one", "Hydrated bullet two"],
+        primaryImageUrl: "",
+        galleryImageUrls: [],
+        variantImageUrls: [],
+        rowIndex: 0,
+      },
+      {
+        sku: "SKU-HYDRATE-2",
+        productId: "",
+        productIdType: "",
+        itemId: "ITEM-HYDRATE-2",
+        wpid: "",
+        title: "Should not overwrite",
+        brand: "Hydrated Brand",
+        shelfDescription: "Incoming short should not overwrite",
+        longDescription: "Incoming long should not overwrite",
+        keyFeatures: ["Incoming bullet should not overwrite"],
+        primaryImageUrl: "",
+        galleryImageUrls: [],
+        variantImageUrls: [],
+        rowIndex: 1,
+      },
+    ]);
+
+    expect(hydrated[0]?.shortDescription).toBe("Hydrated short description");
+    expect(hydrated[0]?.longDescription).toBe("Hydrated long description");
+    expect(hydrated[0]?.bulletPoints).toEqual(["Hydrated bullet one", "Hydrated bullet two"]);
+    expect(hydrated[1]?.shortDescription).toBe("Existing short");
+    expect(hydrated[1]?.longDescription).toBe("Existing long");
+    expect(hydrated[1]?.bulletPoints).toEqual(["Existing bullet"]);
   });
 
   it("matches by exact SKU and prefers duplicate row with usable primary image", () => {

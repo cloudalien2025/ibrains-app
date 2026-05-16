@@ -248,6 +248,56 @@ function parseLiveAttributes(liveItem: Record<string, unknown>): Record<string, 
   return normalizeSearchBrowseAttributes(mapped);
 }
 
+function normalizeNumericProductIdentifier(value: unknown): string {
+  const candidate = asText(value).replace(/\s+/g, "");
+  if (!candidate) return "";
+  return /^\d{6,20}$/.test(candidate) ? candidate : "";
+}
+
+function buildLiveItemLookupUrls(input: {
+  sku: string;
+  product: WalmartProductRecord;
+}): string[] {
+  const urls: string[] = [];
+  const push = (path: string) => {
+    if (!path || urls.includes(path)) return;
+    urls.push(path);
+  };
+
+  const sku = input.sku.trim();
+  const encodedSku = encodeURIComponent(sku);
+  const itemId = normalizeNumericProductIdentifier(input.product.itemId);
+  const externalItemId = normalizeNumericProductIdentifier(input.product.externalItemId);
+  const gtin = normalizeNumericProductIdentifier(input.product.gtin);
+  const upc = normalizeNumericProductIdentifier(input.product.upc);
+
+  // Explicit productIdType lookups reduce ambiguity in Walmart identifier routing.
+  push(`/v3/items/${encodedSku}?productIdType=SKU`);
+  push(`/v3/items/${encodedSku}`);
+  if (itemId) push(`/v3/items/${encodeURIComponent(itemId)}?productIdType=ITEM_ID`);
+  if (externalItemId) push(`/v3/items/${encodeURIComponent(externalItemId)}?productIdType=ITEM_ID`);
+  if (gtin) push(`/v3/items/${encodeURIComponent(gtin)}?productIdType=GTIN`);
+  if (upc) push(`/v3/items/${encodeURIComponent(upc)}?productIdType=UPC`);
+  push(`/v3/items?sku=${encodedSku}`);
+  if (gtin) push(`/v3/items?gtin=${encodeURIComponent(gtin)}`);
+  push(`/v3/items?limit=20`);
+
+  return urls.map((path) => new URL(path, `${WALMART_PRODUCTION_BASE_URL}/`).toString());
+}
+
+function resolveLivePrice(value: Record<string, unknown>): number | null {
+  const priceInfo = asObject(value.priceInfo);
+  const currentPrice = asObject(priceInfo?.currentPrice);
+  return (
+    asNumber(value.price) ??
+    asNumber(asObject(value.price)?.amount) ??
+    asNumber(priceInfo?.currentPrice) ??
+    asNumber(currentPrice?.amount) ??
+    asNumber(priceInfo?.price) ??
+    asNumber(asObject(priceInfo?.price)?.amount)
+  );
+}
+
 function extractLiveItemCandidates(payload: unknown): Record<string, unknown>[] {
   const candidates: Record<string, unknown>[] = [];
 
@@ -415,14 +465,13 @@ async function fetchJsonWithTimeout(input: {
 async function fetchLiveItemBySku(input: {
   accessToken: string;
   sku: string;
+  product: WalmartProductRecord;
 }): Promise<{ item: Record<string, unknown> | null; payload: Record<string, unknown> | null; reason: string; partialHydration: boolean; missingLiveFields: string[]; }> {
   const sku = input.sku.trim();
-  const encodedSku = encodeURIComponent(sku);
-  const candidateUrls = [
-    `${WALMART_PRODUCTION_BASE_URL}/v3/items/${encodedSku}`,
-    `${WALMART_PRODUCTION_BASE_URL}/v3/items?sku=${encodedSku}`,
-    `${WALMART_PRODUCTION_BASE_URL}/v3/items?limit=20`,
-  ];
+  const candidateUrls = buildLiveItemLookupUrls({
+    sku,
+    product: input.product,
+  });
 
   let lastReason = "No Walmart item payload returned.";
   let lastPayload: Record<string, unknown> | null = null;
@@ -445,10 +494,9 @@ async function fetchLiveItemBySku(input: {
     }
 
     const candidateSku = asText(candidate.sku) || asText(candidate.SKU);
-    if (candidateSku && candidateSku.toUpperCase() !== sku.toUpperCase() && url.endsWith("limit=20")) {
-      // limited-list endpoint is only a fallback and might not return our SKU.
+    if (candidateSku && candidateSku.toUpperCase() !== sku.toUpperCase()) {
       lastPayload = asObject(response.payload);
-      lastReason = `Walmart API returned items but SKU ${sku} was not present in fallback page.`;
+      lastReason = `Walmart API returned item data for SKU ${candidateSku}, but requested SKU ${sku}.`;
       continue;
     }
 
@@ -457,7 +505,7 @@ async function fetchLiveItemBySku(input: {
         ? ""
         : "product_name",
       asText(candidate.brand) || asText(candidate.brandName) ? "" : "brand",
-      asNumber(candidate.price) ?? asNumber(asObject(candidate.priceInfo)?.currentPrice) ?? asNumber(asObject(candidate.priceInfo)?.price)
+      resolveLivePrice(candidate)
         ? ""
         : "price",
       asNumber(candidate.quantity) ?? asNumber(asObject(candidate.inventory)?.quantity)
@@ -524,9 +572,7 @@ function mergeLiveItemIntoProduct(input: {
 
   const bulletPoints = parseLiveBulletPoints(liveItem);
   const price =
-    asNumber(liveItem.price) ??
-    asNumber(asObject(liveItem.priceInfo)?.currentPrice) ??
-    asNumber(asObject(liveItem.priceInfo)?.price) ??
+    resolveLivePrice(liveItem) ??
     input.product.price;
 
   const inventoryQuantity =
@@ -695,6 +741,7 @@ export async function hydrateLiveWalmartItemStateForUser(input: {
   const liveResponse = await fetchLiveItemBySku({
     accessToken: token.accessToken,
     sku: input.product.sku,
+    product: input.product,
   });
 
   if (!liveResponse.item) {
